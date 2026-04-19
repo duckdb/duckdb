@@ -10,6 +10,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -195,7 +196,7 @@ protected:
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
 	//! Temporary evicted memory data per tag
-	atomic<idx_t> evicted_data_per_tag[MEMORY_TAG_COUNT];
+	atomic<CheckedInteger<idx_t>> evicted_data_per_tag[MEMORY_TAG_COUNT];
 };
 
 } // namespace duckdb

@@ -14,6 +14,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
+#include <atomic>
 #include <type_traits>
 
 namespace duckdb {
@@ -424,3 +425,78 @@ using u32_t = CheckedInteger<uint32_t>;
 using u64_t = CheckedInteger<uint64_t>;
 
 } // namespace duckdb
+
+namespace std { // NOLINT
+
+//! std::atomic specialization for duckdb::CheckedInteger<T>.
+//! Uses a CAS loop to provide fetch_add/fetch_sub with overflow/underflow detection via CheckedInteger arithmetic.
+template <class T>
+struct atomic<duckdb::CheckedInteger<T>> {
+	static_assert(std::is_integral<T>::value, "CheckedInteger only supports integral types");
+
+private:
+	std::atomic<T> val;
+
+public:
+	using value_type = duckdb::CheckedInteger<T>;
+
+	atomic() noexcept = default;
+	constexpr atomic(value_type desired) noexcept : val(desired.GetValue()) { // NOLINT
+	}
+	constexpr atomic(T desired) noexcept : val(desired) { // NOLINT
+	}
+	atomic(const atomic &) = delete;
+	atomic &operator=(const atomic &) = delete;
+	atomic &operator=(const atomic &) volatile = delete;
+
+	value_type load(std::memory_order order = std::memory_order_seq_cst) const noexcept {
+		return value_type(val.load(order));
+	}
+
+	void store(value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept {
+		val.store(desired.GetValue(), order);
+	}
+
+	value_type operator=(value_type desired) noexcept { // NOLINT
+		store(desired);
+		return desired;
+	}
+
+	//! Atomically adds arg to the stored value using a CAS loop; throws InternalException on overflow.
+	//! Returns the value before the addition.
+	value_type fetch_add(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
+		T current = val.load(std::memory_order_relaxed);
+		T next;
+		do {
+			next = (value_type(current) + arg).GetValue();
+		} while (!val.compare_exchange_weak(current, next, order, std::memory_order_relaxed));
+		return value_type(current);
+	}
+
+	//! Atomically subtracts arg from the stored value using a CAS loop; throws InternalException on underflow.
+	//! Returns the value before the subtraction.
+	value_type fetch_sub(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
+		T current = val.load(std::memory_order_relaxed);
+		T next;
+		do {
+			next = (value_type(current) - arg).GetValue();
+		} while (!val.compare_exchange_weak(current, next, order, std::memory_order_relaxed));
+		return value_type(current);
+	}
+
+	template <class U>
+	value_type operator+=(U arg) {
+		value_type checked_arg(arg);
+		value_type old = fetch_add(checked_arg);
+		return old + checked_arg;
+	}
+
+	template <class U>
+	value_type operator-=(U arg) {
+		value_type checked_arg(arg);
+		value_type old = fetch_sub(checked_arg);
+		return old - checked_arg;
+	}
+};
+
+} // namespace std
