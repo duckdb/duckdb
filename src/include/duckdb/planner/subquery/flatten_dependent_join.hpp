@@ -46,7 +46,6 @@ private:
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
 	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
-	void RewriteCorrelated(LogicalOperator &op, const vector<ColumnBinding> &state);
 	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;
@@ -94,8 +93,6 @@ private:
 	                                            const vector<ColumnBinding> &right_state);
 	vector<ColumnBinding> PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                                    vector<ColumnBinding> state, bool correlated_left);
-	vector<ColumnBinding> PushDownFilter(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                     vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                         vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownAggregate(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
@@ -112,7 +109,6 @@ private:
 	vector<ColumnBinding> PushDownDistinct(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownExpressionGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                            vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownOrderBy(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownGet(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownCTE(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                  vector<ColumnBinding> state);

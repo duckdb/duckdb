@@ -152,10 +152,6 @@ FlattenDependentJoins::GetCurrentBindings(const vector<ColumnBinding> &state) co
 	return current_binding_map;
 }
 
-void FlattenDependentJoins::RewriteCorrelated(LogicalOperator &op, const vector<ColumnBinding> &state) {
-	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
-}
-
 bool FlattenDependentJoins::DependsOnCorrelated(LogicalOperator &op) const {
 	return DependsOnCorrelatedWalk(op, binder, correlated_aliases, dependency_cache);
 }
@@ -325,7 +321,7 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 		state = DecorrelateSubtree(child, propagate_null_values, std::move(state));
 		RemapLocalBindings(*plan, old_child_bindings, child->GetColumnBindings());
 	}
-	return std::move(state);
+	return state;
 }
 
 // General-purpose Row Number Window Builder
@@ -360,7 +356,7 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 			op.children[0] = DecorrelateIndependent(binder, std::move(op.children[0]));
 		}
 
-		RewriteCorrelated(op, state);
+		RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(state), correlated_aliases);
 	} else {
 		state = DecorrelateSubtree(op.children[0], true, std::move(state));
 	}
@@ -381,7 +377,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOpe
 	state = PushDownCorrelatedNode(plan->children[child_idx], propagate_null_values, std::move(state));
 	RemapLocalBindings(*plan, old_child_bindings, plan->children[child_idx]->GetColumnBindings());
 	if (rewrite_parent) {
-		RewriteCorrelated(*plan, state);
+		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
 	return state;
 }
@@ -473,14 +469,14 @@ vector<ColumnBinding> FlattenDependentJoins::CreateDelimCrossProduct(unique_ptr<
 		    bindings.begin() + duckdb::NumericCast<vector<ColumnBinding>::difference_type>(correlated_columns.size()));
 	}
 	plan = std::move(cross_product);
-	return std::move(state);
+	return state;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<LogicalOperator> &plan,
                                                                    vector<ColumnBinding> outer_state,
                                                                    const vector<ColumnBinding> &right_state) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
-	RewriteCorrelated(op, outer_state);
+	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(outer_state), correlated_aliases);
 	PopulateDuplicateEliminatedColumns(op);
 
 	// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
@@ -493,7 +489,7 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 	if (op.is_lateral_join && op.subquery_type == SubqueryType::INVALID) {
 		// check if there are any arbitrary expressions left
 		if (op.arbitrary_expressions.empty()) {
-			return std::move(outer_state);
+			return outer_state;
 		}
 		// we can only evaluate scalar arbitrary expressions for inner joins
 		if (op.join_type != JoinType::INNER) {
@@ -504,13 +500,13 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
 		filter->expressions = std::move(op.arbitrary_expressions);
 		filter->AddChild(std::move(plan));
 		plan = std::move(filter);
-		return std::move(outer_state);
+		return outer_state;
 	}
 
 	if (op.subquery_type == SubqueryType::ANY) {
 		AddAnyJoinConditions(op, plan_columns);
 	}
-	return std::move(outer_state);
+	return outer_state;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(unique_ptr<LogicalOperator> &plan,
@@ -584,11 +580,6 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
-}
-
-vector<ColumnBinding> FlattenDependentJoins::PushDownFilter(unique_ptr<LogicalOperator> &plan,
-                                                            bool propagate_null_values, vector<ColumnBinding> state) {
-	return PushDownChild(plan, propagate_null_values, std::move(state));
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownProjection(unique_ptr<LogicalOperator> &plan,
@@ -730,7 +721,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownJoin(unique_ptr<LogicalOper
 		auto left_state = PushDownChild(plan, propagate_null_values, state, false);
 		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
 		RemapLocalBindings(*plan, old_right_bindings, plan->children[1]->GetColumnBindings());
-		RewriteCorrelated(*plan, left_state);
+		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(left_state), correlated_aliases);
 		return left_state;
 	}
 
@@ -743,7 +734,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownJoin(unique_ptr<LogicalOper
 	auto right_state = PushDownChild(plan, propagate_null_values, left_state, false, 1);
 
 	AddCorrelatedJoinConditions(join, left_state, right_state);
-	RewriteCorrelated(*plan, right_state);
+	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(right_state), correlated_aliases);
 
 	return (join.join_type == JoinType::LEFT) ? left_state : right_state;
 }
@@ -908,11 +899,6 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownExpressionGet(unique_ptr<Lo
 	return CreateContiguousState(ColumnBinding(expr_get.table_index, ProjectionIndex(correlated_offset)));
 }
 
-vector<ColumnBinding> FlattenDependentJoins::PushDownOrderBy(unique_ptr<LogicalOperator> &plan,
-                                                             vector<ColumnBinding> state) {
-	return PushDownChild(plan, true, std::move(state));
-}
-
 vector<ColumnBinding> FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOperator> &plan,
                                                          vector<ColumnBinding> state) {
 	auto &get = plan->Cast<LogicalGet>();
@@ -930,7 +916,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownGet(unique_ptr<LogicalOpera
 		get.projected_input.push_back(NumericCast<idx_t>(it - child_bindings.begin()));
 	}
 
-	RewriteCorrelated(*plan, state);
+	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	// state bindings pass through LogicalGet's projected_input — no update needed
 	return state;
 }
@@ -973,7 +959,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOpera
 	}
 
 	auto right_state = PushDownCorrelatedNode(plan->children[1], false, cte_state);
-	RewriteCorrelated(*plan, right_state);
+	RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(right_state), correlated_aliases);
 
 #ifdef DEBUG
 	plan->children[0]->ResolveOperatorTypes();
@@ -1022,7 +1008,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_FILTER: {
-		return PushDownFilter(plan, propagate_null_values, std::move(state));
+		return PushDownChild(plan, propagate_null_values, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		return PushDownProjection(plan, propagate_null_values, std::move(state));
@@ -1062,7 +1048,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		throw BinderException("PIVOT is not supported in correlated subqueries yet");
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		return PushDownOrderBy(plan, std::move(state));
+		return PushDownChild(plan, true, std::move(state));
 	}
 	case LogicalOperatorType::LOGICAL_GET: {
 		return PushDownGet(plan, std::move(state));
