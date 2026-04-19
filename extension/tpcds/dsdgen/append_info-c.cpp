@@ -37,7 +37,7 @@ void append_row_end(append_info info) {
 
 void append_varchar(append_info info, const char *value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull(nColumn)) {
+	if (append_info->IsNull(nColumn) || !value || *value == '\0') {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<duckdb::string_t>(duckdb::string_t(value));
