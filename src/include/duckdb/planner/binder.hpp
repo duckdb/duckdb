@@ -27,6 +27,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
 
@@ -457,8 +458,7 @@ private:
 	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
 	                                                  TableCatalogEntry &table, TriggerEventType event_type);
 	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-	                                   vector<unique_ptr<QueryNode>> &trigger_bodies,
-	                                   vector<TriggerForEach> &trigger_for_each);
+	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 

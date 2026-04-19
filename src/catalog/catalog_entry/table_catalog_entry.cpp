@@ -1,8 +1,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
-#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
@@ -398,18 +396,17 @@ void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
 	// Default: no triggers (non-DuckDB tables do not support triggers)
 }
 
-void TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing,
-                                            TriggerEventType event_type, vector<unique_ptr<QueryNode>> &trigger_bodies,
-                                            vector<TriggerForEach> &trigger_for_each) const {
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
 	ScanTriggers(transaction, [&](CatalogEntry &entry) {
 		auto &trigger = entry.Cast<TriggerCatalogEntry>();
-		if (trigger.timing != timing || trigger.event_type != event_type) {
-			return;
+		if (trigger.timing == timing && trigger.event_type == event_type) {
+			result.emplace_back(trigger);
 		}
-		D_ASSERT(trigger.trigger_action);
-		trigger_bodies.push_back(trigger.trigger_action->Copy());
-		trigger_for_each.push_back(trigger.for_each);
 	});
+	return result;
 }
 
 } // namespace duckdb

@@ -594,22 +594,19 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 		}
 		return nullptr;
 	}
-	vector<unique_ptr<QueryNode>> trigger_bodies;
-	vector<TriggerForEach> trigger_for_each;
-	table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context), TriggerTiming::AFTER, event_type,
-	                          trigger_bodies, trigger_for_each);
-	if (trigger_bodies.empty()) {
+	auto triggers = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                          TriggerTiming::AFTER, event_type);
+	if (triggers.empty()) {
 		return nullptr;
 	}
 	expanded_tables.insert(table);
-	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, trigger_bodies, trigger_for_each));
+	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }
 
 BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
-                                           vector<unique_ptr<QueryNode>> &trigger_bodies,
-                                           vector<TriggerForEach> &trigger_for_each) {
+                                           const vector<const_reference<TriggerCatalogEntry>> &triggers) {
 	// multiple triggers per table are not yet supported
-	D_ASSERT(trigger_bodies.size() == 1);
+	D_ASSERT(triggers.size() == 1);
 
 	if (returning_list.empty()) {
 		returning_list.push_back(make_uniq<StarExpression>());
@@ -620,8 +617,9 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 
 	// Unreferenced DML CTE
+	auto &trigger = triggers[0].get();
 	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
-	trig_cte->query_node = std::move(trigger_bodies[0]);
+	trig_cte->query_node = trigger.trigger_action->Copy();
 	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
