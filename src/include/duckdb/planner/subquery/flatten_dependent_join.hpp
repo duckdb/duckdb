@@ -101,7 +101,7 @@ private:
 	                                     vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownProjection(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                         vector<ColumnBinding> state);
-	vector<ColumnBinding> FinalizeProjection(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state,
+	vector<ColumnBinding> FinalizeProjection(unique_ptr<LogicalOperator> &plan, const vector<ColumnBinding> &state,
 	                                         const vector<ColumnBinding> &old_child_bindings);
 	vector<ColumnBinding> PushDownAggregate(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                        vector<ColumnBinding> state);
