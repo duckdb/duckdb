@@ -16,9 +16,13 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_trigger_info.hpp"
@@ -521,21 +525,46 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		});
 	}
 
+	// Block trigger bodies whose DML target is the trigger's own table
+	D_ASSERT(create_trigger_info.trigger_action);
+	auto &body = *create_trigger_info.trigger_action;
+	bool writes_to_own_table = false;
+	if (body.type == QueryNodeType::INSERT_QUERY_NODE) {
+		writes_to_own_table = StringUtil::CIEquals(body.Cast<InsertQueryNode>().table, table.name);
+	} else if (body.type == QueryNodeType::UPDATE_QUERY_NODE) {
+		auto &upd = body.Cast<UpdateQueryNode>();
+		if (upd.table && upd.table->type == TableReferenceType::BASE_TABLE) {
+			writes_to_own_table = StringUtil::CIEquals(upd.table->Cast<BaseTableRef>().table_name, table.name);
+		}
+	} else if (body.type == QueryNodeType::DELETE_QUERY_NODE) {
+		auto &del = body.Cast<DeleteQueryNode>();
+		if (del.table && del.table->type == TableReferenceType::BASE_TABLE) {
+			writes_to_own_table = StringUtil::CIEquals(del.table->Cast<BaseTableRef>().table_name, table.name);
+		}
+	}
+	if (writes_to_own_table) {
+		throw NotImplementedException("Trigger body cannot write to the trigger's own table");
+	}
+
 	// Bind a copy to validate (keep original unbound for serialization).
-	// we don't want to expand the trigger body,
-	// since it's also not expanded on the DML statement's binding that fires the trigger
-	// RAII guard so that the flag is restored even if Bind() throws
-	struct ScopedInTriggerExpansion {
-		explicit ScopedInTriggerExpansion(bool &flag) : flag(flag) {
-			flag = true;
+	// Add the trigger table to the expanded set so validation matches runtime behavior
+	// (at runtime, the body is bound inside an expansion where this table is already in the set).
+	struct ScopedTriggerExpansion {
+		reference_set_t<TableCatalogEntry> &set;
+		reference<TableCatalogEntry> entry;
+		bool inserted;
+		ScopedTriggerExpansion(reference_set_t<TableCatalogEntry> &set_p, TableCatalogEntry &table_p)
+		    : set(set_p), entry(table_p) {
+			inserted = set.insert(table_p).second;
 		}
-		~ScopedInTriggerExpansion() {
-			flag = false;
+		~ScopedTriggerExpansion() {
+			if (inserted) {
+				set.erase(entry);
+			}
 		}
-		bool &flag;
 	};
+	ScopedTriggerExpansion trigger_guard(global_binder_state->trigger_expanded_tables, table);
 	auto body_copy = create_trigger_info.trigger_action->Copy();
-	ScopedInTriggerExpansion trigger_guard(in_trigger_expansion);
 	Bind(*body_copy);
 
 	// Add table dependency

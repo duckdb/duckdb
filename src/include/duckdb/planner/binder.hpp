@@ -182,6 +182,8 @@ struct GlobalBinderState {
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
+	//! Tables whose triggers have already been expanded in this query (recursion detection)
+	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
 };
 
 // QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
@@ -357,8 +359,6 @@ private:
 	bool is_outside_flattened = true;
 	//! Whether or not the binder can contain NULLs as the root of expressions
 	bool can_contain_nulls = false;
-	//! Set during trigger expansion so nested binds skip re-expansion
-	bool in_trigger_expansion = false;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
 	//! Used to retrieve CatalogEntry's

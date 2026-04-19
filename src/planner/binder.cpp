@@ -69,7 +69,6 @@ Binder::Binder(ClientContext &context, shared_ptr<Binder> parent_p, BinderType b
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
 		lambda_bindings = parent->lambda_bindings;
-		in_trigger_expansion = parent->in_trigger_expansion;
 	}
 }
 
@@ -589,7 +588,11 @@ static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
 unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
                                                           vector<unique_ptr<ParsedExpression>> &returning_list,
                                                           TableCatalogEntry &table, TriggerEventType event_type) {
-	if (in_trigger_expansion || !table.IsDuckTable()) {
+	if (!table.IsDuckTable()) {
+		return nullptr;
+	}
+	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
+	if (expanded_tables.find(table) != expanded_tables.end()) {
 		return nullptr;
 	}
 	vector<unique_ptr<QueryNode>> trigger_bodies;
@@ -600,6 +603,7 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	if (trigger_bodies.empty()) {
 		return nullptr;
 	}
+	expanded_tables.insert(table);
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, trigger_bodies, trigger_for_each));
 }
 
@@ -608,10 +612,6 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
                                            vector<TriggerForEach> &trigger_for_each) {
 	// multiple triggers per table are not yet supported
 	D_ASSERT(trigger_bodies.size() == 1);
-
-	// Prevent bind-time re-expansion: the base CTE body is a copy of this same DML node on the
-	// same table, so without the flag BindNode would expand it again and loop indefinitely.
-	in_trigger_expansion = true;
 
 	if (returning_list.empty()) {
 		returning_list.push_back(make_uniq<StarExpression>());

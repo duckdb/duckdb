@@ -259,3 +259,13 @@ SELECT COUNT(*) FROM t_conflict_log;
 ----
 2
 
+# Recursive trigger (body writes to trigger table) is blocked at CREATE TRIGGER time
+statement ok
+CREATE TABLE t_recursive (id INTEGER);
+
+statement error
+CREATE TRIGGER trg_recursive AFTER INSERT ON t_recursive FOR EACH STATEMENT
+    INSERT INTO t_recursive VALUES (1);
+----
+Not implemented Error: Trigger body cannot write to the trigger's own table
+
