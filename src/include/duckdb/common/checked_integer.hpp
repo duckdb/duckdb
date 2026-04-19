@@ -19,7 +19,8 @@
 
 namespace duckdb {
 
-//! CheckedInteger is a templated wrapper around integer types (signed or unsigned) that throws an InternalException on overflow or underflow for arithmetic operations.
+//! CheckedInteger is a templated wrapper around integer types (signed or unsigned) that throws an InternalException on
+//! overflow or underflow for arithmetic operations.
 template <class T>
 class CheckedInteger {
 	static_assert(std::is_integral<T>::value, "CheckedInteger only supports integral types");
@@ -30,11 +31,14 @@ private:
 public:
 	using value_type = T;
 
-	CheckedInteger() : value(0) {}
-	CheckedInteger(T v) : value(v) {} // NOLINT
+	CheckedInteger() : value(0) {
+	}
+	CheckedInteger(T v) : value(v) {
+	} // NOLINT
 
 	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
-	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) {} // NOLINT
+	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) {
+	} // NOLINT
 
 	explicit operator T() const {
 		return value;

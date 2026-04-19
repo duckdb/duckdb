@@ -110,31 +110,31 @@ TEST_CASE("Checked integer comparisons", "[checked_integer]") {
 TEST_CASE("CheckedInteger mixed type arithmetic", "[checked_integer]") {
 	// int8_t * double -> int8_t (as per user request)
 	i8_t a(10);
-	auto b = a * 2.5;  // Should cast 2.5 to int8_t (2) and multiply
+	auto b = a * 2.5; // Should cast 2.5 to int8_t (2) and multiply
 	REQUIRE(b.GetValue() == 20);
 
 	// int8_t + double
-	auto c = a + 1.7;  // Casts to 1
+	auto c = a + 1.7; // Casts to 1
 	REQUIRE(c.GetValue() == 11);
 
 	// Compound assignment with different type
 	i16_t d(100);
-	d += 50.9;  // Casts to 50
+	d += 50.9; // Casts to 50
 	REQUIRE(d.GetValue() == 150);
 
 	// int64_t - float
 	i64_t e(1000);
-	auto f = e - 123.9f;  // Casts to 123
+	auto f = e - 123.9f; // Casts to 123
 	REQUIRE(f.GetValue() == 877);
 
 	// uint32_t / int
 	u32_t g(100);
-	auto h = g / 3;  // Casts int(3) to uint32_t
+	auto h = g / 3; // Casts int(3) to uint32_t
 	REQUIRE(h.GetValue() == 33u);
 
 	// Compound assignment: int8_t *= double
 	i8_t i(5);
-	i *= 3.9;  // Casts to 3
+	i *= 3.9; // Casts to 3
 	REQUIRE(i.GetValue() == 15);
 }
 
@@ -152,7 +152,7 @@ TEST_CASE("CheckedInteger unsigned cannot be negative", "[checked_integer]") {
 	u16_t x(50);
 	x += -10;
 	REQUIRE(x.GetValue() == 40u);
-	REQUIRE_THROWS_AS(x -= 100, InternalException);  // underflow caught by checked sub
+	REQUIRE_THROWS_AS(x -= 100, InternalException); // underflow caught by checked sub
 
 	// Mixed: uint32_t * negative double truncates -2.5 to uint32_t, wraps → overflow
 	u32_t y(10);
@@ -164,7 +164,7 @@ TEST_CASE("CheckedInteger unsigned cannot be negative", "[checked_integer]") {
 	REQUIRE(z.GetValue() == 19u);
 }
 
-#define CHECK_MATCHES_NATIVE(checked_val, native_expr) \
+#define CHECK_MATCHES_NATIVE(checked_val, native_expr)                                                                 \
 	REQUIRE(static_cast<decltype(native_expr)>((checked_val).GetValue()) == (native_expr))
 
 TEST_CASE("Cross-type binary arithmetic matches native behavior", "[checked_integer]") {
