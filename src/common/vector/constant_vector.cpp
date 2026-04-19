@@ -2,6 +2,7 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
@@ -22,14 +23,13 @@ buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 		result = make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(internal_type));
 	}
 	result->SetValue(type, 0, value);
-	D_ASSERT(result->Size() == 1);
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
 	return result;
 }
 
 void ConstantVector::Reference(Vector &vector, const Value &value) {
 	D_ASSERT(vector.GetType() == value.type());
-	vector.buffer = CreateConstantBuffer(value);
+	vector.SetBuffer(CreateConstantBuffer(value));
 }
 
 void ConstantVector::SetNull(Vector &vector) {
