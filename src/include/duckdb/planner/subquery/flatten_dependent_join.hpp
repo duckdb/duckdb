@@ -45,6 +45,8 @@ private:
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,
 	                                      const CorrelatedColumns &correlated_columns,
 	                                      const vector<ColumnBinding> &state, bool perform_delim);
+	column_binding_map_t<ColumnBinding> GetCurrentBindings(const vector<ColumnBinding> &state) const;
+	void RewriteCorrelated(LogicalOperator &op, const vector<ColumnBinding> &state);
 	//! Checks whether a subtree contains any correlated expressions that reference this flattener's correlated columns.
 	bool DependsOnCorrelated(LogicalOperator &op) const;
 	idx_t GetDelimKeyIndex(idx_t index) const;
@@ -58,11 +60,9 @@ private:
 	vector<ColumnBinding> DecorrelateDependentJoin(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                               vector<ColumnBinding> state);
 	optional_ptr<const ColumnBinding> GetCorrelatedBase(const ColumnBinding &binding) const;
-	optional_idx GetCorrelatedIndexByBase(const ColumnBinding &base_binding) const;
 	optional_idx GetCorrelatedIndex(const ColumnBinding &binding) const;
 	void MergeCorrelatedAliases(const FlattenDependentJoins &source);
 	Binder &binder;
-	vector<ColumnBinding> correlated_base_bindings;
 	column_binding_map_t<ColumnBinding> correlated_aliases;
 	column_binding_map_t<idx_t> replacement_map;
 	const CorrelatedColumns &correlated_columns;

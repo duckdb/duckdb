@@ -17,13 +17,10 @@ namespace duckdb {
 //! Helper class to rewrite correlated expressions within a single LogicalOperator
 class RewriteCorrelatedExpressions : public LogicalOperatorVisitor {
 public:
-	static void Rewrite(LogicalOperator &op, const vector<ColumnBinding> &correlated_base_bindings,
-	                    const vector<ColumnBinding> &correlated_bindings,
+	static void Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
 	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
 
 private:
-	static void Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
-	                    column_binding_map_t<ColumnBinding> &correlated_aliases);
 	RewriteCorrelatedExpressions(column_binding_map_t<ColumnBinding> current_binding_map,
 	                             column_binding_map_t<ColumnBinding> &correlated_aliases);
 	void RegisterCorrelatedBinding(const ColumnBinding &source_binding, const ColumnBinding &target_binding);

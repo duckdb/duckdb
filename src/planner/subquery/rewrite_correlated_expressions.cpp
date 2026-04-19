@@ -17,17 +17,6 @@ RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(column_binding_map_t<
     : current_binding_map(std::move(current_binding_map)), correlated_aliases(correlated_aliases) {
 }
 
-void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, const vector<ColumnBinding> &correlated_base_bindings,
-                                           const vector<ColumnBinding> &correlated_bindings,
-                                           column_binding_map_t<ColumnBinding> &correlated_aliases) {
-	D_ASSERT(correlated_base_bindings.size() == correlated_bindings.size());
-	column_binding_map_t<ColumnBinding> current_binding_map;
-	for (idx_t i = 0; i < correlated_base_bindings.size(); i++) {
-		current_binding_map[correlated_base_bindings[i]] = correlated_bindings[i];
-	}
-	Rewrite(op, std::move(current_binding_map), correlated_aliases);
-}
-
 void RewriteCorrelatedExpressions::Rewrite(LogicalOperator &op, column_binding_map_t<ColumnBinding> current_binding_map,
                                            column_binding_map_t<ColumnBinding> &correlated_aliases) {
 	RewriteCorrelatedExpressions rewriter(std::move(current_binding_map), correlated_aliases);
