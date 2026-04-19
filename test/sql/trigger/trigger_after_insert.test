@@ -383,3 +383,26 @@ statement error
 INSERT INTO t_returning VALUES (1) RETURNING id;
 ----
 Not implemented Error: RETURNING is not yet supported on tables with AFTER triggers
+
+# MERGE INTO is not supported on tables with triggers
+statement ok
+CREATE TABLE t_merge_target (id INTEGER PRIMARY KEY, val INTEGER);
+
+statement ok
+CREATE TABLE t_merge_source (id INTEGER, val INTEGER);
+
+statement ok
+INSERT INTO t_merge_source VALUES (1, 100);
+
+statement ok
+CREATE TABLE t_merge_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_merge AFTER INSERT ON t_merge_target FOR EACH STATEMENT
+    INSERT INTO t_merge_log VALUES ('fired');
+
+statement error
+MERGE INTO t_merge_target t USING t_merge_source s ON t.id = s.id
+    WHEN NOT MATCHED THEN INSERT VALUES (s.id, s.val);
+----
+Not implemented Error: MERGE INTO is not supported on tables with triggers
