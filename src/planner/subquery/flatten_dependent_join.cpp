@@ -812,13 +812,13 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
 		}
-		auto upper_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(limit_val));
+		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
 		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
 		                                                 std::move(upper_bound));
 	}
 
 	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-		auto lower_bound = make_uniq<BoundConstantExpression>(Value::BIGINT(limit.offset_val.GetConstantValue()));
+		auto lower_bound = make_uniq<BoundConstantExpression>(int64_t(limit.offset_val.GetConstantValue()));
 		auto lower_comp = make_uniq_base<Expression, BoundComparisonExpression>(
 		    ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(), std::move(lower_bound));
 
