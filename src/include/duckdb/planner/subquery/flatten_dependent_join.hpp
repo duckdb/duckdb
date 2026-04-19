@@ -113,20 +113,15 @@ private:
 	                                    vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownWindow(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                     vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownSetOperation(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                           vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownDistinct(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                       vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownSetOperation(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownDistinct(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownExpressionGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                            vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownOrderBy(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                      vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownGet(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                  vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownOrderBy(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownGet(unique_ptr<LogicalOperator> &plan, vector<ColumnBinding> state);
 	vector<ColumnBinding> PushDownCTE(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                  vector<ColumnBinding> state);
-	vector<ColumnBinding> PushDownCTERef(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
-	                                     vector<ColumnBinding> state);
+	vector<ColumnBinding> PushDownCTERef(unique_ptr<LogicalOperator> &plan);
 	vector<ColumnBinding> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                                    vector<ColumnBinding> state);
 };
