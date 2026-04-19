@@ -509,12 +509,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
 
-	table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
-		auto &t = entry.Cast<TriggerCatalogEntry>();
-		if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
-			throw NotImplementedException("Multiple triggers per table event are not yet supported");
-		}
-	});
+	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+			auto &t = entry.Cast<TriggerCatalogEntry>();
+			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+				throw NotImplementedException("Multiple triggers per table event are not yet supported");
+			}
+		});
+	}
 
 	// Bind a copy to validate (keep original unbound for serialization).
 	// Add the trigger table to the expanded set so validation matches runtime behavior
