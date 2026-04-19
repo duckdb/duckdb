@@ -589,6 +589,9 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
                                                           TableCatalogEntry &table, TriggerEventType event_type) {
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
 	if (expanded_tables.find(table) != expanded_tables.end()) {
+		if (global_binder_state->trigger_creation_table == &table) {
+			throw NotImplementedException("Trigger body cannot write to the trigger's own table");
+		}
 		return nullptr;
 	}
 	vector<unique_ptr<QueryNode>> trigger_bodies;

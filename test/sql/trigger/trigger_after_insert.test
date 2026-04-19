@@ -259,6 +259,55 @@ SELECT COUNT(*) FROM t_conflict_log;
 ----
 2
 
+# Chained triggers
+# creating a trigger whose body inserts into a table that already has its own trigger shoud succeed (A->B->C)
+statement ok
+CREATE TABLE t_chain_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_chain_b (msg VARCHAR);
+
+statement ok
+CREATE TABLE t_chain_c (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_chain_b AFTER INSERT ON t_chain_b FOR EACH STATEMENT
+    INSERT INTO t_chain_c VALUES ('fired from b');
+
+statement ok
+CREATE TRIGGER trg_chain_a AFTER INSERT ON t_chain_a FOR EACH STATEMENT
+    INSERT INTO t_chain_b VALUES ('fired from a');
+
+statement ok
+INSERT INTO t_chain_a VALUES (1);
+
+query I
+SELECT COUNT(*) FROM t_chain_b;
+----
+1
+
+query I
+SELECT COUNT(*) FROM t_chain_c;
+----
+1
+
+# Mutual recursion (A->B->A) is blocked when creating the second trigger
+statement ok
+CREATE TABLE t_mutual_a (id INTEGER);
+
+statement ok
+CREATE TABLE t_mutual_b (id INTEGER);
+
+statement ok
+CREATE TRIGGER trg_mutual_a AFTER INSERT ON t_mutual_a FOR EACH STATEMENT
+    INSERT INTO t_mutual_b VALUES (1);
+
+statement error
+CREATE TRIGGER trg_mutual_b AFTER INSERT ON t_mutual_b FOR EACH STATEMENT
+    INSERT INTO t_mutual_a VALUES (1);
+----
+Not implemented Error: Trigger body cannot write to the trigger's own table
+
 # Recursive trigger (body writes to trigger table) is blocked at CREATE TRIGGER time
 statement ok
 CREATE TABLE t_recursive (id INTEGER);
