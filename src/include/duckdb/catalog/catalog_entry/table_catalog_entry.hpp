@@ -140,9 +140,8 @@ public:
 	virtual void ScanTriggers(CatalogTransaction transaction,
 	                          const std::function<void(CatalogEntry &)> &callback) const;
 	//! Collect triggers matching the given timing and event type
-	vector<const_reference<TriggerCatalogEntry>> GetTriggersForEvent(CatalogTransaction transaction,
-	                                                                  TriggerTiming timing,
-	                                                                  TriggerEventType event_type) const;
+	vector<const_reference<TriggerCatalogEntry>>
+	GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type) const;
 
 protected:
 	//! A list of columns that are part of this table

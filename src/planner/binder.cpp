@@ -611,7 +611,8 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	// multiple triggers per table are not yet supported
 	D_ASSERT(triggers.size() == 1);
 
-	D_ASSERT(returning_list.empty());;
+	D_ASSERT(returning_list.empty());
+	;
 	returning_list.push_back(make_uniq<StarExpression>());
 
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
