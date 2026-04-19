@@ -2,6 +2,7 @@ add_library_unity(
   test_common
   OBJECT
   test_cast.cpp
+  test_checked_integer.cpp
   test_checksum.cpp
   test_column_data_allocator.cpp
   test_file_buffer_handle_group.cpp
