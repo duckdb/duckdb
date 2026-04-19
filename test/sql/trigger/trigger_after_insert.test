@@ -367,3 +367,19 @@ query I
 SELECT COUNT(*) FROM t_nn_log;
 ----
 0
+
+# RETURNING is not yet supported on tables with AFTER triggers
+statement ok
+CREATE TABLE t_returning (id INTEGER);
+
+statement ok
+CREATE TABLE t_returning_log (msg VARCHAR);
+
+statement ok
+CREATE TRIGGER trg_returning AFTER INSERT ON t_returning FOR EACH STATEMENT
+    INSERT INTO t_returning_log VALUES ('fired');
+
+statement error
+INSERT INTO t_returning VALUES (1) RETURNING id;
+----
+Not implemented Error: RETURNING is not yet supported on tables with AFTER triggers

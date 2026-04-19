@@ -599,6 +599,9 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	if (triggers.empty()) {
 		return nullptr;
 	}
+	if (!returning_list.empty()) {
+		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
+	}
 	expanded_tables.insert(table);
 	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
 }
@@ -608,9 +611,8 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	// multiple triggers per table are not yet supported
 	D_ASSERT(triggers.size() == 1);
 
-	if (returning_list.empty()) {
-		returning_list.push_back(make_uniq<StarExpression>());
-	}
+	D_ASSERT(returning_list.empty());;
+	returning_list.push_back(make_uniq<StarExpression>());
 
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
