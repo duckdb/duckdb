@@ -1,7 +1,6 @@
 #include "duckdb/planner/binder.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
@@ -588,18 +587,14 @@ static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
 unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
                                                           vector<unique_ptr<ParsedExpression>> &returning_list,
                                                           TableCatalogEntry &table, TriggerEventType event_type) {
-	if (!table.IsDuckTable()) {
-		return nullptr;
-	}
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
 	if (expanded_tables.find(table) != expanded_tables.end()) {
 		return nullptr;
 	}
 	vector<unique_ptr<QueryNode>> trigger_bodies;
 	vector<TriggerForEach> trigger_for_each;
-	table.Cast<DuckTableEntry>().GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
-	                                                 TriggerTiming::AFTER, event_type, trigger_bodies,
-	                                                 trigger_for_each);
+	table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context), TriggerTiming::AFTER, event_type,
+	                          trigger_bodies, trigger_for_each);
 	if (trigger_bodies.empty()) {
 		return nullptr;
 	}

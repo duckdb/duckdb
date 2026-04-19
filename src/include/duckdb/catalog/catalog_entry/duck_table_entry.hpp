@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
@@ -63,13 +62,9 @@ public:
 	//! Returns the virtual columns for this table
 	virtual_column_map_t GetVirtualColumns() const override;
 
-	//! Create a trigger on this table
-	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info);
-	//! Scan all triggers on this table
-	void ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
-	//! Collect trigger bodies
-	void GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing, TriggerEventType event_type,
-	                         vector<unique_ptr<QueryNode>> &trigger_bodies, vector<TriggerForEach> &trigger_for_each);
+	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	void ScanTriggers(CatalogTransaction transaction,
+	                  const std::function<void(CatalogEntry &)> &callback) const override;
 	//! Scan all triggers without a transaction (used by checkpoint writer)
 	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
 	//! Drop a trigger by name

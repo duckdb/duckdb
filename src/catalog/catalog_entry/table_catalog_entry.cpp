@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
@@ -385,6 +387,29 @@ vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
 	vector<column_t> result;
 	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	return result;
+}
+
+optional_ptr<CatalogEntry> TableCatalogEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	throw NotImplementedException("Triggers are not supported for this table type");
+}
+
+void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
+                                     const std::function<void(CatalogEntry &)> &callback) const {
+	// Default: no triggers (non-DuckDB tables do not support triggers)
+}
+
+void TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction, TriggerTiming timing,
+                                            TriggerEventType event_type, vector<unique_ptr<QueryNode>> &trigger_bodies,
+                                            vector<TriggerForEach> &trigger_for_each) const {
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.timing != timing || trigger.event_type != event_type) {
+			return;
+		}
+		D_ASSERT(trigger.trigger_action);
+		trigger_bodies.push_back(trigger.trigger_action->Copy());
+		trigger_for_each.push_back(trigger.for_each);
+	});
 }
 
 } // namespace duckdb

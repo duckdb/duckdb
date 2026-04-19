@@ -105,3 +105,24 @@ CREATE TRIGGER trg_on_view AFTER INSERT ON base_view FOR EACH STATEMENT
     INSERT INTO base_tbl VALUES (1);
 ----
 CREATE TRIGGER requires a base table, not a view or subquery
+
+# CREATE TRIGGER on a non-DuckDB table is rejected
+require sqlite_scanner
+
+statement ok
+LOAD sqlite_scanner;
+
+statement ok
+ATTACH ':memory:' AS sqlite_db (TYPE SQLITE);
+
+statement ok
+CREATE TABLE sqlite_db.my_ext_table (id INTEGER);
+
+statement ok
+CREATE TABLE sqlite_db.my_ext_audit (msg VARCHAR);
+
+statement error
+CREATE TRIGGER trg_on_sqlite AFTER INSERT ON sqlite_db.my_ext_table FOR EACH STATEMENT
+    INSERT INTO sqlite_db.my_ext_audit VALUES ('inserted');
+----
+Triggers are not supported for this table type

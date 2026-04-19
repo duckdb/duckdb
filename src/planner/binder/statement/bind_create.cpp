@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -513,17 +512,12 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
 	}
 
-	if (table.IsDuckTable()) {
-		auto &duck_table = table.Cast<DuckTableEntry>();
-		duck_table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
-			auto &t = entry.Cast<TriggerCatalogEntry>();
-			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
-				// Triggers-to-CTE Expansion creates exactly one trigger CTE.
-				// We will support multiple triggers it in the next PRs.
-				throw NotImplementedException("Multiple triggers per table event are not yet supported");
-			}
-		});
-	}
+	table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+		auto &t = entry.Cast<TriggerCatalogEntry>();
+		if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+			throw NotImplementedException("Multiple triggers per table event are not yet supported");
+		}
+	});
 
 	// Block trigger bodies whose DML target is the trigger's own table
 	D_ASSERT(create_trigger_info.trigger_action);
