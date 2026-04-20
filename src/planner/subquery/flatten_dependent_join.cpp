@@ -333,7 +333,6 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOperator> &plan,
                                                            bool propagate_null_values, vector<ColumnBinding> state,
                                                            bool rewrite_parent, idx_t child_idx) {
-	auto old_child_bindings = plan->children[child_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[child_idx], propagate_null_values, std::move(state));
 	if (rewrite_parent) {
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
@@ -475,7 +474,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
 	idx_t independent_idx = correlated_left ? 1 : 0;
 	state = PushDownCorrelatedNode(plan->children[correlated_idx], propagate_null_values, std::move(state));
 	plan->children[independent_idx] = DecorrelateIndependent(binder, std::move(plan->children[independent_idx]));
-	return std::move(state);
+	return state;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan,
@@ -716,7 +715,8 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 
 	auto window_index = binder.GenerateTableIndex();
 	vector<unique_ptr<Expression>> partitions;
-	for (idx_t i = 0; i < perform_delim ? correlated_columns.size() : 1; i++) {
+	auto delim_key_count = perform_delim ? correlated_columns.size() : 1;
+	for (idx_t i = 0; i < delim_key_count; i++) {
 		auto &col = correlated_columns[GetDelimKeyIndex(i)];
 		partitions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
 	}
@@ -770,7 +770,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownWindow(unique_ptr<LogicalOp
 		auto &w = expr->Cast<BoundWindowExpression>();
 		AppendCorrelatedColumns(w.partitions, state, false);
 	}
-	return std::move(state);
+	return state;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownSetOperation(unique_ptr<LogicalOperator> &plan,
@@ -819,7 +819,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSetOperation(unique_ptr<Log
 #endif
 	state = CreateContiguousState(ColumnBinding(setop.table_index, ProjectionIndex(setop.column_count)));
 	setop.column_count += correlated_columns.size();
-	return std::move(state);
+	return state;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownDistinct(unique_ptr<LogicalOperator> &plan,
@@ -894,7 +894,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCTE(unique_ptr<LogicalOpera
 	// The CTE outputs a contiguous block of bindings. Lock this state in.
 	auto cte_state = CreateContiguousState(ColumnBinding(cte.table_index, ProjectionIndex(cte.column_count)));
 
-	// 4. Recursive CTE Specific Setup
+	// Recursive CTE Specific Setup
 	if (plan->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		auto &rec_cte = plan->Cast<LogicalRecursiveCTE>();
 		if (!rec_cte.key_targets.empty()) {
