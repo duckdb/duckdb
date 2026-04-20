@@ -16,7 +16,8 @@ namespace duckdb {
 template <class T>
 struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count)
-	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)), count(count) {
+	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)), count(count),
+	      current_idx(0) {
 	}
 
 	void SetInvalid(idx_t idx) {
@@ -29,10 +30,23 @@ struct VectorWriter {
 		return data[idx];
 	}
 
+	void PushValue(const T &value) {
+		D_ASSERT(current_idx < count);
+		data[current_idx] = value;
+		current_idx++;
+	}
+
+	void PushInvalid() {
+		D_ASSERT(current_idx < count);
+		validity.SetInvalid(current_idx);
+		current_idx++;
+	}
+
 private:
 	T *data;
 	ValidityMask &validity;
 	idx_t count;
+	idx_t current_idx;
 };
 
 template <>
@@ -97,6 +111,18 @@ struct VectorWriter<string_t> {
 		return StringElement(*this, data, idx);
 	}
 
+	inline void PushValue(string_t val) {
+		D_ASSERT(current_idx < count);
+		StringElement(*this, data, current_idx) = val;
+		current_idx++;
+	}
+
+	inline void PushInvalid() {
+		D_ASSERT(current_idx < count);
+		validity.SetInvalid(current_idx);
+		current_idx++;
+	}
+
 	inline StringHeap &GetHeap() {
 		if (!heap) {
 			InitializeHeap();
@@ -113,6 +139,7 @@ private:
 	ValidityMask &validity;
 	optional_ptr<StringHeap> heap;
 	idx_t count;
+	idx_t current_idx;
 };
 
 } // namespace duckdb

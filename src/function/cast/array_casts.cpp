@@ -185,12 +185,11 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (FlatVector::IsNull(source, i)) {
-			list_data.SetInvalid(i);
+			list_data.PushInvalid();
 			continue;
 		}
 
-		list_data[i].offset = i * array_size;
-		list_data[i].length = array_size;
+		list_data.PushValue(list_entry_t(i * array_size, array_size));
 	}
 	return all_ok;
 }

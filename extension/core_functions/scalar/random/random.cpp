@@ -74,7 +74,7 @@ void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<double>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = lstate.random_engine.NextRandom();
+		result_data.PushValue(lstate.random_engine.NextRandom());
 	}
 }
 
@@ -92,7 +92,7 @@ void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv4::GenerateRandomUUID(lstate.random_engine);
+		result_data.PushValue(UUIDv4::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 
@@ -103,7 +103,7 @@ void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv7::GenerateRandomUUID(lstate.random_engine);
+		result_data.PushValue(UUIDv7::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 

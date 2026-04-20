@@ -638,24 +638,17 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &keys_entry = keys_data[i];
-		auto &children_entry = children_data[i];
-		auto &values_entry = values_data[i];
-
 		//! keys
-		keys_entry.length = keys_sizes[i];
-		keys_entry.offset = keys_offset;
-		keys_offset += keys_entry.length;
+		keys_data.PushValue(list_entry_t(keys_offset, keys_sizes[i]));
+		keys_offset += keys_sizes[i];
 
 		//! children
-		children_entry.length = children_sizes[i];
-		children_entry.offset = children_offset;
-		children_offset += children_entry.length;
+		children_data.PushValue(list_entry_t(children_offset, children_sizes[i]));
+		children_offset += children_sizes[i];
 
 		//! values
-		values_entry.length = values_sizes[i];
-		values_entry.offset = values_offset;
-		values_offset += values_entry.length;
+		values_data.PushValue(list_entry_t(values_offset, values_sizes[i]));
+		values_offset += values_sizes[i];
 
 		//! value
 		blob_data[i].EmptyString(blob_sizes[i]);

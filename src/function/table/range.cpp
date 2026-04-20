@@ -363,7 +363,8 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			if (size >= STANDARD_VECTOR_SIZE) {
 				break;
 			}
-			result_data[size++] = state.current_state;
+			result_data.PushValue(state.current_state);
+			size++;
 			state.current_state =
 			    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment);
 		}

@@ -212,7 +212,8 @@ struct ICUTableRange {
 				if (state.Finished(state.current_state)) {
 					break;
 				}
-				data[size++] = state.current_state;
+				data.PushValue(state.current_state);
+				size++;
 				state.current_state = ICUDateFunc::Add(calendar, state.current_state, state.increment);
 				if (size >= STANDARD_VECTOR_SIZE) {
 					break;

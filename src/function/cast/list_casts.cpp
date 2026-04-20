@@ -60,7 +60,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
+			tdata.PushValue(ldata[i]);
 		}
 	}
 	auto &source_cc = ListVector::GetEntry(source);

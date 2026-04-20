@@ -433,7 +433,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
-			data[i] = unfiltered;
+			data.PushValue(unfiltered);
 		}
 		return;
 	}
@@ -612,7 +612,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 			int64_t start_row = gstate.row_number;
 			auto rdata = FlatVector::Writer<int64_t>(output.data[col_idx], count);
 			for (idx_t i = 0; i < count; i++) {
-				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
+				rdata.PushValue(NumericCast<int64_t>(start_row + NumericCast<int64_t>(i)));
 			}
 			break;
 		}

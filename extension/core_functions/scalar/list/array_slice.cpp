@@ -185,7 +185,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-			result_data.SetInvalid(i);
+			result_data.PushInvalid();
 			continue;
 		}
 
@@ -213,11 +213,11 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		sel_length += length;
 
 		if (!clamp_result) {
-			result_data.SetInvalid(i);
+			result_data.PushInvalid();
 		} else if (!step_vector) {
-			result_data[i] = OP::SliceValue(result, sliced, begin, end);
+			result_data.PushValue(OP::SliceValue(result, sliced, begin, end));
 		} else {
-			result_data[i] = OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx);
+			result_data.PushValue(OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx));
 		}
 	}
 	if (step_vector) {

@@ -39,8 +39,7 @@ unique_ptr<FunctionData> UnionTagBind(BindScalarFunctionInput &input) {
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);
 	auto result_data = FlatVector::Writer<string_t>(varchar_vector, member_count);
 	for (idx_t i = 0; i < member_count; i++) {
-		auto str = string_t(UnionType::GetMemberName(arguments[0]->return_type, i));
-		result_data[i] = str;
+		result_data.PushValue(string_t(UnionType::GetMemberName(arguments[0]->return_type, i)));
 	}
 	auto enum_type = LogicalType::ENUM(varchar_vector, member_count);
 	bound_function.SetReturnType(enum_type);

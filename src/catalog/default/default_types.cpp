@@ -189,7 +189,7 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 			throw BinderException("ENUM type arguments cannot be NULL (argument %d is NULL)", arg_idx + 1);
 		}
 
-		string_data[arg_idx] = StringValue::Get(arg.GetValue());
+		string_data.PushValue(string_t(StringValue::Get(arg.GetValue())));
 	}
 
 	return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(arguments.size()));

@@ -210,9 +210,9 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		if (key.Empty()) {
-			result_data.SetInvalid(i);
+			result_data.PushInvalid();
 		} else {
-			result_data[i] = string_t(const_char_ptr_cast(key.data), key.len);
+			result_data.PushValue(string_t(const_char_ptr_cast(key.data), key.len));
 		}
 	}
 	if (count == 1) {
