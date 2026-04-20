@@ -174,6 +174,7 @@ static void RunFuzzIteration(const uint8_t *data, size_t size) {
 	try {
 		ClearTestDirectory();
 		auto config = GetTestConfig();
+		config->SetOptionByName("disabled_filesystems", "LocalFileSystem");
 		DuckDB db(nullptr, config.get());
 		Connection con(db);
 		(void)con.Query("PRAGMA disable_progress_bar");
