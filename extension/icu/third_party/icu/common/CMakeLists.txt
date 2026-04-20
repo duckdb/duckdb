@@ -28,7 +28,9 @@ add_library(
   utrie.cpp
   utrie2.cpp
   utrie2_builder.cpp
-  uvector.cpp)
+  uvector.cpp
+  wintz.cpp
+)
 add_library_unity(
   duckdb_icu_common_unity
   OBJECT
@@ -142,7 +144,6 @@ add_library_unity(
   utypes.cpp
   uvectr32.cpp
   uvectr64.cpp
-  wintz.cpp
 )
 disable_target_warnings(duckdb_icu_common)
 disable_target_warnings(duckdb_icu_common_unity)
