@@ -1,4 +1,4 @@
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"

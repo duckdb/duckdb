@@ -1,4 +1,4 @@
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 

@@ -1,6 +1,6 @@
-#include "ast/sequence_option.hpp"
+#include "duckdb/parser/peg/ast/sequence_option.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

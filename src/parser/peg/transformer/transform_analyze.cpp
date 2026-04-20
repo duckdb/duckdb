@@ -1,6 +1,6 @@
-#include "ast/analyze_target.hpp"
+#include "duckdb/parser/peg/ast/analyze_target.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 
 namespace duckdb {

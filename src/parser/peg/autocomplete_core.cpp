@@ -1,9 +1,8 @@
-#include "autocomplete_catalog_provider.hpp"
-#include "matcher.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 
 namespace duckdb {
 

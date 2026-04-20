@@ -1,5 +1,5 @@
-#include "ast/add_column_entry.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/ast/add_column_entry.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"

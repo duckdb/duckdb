@@ -1,6 +1,6 @@
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/common/enums/trigger_type.hpp"
-#include "matcher.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref/showref.hpp"

@@ -1,4 +1,4 @@
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 
 namespace duckdb {

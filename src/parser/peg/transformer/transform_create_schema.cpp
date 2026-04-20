@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

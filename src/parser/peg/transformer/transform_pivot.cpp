@@ -1,5 +1,5 @@
-#include "ast/unpivot_name_values.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"

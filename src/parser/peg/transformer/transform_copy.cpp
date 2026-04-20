@@ -3,7 +3,7 @@
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

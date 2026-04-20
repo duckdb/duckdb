@@ -1,6 +1,6 @@
-#include "ast/insert_values.hpp"
-#include "ast/on_conflict_expression_target.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/ast/insert_values.hpp"
+#include "duckdb/parser/peg/ast/on_conflict_expression_target.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 

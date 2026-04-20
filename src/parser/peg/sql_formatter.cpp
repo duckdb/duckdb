@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "sql_formatter.hpp"
-#include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "matcher.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "utf8proc_wrapper.hpp"
 

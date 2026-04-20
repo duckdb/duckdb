@@ -1,7 +1,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
-// #define PEG_PARSER_SOURCE_FILE "extension/autocomplete/include/inlined_grammar.gram"
+// #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"

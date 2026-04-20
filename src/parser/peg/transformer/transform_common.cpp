@@ -1,7 +1,7 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/negate.hpp"

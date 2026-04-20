@@ -1,6 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {

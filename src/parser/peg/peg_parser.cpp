@@ -1,4 +1,4 @@
-#include "parser/peg_parser.hpp"
+#include "duckdb/parser/peg/peg_parser.hpp"
 
 namespace duckdb {
 

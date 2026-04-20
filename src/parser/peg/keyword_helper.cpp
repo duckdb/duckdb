@@ -1,4 +1,4 @@
-#include "keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 
 namespace duckdb {
 PEGKeywordHelper &PEGKeywordHelper::Instance() {

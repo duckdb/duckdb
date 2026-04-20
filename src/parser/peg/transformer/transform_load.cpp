@@ -1,8 +1,8 @@
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb/parser/statement/update_extensions_statement.hpp"
 #include "duckdb/parser/parsed_data/update_extensions_info.hpp"
-#include "transformer/peg_transformer.hpp"
-#include "ast/extension_repository_info.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/ast/extension_repository_info.hpp"
 
 namespace duckdb {
 

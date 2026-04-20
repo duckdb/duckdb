@@ -1,7 +1,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/call_statement.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

@@ -1,7 +1,7 @@
-#include "ast/macro_parameter.hpp"
+#include "duckdb/parser/peg/ast/macro_parameter.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {

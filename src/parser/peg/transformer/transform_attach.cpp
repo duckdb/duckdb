@@ -1,9 +1,9 @@
-#include "ast/generic_copy_option.hpp"
+#include "duckdb/parser/peg/ast/generic_copy_option.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

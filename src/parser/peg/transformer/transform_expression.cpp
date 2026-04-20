@@ -2,7 +2,7 @@
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/optimizer/rule/date_trunc_simplification.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"

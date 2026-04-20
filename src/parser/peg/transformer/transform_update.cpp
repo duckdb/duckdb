@@ -1,6 +1,6 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 

@@ -1,5 +1,5 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 namespace duckdb {
 
