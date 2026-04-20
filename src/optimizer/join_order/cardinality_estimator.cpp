@@ -105,6 +105,11 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
 	for (auto &filter : filter_infos) {
+		if (filter->filter && filter->filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
+			or_filters.push_back(filter.get());
+			continue;
+		}
 		if (SingleColumnFilter(*filter)) {
 			// Filter on one relation, (i.e. string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
@@ -426,20 +431,12 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 }
 
 double CardinalityEstimator::ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const {
-	if (!or_filter_selectivities || or_filter_selectivities->empty()) {
-		return cardinality;
-	}
-	for (auto &entry : *or_filter_selectivities) {
-		if (JoinRelationSet::IsSubset(new_set, entry.first.get())) {
-			cardinality *= entry.second;
+	for (auto &filter : or_filters) {
+		if (JoinRelationSet::IsSubset(new_set, filter->set.get())) {
+			cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
 		}
 	}
 	return cardinality;
-}
-
-void CardinalityEstimator::SetOrFilterSelectivities(
-    optional_ptr<const reference_map_t<JoinRelationSet, double>> selectivities) {
-	or_filter_selectivities = selectivities;
 }
 
 template <>

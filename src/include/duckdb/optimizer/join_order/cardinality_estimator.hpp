@@ -7,7 +7,6 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 
@@ -111,9 +110,6 @@ public:
 	template <class T>
 	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
 
-	//! Non-owning; QueryGraphManager owns the map.
-	void SetOrFilterSelectivities(optional_ptr<const reference_map_t<JoinRelationSet, double>> selectivities);
-
 	//! used for debugging.
 	void AddRelationNamesToRelationStats(vector<RelationStats> &stats);
 	void PrintRelationStats();
@@ -124,7 +120,7 @@ private:
 	//! Applied outside the cardinality cache so stored values stay pre-OR.
 	double ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const;
 
-	optional_ptr<const reference_map_t<JoinRelationSet, double>> or_filter_selectivities;
+	vector<optional_ptr<FilterInfo>> or_filters;
 
 	bool SingleColumnFilter(FilterInfo &filter_info);
 	vector<idx_t> DetermineMatchingEquivalentSets(optional_ptr<FilterInfo> filter_info);

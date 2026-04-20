@@ -111,17 +111,6 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 		} else if (filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conjunction = filter->Cast<BoundConjunctionExpression>();
 			if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
-				// Multi-relation ORs are filters the cardinality estimator should see,
-				// even though they're not hyper-graph edges.
-				auto &relation_set = filter_info->set.get();
-				if (relation_set.count >= 2) {
-					auto entry = or_filter_selectivities.find(relation_set);
-					if (entry == or_filter_selectivities.end()) {
-						or_filter_selectivities.emplace(relation_set, RelationStatisticsHelper::DEFAULT_SELECTIVITY);
-					} else {
-						entry->second *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
-					}
-				}
 				continue;
 			}
 			if (filter_info->join_type == JoinType::INNER || filter_info->join_type == JoinType::INVALID) {
