@@ -43,8 +43,9 @@ struct StrfTimeBindData : public FunctionData {
 };
 
 template <bool REVERSED>
-static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StrfTimeBindFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	auto format_idx = REVERSED ? 0U : 1U;
 	auto &format_arg = arguments[format_idx];
 	if (format_arg->HasParameter()) {
@@ -72,8 +73,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -85,8 +85,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -98,8 +97,7 @@ static void StrfTimeFunctionTimestampNS(DataChunk &args, ExpressionState &state,
 	auto &info = func_expr.bind_info->Cast<StrfTimeBindData>();
 
 	if (info.is_null) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 	info.format.ConvertTimestampNSVector(args.data[REVERSED ? 1 : 0], result, args.size());
@@ -156,13 +154,10 @@ struct StrpTimeFunction {
 		//	There is a bizarre situation where the format column is foldable but not constant
 		//	(i.e., the statistics tell us it has only one value)
 		//	We have to check whether that value is NULL
-		const auto count = args.size();
-		UnifiedVectorFormat format_unified;
-		args.data[1].ToUnifiedFormat(count, format_unified);
+		auto format_entries = args.data[1].Validity(args.size());
 
-		if (!format_unified.validity.RowIsValid(0)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+		if (!format_entries.IsValid(0)) {
+			ConstantVector::SetNull(result);
 			return;
 		}
 		UnaryExecutor::Execute<string_t, T>(args.data[0], result, args.size(), [&](string_t input) {
@@ -182,8 +177,7 @@ struct StrpTimeFunction {
 		auto &info = func_expr.bind_info->Cast<StrpTimeBindData>();
 
 		if (args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[1])) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 
@@ -202,8 +196,10 @@ struct StrpTimeFunction {
 		                                             });
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindScalarFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &bound_function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -295,6 +291,10 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
 	return strftime;
 }
 ScalarFunctionSet StrpTimeFun::GetFunctions() {

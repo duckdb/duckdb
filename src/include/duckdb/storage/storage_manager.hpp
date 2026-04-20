@@ -16,6 +16,7 @@
 #include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
+class ActiveCheckpointWrapper;
 class BlockManager;
 class Catalog;
 class CheckpointWriter;
@@ -78,11 +79,12 @@ public:
 	//! Gets the WAL of the StorageManager, or nullptr, if there is no WAL.
 	optional_ptr<WriteAheadLog> GetWAL();
 	//! Write that we started a checkpoint to the WAL if there is one - returns whether or not there is a WAL
-	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options);
+	bool WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
+	                        ActiveCheckpointWrapper &active_checkpoint);
 	//! Finishes a checkpoint
-	void WALFinishCheckpoint(lock_guard<mutex> &wal_lock);
+	void WALFinishCheckpoint(unique_lock<mutex> &wal_lock);
 	// Get the WAL lock
-	unique_ptr<lock_guard<mutex>> GetWALLock();
+	unique_lock<mutex> GetWALLock();
 
 	//! Returns the database file path
 	string GetDBPath() const {

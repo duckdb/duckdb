@@ -17,7 +17,7 @@ foreach str infinity Infinity INFINITY inFinIty inf
 
 # PG displays numeric infinities in Titlecase but temporal infinities in lowercase
 query II
-SELECT '${str}'::${datatype}, '-${str}'::${datatype};
+SELECT '{str}'::{datatype}, '-{str}'::{datatype};
 ----
 infinity	-infinity
 
@@ -31,7 +31,7 @@ foreach datatype TIMESTAMP TIMESTAMPTZ DATE
 foreach special infinity -infinity epoch
 
 statement error
-SELECT '${special} 00:00:00'::${datatype};
+SELECT '{special} 00:00:00'::{datatype};
 ----
 
 endloop
@@ -182,7 +182,7 @@ foreach arg ts tstz dt
 foreach val ts tstz dt
 
 query II
-SELECT ARG_MIN(${arg}, ${val}), ARG_MAX(${arg}, ${val}) FROM specials;
+SELECT ARG_MIN({arg}, {val}), ARG_MAX({arg}, {val}) FROM specials;
 ----
 -infinity	infinity
 
@@ -241,22 +241,22 @@ foreach datatype TIMESTAMP DATE
 foreach datepart microsecond second minute hour day month year
 
 query I
-SELECT 'infinity'::${datatype} + INTERVAL (1) ${datepart};
+SELECT 'infinity'::{datatype} + INTERVAL (1) {datepart};
 ----
 infinity
 
 query I
-SELECT '-infinity'::${datatype} + INTERVAL (1) ${datepart};
+SELECT '-infinity'::{datatype} + INTERVAL (1) {datepart};
 ----
 -infinity
 
 query I
-SELECT 'infinity'::${datatype} - INTERVAL (1) ${datepart};
+SELECT 'infinity'::{datatype} - INTERVAL (1) {datepart};
 ----
 infinity
 
 query I
-SELECT '-infinity'::${datatype} - INTERVAL (1) ${datepart};
+SELECT '-infinity'::{datatype} - INTERVAL (1) {datepart};
 ----
 -infinity
 

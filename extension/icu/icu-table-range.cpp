@@ -207,7 +207,7 @@ struct ICUTableRange {
 				return OperatorResultType::HAVE_MORE_OUTPUT;
 			}
 			idx_t size = 0;
-			auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
+			auto data = FlatVector::Writer<timestamp_t>(output.data[0], STANDARD_VECTOR_SIZE);
 			while (true) {
 				if (state.Finished(state.current_state)) {
 					break;

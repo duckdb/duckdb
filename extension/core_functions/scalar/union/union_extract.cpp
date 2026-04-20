@@ -42,8 +42,10 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	result.Verify(args.size());
 }
 
-unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

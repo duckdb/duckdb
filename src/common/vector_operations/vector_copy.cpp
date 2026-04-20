@@ -25,10 +25,18 @@ namespace duckdb {
 namespace {
 
 template <class T>
+const T *GetSourceData(const Vector &source) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::GetData<T>(source);
+	}
+	return FlatVector::GetData<T>(source);
+}
+
+template <class T>
 void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
                    idx_t target_offset, idx_t copy_count) {
-	auto ldata = FlatVector::GetData<T>(source);
-	auto tdata = FlatVector::GetData<T>(target);
+	auto ldata = GetSourceData<T>(source);
+	auto tdata = FlatVector::GetDataMutable<T>(target);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel.get_index(source_offset + i);
 		tdata[target_offset + i] = ldata[source_idx];
@@ -40,8 +48,8 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
-	case VectorType::FSST_VECTOR:
-		return FSSTVector::Validity(v);
+	case VectorType::CONSTANT_VECTOR:
+		return ConstantVector::Validity(v);
 	default:
 		throw InternalException("Unsupported vector type in vector copy");
 	}
@@ -61,37 +69,31 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			auto &child = DictionaryVector::Child(*source);
 			auto &dict_sel = DictionaryVector::SelVector(*source);
 			// merge the selection vectors and verify the child
-			auto new_buffer = dict_sel.Slice(*sel, source_count);
-			owned_sel.Initialize(new_buffer);
-			sel = &owned_sel;
+			if (sel->IsSet()) {
+				auto new_buffer = dict_sel.Slice(*sel, source_count);
+				owned_sel.Initialize(new_buffer);
+				sel = &owned_sel;
+			} else {
+				sel = &dict_sel;
+			}
 			source = &child;
 			break;
-		}
-		case VectorType::SEQUENCE_VECTOR: {
-			int64_t start, increment;
-			Vector seq(source->GetType());
-			SequenceVector::GetSequence(*source, start, increment);
-			VectorOperations::GenerateSequence(seq, source_count, *sel, start, increment);
-			VectorOperations::Copy(seq, target, *sel, source_count, source_offset, target_offset);
-			return;
 		}
 		case VectorType::CONSTANT_VECTOR:
 			sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
 			finished = true;
 			break;
-		case VectorType::SHREDDED_VECTOR: {
-			Vector shredded_vector(LogicalType::VARIANT());
-			shredded_vector.Reference(*source);
-			shredded_vector.Flatten(source_count);
-			Copy(shredded_vector, target, *sel, source_count, source_offset, target_offset, copy_count);
-			return;
-		}
-		case VectorType::FSST_VECTOR:
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
-		default:
-			throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
+		default: {
+			// for exotic types we flatten followed by copying
+			Vector flattened_vector(Vector::Ref(*source));
+			flattened_vector.Flatten(*sel, source_offset + source_count);
+			Copy(flattened_vector, target, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
+			     target_offset, copy_count);
+			return;
+		}
 		}
 	}
 
@@ -108,7 +110,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// first copy the nullmask
-	auto &tmask = FlatVector::Validity(target);
+	auto &tmask = FlatVector::ValidityMutable(target);
 	if (source->GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		const bool valid = !ConstantVector::IsNull(*source);
 		for (idx_t i = 0; i < copy_count; i++) {
@@ -120,12 +122,6 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	}
 
 	D_ASSERT(sel);
-
-	// For FSST Vectors we decompress instead of copying.
-	if (source->GetVectorType() == VectorType::FSST_VECTOR) {
-		FSSTVector::DecompressVector(*source, target, source_offset, target_offset, copy_count, sel);
-		return;
-	}
 
 	// now copy over the data
 	switch (source->GetType().InternalType()) {
@@ -170,13 +166,13 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		TemplatedCopy<interval_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::VARCHAR: {
-		auto ldata = FlatVector::GetData<string_t>(*source);
-		auto tdata = FlatVector::GetData<string_t>(target);
+		auto ldata = GetSourceData<string_t>(*source);
+		auto tdata = FlatVector::Writer<string_t>(target, target_offset + copy_count);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
 			if (tmask.RowIsValid(target_idx)) {
-				tdata[target_idx] = StringVector::AddStringOrBlob(target, ldata[source_idx]);
+				tdata[target_idx] = ldata[source_idx];
 			}
 		}
 		break;
@@ -186,7 +182,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto &target_children = StructVector::GetEntries(target);
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
-			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
+			VectorOperations::Copy(source_children[i], target_children[i], sel_p, source_count, source_offset,
 			                       target_offset, copy_count);
 		}
 		break;
@@ -195,8 +191,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::ARRAY);
 		D_ASSERT(ArrayType::GetSize(source->GetType()) == ArrayType::GetSize(target.GetType()));
 
-		auto &source_child = ArrayVector::GetEntry(*source);
-		auto &target_child = ArrayVector::GetEntry(target);
+		auto &source_child = ArrayVector::GetChild(*source);
+		auto &target_child = ArrayVector::GetChildMutable(target);
 		auto array_size = ArrayType::GetSize(source->GetType());
 
 		// Create a selection vector for the child elements
@@ -214,9 +210,9 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 
-		auto &source_child = ListVector::GetEntry(*source);
-		auto sdata = FlatVector::GetData<list_entry_t>(*source);
-		auto tdata = FlatVector::GetData<list_entry_t>(target);
+		auto &source_child = ListVector::GetChild(*source);
+		auto sdata = GetSourceData<list_entry_t>(*source);
+		auto tdata = FlatVector::GetDataMutable<list_entry_t>(target);
 
 		if (target_vector_type == VectorType::CONSTANT_VECTOR) {
 			// If we are only writing one value, then the copied values (if any) are contiguous
@@ -249,7 +245,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				}
 			}
 			idx_t source_child_size = child_rows.size();
-			SelectionVector child_sel(child_rows.data());
+			SelectionVector child_sel(child_rows.data(), child_rows.size());
 
 			idx_t old_target_child_len = ListVector::GetListSize(target);
 

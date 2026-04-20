@@ -8,7 +8,7 @@ PREPARE statement as COPY (
 	SELECT
 		42 AS number,
 		true AS is_even
-) TO '__TEST_DIR__/prepared_parquet_copy.parquet' (
+) TO '{TEST_DIR}/prepared_parquet_copy.parquet' (
 	FORMAT parquet,
 	KV_METADATA {
 		number: $1,
@@ -19,6 +19,6 @@ statement ok
 execute statement(42)
 
 query II
-select * from '__TEST_DIR__/prepared_parquet_copy.parquet';
+select * from '{TEST_DIR}/prepared_parquet_copy.parquet';
 ----
 42	true

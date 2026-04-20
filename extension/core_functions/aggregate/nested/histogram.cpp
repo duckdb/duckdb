@@ -67,21 +67,19 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
 
 	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(sdata);
+	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(count);
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			state.hist = MAP_TYPE::CreateEmpty(aggr_input.allocator);
 		}
@@ -94,16 +92,14 @@ template <class OP, class T, class MAP_TYPE>
 void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = UnifiedVectorFormat::GetData<HIST_STATE *>(sdata);
+	auto states = state_vector.Values<HIST_STATE *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			continue;
 		}
@@ -113,13 +109,13 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	ListVector::Reserve(result, old_len + new_entries);
 	auto &keys = MapVector::GetKeys(result);
 	auto &values = MapVector::GetValues(result);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto count_entries = FlatVector::GetData<uint64_t>(values);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto count_entries = FlatVector::GetDataMutable<uint64_t>(values);
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.hist) {
 			mask.SetInvalid(rid);
 			continue;
@@ -209,8 +205,9 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 }
 
 template <bool IS_ORDERED = true>
-unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {

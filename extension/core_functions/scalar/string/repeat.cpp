@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "core_functions/scalar/string_functions.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 
 namespace duckdb {
@@ -36,16 +37,24 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto &list_vector = args.data[0];
 	auto &cnt_vector = args.data[1];
 
-	auto &source_child = ListVector::GetEntry(list_vector);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &source_child = ListVector::GetChildMutable(list_vector);
 
 	idx_t current_size = ListVector::GetListSize(result);
 	BinaryExecutor::Execute<list_entry_t, int64_t, list_entry_t>(
 	    list_vector, cnt_vector, result, args.size(), [&](list_entry_t list_input, int64_t cnt) {
 		    idx_t copy_count = cnt <= 0 || list_input.length == 0 ? 0 : UnsafeNumericCast<idx_t>(cnt);
-		    idx_t result_length = list_input.length * copy_count;
-		    idx_t new_size = current_size + result_length;
+		    idx_t result_length;
+		    if (!TryMultiplyOperator::Operation(list_input.length, copy_count, result_length)) {
+			    throw OutOfRangeException("Cannot create a list of size: '%d' * '%d', the result is too large",
+			                              list_input.length, copy_count);
+		    }
+		    idx_t new_size;
+		    if (!TryAddOperator::Operation(current_size, result_length, new_size)) {
+			    throw OutOfRangeException("Cannot create a list of size: '%d' + '%d', the result is too large",
+			                              current_size, result_length);
+		    }
 		    ListVector::Reserve(result, new_size);
+		    auto &result_child = ListVector::GetChildMutable(result);
 		    list_entry_t result_list;
 		    result_list.offset = current_size;
 		    result_list.length = result_length;

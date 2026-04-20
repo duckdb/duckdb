@@ -13,7 +13,10 @@
       {
         "id": 101,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "version": "v2.0.0",
+        "status": "read_only",
+        "serialize_property": "GetQueryForSerialization(serializer)"
       },
       {
         "id": 102,
@@ -30,8 +33,15 @@
         "id": 104,
         "name": "payload_aggregates",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 105,
+        "name": "query_node",
+        "type": "QueryNode*",
+        "version": "v2.0.0"
       }
-    ]
+    ],
+    "constructor": ["query", "query_node"]
   },
   {
     "class": "CommonTableExpressionMap",
@@ -314,11 +324,34 @@
       {
         "id": 102,
         "name": "entries",
-        "type": "vector<PivotColumnEntry>"
+        "type": "vector<PivotColumnEntry>",
+        "serialize_property": "GetEntriesForSerialization(serializer)"
       },
       {
         "id": 103,
         "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "PivotColumnEntry",
+    "members": [
+      {
+        "id": 100,
+        "name": "values",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "star_expr",
+        "type": "ParsedExpression*",
+        "property": "expr"
+      },
+      {
+        "id": 102,
+        "name": "alias",
         "type": "string"
       }
     ],
@@ -393,8 +426,8 @@
       {
         "id": 106,
         "name": "tags",
-        "type": "unordered_map<string, string>",
-        "default": "unordered_map<string, string>()"
+        "type": "InsertionOrderPreservingMap<string>",
+        "default": "InsertionOrderPreservingMap<string>()"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
@@ -501,13 +534,16 @@
   {
     "class": "TableFilterSet",
     "includes": [
-      "duckdb/planner/table_filter.hpp"
+      "duckdb/planner/table_filter.hpp",
+      "duckdb/planner/expression.hpp"
     ],
     "members": [
       {
         "id": 100,
         "name": "filters",
-        "type": "map<ProjectionIndex, TableFilter*>"
+        "type": "map<ProjectionIndex, TableFilter*>",
+        "serialize_property": "GetTableFiltersForSerialization(serializer)",
+        "deserialize_property": "GetTableFiltersForDeserialization(deserializer)"
       }
     ],
     "pointer_type": "none"
@@ -1167,9 +1203,14 @@
         "id": 106,
         "name": "row_group_offset",
         "type": "idx_t"
+      },
+      {
+        "id": 107,
+        "name": "leading_null_group_offset",
+        "type": "idx_t"
       }
     ],
-    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset"]
+    "constructor": ["column_idx", "order_by", "order_type", "null_order", "column_type",  "row_limit", "row_group_offset", "leading_null_group_offset"]
   },
   {
     "class": "StorageIndex",

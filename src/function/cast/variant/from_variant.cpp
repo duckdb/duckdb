@@ -157,8 +157,8 @@ static bool CastVariantToPrimitive(FromVariantConversionData &conversion_data, V
 	auto &variant = conversion_data.variant;
 
 	auto &target_type = result.GetType();
-	auto result_data = FlatVector::GetData<T>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::GetDataMutable<T>(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	bool all_valid = true;
 	for (idx_t i = 0; i < count; i++) {
@@ -221,7 +221,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -258,18 +258,18 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	}
 
 	ListVector::Reserve(result, total_offset + total_children);
-	auto &child = ListVector::GetEntry(result);
-	auto list_data = ListVector::GetData(result);
+	auto &child = ListVector::GetChildMutable(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
 		if (!validity.RowIsValid(i)) {
-			FlatVector::SetNull(result, offset + i, true);
+			result_data.SetInvalid(offset + i);
 			continue;
 		}
 
-		auto &entry = list_data[i + offset];
+		auto &entry = result_data[i + offset];
 		entry.offset = total_offset;
 		entry.length = child_data_entry.child_count;
 		total_offset += entry.length;
@@ -296,7 +296,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -330,7 +330,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	SelectionVector new_sel;
 	new_sel.Initialize(array_size);
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 	idx_t total_offset = offset * array_size;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -363,7 +363,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 
 	//! Initialize the validity with that of the result (in case some rows are already set to invalid, we need to
 	//! respect that)
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	ValidityMask validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!result_validity.RowIsValid(offset + i)) {
@@ -392,7 +392,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
-	SelectionVector row_sel(0, count);
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
 	if (row.IsValid()) {
 		auto row_index = row.GetIndex();
 		for (idx_t i = 0; i < count; i++) {
@@ -411,7 +411,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 		ValidityMask lookup_validity(count);
 		VariantUtils::FindChildValues(conversion_data.variant, component, row_sel, child_values_sel, lookup_validity,
 		                              child_data, validity, count);
-		if (!lookup_validity.AllValid()) {
+		if (lookup_validity.CanHaveNull()) {
 			optional_idx nested_index;
 			for (idx_t i = 0; i < count; i++) {
 				if (!lookup_validity.RowIsValid(i)) {
@@ -428,7 +428,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 			return false;
 		}
 		//! Now cast all the values we found to the target type
-		auto &child = *children[child_idx];
+		auto &child = children[child_idx];
 		if (!CastVariant(conversion_data, child, child_values_sel, offset, count, row)) {
 			return false;
 		}
@@ -442,7 +442,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder json_holder;
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -461,7 +461,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 			return false;
 		}
 		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data[offset + i] = StringVector::AddString(result, res);
+		result_data[offset + i] = res;
 		free(json_holder.stringified_json);
 		json_holder.stringified_json = nullptr;
 	}
@@ -699,9 +699,9 @@ static bool TryFromShreddedCast(Vector &variant_vec, Vector &result) {
 	if (ShreddedVector::IsFullyShredded(variant_vec) && shredded_vec.GetType().id() == LogicalTypeId::STRUCT) {
 		// it is! check if the type of the typed_value entry matches
 		auto &shredded_entries = StructVector::GetEntries(shredded_vec);
-		if (shredded_entries[1]->GetType() == result.GetType()) {
+		if (shredded_entries[1].GetType() == result.GetType()) {
 			// the typed_value matches - directly reference it
-			result.Reference(*shredded_entries[1]);
+			result.Reference(shredded_entries[1]);
 			return true;
 		}
 	}

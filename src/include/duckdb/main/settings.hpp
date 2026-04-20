@@ -91,6 +91,16 @@ static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
 // Start of the auto-generated list of settings structures
 //===----------------------------------------------------------------------===//
 
+struct DeltaOnlyVariantEncodingEnabledSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "__delta_only_variant_encoding_enabled";
+	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AccessModeSetting {
 	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";
@@ -198,6 +208,17 @@ struct AllowUnsignedExtensionsSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct AllowedConfigsSetting {
+	using RETURN_TYPE = vector<string>;
+	static constexpr const char *Name = "allowed_configs";
+	static constexpr const char *Description =
+	    "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true";
+	static constexpr const char *InputType = "VARCHAR[]";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
 };
 
 struct AllowedDirectoriesSetting {
@@ -354,6 +375,19 @@ struct CatalogErrorMaxSchemasSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct CheckpointOnDetachSetting {
+	using RETURN_TYPE = CheckpointOnDetach;
+	static constexpr const char *Name = "checkpoint_on_detach";
+	static constexpr const char *Description =
+	    "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never "
+	    "checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "DEFAULT";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct CheckpointThresholdSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "checkpoint_threshold";
@@ -373,6 +407,18 @@ struct ConfigureProfilingSetting {
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct CurrentTransactionInvalidationPolicySetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "current_transaction_invalidation_policy";
+	static constexpr const char *Description =
+	    "Which types of exceptions invalidate the database for the current transaction";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "STANDARD_POLICY";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct CustomExtensionRepositorySetting {
@@ -989,7 +1035,7 @@ struct IeeeFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =
-	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
+	    "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -1080,7 +1126,7 @@ struct LateMaterializationMaxRowsSetting {
 struct LockConfigurationSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "lock_configuration";
-	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const char *Description = "Whether or not configurations can be altered";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
@@ -1537,6 +1583,19 @@ struct UsernameSetting {
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct VacuumRebuildIndexesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "vacuum_rebuild_indexes";
+	static constexpr const char *Description =
+	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ValidateExternalFileCacheSetting {

@@ -1,14 +1,27 @@
 #include "reader/string_column_reader.hpp"
+
+#include <stddef.h>
+#include <utility>
+
 #include "utf8proc_wrapper.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/vector_buffer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class Vector;
+struct SelectionVector;
 
 //===--------------------------------------------------------------------===//
 // String Column Reader
 //===--------------------------------------------------------------------===//
-StringColumnReader::StringColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+StringColumnReader::StringColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
     : ColumnReader(reader, schema), string_column_type(GetStringColumnType(Type())) {
 	fixed_width_string_length = 0;
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -56,10 +69,9 @@ void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) co
 	}
 }
 
-class ParquetStringVectorBuffer : public VectorBuffer {
+class ParquetStringVectorBuffer : public AuxiliaryDataHolder {
 public:
-	explicit ParquetStringVectorBuffer(shared_ptr<ResizeableBuffer> buffer_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(std::move(buffer_p)) {
+	explicit ParquetStringVectorBuffer(shared_ptr<ResizeableBuffer> buffer_p) : buffer(std::move(buffer_p)) {
 	}
 
 private:
@@ -67,7 +79,7 @@ private:
 };
 
 void StringColumnReader::ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(block));
+	StringVector::AddAuxiliaryData(result, make_uniq<ParquetStringVectorBuffer>(block));
 }
 
 void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,

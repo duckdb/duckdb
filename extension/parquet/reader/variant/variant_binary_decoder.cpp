@@ -1,15 +1,21 @@
 #include "reader/variant/variant_binary_decoder.hpp"
-#include "duckdb/common/printer.hpp"
+
+#include <string.h>
+#include <utility>
+#include <cmath>
+
 #include "utf8proc_wrapper.hpp"
-
 #include "reader/uuid_column_reader.hpp"
-
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/value.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -33,8 +39,6 @@ static constexpr uint8_t OBJECT_IS_LARGE_SHIFT = 4;
 //! Array header
 static constexpr uint8_t ARRAY_IS_LARGE_MASK = 0x1;
 static constexpr uint8_t ARRAY_IS_LARGE_SHIFT = 2;
-
-using namespace duckdb_yyjson;
 
 namespace duckdb {
 
@@ -147,7 +151,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValue::NullValue();
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return VariantValue(Value::BOOLEAN(true));
@@ -292,7 +296,7 @@ VariantValue VariantBinaryDecoder::ObjectDecode(const VariantMetadata &metadata,
 
 	auto field_ids = data;
 	auto field_offsets = data + (num_elements * field_id_size);
-	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
+	auto values = field_offsets + (NumericCast<idx_t>(num_elements + 1) * field_offset_size);
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {
@@ -325,7 +329,7 @@ VariantValue VariantBinaryDecoder::ArrayDecode(const VariantMetadata &metadata,
 	}
 
 	auto field_offsets = data;
-	auto values = field_offsets + ((num_elements + 1) * field_offset_size);
+	auto values = field_offsets + (NumericCast<idx_t>(num_elements) + 1) * field_offset_size;
 
 	idx_t last_offset = ReadVariableLengthLittleEndian(field_offset_size, field_offsets);
 	for (idx_t i = 0; i < num_elements; i++) {

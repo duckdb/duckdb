@@ -5,8 +5,8 @@ namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto qn = transformer.Transform<QualifiedName>(list_pr, 1);
 
 	string value_str;
@@ -21,32 +21,32 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	return make_uniq<SetVariableStatement>("schema", std::move(value_expr), SetScope::AUTOMATIC);
 }
 
-// UseTarget <- (CatalogName '.' ReservedSchemaName) / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer,
-                                                        optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+// UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
+QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	QualifiedName result;
-	if (choice_pr.result->type == ParseResultType::LIST) {
-		vector<string> entries;
-		auto use_target_children = choice_pr.result->Cast<ListParseResult>();
-		for (auto &child : use_target_children.GetChildren()) {
-			if (child->type == ParseResultType::IDENTIFIER) {
-				entries.push_back(child->Cast<IdentifierParseResult>().identifier);
-			}
-		}
-		if (entries.size() == 2) {
-			result.catalog = INVALID_CATALOG;
-			result.schema = entries[0];
-			result.name = entries[1];
-		} else {
-			throw InternalException("Invalid amount of entries for use statement");
-		}
-	} else if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
-		result.name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
-	} else {
-		throw InternalException("Unexpected parse result type encountered in UseTarget");
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+		QualifiedName result;
+		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		return result;
 	}
+	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
+}
+
+// UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto catalog = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto schema = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto &extra_opt = list_pr.Child<OptionalParseResult>(3);
+	if (extra_opt.HasResult()) {
+		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
+	}
+	QualifiedName result;
+	result.catalog = INVALID_CATALOG;
+	result.schema = catalog;
+	result.name = schema;
 	return result;
 }
 } // namespace duckdb

@@ -270,7 +270,8 @@ public:
 	}
 
 	template <class OP = EmptyBitpackingWriter>
-	bool Update(T value, bool is_valid) {
+	bool Update(typename VectorIterator<T>::ValueEntry val) {
+		auto is_valid = val.IsValid();
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
 		has_valid = has_valid || is_valid;
 		has_invalid = has_invalid || !is_valid;
@@ -278,6 +279,7 @@ public:
 		all_invalid = all_invalid && !is_valid;
 
 		if (is_valid) {
+			auto value = val.GetValue();
 			compression_buffer[compression_buffer_idx] = value;
 			minimum = MinValue<T>(minimum, value);
 			maximum = MaxValue<T>(maximum, value);
@@ -323,13 +325,8 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<T>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
+	for (auto entry : input.Values<T>(count)) {
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry)) {
 			return false;
 		}
 	}
@@ -491,13 +488,9 @@ public:
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
 	}
 
-	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressionState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>(
-			    data[idx], vdata.validity.RowIsValid(idx));
+	void Append(Vector &input, idx_t count) {
+		for (auto entry : input.Values<T>(count)) {
+			state.template Update<BitpackingWriter>(entry);
 		}
 	}
 
@@ -552,9 +545,7 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
-	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
-	state.Append(vdata, count);
+	state.Append(scan_vector, count);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -776,7 +767,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<BitpackingScanState<T>>();
 
-	T *result_data = FlatVector::GetData<T>(result);
+	T *result_data = FlatVector::GetDataMutable<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
@@ -879,7 +870,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	D_ASSERT(scan_state.current_group_offset < BITPACKING_METADATA_GROUP_SIZE);
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	T *result_data = FlatVector::GetData<T>(result);
+	T *result_data = FlatVector::GetDataMutable<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
 	idx_t offset_in_compression_group =

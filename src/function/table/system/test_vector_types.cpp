@@ -181,13 +181,13 @@ struct TestVectorSequence {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
 			for (auto &child_entry : child_entries) {
-				GenerateVector(info, child_entry->GetType(), *child_entry);
+				GenerateVector(info, child_entry.GetType(), child_entry);
 			}
 			break;
 		}
 		case PhysicalType::LIST: {
 			D_ASSERT(type.id() != LogicalTypeId::MAP);
-			auto data = FlatVector::GetData<list_entry_t>(result);
+			auto data = FlatVector::Writer<list_entry_t>(result, 3);
 			data[0].offset = 0;
 			data[0].length = 2;
 			data[1].offset = 2;
@@ -195,7 +195,7 @@ struct TestVectorSequence {
 			data[2].offset = 2;
 			data[2].length = 1;
 
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
+			GenerateVector(info, ListType::GetChildType(type), ListVector::GetChildMutable(result));
 			ListVector::SetListSize(result, 3);
 			break;
 		}

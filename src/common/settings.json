@@ -1,5 +1,12 @@
 [
     {
+        "name": "__delta_only_variant_encoding_enabled",
+        "description": "Enables the Parquet reader to identify a Variant structurally.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "access_mode",
         "description": "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)",
         "type": "ENUM<AccessMode>",
@@ -82,6 +89,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "allowed_configs",
+        "description": "List of configuration options that are ALWAYS allowed to be changed - even when lock_configuration is true",
+        "type": "VARCHAR[]",
+        "scope": "global",
+        "custom_implementation": true
     },
     {
         "name": "allowed_directories",
@@ -187,6 +201,13 @@
         "default_value": "100"
     },
     {
+        "name": "checkpoint_on_detach",
+        "description": "Override checkpoint behavior when detaching a database. ENABLED always checkpoints, DISABLED never checkpoints, DEFAULT defers to the global checkpoint_on_shutdown setting.",
+        "type": "ENUM<CheckpointOnDetach>",
+        "default_scope": "local",
+        "default_value": "DEFAULT"
+    },
+    {
         "name": "checkpoint_threshold",
         "description": "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)",
         "type": "VARCHAR",
@@ -209,6 +230,17 @@
         "aliases": [
             "custom_profiling_settings",
             "configure_metrics"
+        ]
+    },
+    {
+        "name": "current_transaction_invalidation_policy",
+        "description": "Which types of exceptions invalidate the database for the current transaction",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true,
+        "default_value": "STANDARD_POLICY",
+        "on_callbacks": [
+            "set"
         ]
     },
     {
@@ -669,7 +701,7 @@
     },
     {
         "name": "ieee_floating_point_ops",
-        "description": "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).",
+        "description": "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.",
         "type": "BOOLEAN",
         "default_scope": "local",
         "default_value": "true"
@@ -728,7 +760,7 @@
     },
     {
         "name": "lock_configuration",
-        "description": "Whether or not the configuration can be altered",
+        "description": "Whether or not configurations can be altered",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "false"
@@ -1055,6 +1087,16 @@
         "default_value": "",
         "aliases": [
             "user"
+        ]
+    },
+    {
+        "name": "vacuum_rebuild_indexes",
+        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0",
+        "on_callbacks": [
+            "set"
         ]
     },
     {

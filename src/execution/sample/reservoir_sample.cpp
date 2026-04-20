@@ -159,8 +159,7 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 	// set the NULL columns correctly
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		if (!ValidSampleType(types[col_idx]) && stats_sample) {
-			new_sample_chunk->chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx], true);
+			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx]);
 		}
 	}
 	return new_sample_chunk;
@@ -552,7 +551,7 @@ void ReservoirSample::ExpandSerializedSample() {
 	auto types = reservoir_chunk->chunk.GetTypes();
 	auto new_res_chunk = CreateNewSampleChunk(types, GetReservoirChunkCapacity<idx_t>());
 	auto copy_count = reservoir_chunk->chunk.size();
-	SelectionVector tmp_sel = SelectionVector(0, copy_count);
+	SelectionVector tmp_sel = SelectionVector(static_cast<idx_t>(0), copy_count);
 	UpdateSampleAppend(new_res_chunk->chunk, reservoir_chunk->chunk, tmp_sel, copy_count);
 	new_res_chunk->chunk.SetCardinality(copy_count);
 	std::swap(reservoir_chunk, new_res_chunk);

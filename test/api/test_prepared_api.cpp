@@ -95,6 +95,21 @@ TEST_CASE("Test prepared statements and dependencies", "[api]") {
 	REQUIRE_FAIL(prepare->Execute(11));
 }
 
+TEST_CASE("Prepared temp table insert is invalidated after drop", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TEMP TABLE t(i INTEGER)"));
+	auto prepared = con.Prepare("INSERT INTO t VALUES (42)");
+	REQUIRE(!prepared->HasError());
+
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE t"));
+
+	auto result = prepared->Execute();
+	REQUIRE(result->HasError());
+	REQUIRE(result->GetError().find("does not exist") != string::npos);
+}
+
 TEST_CASE("Dropping connection with prepared statement resets dependencies", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

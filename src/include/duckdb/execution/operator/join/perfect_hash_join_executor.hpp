@@ -29,7 +29,7 @@ struct PerfectHashJoinStats {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
-	using PerfectHashTable = vector<buffer_ptr<VectorChildBuffer>>;
+	using PerfectHashTable = vector<buffer_ptr<DictionaryEntry>>;
 
 public:
 	PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht);
@@ -37,7 +37,8 @@ public:
 public:
 	bool CanDoPerfectHashJoin(const PhysicalHashJoin &op, const Value &min, const Value &max);
 
-	bool BuildPerfectHashTable(LogicalType &type);
+	const LogicalType &GetKeyType() const;
+	bool BuildPerfectHashTable();
 
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &lhs_output_columns,
@@ -59,7 +60,7 @@ private:
 	template <typename T>
 	bool TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
-	bool FullScanHashTable(LogicalType &key_type);
+	bool FullScanHashTable();
 
 private:
 	const PhysicalHashJoin &join;

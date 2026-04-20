@@ -10,8 +10,8 @@
 namespace duckdb {
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target,
-                                  const idx_t count, Vector &result) {
+static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
+                                  Vector &result) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
@@ -27,10 +27,10 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 	vector<const T *> member_datas;
 	vector<UnifiedVectorFormat> member_vectors;
 	idx_t total_matches = 0;
-	for (const auto &member : members) {
-		if (member->GetType().InternalType() == target_type.InternalType()) {
+	for (auto &member : members) {
+		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
-			member->ToUnifiedFormat(count, member_format);
+			member.ToUnifiedFormat(count, member_format);
 			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;
@@ -42,21 +42,17 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<RETURN_TYPE>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
 	const auto member_count = members.size();
 	for (idx_t row = 0; row < count; row++) {
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_validity.SetInvalid(row);
+			result_data.SetInvalid(row);
 			continue;
 		}
 
@@ -68,7 +64,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_validity.SetInvalid(row);
+				result_data.SetInvalid(row);
 			} else {
 				result_data[row] = false;
 			}
@@ -102,7 +98,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 
 		if (!found) {
 			if (return_pos) {
-				result_validity.SetInvalid(row);
+				result_data.SetInvalid(row);
 			} else {
 				result_data[row] = false;
 			}
@@ -111,19 +107,18 @@ static void TemplatedStructSearch(Vector &input_vector, vector<unique_ptr<Vector
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructNestedOp(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target, const idx_t count,
+static void StructNestedOp(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
                            Vector &result) {
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
 	// Set up sort keys for nested types.
 	const auto members_size = members.size();
-	vector<unique_ptr<Vector>> member_sort_key_vectors;
+	vector<Vector> member_sort_key_vectors;
 	for (idx_t i = 0; i < members_size; i++) {
 		Vector member_sort_key_vec(LogicalType::BLOB, count);
-		CreateSortKeyHelpers::CreateSortKeyWithValidity(*members[i], member_sort_key_vec, order_modifiers, count);
+		CreateSortKeyHelpers::CreateSortKeyWithValidity(members[i], member_sort_key_vec, order_modifiers, count);
 
-		auto member_sort_key_ptr = make_uniq<Vector>(member_sort_key_vec);
-		member_sort_key_vectors.push_back(std::move(member_sort_key_ptr));
+		member_sort_key_vectors.push_back(std::move(member_sort_key_vec));
 	}
 
 	Vector target_sort_key_vec(LogicalType::BLOB, count);
@@ -134,7 +129,7 @@ static void StructNestedOp(Vector &input_vector, vector<unique_ptr<Vector>> &mem
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructSearchOp(Vector &input_vector, vector<unique_ptr<Vector>> &members, Vector &target, const idx_t count,
+static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector &target, const idx_t count,
                            Vector &result) {
 	const auto &target_type = target.GetType().InternalType();
 	switch (target_type) {
@@ -180,8 +175,7 @@ static void StructSearchOp(Vector &input_vector, vector<unique_ptr<Vector>> &mem
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
 
@@ -191,14 +185,12 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &target = args.data[1];
 
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
-static unique_ptr<FunctionData> StructContainsBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {

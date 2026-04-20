@@ -2,10 +2,13 @@
 
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
@@ -140,12 +143,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 		}
 		if (window_expr.end_expr) {
 			callback(window_expr.end_expr);
-		}
-		if (window_expr.offset_expr) {
-			callback(window_expr.offset_expr);
-		}
-		if (window_expr.default_expr) {
-			callback(window_expr.default_expr);
 		}
 		for (auto &order : window_expr.arg_orders) {
 			callback(order.expression);
@@ -305,6 +302,67 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		}
 		break;
 	}
+	case QueryNodeType::UPDATE_QUERY_NODE: {
+		auto &upd_node = node.Cast<UpdateQueryNode>();
+		if (upd_node.table) {
+			EnumerateTableRefChildren(*upd_node.table, expr_callback, ref_callback);
+		}
+		if (upd_node.from_table) {
+			EnumerateTableRefChildren(*upd_node.from_table, expr_callback, ref_callback);
+		}
+		if (upd_node.set_info) {
+			for (auto &expr : upd_node.set_info->expressions) {
+				expr_callback(expr);
+			}
+			if (upd_node.set_info->condition) {
+				expr_callback(upd_node.set_info->condition);
+			}
+		}
+		for (auto &expr : upd_node.returning_list) {
+			expr_callback(expr);
+		}
+		break;
+	}
+	case QueryNodeType::DELETE_QUERY_NODE: {
+		auto &del_node = node.Cast<DeleteQueryNode>();
+		if (del_node.table) {
+			EnumerateTableRefChildren(*del_node.table, expr_callback, ref_callback);
+		}
+		for (auto &using_clause : del_node.using_clauses) {
+			EnumerateTableRefChildren(*using_clause, expr_callback, ref_callback);
+		}
+		if (del_node.condition) {
+			expr_callback(del_node.condition);
+		}
+		for (auto &expr : del_node.returning_list) {
+			expr_callback(expr);
+		}
+		break;
+	}
+	case QueryNodeType::INSERT_QUERY_NODE: {
+		auto &ins_node = node.Cast<InsertQueryNode>();
+		if (ins_node.select_statement) {
+			EnumerateQueryNodeChildren(*ins_node.select_statement->node, expr_callback, ref_callback);
+		}
+		if (ins_node.table_ref) {
+			EnumerateTableRefChildren(*ins_node.table_ref, expr_callback, ref_callback);
+		}
+		for (auto &expr : ins_node.returning_list) {
+			expr_callback(expr);
+		}
+		if (ins_node.on_conflict_info && ins_node.on_conflict_info->set_info) {
+			for (auto &expr : ins_node.on_conflict_info->set_info->expressions) {
+				expr_callback(expr);
+			}
+			if (ins_node.on_conflict_info->set_info->condition) {
+				expr_callback(ins_node.on_conflict_info->set_info->condition);
+			}
+		}
+		if (ins_node.on_conflict_info && ins_node.on_conflict_info->condition) {
+			expr_callback(ins_node.on_conflict_info->condition);
+		}
+		break;
+	}
 	default:
 		throw NotImplementedException("QueryNode type not implemented for traversal");
 	}
@@ -314,7 +372,9 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	}
 
 	for (auto &kv : node.cte_map.map) {
-		EnumerateQueryNodeChildren(*kv.second->query->node, expr_callback, ref_callback);
+		if (kv.second->query_node) {
+			EnumerateQueryNodeChildren(*kv.second->query_node, expr_callback, ref_callback);
+		}
 	}
 }
 

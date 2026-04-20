@@ -98,7 +98,7 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 			child_vector.ToUnifiedFormat(0, list_child_data[col_idx]);
 		} else {
 			auto list_size = ListVector::GetListSize(list_vector);
-			auto &child_vector = ListVector::GetEntry(list_vector);
+			auto &child_vector = ListVector::GetChild(list_vector);
 			child_vector.ToUnifiedFormat(list_size, list_child_data[col_idx]);
 		}
 	}
@@ -239,11 +239,10 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			    ListVector::GetListSize(list_vector) == 0) {
 				// UNNEST(NULL) or UNNEST([])
 				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
-				result_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result_vector, true);
+				ConstantVector::SetNull(result_vector);
 				continue;
 			}
-			auto &child_vector = ListVector::GetEntry(list_vector);
+			auto &child_vector = ListVector::GetChild(list_vector);
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten

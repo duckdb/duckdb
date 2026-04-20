@@ -31,8 +31,9 @@ ScalarFunction StAswkbFun::GetFunction() {
 }
 
 static void ToWKTFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(input.data[0], result, input.size(),
-	                                           [&](const string_t &geom) { return Geometry::ToString(result, geom); });
+	                                           [&](const string_t &geom) { return Geometry::ToString(heap, geom); });
 }
 
 ScalarFunction StAstextFun::GetFunction() {
@@ -81,7 +82,7 @@ static void CRSFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionInput &input) {
 	const auto &return_type = input.children[0]->return_type;
-	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
+	if (return_type.id() != LogicalTypeId::GEOMETRY) {
 		// parameter - unknown return type
 		return nullptr;
 	}
@@ -89,14 +90,15 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 	return make_uniq<BoundConstantExpression>(GetCRSValue(return_type));
 }
 
-static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		// parameter - unknown return type
+static unique_ptr<FunctionData> BindCRSFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	if (arguments[0]->return_type.id() != LogicalTypeId::GEOMETRY) {
 		return nullptr;
 	}
 
-	// Check if the CRS is set in the first argument
+	// Propagate the CRS from the input argument to the parameter type
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }
@@ -108,8 +110,11 @@ ScalarFunction StCrsFun::GetFunction() {
 	return geom_func;
 }
 
-static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// Check if the CRS is set in the second argument
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();

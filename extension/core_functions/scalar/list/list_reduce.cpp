@@ -10,7 +10,7 @@ namespace {
 
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context)
-	    : context(context), left_slice(make_uniq<Vector>(*info.child_vector)) {
+	    : context(context), left_slice(make_uniq<Vector>(Vector::Ref(*info.child_vector))) {
 		if (info.has_initial) {
 			initial_value_offset = 0;
 		}
@@ -80,7 +80,7 @@ void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vecto
 			                        source.GetType().ToString(), target.GetType().ToString());
 		}
 		execute_info.accumulator_cast->SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::Validity(*execute_info.accumulator_cast).SetAllValid(count);
+		FlatVector::ValidityMutable(*execute_info.accumulator_cast).SetAllValid(count);
 		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
 		target.Reference(*execute_info.accumulator_cast);
 	} else {
@@ -210,8 +210,10 @@ LogicalType ResolveReduceAccumulatorType(ClientContext &context, const LogicalTy
 	                      initial_type.ToString(), lambda_return_type.ToString());
 }
 
-unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {

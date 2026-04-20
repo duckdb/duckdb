@@ -8,6 +8,9 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 
@@ -100,7 +103,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	SelectionVector delete_sel(chunk.size());
 	idx_t delete_count = chunk.size();
-	Vector delete_row_ids(row_ids);
+	Vector delete_row_ids(Vector::Ref(row_ids));
 
 	// If RETURNING is enabled, deduplicate row_ids: per-thread set (lock-free) then global set (batched lock).
 	if (return_chunk) {
@@ -137,7 +140,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			}
 			delete_count = final_count;
 			if (write_sel == &l_state.final_sel) {
-				delete_sel.Initialize(l_state.final_sel.data());
+				delete_sel.Initialize(l_state.final_sel.data(), l_state.final_sel.Capacity());
 			} else {
 				delete_sel = std::move(*large_sel);
 			}
@@ -173,22 +176,11 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	// Append the deleted row IDs to the delete indexes.
-	// If we only delete local row IDs, then the delete_chunk is empty.
 	if (g_state.has_unique_indexes && l_state.delete_chunk.size() != 0) {
 		annotated_lock_guard<annotated_mutex> index_guard(g_state.index_lock);
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
-		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		for (auto &index : storage->delete_indexes.Indexes()) {
-			if (!index.IsBound() || !index.IsUnique()) {
-				continue;
-			}
-			auto &bound_index = index.Cast<BoundIndex>();
-			auto error = bound_index.Append(l_state.delete_chunk, delete_row_ids, index_append_info);
-			if (error.HasError()) {
-				throw InternalException("failed to update delete ART in physical delete: ", error.Message());
-			}
-		}
+		storage->AppendToDeleteIndexes(row_ids, l_state.delete_chunk);
 	}
 
 	auto deleted = table.Delete(*l_state.delete_state, context.client, delete_row_ids, delete_count);

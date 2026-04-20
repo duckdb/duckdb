@@ -2,7 +2,7 @@
 # description: Test optimistic write with alter type in transaction-local storage
 # group: [optimistic_write]
 
-load __TEST_DIR__/optimistic_write_alter_type.db
+load {TEST_DIR}/optimistic_write_alter_type.db
 
 statement ok
 CREATE TABLE test (a INTEGER);
@@ -86,7 +86,7 @@ SELECT SUM(a) FROM test
 # by more than 1.2.
 
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
+SELECT CASE WHEN {i} = 0 THEN True
 	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
 	ELSE False END
 FROM pragma_database_size() AS current, total_blocks_tbl;
@@ -97,7 +97,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (
-	SELECT CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+	SELECT CASE WHEN {i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
 		ELSE (total_blocks) END);
 
 statement ok

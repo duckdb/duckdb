@@ -9,19 +9,22 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 
 namespace duckdb {
 
 struct AddConstraintInfo;
+struct CreateTriggerInfo;
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
 	DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
-	               shared_ptr<DataTable> inherited_storage = nullptr);
+	               shared_ptr<DataTable> inherited_storage = nullptr,
+	               shared_ptr<CatalogSet> inherited_triggers = nullptr);
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
@@ -56,6 +59,18 @@ public:
 		return true;
 	}
 
+	//! Returns the virtual columns for this table
+	virtual_column_map_t GetVirtualColumns() const override;
+
+	//! Create a trigger on this table
+	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info);
+	//! Scan all triggers on this table
+	void ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
+	//! Scan all triggers without a transaction (used by checkpoint writer)
+	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
+	//! Drop a trigger by name
+	bool DropTrigger(CatalogTransaction transaction, const string &name, bool cascade);
+
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> RenameField(ClientContext &context, RenameFieldInfo &info);
@@ -79,6 +94,8 @@ private:
 private:
 	//! A reference to the underlying storage unit used for this table
 	shared_ptr<DataTable> storage;
+	//! The catalog set holding triggers for this table
+	shared_ptr<CatalogSet> triggers;
 	//! Manages dependencies of the individual columns of the table
 	ColumnDependencyManager column_dependency_manager;
 };

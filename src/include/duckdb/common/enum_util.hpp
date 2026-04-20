@@ -106,6 +106,8 @@ enum class CSVState : uint8_t;
 
 enum class CTEMaterialize : uint8_t;
 
+enum class CacheBlockState : uint8_t;
+
 enum class CacheValidationMode : uint8_t;
 
 enum class CachingMode : uint8_t;
@@ -116,7 +118,11 @@ enum class CatalogType : uint8_t;
 
 enum class CheckpointAbort : uint8_t;
 
+enum class CheckpointOnDetach : uint8_t;
+
 enum class ChunkInfoType : uint8_t;
+
+enum class ClientInterruptState : uint8_t;
 
 enum class ColumnDataAllocatorType : uint8_t;
 
@@ -462,6 +468,8 @@ enum class ThreadPinMode : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
 
+enum class TransactionInvalidationPolicy : uint8_t;
+
 enum class TransactionModifierType : uint8_t;
 
 enum class TransactionType : uint8_t;
@@ -489,8 +497,6 @@ enum class VariantLogicalType : uint8_t;
 enum class VariantStatsShreddingState : uint8_t;
 
 enum class VariantValueType : uint8_t;
-
-enum class VectorAuxiliaryDataType : uint8_t;
 
 enum class VectorBufferType : uint8_t;
 
@@ -625,6 +631,9 @@ template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
+const char* EnumUtil::ToChars<CacheBlockState>(CacheBlockState value);
+
+template<>
 const char* EnumUtil::ToChars<CacheValidationMode>(CacheValidationMode value);
 
 template<>
@@ -640,7 +649,13 @@ template<>
 const char* EnumUtil::ToChars<CheckpointAbort>(CheckpointAbort value);
 
 template<>
+const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value);
+
+template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ClientInterruptState>(ClientInterruptState value);
 
 template<>
 const char* EnumUtil::ToChars<ColumnDataAllocatorType>(ColumnDataAllocatorType value);
@@ -1159,6 +1174,9 @@ template<>
 const char* EnumUtil::ToChars<TimestampCastResult>(TimestampCastResult value);
 
 template<>
+const char* EnumUtil::ToChars<TransactionInvalidationPolicy>(TransactionInvalidationPolicy value);
+
+template<>
 const char* EnumUtil::ToChars<TransactionModifierType>(TransactionModifierType value);
 
 template<>
@@ -1199,9 +1217,6 @@ const char* EnumUtil::ToChars<VariantStatsShreddingState>(VariantStatsShreddingS
 
 template<>
 const char* EnumUtil::ToChars<VariantValueType>(VariantValueType value);
-
-template<>
-const char* EnumUtil::ToChars<VectorAuxiliaryDataType>(VectorAuxiliaryDataType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
@@ -1346,6 +1361,9 @@ template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
+CacheBlockState EnumUtil::FromString<CacheBlockState>(const char *value);
+
+template<>
 CacheValidationMode EnumUtil::FromString<CacheValidationMode>(const char *value);
 
 template<>
@@ -1361,7 +1379,13 @@ template<>
 CheckpointAbort EnumUtil::FromString<CheckpointAbort>(const char *value);
 
 template<>
+CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value);
+
+template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);
+
+template<>
+ClientInterruptState EnumUtil::FromString<ClientInterruptState>(const char *value);
 
 template<>
 ColumnDataAllocatorType EnumUtil::FromString<ColumnDataAllocatorType>(const char *value);
@@ -1880,6 +1904,9 @@ template<>
 TimestampCastResult EnumUtil::FromString<TimestampCastResult>(const char *value);
 
 template<>
+TransactionInvalidationPolicy EnumUtil::FromString<TransactionInvalidationPolicy>(const char *value);
+
+template<>
 TransactionModifierType EnumUtil::FromString<TransactionModifierType>(const char *value);
 
 template<>
@@ -1920,9 +1947,6 @@ VariantStatsShreddingState EnumUtil::FromString<VariantStatsShreddingState>(cons
 
 template<>
 VariantValueType EnumUtil::FromString<VariantValueType>(const char *value);
-
-template<>
-VectorAuxiliaryDataType EnumUtil::FromString<VectorAuxiliaryDataType>(const char *value);
 
 template<>
 VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);

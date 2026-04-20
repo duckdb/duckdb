@@ -1,12 +1,44 @@
 #include "parquet_multi_file_info.hpp"
+
+#include <stdint.h>
+#include <atomic>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_states.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class BaseStatistics;
+class ClientContext;
+class DataChunk;
+class ExecutionContext;
+class Expression;
+class LogicalGet;
+class PhysicalOperator;
 
 struct ParquetMetadataCacheEntry {
 	ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata, ParquetCacheValidity validity,
@@ -65,6 +97,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
 	ParquetReaderScanState scan_state;
+	vector<idx_t> group_indexes;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -341,7 +374,7 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 	}
 	auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &cached_metadata = parquet_data.TryLoadCaches(bind_data, context);
-	if (!cached_metadata.empty()) {
+	if (cached_metadata.empty()) {
 		// no cached metadata - bail
 		return result;
 	}
@@ -684,10 +717,15 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 		return false;
 	}
 	// The current reader has rowgroups left to be scanned
-	vector<idx_t> group_indexes {gstate.row_group_index};
-	InitializeScan(context, lstate.scan_state, group_indexes);
+	lstate.group_indexes = {gstate.row_group_index};
 	gstate.row_group_index++;
 	return true;
+}
+
+void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                LocalTableFunctionState &lstate_p) {
+	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
 }
 
 void ParquetReader::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
@@ -705,7 +743,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, GlobalTableFunctionState
 		}
 	}
 #endif
-
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	local_state.scan_state.op = gstate.op;

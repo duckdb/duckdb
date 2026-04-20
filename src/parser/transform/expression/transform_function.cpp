@@ -47,28 +47,6 @@ static inline WindowBoundary TransformFrameOption(const int frameOptions, const 
 	}
 }
 
-static bool IsExcludableWindowFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_FILL:
-		return false;
-	default:
-		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
-	}
-}
-
 void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_spec, WindowExpression &expr) {
 	// finally: specifics of bounds
 	expr.start_expr = TransformExpression(window_spec.startOffset);
@@ -123,11 +101,6 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 	} else {
 		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
 	}
-
-	if (expr.exclude_clause != WindowExcludeMode::NO_OTHER && !expr.arg_orders.empty() &&
-	    !IsExcludableWindowFunction(expr.type)) {
-		throw ParserException("EXCLUDE is not supported for the window function \"%s\"", expr.function_name.c_str());
-	}
 }
 
 bool Transformer::ExpressionIsEmptyStar(ParsedExpression &expr) {
@@ -149,28 +122,6 @@ bool Transformer::InWindowDefinition() {
 		return parent->InWindowDefinition();
 	}
 	return false;
-}
-
-static bool IsOrderableWindowFunction(ExpressionType type) {
-	switch (type) {
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_NTILE:
-	case ExpressionType::WINDOW_CUME_DIST:
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-	case ExpressionType::WINDOW_FILL:
-	case ExpressionType::WINDOW_AGGREGATE:
-		return true;
-	case ExpressionType::WINDOW_RANK_DENSE:
-		return false;
-	default:
-		throw InternalException("Unknown orderable window type %s", ExpressionTypeToString(type).c_str());
-	}
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall &root) {
@@ -211,32 +162,18 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("window functions are not allowed in window definitions");
 		}
 
-		const auto win_fun_type = WindowExpression::WindowToExpressionType(lowercase_name);
-		if (win_fun_type == ExpressionType::INVALID) {
-			throw InternalException("Unknown/unsupported window function");
+		//	We map first/last OVER() to first_value/last_value.
+		//	Not sure the semantics match, but we are stuck with it.
+		if (lowercase_name == "first" || lowercase_name == "last") {
+			lowercase_name += "_value";
 		}
 
-		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_distinct) {
-			throw ParserException("DISTINCT is not implemented for non-aggregate window functions!");
-		}
-
-		if (root.agg_order && !IsOrderableWindowFunction(win_fun_type)) {
-			throw ParserException("ORDER BY is not supported for the window function \"%s\"", lowercase_name.c_str());
-		}
-
-		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root.agg_filter) {
-			throw ParserException("FILTER is not implemented for non-aggregate window functions!");
-		}
 		if (root.export_state) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE &&
-		    root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS) {
-			throw ParserException("RESPECT/IGNORE NULLS is not supported for windowed aggregates");
-		}
-
-		auto expr = make_uniq<WindowExpression>(win_fun_type, std::move(catalog), std::move(schema), lowercase_name);
+		auto expr = make_uniq<WindowExpression>(std::move(catalog), std::move(schema), lowercase_name);
+		expr->has_ignore_nulls = (root.agg_ignore_nulls != duckdb_libpgquery::PG_DEFAULT_NULLS);
 		expr->ignore_nulls = (root.agg_ignore_nulls == duckdb_libpgquery::PG_IGNORE_NULLS);
 		expr->distinct = root.agg_distinct;
 
@@ -251,35 +188,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			expr->arg_orders = std::move(order_bys->orders);
 		}
 
-		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
-			expr->children = std::move(children);
-		} else {
-			if (!children.empty()) {
-				expr->children.push_back(std::move(children[0]));
-			}
-			if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
-				if (children.size() > 1) {
-					expr->offset_expr = std::move(children[1]);
-				}
-				if (children.size() > 2) {
-					expr->default_expr = std::move(children[2]);
-				}
-				if (children.size() > 3) {
-					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-				}
-			} else if (win_fun_type == ExpressionType::WINDOW_NTH_VALUE) {
-				if (children.size() > 1) {
-					expr->children.push_back(std::move(children[1]));
-				}
-				if (children.size() > 2) {
-					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-				}
-			} else {
-				if (children.size() > 1) {
-					throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-				}
-			}
-		}
+		expr->children = std::move(children);
+
 		auto window_spec = PGPointerCast<duckdb_libpgquery::PGWindowDef>(root.over);
 		if (window_spec->name) {
 			auto it = window_clauses.find(string(window_spec->name));
@@ -404,29 +314,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		coalesce_op->children.push_back(std::move(children[0]));
 		coalesce_op->children.push_back(std::move(children[1]));
 		return std::move(coalesce_op);
-	} else if (lowercase_name == "list" && order_bys->orders.size() == 1) {
-		// list(expr ORDER BY expr <sense> <nulls>) => list_sort(list(expr), <sense>, <nulls>)
-		if (children.size() != 1) {
-			throw ParserException("Wrong number of arguments to LIST.");
-		}
-		auto arg_expr = children[0].get();
-		auto &order_by = order_bys->orders[0];
-		if (arg_expr->Equals(*order_by.expression)) {
-			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
-			order_bys = nullptr;
-			auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
-			                                               std::move(filter_expr), std::move(order_bys),
-			                                               root.agg_distinct, false, root.export_state);
-			lowercase_name = "list_sort";
-			order_bys.reset();   // NOLINT
-			filter_expr.reset(); // NOLINT
-			children.clear();    // NOLINT
-			root.agg_distinct = false;
-			children.emplace_back(std::move(unordered));
-			children.emplace_back(std::move(sense));
-			children.emplace_back(std::move(nulls));
-		}
 	} else if (lowercase_name == "date") {
 		if (children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to DATE function");

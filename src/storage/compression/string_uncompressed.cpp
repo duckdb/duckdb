@@ -98,7 +98,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
 
@@ -129,7 +129,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = start + sel.get_index(i);
@@ -168,7 +168,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	auto dict_offset = base_data[row_id];
 	uint32_t string_length;
@@ -271,17 +271,18 @@ void UncompressedStringStorage::VisitBlockIds(const ColumnSegment &segment, Bloc
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(
-	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, UncompressedStringStorage::StringInitAnalyze,
-	    UncompressedStringStorage::StringAnalyze, UncompressedStringStorage::StringFinalAnalyze,
-	    UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
-	    UncompressedFunctions::FinalizeCompress, UncompressedStringStorage::StringInitScan,
-	    UncompressedStringStorage::StringScan, UncompressedStringStorage::StringScanPartial,
-	    UncompressedStringStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
-	    UncompressedStringStorage::StringInitSegment, UncompressedStringStorage::StringInitAppend,
-	    UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend, nullptr,
-	    UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
-	    UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch, UncompressedStringStorage::Select);
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type,
+	                           UncompressedStringStorage::StringInitAnalyze, UncompressedStringStorage::StringAnalyze,
+	                           UncompressedStringStorage::StringFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
+	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
+	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
+	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
+	                           UncompressedStringStorage::FinalizeAppend, UncompressedStringStorage::StringRevertAppend,
+	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
+	                           UncompressedStringStorage::VisitBlockIds, UncompressedStringInitPrefetch,
+	                           UncompressedStringStorage::Select);
 }
 
 //===--------------------------------------------------------------------===//

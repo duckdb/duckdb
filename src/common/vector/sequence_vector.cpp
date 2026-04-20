@@ -1,0 +1,61 @@
+#include "duckdb/common/vector/sequence_vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+
+namespace duckdb {
+
+SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, idx_t count_p)
+    : VectorBuffer(VectorType::SEQUENCE_VECTOR, VectorBufferType::SEQUENCE_BUFFER), start(start_p),
+      increment(increment_p), seq_count(count_p) {
+}
+
+idx_t SequenceBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
+	return GetTypeIdSize(type.InternalType()) * count;
+}
+
+idx_t SequenceBuffer::GetAllocationSize() const {
+	idx_t size = VectorBuffer::GetAllocationSize();
+	size += sizeof(int64_t) * 3;
+	return size;
+}
+
+void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (count == 0) {
+		return;
+	}
+	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
+}
+
+string SequenceBuffer::ToString(const LogicalType &type, idx_t count) const {
+	string retval;
+	for (idx_t i = 0; i < count; i++) {
+		retval += to_string(start + static_cast<int64_t>(static_cast<uint64_t>(increment) * i));
+		if (i < count - 1) {
+			retval += ", ";
+		}
+	}
+	return retval;
+}
+
+Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
+	return Value::Numeric(type, start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
+}
+
+buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+                                                 idx_t count) const {
+	if (!sel.IsSet()) {
+		// FIXME: work-around for Flatten being called multiple times on the same vector with different counts...
+		count = MaxValue<idx_t>(seq_count, count);
+	}
+	Vector flattened_vector(type, count);
+	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
+	return flattened_vector.GetBufferRef();
+}
+
+void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {
+	D_ASSERT(vector.GetVectorType() == VectorType::SEQUENCE_VECTOR);
+	auto &data = vector.Buffer().Cast<SequenceBuffer>();
+	start = data.start;
+	increment = data.increment;
+}
+
+} // namespace duckdb

@@ -30,11 +30,11 @@ static void StrReverseUnicode(const char *input, idx_t n, char *output) {
 
 struct ReverseOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		auto input_data = input.GetData();
 		auto input_length = input.GetSize();
 
-		auto target = StringVector::EmptyString(result, input_length);
+		auto target = heap.EmptyString(input_length);
 		auto target_data = target.GetDataWriteable();
 		if (!StrReverseASCII(input_data, input_length, target_data)) {
 			StrReverseUnicode(input_data, input_length, target_data);

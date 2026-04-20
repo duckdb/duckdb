@@ -405,8 +405,9 @@ struct EquiWidthBinsTimestamp {
 	}
 };
 
-unique_ptr<FunctionData> BindEquiWidthFunction(ClientContext &, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
 	LogicalType child_type;

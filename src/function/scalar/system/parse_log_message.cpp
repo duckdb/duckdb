@@ -29,8 +29,11 @@ struct ParseLogMessageData : FunctionData {
 	}
 };
 
-unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.size() != 2) {
 		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->alias);
 	}
@@ -72,7 +75,7 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 		VectorOperations::DefaultCast(args.data[1], result, args.size(), true);
 	} else {
 		auto &struct_entries = StructVector::GetEntries(result);
-		struct_entries[0]->Reference(args.data[1]);
+		struct_entries[0].Reference(args.data[1]);
 	}
 }
 
@@ -80,7 +83,7 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 ScalarFunction ParseLogMessage::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
-	                          ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	                          ParseLogMessageBind, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
 	fun.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
 	return fun;
 }

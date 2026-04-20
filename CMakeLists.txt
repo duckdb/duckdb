@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5...3.29)
+cmake_minimum_required(VERSION 3.14...3.29)
 
 if(NOT CLANG_TIDY)
   find_package(Python3)
@@ -80,6 +80,14 @@ if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
     endif()
 endif()
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(DEFAULT_BUILD_TYPE "Release")
+  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
+  set(CMAKE_BUILD_TYPE
+      "${DEFAULT_BUILD_TYPE}"
+      CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 if(NOT DUCKDB_LINKER AND DEFINED ENV{CI} AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
   set(DUCKDB_LINKER "mold")
 endif()
@@ -116,9 +124,25 @@ set(INSTALL_CMAKE_DIR
     CACHE PATH "Installation directory for CMake files")
 set(DUCKDB_EXPORT_SET "DuckDBExports")
 
+option(EXTENSION_STATIC_BUILD
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
+        TRUE)
+option(DISABLE_GCC_FUNCTION_SECTIONS
+        "Do not allow to use '-ffunction-sections -fdata-sections' GCC compile flags."
+        FALSE)
+
+if(ZOS)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
+
+if(WIN32)
+  set(EXTENSION_STATIC_BUILD TRUE)
+  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
+endif()
+
 # This option allows --gc-sections flag during extension linking to discard any unused functions or data
-if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+if (EXTENSION_STATIC_BUILD)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND NOT DISABLE_GCC_FUNCTION_SECTIONS)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
   elseif(WIN32 AND MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
@@ -205,6 +229,31 @@ elseif(UNIX)
 else()
   set(OS_NAME "unknown")
 endif()
+
+# Codesign a target with get-task-allow so lldb can attach to it on macOS.
+# Only applied for debug build types where you'd actually want to debug.
+function(duckdb_codesign_for_debugging target)
+  if(APPLE AND (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo"))
+    set(ENTITLEMENTS_FILE "${CMAKE_BINARY_DIR}/debug_entitlements.plist")
+    if(NOT EXISTS "${ENTITLEMENTS_FILE}")
+      file(WRITE "${ENTITLEMENTS_FILE}"
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+        "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"https://www.apple.com/DTDs/PropertyList-1.0.dtd\">"
+        "<plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>"
+      )
+    endif()
+    set(CODESIGN_SCRIPT "${CMAKE_BINARY_DIR}/codesign_debug.cmake")
+    if(NOT EXISTS "${CODESIGN_SCRIPT}")
+      file(WRITE "${CODESIGN_SCRIPT}"
+        "execute_process(COMMAND codesign -s - -f --entitlements \"\${ENTITLEMENTS_FILE}\" \"\${TARGET_FILE}\" ERROR_QUIET)\n"
+      )
+    endif()
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -DTARGET_FILE=$<TARGET_FILE:${target}> -DENTITLEMENTS_FILE=${ENTITLEMENTS_FILE} -P "${CODESIGN_SCRIPT}"
+      VERBATIM
+    )
+  endif()
+endfunction()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
@@ -386,7 +435,11 @@ else()
           OUTPUT_VARIABLE GIT_DESCRIBE
           OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (GIT_RESULT)
-      message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      if ("$ENV{GITHUB_EVENT_NAME}" STREQUAL "pull_request")
+        message(STATUS "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Continuing with dummy version v0.0.1 for pull_request CI")
+      else()
+        message(WARNING "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'describe --tags --long', likely due to shallow clone. Consider providing explicit OVERRIDE_GIT_DESCRIBE or clone with tags. Continuing with dummy version v0.0.1")
+      endif()
       set(GIT_DESCRIBE "v0.0.1-0-g${GIT_COMMIT_HASH}")
     endif()
   else()
@@ -453,19 +506,6 @@ message(STATUS "git hash ${GIT_COMMIT_HASH}, version ${DUCKDB_VERSION}, extensio
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
-option(EXTENSION_STATIC_BUILD
-        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
-        TRUE)
-
-if(ZOS)
-  set(EXTENSION_STATIC_BUILD TRUE)
-endif()
-
-if(WIN32)
-  set(EXTENSION_STATIC_BUILD TRUE)
-  add_definitions(-D_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS=1)
-endif()
-
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
@@ -503,6 +543,10 @@ option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
+
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -696,14 +740,6 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(DEFAULT_BUILD_TYPE "Release")
-  message(STATUS "Setting build type to '${DEFAULT_BUILD_TYPE}'.")
-  set(CMAKE_BUILD_TYPE
-      "${DEFAULT_BUILD_TYPE}"
-      CACHE STRING "Choose the type of build." FORCE)
-endif()
-
 set(DUCKDB_RELEASE_LINK_JOBS
     4
     CACHE STRING "Maximum number of concurrent linker jobs for Release builds")
@@ -722,6 +758,8 @@ if(NOT DEFINED CMAKE_JOB_POOL_LINK)
     set(CMAKE_JOB_POOL_LINK debug_link_jobs)
   endif()
 endif()
+message(STATUS
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 if(OS_NAME STREQUAL "windows")
   list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
@@ -944,5 +982,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
           "${PROJECT_BINARY_DIR}/DuckDBConfigVersion.cmake"
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
-
-

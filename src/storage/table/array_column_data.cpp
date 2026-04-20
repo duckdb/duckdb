@@ -88,7 +88,7 @@ idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	auto scan_count = validity->ScanCount(state.child_states[0], result, count, result_offset);
 	auto array_size = ArrayType::GetSize(type);
 	// Scan child column
-	auto &child_vec = ArrayVector::GetEntry(result);
+	auto &child_vec = ArrayVector::GetChildMutable(result);
 	child_column->ScanCount(state.child_states[1], child_vec, count * array_size, result_offset * array_size);
 	return scan_count;
 }
@@ -138,7 +138,7 @@ void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 
 	idx_t current_offset = 0;
 	idx_t current_position = 0;
-	auto &child_vec = ArrayVector::GetEntry(result);
+	auto &child_vec = ArrayVector::GetChildMutable(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t start_idx = sel.get_index(i);
 		idx_t end_idx = start_idx + 1;
@@ -192,7 +192,7 @@ void ArrayColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-		Vector append_vector(vector);
+		Vector append_vector(Vector::Ref(vector));
 		append_vector.Flatten(count);
 		Append(stats, state, append_vector, count);
 		return;
@@ -202,7 +202,7 @@ void ArrayColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Ve
 	validity->Append(stats, state.child_appends[0], vector, count);
 	// Append child column
 	auto array_size = ArrayType::GetSize(type);
-	auto &child_vec = ArrayVector::GetEntry(vector);
+	auto &child_vec = ArrayVector::GetChildMutable(vector);
 	child_column->Append(ArrayStats::GetChildStats(stats), state.child_appends[1], child_vec, count * array_size);
 
 	this->count += count;
@@ -248,7 +248,7 @@ void ArrayColumnData::FetchRow(TransactionData transaction, ColumnFetchState &st
 	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
 	// Fetch child column
-	auto &child_vec = ArrayVector::GetEntry(result);
+	auto &child_vec = ArrayVector::GetChildMutable(result);
 	auto &child_type = ArrayType::GetChildType(type);
 	auto array_size = ArrayType::GetSize(type);
 

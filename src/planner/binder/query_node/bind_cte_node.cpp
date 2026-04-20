@@ -1,4 +1,7 @@
 #include "duckdb/parser/query_node/cte_node.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 #include "duckdb/parser/query_node/list.hpp"
@@ -15,10 +18,28 @@ struct BoundCTEData {
 	shared_ptr<CTEBindState> cte_bind_state;
 };
 
+static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
+	if (!cte.query_node) {
+		return false;
+	}
+	auto t = cte.query_node->type;
+	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+	       t == QueryNodeType::DELETE_QUERY_NODE;
+}
+
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
+	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
+		if (IsDMLQueryNode(*cte.second)) {
+			if (parent) {
+				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
+			}
+			if (++dml_cte_count > 1) {
+				throw BinderException("Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
+			}
+		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}
@@ -36,6 +57,15 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 		break;
 	case QueryNodeType::STATEMENT_NODE:
 		result = current_binder.get().BindNode(node.Cast<StatementNode>());
+		break;
+	case QueryNodeType::UPDATE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<UpdateQueryNode>());
+		break;
+	case QueryNodeType::DELETE_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<DeleteQueryNode>());
+		break;
+	case QueryNodeType::INSERT_QUERY_NODE:
+		result = current_binder.get().BindNode(node.Cast<InsertQueryNode>());
 		break;
 	default:
 		throw InternalException("Unsupported query node type");
@@ -105,7 +135,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 	// first recursively visit the materialized CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
-	D_ASSERT(statement.query);
+	D_ASSERT(statement.query_node);
 
 	result.ctename = ctename;
 	result.materialized = statement.materialized;
@@ -113,7 +143,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 	// instead of eagerly binding the CTE here we add the CTE bind state to the list of CTE bindings
 	// the CTE is bound lazily - when referenced for the first time we perform the binding
-	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query->node, statement.aliases);
+	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query_node, statement.aliases);
 
 	result.child_binder = Binder::CreateBinder(context, this);
 
@@ -127,9 +157,19 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
-		// CTE was not bound - just ignore it
-		MoveCorrelatedExpressions(*bound_cte.child_binder);
-		return child;
+		auto node_type = bound_cte.cte_bind_state->cte_def.type;
+		bool is_dml = node_type == QueryNodeType::INSERT_QUERY_NODE || node_type == QueryNodeType::UPDATE_QUERY_NODE ||
+		              node_type == QueryNodeType::DELETE_QUERY_NODE;
+		if (is_dml) {
+			// DML CTEs always execute even if not referenced - force bind now
+			auto dummy_binding =
+			    make_uniq<CTEBinding>(BindingAlias(bound_cte.ctename), bound_cte.cte_bind_state, bound_cte.setop_index);
+			bound_cte.cte_bind_state->Bind(*dummy_binding);
+		} else {
+			// Non-DML CTE was not referenced - just ignore it
+			MoveCorrelatedExpressions(*bound_cte.child_binder);
+			return child;
+		}
 	}
 	auto &bind_state = *bound_cte.cte_bind_state;
 	for (auto &c : bind_state.query_binder->correlated_columns) {

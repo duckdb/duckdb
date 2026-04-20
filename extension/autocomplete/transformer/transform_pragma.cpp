@@ -3,22 +3,22 @@
 
 namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
+                                                                         ParseResult &parse_result) {
 	// Rule: PragmaStatement <- 'PRAGMA'i (PragmaAssign / PragmaFunction)
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &matched_child = list_pr.Child<ListParseResult>(1).Child<ChoiceParseResult>(0);
-	return transformer.Transform<unique_ptr<SQLStatement>>(matched_child.result);
+	return transformer.Transform<unique_ptr<SQLStatement>>(matched_child.GetResult());
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
+                                                                      ParseResult &parse_result) {
 	// Rule: PragmaAssign <- SettingName '=' Expression
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
 	info.name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto value_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));
-	if (value_list.size() > 1) {
+	if (value_list.size() != 1) {
 		throw ParserException("PRAGMA statement with assignment should contain exactly one parameter");
 	}
 	auto &expr = value_list[0];
@@ -46,15 +46,15 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaAssign(PEGTransfo
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTransformer &transformer,
-                                                                        optional_ptr<ParseResult> parse_result) {
+                                                                        ParseResult &parse_result) {
 	// Rule: PragmaFunction <- PragmaName PragmaParameters?
 	auto result = make_uniq<PragmaStatement>();
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	result->info->name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto &optional_parameters_pr = list_pr.Child<OptionalParseResult>(1);
 	if (optional_parameters_pr.HasResult()) {
 		auto parameters =
-		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.optional_result);
+		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.GetResult());
 		for (auto &parameter : parameters) {
 			if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = parameter->Cast<ColumnRefExpression>();
@@ -71,12 +71,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 	return std::move(result);
 }
 
-vector<unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformPragmaParameters(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
+vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformPragmaParameters(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
 	// TODO(Dtenwolde) Check about named parameters
 	// PragmaParameters <- List(Expression)
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto expr_list = ExtractParseResultsFromList(extract_parens);
 	vector<unique_ptr<ParsedExpression>> parameters;
 	for (auto expr : expr_list) {

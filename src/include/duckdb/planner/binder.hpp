@@ -10,10 +10,12 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -57,6 +59,7 @@ class AtClause;
 class BoundAtClause;
 
 struct CreateInfo;
+struct CreateTriggerInfo;
 struct BoundCreateTableInfo;
 struct BoundOnConflictInfo;
 struct CommonTableExpressionInfo;
@@ -223,9 +226,11 @@ public:
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info);
-	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema);
 	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
-	                                                     vector<unique_ptr<Expression>> &bound_defaults);
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
+	unique_ptr<BoundCreateTableInfo> BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema,
+	                                                     vector<unique_ptr<Expression>> &bound_defaults,
+	                                                     AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER);
 	static unique_ptr<BoundCreateTableInfo> BindCreateTableCheckpoint(unique_ptr<CreateInfo> info,
 	                                                                  SchemaCatalogEntry &schema);
 
@@ -254,6 +259,7 @@ public:
 	void SearchSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
 	//! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
@@ -334,6 +340,9 @@ public:
 
 	void SetSearchPath(Catalog &catalog, const string &schema);
 
+	void BindDefaultValue(const ColumnDefinition &column, vector<unique_ptr<Expression>> &bound_defaults,
+	                      const string &catalog = "", const string &schema = "");
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -409,6 +418,9 @@ private:
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
+	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
+	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
+	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
@@ -440,6 +452,9 @@ private:
 	BoundStatement BindNode(RecursiveCTENode &node);
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
+	BoundStatement BindNode(InsertQueryNode &node);
+	BoundStatement BindNode(UpdateQueryNode &node);
+	BoundStatement BindNode(DeleteQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -550,7 +565,7 @@ private:
 	                          vector<LogicalIndex> &named_column_map, vector<LogicalType> &expected_types,
 	                          IndexVector<idx_t, PhysicalIndex> &column_index_map);
 	void TryReplaceDefaultExpression(unique_ptr<ParsedExpression> &expr, const ColumnDefinition &column);
-	void ExpandDefaultInValuesList(InsertStatement &stmt, TableCatalogEntry &table,
+	void ExpandDefaultInValuesList(InsertQueryNode &node, TableCatalogEntry &table,
 	                               optional_ptr<ExpressionListRef> values_list,
 	                               const vector<LogicalIndex> &named_column_map);
 	unique_ptr<BoundMergeIntoAction> BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table,
@@ -558,9 +573,10 @@ private:
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names);
+	                                                 const vector<string> &source_names, MergeActionCondition condition,
+	                                                 const unordered_set<idx_t> &source_table_indices);
 
-	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertStatement &stmt, TableCatalogEntry &table);
+	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 
 	static void CheckInsertColumnCountMismatch(idx_t expected_columns, idx_t result_columns, bool columns_provided,
 	                                           const string &tname);

@@ -394,7 +394,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	}
 	auto &vector = (Vector &)(*list_vector);
 	for (int i = 0; i < 123; i++) {
-		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
+		REQUIRE(ListVector::GetChild(vector).GetValue(i) == i);
 	}
 
 	duckdb_destroy_data_chunk(&chunk);
@@ -415,7 +415,7 @@ TEST_CASE("Test DataChunk populate ArrayVector in C API", "[capi]") {
 		((int *)duckdb_vector_get_data(child))[i] = i;
 	}
 
-	auto vec = (Vector &)(*array_vector);
+	auto &vec = (Vector &)(*array_vector);
 	for (int i = 0; i < 2; i++) {
 		auto child_vals = ArrayValue::GetChildren(vec.GetValue(i));
 		for (int j = 0; j < 3; j++) {
@@ -846,4 +846,80 @@ TEST_CASE("Test unsafe string assignment to VARCHAR vector", "[capi]") {
 	REQUIRE(duckdb_string_t_length(string_data[0]) == 0);
 
 	duckdb_destroy_data_chunk(&chunk);
+}
+
+TEST_CASE("Test appending to a nested list vector", "[capi]") {
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_open(nullptr, &db);
+	duckdb_connect(db, &con);
+	duckdb_query(con, "CREATE TABLE test (col INTEGER[][])", nullptr);
+
+	// Schema: INTEGER[][]
+	auto int_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto inner_list = duckdb_create_list_type(int_type);
+	auto outer_list = duckdb_create_list_type(inner_list);
+
+	duckdb_logical_type schema[] = {outer_list};
+	auto chunk = duckdb_create_data_chunk(schema, 1);
+
+	// Get the full vector chain up front, before any reserve calls.
+	auto outer_vec = duckdb_data_chunk_get_vector(chunk, 0);
+	auto inner_vec = duckdb_list_vector_get_child(outer_vec);
+	auto data_vec = duckdb_list_vector_get_child(inner_vec);
+
+	// 1 row containing 2100 inner lists, each with 1 element.
+	// The 2100 inner lists exceed STANDARD_VECTOR_SIZE (2048),
+	// so the outer reserve triggers child->Resize() on inner_vec.
+	const int NUM_INNER_LISTS = 2100;
+
+	duckdb_list_vector_reserve(outer_vec, NUM_INNER_LISTS);
+	duckdb_list_vector_reserve(inner_vec, NUM_INNER_LISTS);
+
+	// Write one integer per inner list through the pre-cached data_vec.
+	auto data_ptr = (int32_t *)duckdb_vector_get_data(data_vec);
+	for (int i = 0; i < NUM_INNER_LISTS; i++) {
+		data_ptr[i] = i;
+	}
+	duckdb_list_vector_set_size(inner_vec, NUM_INNER_LISTS);
+
+	// Each inner list: single element
+	auto inner_entries = (duckdb_list_entry *)duckdb_vector_get_data(inner_vec);
+	for (int i = 0; i < NUM_INNER_LISTS; i++) {
+		inner_entries[i] = {(uint64_t)i, 1};
+	}
+	duckdb_list_vector_set_size(outer_vec, NUM_INNER_LISTS);
+
+	// 1 outer row containing all 2100 inner lists
+	auto outer_entries = (duckdb_list_entry *)duckdb_vector_get_data(outer_vec);
+	outer_entries[0] = {0, NUM_INNER_LISTS};
+
+	duckdb_data_chunk_set_size(chunk, 1);
+
+	// Append and read back
+	duckdb_appender appender;
+	duckdb_appender_create(con, nullptr, "test", &appender);
+	duckdb_append_data_chunk(appender, chunk);
+	duckdb_appender_close(appender);
+	duckdb_appender_destroy(&appender);
+
+	// Verify: col[1][1] should be 0, col[2100][1] should be 2099
+	duckdb_result result;
+	duckdb_query(con, "SELECT col[1][1], col[2100][1] FROM test", &result);
+
+	int64_t first = duckdb_value_int64(&result, 0, 0);
+	int64_t last = duckdb_value_int64(&result, 1, 0);
+	REQUIRE(first == 0);
+	REQUIRE(last == 2099);
+
+	bool ok = (first == 0 && last == 2099);
+	REQUIRE(ok);
+
+	duckdb_destroy_result(&result);
+	duckdb_destroy_data_chunk(&chunk);
+	duckdb_destroy_logical_type(&int_type);
+	duckdb_destroy_logical_type(&inner_list);
+	duckdb_destroy_logical_type(&outer_list);
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
 }

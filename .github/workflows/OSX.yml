@@ -7,9 +7,9 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
-        type: string
+        type: boolean
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -17,14 +17,17 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
+        default: false
       run_all:
-        type: string
+        type: boolean
+        default: true
   push:
     branches-ignore:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'test/configs/**'
@@ -67,7 +70,7 @@ jobs:
 
     - name: Install ninja
       shell: bash
-      run: brew install ninja
+      run: python3 scripts/ci/retry.py -- brew install ninja
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -77,18 +80,18 @@ jobs:
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: bash
-      run: echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$(find "$PWD" -name 'libduck*.dylib' | head -n 1)" >> "$GITHUB_ENV"
 
     - name: Test DUCKDB_INSTALL_LIB variable
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       shell: bash
       run: make unittest_release
 
     - name: Amalgamation
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       shell: bash
       run: |
         python scripts/amalgamation.py --extended
@@ -120,13 +123,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 
       - name: Install pytest
         run: |
-          python -m pip install pytest
+          python3 scripts/ci/retry.py -- python -m pip install pytest
 
       - name: Build
         shell: bash
@@ -155,11 +158,12 @@ jobs:
             codesign --options runtime --entitlements entitlements.plist --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
           
             zip -j notarize.zip build/release/duckdb build/release/src/libduckdb.dylib 
-            export XCRUN_RESPONSE=$(xcrun notarytool submit --progress --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait -f json notarize.zip)
+            XCRUN_RESPONSE=$(xcrun notarytool submit --progress --apple-id "$APPLE_ID" --password "$PASSWORD" --team-id "$TEAM_ID" --wait -f json notarize.zip)
+            export XCRUN_RESPONSE
             rm notarize.zip
             if [[ $(./build/release/duckdb -csv -noheader -c "SELECT (getenv('XCRUN_RESPONSE')::JSON)->>'status'") != "Accepted" ]] ; then 
               echo "Notarization failed!"
-              echo $XCRUN_RESPONSE
+              echo "$XCRUN_RESPONSE"
               exit 1
             fi
           fi
@@ -197,18 +201,18 @@ jobs:
 
       - name: Unit Test
         shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
+        if: ${{ !inputs.skip_tests }}
         run: make allunit
 
       - name: Tools Tests
         shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
+        if: ${{ !inputs.skip_tests }}
         run: |
           python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
+        if: ${{ !inputs.skip_tests }}
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)

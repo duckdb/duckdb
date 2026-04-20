@@ -1,7 +1,9 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/bignum.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -14,7 +16,28 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	case duckdb_libpgquery::T_PGInteger:
 		D_ASSERT(val.val.ival <= NumericLimits<int32_t>::Maximum());
 		return make_uniq<ConstantExpression>(Value::INTEGER((int32_t)val.val.ival));
-	case duckdb_libpgquery::T_PGBitString: // FIXME: this should actually convert to BLOB
+	case duckdb_libpgquery::T_PGBitString: {
+		string bit_string(val.val.str);
+		if (bit_string.empty() || bit_string[0] != 'x') {
+			return make_uniq<ConstantExpression>(Value(string(val.val.str)));
+		}
+		// X'...' hex literal: val.val.str = "xFF..." (lowercase 'x' prefix + hex digits)
+		const char *hex = bit_string.c_str() + 1; // skip 'x' prefix
+		idx_t hex_len = bit_string.size() - 1;
+		if (hex_len % 2 != 0) {
+			throw ParserException("Hex string literal must have an even number of hex digits");
+		}
+		// Build \xHH-escaped string that Blob::ToBlob (via Value::BLOB) expects
+		idx_t blob_len = hex_len / 2;
+		string escaped;
+		escaped.reserve(blob_len * 4);
+		for (idx_t i = 0; i < hex_len; i += 2) {
+			escaped += "\\x";
+			escaped += hex[i];
+			escaped += hex[i + 1];
+		}
+		return make_uniq<ConstantExpression>(Value::BLOB(escaped));
+	}
 	case duckdb_libpgquery::T_PGString:
 		return make_uniq<ConstantExpression>(Value(string(val.val.str)));
 	case duckdb_libpgquery::T_PGFloat: {
@@ -60,6 +83,14 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 			if (TryCast::Operation<string_t, uhugeint_t>(str_val, uhugeint_value)) {
 				// successfully cast to bigint: bigint value
 				return make_uniq<ConstantExpression>(Value::UHUGEINT(uhugeint_value));
+			}
+			// if that is not successful; try to cast as bignum for very large integers
+			// this preserves precision for integers that exceed uhugeint limits
+			try {
+				auto bignum_str = Bignum::VarcharToBignum(str_val);
+				return make_uniq<ConstantExpression>(Value::BIGNUM(bignum_str));
+			} catch (const ConversionException &) {
+				// if bignum parsing fails (e.g., invalid format), continue to decimal or double fallback
 			}
 		}
 		idx_t decimal_offset = val.val.str[0] == '-' ? 3 : 2;

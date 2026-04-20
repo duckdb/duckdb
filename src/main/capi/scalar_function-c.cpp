@@ -156,8 +156,10 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 // Scalar Function Callbacks
 //===--------------------------------------------------------------------===//
 
-unique_ptr<FunctionData> CScalarFunctionBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &info = bound_function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
@@ -198,7 +200,6 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	auto &c_bind_info = bind_info->Cast<CScalarFunctionBindData>();
 	auto &c_local_state = ExecuteFunctionState::GetFunctionState(state)->Cast<CScalarFunctionLocalState>();
 
-	auto all_const = input.AllConstant();
 	input.Flatten();
 	auto c_input = reinterpret_cast<duckdb_data_chunk>(&input);
 	auto c_result = reinterpret_cast<duckdb_vector>(&result);
@@ -208,9 +209,6 @@ void CAPIScalarFunction(DataChunk &input, ExpressionState &state, Vector &result
 	c_bind_info.info.function(c_function_info, c_input, c_result);
 	if (!function_info.success) {
 		throw InvalidInputException(function_info.error);
-	}
-	if (all_const && (input.size() == 1 || function.function.GetStability() != FunctionStability::VOLATILE)) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
 

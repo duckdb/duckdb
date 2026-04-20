@@ -116,9 +116,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(needles)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-			return;
+			throw InternalException("JSON Contains called with constant NULL needles");
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
 		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
@@ -137,7 +135,7 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
@@ -146,6 +144,9 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
 	// TODO: implement json_contains that accepts path argument as well
 

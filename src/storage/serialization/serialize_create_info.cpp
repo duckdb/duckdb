@@ -30,6 +30,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(2)) {
 		serializer.WritePropertyWithDefault<LogicalDependencyList>(109, "dependencies", dependencies, LogicalDependencyList());
 	}
+	serializer.WritePropertyWithDefault<string>(110, "extension_name", extension_name);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -43,6 +44,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto comment = deserializer.ReadPropertyWithExplicitDefault<Value>(107, "comment", Value());
 	auto tags = deserializer.ReadPropertyWithExplicitDefault<InsertionOrderPreservingMap<string>>(108, "tags", InsertionOrderPreservingMap<string>());
 	auto dependencies = deserializer.ReadPropertyWithExplicitDefault<LogicalDependencyList>(109, "dependencies", LogicalDependencyList());
+	auto extension_name = deserializer.ReadPropertyWithDefault<string>(110, "extension_name");
 	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
@@ -86,6 +88,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	result->comment = comment;
 	result->tags = std::move(tags);
 	result->dependencies = dependencies;
+	result->extension_name = std::move(extension_name);
 	return result;
 }
 
@@ -197,7 +200,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
 	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
 	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
-	serializer.WritePropertyWithDefault<string>(208, "sql_body_text", sql_body_text);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
@@ -209,7 +212,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
 	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
-	deserializer.ReadPropertyWithDefault<string>(208, "sql_body_text", result->sql_body_text);
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
 	return std::move(result);
 }
 

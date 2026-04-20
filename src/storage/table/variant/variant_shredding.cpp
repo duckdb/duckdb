@@ -397,21 +397,27 @@ static LogicalType SetShreddedType(const LogicalType &typed_value, bool fully_co
 
 bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData &column, LogicalType &out_type,
                                                     optional_idx parent_count) const {
-	idx_t max_count = 0;
-	uint8_t type_index = 0;
-	if (column.type_counts[0] == column.total_count) {
+	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
+		throw InternalException("Column count is larger than parent count - this should not be possible");
+	}
+	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
+	const auto null_count = column.type_counts[0];
+	if (null_count == column.total_count) {
 		//! All NULL, emit INT32
-		out_type = SetShreddedType(LogicalTypeId::INTEGER, true);
+		auto fully_consistent = null_count == total_value_count;
+		out_type = SetShreddedType(LogicalTypeId::INTEGER, fully_consistent);
 		return true;
 	}
 
+	idx_t max_count = 0;
+	uint8_t type_index = 0;
 	//! Skip the 'VARIANT_NULL' type, we can't shred on NULL
 	for (uint8_t i = 1; i < static_cast<uint8_t>(VariantLogicalType::ENUM_SIZE); i++) {
 		if (i == static_cast<uint8_t>(VariantLogicalType::DECIMAL) && !column.decimal_consistent) {
 			//! Can't shred on DECIMAL, not consistent
 			continue;
 		}
-		idx_t count = column.type_counts[i] + column.type_counts[0];
+		idx_t count = column.type_counts[i] + null_count;
 		if (!max_count || count > max_count) {
 			max_count = count;
 			type_index = i;
@@ -421,11 +427,7 @@ bool VariantShreddingStats::GetShreddedTypeInternal(const VariantColumnStatsData
 	if (!max_count) {
 		return false;
 	}
-	if (parent_count.IsValid() && column.total_count > parent_count.GetIndex()) {
-		throw InternalException("Column count is larger than parent count - this should not be possible");
-	}
 
-	auto total_value_count = parent_count.IsValid() ? parent_count.GetIndex() : column.total_count;
 	bool fully_consistent = max_count == total_value_count;
 	if (type_index == static_cast<uint8_t>(VariantLogicalType::OBJECT)) {
 		child_list_t<LogicalType> child_types;
@@ -558,10 +560,10 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
                                                   optional_ptr<const SelectionVector> result_sel,
                                                   DuckDBVariantShreddingState &shredding_state, idx_t count) {
 	//
-	// auto &validity = FlatVector::Validity(value);
+	// auto &validity = FlatVector::ValidityMutable(value);
 	uint32_t *untyped_data = nullptr;
 	if (untyped_values) {
-		untyped_data = FlatVector::GetData<uint32_t>(*untyped_values);
+		untyped_data = FlatVector::GetDataMutable<uint32_t>(*untyped_values);
 	}
 
 	for (uint32_t i = 0; i < static_cast<uint32_t>(count); i++) {
@@ -585,7 +587,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			if (shredding_state.type.id() != LogicalTypeId::STRUCT) {
 				//! Value is shredded, directly write a `NULL` to the 'value' if the type is not an OBJECT
 				if (untyped_values) {
-					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+					FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 				}
 				continue;
 			}
@@ -595,7 +597,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			if (unshredded_children.empty()) {
 				//! Fully shredded object
 				if (untyped_values) {
-					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+					FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 				}
 			} else {
 				//! Deal with partially shredded objects
@@ -613,7 +615,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 		if (!variant.RowIsValid(row) || variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
 			//! NULL is reserved for NULL Variant values
 			if (untyped_values) {
-				FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+				FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 			}
 		} else {
 			if (!untyped_data) {
@@ -641,10 +643,10 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 		auto &child_types = StructType::GetChildTypes(result_type);
 		D_ASSERT(child_types.size() == child_vectors.size());
 #endif
-		typed_value_ref = *child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
+		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
 		if (child_vectors.size() > 1) {
 			D_ASSERT(child_vectors.size() == 2);
-			untyped_value_index = *child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
+			untyped_value_index = child_vectors[VariantColumnData::UNTYPED_VALUE_INDEX];
 		}
 	}
 	auto &typed_value = typed_value_ref.get();
@@ -683,10 +685,10 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
 	DuckDBVariantShredding shredding(count);
-	shredding.WriteVariantValues(variant, *child_vectors[1], nullptr, nullptr, nullptr, count);
+	shredding.WriteVariantValues(variant, child_vectors[1], nullptr, nullptr, nullptr, count);
 
 	//! Now we can write the unshredded values
-	auto &unshredded = *child_vectors[0];
+	auto &unshredded = child_vectors[0];
 	auto original_keys_size = ListVector::GetListSize(VariantVector::GetKeys(input));
 	auto original_children_size = ListVector::GetListSize(VariantVector::GetChildren(input));
 	auto original_values_size = ListVector::GetListSize(VariantVector::GetValues(input));
@@ -703,8 +705,8 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	ListVector::Reserve(values, original_values_size);
 	ListVector::SetListSize(values, 0);
 
-	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	auto &keys_entry = ListVector::GetChildMutable(keys);
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);
 

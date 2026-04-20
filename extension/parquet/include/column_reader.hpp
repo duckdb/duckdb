@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
 #include "parquet_statistics.hpp"
@@ -22,16 +26,42 @@
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_crypto.hpp"
-
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetReader;
 struct TableFilterState;
+class Allocator;
+class RleBpDecoder;
+class ThriftFileTransport;
+class Vector;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
@@ -62,11 +92,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
+	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
@@ -78,7 +108,7 @@ public:
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
-	ParquetReader &Reader();
+	const ParquetReader &Reader();
 	const LogicalType &Type() const {
 		return column_schema.type;
 	}
@@ -102,9 +132,9 @@ public:
 		if (encryption_algorithm.__isset.AES_GCM_V1) {
 			unique_file_identifier = encryption_algorithm.AES_GCM_V1.aad_file_unique;
 		} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-			throw InternalException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
+			throw InvalidInputException("File is encrypted with AES_GCM_CTR_V1, but this is not supported by DuckDB");
 		} else {
-			throw InternalException("File is encrypted but no encryption algorithm is set");
+			throw InvalidInputException("File is encrypted but no encryption algorithm is set");
 		}
 
 		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
@@ -214,7 +244,7 @@ private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
@@ -222,7 +252,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -255,8 +285,8 @@ private:
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);
@@ -303,7 +333,7 @@ protected:
 protected:
 	const ParquetColumnSchema &column_schema;
 
-	ParquetReader &reader;
+	const ParquetReader &reader;
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 

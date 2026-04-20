@@ -98,11 +98,10 @@ public:
 			Vector &list_column = args.data[0];
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			result_validity = &FlatVector::Validity(result);
+			result_validity = &FlatVector::ValidityMutable(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result);
 				result_is_null = true;
 				return;
 			}
@@ -118,7 +117,7 @@ public:
 			// get the list column entries
 			list_column.ToUnifiedFormat(row_count, list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
-			child_vector = &ListVector::GetEntry(list_column);
+			child_vector = &ListVector::GetChildMutable(list_column);
 
 			// get the lambda column data for all other input vectors
 			column_infos = LambdaFunctions::GetColumnInfo(args, row_count);

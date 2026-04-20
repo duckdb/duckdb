@@ -25,26 +25,26 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	// We would use result.Reference(input) also for this case,
 	// but that function asserts that the logical types are the same
 	for (idx_t i = 0; i < input_children.size(); i++) {
-		result_children[i]->Reference(*input_children[i]);
+		result_children[i].Reference(input_children[i]);
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		const bool is_null = ConstantVector::IsNull(input);
-		ConstantVector::SetNull(result, is_null);
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result);
+		}
 	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		// set only the struct buffer's type - do not propagate to children
+		// since children reference external vectors (input children) that may have incompatible buffer types
+		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		auto validity_entries = input.Validity(count);
 
-		if (!input_data.validity.AllValid()) {
-			auto &validity = FlatVector::Validity(result);
+		if (validity_entries.CanHaveNull()) {
+			auto &validity = FlatVector::ValidityMutable(result);
 
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = input_data.sel->get_index(i);
-				if (!input_data.validity.RowIsValid(idx)) {
+				if (!validity_entries.IsValid(i)) {
 					validity.SetInvalid(i);
 				}
 			}
@@ -53,8 +53,9 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 // Ensure input is a STRUCT, set return type to an unnamed STRUCT with same child types
-static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	const auto arg_type = arguments[0]->return_type;
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

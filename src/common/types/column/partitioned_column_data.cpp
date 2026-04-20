@@ -95,9 +95,9 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
 	auto &partition_entries = state.GetMap<fixed>();
 	partition_entries.clear();
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	switch (state.partition_indices.GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
+	case VectorType::FLAT_VECTOR: {
+		const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto &partition_index = partition_indices[i];
 			auto partition_entry = partition_entries.find(partition_index);
@@ -108,8 +108,9 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 			}
 		}
 		break;
+	}
 	case VectorType::CONSTANT_VECTOR:
-		partition_entries[partition_indices[0]] = list_entry_t(0, append_count);
+		partition_entries[*ConstantVector::GetData<idx_t>(state.partition_indices)] = list_entry_t(0, append_count);
 		break;
 	default:
 		throw InternalException("Unexpected VectorType in PartitionedTupleData::Append");
@@ -129,6 +130,8 @@ void PartitionedColumnData::BuildPartitionSel(PartitionedColumnDataAppendState &
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
+	D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
 	auto &partition_sel = state.partition_sel;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto &partition_index = partition_indices[i];
@@ -158,7 +161,8 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 		const auto partition_offset = partition_entry.offset - partition_length;
 
 		// Create a selection vector for this partition using the offset into the single selection vector
-		partition_sel.Initialize(state.partition_sel.data() + partition_offset);
+		partition_sel.Initialize(state.partition_sel.data() + partition_offset,
+		                         state.partition_sel.Capacity() - partition_offset);
 
 		if (partition_length >= HalfBufferSize()) {
 			// Slice the input chunk using the selection vector
@@ -175,7 +179,6 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 				// Next batch won't fit in the buffer, flush it to the partition
 				partition.Append(partition_append_state, partition_buffer);
 				partition_buffer.Reset();
-				partition_buffer.SetCapacity(BufferSize());
 			}
 		}
 	}

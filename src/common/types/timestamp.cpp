@@ -41,9 +41,13 @@ timestamp_t timestamp_t::operator+(const double &value) const {
 	return result;
 }
 
+bool timestamp_t::TrySubtract(const timestamp_t &other, int64_t &result) const {
+	return TrySubtractOperator::Operation(value, int64_t(other.value), result);
+}
+
 int64_t timestamp_t::operator-(const timestamp_t &other) const {
 	int64_t result;
-	if (!TrySubtractOperator::Operation(value, int64_t(other.value), result)) {
+	if (!TrySubtract(other, result)) {
 		throw OutOfRangeException("Overflow in timestamp subtraction");
 	}
 	return result;

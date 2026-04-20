@@ -27,7 +27,7 @@ namespace duckdb {
 void VariantValue::AddChild(const string &key, VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::OBJECT);
 	if (val.IsMissing()) {
-		throw InternalException("Adding a missing value to an object");
+		return;
 	}
 	object_children.emplace(key, std::move(val));
 }
@@ -35,9 +35,50 @@ void VariantValue::AddChild(const string &key, VariantValue &&val) {
 void VariantValue::AddItem(VariantValue &&val) {
 	D_ASSERT(value_type == VariantValueType::ARRAY);
 	if (val.IsMissing()) {
-		throw InternalException("Adding a missing value to an array");
+		//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+		val = VariantValue::NullValue();
 	}
 	array_items.push_back(std::move(val));
+}
+
+void VariantValue::SetItems(vector<VariantValue> &&values) {
+	D_ASSERT(value_type == VariantValueType::ARRAY);
+	for (auto &value : values) {
+		if (value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+			value = VariantValue::NullValue();
+		}
+	}
+	array_items = std::move(values);
+}
+
+void VariantValue::ReserveItems(idx_t count) {
+	array_items.reserve(count);
+}
+
+void VariantValue::AddItems(vector<VariantValue>::iterator begin, vector<VariantValue>::iterator end) {
+	D_ASSERT(value_type == VariantValueType::ARRAY);
+	for (; begin != end; begin++) {
+		auto &value = *begin;
+		if (value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
+			value = VariantValue::NullValue();
+		}
+		array_items.push_back(std::move(value));
+	}
+}
+
+map<string, VariantValue> VariantValue::TakeObjectChildren() {
+	D_ASSERT(value_type == VariantValueType::OBJECT);
+	return std::move(object_children);
+}
+
+const map<string, VariantValue> &VariantValue::ObjectChildren() const {
+	return object_children;
+}
+
+const vector<VariantValue> &VariantValue::ArrayItems() const {
+	return array_items;
 }
 
 static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offsets) {
@@ -50,7 +91,7 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
 		//! Write the count of the children
-		auto &children = value.object_children;
+		auto &children = value.ObjectChildren();
 		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
@@ -66,7 +107,7 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 	}
 	case VariantValueType::ARRAY: {
 		//! Write the count of the children
-		auto &children = value.array_items;
+		auto &children = value.ArrayItems();
 		data_offset += GetVarintSize(children.size());
 		if (!children.empty()) {
 			//! Write the children offset
@@ -226,8 +267,6 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 		}
 		break;
 	}
-	case VariantValueType::MISSING:
-		throw InternalException("Unexpected MISSING value in Variant AnalyzeValue");
 	default:
 		throw InternalException("VariantValueType not handled");
 	}
@@ -254,7 +293,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 	switch (value.value_type) {
 	case VariantValueType::OBJECT: {
 		//! Write the count of the children
-		auto &children = value.object_children;
+		auto &children = value.ObjectChildren();
 
 		//! values
 		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::OBJECT);
@@ -295,7 +334,7 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 	}
 	case VariantValueType::ARRAY: {
 		//! Write the count of the children
-		auto &children = value.array_items;
+		auto &children = value.ArrayItems();
 
 		//! values
 		result.type_ids_data[values_list_offset + values_offset] = static_cast<uint8_t>(VariantLogicalType::ARRAY);
@@ -576,17 +615,18 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 
 //! Copied and modified from 'to_variant.cpp'
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size) {
+	auto count = offsets.size();
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::Writer<list_entry_t>(keys, count);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::Writer<list_entry_t>(children, count);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::Writer<list_entry_t>(values, count);
 
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::Writer<string_t>(blob, count);
 
 	idx_t children_offset = 0;
 	idx_t values_offset = 0;
@@ -597,7 +637,6 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto values_sizes = variant::OffsetData::GetValues(offsets);
 	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
-	auto count = offsets.size();
 	for (idx_t i = 0; i < count; i++) {
 		auto &keys_entry = keys_data[i];
 		auto &children_entry = children_data[i];
@@ -619,7 +658,7 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 		values_offset += values_entry.length;
 
 		//! value
-		blob_data[i] = StringVector::EmptyString(blob, blob_sizes[i]);
+		blob_data[i].EmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists
@@ -652,7 +691,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
 			continue;
 		}
 		AnalyzeValue(value, i, analyze_offsets);
@@ -663,8 +702,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	InitializeVariants(analyze_offsets, result, keys_selvec, keys_selvec_size);
 
 	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	auto &keys_entry = ListVector::GetChildMutable(keys);
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	DataChunk conversion_offsets;
 	conversion_offsets.Initialize(
@@ -676,7 +715,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantVectorData variant_data(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &value = input[i];
-		if (value.IsNull()) {
+		if (value.IsNull() || value.IsMissing()) {
+			//! SPEC: If a Variant is missing in a context where a value is required, readers must return a Variant null
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}

@@ -12,32 +12,32 @@ foreach src FLOAT DOUBLE
 foreach dst TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
 query I
-select cast(0.5::${src} as ${dst}) as x;
+select cast(0.5::{src} as {dst}) as x;
 ----
 0
 
 query I
-select cast(0.55::${src} as ${dst}) as x;
+select cast(0.55::{src} as {dst}) as x;
 ----
 1
 
 query I
-select cast(1.5::${src} as ${dst}) as x;
+select cast(1.5::{src} as {dst}) as x;
 ----
 2
 
 query I
-select cast(-0.5::${src} as ${dst}) as x;
+select cast(-0.5::{src} as {dst}) as x;
 ----
 0
 
 query I
-select cast(-0.55::${src} as ${dst}) as x;
+select cast(-0.55::{src} as {dst}) as x;
 ----
 -1
 
 query I
-select cast(-1.5::${src} as ${dst}) as x;
+select cast(-1.5::{src} as {dst}) as x;
 ----
 -2
 

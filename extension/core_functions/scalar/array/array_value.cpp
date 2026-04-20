@@ -26,12 +26,12 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 
 	if (num_columns > 1) {
 		// Ensure that the child has a validity mask of the correct size
 		// The SetValue call below expects the validity mask to be initialized
-		auto &child_validity = FlatVector::Validity(child);
+		auto &child_validity = FlatVector::ValidityMutable(child);
 		child_validity.Resize(num_rows * num_columns);
 	}
 
@@ -45,8 +45,10 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	result.Verify(args.size());
 }
 
-unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw InvalidInputException("array_value requires at least one argument");
 	}
@@ -83,8 +85,7 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, nullptr,
-	                   ArrayValueStats);
+	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, ArrayValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;

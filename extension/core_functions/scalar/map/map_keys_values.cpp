@@ -15,32 +15,22 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result);
 		return;
 	}
-
 	auto count = args.size();
-	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+	map.Flatten(count);
 
-	auto &entries = ListVector::GetEntry(result);
+	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
+	auto &child = get_child_vector(map);
+
+	auto &entries = ListVector::GetChildMutable(result);
 	entries.Reference(child);
 
-	UnifiedVectorFormat map_data;
-	map.ToUnifiedFormat(count, map_data);
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, map_data.data);
-	FlatVector::SetValidity(result, map_data.validity);
+	FlatVector::SetData(result, FlatVector::GetDataMutable(map), count);
+	FlatVector::SetValidity(result, FlatVector::ValidityMutable(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
-	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		result.Slice(*map_data.sel, count);
-	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 	result.Verify(count);
 }
 

@@ -5,14 +5,20 @@ on:
       base_hash:
         type: string
       build_current_release:
-        default: 'false'
-        type: string
+        default: false
+        type: boolean
+      run_slow_tests:
+        default: false
+        type: boolean
       runner_linux_x64:
         default: ubuntu-latest
         type: string
       runner_linux_small:
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       base_hash:
@@ -20,8 +26,12 @@ on:
         type: string
       build_current_release:
         description: 'Build and upload linux-release-build in this workflow'
-        default: 'true'
-        type: string
+        default: true
+        type: boolean
+      run_slow_tests:
+        description: 'Run slow tests when applicable'
+        default: false
+        type: boolean
       runner_linux_x64:
         description: 'Optional x64 runner label override'
         default: ubuntu-latest
@@ -30,6 +40,9 @@ on:
         description: 'Optional small runner label override'
         default: ubuntu-latest
         type: string
+      save_cache:
+        default: false
+        type: boolean
   repository_dispatch:
 
 concurrency:
@@ -59,21 +72,31 @@ jobs:
       - uses: ./.github/actions/ccache-action
 
       - name: Build current release
-        if: ${{ inputs.build_current_release != 'false' }}
-        uses: ./.github/actions/linux_release_build
+        if: ${{ inputs.build_current_release }}
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          BUILD_BENCHMARK: 1
+          BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_SANITIZER: 1
         with:
-          artifact_name: linux-release-build
+          build: python3 scripts/ci/retry.py -- make release
+          bundle: make release-artifact
+          upload-name: linux-release-build
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          save-cache: ${{ inputs.save_cache }}
 
       - name: Select base ref
         run: |
           if [[ "${{ github.repository }}" == "duckdb/duckdb" && "${{ github.ref_name }}" == "main" ]]; then
             if [[ -z "${BASE_HASH}" ]]; then
-              echo "BASE_REF=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')" >> "$GITHUB_ENV"
+              echo "BASE_REF=$(bash scripts/ci/last_main_success_commit.sh)" >> "$GITHUB_ENV"
             else
               echo "BASE_REF=${BASE_HASH}" >> "$GITHUB_ENV"
             fi
           else
-            echo "BASE_REF=origin/${BASE_BRANCH}" >> "$GITHUB_ENV"
+            git fetch https://github.com/duckdb/duckdb.git "${BASE_BRANCH}:refs/remotes/duckdb/${BASE_BRANCH}"
+            echo "BASE_REF=duckdb/${BASE_BRANCH}" >> "$GITHUB_ENV"
           fi
 
       - name: Reset workspace to base ref
@@ -82,15 +105,19 @@ jobs:
           git checkout --detach "${BASE_REF}"
           git submodule update --init --recursive
 
-          # Restore all build related files. This means that any new/changed
-          # compiler/linker optimization is now also applied to the base
-          # comparison build and thus not identical to the "real" base build.
-          git restore --source="${GITHUB_SHA}" --worktree --staged .github Makefile scripts
-
       - name: Build base release
-        uses: ./.github/actions/linux_release_build
+        uses: duckdb/duckdb-ci/build-duckdb@main
+        env:
+          BUILD_BENCHMARK: 1
+          BUILD_JEMALLOC: 1
+          CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          DISABLE_SANITIZER: 1
         with:
-          artifact_name: linux-base-build
+          build: python3 scripts/ci/retry.py -- make release
+          bundle: make release-artifact
+          upload-name: linux-base-build
+          vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+          save-cache: ${{ inputs.save_cache }}
 
   regression-bench:
     name: Bench ${{ matrix.name }}
@@ -111,7 +138,7 @@ jobs:
             benchmarks: .github/regression/realnest.csv
             data_setup: |
               mkdir -p duckdb_benchmark_data
-              wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
+              python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
 
     steps:
       - uses: actions/checkout@v4
@@ -166,6 +193,7 @@ jobs:
               --threads 2 \
               "${extra_args[@]}"; then
               status=1
+              echo "::error title=Regression suite failed::$(basename "$benchmark" .csv) in ${{ matrix.name }}"
             fi
             echo "::endgroup::"
           done

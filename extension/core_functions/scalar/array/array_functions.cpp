@@ -5,8 +5,10 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	const auto &lhs_type = arguments[0]->return_type;
 	const auto &rhs_type = arguments[1]->return_type;
 
@@ -88,9 +90,9 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 	const auto &func_name = expr.function.name;
 
 	const auto count = args.size();
-	auto &lhs_child = ArrayVector::GetEntry(args.data[0]);
-	auto &rhs_child = ArrayVector::GetEntry(args.data[1]);
-	auto &res_child = ArrayVector::GetEntry(result);
+	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
+	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
+	auto &res_child = ArrayVector::GetChildMutable(result);
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
 	const auto &rhs_child_validity = FlatVector::Validity(rhs_child);
@@ -103,7 +105,7 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(res_child);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(res_child);
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto lhs_idx = lhs_format.sel->get_index(i);
@@ -150,8 +152,8 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	const auto &func_name = expr.function.name;
 
 	const auto count = args.size();
-	auto &lhs_child = ArrayVector::GetEntry(args.data[0]);
-	auto &rhs_child = ArrayVector::GetEntry(args.data[1]);
+	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
+	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
 	const auto &rhs_child_validity = FlatVector::Validity(rhs_child);
@@ -164,7 +166,7 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(result);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(result);
 
 	const auto array_size = ArrayType::GetSize(args.data[0].GetType());
 	D_ASSERT(array_size == ArrayType::GetSize(args.data[1].GetType()));

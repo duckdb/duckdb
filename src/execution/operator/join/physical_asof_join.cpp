@@ -238,7 +238,7 @@ private:
 		using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 		BLOCK_ITERATOR itr(block_state, chunk_idx, 0);
 
-		const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
+		const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 		const auto result_count = NextSize();
 		for (idx_t i = 0; i < result_count; ++i) {
 			const auto idx = block_state.GetIndex(chunk_idx, i);
@@ -1032,7 +1032,7 @@ void AsOfProbeBuffer::ScanLeft() {
 	}
 
 	// Filter out NULL matches
-	if (!lhs_valid_mask.AllValid()) {
+	if (lhs_valid_mask.CanHaveNull()) {
 		const auto count = lhs_match_count;
 		lhs_match_count = 0;
 		for (idx_t i = 0; i < count; ++i) {
@@ -1623,8 +1623,7 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 		const auto &op = gsource.op;
 		const idx_t left_column_count = op.children[0].get().GetTypes().size();
 		for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[col_idx], true);
+			ConstantVector::SetNull(chunk.data[col_idx]);
 		}
 		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 			const auto rhs_idx = op.right_projection_map[col_idx];

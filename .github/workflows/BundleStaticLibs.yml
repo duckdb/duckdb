@@ -7,7 +7,7 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -15,12 +15,13 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
   push:
     branches-ignore:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/BundleStaticLibs.yml'
@@ -68,7 +69,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 
@@ -103,6 +104,7 @@ jobs:
     runs-on: windows-latest
     env:
       GEN: ninja
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
@@ -118,13 +120,11 @@ jobs:
       - name: Dependencies
         shell: bash
         run: |
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             ccache \
             make \
-            ninja \
-            zip \
             --no-progress
-          choco install \
+          python scripts/ci/retry.py -- choco install \
             mingw --version 14.2.0 \
             --no-progress
 
@@ -133,12 +133,14 @@ jobs:
       - name: Build Environment
         shell: bash
         run: |
-          # bash from Git
-          echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
-          # make, ninja and ccache from Chocolatey
-          echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
-          # g++ from Chocolatey
-          echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
+          {
+            # bash from Git
+            echo 'C:/Program Files/Git/bin'
+            # make, ninja and ccache from Chocolatey
+            echo 'C:/ProgramData/Chocolatey/bin'
+            # g++ from Chocolatey
+            echo 'C:/ProgramData/mingw64/mingw64/bin'
+          } >> "${GITHUB_PATH}"
 
       - name: Build Environment Check
         shell: cmd
@@ -167,7 +169,12 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          zip -r -j static-libs-windows-mingw.zip src/include/duckdb.h build/release/libs/
+          tmp_zip_dir="$(mktemp -d)"
+          archive_path="$(pwd)/static-libs-windows-mingw.zip"
+          cp src/include/duckdb.h "${tmp_zip_dir}/"
+          find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
+          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
+          rm -rf "${tmp_zip_dir}"
           ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
 
       - uses: actions/upload-artifact@v7
@@ -194,11 +201,10 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          export PWD=`pwd`
           docker run                                                             \
-          -v$PWD:$PWD                                                            \
+          -v"$PWD:$PWD"                                                          \
           -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
-          -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
+          -e OVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"                      \
           -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
           -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
@@ -214,8 +220,8 @@ jobs:
             export CC=gcc
             export CXX=g++
 
-            git config --global --add safe.directory $PWD
-            make gather-libs -C $PWD
+            git config --global --add safe.directory \"$PWD\"
+            make gather-libs -C \"$PWD\"
           "
       - name: Print platform
         shell: bash

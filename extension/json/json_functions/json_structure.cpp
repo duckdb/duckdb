@@ -293,7 +293,7 @@ bool TryParse(Vector &string_vector, StrpTimeFormat &format, const idx_t count) 
 
 	T result;
 	string error_message;
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!OP::template Operation<T>(format, strings[i], result, error_message)) {
 				return false;
@@ -527,13 +527,16 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }

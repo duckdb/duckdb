@@ -482,12 +482,10 @@ void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
 		if (ConstantVector::IsNull(part_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-		} else {
-			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
+			throw InternalException("DateTrunc called with constant NULL part");
 		}
+		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
+		DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
 	} else {
 		BinaryExecutor::ExecuteStandard<string_t, TA, TR, DateTruncBinaryOperator>(part_arg, date_arg, result,
 		                                                                           args.size());
@@ -569,8 +567,10 @@ function_statistics_t DateTruncStats(DatePartSpecifier type) {
 	}
 }
 
-unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (!arguments[0]->IsFoldable()) {
 		return nullptr;
 	}

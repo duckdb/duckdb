@@ -26,15 +26,15 @@ ExplainFormat ParseExplainFormat(const Value &val) {
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto explain_analyze = list_pr.Child<OptionalParseResult>(1);
+                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &explain_analyze = list_pr.Child<OptionalParseResult>(1);
 	auto explain_type = explain_analyze.HasResult() ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
 	auto explain_format = ExplainFormat::DEFAULT;
-	auto explain_options_opt = list_pr.Child<OptionalParseResult>(2);
+	auto &explain_options_opt = list_pr.Child<OptionalParseResult>(2);
 	if (explain_options_opt.HasResult()) {
-		auto options = transformer.Transform<vector<GenericCopyOption>>(explain_options_opt.optional_result);
+		auto options = transformer.Transform<vector<GenericCopyOption>>(explain_options_opt.GetResult());
 		for (auto option : options) {
 			auto option_name = StringUtil::Lower(option.name);
 			if (option_name == "format") {
@@ -45,6 +45,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 				format_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
+			} else {
+				throw NotImplementedException("Unimplemented explain type: %s", option_name);
 			}
 		}
 	}
@@ -53,13 +55,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(PEGTra
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainableStatements(PEGTransformer &transformer,
-                                                                               optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto choice_pr = list_pr.Child<ChoiceParseResult>(0).result;
-	if (StringUtil::CIEquals(choice_pr->name, "SelectStatementInternal")) {
-		return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
+                                                                               ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
+	if (StringUtil::CIEquals(choice_pr.name, "SelectStatementInternal")) {
+		return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 	}
-	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).result);
+	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 } // namespace duckdb

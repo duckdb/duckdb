@@ -7,8 +7,10 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
+        type: boolean
+      runner_windows_2022_x64:
         type: string
   workflow_dispatch:
     inputs:
@@ -17,8 +19,12 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
+        default: false
       run_all:
+        type: boolean
+        default: true
+      runner_windows_2022_x64:
         type: string
 
 concurrency:
@@ -36,7 +42,9 @@ jobs:
  win-release-64:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
-    runs-on: windows-latest
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    env:
+      GEN: ninja
     steps:
     - uses: actions/checkout@v6
       with:
@@ -48,44 +56,43 @@ jobs:
         python-version: '3.12'
 
     - uses: ./.github/actions/ccache-action
+    - uses: ilammy/msvc-dev-cmd@v1
 
     - name: Build
       shell: bash
       run: |
         python scripts/ci/retry.py -- python scripts/windows_ci.py
-        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DDISABLE_UNITY=1 -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
+        python scripts/ci/retry.py -- make windows_release
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
-      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $GITHUB_ENV
+      run: echo "DUCKDB_INSTALL_LIB=$((Get-ChildItem -Recurse -Filter "duckdb.dll" | Select-Object -First 1).FullName)" >> $env:GITHUB_ENV
 
     - name: Test DUCKDB_INSTALL_LIB variable
       shell: bash
-      run: echo $DUCKDB_INSTALL_LIB
+      run: echo "$DUCKDB_INSTALL_LIB"
 
     - name: Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        test/Release/unittest.exe
+        python scripts/ci/run_tests.py test/unittest.exe
 
     - name: Test with VS2019 C++ stdlib
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        choco install wget -y --no-progress
-        wget -P ./test/Release https://blobs.duckdb.org/ci/msvcp140.dll
-        ls ./test/Release
-        ./test/Release/unittest.exe
-        rm ./test/Release/msvcp140.dll
+        python scripts/ci/retry.py -- curl -L --output ./test/msvcp140.dll https://blobs.duckdb.org/ci/msvcp140.dll
+        ls ./test
+        python scripts/ci/run_tests.py test/unittest.exe
+        rm ./test/msvcp140.dll
 
     - name: Tools Test
       shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
+      if: ${{ !inputs.skip_tests }}
       run: |
-        python -m pip install pytest
-        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+        python scripts/ci/retry.py -- python -m pip install pytest
+        python -m pytest tools/shell/tests --shell-binary duckdb.exe
 
     - name: Sign files with Azure Trusted Signing (TM)
       if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -112,9 +119,12 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
         python scripts/amalgamation.py
-        /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-        /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        /c/msys64/usr/bin/zip.exe -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-amd64.zip duckdb.exe
+        tmp_zip_dir="$(mktemp -d)"
+        lib_archive_path="$(pwd)/libduckdb-windows-amd64.zip"
+        cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+        (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
+        rm -rf "${tmp_zip_dir}"
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v7
@@ -127,50 +137,55 @@ jobs:
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
       shell: bash
-      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
+      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
 
-# win-release-32:
-#    name: Windows (32 Bit)
-#    needs:
-#      - win-release-64
-#    if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
-#    runs-on: windows-latest
-#
-#    steps:
-#    - uses: actions/checkout@v6
-#      with:
-#        fetch-depth: 0
-#        ref: ${{ inputs.git_ref }}
-#
-#    - uses: actions/setup-python@v6
-#      with:
-#        python-version: '3.12'
-#
-#    - uses: ./.github/actions/ccache-action
-#
-#    - name: Build
-#      shell: bash
-#      run: |
-#        python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE"
-#        python scripts/ci/retry.py -- cmake --build . --config Release --parallel
-#
-#    - name: Test
-#      shell: bash
-#      run: test/Release/unittest.exe
-#
-#    - name: Tools Test
-#      shell: bash
-#      run: |
-#        python -m pip install pytest
-#        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
+ win-release-32:
+    name: Windows (32 Bit)
+    needs:
+      - win-release-64
+    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
+    runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+    env:
+      GEN: ninja
 
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+        ref: ${{ inputs.git_ref }}
+
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - uses: ./.github/actions/ccache-action
+    - uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: amd64_x86
+
+    - name: Build
+      shell: bash
+      run: |
+        python scripts/ci/retry.py -- make windows_release_32
+
+    - name: Test
+      shell: bash
+      run: python scripts/ci/run_tests.py test/unittest.exe
+
+    - name: Tools Test
+      shell: bash
+      run: |
+        python scripts/ci/retry.py -- python -m pip install pytest
+        python -m pytest tools/shell/tests --shell-binary duckdb.exe
 
  win-release-arm64:
    name: Windows (ARM64)
    needs:
     - win-release-64
-   if: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+   if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
    runs-on: windows-latest
+   env:
+     GEN: ninja
 
    steps:
      - uses: actions/checkout@v6
@@ -183,12 +198,14 @@ jobs:
          python-version: '3.12'
 
      - uses: ./.github/actions/ccache-action
+     - uses: ilammy/msvc-dev-cmd@v1
+       with:
+         arch: amd64_arm64
 
      - name: Build
        shell: bash
        run: |
-         python scripts/ci/retry.py -- cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
-         python scripts/ci/retry.py -- cmake --build . --config Release --parallel
+         python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 EXTRA_CMAKE_VARIABLES=-DBUILD_UNITTESTS=FALSE windows_release
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
@@ -215,9 +232,12 @@ jobs:
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
          python scripts/amalgamation.py
-         /c/msys64/usr/bin/bash.exe -lc "pacman -Sy --noconfirm zip"
-         /c/msys64/usr/bin/zip.exe -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
-         /c/msys64/usr/bin/zip.exe -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-arm64.zip duckdb.exe
+         tmp_zip_dir="$(mktemp -d)"
+         lib_archive_path="$(pwd)/libduckdb-windows-arm64.zip"
+         cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
+         rm -rf "${tmp_zip_dir}"
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v7
@@ -227,68 +247,90 @@ jobs:
            libduckdb-windows-arm64.zip
            duckdb_cli-windows-arm64.zip
 
-# mingw:
-#     name: MinGW (64 Bit)
-#     needs:
-#      - win-release-64
-#     if: ${{ inputs.skip_tests != 'true' }}
-#     runs-on: windows-latest
-#     env:
-#       GEN: ninja
-#       ENABLE_EXTENSION_AUTOLOADING: 1
-#       ENABLE_EXTENSION_AUTOINSTALL: 1
-#     steps:
-#       - uses: actions/checkout@v6
-#         with:
-#           ref: ${{ inputs.git_ref }}
-#
-#       - uses: actions/setup-python@v6
-#         with:
-#           python-version: '3.12'
-#
-#       - name: Dependencies
-#         shell: bash
-#         run: |
-#           choco install \
-#             ccache \
-#             make \
-#             ninja \
-#             --no-progress
-#           choco install \
-#             mingw --version 14.2.0 \
-#             --no-progress
-#
-#       - uses: ./.github/actions/ccache-action
-#
-#       - name: Build Environment
-#         shell: bash
-#         run: |
-#           # bash from Git
-#           echo 'C:/Program Files/Git/bin' >> "${GITHUB_PATH}"
-#           # make, ninja and ccache from Chocolatey
-#           echo 'C:/ProgramData/Chocolatey/bin' >> "${GITHUB_PATH}"
-#           # g++ from Chocolatey
-#           echo 'C:/ProgramData/mingw64/mingw64/bin' >> "${GITHUB_PATH}"
-#
-#       - name: Build Environment Check
-#         shell: bash
-#         run: |
-#           where bash
-#           bash --version
-#           where make
-#           make --version
-#           where ninja
-#           ninja --version
-#           where ccache
-#           ccache --version
-#           where g++
-#           g++ --version
-#           echo %PATH%
-#
-#       - name: Build and test
-#         shell: bash
-#         run: |
-#           make unittest_release
+ mingw:
+     name: MinGW (64 Bit)
+     needs:
+      - win-release-64
+     if: ${{ !inputs.skip_tests }}
+     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
+     env:
+       GEN: ninja
+       ENABLE_EXTENSION_AUTOLOADING: 1
+       ENABLE_EXTENSION_AUTOINSTALL: 1
+     steps:
+       - uses: actions/checkout@v6
+         with:
+           ref: ${{ inputs.git_ref }}
+
+       - uses: actions/setup-python@v6
+         with:
+           python-version: '3.12'
+
+       - name: Dependencies
+         shell: bash
+         run: |
+           python scripts/ci/retry.py -- choco install \
+             ccache \
+             make \
+             --no-progress
+           python scripts/ci/retry.py -- choco install \
+             mingw --version 14.2.0 \
+             --no-progress
+
+       - uses: ./.github/actions/ccache-action
+
+       - name: Build Environment
+         shell: bash
+         run: |
+           {
+             # bash from Git
+             echo 'C:/Program Files/Git/bin'
+             # make, ninja and ccache from Chocolatey
+             echo 'C:/ProgramData/Chocolatey/bin'
+             # g++ from Chocolatey
+             echo 'C:/ProgramData/mingw64/mingw64/bin'
+           } >> "${GITHUB_PATH}"
+
+       - name: Build Environment Check
+         shell: bash
+         run: |
+           where bash
+           bash --version
+           where make
+           make --version
+           where ninja
+           ninja --version
+           where ccache
+           ccache --version
+           where g++
+           g++ --version
+           echo %PATH%
+
+       - name: MinGW Runtime Diagnostics
+         shell: bash
+         run: |
+           set -x
+           echo "PWD=$PWD"
+           echo "PATH=$PATH"
+           where python
+           python --version
+           where unittest.exe || true
+           if [ -f build/release/test/unittest.exe ]; then
+             ls -l build/release/test/unittest.exe
+           fi
+           echo "Nearby DLLs and EXEs:"
+           find build/release -maxdepth 3 \( -name '*.dll' -o -name '*.exe' \) | sort || true
+           /c/Windows/System32/cmd.exe /c "where libstdc++-6.dll" || true
+           /c/Windows/System32/cmd.exe /c "where libgcc_s_seh-1.dll" || true
+           /c/Windows/System32/cmd.exe /c "where libwinpthread-1.dll" || true
+           objdump -p build/release/test/unittest.exe | sed -n '/DLL Name:/p' || true
+           ./build/release/test/unittest.exe --list-tests || true
+
+       - name: Build
+         run: python scripts/ci/retry.py -- make release
+
+       - name: Test
+         run: make unittest_release SKIP_BUILD=1
 
  win-packaged-upload:
    runs-on: windows-latest

@@ -18,4 +18,4 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.node_id }}
         run: |
-          echo $PR_NUMBER
+          echo "$PR_NUMBER"

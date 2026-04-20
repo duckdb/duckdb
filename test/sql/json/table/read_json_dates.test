@@ -45,7 +45,7 @@ Binder Error
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
 
 statement ok
-copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy (select d from date_test) to '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 # auto-detect
 query II
@@ -55,7 +55,7 @@ DATE	1996-03-27
 
 # forced format read_ndjson
 query II
-select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
+select typeof(d), d from read_ndjson('{TEMP_DIR}/my_file.json', columns={d: 'DATE'}, dateformat={date_format})
 ----
 DATE	1996-03-27
 
@@ -73,7 +73,7 @@ statement ok
 create table date_copy_test (d date)
 
 statement ok
-copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat ${date_format})
+copy date_copy_test from '{TEMP_DIR}/my_file.json' (dateformat {date_format})
 
 query II
 select typeof(d), d from date_copy_test
@@ -86,7 +86,7 @@ endloop
 foreach a,b,c '%Y-%m-%d,%H:%M:%S.%f,' '%m-%d-%Y,%I:%M:%S,%p' '%m-%d-%y,%I:%M:%S,%p' '%d-%m-%Y,%H:%M:%S,' '%d-%m-%y,%H:%M:%S,' '%Y-%m-%d,%H:%M:%S,' '%y-%m-%d,%H:%M:%S,'
 
 statement ok
-copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy (select t from timestamp_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 # auto-detect
 query II
@@ -96,7 +96,7 @@ TIMESTAMP	1996-03-27 07:42:33
 
 # forced format read_ndjson
 query II
-select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
+select typeof(t), t from read_ndjson('{TEMP_DIR}/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format={a} {b} {c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
@@ -114,7 +114,7 @@ statement ok
 create table timestamp_copy_test (t timestamp)
 
 statement ok
-copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat ${a} ${b} ${c})
+copy timestamp_copy_test from '{TEMP_DIR}/my_file.json' (format json, timestampformat {a} {b} {c})
 
 query II
 select typeof(t), t from timestamp_copy_test
@@ -128,3 +128,83 @@ query II
 select typeof(createdAt), createdAt from '{DATA_DIR}/json/timestamp_example.json'
 ----
 TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 timestamps with fractional seconds and/or timezone offsets should also be inferred as TIMESTAMP
+# These are all valid ISO 8601 representations that read_json_auto currently fails to detect
+
+# ISO 8601 with fractional seconds + Z suffix: "2023-02-07T19:12:28.123Z"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.123Z"}'))) to '{TEMP_DIR}/iso8601_frac_z.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_z.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.123
+
+# ISO 8601 with UTC timezone offset (+00:00): "2023-02-07T19:12:28+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28+00:00"}'))) to '{TEMP_DIR}/iso8601_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28
+
+# ISO 8601 with fractional seconds + UTC timezone offset: "2023-02-07T19:12:28.456+00:00"
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.456+00:00"}'))) to '{TEMP_DIR}/iso8601_frac_tz.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_frac_tz.json')
+----
+TIMESTAMP	2023-02-07 19:12:28.456
+
+# ISO 8601 with positive offset: "2023-02-07T14:12:28+05:00" -> UTC 09:12:28
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T14:12:28+05:00"}'))) to '{TEMP_DIR}/iso8601_pos_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_pos_offset.json')
+----
+TIMESTAMP	2023-02-07 09:12:28
+
+# ISO 8601 with negative offset + fractional seconds: "2023-02-07T19:12:28.789-07:00" -> UTC 2023-02-08 02:12:28.789
+statement ok
+copy (select * from (values ('{"ts":"2023-02-07T19:12:28.789-07:00"}'))) to '{TEMP_DIR}/iso8601_neg_offset.json' (format csv, quote '', header 0)
+
+query II
+select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
+----
+TIMESTAMP	2023-02-08 02:12:28.789
+
+# test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns
+statement ok
+create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
+
+statement ok
+copy (select t from timestamptz_test) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%Y-%m-%d')
+
+query I
+select t from '{TEMP_DIR}/my_file.json'
+----
+1996-03-27
+
+statement ok
+copy (
+    select
+        '2026-01-01T12:00:00Z'::TIMESTAMP as ts,
+        '2026-01-01T12:00:00Z'::TIMESTAMPTZ as tstz
+) to '{TEMP_DIR}/my_file.json' (format json, timestampformat '%a')
+
+query II
+select ts, tstz from read_json('{TEMP_DIR}/my_file.json')
+----
+Thu	Thu
+
+statement ok
+copy (select '2026-01-01 12:00:00+05:00'::TIMESTAMPTZ as ts) to '{TEMP_DIR}/my_file.json' (timestampformat '%Y-%m-%d %z', format json);
+
+query I
+select ts from '{TEMP_DIR}/my_file.json';
+----
+2026-01-01 +00

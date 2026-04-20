@@ -19,7 +19,7 @@ statement ok
 SET debug_checkpoint_sleep_ms = 500;
 
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_drop_opt.db' AS db
+ATTACH '{TEST_DIR}/concurrent_checkpoint_drop_opt.db' AS db
 
 # Create table with a PRIMARY KEY. During WAL replay, ReplayRowGroupData must scan
 # all blocks to rebuild the index, so corrupted blocks surface immediately.
@@ -69,7 +69,7 @@ DETACH db
 # INSERT into t2. If the blocks were reused, ReplayRowGroupData will read garbage and the primary key rebuild will throw an internal exception or crash, so
 # the ATTACH itself will fail.
 statement ok
-ATTACH '__TEST_DIR__/concurrent_checkpoint_drop_opt.db' AS db
+ATTACH '{TEST_DIR}/concurrent_checkpoint_drop_opt.db' AS db
 
 query I
 SELECT COUNT(*) FROM db.t2
