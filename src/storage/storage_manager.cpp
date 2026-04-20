@@ -206,7 +206,7 @@ bool StorageManager::HasWAL() const {
 
 bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
                                         ActiveCheckpointWrapper &active_checkpoint) {
-	unique_ptr<lock_guard<mutex>> guard;
+	unique_lock<mutex> guard;
 	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
 		// not holding the WAL lock yet - grab it
@@ -258,7 +258,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
+void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	D_ASSERT(wal.get());
 
 	// "wal" points to the checkpoint WAL
@@ -289,8 +289,8 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
-unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
-	return make_uniq<lock_guard<mutex>>(wal_lock);
+unique_lock<mutex> StorageManager::GetWALLock() {
+	return unique_lock<mutex>(wal_lock);
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
