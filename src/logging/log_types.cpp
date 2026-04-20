@@ -271,33 +271,17 @@ LogicalType AdaptiveFilterLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-static string PermutationToString(const vector<idx_t> &permutation) {
-	string result = "[";
-	for (idx_t i = 0; i < permutation.size(); i++) {
-		if (i > 0) {
-			result += ", ";
-		}
-		result += to_string(permutation[i]);
-	}
-	result += "]";
-	return result;
-}
-
 string AdaptiveFilterLogType::ConstructLogMessage(const string &filter_id, const char *event, const string &file_path,
                                                   const vector<idx_t> &permutation,
                                                   const vector<pair<string, string>> &info) {
-	vector<Value> info_keys;
-	vector<Value> info_values;
-	for (const auto &kv : info) {
-		info_keys.emplace_back(kv.first);
-		info_values.emplace_back(kv.second);
-	}
+	auto permutation_str =
+	    "[" + StringUtil::Join(permutation, permutation.size(), ", ", [](idx_t v) { return to_string(v); }) + "]";
 	child_list_t<Value> child_list = {
 	    {"event", Value(event)},
 	    {"filter_id", Value(filter_id)},
 	    {"file_path", Value(file_path)},
-	    {"permutation", Value(PermutationToString(permutation))},
-	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(info_keys), std::move(info_values))},
+	    {"permutation", Value(std::move(permutation_str))},
+	    {"info", StringPairIterableToMap(info)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

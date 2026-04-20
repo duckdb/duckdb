@@ -28,11 +28,8 @@ struct AdaptiveFilterConfiguration {
 	bool disable_permutations = false;
 };
 
-//! Tags an AdaptiveFilter INIT log event: how was the starting permutation chosen?
 enum class AdaptiveFilterSource : uint8_t {
-	//! Fresh construction — no learned state carried in.
 	INITIAL,
-	//! Seeded from a previously-learned AdaptiveFilterConfiguration (cross-file carryover).
 	SEEDED,
 };
 
@@ -54,9 +51,8 @@ public:
 		return config;
 	}
 
-	//! Attach a logger + context. `source` tags the INIT log event.
-	void SetLogger(Logger &logger, string file_path = "",
-	               AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL);
+	void SetLogger(Logger &logger, string file_path = "", AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL,
+	               const vector<idx_t> &filter_identities = {});
 
 private:
 	void LogEvent(const char *event, const vector<pair<string, string>> &info);

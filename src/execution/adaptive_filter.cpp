@@ -51,10 +51,20 @@ const char *AdaptiveFilterSourceToString(AdaptiveFilterSource source) {
 	return "unknown";
 }
 
-void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source) {
+void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source,
+                               const vector<idx_t> &filter_identities) {
 	logger = &logger_p;
 	log_file_path = std::move(file_path);
-	LogEvent("INIT", {{"source", AdaptiveFilterSourceToString(source)}});
+	vector<pair<string, string>> info;
+	info.emplace_back("source", AdaptiveFilterSourceToString(source));
+	if (!filter_identities.empty() && filter_identities.size() == config.permutation.size()) {
+		auto columns_str = "[" +
+		                   StringUtil::Join(config.permutation, config.permutation.size(), ", ",
+		                                    [&](idx_t p) { return to_string(filter_identities[p]); }) +
+		                   "]";
+		info.emplace_back("columns", std::move(columns_str));
+	}
+	LogEvent("INIT", info);
 }
 
 void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, string>> &info) {

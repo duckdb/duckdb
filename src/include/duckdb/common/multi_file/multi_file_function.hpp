@@ -518,7 +518,7 @@ public:
 		result->file_index = 0;
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
-		if (result->filters && !bind_data.file_options.union_by_name) {
+		if (result->filters) {
 			result->adaptive_filter_cache = make_uniq<MultiFileAdaptiveFilterCache>();
 		}
 		result->op = input.op;
