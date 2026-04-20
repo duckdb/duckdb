@@ -1559,12 +1559,13 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		if (filters) {
 			// first load the columns that are used in filters
 			auto filter_state = state.adaptive_filter->BeginFilter();
+			const auto &permutation = state.adaptive_filter->GetConfiguration().permutation;
 			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 				if (filter_count == 0) {
 					// if no rows are left we can stop checking filters
 					break;
 				}
-				auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+				auto &scan_filter = state.scan_filters[permutation[i]];
 				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 				auto column_id = column_ids[local_idx];
 

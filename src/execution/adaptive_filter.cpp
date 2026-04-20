@@ -12,12 +12,12 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
-		permutation.push_back(idx);
+		config.permutation.push_back(idx);
 		if (conj_expr.children[idx]->CanThrow()) {
-			disable_permutations = true;
+			config.disable_permutations = true;
 		}
 		if (idx != conj_expr.children.size() - 1) {
-			swap_likeliness.push_back(100);
+			config.swap_likeliness.push_back(100);
 		}
 	}
 	right_random_border = 100 * (conj_expr.children.size() - 1);
@@ -25,15 +25,22 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
     : observe_interval(10), execute_interval(20), warmup(true) {
-	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
+	config.permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
 	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
-		swap_likeliness.push_back(100);
+		config.swap_likeliness.push_back(100);
 	}
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
+AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilterConfiguration seed)
+    : config(std::move(seed)), observe_interval(10), execute_interval(20), warmup(false) {
+	D_ASSERT(config.permutation.size() == table_filters.FilterCount());
+	D_ASSERT(config.swap_likeliness.size() + 1 == table_filters.FilterCount() || table_filters.FilterCount() == 0);
+	right_random_border = 100 * (table_filters.FilterCount() - 1);
+}
+
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
-	if (permutation.size() <= 1 || disable_permutations) {
+	if (config.permutation.size() <= 1 || config.disable_permutations) {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
@@ -42,7 +49,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 }
 
 void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
-	if (permutation.size() <= 1 || disable_permutations) {
+	if (config.permutation.size() <= 1 || config.disable_permutations) {
 		// nothing to permute
 		return;
 	}
@@ -54,22 +61,22 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
 
-	D_ASSERT(!disable_permutations);
+	D_ASSERT(!config.disable_permutations);
 	if (!warmup) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
 			if (prev_mean - (runtime_sum / static_cast<double>(iteration_count)) <= 0) {
 				// reverse swap because runtime didn't decrease
-				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
+				std::swap(config.permutation[swap_idx], config.permutation[swap_idx + 1]);
 
 				// decrease swap likeliness, but make sure there is always a small likeliness left
-				if (swap_likeliness[swap_idx] > 1) {
-					swap_likeliness[swap_idx] /= 2;
+				if (config.swap_likeliness[swap_idx] > 1) {
+					config.swap_likeliness[swap_idx] /= 2;
 				}
 			} else {
 				// keep swap because runtime decreased, reset likeliness
-				swap_likeliness[swap_idx] = 100;
+				config.swap_likeliness[swap_idx] = 100;
 			}
 			observe = false;
 
@@ -88,9 +95,9 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			idx_t likeliness = random_number - 100 * swap_idx; // random number between [0, 100)
 
 			// check if swap is going to happen
-			if (swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
+			if (config.swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
 				// swap
-				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
+				std::swap(config.permutation[swap_idx], config.permutation[swap_idx + 1]);
 
 				// observe whether swap will be applied
 				observe = true;

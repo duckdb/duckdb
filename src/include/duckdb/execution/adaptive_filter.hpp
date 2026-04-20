@@ -19,12 +19,17 @@ struct AdaptiveFilterState {
 	time_point<high_resolution_clock> start_time;
 };
 
+struct AdaptiveFilterConfiguration {
+	vector<idx_t> permutation;
+	vector<idx_t> swap_likeliness;
+	bool disable_permutations = false;
+};
+
 class AdaptiveFilter {
 public:
 	explicit AdaptiveFilter(const Expression &expr);
 	explicit AdaptiveFilter(const TableFilterSet &table_filters);
-
-	vector<idx_t> permutation;
+	AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilterConfiguration seed);
 
 public:
 	void AdaptRuntimeStatistics(double duration);
@@ -32,9 +37,12 @@ public:
 	AdaptiveFilterState BeginFilter() const;
 	void EndFilter(AdaptiveFilterState state);
 
-private:
-	bool disable_permutations = false;
+	const AdaptiveFilterConfiguration &GetConfiguration() const {
+		return config;
+	}
 
+private:
+	AdaptiveFilterConfiguration config;
 	//! used for adaptive expression reordering
 	idx_t iteration_count = 0;
 	idx_t swap_idx = 0;
@@ -45,7 +53,6 @@ private:
 	double prev_mean = 0;
 	bool observe = false;
 	bool warmup = false;
-	vector<idx_t> swap_likeliness;
 	RandomEngine generator;
 };
 } // namespace duckdb

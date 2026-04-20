@@ -61,6 +61,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
+		const auto &permutation = state.adaptive_filter->GetConfiguration().permutation;
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
 		idx_t false_count = 0;
@@ -74,9 +75,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
-			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
-			                      current_count, true_sel, temp_false.get());
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(),
+			                      current_sel, current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -101,6 +101,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	} else {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
+		const auto &permutation = state.adaptive_filter->GetConfiguration().permutation;
 
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
@@ -115,9 +116,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
-			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
-			                      current_count, temp_true.get(), false_sel);
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(),
+			                      current_sel, current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector
