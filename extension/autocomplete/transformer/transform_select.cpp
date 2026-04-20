@@ -1012,17 +1012,14 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformPrefixAliasSubquery(PEGTran
 unique_ptr<TableRef> PEGTransformerFactory::TransformPrefixAliasParensTable(PEGTransformer &transformer,
                                                                             ParseResult &parse_result) {
 	// PrefixAliasParensTable <- Parens(TableRef) SampleClause?
+	// Match libpg_query's "alias(col,...) : (joined_table)" semantics: attach
+	// the alias directly to the parenthesized TableRef so the underlying
+	// columns (e.g. USING-merged columns of a join) stay resolvable.
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto inner_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
-	auto select_statement = make_uniq<SelectStatement>();
-	auto select_node = make_uniq<SelectNode>();
-	select_node->select_list.push_back(make_uniq<StarExpression>());
-	select_node->from_table = std::move(inner_ref);
-	select_statement->node = std::move(select_node);
-	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
-	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 1, subquery->sample);
-	return std::move(subquery);
+	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
+	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 1, table_ref->sample);
+	return table_ref;
 }
 
 TableAlias PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer, ParseResult &parse_result) {
