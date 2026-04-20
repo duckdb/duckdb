@@ -4,8 +4,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -27,18 +25,8 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 		catalog.DropEntry(context.client, *info);
-
-		// Check if the dropped schema was set as the current schema
-		auto &client_data = ClientData::Get(context.client);
-		auto default_entry = client_data.catalog_search_path->GetResolvedDefault();
-		auto &current_catalog = default_entry.catalog;
-		auto &current_schema = default_entry.schema;
-		D_ASSERT(info->name != DEFAULT_SCHEMA);
-
-		if (info->catalog == current_catalog && current_schema == info->name) {
-			// Reset the schema to default
-			SchemaSetting::SetLocal(context.client, DEFAULT_SCHEMA);
-		}
+		// PG-compatible: leave search_path alone. The dropped schema becomes an
+		// invalid entry that lookups will simply skip (see GetResolvedDefault).
 		break;
 	}
 	case CatalogType::SECRET_ENTRY: {
