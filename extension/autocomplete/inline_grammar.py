@@ -116,6 +116,7 @@ def filename_to_upper_camel(path):
     parts = path.stem.split('_')
     return ''.join(p.capitalize() for p in parts)
 
+
 class PEGTokenType(Enum):
     LITERAL = auto()
     REFERENCE = auto()
@@ -129,6 +130,7 @@ class PEGGrammarRule:
         self.rule_name = None
         self.tokens = []
         self.parameters = {}
+
     def has_tokens(self):
         return bool(self.tokens)
 
@@ -137,8 +139,8 @@ class PEGGrammarRule:
         self.parameters = {}
 
     def references(self):
-        return [t.text for t in self.tokens
-                if t.type in (PEGTokenType.REFERENCE, PEGTokenType.FUNCTION_CALL)]
+        return [t.text for t in self.tokens if t.type in (PEGTokenType.REFERENCE, PEGTokenType.FUNCTION_CALL)]
+
 
 class ParseState(Enum):
     RULE_NAME = auto()
@@ -157,6 +159,7 @@ class ParseLocation:
     line: int
     col: int
     line_text: str
+
     def raise_error(self, message):
         pointer = ' ' * (self.col - 1) + '^'
         raise Exception(f"{self.line}:{self.col}: {message}\n  {self.line_text}\n  {pointer}")
@@ -169,12 +172,14 @@ def character_is_newline(c):
 def character_is_space(c):
     return c.isspace()
 
+
 def get_parse_location(contents, pos):
     lines = contents[:pos].split('\n')
     line_num = len(lines)
     col = len(lines[-1]) + 1
     line_text = contents.split('\n')[line_num - 1]
     return ParseLocation(line=line_num, col=col, line_text=line_text)
+
 
 def update_rules(rules, new_rules, filename):
     for rule_name, rule in new_rules.items():
@@ -198,7 +203,13 @@ def parse_peg_grammar(contents):
             while c < len(contents) and not character_is_newline(contents[c]):
                 c += 1
             continue
-        if parse_state == ParseState.RULE_DEFINITION and character_is_newline(contents[c]) and bracket_count == 0 and not in_or_clause and current_rule.has_tokens():
+        if (
+            parse_state == ParseState.RULE_DEFINITION
+            and character_is_newline(contents[c])
+            and bracket_count == 0
+            and not in_or_clause
+            and current_rule.has_tokens()
+        ):
             current_rule.rule_name = current_rule_name
             if current_rule_name in rules:
                 get_parse_location(contents, c).raise_error(f"Duplicate rule name '{current_rule_name}'")
@@ -237,7 +248,7 @@ def parse_peg_grammar(contents):
                     get_parse_location(contents, c).raise_error("Expected a closing bracket")
                 c += 1
             else:
-                if contents[c] != "<" or contents[c+1] != "-":
+                if contents[c] != "<" or contents[c + 1] != "-":
                     get_parse_location(contents, c).raise_error("Expected a rule definition (<-)")
                 c += 2
                 parse_state = ParseState.RULE_DEFINITION
@@ -256,7 +267,9 @@ def parse_peg_grammar(contents):
                 current_rule.tokens.append(PEGToken(contents[literal_start:c], PEGTokenType.LITERAL))
                 c += 1
                 if c < len(contents) and contents[c] == 'i':
-                    get_parse_location(contents, c).raise_error(f"Unexpected \"i\" found in grammar near rule {current_rule_name}")
+                    get_parse_location(contents, c).raise_error(
+                        f"Unexpected \"i\" found in grammar near rule {current_rule_name}"
+                    )
             elif c < len(contents) and contents[c].isalnum():
                 # rule reference or function call
                 rule_start = c
@@ -306,6 +319,7 @@ def parse_peg_grammar(contents):
 
     return rules
 
+
 def check_unused_rules(all_rules):
     reachable = set()
     stack = ['Statement']
@@ -321,6 +335,7 @@ def check_unused_rules(all_rules):
     for rule_name in unused:
         print(f"Warning: unused rule '{rule_name}'")
 
+
 def check_undefined_rules(all_rules):
     found = False
     for rule_name, rule in all_rules.items():
@@ -332,6 +347,7 @@ def check_undefined_rules(all_rules):
                 found = True
     if found:
         exit(1)
+
 
 rules = {}
 
