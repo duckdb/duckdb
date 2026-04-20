@@ -66,8 +66,6 @@ private:
 	bool any_join;
 	optional_ptr<FlattenDependentJoins> parent;
 	mutable reference_map_t<LogicalOperator, bool> dependency_cache;
-	void AppendDelimColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
-	                        bool include_names) const;
 	void AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions, const vector<ColumnBinding> &state,
 	                             bool include_names) const;
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;

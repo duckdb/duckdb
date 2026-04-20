@@ -489,19 +489,6 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<L
 	return state;
 }
 
-void FlattenDependentJoins::AppendDelimColumns(vector<unique_ptr<Expression>> &expressions,
-                                               const vector<ColumnBinding> &state, bool include_names) const {
-	auto key_count = perform_delim ? correlated_columns.size() : 1;
-	for (idx_t i = 0; i < key_count; i++) {
-		auto &col = correlated_columns[GetDelimKeyIndex(i)];
-		if (include_names) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
-		} else {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(col.type, state[GetDelimKeyIndex(i)]));
-		}
-	}
-}
-
 void FlattenDependentJoins::AppendCorrelatedColumns(vector<unique_ptr<Expression>> &expressions,
                                                     const vector<ColumnBinding> &state, bool include_names) const {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
@@ -729,7 +716,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 
 	auto window_index = binder.GenerateTableIndex();
 	vector<unique_ptr<Expression>> partitions;
-	AppendDelimColumns(partitions, state, true);
+	for (idx_t i = 0; i < perform_delim ? correlated_columns.size() : 1; i++) {
+		auto &col = correlated_columns[GetDelimKeyIndex(i)];
+		partitions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
+	}
 
 	auto window = CreateRowNumberWindow(std::move(child), window_index, std::move(partitions),
 	                                    order_by ? std::move(order_by->orders) : vector<BoundOrderByNode>());
