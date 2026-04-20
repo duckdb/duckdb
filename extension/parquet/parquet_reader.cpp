@@ -24,6 +24,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
@@ -1338,8 +1339,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
 	if (filters) {
-		state.adaptive_filter = make_uniq<AdaptiveFilter>(*filters);
-		state.adaptive_filter->SetLogger(Logger::Get(context), file.path);
+		state.adaptive_filter =
+		    CreateMultiFileAdaptiveFilter(adaptive_filter_cache, *filters, Logger::Get(context), file.path);
 		for (auto &entry : *filters) {
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
@@ -1578,6 +1579,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				is_first_filter = false;
 			}
 			state.adaptive_filter->EndFilter(filter_state);
+			StoreMultiFileAdaptiveFilter(adaptive_filter_cache, *state.adaptive_filter);
 		}
 
 		// we still may have to read some cols

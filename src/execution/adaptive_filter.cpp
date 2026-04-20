@@ -41,10 +41,20 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilt
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
-void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path) {
+const char *AdaptiveFilterSourceToString(AdaptiveFilterSource source) {
+	switch (source) {
+	case AdaptiveFilterSource::INITIAL:
+		return "initial";
+	case AdaptiveFilterSource::SEEDED:
+		return "seeded";
+	}
+	return "unknown";
+}
+
+void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source) {
 	logger = &logger_p;
 	log_file_path = std::move(file_path);
-	LogEvent("INIT", {{"source", "initial"}});
+	LogEvent("INIT", {{"source", AdaptiveFilterSourceToString(source)}});
 }
 
 void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, string>> &info) {

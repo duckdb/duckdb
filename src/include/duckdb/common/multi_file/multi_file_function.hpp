@@ -253,6 +253,7 @@ public:
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
 		reader.file_list_idx = file_idx;
+		reader.adaptive_filter_cache = global_state.adaptive_filter_cache.get();
 
 		// 'reader_bind.schema' could be set explicitly by:
 		// 1. The MultiFileReader::Bind call
@@ -517,6 +518,9 @@ public:
 		result->file_index = 0;
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
+		if (result->filters && !bind_data.file_options.union_by_name) {
+			result->adaptive_filter_cache = make_uniq<MultiFileAdaptiveFilterCache>();
+		}
 		result->op = input.op;
 		result->global_state = bind_data.interface->InitializeGlobalState(context, bind_data, *result);
 		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
