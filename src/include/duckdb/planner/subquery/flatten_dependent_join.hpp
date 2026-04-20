@@ -73,9 +73,6 @@ private:
 	void AddDelimColumnsToGroup(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
 	void AddCorrelatedFirstAggregates(LogicalAggregate &aggr, const vector<ColumnBinding> &state) const;
 	void AddAnyJoinConditions(LogicalDependentJoin &op, const vector<ColumnBinding> &plan_columns) const;
-	static void PopulateDuplicateEliminatedColumns(LogicalDependentJoin &op);
-	void AddComparisonJoinConditions(LogicalComparisonJoin &join, const vector<ColumnBinding> &left_state,
-	                                 const vector<ColumnBinding> &right_state) const;
 	void AddCTERefJoinConditions(LogicalComparisonJoin &join, const LogicalCTERef &cteref,
 	                             const vector<ColumnBinding> &state) const;
 	void AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,

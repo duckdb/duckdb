@@ -6,7 +6,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
-#include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -29,35 +28,6 @@ static bool HasCTEAccessor(LogicalOperator &op, TableIndex table_index) {
 		}
 	}
 	return false;
-}
-
-static void RemapLocalBindings(LogicalOperator &op, const vector<ColumnBinding> &old_bindings,
-                               const vector<ColumnBinding> &new_bindings) {
-	if (old_bindings == new_bindings) {
-		return;
-	}
-	vector<ColumnBinding> unmatched_old_bindings;
-	vector<ColumnBinding> unmatched_new_bindings;
-	for (auto &old_b : old_bindings) {
-		if (std::find(new_bindings.begin(), new_bindings.end(), old_b) == new_bindings.end()) {
-			unmatched_old_bindings.push_back(old_b);
-		}
-	}
-	for (auto &new_b : new_bindings) {
-		if (std::find(old_bindings.begin(), old_bindings.end(), new_b) == old_bindings.end()) {
-			unmatched_new_bindings.push_back(new_b);
-		}
-	}
-	D_ASSERT(unmatched_old_bindings.size() <= unmatched_new_bindings.size());
-	if (unmatched_old_bindings.empty()) {
-		return;
-	}
-	ColumnBindingReplacer replacer;
-	for (idx_t i = 0; i < unmatched_old_bindings.size(); i++) {
-		replacer.replacement_bindings.emplace_back(unmatched_old_bindings[i], unmatched_new_bindings[i]);
-	}
-	LogicalOperatorVisitor::EnumerateExpressions(
-	    op, [&](unique_ptr<Expression> *expression) { replacer.VisitExpression(expression); });
 }
 
 static bool DependsOnCorrelatedWalk(LogicalOperator &op, Binder &binder,
@@ -252,16 +222,6 @@ void FlattenDependentJoins::CreateDelimJoinConditions(LogicalComparisonJoin &del
 	}
 }
 
-void FlattenDependentJoins::PopulateDuplicateEliminatedColumns(LogicalDependentJoin &op) {
-	op.duplicate_eliminated_columns.clear();
-	op.mark_types.clear();
-	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
-		auto &col = op.correlated_columns[i];
-		op.duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		op.mark_types.push_back(col.type);
-	}
-}
-
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -319,7 +279,7 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 	for (auto &child : plan->children) {
 		auto old_child_bindings = child->GetColumnBindings();
 		state = DecorrelateSubtree(child, propagate_null_values, std::move(state));
-		RemapLocalBindings(*plan, old_child_bindings, child->GetColumnBindings());
+		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
 	return state;
 }
@@ -375,7 +335,6 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownChild(unique_ptr<LogicalOpe
                                                            bool rewrite_parent, idx_t child_idx) {
 	auto old_child_bindings = plan->children[child_idx]->GetColumnBindings();
 	state = PushDownCorrelatedNode(plan->children[child_idx], propagate_null_values, std::move(state));
-	RemapLocalBindings(*plan, old_child_bindings, plan->children[child_idx]->GetColumnBindings());
 	if (rewrite_parent) {
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(state), correlated_aliases);
 	}
@@ -397,17 +356,6 @@ void FlattenDependentJoins::AddAnyJoinConditions(LogicalDependentJoin &op,
 		ExpressionBinder::PushCollation(binder.context, compare_cond.LeftReference(), compare_type);
 		ExpressionBinder::PushCollation(binder.context, compare_cond.RightReference(), compare_type);
 		op.conditions.push_back(std::move(compare_cond));
-	}
-}
-
-void FlattenDependentJoins::AddComparisonJoinConditions(LogicalComparisonJoin &join,
-                                                        const vector<ColumnBinding> &left_state,
-                                                        const vector<ColumnBinding> &right_state) const {
-	for (idx_t i = 0; i < correlated_columns.size(); i++) {
-		JoinCondition cond(make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state[i]),
-		                   make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_state[i]),
-		                   ExpressionType::COMPARE_NOT_DISTINCT_FROM);
-		join.conditions.push_back(std::move(cond));
 	}
 }
 
@@ -441,20 +389,23 @@ void FlattenDependentJoins::AddCTERefJoinConditions(LogicalComparisonJoin &join,
 
 void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const vector<ColumnBinding> &left_state,
                                                         const vector<ColumnBinding> &right_state) const {
-	if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
-		AddComparisonJoinConditions(join.Cast<LogicalComparisonJoin>(), left_state, right_state);
-		return;
-	}
-	auto &logical_any_join = join.Cast<LogicalAnyJoin>();
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto left = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, left_state[i]);
 		auto right = make_uniq<BoundColumnRefExpression>(correlated_columns[i].type, right_state[i]);
-		auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-		                                                       std::move(left), std::move(right));
-		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(comparison),
-		                                                         std::move(logical_any_join.condition));
-		logical_any_join.condition = std::move(conjunction);
+
+		if (join.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+		    join.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+			auto &comp_join = join.Cast<LogicalComparisonJoin>();
+			JoinCondition cond(std::move(left), std::move(right), ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+			comp_join.conditions.push_back(std::move(cond));
+		} else {
+			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
+			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                       std::move(left), std::move(right));
+			auto conjunction = make_uniq<BoundConjunctionExpression>(
+			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
+			logical_any_join.condition = std::move(conjunction);
+		}
 	}
 }
 
@@ -477,7 +428,14 @@ vector<ColumnBinding> FlattenDependentJoins::FinalizeDependentJoin(unique_ptr<Lo
                                                                    const vector<ColumnBinding> &right_state) {
 	auto &op = plan->Cast<LogicalDependentJoin>();
 	RewriteCorrelatedExpressions::Rewrite(op, GetCurrentBindings(outer_state), correlated_aliases);
-	PopulateDuplicateEliminatedColumns(op);
+
+	op.duplicate_eliminated_columns.clear();
+	op.mark_types.clear();
+	for (idx_t i = 0; i < op.correlated_columns.size(); i++) {
+		auto &col = op.correlated_columns[i];
+		op.duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
+		op.mark_types.push_back(col.type);
+	}
 
 	// We are done using the operator as a DEPENDENT JOIN, it is now fully decorrelated,
 	// and we change the type to a DELIM JOIN.
@@ -681,7 +639,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownCrossProduct(unique_ptr<Log
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 	auto right_state = PushDownCorrelatedNode(plan->children[1], propagate_null_values, state);
 	auto left_state = PushDownCorrelatedNode(plan->children[0], propagate_null_values, right_state);
-	AddComparisonJoinConditions(*join, left_state, right_state);
+	AddCorrelatedJoinConditions(*join, left_state, right_state);
 	join->children.push_back(std::move(plan->children[0]));
 	join->children.push_back(std::move(plan->children[1]));
 	plan = std::move(join);
@@ -714,13 +672,12 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownJoin(unique_ptr<LogicalOper
 
 			auto left_state = PushDownChild(plan, propagate_null_values, right_state, false, 0);
 
-			AddComparisonJoinConditions(join.Cast<LogicalComparisonJoin>(), left_state, right_state);
+			AddCorrelatedJoinConditions(join, left_state, right_state);
 			return left_state;
 		}
 
 		auto left_state = PushDownChild(plan, propagate_null_values, state, false);
 		plan->children[1] = DecorrelateIndependent(binder, std::move(plan->children[1]));
-		RemapLocalBindings(*plan, old_right_bindings, plan->children[1]->GetColumnBindings());
 		RewriteCorrelatedExpressions::Rewrite(*plan, GetCurrentBindings(left_state), correlated_aliases);
 		return left_state;
 	}
