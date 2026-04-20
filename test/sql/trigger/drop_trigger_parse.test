@@ -4,6 +4,8 @@
 
 require autocomplete
 
+require noforcestorage
+
 statement ok
 call enable_peg_parser();
 
