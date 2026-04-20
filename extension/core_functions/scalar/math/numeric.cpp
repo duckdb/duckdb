@@ -17,9 +17,9 @@
 namespace duckdb {
 
 template <class ERROR_OP, class IEEE_OP>
-static unique_ptr<FunctionData> BindIEEEFloatingUnary(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &) {
-	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+static unique_ptr<FunctionData> BindIEEEFloatingUnary(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(input.GetClientContext())) {
 		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, IEEE_OP>);
 	} else {
 		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, ERROR_OP>);
@@ -28,9 +28,9 @@ static unique_ptr<FunctionData> BindIEEEFloatingUnary(ClientContext &context, Sc
 }
 
 template <class ERROR_OP, class IEEE_OP>
-static unique_ptr<FunctionData> BindIEEEFloatingBinary(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &) {
-	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
+static unique_ptr<FunctionData> BindIEEEFloatingBinary(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(input.GetClientContext())) {
 		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, IEEE_OP>);
 	} else {
 		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, ERROR_OP>);
@@ -1653,11 +1653,18 @@ struct GammaOperator {
 		return std::tgamma(input);
 	}
 };
+
+struct IEEEGammaOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::tgamma(input);
+	}
+};
 } // namespace
 
 ScalarFunction GammaFun::GetFunction() {
-	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                           ScalarFunction::UnaryFunction<double, double, GammaOperator>);
+	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                           BindIEEEFloatingUnary<GammaOperator, IEEEGammaOperator>);
 	func.SetFallible();
 	return func;
 }
@@ -1675,11 +1682,18 @@ struct LogGammaOperator {
 		return std::lgamma(input);
 	}
 };
+
+struct IEEELogGammaOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::lgamma(input);
+	}
+};
 } // namespace
 
 ScalarFunction LogGammaFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<LogGammaOperator, IEEELogGammaOperator>);
 	function.SetFallible();
 	return function;
 }

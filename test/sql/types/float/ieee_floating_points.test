@@ -100,6 +100,14 @@ statement error
 SELECT cot(0::{type});
 ----
 
+statement error
+SELECT gamma(0::{type});
+----
+
+statement error
+SELECT lgamma(0::{type});
+----
+
 statement ok
 SET ieee_floating_point_ops = true;
 
@@ -127,5 +135,10 @@ query II
 SELECT cot(0::{type}), cot(-0::{type});
 ----
 inf	-inf
+
+query IIII
+SELECT gamma(0::{type}), gamma(-1::{type}), lgamma(0::{type}), lgamma(-1::{type});
+----
+inf	nan	inf	inf
 
 endloop
