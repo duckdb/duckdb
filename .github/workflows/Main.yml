@@ -1234,6 +1234,10 @@ jobs:
     - name: Build fuzzer
       run: make fuzzer
 
+    - name: Test fuzzer harness
+      run: |
+        AFL_DEBUG=1 ./build/fuzzer/test/unittest < /dev/null
+
     - name: Fuzzer smoke
       run: make fuzzer_smoke
 
