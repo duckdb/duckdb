@@ -172,39 +172,4 @@ private:
 	idx_t capacity;
 };
 
-class OptionalSelection {
-public:
-	explicit OptionalSelection(optional_ptr<SelectionVector> sel_p) {
-		Initialize(sel_p);
-	}
-	void Initialize(optional_ptr<SelectionVector> sel_p) {
-		sel = sel_p;
-		if (sel) {
-			vec.Initialize(sel->data(), sel->Capacity());
-			sel = &vec;
-		}
-	}
-
-	inline operator optional_ptr<SelectionVector>() { // NOLINT: allow implicit conversion to SelectionVector
-		return sel;
-	}
-
-	inline void Append(idx_t &count, const idx_t idx) {
-		if (sel) {
-			sel->set_index(count, idx);
-		}
-		++count;
-	}
-
-	inline void Advance(idx_t completed) {
-		if (sel) {
-			sel->Initialize(sel->data() + completed, sel->Capacity() - completed);
-		}
-	}
-
-private:
-	optional_ptr<SelectionVector> sel;
-	SelectionVector vec;
-};
-
 } // namespace duckdb
