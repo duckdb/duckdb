@@ -32,14 +32,8 @@ public:
 private:
 	FlattenDependentJoins(Binder &binder, const CorrelatedColumns &correlated, bool perform_delim = true,
 	                      bool any_join = false, optional_ptr<FlattenDependentJoins> parent = nullptr);
-	vector<ColumnBinding> InitialState() const {
-		return {};
-	}
 	vector<ColumnBinding> CreateContiguousState(ColumnBinding base_binding) const;
 
-	vector<ColumnBinding> DecorrelateSubtree(unique_ptr<LogicalOperator> &plan) {
-		return DecorrelateSubtree(plan, true, InitialState());
-	}
 	vector<ColumnBinding> DecorrelateSubtree(unique_ptr<LogicalOperator> &plan, bool propagate_null_values,
 	                                         vector<ColumnBinding> state);
 	static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join,

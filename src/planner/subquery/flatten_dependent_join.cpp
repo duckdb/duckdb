@@ -226,7 +226,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
-	flatten.DecorrelateSubtree(plan);
+	flatten.DecorrelateSubtree(plan, true, {});
 	return std::move(plan);
 }
 
@@ -480,7 +480,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownSingleCorrelatedChild(uniqu
 
 vector<ColumnBinding> FlattenDependentJoins::PushDownCorrelatedNode(unique_ptr<LogicalOperator> &plan,
                                                                     bool propagate_null_values) {
-	auto state = PushDownCorrelatedNode(plan, propagate_null_values, InitialState());
+	auto state = PushDownCorrelatedNode(plan, propagate_null_values, {});
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates::Rewrite(*plan, replacement_map);
