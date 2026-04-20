@@ -4,8 +4,6 @@
 
 require parquet
 
-require noforcestorage
-
 statement ok
 COPY (SELECT i AS a, i%10 AS b, i%100 AS c FROM range(100000) t(i)) TO '{TEST_DIR}/af.parquet'
 
