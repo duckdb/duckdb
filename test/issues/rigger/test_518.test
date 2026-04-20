@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+SET ieee_floating_point_ops=true;
+
 # Query using the LN() function does not terminate
 statement ok
 CREATE TABLE t0(c0 INT);
@@ -18,12 +21,16 @@ INSERT INTO t0(c0) VALUES (0);
 statement ok
 INSERT INTO t1(c0) VALUES (0), (0), (1), (-1);
 
-statement error
+query I
 SELECT LN(t1.c0) FROM t0, t1 WHERE LN(t1.c0) < t0.c0;
 ----
-<REGEX>:Out of Range Error.*logarithm of zero.*
+-inf
+-inf
 
-statement error
+query II
 SELECT t1.c0, LN(t1.c0) FROM t1 ORDER BY t1.c0;
 ----
-<REGEX>:Out of Range Error.*logarithm of zero.*
+-1	nan
+0	-inf
+0	-inf
+1	0.0
