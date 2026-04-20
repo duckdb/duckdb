@@ -41,7 +41,7 @@ static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const S
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size
-		result_data[ridx] = StringVector::EmptyString(result, result_lengths[ridx]);
+		result_data[ridx].EmptyString(result_lengths[ridx]);
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[ridx] = 0;
 		has_results[ridx] = false;

@@ -50,10 +50,11 @@ template <>
 struct VectorWriter<string_t> {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset);
 
-	inline void PushValue(string_t val) {
+	inline const string_t &PushValue(string_t val) {
 		D_ASSERT(current_idx < count);
 		AssignString(current_idx, val);
 		current_idx++;
+		return data[current_idx - 1];
 	}
 
 	inline void PushWithoutCopying(string_t val) {

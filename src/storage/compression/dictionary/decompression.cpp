@@ -55,12 +55,12 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(i);
-		dict_child_data.PushWithoutCopying(FetchStringFromDict(UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len));
+		dict_child_data.PushWithoutCopying(
+		    FetchStringFromDict(UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len));
 	}
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
