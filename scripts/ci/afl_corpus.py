@@ -232,6 +232,9 @@ def run(config: CorpusConfig) -> int:
 
     ensure_clean_dir(output_root)
 
+    skip_groups = ["ldbc"]
+    print(f"Skip test groups: {skip_groups}")
+
     with tempfile.TemporaryDirectory(prefix="corpus_work_") as workdir:
         work_root = Path(workdir)
         raw_root = work_root / "raw"
@@ -243,6 +246,7 @@ def run(config: CorpusConfig) -> int:
         tasks = [
             GroupTask(name=group, raw_dir=raw_dir, min_dir=min_root / group)
             for group, raw_dir in sorted(grouped_raw.items())
+            if group not in skip_groups
         ]
 
         print(f"Discovered {len(test_files)} test files across {len(tasks)} groups")
