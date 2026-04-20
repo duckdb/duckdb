@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "matcher.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 
 namespace duckdb {
 

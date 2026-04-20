@@ -1,3 +1,4 @@
+#pragma once
 #include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {

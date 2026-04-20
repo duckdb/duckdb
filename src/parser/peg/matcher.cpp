@@ -1,4 +1,4 @@
-#include "matcher.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
 // #define PEG_PARSER_SOURCE_FILE "extension/autocomplete/include/inlined_grammar.gram"
@@ -6,19 +6,33 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
-#include "parser/peg_parser.hpp"
-#include "transformer/parse_result.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/peg_parser.hpp"
+#include "duckdb/parser/peg/transformer/parse_result.hpp"
 #ifdef PEG_PARSER_SOURCE_FILE
 #include <fstream>
 #else
-#include "inlined_grammar.hpp"
+#include "duckdb/parser/peg/inlined_grammar.hpp"
 #endif
 
 namespace duckdb {
+
+static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
+	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
+		if (ext.parser_info) {
+			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
+			if (cache) {
+				return *cache;
+			}
+		}
+	}
+	throw InternalException("PEG autocomplete parser extension not registered");
+}
+
+
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);

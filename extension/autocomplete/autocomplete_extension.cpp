@@ -1,6 +1,4 @@
-#include "autocomplete_extension.hpp"
-#include "sql_formatter.hpp"
-
+#include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -11,17 +9,17 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "matcher.hpp"
-#include "autocomplete_catalog_provider.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -30,18 +28,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
-static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
-	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
-		if (ext.parser_info) {
-			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
-			if (cache) {
-				return *cache;
-			}
-		}
-	}
-	throw InternalException("PEG autocomplete parser extension not registered");
-}
+struct AutoCompleteSuggestion;
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {

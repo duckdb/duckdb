@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "keyword_helper.hpp"
-#include "matcher.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
 
 namespace duckdb {
 

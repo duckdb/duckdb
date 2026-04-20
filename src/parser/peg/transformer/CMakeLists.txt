@@ -1,5 +1,5 @@
 add_library_unity(
-  duckdb_peg_transformer
+  duckdb_parser_peg_transformer
   OBJECT
   peg_transformer.cpp
   peg_transformer_factory.cpp
@@ -44,5 +44,5 @@ add_library_unity(
   transform_vacuum.cpp)
 
 set(AUTOCOMPLETE_EXTENSION_FILES
-    ${AUTOCOMPLETE_EXTENSION_FILES} $<TARGET_OBJECTS:duckdb_peg_transformer>
+    ${AUTOCOMPLETE_EXTENSION_FILES} $<TARGET_OBJECTS:duckdb_parser_peg_transformer>
     PARENT_SCOPE)

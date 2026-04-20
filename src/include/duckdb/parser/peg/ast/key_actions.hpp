@@ -1,5 +1,4 @@
 #pragma once
-#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/enums/joinref_type.hpp"
 
 namespace duckdb {
