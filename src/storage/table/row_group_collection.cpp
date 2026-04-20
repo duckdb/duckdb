@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -1172,9 +1173,17 @@ struct VacuumState {
 	bool can_rebuild_indexes = false;
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
+	optional_idx first_changed_old_row_group;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
+
+	void MarkRowIDsChanged(idx_t row_group_idx) {
+		row_ids_changed = true;
+		if (!first_changed_old_row_group.IsValid() || row_group_idx < first_changed_old_row_group.GetIndex()) {
+			first_changed_old_row_group = row_group_idx;
+		}
+	}
 };
 
 class VacuumTask : public BaseCheckpointTask {
@@ -1340,7 +1349,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 		state.can_vacuum_deletes = false;
 		return;
 	}
-	bool dropped_any_rowgroups = false;
+	optional_idx first_dropped_row_group;
 	for (auto &entry : checkpoint_state.row_groups.SegmentNodes()) {
 		auto &row_group = entry.GetNode();
 		auto row_group_count = row_group.GetCommittedRowCount();
@@ -1358,14 +1367,16 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
-			dropped_any_rowgroups = true;
+			if (!first_dropped_row_group.IsValid()) {
+				first_dropped_row_group = entry.GetIndex();
+			}
 			state.row_group_counts.push_back(row_group_count);
 			continue;
 		}
-		if (dropped_any_rowgroups) {
+		if (first_dropped_row_group.IsValid()) {
 			// if there are any dropped row groups before a live row group, all the row ids of the row groups following
 			// the dropped row group will have their row ids shifted forward (to keep row ids contiguous).
-			state.row_ids_changed = true;
+			state.MarkRowIDsChanged(first_dropped_row_group.GetIndex());
 		}
 		state.row_group_counts.push_back(row_group_count);
 	}
@@ -1472,6 +1483,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	// schedule the vacuum task
+	state.MarkRowIDsChanged(segment_idx);
 	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
 	           target_count, merge_rows, state.row_start);
 	auto vacuum_task =
@@ -1514,7 +1526,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (vacuum_tasks) {
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
-				vacuum_state.row_ids_changed = true;
 				continue;
 			}
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1787,6 +1798,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// 2) we have changed rowids.
 	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
 		writer.SetRebuildIndexes();
+	}
+	if (vacuum_state.row_ids_changed) {
+		D_ASSERT(vacuum_state.first_changed_old_row_group.IsValid());
+		CheckpointRowIDChangeInfo info = {writer.GetTableOid(), vacuum_state.first_changed_old_row_group.GetIndex(),
+		                                  true};
+		auto &db = writer.GetDatabase();
+		for (auto &callback : ExtensionCallback::Iterate(db)) {
+			callback->OnCheckpointRowIDsChanged(db, info);
+		}
 	}
 }
 

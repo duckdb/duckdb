@@ -17,6 +17,12 @@ class ClientContext;
 class DatabaseInstance;
 class ErrorData;
 
+struct CheckpointRowIDChangeInfo {
+	idx_t table_oid;
+	idx_t first_changed_old_row_group;
+	bool row_ids_changed;
+};
+
 class ExtensionCallback {
 public:
 	virtual ~ExtensionCallback() {
@@ -36,6 +42,9 @@ public:
 	}
 	//! Called after an extension fails to load loading
 	virtual void OnExtensionLoadFail(DatabaseInstance &db, const string &name, const ErrorData &error) {
+	}
+	//! Called when a checkpoint changes row ids for a table
+	virtual void OnCheckpointRowIDsChanged(DatabaseInstance &db, const CheckpointRowIDChangeInfo &info) {
 	}
 
 	static void Register(DBConfig &config, shared_ptr<ExtensionCallback> extension);

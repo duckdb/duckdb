@@ -54,6 +54,7 @@ public:
 	}
 
 	DatabaseInstance &GetDatabase();
+	idx_t GetTableOid() const;
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
 
 protected:

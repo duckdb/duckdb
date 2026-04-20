@@ -38,6 +38,10 @@ DatabaseInstance &TableDataWriter::GetDatabase() {
 	return table.ParentCatalog().GetDatabase();
 }
 
+idx_t TableDataWriter::GetTableOid() const {
+	return table.oid;
+}
+
 unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
 	if (context) {
 		return make_uniq<TaskExecutor>(*context);
