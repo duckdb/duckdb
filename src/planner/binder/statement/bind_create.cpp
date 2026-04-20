@@ -388,17 +388,53 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
 			try {
+				auto &ret_types = function->return_types;
+				// Resolve UNBOUND types from the grammar to concrete LogicalTypes
+				// so downstream consumers (pg_proc, serialization) see real IDs.
+				for (auto &rt : ret_types) {
+					BindLogicalType(rt);
+				}
+				// Scalar RETURNS with BEGIN ATOMIC/AS $$ SELECT $$ body was
+				// converted to ScalarMacroFunction wrapping a SubqueryExpression.
+				// Validate the inner SELECT against the declared RETURNS type by
+				// binding it as a query node first (yields clean PG-style errors
+				// instead of DuckDB's generic subquery errors).
+				if (!ret_types.empty() && expression->GetExpressionClass() == ExpressionClass::SUBQUERY) {
+					auto &sub_expr = expression->Cast<SubqueryExpression>();
+					if (sub_expr.subquery && sub_expr.subquery->node) {
+						auto dummy_binder = CreateBinder(context, this);
+						if (should_create_dependencies) {
+							dummy_binder->SetCatalogLookupCallback(binder_callback);
+						}
+						auto query_node = sub_expr.subquery->node->Copy();
+						ParsedExpressionIterator::EnumerateQueryNodeChildren(
+						    *query_node, [&dummy_binder](unique_ptr<ParsedExpression> &child) {
+							    ExpressionBinder::QualifyColumnNames(*dummy_binder, child);
+						    });
+						auto bound = dummy_binder->Bind(*query_node);
+						auto &resolved = ret_types[0];
+						if (!bound.types.empty() && !types_compatible(bound.types[0], resolved)) {
+							throw BinderException("return type mismatch in function declared to return %s\n"
+							                      "DETAIL: Actual return type is %s.",
+							                      StringUtil::Lower(resolved.ToString()),
+							                      StringUtil::Lower(bound.types[0].ToString()));
+						}
+						if (bound.types.size() != 1) {
+							throw BinderException("return type mismatch in function declared to return %s\n"
+							                      "DETAIL: Final statement must return exactly one column.",
+							                      StringUtil::Lower(resolved.ToString()));
+						}
+					}
+				}
+
 				error = binder.Bind(expression, 0, false);
 				if (error.HasError()) {
 					error.Throw();
 				}
-				// Validate declared return type for scalar RETURN expr
-				auto &ret_types = function->return_types;
+				// Validate scalar RETURN expr (non-subquery body).
 				if (!ret_types.empty() && expression->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
-					auto resolved = ret_types[0];
-					BindLogicalType(resolved);
+					auto &resolved = ret_types[0];
 					auto &actual = expression->Cast<BoundExpression>().expr->return_type;
-					// PG order: check type compatibility first, then column count
 					if (!types_compatible(actual, resolved)) {
 						throw BinderException("return type mismatch in function declared to return %s\n"
 						                      "DETAIL: Actual return type is %s.",

@@ -44,6 +44,7 @@ class OrderBinder;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TableMacroCatalogEntry;
+class MacroCatalogEntry;
 class UpdateSetInfo;
 class LogicalProjection;
 class LogicalVacuum;
@@ -440,7 +441,7 @@ private:
 	                             unique_ptr<LogicalOperator> child_operator,
 	                             virtual_column_map_t virtual_columns = virtual_column_map_t());
 
-	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func, idx_t depth);
+	unique_ptr<QueryNode> BindTableMacro(FunctionExpression &function, MacroCatalogEntry &macro_func, idx_t depth);
 
 	BoundStatement BindCTE(const string &ctename, CommonTableExpressionInfo &info);
 

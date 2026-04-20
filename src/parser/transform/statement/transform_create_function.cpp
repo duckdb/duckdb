@@ -5,6 +5,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -114,9 +115,8 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 					auto upd = TransformUpdate(PGCast<duckdb_libpgquery::PGUpdateStmt>(*raw.stmt));
 					macro_func = make_uniq<TableMacroFunction>(std::move(upd->Cast<UpdateStatement>().node));
 				} else {
-					throw ParserException(
-					    "Unsupported statement type in SQL function/procedure body: %s",
-					    constant.val.val.str);
+					throw ParserException("Unsupported statement type in SQL function/procedure body: %s",
+					                      constant.val.val.str);
 				}
 			}
 		}
@@ -293,10 +293,39 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 			}
 		}
 
-		// For scalar RETURNS (not RETURNS TABLE), alias the single output column
-		// to the function name (PG convention)
-		if ((!function_def.returns_table_columns || is_scalar_returns) && macro &&
-		    macro->type == MacroType::TABLE_MACRO) {
+		// Scalar RETURNS (not RETURNS TABLE/SETOF) with a SELECT body stored as
+		// TABLE_MACRO: per-overload, convert to ScalarMacroFunction wrapping
+		// the body as a scalar subquery. Symmetric with `RETURN (<subquery>)`.
+		// 0 rows -> NULL, 1 row -> value, >1 rows -> error (bounded by LIMIT 1).
+		if (is_scalar_returns && macro && macro->type == MacroType::TABLE_MACRO) {
+			auto &table_macro = macro->Cast<TableMacroFunction>();
+			if (table_macro.query_node) {
+				auto &modifiers = table_macro.query_node->modifiers;
+				std::erase_if(modifiers, [](const unique_ptr<ResultModifier> &mod) {
+					return mod->type == ResultModifierType::LIMIT_MODIFIER ||
+					       mod->type == ResultModifierType::LIMIT_PERCENT_MODIFIER;
+				});
+				auto limit_mod = make_uniq<LimitModifier>();
+				limit_mod->limit = make_uniq<ConstantExpression>(Value::BIGINT(1));
+				modifiers.push_back(std::move(limit_mod));
+
+				auto inner_stmt = make_uniq<SelectStatement>();
+				inner_stmt->node = std::move(table_macro.query_node);
+				auto subquery = make_uniq<SubqueryExpression>();
+				subquery->subquery = std::move(inner_stmt);
+				subquery->subquery_type = SubqueryType::SCALAR;
+
+				auto scalar_macro = make_uniq<ScalarMacroFunction>(std::move(subquery));
+				scalar_macro->parameters = std::move(table_macro.parameters);
+				scalar_macro->types = std::move(table_macro.types);
+				scalar_macro->default_parameters = std::move(table_macro.default_parameters);
+				scalar_macro->return_types = std::move(table_macro.return_types);
+				scalar_macro->is_procedure = table_macro.is_procedure;
+				macro = std::move(scalar_macro);
+			}
+		} else if (!function_def.returns_table_columns && macro && macro->type == MacroType::TABLE_MACRO) {
+			// RETURN <expr> form with a SELECT body (no explicit RETURNS).
+			// Alias single output column to the function name; force LIMIT 1.
 			auto &table_macro = macro->Cast<TableMacroFunction>();
 			if (table_macro.query_node && table_macro.query_node->type == QueryNodeType::SELECT_NODE) {
 				auto &select = table_macro.query_node->Cast<SelectNode>();
@@ -304,16 +333,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 					select.select_list[0]->alias = TransformQualifiedName(*stmt.name).name;
 				}
 			}
-			// PG semantics: RETURNS <scalar_type> (not TABLE / SETOF) means the
-			// function produces exactly one row. Force LIMIT 1 on the query body
-			// so `SELECT * FROM f()` returns at most one row, even if the body
-			// query produces multiple rows (e.g. VALUES, generate_series, ...).
-			// If the body already has a LIMIT, replace it with 1 (a scalar
-			// function can't return more than one row regardless of what the
-			// body says).
 			if (table_macro.query_node) {
 				auto &modifiers = table_macro.query_node->modifiers;
-				// Remove any existing LIMIT (replace with 1).
 				std::erase_if(modifiers, [](const unique_ptr<ResultModifier> &mod) {
 					return mod->type == ResultModifierType::LIMIT_MODIFIER ||
 					       mod->type == ResultModifierType::LIMIT_PERCENT_MODIFIER;

@@ -9,15 +9,16 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/function/table_macro_function.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
 
-unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, TableMacroCatalogEntry &macro_func,
-                                             idx_t depth) {
+unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, MacroCatalogEntry &macro_func, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positional_arguments;
 	InsertionOrderPreservingMap<unique_ptr<ParsedExpression>> named_arguments;
@@ -39,7 +40,17 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	eb.macro_binding = new_macro_binding.get();
 	vector<unordered_set<string>> lambda_params;
 
-	auto node = macro_def.Cast<TableMacroFunction>().query_node->Copy();
+	unique_ptr<QueryNode> node;
+	if (macro_def.type == MacroType::SCALAR_MACRO) {
+		auto select_node = make_uniq<SelectNode>();
+		auto expr = macro_def.Cast<ScalarMacroFunction>().expression->Copy();
+		expr->alias = macro_func.name;
+		select_node->select_list.push_back(std::move(expr));
+		select_node->from_table = make_uniq<EmptyTableRef>();
+		node = std::move(select_node);
+	} else {
+		node = macro_def.Cast<TableMacroFunction>().query_node->Copy();
+	}
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *node, [&](unique_ptr<ParsedExpression> &child) { eb.ReplaceMacroParameters(child, lambda_params); });
 

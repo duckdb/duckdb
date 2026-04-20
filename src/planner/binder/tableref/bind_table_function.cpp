@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -374,10 +375,29 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
 	auto func_catalog_ptr = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 
-	if (!func_catalog_ptr) {
-		EntryLookupInfo scalar_function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, fexpr.function_name, error_context);
-		func_catalog_ptr = GetCatalogEntry(catalog, schema, scalar_function_lookup, OnEntryNotFound::RETURN_NULL);
-		if (func_catalog_ptr) {
+	// DuckDB's typed catalog lookup can return a MACRO_ENTRY even when asked
+	// for TABLE_FUNCTION_ENTRY (internal fallback). If we found a MACRO_ENTRY
+	// or SCALAR_FUNCTION_ENTRY here, or need to find a scalar macro, normalize
+	// dispatch:
+	// - SCALAR_FUNCTION_ENTRY: wrap as `(SELECT f())` scalar subquery.
+	// - MACRO_ENTRY (scalar macro, possibly mixed with table overloads):
+	//   dispatch via BindTableMacro which resolves the right overload and
+	//   synthesizes a query node from either a SCALAR_MACRO or TABLE_MACRO
+	//   (see bind_table_macro_node.cpp).
+	const bool need_scalar_wrap = !func_catalog_ptr || (func_catalog_ptr->type != CatalogType::TABLE_FUNCTION_ENTRY &&
+	                                                    func_catalog_ptr->type != CatalogType::TABLE_MACRO_ENTRY &&
+	                                                    func_catalog_ptr->type != CatalogType::MACRO_ENTRY);
+	if (need_scalar_wrap) {
+		if (!func_catalog_ptr) {
+			EntryLookupInfo scalar_function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, fexpr.function_name,
+			                                       error_context);
+			func_catalog_ptr = GetCatalogEntry(catalog, schema, scalar_function_lookup, OnEntryNotFound::RETURN_NULL);
+			if (!func_catalog_ptr) {
+				EntryLookupInfo scalar_macro_lookup(CatalogType::MACRO_ENTRY, fexpr.function_name, error_context);
+				func_catalog_ptr = GetCatalogEntry(catalog, schema, scalar_macro_lookup, OnEntryNotFound::RETURN_NULL);
+			}
+		}
+		if (func_catalog_ptr && func_catalog_ptr->type != CatalogType::MACRO_ENTRY) {
 			auto select = make_uniq<SelectNode>();
 			select->select_list.push_back(ref.function->Copy());
 			select->from_table = make_uniq<EmptyTableRef>();
@@ -387,9 +407,34 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 			subquery_ref.query_location = ref.query_location;
 			return Bind(subquery_ref);
 		}
-		func_catalog_ptr = GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		if (!func_catalog_ptr) {
+			func_catalog_ptr =
+			    GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		}
 	}
 	auto &func_catalog = *func_catalog_ptr;
+	if (func_catalog.type == CatalogType::MACRO_ENTRY) {
+		auto &macro_func = func_catalog.Cast<MacroCatalogEntry>();
+		auto query_node = BindTableMacro(fexpr, macro_func, 0);
+		D_ASSERT(query_node);
+
+		auto binder_child = Binder::CreateBinder(context, this);
+		binder_child->can_contain_nulls = true;
+		binder_child->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
+		BoundStatement query;
+		try {
+			query = binder_child->BindNode(*query_node);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			error.AddQueryLocation(ref);
+			error.Throw();
+		}
+		auto bind_index = query.plan->GetRootIndex();
+		string alias = (ref.alias.empty() ? "unnamed_query" + to_string(bind_index.index) : ref.alias);
+		bind_context.AddSubquery(bind_index, alias, ref, query);
+		MoveCorrelatedExpressions(*binder_child);
+		return query;
+	}
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
