@@ -540,12 +540,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
-	auto updates = FlatVector::Writer<data_ptr_t>(update_v);
+	auto updates = FlatVector::ScatterWriter<data_ptr_t>(update_v);
 
 	auto &source_v = ldastate.source_v;
-	auto sources = FlatVector::Writer<data_ptr_t>(source_v);
+	auto sources = FlatVector::ScatterWriter<data_ptr_t>(source_v);
 	auto &target_v = ldastate.target_v;
-	auto targets = FlatVector::Writer<data_ptr_t>(target_v);
+	auto targets = FlatVector::ScatterWriter<data_ptr_t>(target_v);
 
 	auto &zipped_tree = gdastate.zipped_tree;
 	auto &zipped_level = zipped_tree.tree[level_nr].first;

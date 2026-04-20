@@ -212,7 +212,7 @@ struct StoreFieldForSelectedRowsOp {
 	static void Operation(const AggregateStateLayout &layout, Vector &result, idx_t field_idx,
 	                      const SelectionVector &sel, idx_t count, data_ptr_t base_ptr, idx_t field_offset) {
 		auto &child = StructVector::GetEntries(result)[field_idx];
-		auto child_data = FlatVector::Writer<T>(child);
+		auto child_data = FlatVector::ScatterWriter<T>(child);
 
 		for (idx_t i = 0; i < count; i++) {
 			idx_t row = sel.get_index(i);

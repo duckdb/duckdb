@@ -103,7 +103,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	unsafe_unique_array<bool> needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			result_data.SetInvalid(i);

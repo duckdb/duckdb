@@ -39,7 +39,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	auto right_data = right.Values<uint8_t>(count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<bool>(result, count);
+	auto result_data = FlatVector::ScatterWriter<bool>(result);
 	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];

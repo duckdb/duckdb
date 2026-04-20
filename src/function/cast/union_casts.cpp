@@ -307,7 +307,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	auto &tag_vector = UnionVector::GetTags(varchar_union);
 	auto tag_entries = tag_vector.Values<union_tag_t>(count);
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto tag_entry = tag_entries[i];
 		if (!tag_entry.IsValid()) {

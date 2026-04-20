@@ -21,7 +21,7 @@ static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 		*result_data = INVERSE ? !ConstantVector::IsNull(input) : ConstantVector::IsNull(input);
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::Writer<bool>(result, count);
+		auto result_data = FlatVector::ScatterWriter<bool>(result);
 		auto entries = input.Validity(count);
 		for (idx_t i = 0; i < count; i++) {
 			result_data[i] = INVERSE ? entries.IsValid(i) : !entries.IsValid(i);

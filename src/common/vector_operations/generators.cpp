@@ -19,7 +19,7 @@ static void TemplatedGenerateSequence(Vector &result, idx_t count, int64_t start
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	auto result_data = FlatVector::Writer<T>(result, count);
+	auto result_data = FlatVector::ScatterWriter<T>(result);
 	auto value = T(start);
 	for (idx_t i = 0; i < count; i++) {
 		if (i > 0) {
@@ -59,7 +59,7 @@ void TemplatedGenerateSequence(Vector &result, idx_t count, const SelectionVecto
 		throw InternalException("Sequence start or increment out of type range");
 	}
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<T>(result, count);
+	auto result_data = FlatVector::ScatterWriter<T>(result);
 	auto value = static_cast<uint64_t>(start);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);

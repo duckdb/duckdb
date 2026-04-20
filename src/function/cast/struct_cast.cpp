@@ -152,7 +152,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::ValidityMutable(varchar_struct);
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
@@ -298,7 +298,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
 	Vector varchar_keys(LogicalType::VARCHAR, total_count);
-	auto key_data = FlatVector::Writer<string_t>(varchar_keys, count * field_count);
+	auto key_data = FlatVector::ScatterWriter<string_t>(varchar_keys);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {

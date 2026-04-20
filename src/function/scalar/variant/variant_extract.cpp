@@ -244,7 +244,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			result_data.PushInvalid();

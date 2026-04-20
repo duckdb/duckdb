@@ -14,6 +14,15 @@ void VectorWriter<string_t>::InitializeHeap() {
 	heap = StringVector::GetStringHeap(vector);
 }
 
+VectorScatterWriter<string_t>::VectorScatterWriter(Vector &vector)
+    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)),
+      validity(FlatVector::ValidityMutable(vector)) {
+}
+
+void VectorScatterWriter<string_t>::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
+}
+
 VectorStringBuffer::VectorStringBuffer() : StandardVectorBuffer(idx_t(0), sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }

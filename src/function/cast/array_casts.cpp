@@ -106,7 +106,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	auto &child_validity = FlatVector::Validity(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;

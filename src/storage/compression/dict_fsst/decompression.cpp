@@ -151,7 +151,7 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	auto result_data = FlatVector::Writer<string_t>(result, result_offset + scan_count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	auto &selvec = GetSelVec(start, scan_count);

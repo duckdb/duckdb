@@ -48,7 +48,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::Writer<list_entry_t>(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 	auto &result_child_vector = ListVector::GetChildMutable(result);
 
 	// Get the default values, if provided.

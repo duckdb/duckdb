@@ -626,7 +626,7 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto values_data = FlatVector::Writer<list_entry_t>(values, count);
 
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::Writer<string_t>(blob, count);
+	auto blob_data = FlatVector::ScatterWriter<string_t>(blob);
 
 	idx_t children_offset = 0;
 	idx_t values_offset = 0;

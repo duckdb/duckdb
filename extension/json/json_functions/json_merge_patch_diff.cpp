@@ -79,7 +79,7 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 	auto old_inputs = UnifiedVectorFormat::GetData<string_t>(old_data);
 	auto new_inputs = UnifiedVectorFormat::GetData<string_t>(new_data);
 
-	auto result_data = FlatVector::Writer<string_t>(result);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto old_idx = old_data.sel->get_index(i);

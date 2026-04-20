@@ -95,7 +95,7 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
 			result_data.SetInvalid(i);
