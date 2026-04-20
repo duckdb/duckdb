@@ -472,7 +472,11 @@ void VariantColumnData::FetchRow(TransactionData transaction, ColumnFetchState &
 		VariantUtils::UnshredVariantData(intermediate, unshredded, 1);
 		variant_vec.SetValue(0, unshredded.GetValue(0));
 	} else {
-		sub_columns[0]->FetchRow(transaction, state, storage_index, row_id, variant_vec, result_idx);
+		//! The storage_index may be a VARIANT-extract (pushdown) with field-name children that don't
+		//! match the underlying unshredded struct's field layout. We still need the full VARIANT
+		//! to run VariantExtract below, so fetch with a fresh StorageIndex.
+		StorageIndex full_fetch(0);
+		sub_columns[0]->FetchRow(transaction, state, full_fetch, row_id, variant_vec, result_idx);
 		if (result_idx) {
 			variant_vec.SetValue(0, variant_vec.GetValue(result_idx));
 		}

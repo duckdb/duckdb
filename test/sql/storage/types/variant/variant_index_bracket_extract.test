@@ -1,0 +1,43 @@
+# name: test/sql/storage/types/variant/variant_index_bracket_extract.test
+# group: [variant]
+
+# Regression test: VARIANT + ART index + pushdown bracket-extract.
+#
+# The unshredded VariantColumnData::FetchRow used to forward the caller's
+# pushdown-extract StorageIndex (whose child is field-based, e.g.
+# "duration_ms") directly to the inner unshredded struct's
+# StructColumnData::FetchRow. The latter treated the child as a numeric
+# index and read past sub_columns, dereferencing uninitialized memory.
+# The failure mode was an INTERNAL Error reporting an out-of-bounds index
+# with a pointer-sized value against a vector of size 4 (the 4 sub-columns
+# of the unshredded struct: keys/children/values/data).
+
+statement ok
+CREATE TABLE events(ts TIMESTAMP, name VARCHAR, attrs VARIANT);
+
+statement ok
+CREATE INDEX idx_events_name ON events(name);
+
+statement ok
+INSERT INTO events VALUES
+  (TIMESTAMP '2024-01-01 00:00:00', 'http.request', CAST({'duration_ms': 100} AS VARIANT)),
+  (TIMESTAMP '2024-01-01 00:00:01', 'http.request', CAST({'duration_ms': 200} AS VARIANT));
+
+# bracket access + equality on indexed column (used to crash)
+query I
+SELECT attrs['duration_ms']::DOUBLE FROM events WHERE name = 'http.request' ORDER BY 1;
+----
+100.0
+200.0
+
+# negative match (used to work, sanity check)
+query I
+SELECT attrs['duration_ms']::DOUBLE FROM events WHERE name = 'no-such-value';
+----
+
+# full VARIANT projection with same filter (sanity check)
+query I
+SELECT attrs FROM events WHERE name = 'http.request' ORDER BY 1;
+----
+{'duration_ms': 100}
+{'duration_ms': 200}
