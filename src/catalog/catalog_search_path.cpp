@@ -9,6 +9,7 @@
 #include "duckdb/main/database_manager.hpp"
 
 #include "duckdb/common/exception/parser_exception.hpp"
+#include <algorithm>
 
 namespace duckdb {
 
@@ -30,10 +31,29 @@ string CatalogSearchEntry::WriteOptionallyQuoted(const string &input) {
 	if (input == "$user") {
 		return "\"$user\"";
 	}
-	for (idx_t i = 0; i < input.size(); i++) {
-		if (input[i] == '.' || input[i] == ',' || input[i] == '"') {
-			return "\"" + StringUtil::Replace(input, "\"", "\"\"") + "\"";
+	// PG-compliant: leave unquoted only if the identifier is either a run of digits
+	// or a lower-case identifier [a-z_][a-z0-9_]*. Anything else (uppercase,
+	// leading digit followed by letters, `.`, `,`, `"`, `$`, spaces, ...)
+	// needs quoting.
+	bool needs_quote = input.empty();
+	if (!needs_quote) {
+		const bool all_digits = std::all_of(input.begin(), input.end(), [](char c) { return c >= '0' && c <= '9'; });
+		if (!all_digits) {
+			char first = input.front();
+			if (!((first >= 'a' && first <= 'z') || first == '_')) {
+				needs_quote = true;
+			} else {
+				for (idx_t i = 1; i < input.size() && !needs_quote; i++) {
+					char c = input[i];
+					if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) {
+						needs_quote = true;
+					}
+				}
+			}
 		}
+	}
+	if (needs_quote) {
+		return "\"" + StringUtil::Replace(input, "\"", "\"\"") + "\"";
 	}
 	return input;
 }
