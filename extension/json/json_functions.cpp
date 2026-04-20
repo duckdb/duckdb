@@ -272,7 +272,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 
 static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &) {
 	UnifiedVectorFormat child_format;
-	ListVector::GetEntry(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
+	ListVector::GetChildMutable(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
 	const auto input_jsons = UnifiedVectorFormat::GetData<string_t>(child_format);
 
 	static constexpr char const *NULL_STRING = "NULL";
@@ -363,7 +363,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    }
 
 		    // Populate list
-		    const auto result_jsons = FlatVector::GetDataMutable<string_t>(ListVector::GetEntry(result));
+		    const auto result_jsons = FlatVector::GetDataMutable<string_t>(ListVector::GetChildMutable(result));
 		    size_t arr_idx, max;
 		    yyjson_val *val;
 		    yyjson_arr_foreach(doc->root, arr_idx, max, val) {
@@ -376,7 +376,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    return {current_size, arr_len};
 	    });
 
-	JSONAllocator::AddBuffer(ListVector::GetEntry(result), alc);
+	JSONAllocator::AddBuffer(ListVector::GetChildMutable(result), alc);
 	return success;
 }
 

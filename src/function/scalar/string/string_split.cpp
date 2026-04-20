@@ -122,7 +122,7 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	// count all the splits and set up the list entries
-	auto &child_entry = ListVector::GetEntry(result);
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_entry = input_entries[i];

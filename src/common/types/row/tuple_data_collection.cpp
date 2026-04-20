@@ -339,7 +339,8 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 	}
 	case PhysicalType::LIST:
 		D_ASSERT(format.children.size() == 1);
-		ToUnifiedFormatInternal(format.children[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ListVector::GetChildMutable(vector),
+		                        ListVector::GetListSize(vector));
 		break;
 	case PhysicalType::ARRAY: {
 		D_ASSERT(format.children.size() == 1);
@@ -362,7 +363,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), child_array_total_size);
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetChildMutable(vector), child_array_total_size);
 		break;
 	}
 	default:

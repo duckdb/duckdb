@@ -192,7 +192,7 @@ struct TestVectorSequence {
 			data.PushValue(list_entry_t(2, 0));
 			data.PushValue(list_entry_t(2, 1));
 
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
+			GenerateVector(info, ListType::GetChildType(type), ListVector::GetChildMutable(result));
 			ListVector::SetListSize(result, 3);
 			break;
 		}

@@ -24,7 +24,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto &child_vector = ListVector::GetChild(lists);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(row_count, child_data);
 
@@ -49,7 +49,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::Writer<list_entry_t>(result);
-	auto &result_child_vector = ListVector::GetEntry(result);
+	auto &result_child_vector = ListVector::GetChildMutable(result);
 
 	// Get the default values, if provided.
 	UnifiedVectorFormat default_data;

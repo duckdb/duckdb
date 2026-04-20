@@ -66,8 +66,8 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 			ConstantVector::SetNull(result);
 		}
 
-		auto &source_cc = ArrayVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ArrayVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		// If the array vector is constant, the child vector must be flat (or constant if array size is 1)
 		D_ASSERT(source_cc.GetVectorType() == VectorType::FLAT_VECTOR || source_array_size == 1);
@@ -80,9 +80,9 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
-		auto &source_cc = ArrayVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		auto &source_cc = ArrayVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, count * source_array_size, child_parameters);
@@ -101,9 +101,9 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
-	auto &validity = FlatVector::ValidityMutable(varchar_list);
-	auto &child = ArrayVector::GetEntry(varchar_list);
-	auto &child_validity = FlatVector::ValidityMutable(child);
+	auto &validity = FlatVector::Validity(varchar_list);
+	auto &child = ArrayVector::GetChild(varchar_list);
+	auto &child_validity = FlatVector::Validity(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
@@ -176,8 +176,8 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	ListVector::Reserve(result, child_count);
 	ListVector::SetListSize(result, child_count);
 
-	auto &source_child = ArrayVector::GetEntry(source);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &source_child = ArrayVector::GetChildMutable(source);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.Cast(source_child, result_child, child_count, child_parameters);

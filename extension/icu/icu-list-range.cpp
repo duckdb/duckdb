@@ -161,7 +161,7 @@ struct ICUListRange : public ICUDateFunc {
 
 		// now construct the child vector of the list
 		ListVector::Reserve(result, total_size);
-		auto range_data = FlatVector::Writer<timestamp_t>(ListVector::GetEntry(result), total_size);
+		auto range_data = FlatVector::Writer<timestamp_t>(ListVector::GetChildMutable(result), total_size);
 		for (idx_t i = 0; i < args_size; i++) {
 			timestamp_t start_value = info.StartListValue(i);
 			interval_t increment = info.ListIncrementValue(i);

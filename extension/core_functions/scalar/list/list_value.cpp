@@ -131,7 +131,7 @@ void ListFunction(DataChunk &args, Vector &result) {
 	ListVector::Reserve(result, offset_sum);
 
 	// The result vector is [[a], [b], ...], result_child is [a, b, ...].
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	auto unified_format = args.ToUnifiedFormat();
 	vector<const list_entry_t *> col_data;
@@ -143,7 +143,7 @@ void ListFunction(DataChunk &args, Vector &result) {
 		if (length == 0) {
 			continue;
 		}
-		auto &child_vector = ListVector::GetEntry(list);
+		auto &child_vector = ListVector::GetChildMutable(list);
 		VectorOperations::Copy(child_vector, result_child, length, 0, col_offsets[col]);
 	}
 
@@ -225,7 +225,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	}
 
 	ListVector::Reserve(result, args.size() * args.ColumnCount());
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	if (!PopulateChild(args, result_child)) {
 		PopulateChildFallback(args, result);

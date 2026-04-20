@@ -29,4 +29,4 @@ SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem WHERE l_orderk
 query II
 EXPLAIN SELECT * FROM lineitem WHERE rowid = 20058;
 ----
-physical_plan	<REGEX>:.* SEQ_SCAN.*Filters:.*rowid=20058.*
+physical_plan	<REGEX>:.* SEQ_SCAN.*Filters:.*rowid = 20058.*

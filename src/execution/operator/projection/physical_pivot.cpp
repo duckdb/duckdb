@@ -41,7 +41,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 		chunk.data[i].Reference(input.data[i]);
 	}
 	auto pivot_column_lists = FlatVector::GetData<list_entry_t>(input.data.back());
-	auto &pivot_column_values = ListVector::GetEntry(input.data.back());
+	auto &pivot_column_values = ListVector::GetChild(input.data.back());
 	auto pivot_columns = FlatVector::GetData<string_t>(pivot_column_values);
 
 	// initialize all aggregate columns with the empty aggregate value
@@ -71,7 +71,7 @@ OperatorResultType PhysicalPivot::Execute(ExecutionContext &context, DataChunk &
 			auto column_idx = entry->second;
 			for (idx_t aggr = 0; aggr < empty_aggregates.size(); aggr++) {
 				auto pivot_value_lists = FlatVector::GetData<list_entry_t>(input.data[bound_pivot.group_count + aggr]);
-				auto &pivot_value_child = ListVector::GetEntry(input.data[bound_pivot.group_count + aggr]);
+				auto &pivot_value_child = ListVector::GetChild(input.data[bound_pivot.group_count + aggr]);
 				if (list.length != pivot_value_lists[r].length) {
 					throw InternalException("Pivot - unaligned lists between values and columns!?");
 				}

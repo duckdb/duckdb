@@ -113,13 +113,13 @@ struct SortKeyVectorData {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child_entry = ArrayVector::GetEntry(input);
+			auto &child_entry = ArrayVector::GetChildMutable(input);
 			auto array_size = ArrayType::GetSize(input.GetType());
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child_entry = ListVector::GetEntry(input);
+			auto &child_entry = ListVector::GetChildMutable(input);
 			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
@@ -994,7 +994,7 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	const auto list_data =
 	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
@@ -1059,7 +1059,7 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 		if (vector_data.flip_bytes) {
 			list_delimiter = ~list_delimiter;
 		}
-		auto &child_vector = ArrayVector::GetEntry(result);
+		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto array_size = ArrayType::GetSize(result.GetType());
 
 		idx_t found_elements = 0;

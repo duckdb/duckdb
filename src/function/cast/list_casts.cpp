@@ -63,11 +63,11 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 			tdata.PushValue(ldata[i]);
 		}
 	}
-	auto &source_cc = ListVector::GetEntry(source);
+	auto &source_cc = ListVector::GetChildMutable(source);
 	auto source_size = ListVector::GetListSize(source);
 
 	ListVector::Reserve(result, source_size);
-	auto &append_vector = ListVector::GetEntry(result);
+	auto &append_vector = ListVector::GetChildMutable(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
@@ -81,7 +81,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
-	auto &child_vec = ListVector::GetEntry(source);
+	auto &child_vec = ListVector::GetChild(source);
 	auto child_is_nested = child_vec.GetType().IsNested();
 	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
 	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
@@ -90,7 +90,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
-	auto &child = ListVector::GetEntry(varchar_list);
+	auto &child = ListVector::GetChildMutable(varchar_list);
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
 	auto &validity = FlatVector::ValidityMutable(varchar_list);
 
@@ -173,8 +173,8 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			return false;
 		}
 
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
@@ -198,8 +198,8 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		auto child_type = ArrayType::GetChildType(result.GetType());
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 
 		auto child_count = array_size * count;

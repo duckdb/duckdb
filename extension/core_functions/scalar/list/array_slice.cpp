@@ -236,7 +236,7 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
                   optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
-		result_child_vector = &ListVector::GetEntry(result);
+		result_child_vector = &ListVector::GetChildMutable(result);
 	}
 
 	SelectionVector sel;

@@ -23,8 +23,10 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
@@ -1078,6 +1080,18 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
 	    make_uniq<SelectivityOptionalFilter>(std::move(filter), SelectivityOptionalFilterType::MIN_MAX));
 }
 
+static unique_ptr<TableFilter> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
+                                                                const LogicalType &column_type) {
+	auto constant_value = constant;
+	if (!constant_value.IsNull()) {
+		constant_value.DefaultTryCastAs(column_type);
+	}
+	auto column = make_uniq<BoundReferenceExpression>(column_type, 0);
+	auto filter_expr = make_uniq<BoundComparisonExpression>(
+	    comparison_type, std::move(column), make_uniq<BoundConstantExpression>(std::move(constant_value)));
+	return make_uniq<ExpressionFilter>(std::move(filter_expr));
+}
+
 unique_ptr<DataChunk>
 JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalComparisonJoin &op,
                                         unique_ptr<DataChunk> final_min_max, optional_ptr<JoinHashTable> ht,
@@ -1118,7 +1132,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				continue;
 			}
 
-			auto condition_type = op.conditions[join_condition[filter_idx]].GetLHS().return_type;
+			auto condition_type = pushdown_column.storage_type;
 
 			// if the HT is small we can generate a complete "OR" filter
 			// but only if the join condition is equality.
@@ -1129,7 +1143,8 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				// min = max - single value
 				// generate a "one-sided" comparison filter for the LHS
 				// Note that this also works for equalities.
-				info.dynamic_filters->PushFilter(op, filter_col_idx, make_uniq<ConstantFilter>(cmp, min_val));
+				info.dynamic_filters->PushFilter(op, filter_col_idx,
+				                                 CreateComparisonExpressionFilter(cmp, min_val, condition_type));
 			} else {
 				// min != max - generate a range filter or bloom filter + optional range filter
 				// for non-equalities, the range must be half-open
@@ -1140,7 +1155,8 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 					CreateDynamicMinMaxFilter(
 					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val));
+					    CreateComparisonExpressionFilter(ExpressionType::COMPARE_GREATERTHANOREQUALTO, min_val,
+					                                     condition_type));
 					break;
 				}
 				default:
@@ -1150,9 +1166,9 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 				case ExpressionType::COMPARE_EQUAL:
 				case ExpressionType::COMPARE_LESSTHAN:
 				case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
-					CreateDynamicMinMaxFilter(
-					    op, info, filter_col_idx,
-					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val));
+					CreateDynamicMinMaxFilter(op, info, filter_col_idx,
+					                          CreateComparisonExpressionFilter(
+					                              ExpressionType::COMPARE_LESSTHANOREQUALTO, max_val, condition_type));
 					break;
 				}
 				default:

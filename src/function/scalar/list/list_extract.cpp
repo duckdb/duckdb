@@ -45,7 +45,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	auto offsets_entries = offsets.Values<int64_t>(count);
 
 	UnifiedVectorFormat child_data;
-	auto &child_vector = ListVector::GetEntry(list);
+	auto &child_vector = ListVector::GetChild(list);
 	auto child_count = ListVector::GetListSize(list);
 	child_vector.ToUnifiedFormat(child_count, child_data);
 

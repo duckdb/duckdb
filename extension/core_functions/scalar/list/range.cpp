@@ -222,7 +222,7 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 
 	// now construct the child vector of the list
 	ListVector::Reserve(result, total_size);
-	auto range_data = FlatVector::Writer<typename OP::TYPE>(ListVector::GetEntry(result), total_size);
+	auto range_data = FlatVector::Writer<typename OP::TYPE>(ListVector::GetChildMutable(result), total_size);
 	for (idx_t i = 0; i < args_size; i++) {
 		typename OP::TYPE start_value = info.StartListValue(i);
 		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);

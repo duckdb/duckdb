@@ -213,7 +213,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 
 	ListVector::Reserve(vector, list_size);
 	ListVector::SetListSize(vector, list_size);
-	auto &child_vector = ListVector::GetEntry(vector);
+	auto &child_vector = ListVector::GetChildMutable(vector);
 	ArrowToDuckDBConversion::SetValidityMask(child_vector, *array.children[0], chunk_offset, list_size, array.offset,
 	                                         NumericCast<int64_t>(start_offset));
 	auto &list_mask = FlatVector::ValidityMutable(vector);
@@ -270,7 +270,7 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 
 	ArrowToDuckDBConversion::SetValidityMask(vector, array, chunk_offset, size, parent_offset, nested_offset);
 
-	auto &child_vector = ArrayVector::GetEntry(vector);
+	auto &child_vector = ArrayVector::GetChildMutable(vector);
 	ArrowToDuckDBConversion::SetValidityMask(child_vector, *array.children[0], chunk_offset, child_count, array.offset,
 	                                         NumericCast<int64_t>(child_offset));
 
@@ -1102,7 +1102,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		auto val_mask = FlatVector::ValidityMutable(vector);
+		auto &val_mask = FlatVector::ValidityMutable(vector);
 		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDecimalInfo>();
 		auto bit_width = datetime_info.GetBitWidth();
 

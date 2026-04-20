@@ -394,7 +394,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	}
 	auto &vector = (Vector &)(*list_vector);
 	for (int i = 0; i < 123; i++) {
-		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
+		REQUIRE(ListVector::GetChild(vector).GetValue(i) == i);
 	}
 
 	duckdb_destroy_data_chunk(&chunk);
