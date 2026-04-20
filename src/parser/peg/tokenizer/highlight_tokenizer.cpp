@@ -1,4 +1,4 @@
-#include "parser/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 
 namespace duckdb {
 

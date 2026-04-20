@@ -1,7 +1,6 @@
 #include "duckdb/common/string_util.hpp"
-#include "parser/tokenizer/base_tokenizer.hpp"
-
-#include "keyword_helper.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 
 namespace duckdb {
 

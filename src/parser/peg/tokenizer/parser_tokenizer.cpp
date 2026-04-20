@@ -1,4 +1,4 @@
-#include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 
 namespace duckdb {
 
