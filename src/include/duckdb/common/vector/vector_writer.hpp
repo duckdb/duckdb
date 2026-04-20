@@ -19,6 +19,10 @@ struct VectorWriter {
 	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)),
 	      count(offset + count), current_idx(offset) {
 	}
+	~VectorWriter() {
+		// ensure that all values we said we were going to write have been written
+		D_ASSERT(Exception::UncaughtException() || current_idx == count);
+	}
 
 	void PushValue(const T &value) {
 		D_ASSERT(current_idx < count);
@@ -49,6 +53,9 @@ private:
 template <>
 struct VectorWriter<string_t> {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset);
+	~VectorWriter() {
+		D_ASSERT(Exception::UncaughtException() || current_idx == count);
+	}
 
 	inline const string_t &PushValue(string_t val) {
 		D_ASSERT(current_idx < count);
