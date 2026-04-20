@@ -25,7 +25,7 @@ struct CSVStateMachineOptions {
 	//! Quote used for columns that contain reserved characters, e.g '
 	CSVOption<char> quote = '\"';
 	//! Escape character to escape quote character
-	CSVOption<char> escape = '\0';
+	CSVOption<char> escape = '\"';
 	//! Comment character to skip a line
 	CSVOption<char> comment = '\0';
 	//! New Line separator
