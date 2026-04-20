@@ -47,6 +47,9 @@ public:
 	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type);
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
+	//! Record a connection-level default restored on Reset() (RESET search_path,
+	//! RESET ALL). Entries must be fully qualified.
+	DUCKDB_API void SetDefaultPaths(vector<CatalogSearchEntry> new_defaults);
 
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	const vector<CatalogSearchEntry> &GetSetPaths() const {
@@ -82,6 +85,8 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+	//! Connection-level defaults restored by Reset() (RESET search_path / RESET ALL).
+	vector<CatalogSearchEntry> default_paths;
 };
 
 } // namespace duckdb

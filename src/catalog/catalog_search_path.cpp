@@ -148,8 +148,17 @@ CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : CatalogSearchPa
 }
 
 void CatalogSearchPath::Reset() {
-	vector<CatalogSearchEntry> empty;
-	SetPathsInternal(empty);
+	// Restore to the connection-level defaults (empty if never configured).
+	SetPathsInternal(default_paths);
+}
+
+void CatalogSearchPath::SetDefaultPaths(vector<CatalogSearchEntry> new_defaults) {
+	for (auto &entry : new_defaults) {
+		if (entry.catalog.empty() || entry.schema.empty()) {
+			throw InternalException("SetDefaultPaths requires fully qualified entries");
+		}
+	}
+	default_paths = std::move(new_defaults);
 }
 
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {

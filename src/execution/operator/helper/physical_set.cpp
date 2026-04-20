@@ -20,29 +20,26 @@ void PhysicalSet::SetGenericVariable(ClientContext &context, idx_t setting_index
 
 void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const String &name,
                                        SetScope scope, const Value &value) {
-	if (extension_option.default_scope == SetScope::GLOBAL) {
-		if (scope == SetScope::LOCAL || scope == SetScope::SESSION) {
-			throw InvalidInputException("parameter \"%s\" cannot be set locally", name);
-		}
-		if (!context.transaction.IsAutoCommit()) {
-			throw InvalidInputException(
-			    "parameter \"%s\" is global and cannot be set inside a transaction", name);
-		}
-	} else if (extension_option.default_scope == SetScope::SESSION) {
-		if (scope == SetScope::LOCAL) {
-			throw InvalidInputException("parameter \"%s\" cannot be set locally", name);
-		}
+	// Resolve AUTOMATIC against the option's default_scope first so downstream
+	// checks and callbacks work off the effective scope, not the raw one.
+	SetScope effective_scope = scope == SetScope::AUTOMATIC ? extension_option.default_scope : scope;
+
+	// Compatibility: a GLOBAL-only option can't be set locally/session, and a
+	// SESSION-only option can't be set locally.
+	if ((extension_option.default_scope == SetScope::GLOBAL && effective_scope != SetScope::GLOBAL) ||
+	    (extension_option.default_scope == SetScope::SESSION && effective_scope == SetScope::LOCAL)) {
+		throw InvalidInputException("parameter \"%s\" cannot be set locally", name);
 	}
-	auto &target_type = extension_option.type;
-	Value target_value = value.CastAs(context, target_type);
+	// Global writes are DB-wide and shouldn't land mid-transaction.
+	if (effective_scope == SetScope::GLOBAL && !context.transaction.IsAutoCommit()) {
+		throw InvalidInputException("parameter \"%s\" is global and cannot be set inside a transaction", name);
+	}
+
+	Value target_value = value.CastAs(context, extension_option.type);
 	if (extension_option.set_function) {
-		extension_option.set_function(context, scope, target_value);
+		extension_option.set_function(context, effective_scope, target_value);
 	}
-	if (scope == SetScope::AUTOMATIC) {
-		scope = extension_option.default_scope;
-	}
-	auto setting_index = extension_option.setting_index.GetIndex();
-	SetGenericVariable(context, setting_index, scope, std::move(target_value));
+	SetGenericVariable(context, extension_option.setting_index.GetIndex(), effective_scope, std::move(target_value));
 }
 
 void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetScope scope, const Value &value) {
@@ -54,11 +51,6 @@ void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetSco
 		throw InvalidInputException("SET LOCAL can only be used in transaction blocks");
 	}
 	auto option = DBConfig::GetOptionByName(name);
-	// Invoke the pre-SET observer before any storage change so it can snapshot
-	// the current value for transaction rollback.
-	if (context.setting_change_handler) {
-		context.setting_change_handler(context, string(name.data(), name.size()), scope);
-	}
 	if (!option) {
 		ExtensionOption extension_option;
 		if (!config.TryGetExtensionOption(name, extension_option)) {
@@ -67,8 +59,16 @@ void PhysicalSet::SetVariable(ClientContext &context, const String &name, SetSco
 				throw InvalidInputException("Extension parameter %s was not found after autoloading", name);
 			}
 		}
+		// Invoke the pre-SET observer after resolution so the handler only sees
+		// valid option names and can safely snapshot the current value.
+		if (context.setting_change_handler) {
+			context.setting_change_handler(context, string(name.data(), name.size()), scope);
+		}
 		SetExtensionVariable(context, extension_option, name, scope, value);
 		return;
+	}
+	if (context.setting_change_handler) {
+		context.setting_change_handler(context, string(name.data(), name.size()), scope);
 	}
 	SetScope variable_scope = GetSettingScope(*option, scope);
 	Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
