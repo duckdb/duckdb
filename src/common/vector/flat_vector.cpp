@@ -421,7 +421,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 
 	// Set all child entries to NULL.
 	if (internal_type == PhysicalType::ARRAY) {
-		auto &child = ArrayVector::GetEntry(vector);
+		auto &child = ArrayVector::GetChildMutable(vector);
 		auto array_size = ArrayType::GetSize(type);
 		auto child_offset = idx * array_size;
 		for (idx_t i = 0; i < array_size; i++) {

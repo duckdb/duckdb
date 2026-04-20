@@ -269,7 +269,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 
 	// Iterate through them using a single SV
 	sel_t s = 0;
-	SelectionVector sel(&s);
+	SelectionVector sel(&s, 1);
 	auto &arg_cursor = aggr_state.arg_cursor;
 	arg_cursor.Reset();
 	// This doesn't work for STRUCTs because the SV

@@ -228,7 +228,7 @@ struct GenericListType {
 	}
 
 	static void AssignResult(Vector &result, idx_t i, GenericListType<CHILD_TYPE> value) {
-		auto &child = ListVector::GetEntry(result);
+		auto &child = ListVector::GetChildMutable(result);
 		auto current_size = ListVector::GetListSize(result);
 
 		// reserve space in the child element

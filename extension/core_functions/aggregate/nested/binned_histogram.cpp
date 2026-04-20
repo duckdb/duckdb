@@ -52,7 +52,7 @@ struct HistogramBinState {
 		}
 		auto bin_list = bin_entry.GetValue();
 
-		auto &bin_child = ListVector::GetEntry(bin_vector);
+		auto &bin_child = ListVector::GetChildMutable(bin_vector);
 		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
 		auto extra_state = OP::CreateExtraState(bin_count);

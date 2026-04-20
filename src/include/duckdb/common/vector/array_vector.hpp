@@ -59,9 +59,14 @@ private:
 
 struct ArrayVector {
 	//! Gets a reference to the underlying child-vector of an array
-	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	[[deprecated("Use ArrayVector::GetChild instead")]] DUCKDB_API static const Vector &GetEntry(const Vector &vector);
 	//! Gets a reference to the underlying child-vector of an array
-	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	[[deprecated("Use ArrayVector::GetChild or ArrayVector::GetChildMutable instead")]] DUCKDB_API static Vector &
+	GetEntry(Vector &vector);
+	//! Gets a reference to the underlying child-vector of an array
+	DUCKDB_API static const Vector &GetChild(const Vector &vector);
+	//! Gets a mutable reference to the underlying child-vector of an array
+	DUCKDB_API static Vector &GetChildMutable(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
 	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
 

@@ -1,4 +1,5 @@
 #pragma once
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/arena_linked_list.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -424,6 +425,47 @@ public:
 				if (result[i] == '\\' && i + 1 < result.size()) {
 					i++;
 					switch (result[i]) {
+					case 'b':
+						escaped_result += '\b';
+						break;
+					case 'f':
+						escaped_result += '\f';
+						break;
+					case '0':
+					case '1':
+					case '2':
+					case '3':
+					case '4':
+					case '5':
+					case '6':
+					case '7': {
+						size_t oct_start = i;
+						size_t oct_end = oct_start + 1;
+						while (oct_end < result.size() && oct_end - oct_start < 3 && result[oct_end] >= '0' &&
+						       result[oct_end] <= '7') {
+							oct_end++;
+						}
+						string oct_str = result.substr(oct_start, oct_end - oct_start);
+						escaped_result += static_cast<char>(strtoul(oct_str.c_str(), nullptr, 8));
+						i = oct_end - 1;
+						break;
+					}
+					case 'x': {
+						size_t hex_start = i + 1;
+						size_t hex_end = hex_start;
+						while (hex_end < result.size() && hex_end - hex_start < 2 &&
+						       StringUtil::CharacterIsHex(result[hex_end])) {
+							hex_end++;
+						}
+						if (hex_end > hex_start) {
+							string hex_str = result.substr(hex_start, hex_end - hex_start);
+							escaped_result += static_cast<char>(strtoul(hex_str.c_str(), nullptr, 16));
+							i = hex_end - 1;
+						} else {
+							escaped_result += 'x';
+						}
+						break;
+					}
 					case 'n':
 						escaped_result += '\n';
 						break;
@@ -446,6 +488,17 @@ public:
 				} else {
 					escaped_result += result[i];
 				}
+			}
+			if (escaped_result.find('\0') != string::npos) {
+				throw ParserException("Null character not permitted in escape string literal");
+			}
+			UnicodeInvalidReason reason;
+			size_t pos;
+			auto utf_validity = Utf8Proc::Analyze(escaped_result.c_str(), escaped_result.size(), &reason, &pos);
+			if (utf_validity == UnicodeType::INVALID) {
+				const char *reason_str =
+				    reason == UnicodeInvalidReason::BYTE_MISMATCH ? "byte mismatch" : "invalid unicode codepoint";
+				throw ParserException("Invalid UTF-8 in escape string literal at byte offset %d: %s", pos, reason_str);
 			}
 			return make_uniq<ConstantExpression>(Value(escaped_result));
 		}

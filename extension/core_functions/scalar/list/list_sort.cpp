@@ -120,7 +120,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(sort_result_vec);
-	auto &child_vector = ListVector::GetEntry(sort_result_vec);
+	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
 	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
@@ -231,7 +231,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		if (info.is_grade_up) {
-			auto &result_entry = ListVector::GetEntry(result);
+			auto &result_entry = ListVector::GetChildMutable(result);
 			auto result_data = FlatVector::GetData<list_entry_t>(result);
 			for (idx_t i = 0; i < count; i++) {
 				if (!result_validity.RowIsValid(i)) {

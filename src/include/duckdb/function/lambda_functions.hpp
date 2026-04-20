@@ -117,7 +117,7 @@ public:
 			// get the list column entries
 			list_column.ToUnifiedFormat(row_count, list_column_format);
 			list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_column_format);
-			child_vector = &ListVector::GetEntry(list_column);
+			child_vector = &ListVector::GetChildMutable(list_column);
 
 			// get the lambda column data for all other input vectors
 			column_infos = LambdaFunctions::GetColumnInfo(args, row_count);

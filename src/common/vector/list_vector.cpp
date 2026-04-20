@@ -238,7 +238,7 @@ T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
-		return ListVector::GetEntry(child);
+		return GetEntryInternal<T>(child);
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -247,12 +247,20 @@ T &ListVector::GetEntryInternal(T &vector) {
 	return vector.GetBufferRef()->template Cast<VectorListBuffer>().GetChild();
 }
 
-const Vector &ListVector::GetEntry(const Vector &vector) {
+const Vector &ListVector::GetChild(const Vector &vector) {
 	return GetEntryInternal<const Vector>(vector);
 }
 
-Vector &ListVector::GetEntry(Vector &vector) {
+Vector &ListVector::GetChildMutable(Vector &vector) {
 	return GetEntryInternal<Vector>(vector);
+}
+
+const Vector &ListVector::GetEntry(const Vector &vector) {
+	return GetChild(vector);
+}
+
+Vector &ListVector::GetEntry(Vector &vector) {
+	return GetChildMutable(vector);
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {

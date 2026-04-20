@@ -11,7 +11,6 @@
 #include "parquet_metadata.hpp"
 #include "parquet_statistics.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -53,6 +52,10 @@
 #include "parquet_types.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift_tools.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -824,7 +827,7 @@ private:
 
 	unique_ptr<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>> protocol;
 	optional_ptr<Allocator> allocator;
-	unique_ptr<ConstantFilter> filter;
+	unique_ptr<ExpressionFilter> filter;
 };
 
 template <>
@@ -861,9 +864,11 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	auto transport = duckdb_base_std::make_shared<ThriftFileTransport>(reader.GetHandle(), false);
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
-	filter = make_uniq<ConstantFilter>(
-	    ExpressionType::COMPARE_EQUAL,
-	    probe_constant.CastAs(context, reader.GetColumns()[probe_column_idx.GetIndex()].type));
+	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
+	auto comparison = make_uniq<BoundComparisonExpression>(
+	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(probe_column_name, column_type, 0),
+	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
+	filter = make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
 idx_t ParquetBloomProbeProcessor::TotalRowCount(ParquetReader &reader) {
@@ -914,7 +919,7 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
                                              ParquetReader &reader) {
 	auto count = processor.TotalRowCount(reader);
 	auto *result_data = FlatVector::GetDataMutable<list_entry_t>(output);
-	auto &result_struct = ListVector::GetEntry(output);
+	auto &result_struct = ListVector::GetChildMutable(output);
 	auto &result_struct_entries = StructVector::GetEntries(result_struct);
 
 	ListVector::SetListSize(output, count);
