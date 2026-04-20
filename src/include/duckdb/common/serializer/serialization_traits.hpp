@@ -2,6 +2,8 @@
 #include <type_traits>
 #include <cstdint>
 #include <atomic>
+#include <optional>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -184,6 +186,14 @@ struct is_atomic<std::atomic<T>> : std::true_type {
 	typedef T TYPE;
 };
 
+template <typename T>
+struct is_optional : std::false_type {};
+
+template <typename T>
+struct is_optional<std::optional<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
 // NOLINTEND
 
 struct SerializationDefaultValue {
@@ -337,6 +347,16 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type &value) {
 		return !value.IsValid();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_optional<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_optional<T>::value, T>::type &value) {
+		return !value.has_value();
 	}
 
 	template <typename T = void>

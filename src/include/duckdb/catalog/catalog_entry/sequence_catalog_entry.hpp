@@ -12,6 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include <optional>
 
 namespace duckdb {
 class DuckTransaction;
@@ -31,9 +32,7 @@ struct SequenceData {
 	//! The sequence counter
 	int64_t counter;
 	//! The most recently returned value
-	int64_t last_value;
-	//! Whether last_value has been set (i.e. nextval has been called)
-	bool has_last_value;
+	std::optional<int64_t> last_value;
 	//! The increment value
 	int64_t increment;
 	//! The start_value of the sequence
@@ -63,7 +62,7 @@ public:
 	SequenceData GetData() const;
 	int64_t CurrentValue();
 	int64_t NextValue(DuckTransaction &transaction);
-	void ReplayValue(uint64_t usage_count, int64_t counter, bool has_last_value, int64_t last_value);
+	void ReplayValue(uint64_t usage_count, int64_t counter, std::optional<int64_t> last_value);
 
 	string ToSQL() const override;
 

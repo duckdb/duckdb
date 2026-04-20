@@ -570,8 +570,7 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &seri
 	auto &seq_info = info->Cast<CreateSequenceInfo>();
 	// we only support writing last_value from version 2.0.0 onwards
 	if (db.GetStorageManager().GetStorageVersion() < 8) {
-		seq_info.has_last_value = false;
-		seq_info.last_value = 0;
+		seq_info.last_value = std::nullopt;
 	}
 	serializer.WriteProperty(100, "sequence", info.get());
 }
