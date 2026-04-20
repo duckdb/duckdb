@@ -2,33 +2,51 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
 
-void ConstantVector::SetNull(Vector &vector) {
-	auto &type = vector.GetType();
+buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
+	auto &type = value.type();
 	auto internal_type = type.InternalType();
-	// ensure the buffer supports validity masks
-	// buffers like SequenceBuffer/DictionaryBuffer do not have validity masks
-	bool needs_new_buffer = !vector.GetBufferRef();
+	buffer_ptr<VectorBuffer> result;
+	if (internal_type == PhysicalType::STRUCT) {
+		result = make_buffer<VectorStructBuffer>(value.type(), 1ULL);
+	} else if (internal_type == PhysicalType::LIST) {
+		result = make_buffer<VectorListBuffer>(1ULL, value.type());
+	} else if (internal_type == PhysicalType::ARRAY) {
+		result = make_buffer<VectorArrayBuffer>(value.type());
+	} else if (internal_type == PhysicalType::VARCHAR) {
+		result = make_buffer<VectorStringBuffer>(1);
+	} else {
+		result = make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(internal_type));
+	}
+	result->SetValue(type, 0, value);
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	return result;
+}
+
+void ConstantVector::Reference(Vector &vector, const Value &value) {
+	D_ASSERT(vector.GetType() == value.type());
+	vector.SetBuffer(CreateConstantBuffer(value));
+}
+
+void ConstantVector::SetNull(Vector &vector) {
+	// try to re-use the buffer if possible
+	auto &buffer_ref = vector.GetBufferRef();
+	bool needs_new_buffer = !buffer_ref;
 	if (!needs_new_buffer) {
-		auto buffer_type = vector.Buffer().GetBufferType();
+		auto buffer_type = buffer_ref->GetBufferType();
 		needs_new_buffer =
 		    (buffer_type != VectorBufferType::STANDARD_BUFFER && buffer_type != VectorBufferType::STRUCT_BUFFER &&
 		     buffer_type != VectorBufferType::ARRAY_BUFFER && buffer_type != VectorBufferType::LIST_BUFFER &&
 		     buffer_type != VectorBufferType::STRING_BUFFER);
 	}
 	if (needs_new_buffer) {
-		if (internal_type == PhysicalType::STRUCT) {
-			vector.SetBuffer(make_buffer<VectorStructBuffer>(type, 1));
-		} else if (internal_type == PhysicalType::ARRAY) {
-			vector.SetBuffer(make_buffer<VectorArrayBuffer>(type, 1));
-		} else if (internal_type == PhysicalType::LIST) {
-			vector.SetBuffer(VectorBuffer::CreateConstantVector(type));
-		} else {
-			vector.SetBuffer(VectorBuffer::CreateConstantVector(internal_type));
-		}
+		// we cannot re-use the buffer - refer a null-value which has code necessary to create a new buffer
+		Reference(vector, Value(vector.GetType()));
+		return;
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 	SetNull(vector, true);

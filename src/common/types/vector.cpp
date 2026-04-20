@@ -106,31 +106,7 @@ Vector Vector::Ref(const Vector &other) {
 }
 
 void Vector::Reference(const Value &value) {
-	D_ASSERT(GetType().id() == value.type().id());
-	auto internal_type = value.type().InternalType();
-	if (internal_type == PhysicalType::STRUCT) {
-		auto &child_types = StructType::GetChildTypes(value.type());
-		vector<Vector> child_vectors;
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
-			                                          : StructValue::GetChildren(value)[i]);
-		}
-		auto struct_buffer = make_buffer<VectorStructBuffer>(std::move(child_vectors), 1ULL);
-		buffer = std::move(struct_buffer);
-		if (value.IsNull()) {
-			SetValue(0, value);
-		}
-	} else if (internal_type == PhysicalType::LIST) {
-		buffer = VectorBuffer::CreateConstantVector(value.type());
-		SetValue(0, value);
-	} else if (internal_type == PhysicalType::ARRAY) {
-		buffer = make_buffer<VectorArrayBuffer>(value.type());
-		SetValue(0, value);
-	} else {
-		buffer = VectorBuffer::CreateConstantVector(value.type());
-		SetValue(0, value);
-	}
-	SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::Reference(*this, value);
 }
 
 void Vector::Reference(const Vector &other) {
