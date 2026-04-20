@@ -15,7 +15,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
@@ -557,9 +556,9 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// if this is not a dense range we can push an optional filter for zone-map pruning
-	auto optional_filter = make_uniq<OptionalFilter>();
-	auto in_filter = make_uniq<InFilter>(std::move(in_list));
-	optional_filter->child_filter = std::move(in_filter);
+	auto in_expr =
+	    ExpressionFilter::CreateInExpression(CreateFilterTargetExpression(*func.children[0]), std::move(in_list));
+	auto optional_filter = make_uniq<OptionalFilter>(make_uniq<ExpressionFilter>(std::move(in_expr)));
 	table_filters.PushFilter(proj_index, std::move(optional_filter));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }

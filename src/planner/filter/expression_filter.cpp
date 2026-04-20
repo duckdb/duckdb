@@ -34,6 +34,15 @@ ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, con
 	return filter.Cast<ExpressionFilter>();
 }
 
+unique_ptr<Expression> ExpressionFilter::CreateInExpression(unique_ptr<Expression> column, vector<Value> values) {
+	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
+	result->children.push_back(std::move(column));
+	for (auto &value : values) {
+		result->children.push_back(make_uniq<BoundConstantExpression>(std::move(value)));
+	}
+	return result;
+}
+
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
 	ExpressionExecutor executor(context, *expr);
 	return EvaluateWithConstant(executor, val);
