@@ -564,6 +564,26 @@ vector<string> PEGTransformerFactory::TransformColumnAliases(PEGTransformer &tra
 	return result;
 }
 
+static void ApplyTableAlias(TableRef &ref, TableAlias alias) {
+	ref.alias = std::move(alias.name);
+	ref.column_name_alias = std::move(alias.column_name_alias);
+}
+
+// TableAliasColon ("<alias>(col, ...):") and the trailing TableAlias form
+// ("AS <alias>(col, ...)") are mutually exclusive; specifying both on the same
+// table reference is a user error regardless of which TableRef shape surfaces it.
+static void ApplyTableAliasColonAndAlias(PEGTransformer &transformer, TableRef &ref, OptionalParseResult &colon_opt,
+                                         OptionalParseResult &alias_opt, const string &ref_description) {
+	if (colon_opt.HasResult() && alias_opt.HasResult()) {
+		throw ParserException("Table reference %s cannot have two aliases", ref_description);
+	}
+	if (colon_opt.HasResult()) {
+		ApplyTableAlias(ref, transformer.Transform<TableAlias>(colon_opt.GetResult()));
+	} else if (alias_opt.HasResult()) {
+		ApplyTableAlias(ref, transformer.Transform<TableAlias>(alias_opt.GetResult()));
+	}
+}
+
 static bool IsConditionlessJoin(const JoinRef &join) {
 	if (join.condition || !join.using_columns.empty()) {
 		return false;
@@ -952,18 +972,16 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionLateralOpt(PEG
 	                                  qualified_table_function.name, std::move(table_function_arguments));
 	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(4);
 	if (table_alias_opt.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
-		result->alias = table_alias.name;
-		result->column_name_alias = table_alias.column_name_alias;
+		ApplyTableAlias(*result, transformer.Transform<TableAlias>(table_alias_opt.GetResult()));
 	}
 	return std::move(result);
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
+	// TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality?
+	// SampleClause?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-
-	auto table_alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 
 	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto table_function_arguments =
@@ -975,14 +993,21 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformTableFunctionAliasColon(PEG
 	result->function =
 	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
 	                                  qualified_table_function.name, std::move(table_function_arguments));
-	result->alias = table_alias;
+	ApplyTableAlias(*result, transformer.Transform<TableAlias>(list_pr.Child<ListParseResult>(0)));
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer, ParseResult &parse_result) {
+TableAlias PEGTransformerFactory::TransformTableAliasColon(PEGTransformer &transformer, ParseResult &parse_result) {
+	// TableAliasColon <- ColIdOrString ColumnAliases? ':'
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	TableAlias result;
+	result.name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
+	auto &column_aliases_opt = list_pr.Child<OptionalParseResult>(1);
+	if (column_aliases_opt.HasResult()) {
+		result.column_name_alias = transformer.Transform<vector<string>>(column_aliases_opt.GetResult());
+	}
+	return result;
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransformer &transformer,
@@ -1011,14 +1036,13 @@ QualifiedName PEGTransformerFactory::TransformQualifiedTableFunction(PEGTransfor
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformTableSubquery(PEGTransformer &transformer,
                                                                    ParseResult &parse_result) {
+	// TableSubquery <- TableAliasColon? Lateral? SubqueryReference TableAlias?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(1));
-	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(2);
-	if (table_alias_opt.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
-		subquery_reference->alias = table_alias.name;
-		subquery_reference->column_name_alias = table_alias.column_name_alias;
-	}
+	auto subquery_reference = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(2));
+	auto &table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
+	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(3);
+	ApplyTableAliasColonAndAlias(transformer, *subquery_reference, table_alias_colon_opt, table_alias_opt,
+	                             subquery_reference->ToString());
 	return subquery_reference;
 }
 
@@ -1033,21 +1057,12 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformSubqueryReference(PEGTransf
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer &transformer,
                                                                   ParseResult &parse_result) {
+	// BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(1));
 	auto &table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
-	if (table_alias_colon_opt.HasResult()) {
-		result->alias = transformer.Transform<string>(table_alias_colon_opt.GetResult());
-	}
 	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(2);
-	if (table_alias_opt.HasResult() && table_alias_colon_opt.HasResult()) {
-		throw ParserException("Table reference %s cannot have two aliases", result->ToString());
-	}
-	if (table_alias_opt.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
-		result->alias = table_alias.name;
-		result->column_name_alias = table_alias.column_name_alias;
-	}
+	ApplyTableAliasColonAndAlias(transformer, *result, table_alias_colon_opt, table_alias_opt, result->ToString());
 	transformer.TransformOptional<unique_ptr<AtClause>>(list_pr, 3, result->at_clause);
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 4, result->sample);
 	return std::move(result);
@@ -1055,14 +1070,12 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableRef(PEGTransformer
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransformer &transformer,
                                                                     ParseResult &parse_result) {
+	// ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	auto table_ref = transformer.Transform<unique_ptr<TableRef>>(extract_parens);
 	auto &table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
 	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(2);
-	if (table_alias_colon_opt.HasResult() && table_alias_opt.HasResult()) {
-		throw ParserException("Table reference %s cannot have two aliases", table_ref->ToString());
-	}
 	if (!table_alias_colon_opt.HasResult() && !table_alias_opt.HasResult()) {
 		return table_ref;
 	}
@@ -1072,14 +1085,7 @@ unique_ptr<TableRef> PEGTransformerFactory::TransformParensTableRef(PEGTransform
 	select_node->from_table = std::move(table_ref);
 	select_statement->node = std::move(select_node);
 	auto subquery = make_uniq<SubqueryRef>(std::move(select_statement));
-	if (table_alias_colon_opt.HasResult()) {
-		subquery->alias = transformer.Transform<string>(table_alias_colon_opt.GetResult());
-	}
-	if (table_alias_opt.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(table_alias_opt.GetResult());
-		subquery->alias = table_alias.name;
-		subquery->column_name_alias = table_alias.column_name_alias;
-	}
+	ApplyTableAliasColonAndAlias(transformer, *subquery, table_alias_colon_opt, table_alias_opt, subquery->ToString());
 	transformer.TransformOptional<unique_ptr<SampleOptions>>(list_pr, 3, subquery->sample);
 	return std::move(subquery);
 }
@@ -1105,16 +1111,15 @@ string PEGTransformerFactory::TransformAtUnit(PEGTransformer &transformer, Parse
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformValuesRef(PEGTransformer &transformer, ParseResult &parse_result) {
+	// ValuesRef <- TableAliasColon? ValuesClause TableAlias?
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto values_select_statement =
-	    transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(0));
+	    transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(1));
 	auto subquery_ref = make_uniq<SubqueryRef>(std::move(values_select_statement));
-	auto &opt_alias = list_pr.Child<OptionalParseResult>(1);
-	if (opt_alias.HasResult()) {
-		auto table_alias = transformer.Transform<TableAlias>(opt_alias.GetResult());
-		subquery_ref->alias = table_alias.name;
-		subquery_ref->column_name_alias = table_alias.column_name_alias;
-	}
+	auto &table_alias_colon_opt = list_pr.Child<OptionalParseResult>(0);
+	auto &table_alias_opt = list_pr.Child<OptionalParseResult>(2);
+	ApplyTableAliasColonAndAlias(transformer, *subquery_ref, table_alias_colon_opt, table_alias_opt,
+	                             subquery_ref->ToString());
 	return std::move(subquery_ref);
 }
 

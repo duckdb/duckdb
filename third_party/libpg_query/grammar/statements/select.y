@@ -1061,65 +1061,24 @@ from_list_opt_comma:
 			| from_list ','							{ $$ = $1; }
 		;
 
-alias_prefix_colon_clause:
-            ColIdOrString SINGLE_COLON
-            {
-                $$ = makeNode(PGAlias);
-                $$->aliasname = $1;
-            }
-    ;
-
-alias_column_prefix_clause:
-            func_table SINGLE_COLON
-            {
-                PGRangeFunction *n = (PGRangeFunction *) $1;
-                if (n->is_rowsfrom || n->ordinality) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-                if (list_length(n->functions) != 1) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-                auto func_data = (PGList *) linitial(n->functions);
-                if (!func_data || list_length(func_data) != 2) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-                auto func_node = (PGNode *) linitial(func_data);
-                if (!func_node || !IsA(func_node, PGFuncCall)) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-                auto func = (PGFuncCall *) func_node;
-                if (func->agg_order || func->agg_filter || func->agg_within_group || func->agg_star || func->agg_distinct ||
-                    func->func_variadic || func->over || func->export_state ||
-                    func->agg_ignore_nulls != PGIgnoreNulls::PG_DEFAULT_NULLS) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-                if (list_length(func->funcname) != 1 || !IsA(linitial(func->funcname), PGString)) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-
-                auto alias = makeNode(PGAlias);
-                alias->aliasname = pstrdup(strVal(linitial(func->funcname)));
-
-                if (!func->args || list_length(func->args) == 0) {
-                    parser_yyerror("syntax error at or near \":\"");
-                }
-
-                PGList *colnames = NIL;
-                for (auto arg_cell = func->args ? func->args->head : nullptr; arg_cell != nullptr; arg_cell = arg_cell->next) {
-                    auto arg = (PGNode *) arg_cell->data.ptr_value;
-                    if (!arg || !IsA(arg, PGColumnRef)) {
-                        parser_yyerror("syntax error at or near \":\"");
-                    }
-                    auto colref = (PGColumnRef *) arg;
-                    if (list_length(colref->fields) != 1 || !IsA(linitial(colref->fields), PGString)) {
-                        parser_yyerror("syntax error at or near \":\"");
-                    }
-                    colnames = lappend(colnames, makeString(pstrdup(strVal(linitial(colref->fields)))));
-                }
-                alias->colnames = colnames;
-                $$ = alias;
-            }
-    ;
+/*
+ * Prefix alias clause: "<alias>:" or "<alias>(<col>, ...):".
+ * The column-list form reuses the func_table production to avoid a
+ * reduce/reduce conflict between the alias prefix and an actual table
+ * function; makePrefixAliasFromFuncTable validates that the parsed shape
+ * is exactly IDENT(col, col, ...) with no function-call modifiers.
+ */
+prefix_alias_clause:
+			ColIdOrString SINGLE_COLON
+				{
+					$$ = makeNode(PGAlias);
+					$$->aliasname = $1;
+				}
+			| func_table SINGLE_COLON
+				{
+					$$ = makePrefixAliasFromFuncTable((PGRangeFunction *) $1, yyscanner);
+				}
+		;
 
 
 /*
@@ -1132,59 +1091,43 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 					$1->sample = $4;
 					$$ = (PGNode *) $1;
 				}
-	            | func_table func_alias_clause opt_tablesample_clause
-					{
-						PGRangeFunction *n = (PGRangeFunction *) $1;
-						n->alias = (PGAlias*) linitial($2);
-						n->coldeflist = (PGList*) lsecond($2);
-						n->sample = $3;
-						$$ = (PGNode *) n;
-					}
-			     | alias_prefix_colon_clause func_table opt_tablesample_clause
-	                    {
-	                        PGRangeFunction *n = (PGRangeFunction *) $2;
-	                        n->alias = $1;
-	                        n->sample = $3;
-	                        $$ = (PGNode *) n;
-	                    }
-			| alias_column_prefix_clause relation_expr opt_at_clause opt_tablesample_clause
-	                {
+			| func_table func_alias_clause opt_tablesample_clause
+				{
+					PGRangeFunction *n = (PGRangeFunction *) $1;
+					n->alias = (PGAlias *) linitial($2);
+					n->coldeflist = (PGList *) lsecond($2);
+					n->sample = $3;
+					$$ = (PGNode *) n;
+				}
+			| prefix_alias_clause func_table opt_tablesample_clause
+				{
+					PGRangeFunction *n = (PGRangeFunction *) $2;
+					n->alias = $1;
+					n->sample = $3;
+					$$ = (PGNode *) n;
+				}
+			| prefix_alias_clause relation_expr opt_at_clause opt_tablesample_clause
+				{
 					$2->at_clause = $3;
-	                    $2->alias = $1;
-	                    $2->sample = $4;
-	                    $$ = (PGNode *) $2;
-	                }
-			| alias_prefix_colon_clause relation_expr opt_at_clause opt_tablesample_clause
-	                {
-					$2->at_clause = $3;
-	                    $2->alias = $1;
-	                    $2->sample = $4;
-	                    $$ = (PGNode *) $2;
-	                }
-			    | alias_column_prefix_clause func_table opt_tablesample_clause
-	                {
-	                    PGRangeFunction *n = (PGRangeFunction *) $2;
-	                    n->alias = $1;
-	                    n->sample = $3;
-	                    $$ = (PGNode *) n;
-	                }
-			    |
-	            values_clause_opt_comma alias_clause opt_tablesample_clause
-	                {
-	                    PGRangeSubselect *n = makeNode(PGRangeSubselect);
-	                    n->lateral = false;
-                    n->subquery = $1;
-                    n->alias = $2;
-                    n->sample = $3;
-                    $$ = (PGNode *) n;
-                }
-
+					$2->alias = $1;
+					$2->sample = $4;
+					$$ = (PGNode *) $2;
+				}
+			| values_clause_opt_comma alias_clause opt_tablesample_clause
+				{
+					PGRangeSubselect *n = makeNode(PGRangeSubselect);
+					n->lateral = false;
+					n->subquery = $1;
+					n->alias = $2;
+					n->sample = $3;
+					$$ = (PGNode *) n;
+				}
 			| LATERAL_P func_table func_alias_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $2;
 					n->lateral = true;
-					n->alias = (PGAlias*) linitial($3);
-					n->coldeflist = (PGList*) lsecond($3);
+					n->alias = (PGAlias *) linitial($3);
+					n->coldeflist = (PGList *) lsecond($3);
 					$$ = (PGNode *) n;
 				}
 			| select_with_parens opt_alias_clause opt_tablesample_clause
@@ -1196,16 +1139,7 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
-			| alias_prefix_colon_clause select_with_parens opt_tablesample_clause
-				{
-					PGRangeSubselect *n = makeNode(PGRangeSubselect);
-					n->lateral = false;
-					n->subquery = $2;
-					n->alias = $1;
-					n->sample = $3;
-					$$ = (PGNode *) n;
-				}
-			| alias_column_prefix_clause select_with_parens opt_tablesample_clause
+			| prefix_alias_clause select_with_parens opt_tablesample_clause
 				{
 					PGRangeSubselect *n = makeNode(PGRangeSubselect);
 					n->lateral = false;
@@ -1232,16 +1166,11 @@ table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 					$2->alias = $4;
 					$$ = (PGNode *) $2;
 				}
-            | alias_prefix_colon_clause '(' joined_table ')'
-                {
-                    $3->alias = $1;
-                    $$ = (PGNode *) $3;
-                }
-            | alias_column_prefix_clause '(' joined_table ')'
-                {
-                    $3->alias = $1;
-                    $$ = (PGNode *) $3;
-                }
+			| prefix_alias_clause '(' joined_table ')'
+				{
+					$3->alias = $1;
+					$$ = (PGNode *) $3;
+				}
 			| table_ref PIVOT '(' target_list_opt_comma FOR pivot_value_list opt_pivot_group_by ')' opt_alias_clause
 				{
 					PGPivotExpr *n = makeNode(PGPivotExpr);

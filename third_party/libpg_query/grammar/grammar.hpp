@@ -217,3 +217,4 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 			   bool *no_inherit, core_yyscan_t yyscanner);
 static PGNode *makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query);
 static PGNode *makeLimitPercent(PGNode *limit_percent);
+static PGAlias *makePrefixAliasFromFuncTable(PGRangeFunction *n, core_yyscan_t yyscanner);

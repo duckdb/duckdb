@@ -148,3 +148,12 @@ query I
 select i from j(x) : (a join c using(i))
 ----
 42
+
+# complex case: join of a table-function, a subquery and a base table, each with prefix alias(column)
+query III
+select r.x, s.y, tb.z
+from r(x) : range(1, 2)
+join s(y) : (select i from a) on true
+join tb(z) : c on true
+----
+1	42	42
