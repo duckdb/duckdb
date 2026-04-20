@@ -207,3 +207,18 @@ order by all;
 ----
 2.0
 5.0
+
+query II
+explain
+select
+  avg(avg(base_salary)) over (
+    partition by
+      dept_name
+  )
+from
+  foo
+group by
+  dept_name
+order by all;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
