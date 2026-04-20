@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
@@ -58,6 +59,7 @@ void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
 	D_ASSERT(filters.HasFilters());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
+	adaptive_filter->SetLogger(Logger::Get(context));
 	filter_list.reserve(filters.FilterCount());
 	for (auto &entry : filters) {
 		filter_list.emplace_back(context, entry.GetIndex(), column_ids, entry.Filter());

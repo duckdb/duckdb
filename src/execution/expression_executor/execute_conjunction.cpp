@@ -1,5 +1,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
@@ -10,6 +11,9 @@ namespace duckdb {
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
+		if (HasContext()) {
+			adaptive_filter->SetLogger(Logger::Get(GetContext()));
+		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
@@ -75,8 +79,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, true_sel, temp_false.get());
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
+			                      current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
 				// move failing tuples into the false_sel
@@ -116,8 +120,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(),
-			                      current_sel, current_count, temp_true.get(), false_sel);
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
+			                      current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
 					// tuples passed, move them into the actual result vector

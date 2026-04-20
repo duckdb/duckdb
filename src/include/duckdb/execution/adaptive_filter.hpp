@@ -11,9 +11,12 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/chrono.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
+
+class Logger;
 
 struct AdaptiveFilterState {
 	time_point<high_resolution_clock> start_time;
@@ -41,6 +44,11 @@ public:
 		return config;
 	}
 
+	void SetLogger(Logger &logger, string file_path = "");
+
+private:
+	void LogEvent(const char *event, const vector<pair<string, string>> &info);
+
 private:
 	AdaptiveFilterConfiguration config;
 	//! used for adaptive expression reordering
@@ -54,5 +62,7 @@ private:
 	bool observe = false;
 	bool warmup = false;
 	RandomEngine generator;
+	optional_ptr<Logger> logger;
+	string log_file_path;
 };
 } // namespace duckdb

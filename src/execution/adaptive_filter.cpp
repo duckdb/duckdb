@@ -1,8 +1,10 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 
@@ -39,6 +41,24 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilt
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
+void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path) {
+	logger = &logger_p;
+	log_file_path = std::move(file_path);
+	LogEvent("INIT", {{"source", "initial"}});
+}
+
+void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, string>> &info) {
+	if (!logger) {
+		return;
+	}
+	if (!logger->ShouldLog(AdaptiveFilterLogType::NAME, AdaptiveFilterLogType::LEVEL)) {
+		return;
+	}
+	auto filter_id = to_string(reinterpret_cast<uintptr_t>(this));
+	auto msg = AdaptiveFilterLogType::ConstructLogMessage(filter_id, event, log_file_path, config.permutation, info);
+	logger->WriteLog(AdaptiveFilterLogType::NAME, AdaptiveFilterLogType::LEVEL, msg);
+}
+
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 	if (config.permutation.size() <= 1 || config.disable_permutations) {
 		return AdaptiveFilterState();
@@ -66,7 +86,9 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
-			if (prev_mean - (runtime_sum / static_cast<double>(iteration_count)) <= 0) {
+			auto trial_mean = runtime_sum / static_cast<double>(iteration_count);
+			string action;
+			if (prev_mean - trial_mean <= 0) {
 				// reverse swap because runtime didn't decrease
 				std::swap(config.permutation[swap_idx], config.permutation[swap_idx + 1]);
 
@@ -74,10 +96,16 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 				if (config.swap_likeliness[swap_idx] > 1) {
 					config.swap_likeliness[swap_idx] /= 2;
 				}
+				action = "reverted";
 			} else {
 				// keep swap because runtime decreased, reset likeliness
 				config.swap_likeliness[swap_idx] = 100;
+				action = "kept";
 			}
+			LogEvent("REORDER", {{"action", action},
+			                     {"swap_idx", to_string(swap_idx)},
+			                     {"prev_mean_us", StringUtil::Format("%.3f", prev_mean * 1e6)},
+			                     {"trial_mean_us", StringUtil::Format("%.3f", trial_mean * 1e6)}});
 			observe = false;
 
 			// reset values

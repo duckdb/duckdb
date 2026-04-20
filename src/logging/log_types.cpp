@@ -19,6 +19,7 @@ constexpr LogLevel HTTPLogType::LEVEL;
 constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
+constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -250,6 +251,54 @@ string TransactionLogType::ConstructLogMessage(const AttachedDatabase &db, const
 	    {"transaction_id", transaction_id == MAX_TRANSACTION_ID ? Value() : Value::UBIGINT(transaction_id)},
 	};
 
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// AdaptiveFilterLogType
+//===--------------------------------------------------------------------===//
+AdaptiveFilterLogType::AdaptiveFilterLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType AdaptiveFilterLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"event", LogicalType::VARCHAR},
+	    {"filter_id", LogicalType::VARCHAR},
+	    {"file_path", LogicalType::VARCHAR},
+	    {"permutation", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+static string PermutationToString(const vector<idx_t> &permutation) {
+	string result = "[";
+	for (idx_t i = 0; i < permutation.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += to_string(permutation[i]);
+	}
+	result += "]";
+	return result;
+}
+
+string AdaptiveFilterLogType::ConstructLogMessage(const string &filter_id, const char *event, const string &file_path,
+                                                  const vector<idx_t> &permutation,
+                                                  const vector<pair<string, string>> &info) {
+	vector<Value> info_keys;
+	vector<Value> info_values;
+	for (const auto &kv : info) {
+		info_keys.emplace_back(kv.first);
+		info_values.emplace_back(kv.second);
+	}
+	child_list_t<Value> child_list = {
+	    {"event", Value(event)},
+	    {"filter_id", Value(filter_id)},
+	    {"file_path", Value(file_path)},
+	    {"permutation", Value(PermutationToString(permutation))},
+	    {"info", Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(info_keys), std::move(info_values))},
+	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }
 
