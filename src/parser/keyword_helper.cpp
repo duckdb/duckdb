@@ -1,15 +1,32 @@
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
+static KeywordCategory GetPEGKeywordCategory(const string &text) {
+	auto &helper = PEGKeywordHelper::Instance();
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
+		return KeywordCategory::KEYWORD_RESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+		return KeywordCategory::KEYWORD_UNRESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
+		return KeywordCategory::KEYWORD_TYPE_FUNC;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+		return KeywordCategory::KEYWORD_COL_NAME;
+	}
+	return KeywordCategory::KEYWORD_NONE;
+}
+
 bool KeywordHelper::IsKeyword(const string &text, KeywordCategory category) {
-	return Parser::IsKeyword(text) != category;
+	return GetPEGKeywordCategory(text) != category;
 }
 
 KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
-	return Parser::IsKeyword(text);
+	return GetPEGKeywordCategory(text);
 }
 
 bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps, KeywordCategory category) {

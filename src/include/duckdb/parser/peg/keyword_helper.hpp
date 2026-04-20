@@ -14,7 +14,7 @@ enum class PEGKeywordCategory : uint8_t {
 class PEGKeywordHelper {
 public:
 	static PEGKeywordHelper &Instance();
-	bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const;
+bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const;
 	void InitializeKeywordMaps();
 	bool IsKeyword(const string &text) {
 		if (reserved_keyword_map.count(text) != 0 || unreserved_keyword_map.count(text) != 0 ||
@@ -23,6 +23,7 @@ public:
 		}
 		return false;
 	};
+	vector<ParserKeyword> KeywordList();
 
 private:
 	PEGKeywordHelper();

@@ -16,6 +16,7 @@
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "peg/keyword_helper.hpp"
 
 namespace duckdb_libpgquery {
 struct PGNode;
@@ -50,10 +51,11 @@ public:
 	static vector<SimplifiedToken> TokenizeError(const string &error_msg);
 
 	//! Returns true if the given text matches a keyword of the parser
-	static KeywordCategory IsKeyword(const string &text);
+	KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser
-	static vector<ParserKeyword> KeywordList();
-
+	vector<ParserKeyword> KeywordList();
+	// Returns the Keyword category
+	KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
 	                                                                           ParserOptions options = ParserOptions());
@@ -75,10 +77,10 @@ public:
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
-	unique_ptr<SQLStatement> GetStatement(const string &query);
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
 	ParserOptions options;
+	PEGKeywordHelper keyword_helper;
 };
 } // namespace duckdb
