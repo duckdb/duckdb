@@ -56,3 +56,14 @@ query I
 SELECT e'\1012' = 'A2';
 ----
 true
+
+statement error
+SELECT e'\400';
+----
+Parser Error: Null character not permitted in escape string literal
+
+statement error
+SELECT e'\000';
+----
+Parser Error: Null character not permitted in escape string literal
+

@@ -489,6 +489,9 @@ public:
 					escaped_result += result[i];
 				}
 			}
+			if (escaped_result.find('\0') != string::npos) {
+				throw ParserException("Null character not permitted in escape string literal");
+			}
 			UnicodeInvalidReason reason;
 			size_t pos;
 			auto utf_validity = Utf8Proc::Analyze(escaped_result.c_str(), escaped_result.size(), &reason, &pos);
