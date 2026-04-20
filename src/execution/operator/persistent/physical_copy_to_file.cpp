@@ -407,7 +407,7 @@ public:
 	//! Partition/sort strategy with PhysicalOperator-like interface
 	const unique_ptr<const SortStrategy> sort_strategy;
 
-	//! Lock for managing states
+	//! Lock for managing states (sinking_state, flushing_state, flushing flag)
 	mutable annotated_mutex lock;
 	//! Whether a flushing state currently exists
 	atomic<bool> flushing;
@@ -422,10 +422,12 @@ public:
 	shared_ptr<PartitionedCopyState> sinking_state DUCKDB_GUARDED_BY(lock);
 	shared_ptr<PartitionedCopyState> flushing_state DUCKDB_GUARDED_BY(lock);
 
+	//! Fine-grained lock for partition write tracking (leaf lock — never held while acquiring lock)
+	mutable annotated_mutex active_writes_lock;
 	//! The active writes per partition (for partitioned write)
-	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_writes DUCKDB_GUARDED_BY(lock);
-	vector_of_value_map_t<idx_t> previous_partitions DUCKDB_GUARDED_BY(lock);
-	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
+	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_writes DUCKDB_GUARDED_BY(active_writes_lock);
+	vector_of_value_map_t<idx_t> previous_partitions DUCKDB_GUARDED_BY(active_writes_lock);
+	idx_t global_offset DUCKDB_GUARDED_BY(active_writes_lock) = 0;
 };
 
 PartitionedCopyHashGroup::PartitionedCopyHashGroup(PartitionedCopy &partitioned_copy, const ChunkRow &chunk_row,
@@ -769,7 +771,7 @@ void PartitionedCopyHashGroup::Flush(ExecutionContext &execution_context, const 
 	}
 
 	{
-		annotated_lock_guard<annotated_mutex> guard(partitioned_copy.lock);
+		annotated_lock_guard<annotated_mutex> guard(partitioned_copy.active_writes_lock);
 		batch_state->write_info->active_writes--;
 	}
 }
@@ -1152,13 +1154,18 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		return;
 	}
 
-	annotated_lock_guard<annotated_mutex> guard(lock);
-	if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
-		return;
+	bool should_finalize_writes;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
+			return;
+		}
+		flushing_state.reset();
+		flushing = false;
+		should_finalize_writes = finalized && !sinking_state;
 	}
-	flushing_state.reset();
-	flushing = false;
-	if (finalized && !sinking_state) {
+	if (should_finalize_writes) {
+		annotated_lock_guard<annotated_mutex> aw_guard(active_writes_lock);
 		for (auto &entry : active_writes) {
 			auto &file_state = *entry.second->file_state;
 			op.function.copy_to_finalize(context, *op.bind_data, *file_state.data);
@@ -1168,7 +1175,7 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 
 PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &values) {
 	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
 		// check if we have already started writing this partition
 		auto active_write_entry = active_writes.find(values);
 		if (active_write_entry != active_writes.end()) {
@@ -1183,7 +1190,7 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 	auto &result = *info;
 
 	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
 		info->active_writes = 1;
 		// store in active write map
 		active_writes.insert(make_pair(values, std::move(info)));
@@ -1194,7 +1201,7 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
 	idx_t offset = 0;
 	{
-		annotated_lock_guard<annotated_mutex> guard(lock);
+		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
 		// check if we need to close any writers before we can continue
 		if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
 			// we need to! try to close writers
