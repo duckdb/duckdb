@@ -18,11 +18,6 @@
 #include "duckdb/parser/parser_extension.hpp"
 #include "peg/keyword_helper.hpp"
 
-namespace duckdb_libpgquery {
-struct PGNode;
-struct PGList;
-} // namespace duckdb_libpgquery
-
 namespace duckdb {
 
 class GroupByNode;
@@ -51,11 +46,11 @@ public:
 	static vector<SimplifiedToken> TokenizeError(const string &error_msg);
 
 	//! Returns true if the given text matches a keyword of the parser
-	KeywordCategory IsKeyword(const string &text);
+	static KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser
-	vector<ParserKeyword> KeywordList();
+	static vector<ParserKeyword> KeywordList();
 	// Returns the Keyword category
-	KeywordCategory ToKeywordCategory(const string &text);
+	static KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
 	                                                                           ParserOptions options = ParserOptions());
@@ -81,6 +76,5 @@ public:
 
 private:
 	ParserOptions options;
-	PEGKeywordHelper keyword_helper;
 };
 } // namespace duckdb

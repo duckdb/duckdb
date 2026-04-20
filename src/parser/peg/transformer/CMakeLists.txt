@@ -43,6 +43,6 @@ add_library_unity(
   transform_use.cpp
   transform_vacuum.cpp)
 
-set(AUTOCOMPLETE_EXTENSION_FILES
-    ${AUTOCOMPLETE_EXTENSION_FILES} $<TARGET_OBJECTS:duckdb_parser_peg_transformer>
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_parser_peg_transformer>
     PARENT_SCOPE)

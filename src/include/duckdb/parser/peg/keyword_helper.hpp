@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
 enum class PEGKeywordCategory : uint8_t {
