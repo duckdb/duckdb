@@ -2,6 +2,10 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -11,6 +15,107 @@
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 namespace duckdb {
+
+static bool IsSimpleFilterColumnRef(const Expression &expression) {
+	return expression.type == ExpressionType::BOUND_REF ||
+	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+}
+
+static bool TryComparisonFiltersNullValues(const BoundComparisonExpression &comparison, bool &filters_nulls,
+                                           bool &filters_valid_values) {
+	const BoundConstantExpression *constant_expr = nullptr;
+	auto comparison_type = comparison.GetExpressionType();
+	if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = &comparison.right->Cast<BoundConstantExpression>();
+	} else if (comparison.left->type == ExpressionType::VALUE_CONSTANT && IsSimpleFilterColumnRef(*comparison.right)) {
+		constant_expr = &comparison.left->Cast<BoundConstantExpression>();
+		comparison_type = FlipComparisonExpression(comparison_type);
+	} else {
+		return false;
+	}
+	if (constant_expr->value.IsNull()) {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			filters_valid_values = true;
+			break;
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			filters_nulls = true;
+			break;
+		default:
+			filters_nulls = true;
+			filters_valid_values = true;
+			break;
+		}
+	} else {
+		switch (comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			filters_nulls = false;
+			break;
+		default:
+			filters_nulls = true;
+			break;
+		}
+	}
+	return true;
+}
+
+static bool TryExpressionFiltersNullValues(const Expression &expression, bool &filters_nulls,
+                                           bool &filters_valid_values) {
+	filters_nulls = false;
+	filters_valid_values = false;
+
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
+		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
+		if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
+			for (auto &child : conjunction.children) {
+				bool child_filters_nulls = false;
+				bool child_filters_valid_values = false;
+				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
+					return false;
+				}
+				filters_nulls = filters_nulls || child_filters_nulls;
+				filters_valid_values = filters_valid_values || child_filters_valid_values;
+			}
+			return true;
+		}
+		if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
+			filters_nulls = true;
+			filters_valid_values = true;
+			for (auto &child : conjunction.children) {
+				bool child_filters_nulls = false;
+				bool child_filters_valid_values = false;
+				if (!TryExpressionFiltersNullValues(*child, child_filters_nulls, child_filters_valid_values)) {
+					return false;
+				}
+				filters_nulls = filters_nulls && child_filters_nulls;
+				filters_valid_values = filters_valid_values && child_filters_valid_values;
+			}
+			return true;
+		}
+		return false;
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+		return TryComparisonFiltersNullValues(expression.Cast<BoundComparisonExpression>(), filters_nulls,
+		                                      filters_valid_values);
+	}
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
+		auto &op = expression.Cast<BoundOperatorExpression>();
+		if (op.children.size() != 1 || !IsSimpleFilterColumnRef(*op.children[0])) {
+			return false;
+		}
+		switch (expression.type) {
+		case ExpressionType::OPERATOR_IS_NULL:
+			filters_valid_values = true;
+			return true;
+		case ExpressionType::OPERATOR_IS_NOT_NULL:
+			filters_nulls = true;
+			return true;
+		default:
+			return false;
+		}
+	}
+	return false;
+}
 
 //===--------------------------------------------------------------------===//
 // Scan
@@ -149,19 +254,14 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		}
 		break;
 	}
-	case TableFilterType::IS_NULL:
-		filters_valid_values = true;
-		break;
-	case TableFilterType::IS_NOT_NULL:
-		filters_nulls = true;
-		break;
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		auto &state = filter_state.Cast<ExpressionFilterState>();
-		Value val(type);
-		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-		filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
-		filters_valid_values = false;
+		if (!TryExpressionFiltersNullValues(*expr_filter.expr, filters_nulls, filters_valid_values)) {
+			auto &state = filter_state.Cast<ExpressionFilterState>();
+			Value val(type);
+			filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
+			filters_valid_values = false;
+		}
 		break;
 	}
 	case TableFilterType::BLOOM_FILTER: {
