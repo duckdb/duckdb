@@ -419,7 +419,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	t_lock.unlock();
 	// if we have skipped the WAL write due to checkpoint, we keep the WAL lock while checkpointing
 	// this prevents any concurrent transactions from happening during this time
-	if (!skip_wal_write_due_to_checkpoint) {
+	if (!skip_wal_write_due_to_checkpoint && held_wal_lock.owns_lock()) {
 		held_wal_lock.unlock();
 	}
 
