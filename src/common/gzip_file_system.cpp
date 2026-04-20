@@ -110,7 +110,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 }
 
 void MiniZStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(mz_stream_ptr == nullptr);
 	this->file = &file;
 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
 	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
