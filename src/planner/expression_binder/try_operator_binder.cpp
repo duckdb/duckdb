@@ -14,19 +14,15 @@ BindResult TryOperatorBinder::BindAggregate(FunctionExpression &expr, AggregateF
 
 BindResult TryOperatorBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                              bool root_expression) {
-	if (stored_binder && expr_ptr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &active_binder = binder.GetActiveBinder();
-		D_ASSERT(&active_binder == this);
-		binder.SetActiveBinder(*stored_binder);
-		try {
-			auto result = stored_binder->BindExpression(expr_ptr, depth, root_expression);
-			binder.SetActiveBinder(active_binder);
-			return result;
-		} catch (...) {
-			binder.SetActiveBinder(active_binder);
-			throw;
-		}
+	if (!stored_binder || expr_ptr->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
-	return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+	// Route COLUMN_REF through the parent binder so grouping and correlation context is visible.
+	// On exception, ~TryOperatorBinder() restores stored_binder as active, so no catch is required here.
+	D_ASSERT(&binder.GetActiveBinder() == this);
+	binder.SetActiveBinder(*stored_binder);
+	auto result = stored_binder->BindExpression(expr_ptr, depth, root_expression);
+	binder.SetActiveBinder(*this);
+	return result;
 }
 } // namespace duckdb

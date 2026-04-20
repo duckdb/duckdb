@@ -54,97 +54,6 @@ static void CreateDelimJoinConditions(LogicalComparisonJoin &delim_join, const C
 	}
 }
 
-static bool TryRemapCorrelatedBinding(const LogicalProjection &projection, const ColumnBinding &current_binding,
-                                      ColumnBinding &new_binding) {
-	for (idx_t i = 0; i < projection.expressions.size(); i++) {
-		auto &expression = *projection.expressions[i];
-		if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			continue;
-		}
-		if (expression.Cast<BoundColumnRefExpression>().binding != current_binding) {
-			continue;
-		}
-		new_binding = ColumnBinding(projection.table_index, i);
-		return true;
-	}
-	return false;
-}
-
-static bool TryRemapCorrelatedBinding(const LogicalAggregate &aggregate, const ColumnBinding &current_binding,
-                                      ColumnBinding &new_binding) {
-	for (idx_t i = 0; i < aggregate.groups.size(); i++) {
-		auto &group = *aggregate.groups[i];
-		if (group.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			continue;
-		}
-		if (group.Cast<BoundColumnRefExpression>().binding != current_binding) {
-			continue;
-		}
-		new_binding = ColumnBinding(aggregate.group_index, i);
-		return true;
-	}
-	for (idx_t i = 0; i < aggregate.expressions.size(); i++) {
-		auto &expression = *aggregate.expressions[i];
-		if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-			continue;
-		}
-		if (expression.Cast<BoundColumnRefExpression>().binding != current_binding) {
-			continue;
-		}
-		new_binding = ColumnBinding(aggregate.aggregate_index, i);
-		return true;
-	}
-	return false;
-}
-
-static void RemapCorrelatedBindings(CorrelatedColumns &correlated_columns, LogicalOperator &left_side) {
-	auto left_bindings = left_side.GetColumnBindings();
-	switch (left_side.type) {
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = left_side.Cast<LogicalProjection>();
-		for (auto &column : correlated_columns) {
-			bool binding_present = false;
-			for (const auto &binding : left_bindings) {
-				if (binding == column.binding) {
-					binding_present = true;
-					break;
-				}
-			}
-			if (binding_present) {
-				continue;
-			}
-			ColumnBinding new_binding;
-			if (TryRemapCorrelatedBinding(projection, column.binding, new_binding)) {
-				column.binding = new_binding;
-			}
-		}
-		return;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto &aggregate = left_side.Cast<LogicalAggregate>();
-		for (auto &column : correlated_columns) {
-			bool binding_present = false;
-			for (const auto &binding : left_bindings) {
-				if (binding == column.binding) {
-					binding_present = true;
-					break;
-				}
-			}
-			if (binding_present) {
-				continue;
-			}
-			ColumnBinding new_binding;
-			if (TryRemapCorrelatedBinding(aggregate, column.binding, new_binding)) {
-				column.binding = new_binding;
-			}
-		}
-		return;
-	}
-	default:
-		return;
-	}
-}
-
 unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder &binder,
                                                                           unique_ptr<LogicalOperator> plan) {
 	CorrelatedColumns correlated;
@@ -236,7 +145,6 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::Decorrelate(unique_ptr<Logica
 
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
-		RemapCorrelatedBindings(op.correlated_columns, *op.children[0]);
 
 		op.duplicate_eliminated_columns.clear();
 		op.mark_types.clear();
