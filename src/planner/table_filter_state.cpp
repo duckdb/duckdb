@@ -10,8 +10,13 @@
 
 namespace duckdb {
 
-ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) : executor(context) {
-	executor.AddExpression(expression);
+static void InitializeExecutor(ClientContext &context, const Expression &expression, ExpressionFilterState &state) {
+	state.executor = make_uniq<ExpressionExecutor>(context);
+	state.executor->AddExpression(expression);
+}
+
+ExpressionFilterState::ExpressionFilterState(ClientContext &context, const Expression &expression) {
+	InitializeExecutor(context, expression, *this);
 }
 
 JoinFilterTableFilterState::JoinFilterTableFilterState(const LogicalType &key_logical_type)
@@ -89,7 +94,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 		// root nodes - create an empty filter state
