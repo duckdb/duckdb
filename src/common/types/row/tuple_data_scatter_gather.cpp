@@ -1782,14 +1782,8 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
-<<<<<<< HEAD
-	child_function.function(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                        ListVector::GetChildMutable(target), target_sel, &combined_list_vector,
-	                        child_function.child_functions);
-=======
 	child_function.Gather(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                      ListVector::GetEntry(target), target_sel, &combined_list_vector);
->>>>>>> main
+	                      ListVector::GetChildMutable(target), target_sel, &combined_list_vector);
 }
 
 //------------------------------------------------------------------------------
