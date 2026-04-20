@@ -518,31 +518,14 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		});
 	}
 
-	// Bind a copy to validate (keep original unbound for serialization).
-	// Add the trigger table to the expanded set so validation matches runtime behavior
-	// (at runtime, the body is bound inside an expansion where this table is already in the set).
-	struct ScopedTriggerExpansion {
-		reference_set_t<TableCatalogEntry> &set;
-		reference<TableCatalogEntry> entry;
-		optional_ptr<TableCatalogEntry> &validating_table;
-		bool inserted;
-		ScopedTriggerExpansion(reference_set_t<TableCatalogEntry> &set_p, TableCatalogEntry &table_p,
-		                       optional_ptr<TableCatalogEntry> &validating_table_p)
-		    : set(set_p), entry(table_p), validating_table(validating_table_p) {
-			inserted = set.insert(table_p).second;
-			validating_table = &table_p;
-		}
-		~ScopedTriggerExpansion() {
-			validating_table = nullptr;
-			if (inserted) {
-				set.erase(entry);
-			}
-		}
-	};
-	ScopedTriggerExpansion trigger_guard(global_binder_state->trigger_expanded_tables, table,
-	                                     global_binder_state->trigger_creation_table);
+	// Validate the trigger body using an isolated binder (own GlobalBinderState).
+	// Set up trigger_expanded_tables to match runtime behavior.
+	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	auto validation_binder = Binder::CreateBinder(context);
+	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
+	validation_binder->global_binder_state->trigger_creation_table = &table;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
-	Bind(*body_copy);
+	validation_binder->Bind(*body_copy);
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);
