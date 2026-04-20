@@ -45,7 +45,7 @@ struct SelectionVector {
 	    : sel_vector(other.sel_vector), selection_data(std::move(other.selection_data)), capacity(other.capacity) {
 		other.sel_vector = nullptr;
 	}
-	explicit SelectionVector(buffer_ptr<SelectionData> data) {
+	explicit SelectionVector(buffer_ptr<SelectionData> &&data) {
 		Initialize(std::move(data));
 	}
 	SelectionVector &operator=(SelectionVector &&other) noexcept {
@@ -102,8 +102,13 @@ public:
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {
 		selection_data = std::move(data);
-		sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
-		capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
+		if (selection_data) {
+			sel_vector = reinterpret_cast<sel_t *>(selection_data->owned_data.get());
+			capacity = selection_data->owned_data.GetSize() / sizeof(sel_t);
+		} else {
+			sel_vector = nullptr;
+			capacity = 0ULL;
+		}
 	}
 	void Initialize(const SelectionVector &other) {
 		selection_data = other.selection_data;
