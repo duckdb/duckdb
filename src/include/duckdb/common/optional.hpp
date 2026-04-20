@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
+//! FIXME: Remove this in favor of std::optional once all migration to c++17  is done.
 template <typename T>
 class optional {
 public:
