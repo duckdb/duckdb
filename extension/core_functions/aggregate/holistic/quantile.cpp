@@ -250,7 +250,7 @@ struct QuantileListOperation : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
@@ -323,7 +323,7 @@ struct QuantileListFallback : QuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->Cast<QuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 

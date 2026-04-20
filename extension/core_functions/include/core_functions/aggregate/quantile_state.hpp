@@ -232,7 +232,7 @@ struct WindowQuantileState {
 
 		ListVector::Reserve(list, lentry.offset + lentry.length);
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
+		auto &result = ListVector::GetChildMutable(list);
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		for (const auto &q : bind_data.order) {

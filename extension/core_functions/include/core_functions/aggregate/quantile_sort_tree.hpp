@@ -393,7 +393,7 @@ struct QuantileSortTree {
 
 		ListVector::Reserve(list, lentry.offset + lentry.length);
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
+		auto &result = ListVector::GetChildMutable(list);
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		using ID = QuantileIndirect<INPUT_TYPE>;

@@ -40,8 +40,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto l_size = ListVector::GetListSize(l_vec);
 	const auto r_size = ListVector::GetListSize(r_vec);
 
-	auto &l_child = ListVector::GetEntry(l_vec);
-	auto &r_child = ListVector::GetEntry(r_vec);
+	auto &l_child = ListVector::GetChildMutable(l_vec);
+	auto &r_child = ListVector::GetChildMutable(r_vec);
 
 	const auto current_left_child_type = l_child.GetType();
 
@@ -71,7 +71,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
 
-	auto &result_entry = ListVector::GetEntry(result);
+	auto &result_entry = ListVector::GetChildMutable(result);
 
 	string_set_t set;
 	string_set_t result_set;

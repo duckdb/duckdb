@@ -191,8 +191,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::ARRAY);
 		D_ASSERT(ArrayType::GetSize(source->GetType()) == ArrayType::GetSize(target.GetType()));
 
-		auto &source_child = ArrayVector::GetEntry(*source);
-		auto &target_child = ArrayVector::GetEntry(target);
+		auto &source_child = ArrayVector::GetChild(*source);
+		auto &target_child = ArrayVector::GetChildMutable(target);
 		auto array_size = ArrayType::GetSize(source->GetType());
 
 		// Create a selection vector for the child elements
@@ -210,7 +210,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 
-		auto &source_child = ListVector::GetEntry(*source);
+		auto &source_child = ListVector::GetChild(*source);
 		auto sdata = GetSourceData<list_entry_t>(*source);
 		auto tdata = FlatVector::GetDataMutable<list_entry_t>(target);
 

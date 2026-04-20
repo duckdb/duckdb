@@ -41,9 +41,9 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
-	auto &key_validity = FlatVector::ValidityMutable(key_str);
-	auto &val_validity = FlatVector::ValidityMutable(val_str);
-	auto &struct_validity = FlatVector::ValidityMutable(ListVector::GetEntry(varchar_map));
+	auto &key_validity = FlatVector::Validity(key_str);
+	auto &val_validity = FlatVector::Validity(val_str);
+	auto &struct_validity = FlatVector::Validity(ListVector::GetChild(varchar_map));
 
 	//! {key=value[, ]}
 	static constexpr const idx_t SEP_LENGTH = 2;

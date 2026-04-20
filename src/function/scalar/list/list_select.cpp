@@ -82,12 +82,12 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	UnifiedVectorFormat selection_lists;
 	selection_list.ToUnifiedFormat(count, selection_lists);
 	auto selection_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(selection_lists);
-	auto &selection_entry = ListVector::GetEntry(selection_list);
+	auto &selection_entry = ListVector::GetChild(selection_list);
 
 	UnifiedVectorFormat input_list;
 	list.ToUnifiedFormat(count, input_list);
 	auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(input_list);
-	auto &input_entry = ListVector::GetEntry(list);
+	auto &input_entry = ListVector::GetChild(list);
 	auto &input_validity = FlatVector::Validity(input_entry);
 
 	idx_t result_length = 0;
@@ -104,7 +104,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	ValidityMask entry_validity_mask = ValidityMask(result_length);
 
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
-	auto &result_entry = ListVector::GetEntry(result);
+	auto &result_entry = ListVector::GetChildMutable(result);
 
 	idx_t offset = 0;
 	for (idx_t j = 0; j < count; j++) {

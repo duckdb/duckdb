@@ -474,7 +474,7 @@ struct MinMaxNOperation {
 		ListVector::Reserve(result, old_len + new_entries);
 
 		auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
-		auto &child_data = ListVector::GetEntry(result);
+		auto &child_data = ListVector::GetChildMutable(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {

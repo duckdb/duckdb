@@ -919,7 +919,7 @@ void FullMetadataProcessor::PopulateMetadata(ParquetMetadataFileProcessor &proce
                                              ParquetReader &reader) {
 	auto count = processor.TotalRowCount(reader);
 	auto *result_data = FlatVector::GetDataMutable<list_entry_t>(output);
-	auto &result_struct = ListVector::GetEntry(output);
+	auto &result_struct = ListVector::GetChildMutable(output);
 	auto &result_struct_entries = StructVector::GetEntries(result_struct);
 
 	ListVector::SetListSize(output, count);

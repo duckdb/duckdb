@@ -258,7 +258,7 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 	}
 
 	ListVector::Reserve(result, total_offset + total_children);
-	auto &child = ListVector::GetEntry(result);
+	auto &child = ListVector::GetChildMutable(result);
 	auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -330,7 +330,7 @@ static bool ConvertVariantToArray(FromVariantConversionData &conversion_data, Ve
 	SelectionVector new_sel;
 	new_sel.Initialize(array_size);
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 	idx_t total_offset = offset * array_size;
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;

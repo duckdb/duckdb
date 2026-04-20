@@ -366,10 +366,10 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data, c
 
 struct ListEntryAccessor {
 	static Vector &GetChild(Vector &vector) {
-		return ListVector::GetEntry(vector);
+		return ListVector::GetChildMutable(vector);
 	}
 	static void FlattenChild(Vector &vector) {
-		auto &child = ListVector::GetEntry(vector);
+		auto &child = ListVector::GetChildMutable(vector);
 		child.Flatten(ListVector::GetListSize(vector));
 	}
 	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
@@ -388,10 +388,10 @@ struct ArrayEntryAccessor {
 	explicit ArrayEntryAccessor(idx_t array_size) : array_size(array_size) {
 	}
 	Vector &GetChild(Vector &vector) {
-		return ArrayVector::GetEntry(vector);
+		return ArrayVector::GetChildMutable(vector);
 	}
 	void FlattenChild(Vector &vector) {
-		auto &child = ArrayVector::GetEntry(vector);
+		auto &child = ArrayVector::GetChildMutable(vector);
 		child.Flatten(ArrayVector::GetTotalSize(vector));
 	}
 	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
