@@ -67,8 +67,13 @@
     {
       "reason": "CREATE TRIGGER requires storage version v2.0.0 but encrypted databases use an older default storage version",
       "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
         "test/sql/trigger/create_trigger_parse.test",
-        "test/sql/trigger/create_trigger_catalog.test"
+        "test/sql/trigger/create_trigger_wal.test",
+        "test/sql/trigger/drop_trigger_parse.test",
+        "test/sql/trigger/trigger_after_delete.test",
+        "test/sql/trigger/trigger_after_insert.test",
+        "test/sql/trigger/trigger_after_update.test"
       ]
     },
     {
