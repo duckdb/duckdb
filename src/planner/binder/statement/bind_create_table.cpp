@@ -704,9 +704,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 	}
 
-	if (base.columns.PhysicalColumnCount() == 0) {
-		throw BinderException("Creating a table without physical (non-generated) columns is not supported");
-	}
+	// SereneDB fork: allow zero-physical-column tables (e.g. CREATE TABLE t();)
+	// so that indexes / constraints can still be attached later.
 
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 

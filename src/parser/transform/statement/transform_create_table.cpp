@@ -112,12 +112,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 	    stmt.oncommit != duckdb_libpgquery::PGOnCommitAction::PG_ONCOMMIT_NOOP) {
 		throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
 	}
-	if (!stmt.tableElts) {
-		throw ParserException("Table must have at least one column!");
-	}
-
-	idx_t column_count = 0;
-	for (auto c = stmt.tableElts->head; c != nullptr; c = lnext(c)) {
+	for (auto c = stmt.tableElts ? stmt.tableElts->head : nullptr; c != nullptr; c = lnext(c)) {
 		auto node = PGPointerCast<duckdb_libpgquery::PGNode>(c->data.ptr_value);
 		switch (node->type) {
 		case duckdb_libpgquery::T_PGColumnDef: {
@@ -155,7 +150,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			}
 
 			info->columns.AddColumn(std::move(col_def));
-			column_count++;
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
@@ -182,10 +176,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 
 	if (stmt.options) {
 		TransformTableOptions(info->options, stmt.options);
-	}
-
-	if (!column_count) {
-		throw ParserException("Table must have at least one column!");
 	}
 
 	result->info = std::move(info);
