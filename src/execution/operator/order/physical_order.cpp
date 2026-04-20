@@ -145,7 +145,16 @@ InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {
 		if (i > 0) {
 			orders_info += "\n";
 		}
-		orders_info += orders[i].expression->ToString() + " ";
+		auto expr_str = orders[i].expression->ToString();
+		// Strip catalog.schema prefix — keep only table.column.
+		auto last_dot = expr_str.rfind('.');
+		if (last_dot != string::npos && last_dot > 0) {
+			auto prev_dot = expr_str.rfind('.', last_dot - 1);
+			if (prev_dot != string::npos) {
+				expr_str = expr_str.substr(prev_dot + 1);
+			}
+		}
+		orders_info += expr_str + " ";
 		orders_info += orders[i].type == OrderType::DESCENDING ? "DESC" : "ASC";
 	}
 	result["__order_by__"] = orders_info;
