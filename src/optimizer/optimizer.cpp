@@ -118,12 +118,22 @@ void Optimizer::Verify(LogicalOperator &op) {
 }
 
 // Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
-// as a non-root node — i.e. inside a CTE body.  When that is the case, several
-// optimizations are unsafe because they use table statistics captured at plan
-// time, which do not reflect the table state after the DML has executed.
-static bool PlanContainsNonRootDML(const LogicalOperator &op) {
+// inside a CTE body. When that is the case, several optimizations are unsafe because
+// they use table statistics captured at plan time, which do not reflect the table
+// state after the DML has executed.
+// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
+// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool CTEContainsDML(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		for (auto &child : op.children) {
+			if (child->HasSideEffects()) {
+				return true;
+			}
+		}
+	}
 	for (auto &child : op.children) {
-		if (child->HasSideEffects()) {
+		if (CTEContainsDML(*child)) {
 			return true;
 		}
 	}
@@ -281,7 +291,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// convert common subplans into materialized CTEs
 	// Skip when the plan contains a DML CTE: table statistics are stale at plan
 	// time and could cause incorrect deduplication of scans across a DML boundary.
-	if (!PlanContainsNonRootDML(*plan)) {
+	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
 			CommonSubplanOptimizer common_subplan_optimizer(*this);
 			plan = common_subplan_optimizer.Optimize(std::move(plan));
@@ -323,7 +333,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
 	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	if (!PlanContainsNonRootDML(*plan)) {
+	if (!CTEContainsDML(*plan)) {
 		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
 			StatisticsPropagator propagator(*this, *plan);
 			propagator.PropagateStatistics(plan);
