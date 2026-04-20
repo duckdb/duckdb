@@ -2,6 +2,7 @@
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -59,6 +60,7 @@ unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
 		context.TryGetCurrentSetting(key, val);
 	}
 
+	val = Settings::FormatDisplayValue(context, val);
 	bound_function.SetReturnType(val.type());
 	return make_uniq<CurrentSettingBindData>(val);
 }
