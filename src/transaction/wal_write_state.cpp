@@ -242,7 +242,7 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 			booleans[idx] = false;
 		}
 	}
-	SelectionVector sel(tuples);
+	SelectionVector sel(tuples, info.N);
 	update_chunk->Slice(sel, info.N);
 
 	// construct the column index path

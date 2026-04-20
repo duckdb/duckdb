@@ -610,7 +610,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 					continue;
 				}
 				auto current_result_data = result_sel.data() + result_offset;
-				SelectionVector current_result_sel(current_result_data);
+				SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
 				idx_t new_matches =
 				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_count);
 				// increment all matches by the offset
