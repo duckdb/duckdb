@@ -106,7 +106,7 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	auto &child_entries = StructVector::GetEntries(result);
 	auto &left_child_entries = StructVector::GetEntries(left_vector);
 	auto &right_child_entries = StructVector::GetEntries(right_vector);
-	for (int base_idx = 0; base_idx < count; base_idx++) {
+	for (idx_t base_idx = 0; base_idx < count; base_idx++) {
 		auto lhs_list_index = lhs_data.sel->get_index(base_idx);
 		auto rhs_list_index = rhs_data.sel->get_index(base_idx);
 		if (!lhs_data.validity.RowIsValid(lhs_list_index) || !rhs_data.validity.RowIsValid(rhs_list_index)) {
@@ -316,7 +316,6 @@ public:
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state) {
 		auto &sstate = state.Cast<StreamingState>();
-		auto &wexpr = sstate.wexpr;
 		auto &filler = sstate.filler;
 		auto &arg = sstate.arg;
 		const auto count = input.size();
