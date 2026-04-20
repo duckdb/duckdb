@@ -534,6 +534,9 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }

@@ -124,7 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
-		result.Shred(shredded_vector);
+		result.Shred(shredded_vector, count);
 		return true;
 	}
 	auto &component = components[path_index];

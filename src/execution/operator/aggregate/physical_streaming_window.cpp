@@ -163,9 +163,11 @@ public:
 			temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 		}
 
-		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result,
+		             idx_t delayed_capacity) {
 			if (!curr_chunk.ColumnCount()) {
-				curr_chunk.Initialize(context.client, {result.GetType()}, delayed.GetCapacity());
+				curr_chunk.Initialize(context.client, {result.GetType()},
+				                      MaxValue<idx_t>(STANDARD_VECTOR_SIZE, delayed_capacity));
 			}
 
 			if (offset >= 0) {
@@ -189,11 +191,11 @@ public:
 				//	Shift down incomplete buffers
 				//	Copy prev[count, buffered] => temp[0, buffered-count]
 				source_count = buffered - count;
-				FlatVector::Validity(temp).Reset();
+				FlatVector::ValidityMutable(temp).Reset(buffered);
 				VectorOperations::Copy(prev, temp, buffered, count, 0);
 
 				// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset(buffered);
 				VectorOperations::Copy(temp, prev, source_count, 0, 0);
 				// 	Copy curr[0, count] => prev[buffered-count, buffered]
 				VectorOperations::Copy(curr, prev, count, 0, source_count);
@@ -203,7 +205,7 @@ public:
 				//	Copy curr[0, count-buffered] => result[buffered, count]
 				VectorOperations::Copy(curr, result, source_count, 0, buffered);
 				// 	Copy curr[count-buffered, count] => prev[0, buffered]
-				FlatVector::Validity(prev).Reset();
+				FlatVector::ValidityMutable(prev).Reset(buffered);
 				VectorOperations::Copy(curr, prev, count, source_count, 0);
 			}
 		}
@@ -318,17 +320,15 @@ public:
 			}
 		}
 		if (lead_count) {
-			delayed.Initialize(context, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
-			shifted.Initialize(context, input.GetTypes(), lead_count + STANDARD_VECTOR_SIZE);
+			delayed_capacity = lead_count + STANDARD_VECTOR_SIZE;
+			delayed.Initialize(context, input.GetTypes(), delayed_capacity);
+			shifted.Initialize(context, input.GetTypes(), delayed_capacity);
 		}
 		initialized = true;
 	}
 
 	static inline void Reset(DataChunk &chunk) {
-		//	Reset trashes the capacity...
-		const auto capacity = chunk.GetCapacity();
 		chunk.Reset();
-		chunk.SetCapacity(capacity);
 	}
 
 public:
@@ -343,6 +343,7 @@ public:
 	vector<unique_ptr<LeadLagState>> lead_lag_states;
 	//! The number of rows ahead to buffer for LEAD
 	idx_t lead_count = 0;
+	idx_t delayed_capacity = 0;
 	//! A buffer for delayed input
 	DataChunk delayed;
 	//! A buffer for shifting delayed input
@@ -428,7 +429,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	// Check for COUNT(*)
 	if (wexpr.children.empty()) {
 		D_ASSERT(GetTypeIdSize(result.GetType().InternalType()) == sizeof(int64_t));
-		auto data = FlatVector::GetDataMutable<int64_t>(result);
+		auto data = FlatVector::Writer<int64_t>(result, count);
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
@@ -609,7 +610,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
 			int64_t start_row = gstate.row_number;
-			auto rdata = FlatVector::GetDataMutable<int64_t>(output.data[col_idx]);
+			auto rdata = FlatVector::Writer<int64_t>(output.data[col_idx], count);
 			for (idx_t i = 0; i < count; i++) {
 				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}
@@ -617,7 +618,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		}
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_LEAD:
-			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result);
+			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result, state.delayed_capacity);
 			break;
 		default:
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
@@ -740,9 +741,9 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &input = state.shifted;
 		state.Reset(input);
 
-		if (output.GetCapacity() < delayed.size()) {
+		if (delayed.size() > STANDARD_VECTOR_SIZE) {
 			//	More than one output buffer was delayed, so shift in what we can
-			output.SetCardinality(output.GetCapacity());
+			output.SetCardinality(STANDARD_VECTOR_SIZE);
 			ExecuteShifted(context, delayed, input, output, gstate_p);
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}

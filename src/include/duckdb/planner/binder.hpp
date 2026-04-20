@@ -10,10 +10,12 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -422,6 +424,9 @@ private:
 	BoundStatement Bind(UpdateExtensionsStatement &stmt);
 	BoundStatement Bind(MergeIntoStatement &stmt);
 
+	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
+	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
+	void BindDropTrigger(DropStatement &stmt, StatementProperties &properties);
 	void BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<unique_ptr<Expression>> &expressions);
 	//! Build a mapping from storage column index to scan chunk index for RETURNING.
 	//! Ensures all physical columns are present in the scan.
@@ -579,7 +584,8 @@ private:
 	                                                 vector<unique_ptr<Expression>> &expressions,
 	                                                 unique_ptr<LogicalOperator> &root, MergeIntoAction &action,
 	                                                 const vector<BindingAlias> &source_aliases,
-	                                                 const vector<string> &source_names);
+	                                                 const vector<string> &source_names, MergeActionCondition condition,
+	                                                 const unordered_set<idx_t> &source_table_indices);
 
 	unique_ptr<MergeIntoStatement> GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table);
 

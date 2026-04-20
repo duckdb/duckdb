@@ -235,7 +235,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
-			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+			D_ASSERT(FlatVector::ValidityMutable(result).CheckAllValid(count));
 		}
 	}
 #endif

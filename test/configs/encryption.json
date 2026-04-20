@@ -70,7 +70,9 @@
         "test/sql/trigger/create_trigger_catalog.test",
         "test/sql/trigger/create_trigger_parse.test",
         "test/sql/trigger/create_trigger_wal.test",
+        "test/sql/trigger/drop_trigger.test",
         "test/sql/trigger/drop_trigger_parse.test",
+        "test/sql/trigger/drop_trigger_wal.test",
         "test/sql/trigger/trigger_after_delete.test",
         "test/sql/trigger/trigger_after_insert.test",
         "test/sql/trigger/trigger_after_update.test"

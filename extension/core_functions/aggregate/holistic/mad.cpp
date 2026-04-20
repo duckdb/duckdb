@@ -205,7 +205,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto n = FrameSize(included, frames);
 
 		if (!n) {
-			auto &rmask = FlatVector::Validity(result);
+			auto &rmask = FlatVector::ValidityMutable(result);
 			rmask.Set(ridx, false);
 			return;
 		}

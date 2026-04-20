@@ -92,7 +92,7 @@ public:
 
 protected:
 	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
-	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
+	                              idx_t row_idx, OperatorSinkInput &sink) const;
 };
 
 } // namespace duckdb

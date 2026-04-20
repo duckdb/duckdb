@@ -33,11 +33,11 @@ static unique_ptr<BoundCastData> BindArrayToListCast(BindCastInput &input, const
 
 unique_ptr<FunctionLocalState> ArrayBoundCastData::InitArrayLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
-	if (!cast_data.child_cast_info.init_local_state) {
+	if (!cast_data.child_cast_info.HasInitLocalState()) {
 		return nullptr;
 	}
-	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.cast_data);
-	return cast_data.child_cast_info.init_local_state(child_parameters);
+	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData());
+	return cast_data.child_cast_info.InitLocalState(child_parameters);
 }
 
 //------------------------------------------------------------------------------
@@ -72,21 +72,20 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		// If the array vector is constant, the child vector must be flat (or constant if array size is 1)
 		D_ASSERT(source_cc.GetVectorType() == VectorType::FLAT_VECTOR || source_array_size == 1);
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, source_array_size, child_parameters);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, source_array_size, child_parameters);
 		return all_ok;
 	} else {
 		// Flatten if not constant
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
 		auto &source_cc = ArrayVector::GetEntry(source);
 		auto &result_cc = ArrayVector::GetEntry(result);
 
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-		bool all_ok =
-		    cast_data.child_cast_info.function(source_cc, result_cc, count * source_array_size, child_parameters);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, count * source_array_size, child_parameters);
 		return all_ok;
 	}
 }
@@ -102,9 +101,9 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
-	auto &validity = FlatVector::Validity(varchar_list);
+	auto &validity = FlatVector::ValidityMutable(varchar_list);
 	auto &child = ArrayVector::GetEntry(varchar_list);
-	auto &child_validity = FlatVector::Validity(child);
+	auto &child_validity = FlatVector::ValidityMutable(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
@@ -180,8 +179,8 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto &source_child = ArrayVector::GetEntry(source);
 	auto &result_child = ListVector::GetEntry(result);
 
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	bool all_ok = cast_data.child_cast_info.function(source_child, result_child, child_count, child_parameters);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+	bool all_ok = cast_data.child_cast_info.Cast(source_child, result_child, child_count, child_parameters);
 
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

@@ -153,16 +153,15 @@ struct DistinctFunctor {
 		// reserve space in the list vector
 		ListVector::Reserve(result, old_len + new_entries);
 		auto &child_elements = ListVector::GetEntry(result);
-		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+		auto list_entries = FlatVector::Writer<list_entry_t>(result, count);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
 			const auto rid = i;
 			auto &state = *states[sdata.sel->get_index(i)];
-			auto &list_entry = list_entries[rid];
-			list_entry.offset = current_offset;
+			list_entries[rid].offset = current_offset;
 			if (!state.hist) {
-				list_entry.length = 0;
+				list_entries[rid].length = 0;
 				continue;
 			}
 
@@ -170,7 +169,7 @@ struct DistinctFunctor {
 				OP::template HistogramFinalize<T>(entry.first, child_elements, current_offset);
 				current_offset++;
 			}
-			list_entry.length = current_offset - list_entry.offset;
+			list_entries[rid].length = current_offset - list_entries[rid].offset;
 		}
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
@@ -206,7 +205,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// set the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		ConstantVector::SetNull(result);

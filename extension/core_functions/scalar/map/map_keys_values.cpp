@@ -28,7 +28,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	entries.Reference(child);
 
 	FlatVector::SetData(result, FlatVector::GetDataMutable(map), count);
-	FlatVector::SetValidity(result, FlatVector::Validity(map));
+	FlatVector::SetValidity(result, FlatVector::ValidityMutable(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
 	result.Verify(count);

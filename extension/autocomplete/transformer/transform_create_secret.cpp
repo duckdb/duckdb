@@ -14,20 +14,19 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer,
-                                                                             optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                             ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CreateStatement>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);
-	auto secret_name_pr = list_pr.Child<OptionalParseResult>(2);
+	auto &secret_name_pr = list_pr.Child<OptionalParseResult>(2);
 	if (secret_name_pr.HasResult()) {
-		info->name = transformer.Transform<string>(secret_name_pr.optional_result);
+		info->name = transformer.Transform<string>(secret_name_pr.GetResult());
 	}
-	auto secret_storage_specifier_pr = list_pr.Child<OptionalParseResult>(3);
+	auto &secret_storage_specifier_pr = list_pr.Child<OptionalParseResult>(3);
 	if (secret_storage_specifier_pr.HasResult()) {
-		info->storage_type =
-		    StringUtil::Lower(transformer.Transform<string>(secret_storage_specifier_pr.optional_result));
+		info->storage_type = StringUtil::Lower(transformer.Transform<string>(secret_storage_specifier_pr.GetResult()));
 	}
 	auto option_list = transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(4));
 	for (auto option : option_list) {
@@ -65,14 +64,13 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(PEG
 	return result;
 }
 
-string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 }
 
-string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer,
-                                                              optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(1).identifier;
 }
 

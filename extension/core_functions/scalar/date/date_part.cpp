@@ -2016,82 +2016,51 @@ struct StructDatePart {
 			}
 		}
 
-		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto entries = input.Values<INPUT_TYPE>(count);
 
-			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
+		// Start with a valid flat vector
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &res_valid = FlatVector::ValidityMutable(result);
+		if (res_valid.GetData()) {
+			res_valid.SetAllValid(count);
+		}
+
+		// Start with valid children
+		for (size_t col = 0; col < child_entries.size(); ++col) {
+			auto &child_entry = child_entries[col];
+			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
+			auto &child_validity = FlatVector::ValidityMutable(child_entry);
+			if (child_validity.GetData()) {
+				child_validity.SetAllValid(count);
+			}
+
+			// Pre-multiplex
+			const auto part_index = size_t(info.part_codes[col]);
+			if (owners[part_index] == col) {
+				if (IsBigintDatepart(info.part_codes[col])) {
+					bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
+					    FlatVector::GetDataMutable<int64_t>(child_entry);
+				} else {
+					double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
+					    FlatVector::GetDataMutable<double>(child_entry);
+				}
+			}
+		}
+
+		for (idx_t i = 0; i < count; ++i) {
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				if (Value::IsFinite(entry.GetValue())) {
+					DatePart::StructOperator::Operation(bigint_values, double_values, entry.GetValue(), i, part_mask);
+				} else {
+					for (auto &child_entry : child_entries) {
+						FlatVector::ValidityMutable(child_entry).SetInvalid(i);
+					}
+				}
 			} else {
-				for (size_t col = 0; col < child_entries.size(); ++col) {
-					auto &child_entry = child_entries[col];
-					const auto part_index = size_t(info.part_codes[col]);
-					if (owners[part_index] == col) {
-						if (IsBigintDatepart(info.part_codes[col])) {
-							bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-							    ConstantVector::GetData<int64_t>(child_entry);
-						} else {
-							double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-							    ConstantVector::GetData<double>(child_entry);
-						}
-					}
-				}
-				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				if (Value::IsFinite(tdata[0])) {
-					DatePart::StructOperator::Operation(bigint_values, double_values, tdata[0], 0, part_mask);
-				} else {
-					for (auto &child_entry : child_entries) {
-						ConstantVector::SetNull(child_entry);
-					}
-				}
-			}
-		} else {
-			auto entries = input.template Values<INPUT_TYPE>(count);
-
-			// Start with a valid flat vector
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto &res_valid = FlatVector::Validity(result);
-			if (res_valid.GetData()) {
-				res_valid.SetAllValid(count);
-			}
-
-			// Start with valid children
-			for (size_t col = 0; col < child_entries.size(); ++col) {
-				auto &child_entry = child_entries[col];
-				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
-				auto &child_validity = FlatVector::Validity(child_entry);
-				if (child_validity.GetData()) {
-					child_validity.SetAllValid(count);
-				}
-
-				// Pre-multiplex
-				const auto part_index = size_t(info.part_codes[col]);
-				if (owners[part_index] == col) {
-					if (IsBigintDatepart(info.part_codes[col])) {
-						bigint_values[part_index - size_t(DatePartSpecifier::BEGIN_BIGINT)] =
-						    FlatVector::GetDataMutable<int64_t>(child_entry);
-					} else {
-						double_values[part_index - size_t(DatePartSpecifier::BEGIN_DOUBLE)] =
-						    FlatVector::GetDataMutable<double>(child_entry);
-					}
-				}
-			}
-
-			for (idx_t i = 0; i < count; ++i) {
-				auto entry = entries[i];
-				if (entry.IsValid()) {
-					if (Value::IsFinite(entry.GetValue())) {
-						DatePart::StructOperator::Operation(bigint_values, double_values, entry.GetValue(), i,
-						                                    part_mask);
-					} else {
-						for (auto &child_entry : child_entries) {
-							FlatVector::Validity(child_entry).SetInvalid(i);
-						}
-					}
-				} else {
-					res_valid.SetInvalid(i);
-					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(child_entry).SetInvalid(i);
-					}
+				res_valid.SetInvalid(i);
+				for (auto &child_entry : child_entries) {
+					FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 				}
 			}
 		}

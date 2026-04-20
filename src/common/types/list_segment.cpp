@@ -392,7 +392,7 @@ void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &link
 template <class T>
 static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
                                          idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -415,7 +415,7 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 
 static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListSegment *segment, Vector &result,
                                        idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// use length and (reconstructed) offset to get the correct substrings
 	auto aggr_vector_data = FlatVector::GetDataMutable<string_t>(result);
@@ -462,7 +462,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 
 static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                     idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -502,7 +502,7 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 
 static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                       idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);
@@ -526,7 +526,7 @@ static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, con
 
 static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, const ListSegment *segment, Vector &result,
                                      idx_t &total_count) {
-	auto &aggr_vector_validity = FlatVector::Validity(result);
+	auto &aggr_vector_validity = FlatVector::ValidityMutable(result);
 
 	// set NULLs
 	auto null_mask = GetNullMask(segment);

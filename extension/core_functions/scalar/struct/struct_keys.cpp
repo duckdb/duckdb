@@ -23,12 +23,9 @@ struct StructKeysBindData : public FunctionData {
 		}
 		ListVector::SetListSize(keys_vector, count);
 
-		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(keys_vector);
+		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
 		list_entries[0] = {0, count};
-
-		auto &validity = FlatVector::Validity(keys_vector);
-		validity.EnsureWritable();
-		validity.SetInvalid(1);
+		list_entries.SetInvalid(1);
 	}
 
 	bool Equals(const FunctionData &other) const override {
@@ -51,10 +48,6 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
-		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
-			return;
-		}
 		ConstantVector::Reference(result, keys_vector, 0, count);
 		return;
 	}

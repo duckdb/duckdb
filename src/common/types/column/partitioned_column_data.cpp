@@ -178,7 +178,6 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 				// Next batch won't fit in the buffer, flush it to the partition
 				partition.Append(partition_append_state, partition_buffer);
 				partition_buffer.Reset();
-				partition_buffer.SetCapacity(BufferSize());
 			}
 		}
 	}

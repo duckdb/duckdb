@@ -98,7 +98,7 @@ public:
 			Vector &list_column = args.data[0];
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			result_validity = &FlatVector::Validity(result);
+			result_validity = &FlatVector::ValidityMutable(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
 				ConstantVector::SetNull(result);

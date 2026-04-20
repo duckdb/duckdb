@@ -264,6 +264,19 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 	auto v = OtherBucketValue(input_type);
 	Vector ref(v);
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+
+	// Set NULL if input is NULL.
+	UnifiedVectorFormat input_data;
+	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	if (!input_data.validity.CannotHaveNull()) {
+		auto &result_validity = FlatVector::ValidityMutable(result);
+		for (idx_t idx = 0; idx < args.size(); ++idx) {
+			auto input_idx = input_data.sel->get_index(idx);
+			if (!input_data.validity.RowIsValid(input_idx)) {
+				result_validity.SetInvalid(idx);
+			}
+		}
+	}
 }
 
 template <class OP, class T>
@@ -271,7 +284,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
                                   idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
