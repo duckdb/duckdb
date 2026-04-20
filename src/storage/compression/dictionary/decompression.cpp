@@ -50,7 +50,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, index_buffer_count);
 	dictionary_size = index_buffer_count;
-	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, index_buffer_count + 1);
+	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, index_buffer_count);
 	dict_child_data.PushInvalid();
 	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
