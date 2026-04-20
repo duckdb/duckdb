@@ -68,11 +68,15 @@ struct VectorWriter<string_t> {
 		current_idx++;
 	}
 
-	inline void PushInvalid(string_t val) {
-		D_ASSERT(current_idx < count);
-		AssignString(current_idx, val);
-		validity.SetInvalid(current_idx);
+	inline string_t &PushEmptyString(idx_t length) {
+		if (length <= string_t::INLINE_LENGTH) {
+			data[current_idx] = string_t(UnsafeNumericCast<uint32_t>(length));
+		} else {
+			data[current_idx] = GetHeap().CreateEmptyStringInHeap(length);
+		}
+		auto &res = data[current_idx];
 		current_idx++;
+		return res;
 	}
 
 	inline StringHeap &GetHeap() {
