@@ -115,9 +115,9 @@ void Binder::SearchSchema(CreateInfo &info) {
 	}
 	auto &search_path = ClientData::Get(context).catalog_search_path;
 	if (IsInvalidCatalog(info.catalog) && IsInvalidSchema(info.schema)) {
-		auto &default_entry = search_path->GetDefault();
-		info.catalog = default_entry.catalog;
-		info.schema = default_entry.schema;
+		auto default_entry = search_path->GetResolvedDefault();
+		info.catalog = std::move(default_entry.catalog);
+		info.schema = std::move(default_entry.schema);
 	} else if (IsInvalidSchema(info.schema)) {
 		info.schema = search_path->GetDefaultSchema(context, info.catalog);
 	} else if (IsInvalidCatalog(info.catalog)) {

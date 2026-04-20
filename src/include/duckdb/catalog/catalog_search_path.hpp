@@ -52,7 +52,15 @@ public:
 	const vector<CatalogSearchEntry> &GetSetPaths() const {
 		return set_paths;
 	}
+	//! Like GetSetPaths() but with the "$user" placeholder resolved via the
+	//! session_user. Entries that fail to resolve are dropped.
+	DUCKDB_API vector<CatalogSearchEntry> GetResolvedSetPaths() const;
+	//! Cheap: returns the first user-set entry as stored (schema may be the
+	//! literal "$user"). Use when only `.catalog` is needed.
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
+	//! Returns the first user-set entry whose schema resolves (skips "$user"
+	//! if no session user); falls back to GetDefault() if none resolve.
+	DUCKDB_API CatalogSearchEntry GetResolvedDefault() const;
 	//! FIXME: this method is deprecated
 	DUCKDB_API string GetDefaultSchema(const string &catalog) const;
 	DUCKDB_API string GetDefaultSchema(ClientContext &context, const string &catalog) const;

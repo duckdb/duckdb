@@ -107,6 +107,11 @@ public:
 	typedef bool (*warning_handler_t)(ClientContext &context, const char *message);
 	warning_handler_t warning_handler = nullptr;
 
+	//! PG session_user — the role the connection authenticated as. Used to
+	//! resolve the literal "$user" placeholder in catalog_search_path. Set by
+	//! the wire layer at connect time; updated on SET ROLE if applicable.
+	string session_user;
+
 	//! Filter for settings listings (duckdb_settings(), SHOW ALL, pg_settings).
 	//! Return false to hide the setting from listings. SET / SHOW <name> are
 	//! unaffected. nullptr = show everything.

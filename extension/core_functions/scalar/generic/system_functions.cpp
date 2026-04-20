@@ -25,8 +25,9 @@ void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &resu
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
 	auto &current_catalog = DatabaseManager::GetDefaultDatabase(context);
-	auto &set_paths = ClientData::Get(context).catalog_search_path->GetSetPaths();
-	for (auto &entry : set_paths) {
+	// Only user-set entries, with "$user" resolved — no implicit/temp/system.
+	auto entries = ClientData::Get(context).catalog_search_path->GetResolvedSetPaths();
+	for (auto &entry : entries) {
 		if (entry.catalog != current_catalog) {
 			continue;
 		}
@@ -105,8 +106,9 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 			}
 			schema_list.emplace_back("pg_catalog");
 		}
-		// PG-compliant: only include schemas that actually exist.
-		for (auto &entry : catalog_search_path->GetSetPaths()) {
+		// PG-compliant: only include user-set schemas that actually exist,
+		// with "$user" resolved via the current session user.
+		for (auto &entry : catalog_search_path->GetResolvedSetPaths()) {
 			if (entry.catalog != current_catalog) {
 				continue;
 			}

@@ -48,6 +48,12 @@ void TransactionContext::Commit() {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
+	// Pre-commit hooks run while the transaction is still active so they can
+	// issue operations that need ActiveTransaction (e.g. reverting SET LOCAL
+	// values for custom-impl settings).
+	for (auto &state : context.registered_state->States()) {
+		state->TransactionPreCommit(*current_transaction, context);
+	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
 	auto error = transaction->Commit();
@@ -89,6 +95,12 @@ void TransactionContext::SetReadOnly() {
 void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
+	}
+	// Pre-rollback hooks run while the transaction is still active so they can
+	// issue operations that need ActiveTransaction (e.g. restoring SET values
+	// for custom-impl settings like search_path).
+	for (auto const &s : context.registered_state->States()) {
+		s->TransactionPreRollback(*current_transaction, context, error);
 	}
 	auto transaction = std::move(current_transaction);
 	ClearTransaction();
