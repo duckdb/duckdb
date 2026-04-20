@@ -4,7 +4,7 @@ set -euo pipefail
 AFLPP_DIR="./AFLplusplus"
 
 rm -rf "${AFLPP_DIR}"
-git clone --depth 1 --branch v4.32c https://github.com/AFLplusplus/AFLplusplus.git "${AFLPP_DIR}"
+git clone --depth 1 --branch v4.40c https://github.com/AFLplusplus/AFLplusplus.git "${AFLPP_DIR}"
 
 pushd "${AFLPP_DIR}"
 echo "::group::Build afl++"
