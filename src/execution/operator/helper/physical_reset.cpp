@@ -24,6 +24,17 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 		                            extension_option.description);
 	}
 
+	// RESET on an option the user never SET is a no-op — don't reapply the
+	// default via set_function, which would needlessly trigger side-effect
+	// callbacks (e.g. Readonly guards that reject any write).
+	auto &client_config = ClientConfig::GetConfig(context.client);
+	auto setting_index = extension_option.setting_index.GetIndex();
+	bool is_user_set =
+	    effective_scope == SetScope::GLOBAL || client_config.user_settings.IsSet(setting_index);
+	if (!is_user_set) {
+		return;
+	}
+
 	if (extension_option.reset_function) {
 		extension_option.reset_function(context.client, effective_scope);
 	} else if (extension_option.set_function) {
@@ -32,9 +43,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 	if (effective_scope == SetScope::GLOBAL) {
 		config.ResetOption(extension_option);
 	} else {
-		auto &client_config = ClientConfig::GetConfig(context.client);
-		auto setting_index = extension_option.setting_index.GetIndex();
-		client_config.user_settings.SetUserSetting(setting_index, extension_option.default_value);
+		client_config.user_settings.ClearSetting(setting_index);
 	}
 }
 
@@ -44,15 +53,22 @@ void PhysicalReset::ResetOption(ExecutionContext &context, DBConfig &config,
 	SetScope variable_scope = PhysicalSet::GetSettingScope(option, scope);
 
 	if (option.default_value) {
+		// RESET on an untouched generic option is a no-op — don't fire
+		// set_callback with default_value (Readonly-style guards would throw).
+		auto &client_config = ClientConfig::GetConfig(context.client);
+		auto setting_index = option.setting_idx.GetIndex();
+		bool is_user_set =
+		    variable_scope == SetScope::GLOBAL || client_config.user_settings.IsSet(setting_index);
+		if (!is_user_set) {
+			return;
+		}
 		if (option.set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);
 			auto parameter_type = DBConfig::ParseLogicalType(option.parameter_type);
 			Value reset_val = Value(option.default_value).CastAs(context.client, parameter_type);
 			option.set_callback(info, reset_val);
 		}
-		auto setting_index = option.setting_idx.GetIndex();
 		if (variable_scope == SetScope::SESSION || variable_scope == SetScope::LOCAL) {
-			auto &client_config = ClientConfig::GetConfig(context.client);
 			client_config.user_settings.ClearSetting(setting_index);
 		} else {
 			config.ResetGenericOption(setting_index);
@@ -127,10 +143,16 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 void PhysicalReset::ResetAll(ExecutionContext &context, DBConfig &config) const {
 	// RESET ALL / RESET LOCAL ALL: reset every session-level option. Skip
 	// GLOBAL-scoped settings — those live DB-wide and PG's RESET ALL does not
-	// touch them. Individual resets may throw (readonly/deprecated settings
-	// that refuse standalone reset); swallow per-option failures so one bad
-	// option doesn't block the rest. TODO: track which options were actually
-	// user-set and only reset those.
+	// touch them.
+	//
+	// The inner try/catch exists because custom-impl built-ins (DUCKDB_LOCAL /
+	// DUCKDB_GLOBAL_LOCAL) have no setting_idx, so we can't gate their
+	// reset_local on "was ever user-set" — it fires unconditionally. Some
+	// reset_local callbacks refuse standalone reset (e.g. TransactionIsolation)
+	// and throw; swallow per-option failures here so one bad option doesn't
+	// block the rest. Generic and extension options are already no-op'd via
+	// the `is_user_set` guard in ResetOption/ResetExtensionVariable.
+	// TODO: track which custom-impl options were user-set and drop the try/catch.
 	auto reset_option = [&](const ConfigurationOption &option) {
 		if (context.client.setting_change_handler) {
 			context.client.setting_change_handler(context.client, option.name, scope);

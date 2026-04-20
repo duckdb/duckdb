@@ -403,6 +403,11 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 
 CatalogSearchEntry CatalogSearchPath::GetResolvedDefault() const {
 	D_ASSERT(paths.size() >= set_paths.size() + 2);
+	// No user-set entries -> no default schema (PG: current_schema is NULL,
+	// CREATE without schema prefix errors with "no schema has been selected").
+	if (set_paths.empty()) {
+		return {"", ""};
+	}
 	// Walk the user-set range and return the first entry whose schema resolves
 	// AND actually exists in the target catalog. PG falls through to the next
 	// search_path entry when "$user" doesn't match a real schema.

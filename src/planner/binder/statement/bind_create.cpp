@@ -126,6 +126,10 @@ void Binder::SearchSchema(CreateInfo &info) {
 	if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = DatabaseManager::GetDefaultDatabase(context);
 	}
+	if (IsInvalidSchema(info.schema)) {
+		// Empty search_path / no resolvable entry -> PG-style error.
+		throw CatalogException("no schema has been selected to create in");
+	}
 	if (!info.temporary) {
 		// non-temporary create: not read only
 		if (info.catalog == TEMP_CATALOG) {
