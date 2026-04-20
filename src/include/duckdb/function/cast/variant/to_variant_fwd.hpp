@@ -78,7 +78,9 @@ void WriteContainerData(VariantVectorData &result, idx_t result_index, uint32_t 
 struct ContainerSelectionVectors {
 public:
 	explicit ContainerSelectionVectors(idx_t max_size)
-	    : new_selection(0, max_size), non_null_selection(0, max_size), children_selection(0, max_size) {
+	    : new_selection(SelectionVector::Incremental(max_size)),
+	      non_null_selection(SelectionVector::Incremental(max_size)),
+	      children_selection(SelectionVector::Incremental(max_size)) {
 	}
 
 public:
