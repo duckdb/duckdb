@@ -63,7 +63,7 @@ public:
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
-	//! commit failed, or an empty string if the commit was sucessful
+	//! commit failed, or an empty string if the commit was successful
 	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	                 unique_ptr<StorageCommitState> commit_state) noexcept;
 	//! Returns whether or not a commit of this transaction should trigger an automatic checkpoint
