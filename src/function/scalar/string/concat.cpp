@@ -142,7 +142,6 @@ struct ListConcatInputData {
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -163,24 +162,27 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	}
 
 	idx_t offset = 0;
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i].offset = offset;
-		result_data[i].length = 0;
+		list_entry_t result_entry;
+		result_entry.offset = offset;
+		result_entry.length = 0;
 		for (auto &data : input_data) {
 			auto list_index = data.vdata.sel->get_index(i);
 			if (!data.vdata.validity.RowIsValid(list_index)) {
 				// LIST_CONCAT ignores NULL values, but || does not
 				if (is_operator) {
-					result_data.SetInvalid(i);
+					result_data.PushInvalid();
 				}
 				continue;
 			}
 			const auto &list_entry = data.input_entries[list_index];
-			result_data[i].length += list_entry.length;
+			result_entry.length += list_entry.length;
 			ListVector::Append(result, data.child_vec, *data.child_vdata.sel, list_entry.offset + list_entry.length,
 			                   list_entry.offset);
 		}
-		offset += result_data[i].length;
+		offset += result_entry.length;
+		result_data.PushValue(result_entry);
 	}
 	ListVector::SetListSize(result, offset);
 }

@@ -56,6 +56,12 @@ struct VectorWriter<string_t> {
 		current_idx++;
 	}
 
+	inline void PushWithoutCopying(string_t val) {
+		D_ASSERT(current_idx < count);
+		data[current_idx] = val;
+		current_idx++;
+	}
+
 	inline void PushInvalid() {
 		D_ASSERT(current_idx < count);
 		validity.SetInvalid(current_idx);
@@ -142,9 +148,6 @@ struct VectorScatterWriter<string_t> {
 				data[idx] = heap.AddBlobToHeap(val.GetData(), val.GetSize());
 			}
 			return data[idx];
-		}
-		inline void AssignWithoutCopying(string_t val) {
-			data[idx] = val;
 		}
 		inline char *GetDataWriteable() {
 			return data[idx].GetDataWriteable();

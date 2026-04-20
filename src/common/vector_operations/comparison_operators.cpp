@@ -191,13 +191,13 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	VectorOperations::Comparator(left, right, comparator_result, count);
 	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::ScatterWriter<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto entry = cmp_data[i];
 		if (!entry.IsValid()) {
-			result_data.SetInvalid(i);
+			result_data.PushInvalid();
 		} else {
-			result_data[i] = predicate(entry.GetValue());
+			result_data.PushValue(predicate(entry.GetValue()));
 		}
 	}
 }

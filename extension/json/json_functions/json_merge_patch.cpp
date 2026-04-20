@@ -60,12 +60,12 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// Write to result vector
-	auto result_data = FlatVector::ScatterWriter<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_data.SetInvalid(i);
+			result_data.PushInvalid();
 		} else {
-			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
+			result_data.PushWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
 	JSONAllocator::AddBuffer(result, alc);
