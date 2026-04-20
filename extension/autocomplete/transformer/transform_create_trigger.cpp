@@ -23,10 +23,10 @@ static unique_ptr<QueryNode> ExtractQueryNode(unique_ptr<SQLStatement> stmt) {
 }
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PEGTransformer &transformer,
-                                                                              optional_ptr<ParseResult> parse_result) {
+                                                                              ParseResult &parse_result) {
 	// CreateTriggerStmt <- 'TRIGGER' IfNotExists? TriggerName TriggerTiming TriggerEvent 'ON' BaseTableName
 	// ForEachClause? TriggerBody
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto trigger_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(2)); // TriggerName
 	auto timing = transformer.Transform<TriggerTiming>(list_pr.Child<ListParseResult>(3));
@@ -36,7 +36,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	auto &for_each_opt = list_pr.Child<OptionalParseResult>(7);
 	TriggerForEach for_each = TriggerForEach::STATEMENT;
 	if (for_each_opt.HasResult()) {
-		for_each = transformer.Transform<TriggerForEach>(for_each_opt.optional_result);
+		for_each = transformer.Transform<TriggerForEach>(for_each_opt.GetResult());
 	}
 	auto trigger_action = transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ListParseResult>(8));
 
@@ -54,58 +54,54 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTriggerStmt(PE
 	return result;
 }
 
-TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &transformer,
-                                                             optional_ptr<ParseResult> parse_result) {
+TriggerForEach PEGTransformerFactory::TransformForEachClause(PEGTransformer &transformer, ParseResult &parse_result) {
 	// ForEachClause <- ForEachRow / ForEachStatement
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.TransformEnum<TriggerForEach>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+string PEGTransformerFactory::TransformTriggerName(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.Child<IdentifierParseResult>(0).identifier;
 }
 
-TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer,
-                                                            optional_ptr<ParseResult> parse_result) {
+TriggerTiming PEGTransformerFactory::TransformTriggerTiming(PEGTransformer &transformer, ParseResult &parse_result) {
 	// TriggerTiming <- TriggerBefore / TriggerAfter / TriggerInsteadOf
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.TransformEnum<TriggerTiming>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.TransformEnum<TriggerTiming>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-TriggerEventInfo PEGTransformerFactory::TransformTriggerEvent(PEGTransformer &transformer,
-                                                              optional_ptr<ParseResult> parse_result) {
+TriggerEventInfo PEGTransformerFactory::TransformTriggerEvent(PEGTransformer &transformer, ParseResult &parse_result) {
 	// TriggerEvent <- TriggerEventUpdateOf / TriggerEventInsert / TriggerEventDelete / TriggerEventUpdate
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<TriggerEventInfo>(list_pr.Child<ChoiceParseResult>(0).result);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<TriggerEventInfo>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventInsert(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
+                                                                    ParseResult &parse_result) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::INSERT_EVENT;
 	return result;
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventDelete(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
+                                                                    ParseResult &parse_result) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::DELETE_EVENT;
 	return result;
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdate(PEGTransformer &transformer,
-                                                                    optional_ptr<ParseResult> parse_result) {
+                                                                    ParseResult &parse_result) {
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::UPDATE_EVENT;
 	return result;
 }
 
 TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
+                                                                      ParseResult &parse_result) {
 	// TriggerEventUpdateOf <- 'UPDATE' 'OF' TriggerColumnList
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	TriggerEventInfo result;
 	result.event_type = TriggerEventType::UPDATE_EVENT;
 	result.columns = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(2));
@@ -113,9 +109,9 @@ TriggerEventInfo PEGTransformerFactory::TransformTriggerEventUpdateOf(PEGTransfo
 }
 
 vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer &transformer,
-                                                                 optional_ptr<ParseResult> parse_result) {
+                                                                 ParseResult &parse_result) {
 	// TriggerColumnList <- List(ColId)
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	vector<string> result;
 	for (auto &column : column_list) {
@@ -125,11 +121,11 @@ vector<string> PEGTransformerFactory::TransformTriggerColumnList(PEGTransformer 
 }
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTriggerBody(PEGTransformer &transformer,
-                                                                     optional_ptr<ParseResult> parse_result) {
+                                                                     ParseResult &parse_result) {
 	// TriggerBody <- InsertStatement / UpdateStatement / DeleteStatement
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
 }
 
 } // namespace duckdb

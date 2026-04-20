@@ -219,8 +219,8 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	// Gather a dense Vector containing the column values being matched
 	Vector key(type);
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
-	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
-	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
+	gather_function.Gather(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
+	                       *FlatVector::IncrementalSelectionVector(), nullptr);
 	key.Verify(count);
 
 	// Densify the input column

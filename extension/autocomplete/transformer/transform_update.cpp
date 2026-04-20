@@ -5,13 +5,13 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<UpdateStatement>();
 	auto &node = *result->node;
-	auto with_opt = list_pr.Child<OptionalParseResult>(0);
+	auto &with_opt = list_pr.Child<OptionalParseResult>(0);
 	if (with_opt.HasResult()) {
-		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.optional_result);
+		node.cte_map = transformer.Transform<CommonTableExpressionMap>(with_opt.GetResult());
 	}
 	node.table = transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ListParseResult>(2));
 	node.set_info = transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ListParseResult>(3));
@@ -22,46 +22,45 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUpdateStatement(PEGTran
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformUpdateTarget(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).result);
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<TableRef>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableSet(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 }
 
 unique_ptr<TableRef> PEGTransformerFactory::TransformBaseTableAliasSet(PEGTransformer &transformer,
-                                                                       optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto table_ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<string>(list_pr, 1, table_ref->alias);
 	return std::move(table_ref);
 }
 
-string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+string PEGTransformerFactory::TransformUpdateAlias(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetClause(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ChoiceParseResult>(0).result);
+                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<UpdateSetInfo>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTransformer &transformer,
-                                                                         optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+                                                                         ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
 	auto column_list = ExtractParseResultsFromList(extract_parens);
 	auto result = make_uniq<UpdateSetInfo>();
 	result->columns.reserve(column_list.size());
-	for (auto &column : column_list) {
-		result->columns.push_back(column->Cast<IdentifierParseResult>().identifier);
+	for (auto column : column_list) {
+		result->columns.push_back(column.get().Cast<IdentifierParseResult>().identifier);
 	}
 
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
@@ -91,8 +90,8 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 }
 
 unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(PEGTransformer &transformer,
-                                                                               optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                               ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<UpdateSetInfo>();
 	auto update_element_list = ExtractParseResultsFromList(list_pr.Child<ListParseResult>(0));
 	for (auto &update_element : update_element_list) {
@@ -103,18 +102,17 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetElementList(P
 	return result;
 }
 
-pair<string, unique_ptr<ParsedExpression>>
-PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformUpdateSetElement(PEGTransformer &transformer,
+                                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_name = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	return make_pair(column_name, std::move(expr));
 }
 
 // UpdateSetColumnTarget <- ColumnName ('.' Identifier)*
-string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer,
-                                                             optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+string PEGTransformerFactory::TransformUpdateSetColumnTarget(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto &extra_opt = list_pr.Child<OptionalParseResult>(1);
 	if (extra_opt.HasResult()) {

@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
@@ -149,10 +150,55 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	return true;
 }
 
+static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	const bool succeeded = ListCast::ListToListCast(source, result, count, parameters);
+	if (succeeded) {
+		return true;
+	}
+
+	// We're not in TRY_CAST mode, so the error will be thrown.
+	if (!parameters.error_message) {
+		return false;
+	}
+
+	// We're in TRY_CAST mode: child cast failures may have produced NULL keys in the result maps.
+	// NULL keys are not allowed, so NULL out those map entries.
+	auto &keys = MapVector::GetKeys(result);
+	auto maps_length = ListVector::GetListSize(result);
+	auto key_validity = keys.Validity(maps_length);
+
+	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (!ConstantVector::IsNull(result)) {
+			auto list_data = ConstantVector::GetData<list_entry_t>(result);
+			for (idx_t j = 0; j < list_data->length; j++) {
+				if (!key_validity.IsValid(list_data->offset + j)) {
+					ConstantVector::SetNull(result);
+					break;
+				}
+			}
+		}
+	} else {
+		auto list_data = FlatVector::GetData<list_entry_t>(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!result_validity.RowIsValid(i)) {
+				continue;
+			}
+			for (idx_t j = 0; j < list_data[i].length; j++) {
+				if (!key_validity.IsValid(list_data[i].offset + j)) {
+					result_validity.SetInvalid(i);
+					break;
+				}
+			}
+		}
+	}
+	return false;
+}
+
 BoundCastInfo DefaultCasts::MapCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::MAP:
-		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target),
+		return BoundCastInfo(MapToMapCast, ListBoundCastData::BindListToListCast(input, source, target),
 		                     ListBoundCastData::InitListLocalState);
 	case LogicalTypeId::VARCHAR: {
 		auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);

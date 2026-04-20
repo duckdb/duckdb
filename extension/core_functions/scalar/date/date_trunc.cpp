@@ -482,11 +482,10 @@ void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
 		if (ConstantVector::IsNull(part_arg)) {
-			ConstantVector::SetNull(result);
-		} else {
-			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
+			throw InternalException("DateTrunc called with constant NULL part");
 		}
+		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
+		DateTruncUnaryExecutor<TA, TR>(type, date_arg, result, args.size());
 	} else {
 		BinaryExecutor::ExecuteStandard<string_t, TA, TR, DateTruncBinaryOperator>(part_arg, date_arg, result,
 		                                                                           args.size());

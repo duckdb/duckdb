@@ -24,6 +24,7 @@ public:
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
@@ -32,6 +33,9 @@ public:
 	}
 	const Vector &GetChild() const {
 		return *child;
+	}
+	unique_ptr<Vector> &GetChildMutable() {
+		return child;
 	}
 	void Reserve(idx_t to_reserve);
 
@@ -60,6 +64,7 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
+	buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) override;
 
 private:
 	//! child vectors used for nested data

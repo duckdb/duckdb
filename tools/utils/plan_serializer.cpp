@@ -10,8 +10,6 @@
 
 #include <fstream>
 
-using namespace duckdb;
-
 // This tool can be used to serialize and deserialize plans logical plans
 // It takes a file with SQL statements as input, executes all statements except the last one and then either
 // - serializes the plan of the last statement into the <plan_file> (if mode is "serialize")
@@ -24,16 +22,16 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-	string source_location;
-	string target_location;
+	std::string source_location;
+	std::string target_location;
 
 	if (argc < 4) {
 		fprintf(stderr, "Usage: %s <mode> <sql_file> <plan_file>\n", argv[0]);
 		return 1;
 	}
-	if (StringUtil::CIEquals(argv[1], "serialize") || StringUtil::CIEquals(argv[1], "s")) {
+	if (duckdb::StringUtil::CIEquals(argv[1], "serialize") || duckdb::StringUtil::CIEquals(argv[1], "s")) {
 		serialize = true;
-	} else if (StringUtil::CIEquals(argv[1], "deserialize") || StringUtil::CIEquals(argv[1], "d")) {
+	} else if (duckdb::StringUtil::CIEquals(argv[1], "deserialize") || duckdb::StringUtil::CIEquals(argv[1], "d")) {
 		serialize = false;
 	} else {
 		fprintf(stderr, "Invalid mode: %s. Use 's, serialize' or 'd, deserialize'.\n", argv[1]);
@@ -43,13 +41,13 @@ int main(int argc, char **argv) {
 	source_location = argv[2];
 	target_location = argv[3];
 
-	DuckDB db;
-	Connection con(db);
+	duckdb::DuckDB db;
+	duckdb::Connection con(db);
 
 	// Collect all statements
-	vector<string> statements;
+	std::vector<std::string> statements;
 	std::ifstream file(source_location);
-	string line;
+	std::string line;
 	while (std::getline(file, line)) {
 		if (line.empty()) {
 			continue;
@@ -58,7 +56,7 @@ int main(int argc, char **argv) {
 	}
 
 	// Now execute all statements, except the last one which we will serialize
-	for (idx_t i = 0; i < statements.size() - 1; i++) {
+	for (duckdb::idx_t i = 0; i < statements.size() - 1; i++) {
 		auto result = con.Query(statements[i]);
 		if (result->HasError()) {
 			fprintf(stderr, "Error executing statement %s\n", result->GetError().c_str());
@@ -70,18 +68,18 @@ int main(int argc, char **argv) {
 
 	// Serialize the statement
 	if (serialize) {
-		BufferedFileWriter target(db.GetFileSystem(), target_location);
+		duckdb::BufferedFileWriter target(db.GetFileSystem(), target_location);
 
 		con.BeginTransaction();
-		Parser p;
+		duckdb::Parser p;
 		p.ParseQuery(target_stmt);
 
-		Planner planner(*con.context);
+		duckdb::Planner planner(*con.context);
 
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto plan = std::move(planner.plan);
 
-		BinarySerializer serializer(target);
+		duckdb::BinarySerializer serializer(target);
 		serializer.Begin();
 		plan->Serialize(serializer);
 		serializer.End();
@@ -96,20 +94,20 @@ int main(int argc, char **argv) {
 	}
 	// Deserialize the statement and execute
 	else {
-		BufferedFileReader file_source(db.GetFileSystem(), target_location.c_str());
+		duckdb::BufferedFileReader file_source(db.GetFileSystem(), target_location.c_str());
 
 		con.BeginTransaction();
 
-		BinaryDeserializer deserializer(file_source);
-		deserializer.Set<ClientContext &>(*con.context);
+		duckdb::BinaryDeserializer deserializer(file_source);
+		deserializer.Set<duckdb::ClientContext &>(*con.context);
 		deserializer.Begin();
-		auto deserialized_plan = LogicalOperator::Deserialize(deserializer);
+		auto deserialized_plan = duckdb::LogicalOperator::Deserialize(deserializer);
 		deserializer.End();
 
 		deserialized_plan->ResolveOperatorTypes();
 
 		auto deserialized_results =
-		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		    con.context->Query(duckdb::make_uniq<duckdb::LogicalPlanStatement>(std::move(deserialized_plan)), false);
 		if (deserialized_results->HasError()) {
 			fprintf(stderr, "Error executing deserialized plan: %s\n", deserialized_results->GetError().c_str());
 			return 1;
@@ -119,9 +117,9 @@ int main(int argc, char **argv) {
 
 		// Now execute the original statement as well and compare results
 		con.BeginTransaction();
-		Parser p;
+		duckdb::Parser p;
 		p.ParseQuery(target_stmt);
-		Planner planner(*con.context);
+		duckdb::Planner planner(*con.context);
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto expected_plan = std::move(planner.plan);
 		expected_plan->ResolveOperatorTypes();

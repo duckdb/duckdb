@@ -236,9 +236,9 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.buffer);
-	D_ASSERT(vector.buffer->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return vector.buffer->Cast<VectorStructBuffer>().GetChildren();
+	D_ASSERT(vector.GetBufferRef());
+	D_ASSERT(vector.Buffer().GetBufferType() == VectorBufferType::STRUCT_BUFFER);
+	return vector.BufferMutable().Cast<VectorStructBuffer>().GetChildren();
 }
 
 const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
