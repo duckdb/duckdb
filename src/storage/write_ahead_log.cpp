@@ -337,7 +337,9 @@ void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	serializer.WriteProperty(104, "counter", val.counter);
 	// we only support writing last_value from version 2.0.0 onwards
 	if (storage_manager.GetStorageVersion() >= 8) {
-		serializer.WriteProperty(105, "last_value", val.entry->GetData().last_value);
+		auto seq_data = val.entry->GetData();
+		serializer.WriteProperty(105, "has_last_value", seq_data.has_last_value);
+		serializer.WriteProperty(106, "last_value", seq_data.last_value);
 	}
 	serializer.End();
 }

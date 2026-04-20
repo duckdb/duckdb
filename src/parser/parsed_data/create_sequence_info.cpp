@@ -4,7 +4,8 @@ namespace duckdb {
 
 CreateSequenceInfo::CreateSequenceInfo()
     : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),
-      min_value(1), max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
+      min_value(1), max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false), last_value(0),
+      has_last_value(false) {
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
@@ -19,6 +20,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 	result->start_value = start_value;
 	result->cycle = cycle;
 	result->last_value = last_value;
+	result->has_last_value = has_last_value;
 	return std::move(result);
 }
 

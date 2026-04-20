@@ -333,8 +333,13 @@
       },
       {
         "id": 207,
+        "name": "has_last_value",
+        "type": "bool"
+      },
+      {
+        "id": 208,
         "name": "last_value",
-        "type": "std::optional<int64_t>"
+        "type": "int64_t"
       }
     ]
   },
