@@ -293,8 +293,9 @@ struct VectorMinMaxBase {
 		}
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		function.arguments[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
@@ -331,8 +332,11 @@ static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
-unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &function,
-                                    vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// We should also push collations for non-VARCHAR here, but we aren't ready for it yet (see internal #8704)
 	const auto collation = arguments[0]->return_type.id() == LogicalTypeId::VARCHAR &&
 	                       (!StringType::GetCollation(arguments[0]->return_type).empty() ||
@@ -384,10 +388,9 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	if (function.HasBindCallback()) {
-		return function.GetBindCallback()(context, function, arguments);
-	} else {
-		return nullptr;
+		return function.Bind(context, arguments);
 	}
+	return nullptr;
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
@@ -519,8 +522,9 @@ void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &functio
 }
 
 template <class COMPARATOR>
-unique_ptr<FunctionData> MinMaxNBind(ClientContext &context, AggregateFunction &function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

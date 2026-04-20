@@ -24,7 +24,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto &child_vector = ListVector::GetChild(lists);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(row_count, child_data);
 
@@ -48,9 +48,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-	auto &result_child_vector = ListVector::GetEntry(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result);
+	auto &result_child_vector = ListVector::GetChildMutable(result);
 
 	// Get the default values, if provided.
 	UnifiedVectorFormat default_data;
@@ -67,7 +66,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		// Set to NULL, if the list is NULL.
 		if (!lists_data.validity.RowIsValid(list_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_entries.SetInvalid(row_idx);
 			continue;
 		}
 
@@ -119,8 +118,10 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	}
 }
 
-static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	bound_function.arguments[1] = LogicalType::UBIGINT;
 

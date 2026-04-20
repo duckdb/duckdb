@@ -55,6 +55,13 @@ DetachStmt:
 					n->db_name = $5;
 					$$ = (PGNode *)n;
 				}
+			|	DETACH IF_P EXISTS ColLabel
+				{
+					PGDetachStmt *n = makeNode(PGDetachStmt);
+					n->missing_ok = true;
+					n->db_name = $4;
+					$$ = (PGNode *)n;
+				}
 		;
 
 opt_database:	DATABASE							{}

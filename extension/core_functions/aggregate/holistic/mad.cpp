@@ -199,13 +199,13 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
-		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
 		const auto n = FrameSize(included, frames);
 
 		if (!n) {
-			auto &rmask = FlatVector::Validity(result);
+			auto &rmask = FlatVector::ValidityMutable(result);
 			rmask.Set(ridx, false);
 			return;
 		}
@@ -255,8 +255,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 	}
 };
 
-unique_ptr<FunctionData> BindMAD(ClientContext &context, AggregateFunction &function,
-                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindMAD(BindAggregateFunctionInput &input) {
 	return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 }
 
@@ -320,12 +319,13 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	return result;
 }
 
-unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &context, AggregateFunction &function,
-                                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->return_type);
 	function.name = "mad";
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	return BindMAD(context, function, arguments);
+	return BindMAD(input);
 }
 
 } // namespace

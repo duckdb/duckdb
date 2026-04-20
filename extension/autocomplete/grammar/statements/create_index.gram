@@ -11,5 +11,4 @@ RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedIdentifier / StringLiteral
 RelOptionArgumentOpt <- '=' DefArg
 DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
-ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'

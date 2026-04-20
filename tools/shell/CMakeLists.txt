@@ -86,4 +86,6 @@ set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)
 set_target_properties(shell PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                        ${PROJECT_BINARY_DIR})
 
+duckdb_codesign_for_debugging(shell)
+
 install(TARGETS shell RUNTIME DESTINATION "${INSTALL_BIN_DIR}")

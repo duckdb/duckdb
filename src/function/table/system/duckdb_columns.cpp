@@ -79,6 +79,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("numeric_scale");
 	return_types.emplace_back(LogicalType::INTEGER);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -108,6 +111,7 @@ public:
 	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
 	virtual const Value ColumnComment(idx_t col) = 0;
+	virtual const Value ColumnTags(idx_t col) = 0;
 
 	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
 };
@@ -149,6 +153,9 @@ public:
 	}
 	const Value ColumnComment(idx_t col) override {
 		return entry.GetColumn(LogicalIndex(col)).Comment();
+	}
+	const Value ColumnTags(idx_t col) override {
+		return Value::MAP(entry.GetColumn(LogicalIndex(col)).Tags());
 	}
 
 private:
@@ -199,6 +206,10 @@ public:
 	}
 	const Value ColumnComment(idx_t col) override {
 		return bound_view ? entry.GetColumnComment(col) : Value();
+	}
+	const Value ColumnTags(idx_t col) override {
+		InsertionOrderPreservingMap<string> empty;
+		return Value::MAP(empty);
 	}
 
 private:
@@ -319,6 +330,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		output.SetValue(col++, index, numeric_precision_radix);
 		// numeric_scale, INTEGER
 		output.SetValue(col++, index, numeric_scale);
+		// tags, MAP(VARCHAR, VARCHAR)
+		output.SetValue(col++, index, ColumnTags(i));
 	}
 }
 

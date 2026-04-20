@@ -38,12 +38,12 @@ struct AggregateInputData {
 };
 
 struct AggregateUnaryInput {
-	AggregateUnaryInput(AggregateInputData &input_p, ValidityMask &input_mask_p)
+	AggregateUnaryInput(AggregateInputData &input_p, const ValidityMask &input_mask_p)
 	    : input(input_p), input_mask(input_mask_p), input_idx(0) {
 	}
 
 	AggregateInputData &input;
-	ValidityMask &input_mask;
+	const ValidityMask &input_mask;
 	idx_t input_idx;
 
 	inline bool RowIsValid() {

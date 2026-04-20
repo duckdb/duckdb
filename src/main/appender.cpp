@@ -87,7 +87,7 @@ void BaseAppender::EndRow() {
 
 template <class SRC, class DST>
 void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
-	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
+	FlatVector::GetDataMutable<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
 }
 
 template <class SRC, class DST>
@@ -99,7 +99,7 @@ void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		CastParameters parameters;
-		auto &result = FlatVector::GetData<DST>(col)[chunk.size()];
+		auto &result = FlatVector::GetDataMutable<DST>(col)[chunk.size()];
 		TryCastToDecimal::Operation<SRC, DST>(input, result, parameters, width, scale);
 		return;
 	}
@@ -196,7 +196,8 @@ void BaseAppender::AppendValueInternal(T input) {
 		AppendValueInternal<T, interval_t>(col, input);
 		break;
 	case LogicalTypeId::VARCHAR:
-		FlatVector::GetData<string_t>(col)[chunk.size()] = StringCast::Operation<T>(input, col);
+		FlatVector::GetDataMutable<string_t>(col)[chunk.size()] =
+		    StringCast::Operation<T>(input, StringVector::GetStringHeap(col));
 		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
@@ -316,10 +317,6 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (col >= target.ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
-	if (row >= target.GetCapacity()) {
-		throw InvalidInputException("Too many rows for chunk!");
-	}
-
 	if (value.type() == target.GetTypes()[col]) {
 		target.SetValue(col, row, value);
 	} else {
@@ -483,7 +480,7 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 
 	// Create the CTE info.
 	auto cte_info = make_uniq<CommonTableExpressionInfo>();
-	cte_info->query = std::move(cte_select);
+	cte_info->query_node = std::move(cte_select->node);
 	cte_info->materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 
 	// Add the appender data as a CTE to the CTE map of the statement.

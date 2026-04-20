@@ -179,7 +179,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable() {
 		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		auto &col_mask = FlatVector::Validity(vector);
+		auto &col_mask = FlatVector::ValidityMutable(vector);
 		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
@@ -299,7 +299,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
-		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec);
+		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec, probe_sel_count);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -380,7 +380,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		if (!entry.IsValid()) {
 			continue;
 		}
-		const auto &input_value = entry.value;
+		const auto &input_value = entry.GetValue();
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			// subtract min value to get the idx

@@ -13,7 +13,10 @@
       {
         "id": 101,
         "name": "query",
-        "type": "SelectStatement*"
+        "type": "SelectStatement*",
+        "version": "v2.0.0",
+        "status": "read_only",
+        "serialize_property": "GetQueryForSerialization(serializer)"
       },
       {
         "id": 102,
@@ -30,8 +33,15 @@
         "id": 104,
         "name": "payload_aggregates",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 105,
+        "name": "query_node",
+        "type": "QueryNode*",
+        "version": "v2.0.0"
       }
-    ]
+    ],
+    "constructor": ["query", "query_node"]
   },
   {
     "class": "CommonTableExpressionMap",
@@ -416,8 +426,8 @@
       {
         "id": 106,
         "name": "tags",
-        "type": "unordered_map<string, string>",
-        "default": "unordered_map<string, string>()"
+        "type": "InsertionOrderPreservingMap<string>",
+        "default": "InsertionOrderPreservingMap<string>()"
       }
     ],
     "constructor": ["name", "type", "expression", "category"],
@@ -524,13 +534,16 @@
   {
     "class": "TableFilterSet",
     "includes": [
-      "duckdb/planner/table_filter.hpp"
+      "duckdb/planner/table_filter.hpp",
+      "duckdb/planner/expression.hpp"
     ],
     "members": [
       {
         "id": 100,
         "name": "filters",
-        "type": "map<ProjectionIndex, TableFilter*>"
+        "type": "map<ProjectionIndex, TableFilter*>",
+        "serialize_property": "GetTableFiltersForSerialization(serializer)",
+        "deserialize_property": "GetTableFiltersForDeserialization(deserializer)"
       }
     ],
     "pointer_type": "none"

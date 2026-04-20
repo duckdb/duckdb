@@ -88,7 +88,7 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
 	set.AddFunction(ScalarFunction("json_normalize", {json}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {

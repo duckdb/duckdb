@@ -6,12 +6,12 @@
 namespace duckdb {
 
 Vector &MapVector::GetKeys(Vector &vector) {
-	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
+	auto &entries = StructVector::GetEntries(ListVector::GetChildMutable(vector));
 	D_ASSERT(entries.size() == 2);
 	return entries[0];
 }
 Vector &MapVector::GetValues(Vector &vector) {
-	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
+	auto &entries = StructVector::GetEntries(ListVector::GetChildMutable(vector));
 	D_ASSERT(entries.size() == 2);
 	return entries[1];
 }
@@ -37,10 +37,10 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto mapped_row = sel.get_index(row_idx);
 		auto map_entry = map_entries[mapped_row];
-		if (!map_entry.is_valid) {
+		if (!map_entry.IsValid()) {
 			continue;
 		}
-		auto &map_list = map_entry.value;
+		auto &map_list = map_entry.GetValue();
 
 		value_set_t unique_keys;
 		auto length = map_list.length;

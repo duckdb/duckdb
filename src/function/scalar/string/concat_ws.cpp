@@ -98,7 +98,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
 		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
 				result_mask.SetInvalid(i);
@@ -113,8 +113,8 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> BindConcatWSFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
 	for (auto &arg : bound_function.arguments) {
 		arg = LogicalType::VARCHAR;
 	}

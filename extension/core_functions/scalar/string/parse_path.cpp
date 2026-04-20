@@ -42,7 +42,7 @@ struct SplitInput {
 			ListVector::SetListSize(result_list, offset + list_idx);
 			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
 		}
-		FlatVector::GetData<string_t>(result_child)[list_entry] =
+		FlatVector::GetDataMutable<string_t>(result_child)[list_entry] =
 		    StringVector::AddString(result_child, split_data, split_size);
 	}
 };
@@ -226,6 +226,7 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 	Vector trim_extension(false);
 	ReadOptionalArgs(args, separator, trim_extension, true);
 
+	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<string_t, string_t, string_t>(
 	    path, separator, result, args.size(), [&](string_t input_path, string_t input_sep) {
 		    auto path = input_path.GetData();
@@ -238,11 +239,11 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 		    }
 		    idx_t new_size = (IsIdxValid(last_sep, path_size)) ? last_sep : 0;
 
-		    auto target = StringVector::EmptyString(result, new_size);
+		    auto target = heap.EmptyString(new_size);
 		    auto output = target.GetDataWriteable();
 		    memcpy(output, path, new_size);
 		    target.Finalize();
-		    return StringVector::AddString(result, target);
+		    return target;
 	    });
 }
 
@@ -268,20 +269,19 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::SetListSize(result, 0);
 
 	// set up the list entries
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
-	auto &child_entry = ListVector::GetEntry(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			result_mask.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
 		SplitInput split_input(result, child_entry, total_splits);
 		auto list_length = SplitPath(inputs[input_idx], sep, split_input);
-		list_data[i].length = list_length;
-		list_data[i].offset = total_splits;
+		result_data[i].length = list_length;
+		result_data[i].offset = total_splits;
 		total_splits += list_length;
 	}
 	ListVector::SetListSize(result, total_splits);
@@ -291,8 +291,7 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 	ScalarFunctionSet parse_dirname;
 	ScalarFunction func({LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<true>, nullptr, nullptr, nullptr,
-	                    nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                    FunctionNullHandling::SPECIAL_HANDLING);
+	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_dirname.AddFunction(func);
 	// separator options
 	func.arguments.emplace_back(LogicalType::VARCHAR);
@@ -303,8 +302,7 @@ ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 ScalarFunctionSet ParseDirpathFun::GetFunctions() {
 	ScalarFunctionSet parse_dirpath;
 	ScalarFunction func({LogicalType::VARCHAR}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr,
-	                    nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                    FunctionNullHandling::SPECIAL_HANDLING);
+	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_dirpath.AddFunction(func);
 	// separator options
 	func.arguments.emplace_back(LogicalType::VARCHAR);
@@ -315,17 +313,17 @@ ScalarFunctionSet ParseDirpathFun::GetFunctions() {
 ScalarFunctionSet ParseFilenameFun::GetFunctions() {
 	ScalarFunctionSet parse_filename;
 	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<false>,
-	                                          nullptr, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                                          nullptr, nullptr, nullptr, LogicalType::INVALID,
 	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr,
-	    nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr,
-	    nullptr, nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::VARCHAR,
+	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
 	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
-	                                          nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                                          LogicalType::INVALID, FunctionStability::CONSISTENT,
 	                                          FunctionNullHandling::SPECIAL_HANDLING));
 	return parse_filename;
 }
@@ -334,8 +332,7 @@ ScalarFunctionSet ParsePathFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet parse_path;
 	ScalarFunction func({LogicalType::VARCHAR}, varchar_list_type, ParsePathFunction, nullptr, nullptr, nullptr,
-	                    nullptr, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                    FunctionNullHandling::SPECIAL_HANDLING);
+	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_path.AddFunction(func);
 	// separator options
 	func.arguments.emplace_back(LogicalType::VARCHAR);

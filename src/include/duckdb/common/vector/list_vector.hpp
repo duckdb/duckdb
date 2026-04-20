@@ -14,17 +14,17 @@
 
 namespace duckdb {
 
-class VectorListBuffer : public VectorBuffer {
+class VectorListBuffer : public StandardVectorBuffer {
 public:
-	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector,
-	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector);
 	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
 	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(data_ptr_t data, const Vector &vector, idx_t child_capacity, idx_t child_size);
-	explicit VectorListBuffer(data_ptr_t data, const VectorListBuffer &parent);
-	explicit VectorListBuffer(AllocatedData allocated_data, const VectorListBuffer &parent);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
@@ -34,6 +34,9 @@ public:
 	const Vector &GetChild() const {
 		return *child;
 	}
+	unique_ptr<Vector> &GetChildMutable() {
+		return child;
+	}
 	void Reserve(idx_t to_reserve);
 
 	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
@@ -41,52 +44,57 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() {
+	idx_t GetSize() const {
 		return size;
 	}
 
-	idx_t GetCapacity() {
-		return capacity;
-	}
+	idx_t GetChildCapacity() const;
 
-	void SetCapacity(idx_t new_capacity);
 	void SetSize(idx_t new_size);
 
-	data_ptr_t GetData() override {
-		return data_ptr;
-	}
+public:
+	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
+	idx_t GetAllocationSize() const override;
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	Value GetValue(const LogicalType &type, idx_t index) const override;
+	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
-	optional_ptr<Allocator> GetAllocator() const override {
-		return allocated_data.GetAllocator();
-	}
+protected:
+	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
+	buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) override;
 
 private:
-	// data for list offsets
-	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t capacity = 0;
 	idx_t size = 0;
 };
 
 struct ListVector {
-	static inline const list_entry_t *GetData(const Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline const list_entry_t *
+	GetData(const Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
 		return FlatVector::GetData<const list_entry_t>(v);
 	}
-	static inline list_entry_t *GetData(Vector &v) {
+	[[deprecated("Use FlatVector::GetData<list_entry_t> instead")]] static inline list_entry_t *GetData(Vector &v) {
 		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			throw InternalException("ListVector::GetData called on dictionary vector");
 		}
-		return FlatVector::GetData<list_entry_t>(v);
+		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	[[deprecated("Use ListVector::GetChild instead")]] DUCKDB_API static const Vector &GetEntry(const Vector &vector);
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	[[deprecated("Use ListVector::GetChild or ListVector::GetChildMutable instead")]] DUCKDB_API static Vector &
+	GetEntry(Vector &vector);
+	//! Gets a reference to the underlying child-vector of a list
+	DUCKDB_API static const Vector &GetChild(const Vector &vector);
+	//! Gets a mutable reference to the underlying child-vector of a list
+	DUCKDB_API static Vector &GetChildMutable(Vector &vector);
 	//! Gets the total size of the underlying child-vector of a list
 	DUCKDB_API static idx_t GetListSize(const Vector &vector);
 	//! Sets the total size of the underlying child-vector of a list

@@ -83,6 +83,13 @@ static void CheckTypeIsSupported(const LogicalType &logical_type, AttachedDataba
 	});
 }
 
+virtual_column_map_t DuckTableEntry::GetVirtualColumns() const {
+	virtual_column_map_t virtual_columns;
+	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_NUMBER, TableColumn("row_number", LogicalType::BIGINT)));
+	return virtual_columns;
+}
+
 DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, BoundCreateTableInfo &info,
                                shared_ptr<DataTable> inherited_storage, shared_ptr<CatalogSet> inherited_triggers)
     : TableCatalogEntry(catalog, schema, info.Base()), storage(std::move(inherited_storage)),
@@ -183,7 +190,8 @@ unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context,
 }
 
 unique_ptr<BaseStatistics> DuckTableEntry::GetStatistics(ClientContext &context, column_t column_id) {
-	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
+	if (IsVirtualColumn(column_id)) {
+		// no stats for virtual columns (yet?)
 		return nullptr;
 	}
 	auto &column = columns.GetColumn(LogicalIndex(column_id));
@@ -589,8 +597,9 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFieldInfo &info) {
-	// follow the path
-	auto &col = GetColumn(info.column_path[0]);
+	// follow the path - the parent column must exist regardless of IF NOT EXISTS (which only applies to the new field)
+	auto col_idx = GetColumnIndex(info.column_path[0], false);
+	auto &col = GetColumn(col_idx);
 	auto res = AddFieldToStruct(col.Type(), info.column_path, info.new_field);
 	if (res.error.HasError()) {
 		if (!info.if_field_not_exists) {
@@ -758,6 +767,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
@@ -981,6 +991,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1308,19 +1319,27 @@ void DuckTableEntry::SetAsRoot() {
 
 void DuckTableEntry::CommitAlter(string &column_name) {
 	D_ASSERT(!column_name.empty());
-	optional_idx removed_index;
+	optional_idx logical_column_idx;
+	auto column_path = StringUtil::Split(column_name, '.');
+	D_ASSERT(!column_path.empty());
+	auto &root_column_name = column_path[0];
+	idx_t column_position = 0;
 	for (auto &col : columns.Logical()) {
-		if (col.Name() == column_name) {
+		if (StringUtil::CIEquals(col.Name(), root_column_name)) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;
 			}
-			removed_index = col.Oid();
+			logical_column_idx = column_position;
 			break;
 		}
+		column_position++;
 	}
 
-	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
+	if (!logical_column_idx.IsValid()) {
+		return;
+	}
+	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
 	storage->CommitDropColumn(column_index);
 }

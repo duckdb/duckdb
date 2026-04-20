@@ -947,12 +947,13 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	if (!table_name.empty()) {
-		auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
-		auto &duck_table = table.Cast<DuckTableEntry>();
-		auto transaction = catalog.GetCatalogTransaction(context);
-		duck_table.DropTrigger(transaction, info.name, info.cascade);
+	if (table_name.empty()) {
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
 	}
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	duck_table.DropTrigger(transaction, info.name, info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1161,7 +1162,7 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 			column_ids.emplace_back(col.StorageOid());
 		}
 		Vector row_id_vector(LogicalType::ROW_TYPE, STANDARD_VECTOR_SIZE);
-		auto row_ids = FlatVector::GetData<row_t>(row_id_vector);
+		auto row_ids = FlatVector::GetDataMutable<row_t>(row_id_vector);
 		auto current_row_id = storage.GetTotalRows();
 		for (auto &chunk : new_row_groups.Chunks(transaction, column_ids)) {
 			for (idx_t r = 0; r < chunk.size(); r++) {

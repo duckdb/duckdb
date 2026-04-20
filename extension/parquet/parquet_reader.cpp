@@ -1,5 +1,9 @@
 #include "parquet_reader.hpp"
 
+#include <string.h>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
@@ -10,23 +14,55 @@
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "thrift_tools.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/transport/TTransport.h"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -1143,13 +1179,25 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		}
 		return and_result;
 	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &min_value = pq_col_stats.min_value;
-		auto &max_value = pq_col_stats.max_value;
-		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
+		auto &expr = *expr_filter.expr;
+
+		// Handle comparison expressions (from ConstantFilter conversion)
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comp = expr.Cast<BoundComparisonExpression>();
+			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+				auto &constant = comp.right->Cast<BoundConstantExpression>();
+				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto &min_value = pq_col_stats.min_value;
+					auto &max_value = pq_col_stats.max_value;
+					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+					                                 comp.type, StringValue::Get(constant.value));
+				}
+			}
+		}
+		return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 	}
 	default:
 		return filter.CheckStatistics(stats);

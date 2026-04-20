@@ -132,7 +132,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	// Create a Vector of pointers to the start of the TupleDataLayout of the STRUCT
 	Vector rhs_struct_row_locations(LogicalType::POINTER);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
-	auto rhs_struct_locations = FlatVector::GetData<data_ptr_t>(rhs_struct_row_locations);
+	auto rhs_struct_locations = FlatVector::GetDataMutable<data_ptr_t>(rhs_struct_row_locations);
 	for (idx_t i = 0; i < match_count; i++) {
 		const auto idx = sel.get_index(i);
 		rhs_struct_locations[idx] = rhs_locations[idx] + rhs_offset_in_row;
@@ -219,9 +219,9 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	// Gather a dense Vector containing the column values being matched
 	Vector key(type);
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
-	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
-	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
-	Vector::Verify(key, *FlatVector::IncrementalSelectionVector(), count);
+	gather_function.Gather(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
+	                       *FlatVector::IncrementalSelectionVector(), nullptr);
+	key.Verify(count);
 
 	// Densify the input column
 	Vector sliced(lhs_vector, sel, count);

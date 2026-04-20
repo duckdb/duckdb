@@ -55,7 +55,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          xcrun xcodebuild test \
+          python3 scripts/ci/retry.py -- xcrun xcodebuild test \
             -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'

@@ -52,6 +52,29 @@ struct WindowPartitionInput {
 	InterruptState &interrupt_state;
 };
 
+class BindAggregateFunctionInput {
+public:
+	BindAggregateFunctionInput(ClientContext &context_p, AggregateFunction &bound_function_p,
+	                           vector<unique_ptr<Expression>> &arguments_p)
+	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	AggregateFunction &GetBoundFunction() const {
+		return bound_function;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+
+private:
+	ClientContext &context;
+	AggregateFunction &bound_function;
+	vector<unique_ptr<Expression>> &arguments;
+};
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(const AggregateFunction &function);
 //! The type used for initializing hashed aggregate function states
@@ -68,8 +91,7 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_inp
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
-                                                              vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BindAggregateFunctionInput &input);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_input_data, idx_t count);
 
@@ -190,6 +212,11 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
+	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+		BindAggregateFunctionInput bind_input(context, *this, arguments);
+		return Bind(bind_input);
+	}
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }

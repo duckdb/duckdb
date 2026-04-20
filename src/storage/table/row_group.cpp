@@ -22,6 +22,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/table/row_id_column_data.hpp"
+#include "duckdb/storage/table/row_number_column_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -32,13 +33,14 @@ namespace duckdb {
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, idx_t count)
     : SegmentBase<RowGroup>(count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	Verify();
 }
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
     : SegmentBase<RowGroup>(pointer.tuple_count), collection(collection_p), version_info(nullptr),
-      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      deletes_is_loaded(false), allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false),
+      has_changes(false) {
 	// deserialize the columns
 	if (pointer.data_pointers.size() != collection_p.GetTypes().size()) {
 		throw IOException("Row group column count is unaligned with table column count. Corrupt file?");
@@ -58,7 +60,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 
 RowGroup::RowGroup(RowGroupCollection &collection_p, PersistentRowGroupData &data)
     : SegmentBase<RowGroup>(data.count), collection(collection_p), version_info(nullptr), deletes_is_loaded(false),
-      allocation_size(0), row_id_is_loaded(false), has_changes(false) {
+      allocation_size(0), row_id_is_loaded(false), row_number_is_loaded(false), has_changes(false) {
 	auto &block_manager = GetBlockManager();
 	auto &info = GetTableInfo();
 	auto &types = collection.get().GetTypes();
@@ -124,6 +126,19 @@ void RowGroup::LoadRowIdColumnData() const {
 	row_id_is_loaded = true;
 }
 
+void RowGroup::LoadRowNumberColumnData() const {
+	if (row_number_is_loaded) {
+		return;
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (row_number_column_data) {
+		return;
+	}
+	row_number_column_data = make_uniq<RowNumberColumnData>(GetBlockManager(), GetTableInfo());
+	row_number_column_data->count = count.load();
+	row_number_is_loaded = true;
+}
+
 ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 	auto &res = GetColumn(c.GetPrimaryIndex());
 	return res;
@@ -131,12 +146,22 @@ ColumnData &RowGroup::GetColumn(const StorageIndex &c) const {
 
 ColumnData &RowGroup::GetColumn(storage_t c) const {
 	LoadColumn(c);
-	return c == COLUMN_IDENTIFIER_ROW_ID ? *row_id_column_data : *columns[c];
+	if (c == COLUMN_IDENTIFIER_ROW_ID) {
+		return *row_id_column_data;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		return *row_number_column_data;
+	}
+	return *columns[c];
 }
 
 void RowGroup::LoadColumn(storage_t c) const {
 	if (c == COLUMN_IDENTIFIER_ROW_ID) {
 		LoadRowIdColumnData();
+		return;
+	}
+	if (c == COLUMN_IDENTIFIER_ROW_NUMBER) {
+		LoadRowNumberColumnData();
 		return;
 	}
 	D_ASSERT(c < columns.size());
@@ -304,7 +329,7 @@ void CollectionScanState::Initialize(const QueryContext &context, const vector<L
 		column_scans.emplace_back(*this);
 	}
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i].IsRowIdColumn()) {
+		if (column_ids[i].IsRowIdColumn() || column_ids[i].IsRowNumberColumn()) {
 			continue;
 		}
 		auto index = column_ids[i].GetPrimaryIndex();
@@ -864,13 +889,13 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 
 void RowGroup::SetCount(idx_t count) {
 	this->count = count;
-	if (!row_id_is_loaded) {
-		lock_guard<mutex> guard(row_group_lock);
-		if (!row_id_is_loaded) {
-			return;
-		}
+	lock_guard<mutex> guard(row_group_lock);
+	if (row_id_is_loaded) {
+		row_id_column_data->count = count;
 	}
-	row_id_column_data->count = count;
+	if (row_number_is_loaded) {
+		row_number_column_data->count = count;
+	}
 }
 
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
@@ -957,7 +982,7 @@ void RowGroup::Update(TransactionData transaction, DataTable &data_table, DataCh
 void RowGroup::UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
                             idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start) {
 	D_ASSERT(updates.ColumnCount() == 1);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
+	auto ids = FlatVector::GetDataMutable<row_t>(row_ids);
 
 	auto primary_column_idx = column_path[0];
 	D_ASSERT(primary_column_idx < columns.size());
@@ -1113,7 +1138,18 @@ idx_t RowGroup::GetCommittedRowCount() {
 	if (!vinfo) {
 		return count;
 	}
-	return count - vinfo->GetCommittedDeletedCount(count);
+	ScanOptions options(TransactionData(0, TRANSACTION_ID_START));
+	options.insert_type = InsertedScanType::ALL_ROWS;
+	options.delete_type = DeletedScanType::OMIT_COMMITTED_DELETES;
+	return vinfo->GetRowCount(options, count);
+}
+
+idx_t RowGroup::GetVisibleRowCount(TransactionData transaction) {
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		return count;
+	}
+	return vinfo->GetRowCount(transaction, count);
 }
 
 bool RowGroup::HasUnloadedDeletes() const {
@@ -1402,7 +1438,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 			return false;
 		}
 		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
-			if (!StringStats::HasMaxStringLength(stats)) {
+			if (!StringStats::HasMinMax(stats) || !StringStats::HasMaxStringLength(stats)) {
 				return false;
 			}
 			const idx_t max_length = StringStats::MaxStringLength(stats);
@@ -1487,6 +1523,9 @@ void RowGroup::Verify() {
 	lock_guard<mutex> guard(row_group_lock);
 	if (row_id_is_loaded) {
 		D_ASSERT(row_id_column_data->count == count);
+	}
+	if (row_number_is_loaded) {
+		D_ASSERT(row_number_column_data->count == count);
 	}
 #endif
 }

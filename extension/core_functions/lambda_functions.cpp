@@ -116,8 +116,8 @@ struct ListFilterFunctor {
 			}
 
 			// found a true value
-			if (entry.is_valid && entry.value) {
-				sel.set_index(count++, entry.index);
+			if (entry.IsValid() && entry.GetValue()) {
+				sel.set_index(count++, entry.GetIndex());
 				info.length++;
 			}
 
@@ -269,7 +269,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 		return;
 	}
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector

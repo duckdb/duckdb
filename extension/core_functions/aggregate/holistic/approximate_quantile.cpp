@@ -234,8 +234,10 @@ float CheckApproxQuantile(const Value &quantile_val) {
 	return quantile;
 }
 
-unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFunction &function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindApproxQuantile(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -277,9 +279,10 @@ AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	return function;
 }
 
-unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindApproxQuantile(context, function, arguments);
+unique_ptr<FunctionData> BindApproxQuantileDecimal(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto bind_data = BindApproxQuantile(input);
 	function = ApproxQuantileDecimalFunction(arguments[0]->return_type);
 	return bind_data;
 }
@@ -306,10 +309,10 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
-		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		D_ASSERT(state.h);
 		state.h->compress();
@@ -397,9 +400,10 @@ AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	return function;
 }
 
-unique_ptr<FunctionData> BindApproxQuantileDecimalList(ClientContext &context, AggregateFunction &function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindApproxQuantile(context, function, arguments);
+unique_ptr<FunctionData> BindApproxQuantileDecimalList(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto bind_data = BindApproxQuantile(input);
 	function = ApproxQuantileDecimalListFunction(arguments[0]->return_type);
 	return bind_data;
 }

@@ -10,7 +10,7 @@ namespace duckdb {
 static void WriteShreddedPrimitive(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                    const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                    idx_t count, idx_t type_size) {
-	auto result_data = FlatVector::GetData(result);
+	auto result_data = FlatVector::GetDataMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -29,7 +29,7 @@ template <class T>
 static void WriteShreddedDecimal(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                  const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                  idx_t count) {
-	auto result_data = FlatVector::GetData(result);
+	auto result_data = FlatVector::GetDataMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -161,7 +161,7 @@ void VariantShredding::WriteTypedPrimitiveValues(UnifiedVariantVectorData &varia
 }
 
 void VariantShredding::WriteMissingField(Vector &vector, idx_t index) {
-	FlatVector::GetData<uint32_t>(vector)[index] = 0;
+	FlatVector::GetDataMutable<uint32_t>(vector)[index] = 0;
 }
 
 void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant, Vector &result,
@@ -170,7 +170,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	auto &type = result.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	(void)validity;
 
 	//! Collect the nested data for the objects
@@ -262,7 +262,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result,
                                              const SelectionVector &sel, const SelectionVector &value_index_sel,
                                              const SelectionVector &result_sel, idx_t count) {
-	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto list_data = FlatVector::Writer<list_entry_t>(result);
 
 	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
 
@@ -308,7 +308,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 		}
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, child_result_sel, total_offset);
 }
 

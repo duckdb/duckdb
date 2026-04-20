@@ -1,8 +1,24 @@
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+struct ParquetColumnSchema;
 
 struct ListReaderData {
 	ListReaderData(list_entry_t *result_ptr, ValidityMask &result_mask)
@@ -19,8 +35,8 @@ struct TemplatedListReader {
 	static DATA Initialize(optional_ptr<Vector> result_out) {
 		D_ASSERT(ListVector::GetListSize(*result_out) == 0);
 
-		auto result_ptr = FlatVector::GetData<list_entry_t>(*result_out);
-		auto &result_mask = FlatVector::Validity(*result_out);
+		auto result_ptr = FlatVector::GetDataMutable<list_entry_t>(*result_out);
+		auto &result_mask = FlatVector::ValidityMutable(*result_out);
 		return ListReaderData(result_ptr, result_mask);
 	}
 

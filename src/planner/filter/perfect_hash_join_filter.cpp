@@ -29,7 +29,7 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 	}
 
 	Vector range_vec(type, DEFAULT_STANDARD_VECTOR_SIZE);
-	auto range_data = FlatVector::GetData<T>(range_vec);
+	auto range_data = FlatVector::GetDataMutable<T>(range_vec);
 	T val = min;
 	for (; val < max; val += 1) {
 		*range_data++ = val;

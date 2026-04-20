@@ -195,6 +195,19 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	if (base.binding_mode == CreateViewBindingMode::SKIP_BINDING) {
 		return;
 	}
+	// DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a view,
+	// because the DML would execute every time the view is queried.
+	for (auto &kv : base.query->node->cte_map.map) {
+		auto &cte = *kv.second;
+		if (!cte.query_node) {
+			continue;
+		}
+		auto t = cte.query_node->type;
+		if (t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+		    t == QueryNodeType::DELETE_QUERY_NODE) {
+			throw BinderException("DML statements (INSERT/UPDATE/DELETE) are not allowed as CTE bodies inside a VIEW");
+		}
+	}
 	optional_ptr<LogicalDependencyList> dependencies;
 	if (Settings::Get<EnableViewDependenciesSetting>(context)) {
 		dependencies = base.dependencies;
@@ -513,6 +526,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
+	auto return_type = StatementReturnType::NOTHING;
+	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -593,7 +608,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto create_table = make_uniq<LogicalCreateTable>(schema, std::move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
-			properties.return_type = StatementReturnType::CHANGED_ROWS;
+			return_type = StatementReturnType::CHANGED_ROWS;
 			create_table->children.push_back(std::move(root));
 		}
 		result.plan = std::move(create_table);
@@ -645,7 +660,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::SECRET_ENTRY: {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
-		properties.return_type = StatementReturnType::QUERY_RESULT;
+		return_type = StatementReturnType::QUERY_RESULT;
 
 		auto &info = stmt.info->Cast<CreateSecretInfo>();
 
@@ -712,7 +727,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
 		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
 
-		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {
 		auto &create_trigger_info = stmt.info->Cast<CreateTriggerInfo>();
@@ -724,8 +740,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw InternalException("Unrecognized type!");
 	}
-	properties.return_type = StatementReturnType::NOTHING;
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+
+	properties.return_type = return_type;
+	properties.output_type = output_type;
+
 	return result;
 }
 

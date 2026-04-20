@@ -1,37 +1,55 @@
 #include "column_reader.hpp"
 
+#include <algorithm>
+#include <memory>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
-#include "reader/decimal_column_reader.hpp"
-#include "duckdb.hpp"
-#include "reader/expression_column_reader.hpp"
 #include "reader/interval_column_reader.hpp"
-#include "reader/list_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "reader/null_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
-
-#include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
 #include "reader/string_column_reader.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
-
 #include "zstd.h"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include "duckdb/common/types/bit.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-
 #include "parquet_crypto.hpp"
+#include "decode_utils.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "parquet_decimal_utils.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_rle_bp_decoder.hpp"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift_tools.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
+class Allocator;
+struct hugeint_t;
 
 using duckdb_parquet::CompressionCodec;
 using duckdb_parquet::ConvertedType;
@@ -638,7 +656,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < read_now; i++) {
 			validity.SetInvalid(result_offset + i);
 		}

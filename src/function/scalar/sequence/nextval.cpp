@@ -90,8 +90,9 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	}
 }
 
-unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, ScalarFunction &,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
+
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -99,7 +100,7 @@ unique_ptr<FunctionData> NextValBind(ScalarFunctionBindInput &bind_input, Scalar
 		throw NotImplementedException(
 		    "currval/nextval requires a constant sequence - non-constant sequences are no longer supported");
 	}
-	auto &binder = bind_input.binder;
+	auto &binder = input.GetBinder();
 	// parameter to nextval function is a foldable constant
 	// evaluate the constant and perform the catalog lookup already
 	auto seqname = ExpressionExecutor::EvaluateScalar(binder.context, *arguments[0]);
@@ -140,7 +141,7 @@ void NextValModifiedDatabases(ClientContext &context, FunctionModifiedDatabasesI
 ScalarFunction NextvalFun::GetFunction() {
 	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<NextSequenceValueOperator>, nullptr, nullptr);
-	next_val.SetBindExtendedCallback(NextValBind);
+	next_val.SetBindCallback(NextValBind);
 	next_val.SetSerializeCallback(Serialize);
 	next_val.SetDeserializeCallback(Deserialize);
 	next_val.SetModifiedDatabasesCallback(NextValModifiedDatabases);
@@ -153,7 +154,7 @@ ScalarFunction NextvalFun::GetFunction() {
 ScalarFunction CurrvalFun::GetFunction() {
 	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                        NextValFunction<CurrentSequenceValueOperator>, nullptr, nullptr);
-	curr_val.SetBindExtendedCallback(NextValBind);
+	curr_val.SetBindCallback(NextValBind);
 	curr_val.SetSerializeCallback(Serialize);
 	curr_val.SetDeserializeCallback(Deserialize);
 	curr_val.SetInitStateCallback(NextValLocalFunction);

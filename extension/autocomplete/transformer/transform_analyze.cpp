@@ -5,14 +5,17 @@
 
 namespace duckdb {
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	VacuumOptions vacuum_options;
 	vacuum_options.analyze = true;
 	auto result = make_uniq<VacuumStatement>(vacuum_options);
-	auto target_opt = list_pr.Child<OptionalParseResult>(2);
+	if (list_pr.Child<OptionalParseResult>(1).HasResult()) {
+		throw NotImplementedException("ANALYZE VERBOSE is not implemented yet");
+	}
+	auto &target_opt = list_pr.Child<OptionalParseResult>(2);
 	if (target_opt.HasResult()) {
-		auto target = transformer.Transform<AnalyzeTarget>(target_opt.optional_result);
+		auto target = transformer.Transform<AnalyzeTarget>(target_opt.GetResult());
 		result->info->columns = target.columns;
 		result->info->ref = std::move(target.ref);
 		result->info->has_table = true;
@@ -20,9 +23,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTra
 	return std::move(result);
 }
 
-AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,
-                                                            optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	AnalyzeTarget result;
 	result.ref = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.Child<ListParseResult>(0));
 	transformer.TransformOptional<vector<string>>(list_pr, 1, result.columns);
