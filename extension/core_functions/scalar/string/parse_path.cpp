@@ -269,20 +269,19 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::SetListSize(result, 0);
 
 	// set up the list entries
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child_entry = ListVector::GetEntry(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			result_mask.SetInvalid(i);
+			result_data.SetInvalid(i);
 			continue;
 		}
 		SplitInput split_input(result, child_entry, total_splits);
 		auto list_length = SplitPath(inputs[input_idx], sep, split_input);
-		list_data[i].length = list_length;
-		list_data[i].offset = total_splits;
+		result_data[i].length = list_length;
+		result_data[i].offset = total_splits;
 		total_splits += list_length;
 	}
 	ListVector::SetListSize(result, total_splits);

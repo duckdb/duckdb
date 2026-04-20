@@ -35,7 +35,7 @@ private:
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
 	                                             map<MultiFileGlobalIndex, reference<TableFilter>> &remaining_filters);
 	Value GetConstantValue(MultiFileGlobalIndex global_index);
-	bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant);
+	bool EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant);
 
 private:
 	ClientContext &context;

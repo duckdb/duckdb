@@ -221,7 +221,7 @@ static void DictFSSTFilter(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 		sel_count = approved_tuple_count;
 
-		result.Dictionary(scan_state.dictionary, dict_sel);
+		result.Dictionary(scan_state.dictionary, dict_sel, vector_count);
 		return;
 	}
 	// fallback: scan + filter

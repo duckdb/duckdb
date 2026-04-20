@@ -25,15 +25,23 @@ struct ConstantVector {
 #endif
 	}
 
+	static void VerifyConstantVector(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
+		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			throw InternalException("Operation requires a constant vector but a non-constant vector was encountered");
+		}
+#endif
+	}
+
 	static inline const_data_ptr_t GetData(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		VerifyConstantVector(vector);
+		return vector.GetBufferRef() ? vector.GetBufferRef()->GetData() : nullptr;
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		return vector.buffer ? vector.buffer->GetData() : nullptr;
+		VerifyConstantVector(vector);
+		return vector.GetBufferRef() ? vector.BufferMutable().GetData() : nullptr;
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
@@ -55,7 +63,7 @@ struct ConstantVector {
 	}
 	static inline bool IsNull(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.Buffer().GetValidityMask();
 		return !validity.RowIsValid(0);
 	}
 	//! Sets a vector to be a constant NULL vector
@@ -63,16 +71,18 @@ struct ConstantVector {
 	DUCKDB_API static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		return validity;
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.Buffer().GetValidityMask();
 		return validity;
 	}
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector();
+	//! Turns "vector" into a constant vector by referencing a value
+	DUCKDB_API static void Reference(Vector &vector, const Value &value);
 	//! Turns "vector" into a constant vector by referencing a value within the source vector
 	DUCKDB_API static void Reference(Vector &vector, const Vector &source, idx_t position, idx_t count);
 

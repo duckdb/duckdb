@@ -58,10 +58,10 @@ private:
 	unique_ptr<Expression> CreateRowNumberGenerator(unique_ptr<Expression> aggregate_column_ref) const;
 	void AddStructExtractExprs(vector<unique_ptr<Expression>> &exprs, const LogicalType &struct_type,
 	                           const unique_ptr<BoundColumnRefExpression> &aggregate_column_ref) const;
-	static void UpdateTopmostBindings(TableIndex window_idx, const unique_ptr<LogicalOperator> &op,
-	                                  const map<idx_t, idx_t> &group_idxs,
-	                                  const vector<ColumnBinding> &topmost_bindings,
-	                                  vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
+	unique_ptr<LogicalOperator>
+	UpdateTopmostBindings(TableIndex window_idx, unique_ptr<LogicalOperator> op, const vector<LogicalType> &types,
+	                      const map<idx_t, idx_t> &group_idxs, const vector<ColumnBinding> &topmost_bindings,
+	                      vector<ColumnBinding> &new_bindings, ColumnBindingReplacer &replacer);
 	TopNWindowEliminationParameters ExtractOptimizerParameters(const LogicalWindow &window, const LogicalFilter &filter,
 	                                                           const vector<ColumnBinding> &bindings,
 	                                                           vector<unique_ptr<Expression>> &aggregate_payload);

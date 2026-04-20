@@ -96,7 +96,7 @@ template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetDataMutable<T>(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
@@ -124,7 +124,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 
 void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(vector)) {
 			for (idx_t i = 0; i < count; i++) {
@@ -206,7 +206,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	}
 	case PhysicalType::LIST: {
 		idx_t offset = ListVector::GetListSize(result);
-		auto &list_child = ListVector::GetEntry(vector);
+		auto &list_child = ListVector::GetChild(vector);
 		ListVector::Append(result, list_child, ListVector::GetListSize(vector));
 
 		// all the false offsets need to be incremented by true_child.count

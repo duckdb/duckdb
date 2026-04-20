@@ -1,3 +1,16 @@
+diff --git a/src/common/ducklake_util.cpp b/src/common/ducklake_util.cpp
+index 4567b707..2cdd4281 100644
+--- a/src/common/ducklake_util.cpp
++++ b/src/common/ducklake_util.cpp
+@@ -320,7 +320,7 @@ DynamicFilter *DuckLakeUtil::GetOptionalDynamicFilter(const TableFilter &filter)
+ 		return nullptr;
+ 	}
+ 	auto &dynamic = optional.child_filter->Cast<DynamicFilter>();
+-	if (!dynamic.filter_data || !dynamic.filter_data->filter) {
++	if (!dynamic.filter_data || !dynamic.filter_data->initialized) {
+ 		return nullptr;
+ 	}
+ 	return &dynamic;
 diff --git a/src/common/parquet_file_scanner.cpp b/src/common/parquet_file_scanner.cpp
 index f03ad464..e6fc959d 100644
 --- a/src/common/parquet_file_scanner.cpp
@@ -1414,7 +1427,7 @@ index 65adf801..e7dfc462 100644
  		for (auto &def : op.bound_defaults) {
  			insert_op.bound_defaults.push_back(def->Copy());
 diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
-index e812cef5..6140d444 100644
+index e812cef5..cb38892c 100644
 --- a/src/storage/ducklake_metadata_manager.cpp
 +++ b/src/storage/ducklake_metadata_manager.cpp
 @@ -312,7 +312,7 @@ SELECT key, value FROM {METADATA_CATALOG}.ducklake_metadata
@@ -1507,6 +1520,15 @@ index e812cef5..6140d444 100644
  	FilterPushdownQueryComponents result;
  
  	if (filter_info.column_filters.empty()) {
+@@ -1293,7 +1293,7 @@ vector<DuckLakeFileListEntry> DuckLakeMetadataManager::GetFilesForTable(DuckLake
+ 				ExpressionType comparison_type;
+ 				{
+ 					lock_guard<mutex> l(dynamic->filter_data->lock);
+-					comparison_type = dynamic->filter_data->filter->comparison_type;
++					comparison_type = dynamic->filter_data->comparison_type;
+ 				}
+ 				dynamic_filter_columns.push_back(
+ 				    {col_filter.column_field_index, comparison_type, col_filter.column_type});
 @@ -1907,7 +1907,7 @@ string DuckLakeMetadataManager::DropSchemas(const set<SchemaIndex> &ids) {
  	return FlushDrop("ducklake_schema", "schema_id", ids);
  }
@@ -1707,7 +1729,7 @@ index e3ddf53b..96e99928 100644
  		const auto &column_type = read_info.column_types[column_index.index];
  
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 2d6317f9..a32fe7f3 100644
+index 2d6317f9..841df7a4 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
 @@ -28,6 +28,7 @@
@@ -1727,6 +1749,17 @@ index 2d6317f9..a32fe7f3 100644
                                idx_t snapshot_value, ExpressionType comparison_type) {
  	auto constant = Value::UBIGINT(snapshot_value).DefaultCastAs(col_type);
  	auto filter = make_uniq<ConstantFilter>(comparison_type, std::move(constant));
+@@ -87,8 +88,8 @@ static bool CanSkipFileByTopNDynamicFilter(const DuckLakeFileListEntry &file_ent
+ 			if (!filter->filter_data->initialized) {
+ 				return false;
+ 			}
+-			comparison_type = filter->filter_data->filter->comparison_type;
+-			constant = filter->filter_data->filter->constant;
++			comparison_type = filter->filter_data->comparison_type;
++			constant = filter->filter_data->constant;
+ 		}
+ 
+ 		auto mm_it = file_entry.column_min_max.find(col_filter.column_field_index);
 @@ -317,7 +318,7 @@ ReaderInitializeType DuckLakeMultiFileReader::InitializeReader(MultiFileReaderDa
  		if (!reader.filters) {
  			reader.filters = make_uniq<TableFilterSet>();

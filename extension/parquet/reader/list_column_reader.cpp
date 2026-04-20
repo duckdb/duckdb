@@ -36,7 +36,7 @@ struct TemplatedListReader {
 		D_ASSERT(ListVector::GetListSize(*result_out) == 0);
 
 		auto result_ptr = FlatVector::GetDataMutable<list_entry_t>(*result_out);
-		auto &result_mask = FlatVector::Validity(*result_out);
+		auto &result_mask = FlatVector::ValidityMutable(*result_out);
 		return ListReaderData(result_ptr, result_mask);
 	}
 

@@ -81,14 +81,30 @@ unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &conte
 
 void WindowExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                           const idx_t input_idx, OperatorSinkInput &sink) const {
-	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
-	lbstate.Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	if (wexpr.window && wexpr.window->HasSinkCallback()) {
+		wexpr.window->GetSinkCallback()(context, sink_chunk, coll_chunk, input_idx, sink);
+	} else {
+		auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
+		lbstate.Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+	}
 }
 
 void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
 	auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
 	lbstate.state.Finalize(collection);
-	lbstate.Finalize(context, collection, sink);
+
+	if (wexpr.window && wexpr.window->HasFinalizeCallback()) {
+		wexpr.window->GetFinalizeCallback()(context, collection, sink);
+	} else {
+		lbstate.Finalize(context, collection, sink);
+	}
+}
+
+void WindowExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+	if (wexpr.window && wexpr.window->HasEvaluateCallback()) {
+		wexpr.window->GetEvaluateCallback()(context, eval_chunk, bounds, result, row_idx, sink);
+	}
 }
 
 } // namespace duckdb

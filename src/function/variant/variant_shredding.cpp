@@ -170,7 +170,7 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 	auto &type = result.GetType();
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT);
 
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	(void)validity;
 
 	//! Collect the nested data for the objects
@@ -308,7 +308,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 		}
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, child_result_sel, total_offset);
 }
 

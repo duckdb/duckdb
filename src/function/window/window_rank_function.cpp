@@ -1,4 +1,4 @@
-#include "duckdb/function/window/window_rank_function.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -51,10 +51,10 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-	          OperatorSinkInput &sink) override;
+	static void Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                   OperatorSinkInput &sink);
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 
@@ -69,19 +69,17 @@ public:
 	unique_ptr<LocalSinkState> local_tree;
 };
 
-void WindowPeerLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                idx_t input_idx, OperatorSinkInput &sink) {
-	WindowExecutorLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
-
+void WindowPeerLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                  idx_t input_idx, OperatorSinkInput &sink) {
+	auto &local_tree = sink.local_state.Cast<WindowPeerLocalState>().local_tree;
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
 		local_tokens.Sink(context, sink_chunk, input_idx, nullptr, 0, sink.interrupt_state);
 	}
 }
 
-void WindowPeerLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowExecutorLocalState::Finalize(context, collection, sink);
-
+void WindowPeerLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	auto &local_tree = sink.local_state.Cast<WindowPeerLocalState>().local_tree;
 	if (local_tree) {
 		auto &local_tokens = local_tree->Cast<WindowMergeSortTreeLocalState>();
 		local_tokens.Finalize(context, sink.interrupt_state);
@@ -105,6 +103,14 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 //===--------------------------------------------------------------------===//
 // WindowPeerExecutor
 //===--------------------------------------------------------------------===//
+struct WindowPeerExecutor : public WindowExecutor {
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+};
+
 void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	const auto &wexpr = executor.wexpr;
 	auto &arg_order_idx = executor.arg_order_idx;
@@ -121,6 +127,15 @@ unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobal(ClientContext &client,
 //===--------------------------------------------------------------------===//
 // WindowRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowRankExecutor : public WindowPeerExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowRankLocalState : public WindowPeerLocalState {
 public:
 	WindowRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -143,7 +158,8 @@ void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowE
 WindowFunction RankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK, nullptr,
 	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing, WindowRankExecutor::GetGlobal,
-	                   WindowRankExecutor::GetLocal);
+	                   WindowRankExecutor::GetLocal, WindowRankLocalState::Sinker, WindowRankLocalState::Finalizer,
+	                   WindowRankExecutor::GetData);
 	return fun;
 }
 
@@ -151,12 +167,12 @@ unique_ptr<LocalSinkState> WindowRankExecutor::GetLocal(ExecutionContext &contex
 	return make_uniq<WindowRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
-void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                          Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                 idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
@@ -191,6 +207,16 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 // WindowDenseRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowDenseRankExecutor : public WindowPeerExecutor {
+public:
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowDenseRankLocalState : public WindowPeerLocalState {
 public:
 	WindowDenseRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -205,8 +231,8 @@ void WindowDenseRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWi
 
 WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
-	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowCumeDistExecutor::GetGlobal,
-	                   WindowCumeDistExecutor::GetLocal);
+	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowDenseRankExecutor::GetGlobal,
+	                   WindowDenseRankExecutor::GetLocal, nullptr, nullptr, WindowDenseRankExecutor::GetData);
 	fun.can_order_by = false;
 	return fun;
 }
@@ -215,8 +241,8 @@ unique_ptr<LocalSinkState> WindowDenseRankExecutor::GetLocal(ExecutionContext &c
 	return make_uniq<WindowDenseRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
-void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
 	const auto count = eval_chunk.size();
@@ -224,7 +250,7 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	auto &order_mask = gpeer.order_mask;
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
-	auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+	auto rdata = FlatVector::Writer<int64_t>(result, count);
 
 	//	Reset to "previous" row
 	//	Resetting is slow because we have to rescan the mask.
@@ -283,6 +309,15 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowPercentRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowPercentRankExecutor : public WindowPeerExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowPercentRankLocalState : public WindowPeerLocalState {
 public:
 	WindowPercentRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -305,7 +340,9 @@ void WindowPercentRankExecutor::GetBounds(WindowBoundsSet &required, const Bound
 WindowFunction PercentRankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK, nullptr,
 	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing,
-	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal);
+	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal,
+	                   WindowPercentRankLocalState::Sinker, WindowPercentRankLocalState::Finalizer,
+	                   WindowPercentRankExecutor::GetData);
 	return fun;
 }
 
@@ -319,12 +356,12 @@ static inline double PercentRank(const idx_t begin, const idx_t end, const uint6
 	return denom > 0 ? ((double)rank - 1) / denom : 0;
 }
 
-void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                                 Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                        Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
-	auto rdata = FlatVector::GetDataMutable<double>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
@@ -362,6 +399,15 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 //===--------------------------------------------------------------------===//
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
+struct WindowCumeDistExecutor : public WindowPeerExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowCumeDistLocalState : public WindowPeerLocalState {
 public:
 	WindowCumeDistLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -382,9 +428,10 @@ void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWin
 	}
 }
 WindowFunction CumeDistFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr,
-	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing,
-	                   WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal);
+	WindowFunction fun(
+	    Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr, WindowCumeDistExecutor::GetBounds,
+	    WindowCumeDistExecutor::GetSharing, WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal,
+	    WindowCumeDistLocalState::Sinker, WindowCumeDistLocalState::Finalizer, WindowCumeDistExecutor::GetData);
 	return fun;
 }
 
@@ -398,11 +445,11 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 	return denom > 0 ? (num / denom) : 0;
 }
 
-void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                              Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                     Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
-	auto rdata = FlatVector::GetDataMutable<double>(result);
 	const auto count = eval_chunk.size();
+	auto rdata = FlatVector::Writer<double>(result, count);
 
 	if (gpeer.use_framing) {
 		auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 
@@ -18,6 +19,7 @@ struct WindowSharedExpressions;
 class WindowExecutor;
 class GlobalSinkState;
 class LocalSinkState;
+class WindowCollection;
 
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
@@ -78,7 +80,7 @@ private:
 	vector<unique_ptr<Expression>> &arguments;
 };
 
-//! Binds the scalar function and creates the function data
+//! Binds the window function and creates the function data
 typedef unique_ptr<FunctionData> (*window_bind_function_t)(BindWindowFunctionInput &input);
 
 //! Validates the additional ordering usage.
@@ -103,6 +105,18 @@ typedef unique_ptr<GlobalSinkState> (*window_global_function_t)(ClientContext &c
 //! If not provided, a default WindowExecutorLocalState will be generated, with references to the parameters
 typedef unique_ptr<LocalSinkState> (*window_local_function_t)(ExecutionContext &context, const GlobalSinkState &gstate);
 
+//! Sinks data into the thread-local state
+typedef void (*window_sink_function_t)(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                       idx_t input_idx, OperatorSinkInput &sink);
+
+//! Finalizes the thread-local state (builds all data structures needed for
+typedef void (*window_finalize_function_t)(ExecutionContext &context, optional_ptr<WindowCollection> collection,
+                                           OperatorSinkInput &sink);
+
+//! Computes the function for a single chunk
+typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                           Vector &result, idx_t row_idx, OperatorSinkInput &sink);
+
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                    const WindowFunction &function);
@@ -113,17 +127,22 @@ public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,
-	               window_global_function_t global = nullptr, window_local_function_t local = nullptr)
+	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
+	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr,
+	               window_evaluate_function_t evaluate = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID), FunctionNullHandling::DEFAULT_NULL_HANDLING),
-	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing), global(global), local(local) {
+	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing), global(global), local(local),
+	      sink(sink), finalize(finalize), evaluate(evaluate) {
 	}
 
 	WindowFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, ExpressionType window_enum,
 	               window_bind_function_t bind = nullptr, window_bounds_function_t bounds = nullptr,
 	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr,
-	               window_local_function_t local = nullptr)
-	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local) {
+	               window_local_function_t local = nullptr, window_sink_function_t sink = nullptr,
+	               window_finalize_function_t finalize = nullptr, window_evaluate_function_t evaluate = nullptr)
+	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
+	                     finalize, evaluate) {
 	}
 
 	// clang-format off
@@ -156,6 +175,18 @@ public:
 	bool HasLocalCallback() const { return local != nullptr; }
 	window_local_function_t GetLocalCallback() const { return local; }
 	void SetLocalCallback(window_local_function_t callback) { local = callback; }
+
+	bool HasSinkCallback() const { return sink != nullptr; }
+	window_sink_function_t GetSinkCallback() const { return sink; }
+	void SetSinkCallback(window_sink_function_t callback) { sink = callback; }
+
+	bool HasFinalizeCallback() const { return finalize != nullptr; }
+	window_finalize_function_t GetFinalizeCallback() const { return finalize; }
+	void SetFinalizeCallback(window_finalize_function_t callback) { finalize = callback; }
+
+	bool HasEvaluateCallback() const { return evaluate != nullptr; }
+	window_evaluate_function_t GetEvaluateCallback() const { return evaluate; }
+	void SetEvaluateCallback(window_evaluate_function_t callback) { evaluate = callback; }
 
 	bool HasSerializationCallbacks() const { return false; }
 	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
@@ -190,6 +221,12 @@ public:
 	window_global_function_t global = nullptr;
 	//! The local state constructor
 	window_local_function_t local = nullptr;
+	//! The local state data sink
+	window_sink_function_t sink = nullptr;
+	//! The local state finalize operation
+	window_finalize_function_t finalize = nullptr;
+	//! The thread-local evaluation function
+	window_evaluate_function_t evaluate = nullptr;
 
 	//! Serialization specialization. Not yet implemented
 	window_serialize_t serialize = nullptr;

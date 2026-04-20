@@ -2,6 +2,15 @@ diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
 index 91b7180..a002078 100644
 --- a/src/sqlite_scanner.cpp
 +++ b/src/sqlite_scanner.cpp
+@@ -270,7 +270,7 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
+ 				auto &out_vec = output.data[col_idx];
+ 				auto sqlite_column_type = stmt.GetType(col_idx);
+ 				if (sqlite_column_type == SQLITE_NULL) {
+-					auto &mask = FlatVector::Validity(out_vec);
++					auto &mask = FlatVector::ValidityMutable(out_vec);
+ 					mask.Set(out_idx, false);
+ 					continue;
+ 				}
 @@ -279,26 +279,26 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
  				switch (out_vec.GetType().id()) {
  				case LogicalTypeId::BIGINT:

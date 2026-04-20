@@ -25,9 +25,17 @@ namespace duckdb {
 namespace {
 
 template <class T>
+const T *GetSourceData(const Vector &source) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		return ConstantVector::GetData<T>(source);
+	}
+	return FlatVector::GetData<T>(source);
+}
+
+template <class T>
 void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vector &target, idx_t source_offset,
                    idx_t target_offset, idx_t copy_count) {
-	auto ldata = FlatVector::GetData<T>(source);
+	auto ldata = GetSourceData<T>(source);
 	auto tdata = FlatVector::GetDataMutable<T>(target);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel.get_index(source_offset + i);
@@ -40,6 +48,8 @@ static const ValidityMask &ExtractValidityMask(const Vector &v) {
 	switch (v.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return FlatVector::Validity(v);
+	case VectorType::CONSTANT_VECTOR:
+		return ConstantVector::Validity(v);
 	default:
 		throw InternalException("Unsupported vector type in vector copy");
 	}
@@ -100,7 +110,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// first copy the nullmask
-	auto &tmask = FlatVector::Validity(target);
+	auto &tmask = FlatVector::ValidityMutable(target);
 	if (source->GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		const bool valid = !ConstantVector::IsNull(*source);
 		for (idx_t i = 0; i < copy_count; i++) {
@@ -156,7 +166,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		TemplatedCopy<interval_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::VARCHAR: {
-		auto ldata = FlatVector::GetData<string_t>(*source);
+		auto ldata = GetSourceData<string_t>(*source);
 		auto tdata = FlatVector::Writer<string_t>(target, target_offset + copy_count);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
@@ -181,8 +191,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::ARRAY);
 		D_ASSERT(ArrayType::GetSize(source->GetType()) == ArrayType::GetSize(target.GetType()));
 
-		auto &source_child = ArrayVector::GetEntry(*source);
-		auto &target_child = ArrayVector::GetEntry(target);
+		auto &source_child = ArrayVector::GetChild(*source);
+		auto &target_child = ArrayVector::GetChildMutable(target);
 		auto array_size = ArrayType::GetSize(source->GetType());
 
 		// Create a selection vector for the child elements
@@ -200,8 +210,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 
-		auto &source_child = ListVector::GetEntry(*source);
-		auto sdata = FlatVector::GetData<list_entry_t>(*source);
+		auto &source_child = ListVector::GetChild(*source);
+		auto sdata = GetSourceData<list_entry_t>(*source);
 		auto tdata = FlatVector::GetDataMutable<list_entry_t>(target);
 
 		if (target_vector_type == VectorType::CONSTANT_VECTOR) {

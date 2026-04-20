@@ -8,9 +8,9 @@ on:
       git_ref:
         type: string
       skip_tests:
-        type: string
+        type: boolean
       run_all:
-        type: string
+        type: boolean
       twine_upload:
         type: string
 
@@ -85,7 +85,7 @@ jobs:
     needs: prepare-status
     if: ${{ always() }}
     with:
-      is-success: ${{ needs.prepare-status.outputs.is-success }}
+      is-success: ${{ fromJSON(needs.prepare-status.outputs.is-success) }}
       target-branch: ${{ inputs.git_ref == '' && github.ref || inputs.git_ref }}
       duckdb-sha: ${{ github.sha }}
       triggering-event: ${{ github.event_name }}

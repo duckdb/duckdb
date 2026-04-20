@@ -343,7 +343,7 @@ template <class OP = HistogramGenericFunctor>
 void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	auto states = state_vector.Values<ApproxTopKState *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need
@@ -359,7 +359,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
 	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child_data = ListVector::GetEntry(result);
+	auto &child_data = ListVector::GetChildMutable(result);
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {

@@ -16,7 +16,7 @@ namespace duckdb {
 
 void ArrayColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	auto &array_child = ArrayVector::GetEntry(vector);
+	auto &array_child = ArrayVector::GetChildMutable(vector);
 	auto array_size = ArrayType::GetSize(vector.GetType());
 	GetChildWriter().Analyze(*state.child_state, &state_p, array_child, array_size * count);
 }
@@ -42,7 +42,7 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 
 	// write definition levels and repeats
 	// the main difference between this and ListColumnWriter::Prepare is that we need to make sure to write out
@@ -71,7 +71,7 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 	}
 	state.parent_index += vcount;
 
-	auto &array_child = ArrayVector::GetEntry(vector);
+	auto &array_child = ArrayVector::GetChildMutable(vector);
 	// The elements of a single array should not span multiple Parquet pages
 	// So, we force the entire vector to fit on a single page by setting "vector_can_span_multiple_pages=false"
 	GetChildWriter().Prepare(*state.child_state, &state_p, array_child, count * array_size, false);
@@ -80,7 +80,7 @@ void ArrayColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto array_size = ArrayType::GetSize(vector.GetType());
-	auto &array_child = ArrayVector::GetEntry(vector);
+	auto &array_child = ArrayVector::GetChildMutable(vector);
 	GetChildWriter().Write(*state.child_state, array_child, count * array_size);
 }
 

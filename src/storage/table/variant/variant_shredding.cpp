@@ -560,7 +560,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
                                                   optional_ptr<const SelectionVector> result_sel,
                                                   DuckDBVariantShreddingState &shredding_state, idx_t count) {
 	//
-	// auto &validity = FlatVector::Validity(value);
+	// auto &validity = FlatVector::ValidityMutable(value);
 	uint32_t *untyped_data = nullptr;
 	if (untyped_values) {
 		untyped_data = FlatVector::GetDataMutable<uint32_t>(*untyped_values);
@@ -587,7 +587,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			if (shredding_state.type.id() != LogicalTypeId::STRUCT) {
 				//! Value is shredded, directly write a `NULL` to the 'value' if the type is not an OBJECT
 				if (untyped_values) {
-					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+					FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 				}
 				continue;
 			}
@@ -597,7 +597,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 			if (unshredded_children.empty()) {
 				//! Fully shredded object
 				if (untyped_values) {
-					FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+					FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 				}
 			} else {
 				//! Deal with partially shredded objects
@@ -615,7 +615,7 @@ void DuckDBVariantShredding::AnalyzeVariantValues(UnifiedVariantVectorData &vari
 		if (!variant.RowIsValid(row) || variant.GetTypeId(row, value_index) == VariantLogicalType::VARIANT_NULL) {
 			//! NULL is reserved for NULL Variant values
 			if (untyped_values) {
-				FlatVector::Validity(*untyped_values).SetInvalid(result_index);
+				FlatVector::ValidityMutable(*untyped_values).SetInvalid(result_index);
 			}
 		} else {
 			if (!untyped_data) {
@@ -705,7 +705,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 	ListVector::Reserve(values, original_values_size);
 	ListVector::SetListSize(values, 0);
 
-	auto &keys_entry = ListVector::GetEntry(keys);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
 	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	keys_selvec.Initialize(original_keys_size);

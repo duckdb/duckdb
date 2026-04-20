@@ -4,6 +4,9 @@
 
 # see https://www.postgresql.org/docs/10/functions-math.html
 
+statement ok
+SET ieee_floating_point_ops = false;
+
 query R
 select abs(-17.4)
 ----
@@ -174,3 +177,6 @@ statement error
 select log(2, -1)
 ----
 <REGEX>:.*Out of Range Error.*cannot take logarithm.*
+
+statement ok
+RESET ieee_floating_point_ops;

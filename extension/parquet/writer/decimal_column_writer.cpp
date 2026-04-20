@@ -93,7 +93,7 @@ unique_ptr<ColumnWriterStatistics> FixedDecimalColumnWriter::InitializeStatsStat
 void FixedDecimalColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p,
                                            ColumnWriterPageState *page_state, Vector &input_column, idx_t chunk_start,
                                            idx_t chunk_end) {
-	auto &mask = FlatVector::Validity(input_column);
+	auto &mask = FlatVector::ValidityMutable(input_column);
 	auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
 	auto &stats = stats_p->Cast<FixedDecimalStatistics>();
 

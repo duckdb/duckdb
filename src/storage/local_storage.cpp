@@ -433,13 +433,37 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		return;
 	}
 
+	// Only committed row IDs (< MAX_ROW_ID) belong in the delete indexes.
+	// Local row IDs (>= MAX_ROW_ID) live in transaction-local storage and are
+	// handled directly by LocalStorage::Delete.
+	row_ids.Flatten(delete_chunk.size());
+	auto flat_row_ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t committed_count = 0;
+	SelectionVector committed_sel(delete_chunk.size());
+	for (idx_t i = 0; i < delete_chunk.size(); i++) {
+		if (flat_row_ids[i] < MAX_ROW_ID) {
+			committed_sel.set_index(committed_count++, i);
+		}
+	}
+
+	if (committed_count == 0) {
+		return;
+	}
+
+	DataChunk committed_chunk;
+	committed_chunk.Initialize(Allocator::DefaultAllocator(), delete_chunk.GetTypes());
+	committed_chunk.Slice(delete_chunk, committed_sel, committed_count);
+
+	Vector committed_row_ids(row_ids, committed_sel, committed_count);
+	committed_row_ids.Flatten(committed_count);
+
 	for (auto &index : delete_indexes.Indexes()) {
 		D_ASSERT(index.IsBound());
 		if (!index.IsUnique()) {
 			continue;
 		}
 		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
-		auto result = index.Cast<BoundIndex>().Append(delete_chunk, row_ids, index_append_info);
+		auto result = index.Cast<BoundIndex>().Append(committed_chunk, committed_row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}
@@ -697,7 +721,7 @@ void LocalStorage::ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t change
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
+void LocalStorage::FetchChunk(DataTable &table, const Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
                               DataChunk &chunk, ColumnFetchState &fetch_state) {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {

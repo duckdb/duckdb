@@ -34,21 +34,27 @@ private:
 };
 
 template <class T>
-class VectorValueIterator {
+class VectorIterator {
 public:
-	VectorValueIterator(const Vector &vector, idx_t count) : count(count) {
+	VectorIterator(const Vector &vector, idx_t count) : count(count) {
 		vector.ToUnifiedFormat(count, format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
 
 public:
-	struct VectorValueEntry {
-		VectorValueEntry(const UnifiedVectorFormat &format, const T *data, idx_t index)
+	struct ValueEntry {
+		ValueEntry(const UnifiedVectorFormat &format, const T *data, idx_t index)
 		    : format(format), data(data), index(index) {
 			sel_index = format.sel->get_index(index);
 		}
 
+		//! Return the data - the value must be valid
 		const T &GetValue() const {
+			D_ASSERT(IsValid());
+			return GetValueUnsafe();
+		}
+		//! Return the underlying data. If the data is not valid then uninitialized memory is returned.
+		const T &GetValueUnsafe() const {
 			return data[sel_index];
 		}
 		bool IsValid() const {
@@ -66,71 +72,71 @@ public:
 	};
 
 private:
-	class VectorIterator {
+	class Iterator {
 	public:
-		explicit VectorIterator(UnifiedVectorFormat &format, const T *data, idx_t index)
+		explicit Iterator(UnifiedVectorFormat &format, const T *data, idx_t index)
 		    : format(format), data(data), index(index) {
 		}
 
 	public:
-		VectorIterator &operator++() { // NOLINT: match stl API
+		Iterator &operator++() { // NOLINT: match stl API
 			++index;
 			return *this;
 		}
-		VectorIterator operator++(int) { // NOLINT: match stl API
+		Iterator operator++(int) { // NOLINT: match stl API
 			auto tmp = *this;
 			++index;
 			return tmp;
 		}
-		VectorIterator &operator--() { // NOLINT: match stl API
+		Iterator &operator--() { // NOLINT: match stl API
 			--index;
 			return *this;
 		}
-		VectorIterator &operator+=(idx_t n) {
+		Iterator &operator+=(idx_t n) {
 			index += n;
 			return *this;
 		}
-		VectorIterator &operator-=(idx_t n) {
+		Iterator &operator-=(idx_t n) {
 			index -= n;
 			return *this;
 		}
-		VectorIterator operator+(idx_t n) const {
-			return VectorIterator(format, data, index + n);
+		Iterator operator+(idx_t n) const {
+			return Iterator(format, data, index + n);
 		}
-		VectorIterator operator-(idx_t n) const {
-			return VectorIterator(format, data, index - n);
+		Iterator operator-(idx_t n) const {
+			return Iterator(format, data, index - n);
 		}
-		int64_t operator-(const VectorIterator &other) const {
+		int64_t operator-(const Iterator &other) const {
 			return static_cast<int64_t>(index) - static_cast<int64_t>(other.index);
 		}
-		bool operator==(const VectorIterator &other) const {
+		bool operator==(const Iterator &other) const {
 			return index == other.index;
 		}
-		bool operator!=(const VectorIterator &other) const {
+		bool operator!=(const Iterator &other) const {
 			return index != other.index;
 		}
-		bool operator<(const VectorIterator &other) const {
+		bool operator<(const Iterator &other) const {
 			return index < other.index;
 		}
-		bool operator<=(const VectorIterator &other) const {
+		bool operator<=(const Iterator &other) const {
 			return index <= other.index;
 		}
-		bool operator>(const VectorIterator &other) const {
+		bool operator>(const Iterator &other) const {
 			return index > other.index;
 		}
-		bool operator>=(const VectorIterator &other) const {
+		bool operator>=(const Iterator &other) const {
 			return index >= other.index;
 		}
-		VectorValueEntry operator*() const {
+		ValueEntry operator*() const {
 			return GetEntry(index);
 		}
-		VectorValueEntry operator[](idx_t n) const {
+		ValueEntry operator[](idx_t n) const {
 			return GetEntry(index + n);
 		}
 
 	private:
-		VectorValueEntry GetEntry(idx_t i) const {
-			return VectorValueEntry(format, data, i);
+		ValueEntry GetEntry(idx_t i) const {
+			return ValueEntry(format, data, i);
 		}
 
 	private:
@@ -140,17 +146,17 @@ private:
 	};
 
 public:
-	VectorIterator begin() { // NOLINT: match stl API
-		return VectorIterator(format, data, 0);
+	Iterator begin() { // NOLINT: match stl API
+		return Iterator(format, data, 0);
 	}
-	VectorIterator end() { // NOLINT: match stl API
-		return VectorIterator(format, data, count);
+	Iterator end() { // NOLINT: match stl API
+		return Iterator(format, data, count);
 	}
 	idx_t size() const {
 		return count;
 	}
-	VectorValueEntry operator[](idx_t i) const {
-		return VectorValueEntry(format, data, i);
+	ValueEntry operator[](idx_t i) const {
+		return ValueEntry(format, data, i);
 	}
 	//! Returns the value at the specified location without checking the NULL mask
 	T GetValueUnsafe(idx_t i) const {
@@ -264,8 +270,8 @@ private:
 };
 
 template <class T>
-inline VectorValueIterator<T> Vector::Values(idx_t count) const {
-	return VectorValueIterator<T>(*this, count);
+inline VectorIterator<T> Vector::Values(idx_t count) const {
+	return VectorIterator<T>(*this, count);
 }
 
 template <class T>

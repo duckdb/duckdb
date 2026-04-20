@@ -1,6 +1,9 @@
 #include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -11,6 +14,15 @@ DynamicFilter::DynamicFilter(shared_ptr<DynamicFilterData> filter_data_p)
     : TableFilter(TableFilterType::DYNAMIC_FILTER), filter_data(std::move(filter_data_p)) {
 }
 
+DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value constant_p)
+    : comparison_type(comparison_type_p), constant(std::move(constant_p)) {
+}
+
+unique_ptr<Expression> DynamicFilterData::ToExpression(const Expression &column) const {
+	return make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(),
+	                                            make_uniq<BoundConstantExpression>(constant));
+}
+
 FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) const {
 	if (!filter_data) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -19,7 +31,9 @@ FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) cons
 	if (!filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	return filter_data->filter->CheckStatistics(stats);
+	auto column = make_uniq<BoundReferenceExpression>(stats.GetType(), 0);
+	auto expression = filter_data->ToExpression(*column);
+	return ExpressionFilter::CheckExpressionStatistics(*expression, stats);
 }
 
 string DynamicFilter::ToString(const string &column_name) const {
@@ -36,7 +50,7 @@ unique_ptr<Expression> DynamicFilter::ToExpression(const Expression &column) con
 		return std::move(bound_constant);
 	}
 	lock_guard<mutex> l(filter_data->lock);
-	return filter_data->filter->ToExpression(column);
+	return filter_data->ToExpression(column);
 }
 
 bool DynamicFilter::Equals(const TableFilter &other_p) const {
@@ -56,7 +70,7 @@ void DynamicFilterData::SetValue(Value val) {
 		return;
 	}
 	lock_guard<mutex> l(lock);
-	filter->Cast<ConstantFilter>().constant = std::move(val);
+	constant = std::move(val);
 	initialized = true;
 }
 
