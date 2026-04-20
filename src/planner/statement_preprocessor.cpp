@@ -73,11 +73,11 @@ StatementPreprocessor::StatementPreprocessor(ClientContext &context) : context(c
 
 PreprocessingTransactionHandling GetTransactionHandling(vector<unique_ptr<SQLStatement>> &body_statements,
                                                         CurrentTransactionState full_transaction_state,
-                                                        bool can_wrap = true) {
-	if (body_statements.size() <= 1) {
+                                                        bool skip_handling = false) {
+	if (body_statements.size() <= 1 || skip_handling) {
 		return PreprocessingTransactionHandling::NONE;
 	}
-	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION && can_wrap) {
+	if (full_transaction_state == NOT_IN_ACTIVE_TRANSACTION) {
 		return PreprocessingTransactionHandling::WRAP_IN_TRANSACTION;
 	}
 	if (full_transaction_state == IN_ACTIVE_TRANSACTION) {
@@ -100,9 +100,7 @@ void UnpackMultiStatement(MultiStatement &multi_statement, const CurrentTransact
 			has_select = true;
 		}
 	}
-	bool can_wrap_in_transaction = !has_select;
-	auto handling =
-	    GetTransactionHandling(multi_statement.statements, current_transaction_state, can_wrap_in_transaction);
+	auto handling = GetTransactionHandling(multi_statement.statements, current_transaction_state, has_select);
 	AddStatements(multi_statement.statements, handling, new_statements);
 }
 
