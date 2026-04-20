@@ -256,7 +256,6 @@ void LogicalAggregate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", grouping_sets);
 	serializer.WritePropertyWithDefault<vector<unsafe_vector<ProjectionIndex>>>(206, "grouping_functions", grouping_functions);
 	serializer.WritePropertyWithDefault<TupleDataValidityType>(207, "distinct_validity", distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	serializer.WritePropertyWithDefault<optional_idx>(208, "limit", limit);
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserializer) {
@@ -269,7 +268,6 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<vector<GroupingSet>>(205, "grouping_sets", result->grouping_sets);
 	deserializer.ReadPropertyWithDefault<vector<unsafe_vector<ProjectionIndex>>>(206, "grouping_functions", result->grouping_functions);
 	deserializer.ReadPropertyWithExplicitDefault<TupleDataValidityType>(207, "distinct_validity", result->distinct_validity, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
-	deserializer.ReadPropertyWithDefault<optional_idx>(208, "limit", result->limit);
 	return std::move(result);
 }
 
@@ -449,7 +447,6 @@ void LogicalDistinct::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<DistinctType>(200, "distinct_type", distinct_type);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "distinct_targets", distinct_targets);
 	serializer.WritePropertyWithDefault<unique_ptr<BoundOrderModifier>>(202, "order_by", order_by);
-	serializer.WritePropertyWithDefault<optional_idx>(203, "limit", limit);
 }
 
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(Deserializer &deserializer) {
@@ -457,7 +454,6 @@ unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(Deserializer &deseriali
 	auto distinct_targets = deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "distinct_targets");
 	auto result = duckdb::unique_ptr<LogicalDistinct>(new LogicalDistinct(std::move(distinct_targets), distinct_type));
 	deserializer.ReadPropertyWithDefault<unique_ptr<BoundOrderModifier>>(202, "order_by", result->order_by);
-	deserializer.ReadPropertyWithDefault<optional_idx>(203, "limit", result->limit);
 	return std::move(result);
 }
 
