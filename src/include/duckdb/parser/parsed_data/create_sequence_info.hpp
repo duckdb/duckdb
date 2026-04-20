@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include <optional>
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 
@@ -46,7 +46,7 @@ struct CreateSequenceInfo : public CreateInfo {
 	//! Whether or not the sequence cycles
 	bool cycle;
 	//! The most recently returned value
-	std::optional<int64_t> last_value;
+	optional<int64_t> last_value;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

@@ -334,7 +334,7 @@
       {
         "id": 207,
         "name": "last_value",
-        "type": "std::optional<int64_t>"
+        "type": "optional<int64_t>"
       }
     ]
   },

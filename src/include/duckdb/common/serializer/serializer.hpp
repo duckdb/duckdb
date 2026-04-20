@@ -205,15 +205,15 @@ protected:
 		}
 	}
 
-	// Optional
+	// DuckDB Optional
 	template <typename T>
-	void WriteValue(const std::optional<T> &opt) {
-		if (!opt.has_value()) {
+	void WriteValue(const optional<T> &opt) {
+		if (!opt.IsValid()) {
 			OnNullableBegin(false);
 			OnNullableEnd();
 		} else {
 			OnNullableBegin(true);
-			WriteValue(opt.value());
+			WriteValue(opt.GetValue());
 			OnNullableEnd();
 		}
 	}

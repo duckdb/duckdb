@@ -12,7 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include <optional>
+#include "duckdb/common/optional.hpp"
 
 namespace duckdb {
 class DuckTransaction;
@@ -32,7 +32,8 @@ struct SequenceData {
 	//! The sequence counter
 	int64_t counter;
 	//! The most recently returned value
-	std::optional<int64_t> last_value;
+	//! FIXME: This is our own duckdb::optional. Make it a std::optional once all migration to c++17  is done.
+	optional<int64_t> last_value;
 	//! The increment value
 	int64_t increment;
 	//! The start_value of the sequence
@@ -62,7 +63,7 @@ public:
 	SequenceData GetData() const;
 	int64_t CurrentValue();
 	int64_t NextValue(DuckTransaction &transaction);
-	void ReplayValue(uint64_t usage_count, int64_t counter, std::optional<int64_t> last_value);
+	void ReplayValue(uint64_t usage_count, int64_t counter, optional<int64_t> last_value);
 
 	string ToSQL() const override;
 

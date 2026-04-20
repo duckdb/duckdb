@@ -276,9 +276,9 @@ private:
 		return ptr;
 	}
 
-	// Deserialize a std::optional
-	template <class T, typename ELEMENT_TYPE = typename is_optional<T>::ELEMENT_TYPE>
-	inline typename std::enable_if<is_optional<T>::value, T>::type Read() {
+	// Deserialize a duckdb_optional
+	template <class T, typename ELEMENT_TYPE = typename is_duckdb_optional<T>::ELEMENT_TYPE>
+	inline typename std::enable_if<is_duckdb_optional<T>::value, T>::type Read() {
 		auto is_present = OnNullableBegin();
 		T result;
 		if (is_present) {

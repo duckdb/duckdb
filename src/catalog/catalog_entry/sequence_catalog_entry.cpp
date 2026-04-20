@@ -48,7 +48,7 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 	if (!data.last_value) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value.value();
+	result = data.last_value.GetValue();
 	return result;
 }
 
@@ -81,7 +81,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	return result;
 }
 
-void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, std::optional<int64_t> last_value) {
+void SequenceCatalogEntry::ReplayValue(uint64_t v_usage_count, int64_t v_counter, optional<int64_t> last_value) {
 	if (v_usage_count > data.usage_count) {
 		data.usage_count = v_usage_count;
 		data.counter = v_counter;
