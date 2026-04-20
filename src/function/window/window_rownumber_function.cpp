@@ -154,7 +154,8 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 		if (grstate.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				// Row numbers are unique ranks
-				rdata.PushValue(UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
+				rdata.PushValue(
+				    UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {

@@ -262,10 +262,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result,
                                              const SelectionVector &sel, const SelectionVector &value_index_sel,
                                              const SelectionVector &result_sel, idx_t count) {
-	auto list_data = FlatVector::Writer<list_entry_t>(result);
-
 	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
 
+	auto list_data = FlatVector::Writer<list_entry_t>(result);
 	idx_t total_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];

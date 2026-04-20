@@ -163,8 +163,12 @@ struct FlatVector {
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 
 	template <class T>
+	static VectorWriter<T> Writer(Vector &vector, idx_t count, idx_t offset) {
+		return VectorWriter<T>(vector, count, offset);
+	}
+	template <class T>
 	static VectorWriter<T> Writer(Vector &vector, idx_t count) {
-		return VectorWriter<T>(vector, count);
+		return Writer<T>(vector, count, 0ULL);
 	}
 	template <class T>
 	static auto Writer(Vector &vector) -> decltype(Writer<T>(vector, NumericLimits<idx_t>::Maximum())) {

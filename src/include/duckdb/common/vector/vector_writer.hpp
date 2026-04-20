@@ -15,9 +15,9 @@ namespace duckdb {
 
 template <class T>
 struct VectorWriter {
-	VectorWriter(Vector &vector, idx_t count)
-	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)), count(count),
-	      current_idx(0) {
+	VectorWriter(Vector &vector, idx_t count, idx_t offset)
+	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)),
+	      count(offset + count), current_idx(offset) {
 	}
 
 	void SetInvalid(idx_t idx) {
@@ -99,7 +99,7 @@ struct VectorWriter<string_t> {
 		idx_t idx;
 	};
 
-	VectorWriter(Vector &vector, idx_t count);
+	VectorWriter(Vector &vector, idx_t count, idx_t offset);
 
 	inline void SetInvalid(idx_t idx) {
 		D_ASSERT(idx < count);

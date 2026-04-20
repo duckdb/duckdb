@@ -179,7 +179,8 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.PushValue(UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
+				rdata.PushValue(
+				    UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
 			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
