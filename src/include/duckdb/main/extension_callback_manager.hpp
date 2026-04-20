@@ -22,6 +22,7 @@ class OperatorExtension;
 class OptimizerExtension;
 class ParserExtension;
 class PlannerExtension;
+class ShellCommandExtension;
 class StorageExtension;
 struct ExtensionCallbackRegistry;
 
@@ -43,14 +44,17 @@ public:
 	void Register(shared_ptr<OperatorExtension> extension);
 	void Register(const string &name, shared_ptr<StorageExtension> extension);
 	void Register(shared_ptr<ExtensionCallback> extension);
+	void Register(ShellCommandExtension extension);
 
 	ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>> OperatorExtensions() const;
 	ExtensionCallbackIteratorHelper<OptimizerExtension> OptimizerExtensions() const;
 	ExtensionCallbackIteratorHelper<ParserExtension> ParserExtensions() const;
 	ExtensionCallbackIteratorHelper<PlannerExtension> PlannerExtensions() const;
 	ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallbacks() const;
+	ExtensionCallbackIteratorHelper<ShellCommandExtension> ShellCommandExtensions() const;
 	optional_ptr<StorageExtension> FindStorageExtension(const string &name) const;
 	bool HasParserExtensions() const;
+	bool HasShellCommandExtensions() const;
 
 private:
 	mutex registry_lock;

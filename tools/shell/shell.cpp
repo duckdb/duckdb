@@ -90,6 +90,9 @@
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/main/config.hpp"
 
 using namespace duckdb_shell;
 
@@ -1570,15 +1573,18 @@ void ShellState::NewTempFile(const char *zSuffix) {
 	}
 }
 
-MetadataResult ShellState::EnableSafeMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShellState::EnableSafeMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.safe_mode = true;
 	if (state.db) {
 		// db has been opened - disable external access
 		state.ExecuteQuery("SET enable_external_access=false");
 		state.ExecuteQuery("SET lock_configuration=true");
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
+
+#define ShellCommandResult ShellCommandResult
 
 bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	auto mode_str = mode_name.c_str();
@@ -1651,9 +1657,10 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	return true;
 }
 
-MetadataResult ShellState::SetNullValue(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShellState::SetNullValue(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.nullValue = args[1];
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 bool ShellState::ImportData(const vector<string> &args) {
@@ -1911,15 +1918,16 @@ bool ShellState::OpenDatabase(const vector<string> &args) {
 	return true;
 }
 
-MetadataResult ShellState::SetSeparator(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShellState::SetSeparator(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() < 2 || args.size() > 3) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	state.colSeparator = args[1];
 	if (args.size() >= 3) {
 		state.rowSeparator = args[2];
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
@@ -2126,9 +2134,9 @@ void ShellState::ShowConfiguration() {
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
 }
 
-MetadataResult ShellState::DisplayTables(const vector<string> &args) {
+ShellCommandResult ShellState::DisplayTables(const vector<string> &args) {
 	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	// FIXME: copy pasted from below
 	// Parse the filter pattern to check for schema qualification
@@ -2175,7 +2183,7 @@ GROUP BY ALL;
 	auto query_result = con.Query(query);
 	if (query_result->HasError()) {
 		PrintDatabaseError(query_result->GetError());
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 	vector<ShellTableInfo> result;
 	for (auto &row : *query_result) {
@@ -2205,14 +2213,14 @@ GROUP BY ALL;
 		result.push_back(std::move(table));
 	}
 	RenderTableMetadata(result);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShellState::DisplayEntries(const vector<string> &args, char type) {
+ShellCommandResult ShellState::DisplayEntries(const vector<string> &args, char type) {
 	string s;
 
 	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 
 	// Parse the filter pattern to check for schema qualification
@@ -2281,7 +2289,7 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 	auto prepared = con.Prepare(s);
 	if (prepared->HasError()) {
 		PrintDatabaseError(prepared->GetError());
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 
 	duckdb::vector<duckdb::Value> bind_values;
@@ -2335,7 +2343,7 @@ WHERE type='index' AND tbl_name LIKE ?1)";
 			Print("\n");
 		}
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 SuccessState ShellState::ChangeDirectory(const string &path) {
@@ -2378,13 +2386,14 @@ SuccessState ShellState::ShowDatabases() {
 	return SuccessState::SUCCESS;
 }
 
-MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShellState::ToggleTimer(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	enableTimer = state.StringToBool(args[1]);
 	if (enableTimer && !HAS_TIMER) {
 		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");
 		enableTimer = false;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 /*
@@ -2453,26 +2462,26 @@ int ShellState::DoMetaCommand(const string &zLine) {
 		rc = 1;
 	} else {
 		auto &command = *metadata_command;
-		MetadataResult result = MetadataResult::PRINT_USAGE;
+		ShellCommandResult result = ShellCommandResult::PRINT_USAGE;
 		try {
 			if (!command.callback) {
 				PrintF(PrintOutput::STDERR, "Command \"%s\" is unsupported in the current version of the CLI\n",
 				       command.command);
-				result = MetadataResult::FAIL;
+				result = ShellCommandResult::FAIL;
 			} else if (command.argument_count == 0 || command.argument_count == args.size()) {
 				result = command.callback(*this, args);
 			}
-			if (result == MetadataResult::PRINT_USAGE) {
+			if (result == ShellCommandResult::PRINT_USAGE) {
 				string error = StringUtil::Format("Invalid Command Error: Invalid usage of command '.%s'\n\n", args[0]);
 				error += StringUtil::Format("Usage: '.%s %s'", command.command, command.usage);
 				PrintDatabaseError(error);
 				rc = 1;
-				result = MetadataResult::FAIL;
+				result = ShellCommandResult::FAIL;
 			}
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			PrintDatabaseError(error.Message());
-			result = MetadataResult::FAIL;
+			result = ShellCommandResult::FAIL;
 		}
 		rc = int(result);
 	}
@@ -2891,22 +2900,22 @@ string ShellState::GetDefaultDuckDBRC() {
 	return lfs.JoinPath(GetHomeDirectory(), ".duckdbrc");
 }
 
-MetadataResult ShellState::FormatSQL(string &sql) {
+ShellCommandResult ShellState::FormatSQL(string &sql) {
 	if (sql.empty()) {
 		// no input
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 	}
 	// Format through the duckdb_format_sql SQL function using a prepared statement.
 	auto result = conn->Query("SELECT duckdb_format_sql($1)", duckdb::Value(sql));
 	if (result->HasError()) {
 		PrintF(PrintOutput::STDERR, "%s: %s\n", program_name, result->GetError().c_str());
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 	sql = string();
 	for (auto &row : *result) {
 		sql = row.GetValue<string>(0) + "\n";
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 void ShellState::HighlightSQL(string &sql) {
@@ -3230,7 +3239,7 @@ int RunShell(int argc, const char **argv) {
 		if (option.pre_init_callback) {
 			// invoke the pre-init callback (if any)
 			auto result = option.pre_init_callback(data, arguments);
-			if (result == MetadataResult::EXIT) {
+			if (result == ShellCommandResult::EXIT) {
 				return 0;
 			}
 		}
@@ -3275,7 +3284,7 @@ int RunShell(int argc, const char **argv) {
 			continue;
 		}
 		auto result = option.post_init_callback(data, call.arguments);
-		if (result == MetadataResult::EXIT) {
+		if (result == ShellCommandResult::EXIT) {
 			return 0;
 		}
 	}

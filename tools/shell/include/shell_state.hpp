@@ -19,6 +19,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
 
 namespace duckdb_shell {
 using duckdb::make_uniq;
@@ -99,7 +100,6 @@ enum class StartupText { ALL, VERSION, NONE };
 enum class ReadLineVersion { LINENOISE, FALLBACK };
 enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 
-enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 enum class HighlightMode : uint32_t { AUTOMATIC, MIXED_MODE, DARK_MODE, LIGHT_MODE };
 
 enum class ExecuteSQLSingleValueResult {
@@ -110,26 +110,17 @@ enum class ExecuteSQLSingleValueResult {
 	MULTIPLE_COLUMNS,
 	NULL_RESULT
 };
-
-typedef MetadataResult (*metadata_command_t)(ShellState &state, const vector<string> &args);
+using duckdb::shell_command_t;
+using duckdb::ShellCommand;
+using duckdb::ShellCommandResult;
 
 struct CommandLineOption {
 	const char *option;
 	idx_t argument_count;
 	const char *arguments;
-	metadata_command_t pre_init_callback;
-	metadata_command_t post_init_callback;
+	shell_command_t pre_init_callback;
+	shell_command_t post_init_callback;
 	const char *description;
-};
-
-struct MetadataCommand {
-	const char *command;
-	idx_t argument_count;
-	metadata_command_t callback;
-	const char *usage;
-	const char *description;
-	idx_t match_size;
-	const char *extra_description;
 };
 
 struct ShellColumnInfo {
@@ -157,7 +148,7 @@ enum class AutoFormatMode { NO_AUTO_FORMAT, AUTO_FORMAT_COMPLETE_STATEMENTS };
 ** State information about the database connection is contained in an
 ** instance of the following structure.
 */
-struct ShellState {
+struct ShellState : public duckdb::BaseShellState {
 public:
 	unique_ptr<duckdb::DuckDB> db;            /* The database */
 	unique_ptr<duckdb::Connection> conn;      /* The primary connection to the database */
@@ -304,8 +295,8 @@ public:
 	bool SetOutputFile(const vector<string> &args, char output_mode);
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const vector<string> &args);
-	MetadataResult DisplayEntries(const vector<string> &args, char type);
-	MetadataResult DisplayTables(const vector<string> &args);
+	ShellCommandResult DisplayEntries(const vector<string> &args, char type);
+	ShellCommandResult DisplayTables(const vector<string> &args);
 	void ShowConfiguration();
 	void ClearInterrupt();
 
@@ -410,8 +401,11 @@ public:
 	static string Win32Utf8ToMbcs(const string &zText, bool useAnsi);
 #endif
 	optional_ptr<const CommandLineOption> FindCommandLineOption(const string &option, string &error_msg) const;
-	optional_ptr<const MetadataCommand> FindMetadataCommand(const string &option, string &error_msg) const;
+	optional_ptr<const duckdb::ShellCommand> FindMetadataCommand(const string &option, string &error_msg) const;
 	static vector<string> GetMetadataCompletions(const char *zLine, idx_t nLine);
+
+	//! Auxiliary id for extensions provided commands
+	idx_t current_extension_command_index;
 
 	//! Execute a SQL query
 	// On fail - print the error and returns FAILURE
@@ -427,17 +421,17 @@ public:
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 
-	static MetadataResult SetNullValue(ShellState &state, const vector<string> &args);
-	static MetadataResult SetSeparator(ShellState &state, const vector<string> &args);
-	static MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args);
-	static MetadataResult ToggleTimer(ShellState &state, const vector<string> &args);
+	static ShellCommandResult SetNullValue(BaseShellState &state, const vector<string> &args);
+	static ShellCommandResult SetSeparator(BaseShellState &state, const vector<string> &args);
+	static ShellCommandResult EnableSafeMode(BaseShellState &state, const vector<string> &args);
+	static ShellCommandResult ToggleTimer(BaseShellState &state, const vector<string> &args);
 	SuccessState ChangeDirectory(const string &path);
 	SuccessState ShowDatabases();
 	void CloseOutputFile(FILE *file);
 	FILE *OpenOutputFile(const char *zFile, int bTextMode);
 	static void SetPrompt(char prompt[], const string &new_value);
 	static string ModeToString(RenderMode mode);
-	MetadataResult FormatSQL(string &sql);
+	ShellCommandResult FormatSQL(string &sql);
 	void HighlightSQL(string &sql);
 	string ReadFileContents(FILE *f);
 	string ReadFileContents(const string &filename);

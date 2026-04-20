@@ -3,6 +3,10 @@
 #include "shell_prompt.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_renderer.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
+#include "duckdb/main/config.hpp"
 
 #ifdef HAVE_LINENOISE
 #include "linenoise.h"
@@ -11,7 +15,10 @@
 
 namespace duckdb_shell {
 
-MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
+using duckdb::BaseShellState;
+
+ShellCommandResult ToggleAbout(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	string about_text = "DuckDB is an in-process analytical database management system designed for fast "
 	                    "execution of complex SQL queries. It runs embedded within its host process with "
 	                    "no external dependencies, and is optimized for OLAP workloads using a columnar, "
@@ -24,10 +31,11 @@ MetadataResult ToggleAbout(ShellState &state, const vector<string> &args) {
 	state.PrintF(PrintOutput::STDOUT, "DuckDB %s (%s)\n\n", duckdb::DuckDB::LibraryVersion(),
 	             duckdb::DuckDB::ReleaseCodename());
 	state.Print(PrintOutput::STDOUT, about_text);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleBail(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args[1] == "auto") {
 		state.bail = BailOnError::AUTOMATIC;
 	} else if (state.StringToBool(args[1])) {
@@ -35,65 +43,73 @@ MetadataResult ToggleBail(ShellState &state, const vector<string> &args) {
 	} else {
 		state.bail = BailOnError::DONT_BAIL_ON_ERROR;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleBinary(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleBinary(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.StringToBool(args[1])) {
 		state.SetBinaryMode();
 	} else {
 		state.SetTextMode();
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ChangeDirectory(ShellState &state, const vector<string> &args) {
+ShellCommandResult ChangeDirectory(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.safe_mode) {
 		state.PrintF(PrintOutput::STDERR, ".cd cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 	auto result = state.ChangeDirectory(args[1]);
-	return result == SuccessState::SUCCESS ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+	return result == SuccessState::SUCCESS ? ShellCommandResult::SUCCESS : ShellCommandResult::FAIL;
 }
 
-MetadataResult ToggleChanges(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleChanges(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.SetOrClearFlag(ShellFlags::SHFLG_CountChanges, args[1]);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowDatabases(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowDatabases(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	auto result = state.ShowDatabases();
-	return result == SuccessState::SUCCESS ? MetadataResult::SUCCESS : MetadataResult::FAIL;
+	return result == SuccessState::SUCCESS ? ShellCommandResult::SUCCESS : ShellCommandResult::FAIL;
 }
 
-MetadataResult SetSeparator(ShellState &state, const vector<string> &args, const char *separator_name,
-                            char &separator) {
+ShellCommandResult SetSeparator(BaseShellState &base_state, const vector<string> &args, const char *separator_name,
+                                char &separator) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() == 1) {
 		state.PrintF("current %s separator: %c\n", separator_name, separator);
 	} else if (args.size() != 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	} else if (StringUtil::Equals(args[1], "space")) {
 		separator = ' ';
 	} else if (StringUtil::Equals(args[1], "none")) {
 		separator = '\0';
 	} else if (args[1].size() != 1) {
 		state.PrintF(PrintOutput::STDERR, ".%s_sep SEP must be one byte, \"space\" or \"none\"\n", separator_name);
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	} else {
 		separator = args[1][0];
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetDecimalSep(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetDecimalSep(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	return SetSeparator(state, args, "decimal", state.decimal_separator);
 }
 
-MetadataResult SetThousandSep(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetThousandSep(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	return SetSeparator(state, args, "thousand", state.thousand_separator);
 }
 
-MetadataResult SetLargeNumberRendering(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetLargeNumberRendering(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (StringUtil::Equals(args[1], "all")) {
 		state.large_number_rendering = LargeNumberRendering::ALL;
 	} else if (StringUtil::Equals(args[1], "footer")) {
@@ -105,10 +121,11 @@ MetadataResult SetLargeNumberRendering(ShellState &state, const vector<string> &
 			state.large_number_rendering = LargeNumberRendering::NONE;
 		}
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
+ShellCommandResult DumpTable(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	string zLike;
 	bool savedShowHeader = state.showHeader;
 	int savedShellFlags = state.shellFlgs;
@@ -124,7 +141,7 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 				state.ShellSetFlag(ShellFlags::SHFLG_Newlines);
 			} else {
 				state.PrintF(PrintOutput::STDERR, "Unknown option \"%s\" on \".dump\"\n", args[i].c_str());
-				return MetadataResult::FAIL;
+				return ShellCommandResult::FAIL;
 			}
 		} else if (!zLike.empty()) {
 			zLike = StringUtil::Format("%s OR name LIKE %s ESCAPE '\\'", zLike, SQLString(args[i]));
@@ -168,58 +185,64 @@ MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	state.PrintF(state.nErr ? "ROLLBACK; -- due to errors\n" : "COMMIT;\n");
 	state.showHeader = savedShowHeader;
 	state.shellFlgs = savedShellFlags;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleEcho(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleEcho(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.SetOrClearFlag(ShellFlags::SHFLG_Echo, args[1]);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleAutoFormat(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleAutoFormat(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.StringToBool(args[1])) {
 		state.auto_format = AutoFormatMode::AUTO_FORMAT_COMPLETE_STATEMENTS;
 	} else {
 		state.auto_format = AutoFormatMode::NO_AUTO_FORMAT;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ExitProcess(ShellState &state, const vector<string> &args) {
+ShellCommandResult ExitProcess(BaseShellState &, const vector<string> &args) {
 	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	int rc = 0;
 	if (args.size() > 1 && (rc = (int)ShellState::StringToInt(args[1])) != 0) {
 		// exit immediately if a custom error code is provided
 		ShellState::Exit(rc);
 	}
-	return MetadataResult::EXIT;
+	return ShellCommandResult::EXIT;
 }
 
-MetadataResult ToggleHeaders(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHeaders(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.showHeader = state.StringToBool(args[1]);
 	state.ShellSetFlag(ShellFlags::SHFLG_HeaderSet);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetHighlightColors(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() < 3 || args.size() > 4) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	ShellHighlight highlighter(state);
 	if (!highlighter.SetColor(args[1].c_str(), args[2].c_str(), args.size() == 3 ? nullptr : args[3].c_str())) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHighlighErrors(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.highlight_errors = state.StringToBool(args[1]) ? OptionType::ON : OptionType::OFF;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlightMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHighlightMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args[1] == "mixed") {
 		state.highlight_mode = HighlightMode::MIXED_MODE;
 	} else if (args[1] == "dark") {
@@ -229,19 +252,21 @@ MetadataResult ToggleHighlightMode(ShellState &state, const vector<string> &args
 	} else if (args[1] == "auto") {
 		state.highlight_mode = HighlightMode::AUTOMATIC;
 	} else {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	ShellHighlight highlight(state);
 	highlight.ToggleMode(state.highlight_mode);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHighlightResult(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.highlight_results = state.StringToBool(args[1]) ? OptionType::ON : OptionType::OFF;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowHelp(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() >= 2) {
 #ifdef HAVE_LINENOISE
 		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
@@ -259,7 +284,7 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 				}
 				state.PrintF("  %-24s %s\n", entry.key_name, entry.description);
 			}
-			return MetadataResult::SUCCESS;
+			return ShellCommandResult::SUCCESS;
 		}
 #endif
 		idx_t n = state.PrintHelp(args[1].c_str());
@@ -269,84 +294,93 @@ MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	} else {
 		state.PrintHelp(0);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
+ShellCommandResult RenderLastResult(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.last_result) {
 		auto renderer = state.GetRenderer();
 		renderer->RemoveRenderLimits();
 		auto res = state.RenderQueryResult(*renderer, *state.last_result);
 		if (res == SuccessState::FAILURE) {
-			return MetadataResult::FAIL;
+			return ShellCommandResult::FAIL;
 		}
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleLog(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.safe_mode) {
 		state.PrintF(PrintOutput::STDERR, ".log cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 	const char *zFile = args[1].c_str();
 	state.CloseOutputFile(state.pLog);
 	state.pLog = state.OpenOutputFile(zFile, 0);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetMaxRows(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetMaxRows(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() > 3) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current max rows: %zu\n", state.max_rows);
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 	}
 	state.max_rows = (size_t)ShellState::StringToInt(args[1]);
 	if (args.size() > 2) {
 		state.max_analyze_rows = (size_t)ShellState::StringToInt(args[2]);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetMaxWidth(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetMaxWidth(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() > 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current max rows: %zu\n", state.max_width);
 	} else {
 		state.max_width = (size_t)ShellState::StringToInt(args[1]);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetColumnRendering(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetColumnRendering(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.columns = 1;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetRowRendering(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetRowRendering(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.columns = 0;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ImportData(ShellState &state, const vector<string> &args) {
+ShellCommandResult ImportData(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.ImportData(args)) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult OpenDatabase(ShellState &state, const vector<string> &args) {
+ShellCommandResult OpenDatabase(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.OpenDatabase(args)) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult PrintArguments(ShellState &state, const vector<string> &args) {
+ShellCommandResult PrintArguments(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
 			state.PrintF(" ");
@@ -354,7 +388,7 @@ MetadataResult PrintArguments(ShellState &state, const vector<string> &args) {
 		state.PrintF("%s", args[i].c_str());
 	}
 	state.PrintF("\n");
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 void ShellState::SetPrompt(char *prompt, const string &new_value) {
@@ -362,7 +396,8 @@ void ShellState::SetPrompt(char *prompt, const string &new_value) {
 	prompt[MAX_PROMPT_SIZE - 1] = '\0';
 }
 
-MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetPrompt(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() >= 2) {
 		auto new_prompt = make_uniq<Prompt>();
 		new_prompt->ParsePrompt(args[1]);
@@ -380,90 +415,98 @@ MetadataResult SetPrompt(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 6) {
 		ShellState::SetPrompt(state.scrollDownPrompt, args[5]);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ConfigureProgressBar(ShellState &state, const vector<string> &args) {
+ShellCommandResult ConfigureProgressBar(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() < 2 || args.size() > 3) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (args[1] == "--clear") {
 		if (args.size() != 2) {
-			return MetadataResult::PRINT_USAGE;
+			return ShellCommandResult::PRINT_USAGE;
 		}
 		state.progress_bar->ClearComponents();
 	} else if (args[1] == "--add") {
 		if (args.size() != 3) {
-			return MetadataResult::PRINT_USAGE;
+			return ShellCommandResult::PRINT_USAGE;
 		}
 		state.progress_bar->AddComponent(args[2]);
 	} else {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetOutputMode(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetOutputMode(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() > 3) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (args.size() == 1) {
 		state.PrintF("current output mode: %s\n", ShellState::ModeToString(state.mode));
 	} else {
 		if (!state.SetOutputMode(args[1], args.size() > 2 ? args[2].c_str() : nullptr)) {
-			return MetadataResult::FAIL;
+			return ShellCommandResult::FAIL;
 		}
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult QuitProcess(ShellState &, const vector<string> &args) {
-	return MetadataResult::EXIT;
+ShellCommandResult QuitProcess(BaseShellState &, const vector<string> &args) {
+	return ShellCommandResult::EXIT;
 }
 
-MetadataResult SetOutput(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetOutput(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.SetOutputFile(args, '\0')) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetOutputOnce(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetOutputOnce(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.SetOutputFile(args, 'o')) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetOutputExcel(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetOutputExcel(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.SetOutputFile(args, 'e')) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ReadFromFile(ShellState &state, const vector<string> &args) {
+ShellCommandResult ReadFromFile(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.ReadFromFile(args[1])) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult DisplaySchemas(ShellState &state, const vector<string> &args) {
+ShellCommandResult DisplaySchemas(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (!state.DisplaySchemas(args)) {
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
+ShellCommandResult RunShellCommand(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (state.safe_mode) {
 		state.Print(PrintOutput::STDERR, ".sh/.system cannot be used in -safe mode\n");
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 	}
 	int x;
 	if (args.size() < 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	auto zCmd = StringUtil::Format(StringUtil::Contains(args[1], ' ') ? "%s" : "\"%s\"", args[1]);
 	for (idx_t i = 2; i < args.size(); i++) {
@@ -473,15 +516,17 @@ MetadataResult RunShellCommand(ShellState &state, const vector<string> &args) {
 	if (x) {
 		state.PrintF(PrintOutput::STDERR, "System command returns %d\n", x);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowConfiguration(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowConfiguration(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.ShowConfiguration();
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetStartupText(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetStartupText(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	auto prev_display = state.startup_text;
 	if (args[1] == "all") {
 		state.startup_text = StartupText::ALL;
@@ -490,7 +535,7 @@ MetadataResult SetStartupText(ShellState &state, const vector<string> &args) {
 	} else if (args[1] == "none") {
 		state.startup_text = StartupText::NONE;
 	} else {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (state.displayed_loading_resources_message && prev_display == StartupText::ALL &&
 	    state.startup_text != StartupText::ALL) {
@@ -499,10 +544,11 @@ MetadataResult SetStartupText(ShellState &state, const vector<string> &args) {
 		                 "prevent the \"Loading resources\" message from being displayed\n";
 		highlight.PrintText(warning, PrintOutput::STDERR, HighlightElementType::STARTUP_TEXT);
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowVersion(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.PrintF("DuckDB %s (%s) %s\n" /*extra-version-info*/, duckdb::DuckDB::LibraryVersion(),
 	             duckdb::DuckDB::ReleaseCodename(), duckdb::DuckDB::SourceID());
 #define CTIMEOPT_VAL_(opt) #opt
@@ -515,28 +561,32 @@ MetadataResult ShowVersion(ShellState &state, const vector<string> &args) {
 #elif defined(__GNUC__) && defined(__VERSION__)
 	state.PrintF("gcc-" __VERSION__ "\n");
 #endif
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetWidths(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetWidths(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	state.colWidth.clear();
 	for (idx_t j = 1; j < args.size(); j++) {
 		state.colWidth.push_back((int)ShellState::StringToInt(args[j]));
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ShowIndexes(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowIndexes(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	return state.DisplayEntries(args, 'i');
 }
 
-MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
+ShellCommandResult ShowTables(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	return state.DisplayTables(args);
 }
 
-MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetUICommand(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() < 1) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	string command;
 	for (idx_t i = 1; i < args.size(); i++) {
@@ -546,42 +596,46 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 		command += args[i];
 	}
 	state.ui_command = "CALL " + command;
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlighting(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleHighlighting(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	ShellHighlight::SetHighlighting(state.StringToBool(args[1]));
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
 #ifdef HAVE_LINENOISE
-MetadataResult ToggleErrorRendering(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleErrorRendering(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	linenoiseSetErrorRendering(state.StringToBool(args[1]));
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleCompletionRendering(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleCompletionRendering(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	linenoiseSetCompletionRendering(state.StringToBool(args[1]));
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleMultiLine(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleMultiLine(BaseShellState &, const vector<string> &args) {
 	if (args.size() != 1) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(true);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult ToggleSingleLine(ShellState &state, const vector<string> &args) {
+ShellCommandResult ToggleSingleLine(BaseShellState &, const vector<string> &args) {
 	if (args.size() != 1) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	linenoiseSetMultiLine(false);
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult TrySetHighlightColor(ShellState &state, const string &component, const string &code) {
+ShellCommandResult TrySetHighlightColor(BaseShellState &base_state, const string &component, const string &code) {
+	auto &state = static_cast<ShellState &>(base_state);
 	vector<string> args;
 	args.push_back("highlight_colors");
 	args.push_back(component);
@@ -599,7 +653,8 @@ enum class DeprecatedHighlightColors {
 };
 
 template <DeprecatedHighlightColors T>
-MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetHighlightingColor(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	string literal;
 	switch (T) {
 	case DeprecatedHighlightColors::COMMENT:
@@ -678,7 +733,8 @@ idx_t FindColorGroup(const vector<vector<string>> &groups, const string &name) {
 	return group_idx.GetIndex();
 }
 
-MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
+ShellCommandResult DisplayColors(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	bool bold = false;
 	bool underline = false;
 	for (idx_t i = 1; i < args.size(); i++) {
@@ -687,7 +743,7 @@ MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 		} else if (args[i] == "underline") {
 			underline = true;
 		} else {
-			return MetadataResult::PRINT_USAGE;
+			return ShellCommandResult::PRINT_USAGE;
 		}
 	}
 	PrintIntensity intensity = PrintIntensity::STANDARD;
@@ -743,26 +799,28 @@ MetadataResult DisplayColors(ShellState &state, const vector<string> &args) {
 		state.Print(" ");
 	}
 	state.Print("\n");
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-MetadataResult SetReadLineVersion(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetReadLineVersion(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args[1] == "linenoise") {
 #ifdef HAVE_LINENOISE
 		state.rl_version = ReadLineVersion::LINENOISE;
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 #else
 		state.Print("linenoise is not available in this build");
-		return MetadataResult::FAIL;
+		return ShellCommandResult::FAIL;
 #endif
 	} else if (args[1] == "fallback") {
 		state.rl_version = ReadLineVersion::FALLBACK;
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 	}
-	return MetadataResult::PRINT_USAGE;
+	return ShellCommandResult::PRINT_USAGE;
 }
 
-MetadataResult SetPager(ShellState &state, const vector<string> &args) {
+ShellCommandResult SetPager(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
 	if (args.size() == 1) {
 		// Show current pager status
 		string mode_str;
@@ -790,18 +848,18 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 		if (state.pager_mode != PagerMode::PAGER_OFF || !state.pager_command.empty()) {
 			state.PrintF("Pager command: %s\n", state.pager_command);
 		}
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 	}
 	if (args[1] == "set_row_threshold") {
 		if (args.size() != 3) {
-			return MetadataResult::PRINT_USAGE;
+			return ShellCommandResult::PRINT_USAGE;
 		}
 		idx_t limit = (idx_t)state.StringToInt(args[2]);
 		state.pager_min_rows = limit;
-		return MetadataResult::SUCCESS;
+		return ShellCommandResult::SUCCESS;
 	}
 	if (args.size() != 2) {
-		return MetadataResult::PRINT_USAGE;
+		return ShellCommandResult::PRINT_USAGE;
 	}
 	if (args[1] == "on") {
 		state.pager_mode = PagerMode::PAGER_ON;
@@ -815,10 +873,10 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	} else {
 		state.pager_command = args[1];
 	}
-	return MetadataResult::SUCCESS;
+	return ShellCommandResult::SUCCESS;
 }
 
-static const MetadataCommand metadata_commands[] = {
+static const duckdb::ShellCommand metadata_commands[] = {
     {"about", 0, ToggleAbout, "", "Show information about DuckDB", 0, ""},
 #ifdef HAVE_LINENOISE
     {"auto_format", 2, ToggleAutoFormat, "on|off", "Automatically format SQL before execution.  Default OFF", 3, ""},
@@ -955,12 +1013,13 @@ static const MetadataCommand metadata_commands[] = {
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0,
      "Negative values right-justify"},
 #if defined(_WIN32) || defined(WIN32)
-    {"utf8", 1, [](ShellState &, const vector<string> &) -> MetadataResult { return MetadataResult::SUCCESS; }, "",
+    {"utf8", 1,
+     [](BaseShellState &, const vector<string> &) -> ShellCommandResult { return ShellCommandResult::SUCCESS; }, "",
      "Deprecated. This option is accepted for compatibility but has no effect.", 0, ""},
 #endif
     {nullptr, 0, nullptr, 0, nullptr}};
 
-bool ShouldPrintCommand(const MetadataCommand &command, const string &glob_pattern) {
+bool ShouldPrintCommand(const duckdb::ShellCommand &command, const string &glob_pattern) {
 	if (!command.extra_description) {
 		return false;
 	}
@@ -1063,6 +1122,22 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 			}
 		}
 	}
+	// also include extension-registered shell commands
+	if (db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext_cmd : mgr.ShellCommandExtensions()) {
+			if (!glob_pattern.empty() && !ShellState::StringGlob(glob_pattern.c_str(), ext_cmd.command.c_str())) {
+				continue;
+			}
+			PrintCommandInfo print_info;
+			print_info.command_name = StringUtil::Format(".%s", ext_cmd.command);
+			print_info.first_part += StringUtil::Format(" %s", ext_cmd.usage);
+			print_info.second_part = ext_cmd.description;
+			print_info.first_part_highlight = HighlightElementType::STRING_CONSTANT;
+			print_info_list.push_back(std::move(print_info));
+		}
+	}
+
 	// figure out alignment based on the total first part print size
 	idx_t max_lhs_size = 0;
 	for (auto &print_info : print_info_list) {
@@ -1100,32 +1175,68 @@ idx_t ShellState::PrintHelp(const char *pattern) {
 	return print_info_list.size();
 }
 
-vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine) {
+static void AppendDotCompletion(vector<string> &result, const char *cmd_name, const char *zLine, idx_t nLine) {
 	char zBuf[1000];
+	zBuf[0] = '.';
+	idx_t line_pos;
+	bool found_match = true;
+	for (line_pos = 0; cmd_name[line_pos] && !ShellState::IsSpace(cmd_name[line_pos]) && line_pos + 2 < sizeof(zBuf);
+	     line_pos++) {
+		zBuf[line_pos + 1] = cmd_name[line_pos];
+		if (line_pos + 1 < nLine && cmd_name[line_pos] != zLine[line_pos + 1]) {
+			found_match = false;
+			break;
+		}
+	}
+	zBuf[line_pos + 1] = '\0';
+	if (found_match && line_pos + 1 >= nLine) {
+		result.push_back(zBuf);
+	}
+}
+
+vector<string> ShellState::GetMetadataCompletions(const char *zLine, idx_t nLine) {
 	vector<string> result;
 	for (idx_t c = 0; metadata_commands[c].command; c++) {
-		auto &command = metadata_commands[c];
-		auto &line = command.command;
-		bool found_match = true;
-		idx_t line_pos;
-		zBuf[0] = '.';
-		for (line_pos = 0; !IsSpace(line[line_pos]) && line[line_pos] && line_pos + 2 < sizeof(zBuf); line_pos++) {
-			zBuf[line_pos + 1] = line[line_pos];
-			if (line_pos + 1 < nLine && line[line_pos] != zLine[line_pos + 1]) {
-				// only match prefixes for auto-completion, i.e. ".sh" matches ".shell"
-				found_match = false;
-				break;
-			}
-		}
-		zBuf[line_pos + 1] = '\0';
-		if (found_match && line_pos + 1 >= nLine) {
-			result.push_back(zBuf);
+		AppendDotCompletion(result, metadata_commands[c].command, zLine, nLine);
+	}
+	// also include extension-registered shell commands
+	auto &state = ShellState::Get();
+	if (state.db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*state.db->instance);
+		for (auto &ext_cmd : mgr.ShellCommandExtensions()) {
+			AppendDotCompletion(result, ext_cmd.command.c_str(), zLine, nLine);
 		}
 	}
 	return result;
 }
 
-optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string &option, string &error_msg) const {
+ShellCommandResult RunExtensionCommand(BaseShellState &base_state, const vector<string> &args) {
+	auto &state = static_cast<ShellState &>(base_state);
+	if (state.safe_mode) {
+		state.Print(PrintOutput::STDERR, "Extension provided commands can't be executed in -safe mode\n");
+		return ShellCommandResult::FAIL;
+	}
+
+	const idx_t extension_command_index = state.current_extension_command_index;
+
+	auto &mgr = duckdb::ExtensionCallbackManager::Get(*state.db->instance);
+
+	const duckdb::ShellCommandExtension &command = *(mgr.ShellCommandExtensions().begin() + extension_command_index);
+
+	if (!command.callback) {
+		state.Print(PrintOutput::STDERR, "Extension provided commands can't be executed due to missing callback\n");
+		return ShellCommandResult::FAIL;
+	}
+	try {
+		return command.callback(*state.db->instance, args, command.info);
+	} catch (...) {
+		state.Print(PrintOutput::STDERR, "Extension provided commands was execute but failed in an uncontrolled way, "
+		                                 "for caution, terminating the process\n");
+		return ShellCommandResult::FAIL;
+	}
+}
+optional_ptr<const duckdb::ShellCommand> ShellState::FindMetadataCommand(const string &option,
+                                                                         string &error_msg) const {
 	idx_t n = option.size();
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
@@ -1135,6 +1246,18 @@ optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string
 		}
 		return command;
 	}
+	if (db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		idx_t index = 0;
+		for (auto &ext_cmd : mgr.ShellCommandExtensions()) {
+			if (StringUtil::StartsWith(option, ext_cmd.command)) {
+				ext_cmd.Finalize(index);
+				ext_cmd.inner_command.callback = RunExtensionCommand;
+				return ext_cmd.inner_command;
+			}
+			index++;
+		}
+	}
 	// no command found
 	error_msg = StringUtil::Format("Unknown Command Error: Unrecognized command '%s'\n", option);
 
@@ -1142,6 +1265,13 @@ optional_ptr<const MetadataCommand> ShellState::FindMetadataCommand(const string
 	for (idx_t command_idx = 0; metadata_commands[command_idx].command; command_idx++) {
 		auto &command = metadata_commands[command_idx];
 		command_names.push_back(string(".") + command.command);
+	}
+	// include extension-registered commands in the candidates list
+	if (db) {
+		auto &mgr = duckdb::ExtensionCallbackManager::Get(*db->instance);
+		for (auto &ext_cmd : mgr.ShellCommandExtensions()) {
+			command_names.push_back("." + ext_cmd.command);
+		}
 	}
 	auto candidates_msg = StringUtil::CandidatesErrorMessage(command_names, option, "Did you mean");
 	error_msg += candidates_msg + "\n";

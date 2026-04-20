@@ -147,6 +147,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/secret/secret.hpp"
 #include "duckdb/main/setting_info.hpp"
+#include "duckdb/main/shell_command_extension.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/interrupt.hpp"
@@ -4607,6 +4608,26 @@ const char* EnumUtil::ToChars<SettingScope>(SettingScope value) {
 template<>
 SettingScope EnumUtil::FromString<SettingScope>(const char *value) {
 	return static_cast<SettingScope>(StringUtil::StringToEnum(GetSettingScopeValues(), 4, "SettingScope", value));
+}
+
+const StringUtil::EnumStringLiteral *GetShellCommandResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ShellCommandResult::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(ShellCommandResult::FAIL), "FAIL" },
+		{ static_cast<uint32_t>(ShellCommandResult::EXIT), "EXIT" },
+		{ static_cast<uint32_t>(ShellCommandResult::PRINT_USAGE), "PRINT_USAGE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ShellCommandResult>(ShellCommandResult value) {
+	return StringUtil::EnumToString(GetShellCommandResultValues(), 4, "ShellCommandResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ShellCommandResult EnumUtil::FromString<ShellCommandResult>(const char *value) {
+	return static_cast<ShellCommandResult>(StringUtil::StringToEnum(GetShellCommandResultValues(), 4, "ShellCommandResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetShowTypeValues() {
