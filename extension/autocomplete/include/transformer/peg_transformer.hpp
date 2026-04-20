@@ -1083,10 +1083,14 @@ private:
 
 	static unique_ptr<TableRef> TransformInnerTableRef(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformTableFunction(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<TableRef> TransformTableFunctionLateralOpt(PEGTransformer &transformer,
+	static unique_ptr<TableRef> TransformPrefixAliasTableRef(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformPrefixAliasTableRefBody(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
-	static unique_ptr<TableRef> TransformTableFunctionAliasColon(PEGTransformer &transformer,
-	                                                             ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformPrefixAliasTableFunction(PEGTransformer &transformer,
+	                                                              ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformPrefixAliasBaseTable(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformPrefixAliasSubquery(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformPrefixAliasParensTable(PEGTransformer &transformer, ParseResult &parse_result);
 	static TableAlias TransformTableAliasColon(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformQualifiedTableFunction(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TableRef> TransformTableSubquery(PEGTransformer &transformer, ParseResult &parse_result);
