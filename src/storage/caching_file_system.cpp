@@ -421,9 +421,9 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		if (overlapping_range->location > current_location) {
 			// We need to read from the file until we're at the location of the current overlapping file range
 			const auto buffer_offset = nr_bytes - remaining_bytes;
-			const auto bytes_to_read = overlapping_range->location - current_location;
-			D_ASSERT(bytes_to_read < remaining_bytes);
-			if (actually_read) {
+			auto bytes_to_read = overlapping_range->location - current_location;
+			bytes_to_read = MinValue(bytes_to_read, remaining_bytes);
+			if (actually_read && bytes_to_read > 0) {
 				GetFileHandle().Read(context, buffer + buffer_offset, bytes_to_read, current_location);
 			}
 			current_location += bytes_to_read;
@@ -445,7 +445,9 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		D_ASSERT(current_location >= overlapping_range->location);
 		const auto buffer_offset = nr_bytes - remaining_bytes;
 		const auto overlapping_range_offset = current_location - overlapping_range->location;
-		D_ASSERT(overlapping_range->nr_bytes > overlapping_range_offset);
+		if (overlapping_range_offset >= overlapping_range->nr_bytes) {
+			continue;
+		}
 		const auto bytes_to_read = MinValue(overlapping_range->nr_bytes - overlapping_range_offset, remaining_bytes);
 		if (actually_read) {
 			memcpy(buffer + buffer_offset, overlapping_file_range_pin.Ptr() + overlapping_range_offset, bytes_to_read);
