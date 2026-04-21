@@ -1,0 +1,53 @@
+# name: test/sql/copy/parquet/parquet_22147_union_by_name_nonnested.test
+# description: Issue #22147: read_parquet(union_by_name=true) should not fail when one file has a STRUCT column and another file has a non-nested column with the same name
+# group: [parquet]
+
+require parquet
+
+# file 1: 'x' is a STRUCT
+statement ok
+COPY (SELECT {'a': 1::INTEGER} AS x) TO '{TEST_DIR}/ubn22147_struct.parquet' (FORMAT PARQUET);
+
+# file 2: 'x' is a non-nested column (all-null INTEGER) - mimics what polars writes for a None-valued column
+statement ok
+COPY (SELECT NULL::INTEGER AS x) TO '{TEST_DIR}/ubn22147_int.parquet' (FORMAT PARQUET);
+
+# file 3: 'x' is a SQLNULL column
+statement ok
+COPY (SELECT NULL AS x) TO '{TEST_DIR}/ubn22147_null.parquet' (FORMAT PARQUET);
+
+# union_by_name should succeed: non-nested local columns are treated as NULL of the global STRUCT type
+query I rowsort
+SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_int.parquet'], union_by_name=true);
+----
+NULL
+{'a': 1}
+
+query I rowsort
+SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_null.parquet'], union_by_name=true);
+----
+NULL
+{'a': 1}
+
+# all three together
+query I rowsort
+SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_int.parquet', '{TEST_DIR}/ubn22147_null.parquet'], union_by_name=true);
+----
+NULL
+NULL
+{'a': 1}
+
+# struct child filter should also work when one file contributes a non-nested NULL-like column
+query I
+SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_int.parquet'], union_by_name=true) WHERE x.a = 1;
+----
+{'a': 1}
+
+# real type conflict (non-null INTEGER vs STRUCT) should still raise a clear conversion error
+statement ok
+COPY (SELECT 42::INTEGER AS x) TO '{TEST_DIR}/ubn22147_int_val.parquet' (FORMAT PARQUET);
+
+statement error
+SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_int_val.parquet'], union_by_name=true);
+----
+Unimplemented type for cast

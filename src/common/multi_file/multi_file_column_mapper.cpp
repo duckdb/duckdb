@@ -584,8 +584,9 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 	expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
 	if (!global_column.type.IsNested() ||
 	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
-	    is_trivially_mappable) {
-		// not a struct - potentially add a cast
+	    is_trivially_mappable || !local_column.type.IsNested()) {
+		// non-nested global type, or non-nested local type (remap_struct requires a nested source - see #22147)
+		// potentially add a cast
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}
