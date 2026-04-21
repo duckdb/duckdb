@@ -46,6 +46,8 @@ public:
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	                  idx_t target_offset, idx_t copy_count) override;
 
 private:
 	ValidityMask validity;

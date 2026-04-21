@@ -149,6 +149,9 @@ public:
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
 	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	//! Copy data from another vector into this vectors' buffer
+	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	          idx_t target_offset, idx_t copy_count);
 	//! Produce a string representation of buffer contents (debug only)
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
@@ -169,6 +172,9 @@ protected:
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end);
+	//! Copy data from another vector into this vectors' buffer
+	virtual void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
 protected:
 	VectorType vector_type;

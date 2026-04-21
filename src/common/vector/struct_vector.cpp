@@ -193,6 +193,15 @@ void VectorStructBuffer::Resize(idx_t current_size, idx_t new_size) {
 	capacity = new_size;
 }
 
+void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto &source_children = StructVector::GetEntries(source);
+	D_ASSERT(source_children.size() == children.size());
+	for (idx_t i = 0; i < source_children.size(); i++) {
+		children[i].Copy(source_children[i], source_sel, source_count, source_offset, target_offset, copy_count);
+	}
+}
+
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
                                                      idx_t count) const {
 	if (!input_sel.IsSet() && GetVectorType() == VectorType::FLAT_VECTOR) {

@@ -78,6 +78,21 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 	return result;
 }
 
+void VectorStringBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto ldata = FlatVector::GetData<string_t>(source);
+	auto tdata = reinterpret_cast<string_t *>(data_ptr);
+	auto &append_heap = GetHeap();
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_sel.get_index(source_offset + i);
+		auto target_idx = target_offset + i;
+		if (!validity.RowIsValid(target_idx)) {
+			continue;
+		}
+		tdata[target_idx] = append_heap.AddBlob(ldata[source_idx]);
+	}
+}
+
 void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));

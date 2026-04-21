@@ -143,6 +143,9 @@ public:
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
 
+	DUCKDB_API void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+	                     idx_t source_offset, idx_t target_offset, idx_t copy_count);
+
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 

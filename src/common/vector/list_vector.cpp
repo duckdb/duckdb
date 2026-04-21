@@ -172,13 +172,48 @@ buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data
 	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
 }
 
+void VectorListBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                    idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(source.GetType().InternalType() == PhysicalType::LIST);
+
+	auto &source_child = ListVector::GetChild(source);
+	auto sdata = FlatVector::GetData<list_entry_t>(source);
+	auto tdata = reinterpret_cast<list_entry_t *>(data_ptr);
+
+	//! we need to append the child elements to the target
+	//! build a selection vector for the copied child elements
+	idx_t current_child_len = child_size;
+	vector<sel_t> child_rows;
+	for (idx_t i = 0; i < copy_count; ++i) {
+		if (!validity.RowIsValid(target_offset + i)) {
+			continue;
+		}
+		auto source_idx = source_sel.get_index(source_offset + i);
+		auto &source_entry = sdata[source_idx];
+		auto &target_entry = tdata[target_offset + i];
+		for (idx_t j = 0; j < source_entry.length; ++j) {
+			child_rows.emplace_back(source_entry.offset + j);
+		}
+		// point the list to the new length / offset
+		target_entry.offset = current_child_len;
+		target_entry.length = source_entry.length;
+		current_child_len += source_entry.length;
+	}
+	if (child_rows.empty()) {
+		// nothing to copy
+		return;
+	}
+	// now append the child elements
+	SelectionVector child_sel(child_rows.data(), child_rows.size());
+	AppendToChild(source_child, child_sel, child_rows.size());
+}
+
 buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                    idx_t count) const {
 	auto result = StandardVectorBuffer::Flatten(type, sel, count);
 	if (!result) {
 		// already flat - flatten the child
-		auto &child = GetChild();
-		child.Flatten(child_size);
+		child->Flatten(child_size);
 		return nullptr;
 	}
 	// created a new buffer - also flatten the child

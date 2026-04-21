@@ -156,8 +156,6 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	}
 	auto &sel = sel_ref.get();
 
-	auto type_size = GetTypeIdSize(type.InternalType());
-
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
 	auto target_byte_count = allocated_count * type_size;
@@ -183,6 +181,60 @@ void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &for
 	}
 	format.data = data_ptr;
 	format.validity = validity;
+}
+
+template <idx_t TYPE_SIZE>
+void FixedSizeCopy(data_ptr_t target_data, const_data_ptr_t source_data, const SelectionVector &sel,
+                   idx_t base_source_offset, idx_t base_target_offset, idx_t copy_count) {
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel.get_index(base_source_offset + i);
+		auto target_offset = (base_target_offset + i) * TYPE_SIZE;
+		auto source_offset = source_idx * TYPE_SIZE;
+		memcpy(target_data + target_offset, source_data + source_offset, TYPE_SIZE);
+	}
+}
+
+void CopyVectorBuffer(data_ptr_t target_data, const_data_ptr_t source_data, const SelectionVector &sel,
+                      idx_t base_source_offset, idx_t base_target_offset, idx_t copy_count, idx_t type_size) {
+	switch (type_size) {
+	case 1:
+		FixedSizeCopy<1>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 2:
+		FixedSizeCopy<2>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 4:
+		FixedSizeCopy<4>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 8:
+		FixedSizeCopy<8>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 16:
+		FixedSizeCopy<16>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	default:
+		// fallback: use non-fixed-width copy
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel.get_index(base_source_offset + i);
+			auto target_offset = (base_target_offset + i) * type_size;
+			auto source_offset = source_idx * type_size;
+			memcpy(target_data + target_offset, source_data + source_offset, type_size);
+		}
+		break;
+	}
+}
+
+void StandardVectorBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                        idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	// now copy over the data
+	const_data_ptr_t source_data;
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		source_data = ConstantVector::GetData(source);
+	} else {
+		source_data = FlatVector::GetData(source);
+	}
+
+	CopyVectorBuffer(data_ptr, source_data, source_sel, source_offset, target_offset, copy_count, type_size);
 }
 
 void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

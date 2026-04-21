@@ -283,6 +283,12 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	}
 }
 
+void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+                  idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(source.GetType() == GetType());
+	buffer->Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	buffer->SetValue(GetType(), index, val);
 }
