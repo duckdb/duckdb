@@ -50,4 +50,4 @@ COPY (SELECT 42::INTEGER AS x) TO '{TEST_DIR}/ubn22147_int_val.parquet' (FORMAT 
 statement error
 SELECT x FROM read_parquet(['{TEST_DIR}/ubn22147_struct.parquet', '{TEST_DIR}/ubn22147_int_val.parquet'], union_by_name=true);
 ----
-Unimplemented type for cast
+INTEGER -> STRUCT(a INTEGER)
