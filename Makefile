@@ -25,13 +25,8 @@ PROJ_DIR := $(dir $(MKFILE_PATH))
 PYTHON ?= python3
 FORMAT_VENV ?= build/format-venv
 FORMAT_VENV_PYTHON := $(FORMAT_VENV)/bin/python
-ifdef CI
-FORMAT_PYTHON := $(PYTHON)
-FORMAT_SETUP_DEPS :=
-else
 FORMAT_PYTHON := $(FORMAT_VENV_PYTHON)
 FORMAT_SETUP_DEPS := format-venv-tools
-endif
 
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
@@ -592,15 +587,10 @@ test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
 format_tools:
-	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install --break-system-packages cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+	$(call ensure_apt_commands,ninja,ninja-build)
+	sudo pip3 install --break-system-packages cxxheaderparser pcpp
 	@echo "::group::Installed Python packages"
 	pip3 freeze
-	@echo "::endgroup::"
-	@echo "::group::Formatter versions and config"
-	clang-format --version
-	clang-format --dump-config
-	black --version
 	@echo "::endgroup::"
 
 spell_tools:
@@ -637,7 +627,7 @@ format-venv-tools:
 		mkdir -p "$(dir $(FORMAT_VENV))" && \
 		$(PYTHON) -m venv "$(FORMAT_VENV)"; \
 	fi
-	@$(FORMAT_VENV_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install black
+	@$(FORMAT_VENV_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install black==24.*
 	@$(FORMAT_VENV_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install cmake-format
 	@$(FORMAT_VENV_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install clang_format==11.0.1
 
