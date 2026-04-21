@@ -137,6 +137,14 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 	CheckPrimitive<VariantLogicalType::BLOB, LogicalTypeId::BLOB>(state, result);
 	CheckPrimitive<VariantLogicalType::VARCHAR, LogicalTypeId::VARCHAR>(state, result);
 	CheckPrimitive<VariantLogicalType::UUID, LogicalTypeId::UUID>(state, result);
+	// these types are not natively supported in Parquet - we convert them during write
+	// during analysis map them to the type we convert them into
+	CheckPrimitive<VariantLogicalType::UINT8, LogicalTypeId::SMALLINT>(state, result);
+	CheckPrimitive<VariantLogicalType::UINT16, LogicalTypeId::INTEGER>(state, result);
+	CheckPrimitive<VariantLogicalType::UINT32, LogicalTypeId::BIGINT>(state, result);
+	CheckPrimitive<VariantLogicalType::UINT64, LogicalTypeId::BIGINT>(state, result);
+	CheckPrimitive<VariantLogicalType::UINT128, LogicalTypeId::BIGINT>(state, result);
+	CheckPrimitive<VariantLogicalType::INT128, LogicalTypeId::BIGINT>(state, result);
 
 	auto array_count = state.type_map[static_cast<uint8_t>(VariantLogicalType::ARRAY)];
 	auto object_count = state.type_map[static_cast<uint8_t>(VariantLogicalType::OBJECT)];
@@ -160,9 +168,14 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 			for (auto &field : object_data.fields) {
 				LogicalType child_type;
 				if (!ConstructShreddedType(field.second, child_type)) {
-					return false;
+					// cannot shred on this field - skip
+					continue;
 				}
 				field_types.emplace_back(field.first, child_type);
+			}
+			if (field_types.empty()) {
+				// no field types to shred on - avoid shredding
+				return false;
 			}
 			out = LogicalType::STRUCT(field_types);
 			return true;

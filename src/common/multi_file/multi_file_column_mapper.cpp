@@ -38,20 +38,20 @@ public:
 enum class FilterConversionType { COPY_DIRECTLY, CAST_FILTER, CANNOT_CONVERT };
 
 struct MultiFileColumnMap {
-	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type)
-	    : mapping(index), local_type(local_type), global_type(global_type),
+	MultiFileColumnMap(idx_t index, const LogicalType &local_type_p, const LogicalType &global_type_p)
+	    : mapping(index), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(local_type == global_type ? FilterConversionType::COPY_DIRECTLY
 	                                                  : FilterConversionType::CAST_FILTER) {
 	}
-	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type, const LogicalType &global_type,
-	                   FilterConversionType filter_conversion)
-	    : mapping(std::move(mapping_p)), local_type(local_type), global_type(global_type),
+	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type_p,
+	                   const LogicalType &global_type_p, FilterConversionType filter_conversion)
+	    : mapping(std::move(mapping_p)), local_type(local_type_p), global_type(global_type_p),
 	      filter_conversion(filter_conversion) {
 	}
 
 	MultiFileIndexMapping mapping;
-	const LogicalType &local_type;
-	const LogicalType &global_type;
+	const LogicalType local_type;
+	const LogicalType global_type;
 	FilterConversionType filter_conversion;
 };
 
@@ -580,12 +580,13 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
                                               const MultiFileColumnDefinition &global_column,
                                               bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
-	unique_ptr<Expression> expr;
-	expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
-	if (!global_column.type.IsNested() ||
-	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
-	    is_trivially_mappable) {
-		// not a struct - potentially add a cast
+	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
+	bool can_use_remap_struct =
+	    global_column.type.IsNested() &&
+	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
+	    !is_trivially_mappable && local_column.type.IsNested();
+	if (!can_use_remap_struct) {
+		// use the cast path unless we actually need struct remapping and both source/target sides are nested
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}

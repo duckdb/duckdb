@@ -2,20 +2,5 @@
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict;",
-  "statically_loaded_extensions": ["core_functions", "autocomplete"],
-  "skip_tests": [
-    {
-      "reason": "Strict mode is currently not compatible with loadable parser override extensions. Requires redesign of the parser selection setting.",
-      "paths": [
-        "test/extension/loadable_parser_override.test",
-        "test/extension/consistent_semicolon_extension_parse.test",
-        "test/extension/load_extension.test",
-        "test/extension/test_tags.test",
-        "test/extension/concurrent_load_extension.test",
-        "test/extension/test_alias_point.test",
-        "test/extension/test_custom_type_modifier_cast.test",
-        "test/extension/load_test_alias.test"
-      ]
-    }
-  ]
+  "statically_loaded_extensions": ["core_functions", "autocomplete"]
 }

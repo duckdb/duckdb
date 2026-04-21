@@ -108,3 +108,15 @@ statement error
 CREATE TABLE t1 (id INTEGER, name );
 ----
 Parser Error: Column "name" must have a type or be defined as a GENERATED column.
+
+# Cast followed by subscript/slice is not allowed without parentheses
+statement error
+SELECT 'abcd'::VARCHAR[1:3];
+----
+Parser Error: Subscript/slice cannot be applied directly after a cast operator
+
+# Wrapping the cast in parentheses is allowed
+query I
+SELECT ('abcd'::VARCHAR)[1:3];
+----
+abc

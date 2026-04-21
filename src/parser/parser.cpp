@@ -233,6 +233,8 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		if (options.extensions) {
+			bool has_strict_extension_error = false;
+			ErrorData last_strict_extension_error;
 			for (auto &ext : options.extensions->ParserExtensions()) {
 				if (!ext.parser_override) {
 					continue;
@@ -247,10 +249,19 @@ void Parser::ParseQuery(const string &query) {
 					return;
 				}
 				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
-					ThrowParserOverrideError(result);
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						has_strict_extension_error = true;
+						last_strict_extension_error = std::move(result.error);
+					} else {
+						has_strict_extension_error = false;
+					}
+					continue;
 				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
 					continue;
 				}
+			}
+			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE && has_strict_extension_error) {
+				last_strict_extension_error.Throw();
 			}
 		}
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);

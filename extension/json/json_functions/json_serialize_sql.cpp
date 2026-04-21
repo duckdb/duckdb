@@ -106,8 +106,12 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 					throw NotImplementedException("Only SELECT statements can be serialized to json!");
 				}
 				auto &select = statement->Cast<SelectStatement>();
-				auto json =
-				    JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty, info.skip_if_default);
+
+				auto options = make_uniq<SerializationOptions>();
+				options->serialization_compatibility =
+				    state.GetContext().db->config.options.serialization_compatibility;
+				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty,
+				                                      info.skip_if_default, *options);
 
 				yyjson_mut_arr_append(statements_arr, json);
 			}

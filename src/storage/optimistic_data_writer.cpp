@@ -145,7 +145,7 @@ void OptimisticWriteCollection::MergeStorage(OptimisticWriteCollection &merge_co
 	// we cannot append into a row group that has been flushed
 	if (complete_row_groups == collection->GetRowGroupCount()) {
 		// if the last row group has been flushed move any new appends to a new row group
-		collection->SetAppendRequiresNewRowGroup();
+		collection->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	}
 }
 

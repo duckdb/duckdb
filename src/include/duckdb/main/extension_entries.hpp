@@ -127,6 +127,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"check_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"chr", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"clear_httpfs_connection_cache", "httpfs", CatalogType::TABLE_FUNCTION_ENTRY},
     {"corr", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"cos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -165,6 +166,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_merge_adjacent_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_options", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_rewrite_data_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"ducklake_scan", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_set_commit_message", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_set_option", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"ducklake_settings", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -476,6 +478,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"min_by", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"mismatches", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"mode", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
+    {"murmur3_32", "ducklake", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"mysql_clear_cache", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_debug_execution_plan", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"mysql_execute", "mysql_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1048,6 +1051,9 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_context_caching", "azure"},
     {"azure_credential_chain", "azure"},
     {"azure_endpoint", "azure"},
+    {"azure_http_logging", "azure"},
+    {"azure_http_logging_redact_headers", "azure"},
+    {"azure_http_logging_redact_query_params", "azure"},
     {"azure_http_proxy", "azure"},
     {"azure_http_stats", "azure"},
     {"azure_proxy_password", "azure"},
@@ -1065,6 +1071,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"ducklake_max_retry_count", "ducklake"},
     {"ducklake_retry_backoff", "ducklake"},
     {"ducklake_retry_wait_ms", "ducklake"},
+    {"ducklake_write_deletion_vectors", "ducklake"},
     {"enable_curl_server_cert_verification", "httpfs"},
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_global_s3_configuration", "httpfs"},
@@ -1081,6 +1088,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"http_retry_wait_ms", "httpfs"},
     {"http_timeout", "httpfs"},
     {"httpfs_client_implementation", "httpfs"},
+    {"httpfs_connection_caching", "httpfs"},
     {"iceberg_test_force_token_expiry", "iceberg"},
     {"iceberg_via_aws_sdk_for_catalog_interactions", "iceberg"},
     {"merge_http_secret_into_s3_request", "httpfs"},
@@ -1169,7 +1177,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
-    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+    {"parquet", "parquet"},
+    {"json", "json"},
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

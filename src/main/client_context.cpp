@@ -940,7 +940,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						reparsed_transaction_stmt.info->invalidation_policy =
 						    previous_transaction_stmt.info->invalidation_policy;
 						// re-apply auto rollback
-						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
+						reparsed_transaction_stmt.info->auto_rollback =
 						    statement->Cast<TransactionStatement>().info->auto_rollback;
 					}
 					statement = std::move(parser.statements[0]);
@@ -1031,6 +1031,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
+		if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+			transaction.Rollback(pending_query->GetErrorObject());
+		}
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();

@@ -455,6 +455,34 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 	input_data.release = nullptr;
 }
 
+TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(db.adbc_error.message);
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "does not exist"));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "missing_table"));
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -479,6 +507,48 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 		auto res_persistent = db.Query("SELECT * FROM memory.main.my_table");
 		REQUIRE(!res_persistent->HasError());
 		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
+	}
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// create a temp table with data1 on adbc_connection
+	auto &input_temp = db.QueryArrowForIngest("SELECT 1 AS idx, 'foo' AS value");
+	db.CreateTable("my_table", input_temp, "", true);
+
+	// create a persistent table with data2 on the SAME adbc_connection (no catalog/schema).
+	// This triggers the bug: the appender resolves "my_table" to the temp table.
+	{
+		auto &input_persistent = db.QueryArrowForIngest("SELECT 2 AS idx, 'bar' AS value");
+		AdbcStatement stmt = {};
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+		// No catalog, no schema, no temporary flag — should go to memory.main
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_persistent, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input_persistent.release) {
+			input_persistent.release(&input_persistent);
+		}
+	}
+
+	// Temp table should still contain only data1 (idx=1)
+	{
+		auto res = db.Query("SELECT idx FROM temp.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "1");
+	}
+	// Persistent table should contain data2 (idx=2)
+	{
+		auto res = db.Query("SELECT idx FROM memory.main.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "2");
 	}
 }
 
