@@ -77,7 +77,7 @@ public:
 		InitializeIntermediateAppend();
 		op.working_table->InitializeAppend(working_append_state);
 		if (op.recurring_table) {
-			InitializeRecurringAppend();
+			op.recurring_table->InitializeAppend(recurring_append_state);
 		}
 	}
 
@@ -89,15 +89,10 @@ public:
 		intermediate_table.InitializeAppend(intermediate_append_state);
 	}
 
-	void InitializeRecurringAppend() {
-		D_ASSERT(op.recurring_table);
-		op.recurring_table->InitializeAppend(recurring_append_state);
-	}
-
 	void ResetRecurringTable() {
 		D_ASSERT(op.recurring_table);
 		op.recurring_table->Reset();
-		InitializeRecurringAppend();
+		op.recurring_table->InitializeAppend(recurring_append_state);
 	}
 
 	ColumnDataCollection &CurrentOutputTable() {
@@ -508,7 +503,8 @@ static RecursiveCTEInlineStageStack AddRecursiveInlineStageStack(RecursiveCTEInl
 	return RecursiveCTEInlineStageStack(execute, prepare_finish, finish);
 }
 
-static RecursiveCTEEventStack CreateRecursiveEventStack(const shared_ptr<Pipeline> &pipeline, RecursiveCTEState &state) {
+static RecursiveCTEEventStack CreateRecursiveEventStack(const shared_ptr<Pipeline> &pipeline,
+                                                        RecursiveCTEState &state) {
 	auto execute = make_shared_ptr<RecursiveCTEPipelineEvent>(pipeline, state);
 	auto prepare_finish = make_shared_ptr<PipelinePrepareFinishEvent>(pipeline);
 	auto finish = make_shared_ptr<PipelineFinishEvent>(pipeline);
@@ -517,7 +513,12 @@ static RecursiveCTEEventStack CreateRecursiveEventStack(const shared_ptr<Pipelin
 	return RecursiveCTEEventStack(execute, prepare_finish, finish, nullptr);
 }
 
-enum class RecursiveCTEMetaPipelineEntryType : uint8_t { BASE, SHARED_FINISH_GROUP, HAS_FINISH_EVENT, SHARED_BASE_FINISH };
+enum class RecursiveCTEMetaPipelineEntryType : uint8_t {
+	BASE,
+	SHARED_FINISH_GROUP,
+	HAS_FINISH_EVENT,
+	SHARED_BASE_FINISH
+};
 
 struct RecursiveCTEMetaPipelinePlanEntry {
 	RecursiveCTEMetaPipelinePlanEntry(Pipeline &pipeline_p, RecursiveCTEMetaPipelineEntryType type_p,
@@ -612,8 +613,9 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 			case RecursiveCTEMetaPipelineEntryType::SHARED_BASE_FINISH: {
 				auto execute = AddRecursiveInlineStage(*plan, RecursiveCTEInlineStageType::EXECUTE, pipeline);
 				AddRecursiveInlineDependency(*plan, base_stack.prepare_finish_stage, execute);
-				stage_map.emplace(reference<Pipeline>(pipeline),
-				                  RecursiveCTEInlineStageStack(execute, base_stack.prepare_finish_stage, base_stack.finish_stage));
+				stage_map.emplace(
+				    reference<Pipeline>(pipeline),
+				    RecursiveCTEInlineStageStack(execute, base_stack.prepare_finish_stage, base_stack.finish_stage));
 				break;
 			}
 			default:
