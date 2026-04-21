@@ -40,7 +40,7 @@ unique_ptr<Expression> ExpressionFilter::CreateInExpression(unique_ptr<Expressio
 	for (auto &value : values) {
 		result->children.push_back(make_uniq<BoundConstantExpression>(std::move(value)));
 	}
-	return unique_ptr_cast<BoundOperatorExpression, Expression>(std::move(result));
+	return std::move(result);
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
