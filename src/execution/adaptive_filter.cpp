@@ -3,6 +3,7 @@
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
@@ -41,22 +42,12 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilt
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
-const char *AdaptiveFilterSourceToString(AdaptiveFilterSource source) {
-	switch (source) {
-	case AdaptiveFilterSource::INITIAL:
-		return "initial";
-	case AdaptiveFilterSource::SEEDED:
-		return "seeded";
-	}
-	return "unknown";
-}
-
 void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source,
                                const vector<idx_t> &filter_identities) {
 	logger = &logger_p;
 	log_file_path = std::move(file_path);
 	vector<pair<string, string>> info;
-	info.emplace_back("source", AdaptiveFilterSourceToString(source));
+	info.emplace_back("source", EnumUtil::ToChars(source));
 	if (!filter_identities.empty() && filter_identities.size() == config.permutation.size()) {
 		auto columns_str = "[" +
 		                   StringUtil::Join(config.permutation, config.permutation.size(), ", ",

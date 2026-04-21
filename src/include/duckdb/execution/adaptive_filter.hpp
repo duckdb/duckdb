@@ -33,8 +33,6 @@ enum class AdaptiveFilterSource : uint8_t {
 	SEEDED,
 };
 
-const char *AdaptiveFilterSourceToString(AdaptiveFilterSource source);
-
 class AdaptiveFilter {
 public:
 	explicit AdaptiveFilter(const Expression &expr);

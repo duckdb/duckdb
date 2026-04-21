@@ -27,19 +27,19 @@ query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%af_cross_1.parquet' ORDER BY timestamp LIMIT 1
 ----
-initial
+INITIAL
 
 query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%af_cross_2.parquet' ORDER BY timestamp LIMIT 1
 ----
-seeded
+SEEDED
 
 query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%af_cross_3.parquet' ORDER BY timestamp LIMIT 1
 ----
-seeded
+SEEDED
 
 # union_by_name
 statement ok
@@ -61,7 +61,7 @@ WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet'
 
 query I
 SELECT count(*) > 0 FROM duckdb_logs_parsed('AdaptiveFilter')
-WHERE event = 'INIT' AND info['source'] = 'seeded' AND file_path LIKE '%af_cross_4.parquet'
+WHERE event = 'INIT' AND info['source'] = 'SEEDED' AND file_path LIKE '%af_cross_4.parquet'
 ----
 true
 
@@ -94,7 +94,7 @@ query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' ORDER BY timestamp LIMIT 1
 ----
-initial
+INITIAL
 
 # Confirm the size check
 query II
@@ -125,13 +125,13 @@ query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%ord_abc.parquet' ORDER BY timestamp LIMIT 1
 ----
-initial
+INITIAL
 
 query I
 SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND file_path LIKE '%ord_cab.parquet' ORDER BY timestamp LIMIT 1
 ----
-seeded
+SEEDED
 
 # File 2's seeded ordering matches file 1's latest ordering by column identity
 query I
@@ -140,7 +140,7 @@ SELECT first.columns = second.columns FROM
      WHERE event = 'INIT' AND file_path LIKE '%ord_abc.parquet'
      ORDER BY timestamp DESC LIMIT 1) AS first,
     (SELECT info['columns'] AS columns, timestamp FROM duckdb_logs_parsed('AdaptiveFilter')
-     WHERE event = 'INIT' AND file_path LIKE '%ord_cab.parquet' AND info['source'] = 'seeded'
+     WHERE event = 'INIT' AND file_path LIKE '%ord_cab.parquet' AND info['source'] = 'SEEDED'
      ORDER BY timestamp LIMIT 1) AS second
 ----
 true
@@ -161,16 +161,16 @@ SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_cross_1.parquet', '{TEST_DIR}/
 query II
 SELECT
     (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'initial') = 2,
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'INITIAL') = 2,
     (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'seeded') = 1
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'SEEDED') = 1
 ----
 true	true
 
 # A seeded file permutation must be equal to one of the initial sources
 query I
 SELECT count(*) = 0 FROM duckdb_logs_parsed('AdaptiveFilter') AS seeded
-WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'seeded'
+WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'SEEDED'
   AND seeded.permutation NOT IN (
     SELECT permutation FROM duckdb_logs_parsed('AdaptiveFilter')
     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet'
