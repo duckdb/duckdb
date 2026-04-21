@@ -64,9 +64,7 @@ public:
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 
-	//! Tables that are dropped by the end of this transaction (populated at PushCatalogEntry time).
-	//! WAL serialization consults this set to skip row-level ops on tables that will not exist after commit
-	//! (see issue #22124).
+	//! Tables dropped by the end of this transaction.
 	const unordered_set<const DataTableInfo *> &GetDroppedTables() const {
 		return dropped_tables;
 	}
@@ -136,8 +134,7 @@ private:
 	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
-	//! DataTableInfo identities for tables that are dropped by the end of this transaction.
-	//! Populated at PushCatalogEntry time so that WAL serialization does not need to scan the undo buffer (#22124).
+	//! Tables dropped by the end of this transaction; populated in PushCatalogEntry.
 	unordered_set<const DataTableInfo *> dropped_tables;
 };
 

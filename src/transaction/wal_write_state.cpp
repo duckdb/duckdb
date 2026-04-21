@@ -281,7 +281,6 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			break;
 		}
 		if (IsDroppedTable(*info->table->GetDataTableInfo())) {
-			// table is dropped by the end of this transaction - skip emitting the data op to the WAL (see #22124)
 			break;
 		}
 		info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());

@@ -34,8 +34,6 @@ public:
 
 private:
 	void SwitchTable(DataTableInfo &table, UndoFlags new_op);
-	//! Returns true if this table is dropped by the end of the transaction - data ops on it are skipped to avoid
-	//! writing stale USE_TABLE entries that can't be replayed (see issue #22124).
 	bool IsDroppedTable(const DataTableInfo &table) const;
 
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
@@ -48,7 +46,7 @@ private:
 	optional_ptr<StorageCommitState> commit_state;
 
 	optional_ptr<DataTableInfo> current_table_info;
-	//! Tables that are dropped by the end of this transaction - populated at PushCatalogEntry time.
+	//! Tables dropped by the end of this transaction.
 	const unordered_set<const DataTableInfo *> &dropped_tables;
 
 	unique_ptr<DataChunk> delete_chunk;

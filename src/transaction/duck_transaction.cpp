@@ -78,9 +78,7 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 		// then copy over the actual data
 		memcpy(ptr, extra_data, extra_data_size);
 	}
-	// Record the DataTableInfo of any table that is being dropped so WAL serialization can skip row-level ops on it
-	// (see issue #22124). The storage pointer is stable across RENAMEs in the same transaction, so any data op
-	// touching this table has the same DataTableInfo identity.
+	// record DataTableInfo for tables being dropped so WAL write can skip row-level ops on them
 	if (entry.Parent().type == CatalogType::DELETED_ENTRY && entry.type == CatalogType::TABLE_ENTRY) {
 		auto &table_entry = entry.Cast<TableCatalogEntry>();
 		if (table_entry.IsDuckTable()) {
