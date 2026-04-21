@@ -67,48 +67,34 @@ env:
   PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
 jobs:
-  notify-odbc-run:
-    name: Run ODBC Vendor
+  notify-external-repositories:
+    name: Notify External Repositories
     runs-on: ubuntu-slim
-    if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
+    if: ${{ github.repository == 'duckdb/duckdb' }}
     steps:
       - name: Run ODBC Vendor
-        if: ${{ github.repository == 'duckdb/duckdb' }}
+        if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
-          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
-  notify-jdbc-run:
-    name: Run JDBC Vendor
-    runs-on: ubuntu-slim
-    if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
-    steps:
       - name: Run JDBC Vendor
-        if: ${{ github.repository == 'duckdb/duckdb' }}
+        if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
-          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
-  notify-nightly-build-status:
-    name: Run Nightly build status
-    runs-on: ubuntu-slim
-    steps:
       - name: Run Nightly build status
-        if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
-          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
-  notify-python-nightly:
-    name: Dispatch Python nightly build
-    runs-on: ubuntu-slim
-    steps:
       - name: Call /dispatch
-        if: ${{ github.repository == 'duckdb/duckdb' && inputs.override-git-describe == '' }}
+        if: ${{ inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "pypi-index": "prod" }}'
-          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
