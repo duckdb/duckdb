@@ -91,6 +91,9 @@ struct CopyFunctionBindInput {
 	const CopyInfo &info;
 	shared_ptr<CopyFunctionInfo> function_info;
 	string file_extension;
+	// Per-column NOT NULL flags (true = NOT NULL).
+	// Empty if unknown (e.g. COPY from a query).
+	vector<bool> not_null_columns;
 };
 
 struct CopyFromFunctionBindInput {

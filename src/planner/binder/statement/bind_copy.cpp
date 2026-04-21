@@ -2,13 +2,16 @@
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/bind_helpers.hpp"
+#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_entries.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -22,9 +25,6 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
-#include "duckdb/common/algorithm.hpp"
-
-#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 
@@ -309,6 +309,33 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
 	auto types_to_write =
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
+
+	// If copying from a table, propagate NOT NULL constraints
+	if (!copy_info.table.empty()) {
+		auto &catalog = Catalog::GetCatalog(context, copy_info.catalog);
+		auto &entry =
+		    catalog.GetEntry(context, copy_info.schema, EntryLookupInfo(CatalogType::TABLE_ENTRY, copy_info.table));
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry.Cast<TableCatalogEntry>();
+			unordered_map<string, idx_t> name_to_idx;
+			for (idx_t i = 0; i < names_to_write.size(); i++) {
+				name_to_idx[names_to_write[i]] = i;
+			}
+			bind_input.not_null_columns.resize(names_to_write.size(), false);
+			for (auto &constraint : table.GetConstraints()) {
+				if (constraint->type != ConstraintType::NOT_NULL) {
+					continue;
+				}
+				auto &not_null = constraint->Cast<NotNullConstraint>();
+				const auto &col_name = table.GetColumn(not_null.index).GetName();
+				auto it = name_to_idx.find(col_name);
+				if (it != name_to_idx.end()) {
+					bind_input.not_null_columns[it->second] = true;
+				}
+			}
+		}
+	}
+
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 
 	const auto rotate = file_size_bytes.IsValid() || batches_per_file.IsValid();

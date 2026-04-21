@@ -149,7 +149,7 @@ public:
 	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
 	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
 	              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96,
-	              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc);
+	              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc, vector<bool> not_null_columns);
 	~ParquetWriter();
 
 public:
@@ -259,6 +259,7 @@ private:
 	GeoParquetVersion geoparquet_version;
 	bool write_timestamp_as_int96;
 	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
+	vector<bool> not_null_columns;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files
