@@ -101,8 +101,6 @@ void TableIndexList::RemoveIndex(const string &name) {
 		auto &index = *index_entries[i]->index;
 		if (index.GetIndexName() == name) {
 			if (!index.IsBound()) {
-				// An unbound index holds raw block pointers rather than FixedSizeBuffers; release them here
-				// before the entry is erased (bound indexes release theirs via FSB destruction).
 				index.Cast<UnboundIndex>().MarkStorageAsModified();
 				unbound_count--;
 			}

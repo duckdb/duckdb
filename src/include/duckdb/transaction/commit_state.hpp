@@ -85,13 +85,11 @@ private:
 
 class CommitState {
 public:
-	CommitState(DuckTransaction &transaction, transaction_t commit_id, ActiveTransactionState transaction_state,
-	            CommitMode commit_mode);
+	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
+	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 public:
-	//! Dispatch a forward-commit undo entry. Drops register their deferred work into drop_buffer.
 	void CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer &drop_buffer);
-	//! Dispatch a revert-commit undo entry. Never queues drops.
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 	void Flush();
 	void Verify();

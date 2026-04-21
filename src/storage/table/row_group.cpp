@@ -504,7 +504,7 @@ void RowGroup::CommitDrop(CommitDropBuffer &drop_buffer) {
 }
 
 struct BlockIdDropper : public BlockIdVisitor {
-	BlockIdDropper(BlockManager &block_manager, CommitDropBuffer &drop_buffer)
+	explicit BlockIdDropper(BlockManager &block_manager, CommitDropBuffer &drop_buffer)
 	    : block_manager(block_manager), drop_buffer(drop_buffer) {
 	}
 

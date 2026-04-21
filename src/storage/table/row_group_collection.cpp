@@ -1264,7 +1264,7 @@ public:
 					}
 				}
 			}
-			// drop the merged row group
+			// drop the row group after merging
 			current_row_group.CommitDrop();
 			checkpoint_state.DropSegment(c_idx);
 		}
@@ -1356,7 +1356,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		if (row_group_count == 0) {
-			// empty row group - we can drop it entirely
+			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			dropped_any_rowgroups = true;

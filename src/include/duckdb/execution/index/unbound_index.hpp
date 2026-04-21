@@ -80,10 +80,6 @@ public:
 	             AttachedDatabase &db);
 
 public:
-	//! Marks the on-disk blocks backing this index as modified so the block manager can reclaim them.
-	//! Called by TableIndexList::RemoveIndex; bound indexes release their blocks via FixedSizeBuffer destruction
-	//! and have no equivalent hook.
-	void MarkStorageAsModified();
 
 	bool IsBound() const override {
 		return false;

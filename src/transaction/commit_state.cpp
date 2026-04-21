@@ -48,7 +48,6 @@ void CommitDropBuffer::Apply() {
 	} else {
 		D_ASSERT(dropped_block_ids.empty());
 	}
-	// RemoveIndex marks any storage held by an unbound index before erasing the entry.
 	for (auto &removal : pending_index_removals) {
 		removal.indexes.get().RemoveIndex(removal.name);
 	}
