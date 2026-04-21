@@ -17,7 +17,14 @@ extend-exclude = [
 extend-ignore-re = [
   # Ignore short, intentionally random SQL literals (e.g. 'ABC')
   "'[A-Z]{2,4}'",
-  "PNGs?",
+  # Explicitly capitalized words, ending with an optional 's'.
+  "\\b[A-Z]{2,}s?\\b",
+  # Ignore lines that end with `# typos:ignore`
+  "(?Rm)^.*(#|//)\\s*typos:ignore$",
+  # Ignore the line after `# typos:ignore-next-line`
+  "(#|//)\\s*typos:ignore-next-line\\n.*",
+  # Ignore blocks between `# typos:off` and `# typos:on`
+  "(?s)(#|//)\\s*typos:off.*?\\n\\s*(#|//)\\s*typos:on",
 ]
 
 [default.extend-words]
