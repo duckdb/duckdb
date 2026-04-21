@@ -12,7 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "transformer/parse_result.hpp"
+#include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {

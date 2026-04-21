@@ -1,9 +1,9 @@
 #pragma once
 
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
-#include "parse_result.hpp"
-#include "transform_enum_result.hpp"
-#include "transform_result.hpp"
+#include "duckdb/parser/peg/transformer/parse_result.hpp"
+#include "duckdb/parser/peg/transformer/transform_enum_result.hpp"
+#include "duckdb/parser/peg/transformer/transform_result.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
 #include "duckdb/parser/peg/ast/analyze_target.hpp"
 #include "duckdb/parser/peg/ast/column_elements.hpp"

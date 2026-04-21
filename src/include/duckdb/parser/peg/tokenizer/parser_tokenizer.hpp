@@ -1,5 +1,5 @@
 #pragma once
-#include "base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 
 namespace duckdb {
 struct MatcherToken;
