@@ -38,7 +38,7 @@ public:
 
 private:
 	void SystemSamplePercent(DataChunk &input, DataChunk &result, OperatorState &state) const;
-	void SystemSampleRows(DataChunk &input, DataChunk &result, GlobalOperatorState &gstate, OperatorState &state) const;
+	void SystemSampleRows(DataChunk &input, DataChunk &result, OperatorState &state) const;
 	void BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
 };
 

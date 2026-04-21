@@ -37,10 +37,14 @@ PhysicalStreamingSample::PhysicalStreamingSample(PhysicalPlan &physical_plan, ve
 //===--------------------------------------------------------------------===//
 class StreamingSampleOperatorState : public OperatorState {
 public:
-	explicit StreamingSampleOperatorState(int64_t seed) : random(seed) {
+	explicit StreamingSampleOperatorState(int64_t seed) : random(seed), system_rows_seen(0), system_rows_emitted(0) {
 	}
 
 	RandomEngine random;
+
+	// Counters for row-count SYSTEM sampling.
+	idx_t system_rows_seen;
+	idx_t system_rows_emitted;
 };
 
 void PhysicalStreamingSample::SystemSamplePercent(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
@@ -53,19 +57,30 @@ void PhysicalStreamingSample::SystemSamplePercent(DataChunk &input, DataChunk &r
 	}
 }
 
-void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &result, GlobalOperatorState &gstate_p,
-                                               OperatorState &state_p) const {
+void PhysicalStreamingSample::SystemSampleRows(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
 	double rate = percentage;
 	if (rate <= 0) {
 		return;
 	}
 
-	// We take rows from the beginning of the chunk rather than randomly
-	// selecting positions to keep sampling fast and consistent.
-	const idx_t rows_to_take = ClampValue(LossyNumericCast<idx_t>(std::ceil(rate * static_cast<double>(input.size()))),
-	                                      idx_t(1), input.size());
-	result.Reference(input);
-	result.Slice(0, rows_to_take);
+	// Emit a row whenever rows_seen * rate crosses the next integer threshold.
+	// Using a fresh multiply per row (rather than an accumulated sum) avoids
+	// floating-point drift where repeated additions of rate never quite reach
+	// a whole number (e.g. 10000 × 0.0001 < 1.0).
+	auto &state = state_p.Cast<StreamingSampleOperatorState>();
+	idx_t result_count = 0;
+	SelectionVector sel(input.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		state.system_rows_seen++;
+		if (LossyNumericCast<double>(state.system_rows_seen) * rate >=
+		    LossyNumericCast<double>(state.system_rows_emitted) + 1.0) {
+			sel.set_index(result_count++, i);
+			state.system_rows_emitted++;
+		}
+	}
+	if (result_count > 0) {
+		result.Slice(input, sel, result_count);
+	}
 }
 
 void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
@@ -86,6 +101,11 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 bool PhysicalStreamingSample::ParallelOperator() const {
+	if (!sample_options->is_percentage) {
+		// Row-count SYSTEM sampling must see the full input stream through a
+		// single OperatorState so the rows_seen counter advances globally.
+		return false;
+	}
 	return !sample_options->repeatable;
 }
 
@@ -109,7 +129,7 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 		if (sample_options->is_percentage) {
 			SystemSamplePercent(input, chunk, state);
 		} else {
-			SystemSampleRows(input, chunk, gstate, state);
+			SystemSampleRows(input, chunk, state);
 		}
 		break;
 	default:
