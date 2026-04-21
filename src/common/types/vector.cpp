@@ -291,6 +291,18 @@ void Vector::Reserve(idx_t to_reserve) {
 	Resize(size(), to_reserve);
 }
 
+void Vector::Append(const Value &value) {
+	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, idx_t count) {
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
+	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+}
+
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
                   idx_t target_offset, idx_t copy_count) {
 	D_ASSERT(source.GetType() == GetType());

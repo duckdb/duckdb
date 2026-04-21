@@ -101,7 +101,7 @@ public:
 	idx_t Size() const {
 		return v_size.GetIndex();
 	}
-	virtual void SetVectorSize(idx_t new_size);
+	void SetVectorSize(idx_t new_size);
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {

@@ -129,6 +129,16 @@ struct FlatVector {
 		}
 		return buffer.Capacity();
 	}
+	static void SetSize(Vector &vector, idx_t new_size) {
+		auto &buffer_ref = vector.GetBufferRef();
+		if (!buffer_ref) {
+			if (new_size != 0) {
+				throw InternalException("Calling FlatVector::SetSize on a vector without a buffer with non-zero size");
+			}
+			return;
+		}
+		buffer_ref->SetVectorSize(new_size);
+	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
 		return reinterpret_cast<const T *>(GetData(vector));

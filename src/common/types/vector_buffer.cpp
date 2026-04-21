@@ -34,15 +34,20 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 }
 
 void VectorBuffer::SetVectorSize(idx_t new_size) {
-	if (!HasSize()) {
-		throw InternalException("Non-Flat/Non-Constant vector buffer does not have a size defined");
+	switch(vector_type) {
+	case VectorType::CONSTANT_VECTOR:
+		break;
+	case VectorType::FLAT_VECTOR:
+		if (new_size > Capacity()) {
+			throw InternalException(
+				"Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
+				Capacity());
+		}
+		break;
+	default:
+		throw InternalException("Non-Flat/Non-Constant vector buffer cannot have their size changed");
 	}
-	if (Size() == new_size) {
-		return;
-	}
-	throw InternalException(
-	    "VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d",
-	    new_size, Size());
+	v_size = new_size;
 }
 
 idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {

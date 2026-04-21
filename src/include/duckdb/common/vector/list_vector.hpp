@@ -21,7 +21,7 @@ public:
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
 	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector);
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
@@ -45,11 +45,10 @@ public:
 	void PushBack(const Value &insert);
 
 	idx_t GetChildSize() const {
-		return child_size;
+		return child->size();
 	}
 
 	idx_t GetChildCapacity() const;
-
 	void SetChildSize(idx_t new_size);
 
 public:
@@ -70,7 +69,6 @@ protected:
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t child_size = 0;
 };
 
 struct ListVector {
