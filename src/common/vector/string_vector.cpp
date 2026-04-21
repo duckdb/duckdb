@@ -33,17 +33,17 @@ VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(ca
 }
 
 VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p, idx_t capacity)
-    : StandardVectorBuffer(data_ptr_p, capacity) {
+    : StandardVectorBuffer(data_ptr_p, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity)
-    : StandardVectorBuffer(std::move(data_p), capacity), heap(AllocateHeap()) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)), heap(AllocateHeap()) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity, const VectorStringBuffer &other)
-    : StandardVectorBuffer(std::move(data_p), capacity) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {
 		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(auxiliary_data)));

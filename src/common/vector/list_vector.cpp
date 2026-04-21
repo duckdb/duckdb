@@ -17,26 +17,26 @@ VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 }
 
 VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size_p)
-    : StandardVectorBuffer(data, capacity) {
+    : StandardVectorBuffer(data, capacity, sizeof(list_entry_t)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child_size = child_size_p;
 	child = make_uniq<Vector>(Vector::Ref(vector));
 }
 
 VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent)
-    : StandardVectorBuffer(data, capacity), child_size(parent.child_size) {
+    : StandardVectorBuffer(data, capacity, sizeof(list_entry_t)), child_size(parent.child_size) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, const VectorListBuffer &parent)
-    : StandardVectorBuffer(std::move(allocated_data_p), capacity), child_size(parent.child_size) {
+    : StandardVectorBuffer(std::move(allocated_data_p), capacity, sizeof(list_entry_t)), child_size(parent.child_size) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
 VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, VectorListBuffer &parent)
-    : StandardVectorBuffer(std::move(allocated_data_p), capacity), child_size(parent.child_size) {
+    : StandardVectorBuffer(std::move(allocated_data_p), capacity, sizeof(list_entry_t)), child_size(parent.child_size) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	auto &parent_child = parent.GetChildMutable();
 	child = std::move(parent_child);

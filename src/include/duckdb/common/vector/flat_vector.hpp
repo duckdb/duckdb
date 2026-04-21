@@ -17,8 +17,8 @@ class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity);
-	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity, idx_t type_size);
 
 public:
 	data_ptr_t GetData() override {
@@ -47,7 +47,7 @@ public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
-	buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) override;
+	buffer_ptr<VectorBuffer> Resize(idx_t current_size, idx_t new_size) override;
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
@@ -59,6 +59,7 @@ protected:
 protected:
 	ValidityMask validity;
 	data_ptr_t data_ptr;
+	idx_t type_size;
 	idx_t capacity;
 	AllocatedData allocated_data;
 };

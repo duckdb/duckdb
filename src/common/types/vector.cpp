@@ -58,7 +58,8 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
 	} else {
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count);
+		auto type_size = GetTypeIdSize(type.InternalType());
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
 	}
 }
 
@@ -278,7 +279,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
 	} else {
 		// resize the buffer
-		auto new_buffer = buffer->Resize(GetType(), current_size, new_size);
+		auto new_buffer = buffer->Resize(current_size, new_size);
 		if (new_buffer) {
 			buffer = std::move(new_buffer);
 		}

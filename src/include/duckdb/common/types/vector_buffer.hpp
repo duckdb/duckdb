@@ -162,7 +162,7 @@ public:
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation
-	virtual buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size);
+	virtual buffer_ptr<VectorBuffer> Resize(idx_t current_size, idx_t new_size);
 
 protected:
 	//! Slice the buffer with a selection vector, returning a new buffer
