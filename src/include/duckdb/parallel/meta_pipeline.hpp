@@ -65,8 +65,11 @@ public:
 	//! Let 'dependant' depend on all pipeline that were created since 'start',
 	//! where 'including' determines whether 'start' is added to the dependencies
 	vector<shared_ptr<Pipeline>> AddDependenciesFrom(Pipeline &dependant, const Pipeline &start, bool including);
-	//! Recursively makes all children of this MetaPipeline depend on the given Pipeline
-	void AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child);
+	//! Recursively makes all children of this MetaPipeline depend on the given Pipeline.
+	//! If 'force' is true, dependencies are added regardless of pipeline/thread count
+	//! (required for DML CTEs where ordering is mandatory, not just a performance hint).
+	void AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies, const MetaPipeline &last_child,
+	                              bool force = false);
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline &pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent

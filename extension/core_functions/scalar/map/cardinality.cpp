@@ -15,10 +15,10 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto entry = entries[row];
 		if (!entry.IsValid()) {
-			result_data.SetInvalid(row);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[row] = entries.GetValueUnsafe(row).length;
+		result_data.WriteValue(entries.GetValueUnsafe(row).length);
 	}
 }
 

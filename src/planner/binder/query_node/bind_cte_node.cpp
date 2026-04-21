@@ -7,6 +7,9 @@
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -36,9 +39,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 			if (parent) {
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
-			if (++dml_cte_count > 1) {
-				throw BinderException("Only a single DML statement (INSERT/UPDATE/DELETE) is allowed per WITH clause");
-			}
+			++dml_cte_count;
 		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
@@ -73,6 +74,18 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	for (idx_t i = bound_ctes.size(); i > 0; i--) {
 		auto &finish_binder = i == 1 ? *this : *bound_ctes[i - 2].child_binder;
 		result = finish_binder.FinishCTE(bound_ctes[i - 1], std::move(result));
+	}
+	if (dml_cte_count > 1) {
+		auto &properties = GetStatementProperties();
+		auto &manager = DatabaseManager::Get(context);
+		for (auto &entry : properties.modified_databases) {
+			auto db = manager.GetDatabase(context, entry.first);
+			if (db && !db->GetCatalog().SupportsMultipleDMLCTEs()) {
+				throw BinderException("Multiple DML statements in a single WITH clause are not supported for "
+				                      "database \"%s\"",
+				                      entry.first);
+			}
+		}
 	}
 	return result;
 }

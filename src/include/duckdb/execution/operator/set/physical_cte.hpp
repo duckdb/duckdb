@@ -30,6 +30,7 @@ public:
 
 	TableIndex table_index;
 	string ctename;
+	bool cte_body_is_dml = false;
 
 public:
 	// Sink interface

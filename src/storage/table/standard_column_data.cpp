@@ -145,7 +145,7 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 	return scan_count;
 }
 
-void StandardColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void StandardColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	ColumnScanState standard_state(nullptr);
 	ColumnScanState validity_state(nullptr);
@@ -154,24 +154,24 @@ void StandardColumnData::Update(TransactionData transaction, DataTable &data_tab
 	FetchUpdateData(standard_state, row_ids, base_vector, row_group_start);
 	validity->FetchUpdateData(validity_state, row_ids, base_vector, row_group_start);
 
-	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
-	validity->UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	validity->UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	                         row_group_start);
 }
 
-void StandardColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void StandardColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                       const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                       idx_t update_count, idx_t depth, idx_t row_group_start) {
 	if (depth >= column_path.size()) {
 		// update this column
-		ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count,
+		ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count,
 		                   row_group_start);
 	} else {
 		// update the child column (i.e. the validity column)
-		validity->UpdateColumn(transaction, data_table, column_path, update_vector, row_ids, update_count, depth + 1,
+		validity->UpdateColumn(transaction, table_entry, column_path, update_vector, row_ids, update_count, depth + 1,
 		                       row_group_start);
-		validity->UpdateWithBase(transaction, data_table, column_path[0], update_vector, row_ids, update_count, *this,
+		validity->UpdateWithBase(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, *this,
 		                         row_group_start);
 	}
 }

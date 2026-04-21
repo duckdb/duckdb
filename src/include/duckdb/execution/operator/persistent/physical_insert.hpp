@@ -69,7 +69,7 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &table,
+	PhysicalInsert(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &table,
 	               vector<unique_ptr<BoundConstraint>> bound_constraints,
 	               vector<unique_ptr<Expression>> set_expressions, vector<PhysicalIndex> set_columns,
 	               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk, bool parallel,
@@ -81,7 +81,7 @@ public:
 	               unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality, bool parallel);
 
 	//! The table to insert into
-	optional_ptr<TableCatalogEntry> insert_table;
+	optional_ptr<DuckTableEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The bound constraints for the table
@@ -157,9 +157,9 @@ protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                    ClientContext &client) const;
 	//! Returns the amount of updated tuples
-	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
+	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, DuckTableEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
+	idx_t OnConflictHandling(DuckTableEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
 	                         InsertLocalState &lstate, DataChunk &insert_chunk) const;
 };
 

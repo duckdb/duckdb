@@ -52,7 +52,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_data.SetInvalid(row);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -64,14 +64,15 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
 
 		bool found = false;
+		RETURN_TYPE found_value {};
 
 		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
 			auto &member_data = member_datas[member_idx];
@@ -89,19 +90,21 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 			if (is_null || both_valid_and_match) {
 				found = true;
 				if (return_pos) {
-					result_data[row] = UnsafeNumericCast<int32_t>(member_idx + 1);
+					found_value = UnsafeNumericCast<int32_t>(member_idx + 1);
 				} else {
-					result_data[row] = true;
+					found_value = RETURN_TYPE(true);
 				}
 			}
 		}
 
 		if (!found) {
 			if (return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
+		} else {
+			result_data.WriteValue(found_value);
 		}
 	}
 }

@@ -244,13 +244,13 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[i] = values_data[values.sel->get_index(i)];
+		result_data.WriteValue(values_data[values.sel->get_index(i)]);
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
