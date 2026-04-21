@@ -37,6 +37,31 @@ void WALWriteState::SwitchTable(DataTableInfo &table_info, UndoFlags new_op) {
 	}
 }
 
+bool WALWriteState::IsDroppedTable(const DataTableInfo &table) const {
+	return dropped_tables.find(&table) != dropped_tables.end();
+}
+
+void WALWriteState::CollectDroppedTable(UndoFlags type, data_ptr_t data) {
+	if (type != UndoFlags::CATALOG_ENTRY) {
+		return;
+	}
+	auto catalog_entry = Load<CatalogEntry *>(data);
+	auto &parent = catalog_entry->Parent();
+	if (parent.type != CatalogType::DELETED_ENTRY) {
+		return;
+	}
+	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
+		return;
+	}
+	auto &table_entry = catalog_entry->Cast<DuckTableEntry>();
+	if (!table_entry.IsDuckTable()) {
+		return;
+	}
+	// the storage pointer is stable across RENAMEs in the same transaction, so any data op touching this table
+	// will point at the same DataTableInfo and we can short-circuit it.
+	dropped_tables.insert(table_entry.GetStorage().GetDataTableInfo().get());
+}
+
 void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	if (entry.temporary || entry.Parent().temporary) {
 		return;
@@ -271,25 +296,39 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
+		if (info->table->IsTemporary()) {
+			break;
 		}
+		if (IsDroppedTable(*info->table->GetDataTableInfo())) {
+			// table is dropped by the end of this transaction - skip emitting the data op to the WAL (see #22124)
+			break;
+		}
+		info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (!info->table->IsTemporary()) {
-			WriteDelete(*info);
+		if (info->table->IsTemporary()) {
+			break;
 		}
+		if (IsDroppedTable(*info->table->GetDataTableInfo())) {
+			break;
+		}
+		WriteDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (!info->segment->column_data.GetTableInfo().IsTemporary()) {
-			WriteUpdate(*info);
+		auto &table_info = info->segment->column_data.GetTableInfo();
+		if (table_info.IsTemporary()) {
+			break;
 		}
+		if (IsDroppedTable(table_info)) {
+			break;
+		}
+		WriteUpdate(*info);
 		break;
 	}
 	case UndoFlags::ATTACHED_DATABASE:
