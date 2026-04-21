@@ -566,7 +566,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools enum-integrity-check
+.PHONY: toolsci format_tools enum-integrity-check check-typos
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -574,6 +574,7 @@ toolsci:
 		sudo apt-get update -y -qq; \
 		sudo apt-get install -y -qq libcurl4-openssl-dev; \
 	}
+	command -v typos >/dev/null 2>&1 || cargo install --locked typos-cli
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
@@ -595,6 +596,13 @@ format_tools:
 
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
+
+check-typos:
+	@if ! command -v typos >/dev/null 2>&1; then \
+		echo 'typos not found. Install it with "brew install typos-cli"'; \
+		exit 1; \
+	fi
+	typos -c scripts/typos.toml
 
 benchmark:
 	mkdir -p ./build/release && \

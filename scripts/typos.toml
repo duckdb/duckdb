@@ -1,0 +1,15 @@
+[files]
+extend-exclude = [
+  "*.csv",
+  "/benchmark/clickbench",
+  "/data/",
+  "/test/ossfuzz",
+  "project.pbxproj",
+  "third_party",
+]
+
+[default.extend-words]
+# Legal language
+stichting = "stichting"
+# Project-specific acronyms
+nd = "nd"
