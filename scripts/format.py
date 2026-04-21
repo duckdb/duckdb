@@ -152,6 +152,27 @@ if args.directories:
     formatted_directories = args.directories
 
 
+def get_typos_targets():
+    if format_all:
+        return [path for path in formatted_directories if os.path.exists(path)]
+    return sorted(set([f.full_path for f in files if os.path.exists(f.full_path)]))
+
+
+def run_typos_check():
+    typos_targets = get_typos_targets()
+    if not typos_targets:
+        return 0
+    typos_command = ['typos']
+    if not check_only:
+        typos_command.append('-w')
+    typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
+    try:
+        return subprocess.call(typos_command)
+    except FileNotFoundError:
+        print('typos not found. Install it with "brew install typos-cli"')
+        return 1
+
+
 def file_is_ignored(full_path):
     if os.path.basename(full_path) in ignored_files:
         return True
@@ -430,6 +451,8 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.shutdown(wait=True, cancel_futures=True)
         raise
 
+typos_status = run_typos_check()
+
 if check_only:
     if len(difference_files) > 0:
         print("")
@@ -440,6 +463,10 @@ if check_only:
             print("- " + fname)
         print('Run "make format-fix" to fix these differences automatically')
         exit(1)
+    if typos_status != 0:
+        exit(1)
     else:
         print("Passed format-check")
         exit(0)
+elif typos_status != 0:
+    exit(1)

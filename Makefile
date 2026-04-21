@@ -566,7 +566,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools spell_tools enum-integrity-check check-typos
+.PHONY: toolsci format_tools spell_tools enum-integrity-check
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -621,13 +621,6 @@ spell_tools:
 
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
-
-check-typos:
-	@if ! command -v typos >/dev/null 2>&1; then \
-		echo 'typos not found. Install it with "brew install typos-cli"'; \
-		exit 1; \
-	fi
-	typos -c scripts/typos.toml
 
 benchmark:
 	mkdir -p ./build/release && \
