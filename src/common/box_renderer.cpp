@@ -615,28 +615,24 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
+	vector.Flatten(count);
 	auto input_values = vector.Values<string_t>(count);
-
-	Vector result_strings(LogicalType::VARCHAR, count);
-	auto result_data = FlatVector::Writer<string_t>(result_strings, count);
-
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
+	auto result_data = FlatVector::ScatterWriter<string_t>(vector);
 	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);
 	for (idx_t r = 0; r < count; r++) {
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
 			// set render length to render length of NULL
 			render_length_data.PushValue(null_render_length);
-			result_data.PushInvalid();
 			continue;
 		}
 		// non-null - convert value
 		auto input_str = input_values[r].GetValue().GetString();
 		auto result_str = ConvertRenderValue(input_str, original_type);
 		render_length_data.PushValue(Utf8Proc::RenderWidth(result_str));
-		result_data.PushValue(result_str);
+		result_data[r] = result_str;
 	}
-	vector.Reference(result_strings);
 }
 
 RenderDataCollection::RenderDataCollection(BoxRendererContext &context, idx_t column_count) : context(context) {
