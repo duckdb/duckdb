@@ -23,6 +23,16 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+FORMAT_VENV ?= build/format-venv
+FORMAT_VENV_PYTHON := $(FORMAT_VENV)/bin/python
+ifdef CI
+FORMAT_PYTHON := $(PYTHON)
+FORMAT_SETUP_DEPS :=
+else
+FORMAT_PYTHON := $(FORMAT_VENV_PYTHON)
+FORMAT_SETUP_DEPS := format-venv-tools
+endif
+
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
 EXE_SUFFIX := .exe
@@ -566,7 +576,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools spell_tools enum-integrity-check
+.PHONY: toolsci format_tools spell_tools enum-integrity-check format-venv-tools
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -622,6 +632,15 @@ spell_tools:
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
+format-venv-tools:
+	@if [ ! -x "$(FORMAT_VENV_PYTHON)" ]; then \
+		mkdir -p "$(dir $(FORMAT_VENV))" && \
+		$(PYTHON) -m venv "$(FORMAT_VENV)"; \
+	fi
+	@$(FORMAT_VENV_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install black
+	@$(FORMAT_VENV_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install cmake-format
+	@$(FORMAT_VENV_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install clang_format==11.0.1
+
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
@@ -669,15 +688,15 @@ tidy-fix:
 test_compile: # test compilation of individual cpp files
 	$(PYTHON) scripts/amalgamation.py --compile
 
-format-check:
-	$(PYTHON) scripts/format.py --all --check
+format-check: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check
 
-format-check-silent:
-	$(PYTHON) scripts/format.py --all --check --silent
+format-check-silent: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check --silent
 
-format-fix:
+format-fix: $(FORMAT_SETUP_DEPS)
 	rm -rf src/amalgamation/*
-	$(PYTHON) scripts/format.py --all --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration
@@ -693,17 +712,17 @@ check-extension-entries: extension_configuration
 		echo "No differences found"; \
 	fi
 
-format-head:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-head: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
 
-format-changes:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-changes: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
 
-format-main:
-	$(PYTHON) scripts/format.py main --fix --noconfirm
+format-main: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm
 
-format-feature:
-	$(PYTHON) scripts/format.py feature --fix --noconfirm
+format-feature: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm
 
 format-configs:
 	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)
