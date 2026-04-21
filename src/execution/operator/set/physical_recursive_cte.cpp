@@ -71,9 +71,12 @@ public:
 
 		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.distinct_types,
 		                                          op.payload_types, std::move(payload_aggregates));
-		if (op.using_key && !op.distinct_types.empty()) {
+		if (op.using_key) {
 			distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
+			source_distinct_rows.Initialize(Allocator::DefaultAllocator(), op.distinct_types);
+			source_payload_rows.Initialize(Allocator::DefaultAllocator(), op.payload_types);
 		}
+		source_result.Initialize(Allocator::DefaultAllocator(), op.GetTypes());
 		InitializeIntermediateAppend();
 		op.working_table->InitializeAppend(working_append_state);
 		if (op.recurring_table) {
@@ -177,6 +180,7 @@ public:
 			return executors;
 		}
 		D_ASSERT(executor_pool);
+		// Lock order: cached_executor_lock -> executor_pool->lock.
 		lock_guard<mutex> pool_guard(executor_pool->lock);
 		auto pool_entry = executor_pool->executors.find(pipeline);
 		if (pool_entry == executor_pool->executors.end()) {
@@ -206,6 +210,7 @@ public:
 			return;
 		}
 		D_ASSERT(executor_pool);
+		// Lock order: cached_executor_lock -> executor_pool->lock.
 		lock_guard<mutex> pool_guard(executor_pool->lock);
 		for (auto &entry : cached_executors) {
 			auto pool_entry = executor_pool->executors.find(entry.first.get());
@@ -242,9 +247,14 @@ public:
 	Vector dummy_addresses;
 	//! Cached chunk for distinct key extraction in the using_key Sink path
 	DataChunk distinct_rows;
+	//! Cached chunks for source-side hash table scans and recurring table copy paths
+	DataChunk source_result;
+	DataChunk source_payload_rows;
+	DataChunk source_distinct_rows;
 	AggregateHTScanState ht_scan_state;
 
 	//! Cached PipelineExecutors per pipeline for reuse across recursive iterations
+	//! When both locks are needed, always acquire cached_executor_lock before executor_pool->lock.
 	mutex cached_executor_lock;
 	PhysicalRecursiveCTE::executor_cache_t cached_executors;
 	//! Cached dependency graph for the single-thread inline recursive fast path
@@ -259,6 +269,8 @@ public:
 // Recursive CTE Task and Event for optimized execution
 //===--------------------------------------------------------------------===//
 
+// Recursive iterations often produce small batches. Aim for about half a vector of input per worker
+// before increasing parallelism so scheduler overhead stays low on narrow recursive workloads.
 static constexpr const idx_t RECURSIVE_ROWS_PER_THREAD = STANDARD_VECTOR_SIZE / 2;
 
 static idx_t GetRecursiveThreadLimit(const RecursiveCTEState &state) {
@@ -341,10 +353,11 @@ public:
 	}
 
 private:
+	// Keep partial execution reasonably coarse so blocked pipelines make progress without creating tiny tasks.
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
 };
 
-//! A pipeline event that uses cached PipelineExecutors for the recursive CTE
+//! A pipeline event that uses cached PipelineExecutors for the recursive CTE.
 class RecursiveCTEPipelineEvent : public BasePipelineEvent {
 public:
 	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p)
@@ -392,6 +405,8 @@ public:
 	}
 
 	void Schedule() override {
+		// This event is only used by the single-thread inline recursive fast path.
+		// Blocking here is safe because the caller runs it synchronously and explicitly waits for completion.
 		D_ASSERT(total_tasks == 0);
 		total_tasks = 1;
 
@@ -586,6 +601,9 @@ BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines)
 		                                        DConstants::INVALID_INDEX);
 		for (auto &entry : meta_pipeline_plan.entries) {
 			auto &pipeline = entry.pipeline.get();
+			if (entry.type != RecursiveCTEMetaPipelineEntryType::BASE) {
+				D_ASSERT(base_stack.execute_stage != DConstants::INVALID_INDEX);
+			}
 			switch (entry.type) {
 			case RecursiveCTEMetaPipelineEntryType::BASE: {
 				base_stack = AddRecursiveInlineStageStack(*plan, pipeline);
@@ -866,14 +884,18 @@ static void ConfigureInvariantRecursiveBuildReuse(const PhysicalRecursiveCTE &op
 	}
 }
 
+static void ProcessRecursiveExecutorTasks(Executor &executor) {
+	if (!executor.WorkOnTasks()) {
+		executor.WaitForTask();
+	}
+	if (executor.HasError()) {
+		executor.ThrowException();
+	}
+}
+
 static void WaitForRecursiveEvents(Executor &executor, vector<shared_ptr<Event>> &events) {
 	while (true) {
-		if (!executor.WorkOnTasks()) {
-			executor.WaitForTask();
-		}
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
+		ProcessRecursiveExecutorTasks(executor);
 		bool finished = true;
 		for (auto &event : events) {
 			if (!event->IsFinished()) {
@@ -889,12 +911,7 @@ static void WaitForRecursiveEvents(Executor &executor, vector<shared_ptr<Event>>
 
 static void WaitForRecursiveEvent(Executor &executor, Event &event) {
 	while (!event.IsFinished()) {
-		if (!executor.WorkOnTasks()) {
-			executor.WaitForTask();
-		}
-		if (executor.HasError()) {
-			executor.ThrowException();
-		}
+		ProcessRecursiveExecutorTasks(executor);
 	}
 }
 
@@ -905,6 +922,12 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 	RecursiveCTEEventStack base_stack(nullptr, nullptr, nullptr, nullptr);
 	for (auto &entry : meta_pipeline_plan.entries) {
 		auto &pipeline = entry.pipeline.get();
+		if (entry.type != RecursiveCTEMetaPipelineEntryType::BASE) {
+			D_ASSERT(base_stack.pipeline_event);
+			D_ASSERT(base_stack.pipeline_prepare_finish_event);
+			D_ASSERT(base_stack.pipeline_finish_event);
+			D_ASSERT(base_stack.pipeline_complete_event);
+		}
 		switch (entry.type) {
 		case RecursiveCTEMetaPipelineEntryType::BASE: {
 			base_stack = CreateRecursiveEventStack(pipeline.shared_from_this(), state);
@@ -1124,20 +1147,20 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-static void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set,
-                          bool reference) {
+static void GatherChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {
 	idx_t chunk_index = 0;
-	// Populate the group_chunk
 	for (auto &group_idx : idx_set) {
-		if (reference) {
-			// Reference from input_chunk[chunk_index] -> group_chunk[group_idx]
-			group_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
-		} else {
-			// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
-			group_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
-		}
+		output_chunk.data[chunk_index++].Reference(input_chunk.data[group_idx]);
 	}
-	group_chunk.SetCardinality(input_chunk.size());
+	output_chunk.SetCardinality(input_chunk.size());
+}
+
+static void ScatterChunk(DataChunk &output_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set) {
+	idx_t chunk_index = 0;
+	for (auto &group_idx : idx_set) {
+		output_chunk.data[group_idx].Reference(input_chunk.data[chunk_index++]);
+	}
+	output_chunk.SetCardinality(input_chunk.size());
 }
 
 SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
@@ -1158,7 +1181,7 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &
 	} else {
 		// Split incoming DataChunk into payload and keys using the cached distinct_rows chunk
 		gstate.distinct_rows.Reset();
-		PopulateChunk(gstate.distinct_rows, chunk, distinct_idx, true);
+		GatherChunk(gstate.distinct_rows, chunk, distinct_idx);
 
 		// Add result of recursive anchor to intermediate table
 		gstate.intermediate_table.Append(gstate.intermediate_append_state, chunk);
@@ -1215,23 +1238,15 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 				gstate.ResetRecurringTable();
 				AggregateHTScanState scan_state;
 				gstate.ht->InitializeScan(scan_state);
-
-				// Initialise the DataChunks to read the resulting rows.
-				// One DataChunk for the payload, one for the keys.
-				// Create a new DataChunk to store the result.
-				DataChunk result;
-				DataChunk payload_rows;
-				DataChunk distinct_rows;
-				distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-				if (!payload_types.empty()) {
-					payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
-				}
-				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
+				auto &result = gstate.source_result;
+				auto &payload_rows = gstate.source_payload_rows;
+				auto &distinct_rows = gstate.source_distinct_rows;
 
 				while (gstate.ht->Scan(scan_state, distinct_rows, payload_rows)) {
+					result.Reset();
 					// Populate the result DataChunk with the keys and the payload.
-					PopulateChunk(result, distinct_rows, distinct_idx, false);
-					PopulateChunk(result, payload_rows, payload_idx, false);
+					ScatterChunk(result, distinct_rows, distinct_idx);
+					ScatterChunk(result, payload_rows, payload_idx);
 					// Append the result to the recurring table.
 					recurring_table->Append(gstate.recurring_append_state, result);
 				}
@@ -1243,11 +1258,8 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 				// we can just scan the intermediate table directly, instead of going through the HT
 				ColumnDataScanState scan_state;
 				current_output.InitializeScan(scan_state);
-				DataChunk result;
-				result.Initialize(Allocator::DefaultAllocator(), chunk.GetTypes());
-
-				while (current_output.Scan(scan_state, result)) {
-					recurring_table->Append(gstate.recurring_append_state, result);
+				while (current_output.Scan(scan_state, gstate.source_result)) {
+					recurring_table->Append(gstate.recurring_append_state, gstate.source_result);
 				}
 			}
 
@@ -1284,18 +1296,13 @@ SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context
 			if (gstate.CurrentOutputTable().Count() == 0) {
 				gstate.finished_scan = true;
 				if (using_key) {
-					// Initialise the DataChunks to read the ht.
-					// One DataChunk for payload, one for keys.
-					DataChunk payload_rows;
-					DataChunk distinct_rows;
-					distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
-					if (!payload_types.empty()) {
-						payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
-					}
-
+					auto &payload_rows = gstate.source_payload_rows;
+					auto &distinct_rows = gstate.source_distinct_rows;
+					distinct_rows.Reset();
+					payload_rows.Reset();
 					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
-					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
-					PopulateChunk(chunk, payload_rows, payload_idx, false);
+					ScatterChunk(chunk, distinct_rows, distinct_idx);
+					ScatterChunk(chunk, payload_rows, payload_idx);
 				}
 				break;
 			}
