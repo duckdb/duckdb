@@ -332,6 +332,9 @@ public:
 	virtual bool SupportsTimeTravel() const {
 		return false;
 	}
+	virtual bool SupportsMultipleDMLCTEs() const {
+		return false;
+	}
 	virtual bool IsEncrypted() const {
 		return false;
 	}
