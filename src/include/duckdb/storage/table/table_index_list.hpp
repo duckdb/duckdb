@@ -69,6 +69,9 @@ public:
 	void AddIndex(unique_ptr<Index> index);
 	//! Removes an index entry from the list of index entries.
 	void RemoveIndex(const string &name);
+	//! Dispatches Index::CommitDrop on the matching entry without removing it from the list. Used by the deferred
+	//! commit-drop path so an UnboundIndex can mark its on-disk blocks as modified before RemoveIndex destroys it.
+	void CommitDrop(const string &name);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name);
 	//! Returns an optional pointer to the index matching the name.

@@ -121,6 +121,10 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
+	//! A bound index's on-disk blocks are reclaimed by FixedSizeBuffer destructors when the index is destroyed,
+	//! so this hook is an empty no-op.
+	void CommitDrop() override;
+
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
 	virtual void ResetStorage(IndexLock &index_lock) = 0;
 	//! Obtains a lock and calls ResetStorage while holding that lock.

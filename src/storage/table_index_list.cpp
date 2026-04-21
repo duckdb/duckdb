@@ -109,6 +109,17 @@ void TableIndexList::RemoveIndex(const string &name) {
 	}
 }
 
+void TableIndexList::CommitDrop(const string &name) {
+	lock_guard<mutex> lock(index_entries_lock);
+	for (auto &entry : index_entries) {
+		auto &index = *entry->index;
+		if (index.GetIndexName() == name) {
+			index.CommitDrop();
+			return;
+		}
+	}
+}
+
 unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	lock_guard<mutex> lock(index_entries_lock);
 	unordered_set<string> result;
@@ -222,10 +233,6 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			bound_idx->ApplyBufferedReplays(physical_column_types, unbound_index.GetBufferedReplays(),
 			                                unbound_index.GetMappedColumnIds());
 		}
-
-		// The bound index now owns the on-disk blocks that backed the unbound index; stop the unbound index's
-		// destructor from marking them a second time.
-		unbound_index.ReleaseStorageOwnership();
 
 		// Commit the bound index to the index entry.
 		lock.lock();

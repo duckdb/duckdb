@@ -49,6 +49,9 @@ void CommitDropBuffer::Apply() {
 		block_manager->MarkBlockAsModified(block_id);
 	}
 	for (auto &removal : pending_index_removals) {
+		// CommitDrop marks any on-disk blocks held by an unbound index; bound indexes release theirs via
+		// FixedSizeBuffer destruction when RemoveIndex destroys the entry.
+		removal.indexes.get().CommitDrop(removal.name);
 		removal.indexes.get().RemoveIndex(removal.name);
 	}
 	dropped_block_ids.clear();
