@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
+#include "duckdb/storage/checkpoint/checkpoint_options.hpp"
 
 namespace duckdb {
 struct DBConfig;
@@ -17,10 +19,36 @@ class ClientContext;
 class DatabaseInstance;
 class ErrorData;
 
-struct CheckpointRowIDChangeInfo {
+enum class CheckpointTableFlags : uint8_t {
+	NONE = 0,
+	ROW_GROUPS_DROPPED = 1 << 0,
+	ROW_GROUPS_MERGED = 1 << 1,
+	ROW_IDS_REMAPPED = 1 << 2,
+	INDEXES_REBUILT = 1 << 3
+};
+
+inline CheckpointTableFlags operator|(CheckpointTableFlags left, CheckpointTableFlags right) {
+	return static_cast<CheckpointTableFlags>(static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
+}
+
+inline CheckpointTableFlags &operator|=(CheckpointTableFlags &left, CheckpointTableFlags right) {
+	left = left | right;
+	return left;
+}
+
+inline bool HasCheckpointTableFlag(CheckpointTableFlags flags, CheckpointTableFlags flag) {
+	return (static_cast<uint8_t>(flags) & static_cast<uint8_t>(flag)) != 0;
+}
+
+struct CheckpointTableEvent {
 	idx_t table_oid;
-	idx_t first_changed_old_row_group;
-	bool row_ids_changed;
+	optional_idx first_affected_old_row_group;
+	CheckpointTableFlags flags = CheckpointTableFlags::NONE;
+};
+
+struct CheckpointEventInfo {
+	CheckpointOptions options;
+	vector<CheckpointTableEvent> tables;
 };
 
 class ExtensionCallback {
@@ -43,8 +71,11 @@ public:
 	//! Called after an extension fails to load loading
 	virtual void OnExtensionLoadFail(DatabaseInstance &db, const string &name, const ErrorData &error) {
 	}
-	//! Called when a checkpoint changes row ids for a table
-	virtual void OnCheckpointRowIDsChanged(DatabaseInstance &db, const CheckpointRowIDChangeInfo &info) {
+	//! Called before a checkpoint starts
+	virtual void OnCheckpointStart(DatabaseInstance &db, const CheckpointOptions &options) {
+	}
+	//! Called after a checkpoint ends
+	virtual void OnCheckpointEnd(DatabaseInstance &db, const CheckpointEventInfo &info) {
 	}
 
 	static void Register(DBConfig &config, shared_ptr<ExtensionCallback> extension);

@@ -87,7 +87,7 @@ void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(QueryContext context, AttachedDatabase &db,
                                                        BlockManager &block_manager, CheckpointOptions options_p)
-    : CheckpointWriter(db), context(context.GetClientContext()),
+    : CheckpointWriter(db, options_p), context(context.GetClientContext()),
       partial_block_manager(context, block_manager, PartialBlockType::FULL_CHECKPOINT), options(options_p) {
 }
 
@@ -695,6 +695,7 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	auto writer = GetTableDataWriter(table);
 	if (writer) {
 		writer->WriteTableData(serializer);
+		AddCheckpointTableEvents(writer->GetCheckpointTableEvents());
 	}
 }
 

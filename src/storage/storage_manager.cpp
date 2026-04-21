@@ -7,6 +7,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -697,8 +698,14 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
+	auto &database = db.GetDatabase();
+	for (auto &callback : ExtensionCallback::Iterate(database)) {
+		callback->OnCheckpointStart(database, options);
+	}
 
 	auto &config = DBConfig::Get(db);
+	CheckpointEventInfo checkpoint_info;
+	checkpoint_info.options = options;
 	// We only need to checkpoint if there is anything in the WAL.
 	auto wal_size = GetWALSize();
 	if (wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
@@ -713,6 +720,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
+			checkpoint_info = checkpointer->GetCheckpointEventInfo();
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -722,6 +730,9 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointEnd(db, options);
+	}
+	for (auto &callback : ExtensionCallback::Iterate(database)) {
+		callback->OnCheckpointEnd(database, checkpoint_info);
 	}
 }
 

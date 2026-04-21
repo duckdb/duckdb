@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 
 namespace duckdb {
@@ -67,13 +68,20 @@ private:
 
 class CheckpointWriter {
 public:
-	explicit CheckpointWriter(AttachedDatabase &db) : db(db) {
+	CheckpointWriter(AttachedDatabase &db, CheckpointOptions options) : db(db) {
+		checkpoint_info.options = options;
 	}
 	virtual ~CheckpointWriter() {
 	}
 
 	//! The database
 	AttachedDatabase &db;
+	const CheckpointEventInfo &GetCheckpointEventInfo() const {
+		return checkpoint_info;
+	}
+	void AddCheckpointTableEvents(const vector<CheckpointTableEvent> &table_events) {
+		checkpoint_info.tables.insert(checkpoint_info.tables.end(), table_events.begin(), table_events.end());
+	}
 
 	virtual void CreateCheckpoint() = 0;
 	virtual MetadataManager &GetMetadataManager() = 0;
@@ -91,6 +99,9 @@ protected:
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
 	virtual void WriteType(TypeCatalogEntry &type, Serializer &serializer);
 	virtual void WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer);
+
+private:
+	CheckpointEventInfo checkpoint_info;
 };
 
 class CheckpointReader {

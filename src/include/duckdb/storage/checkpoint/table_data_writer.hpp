@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
 namespace duckdb {
@@ -52,6 +53,12 @@ public:
 	void SetRebuildIndexes() {
 		rebuild_indexes = true;
 	}
+	void AddCheckpointTableEvent(CheckpointTableEvent event) {
+		checkpoint_table_events.push_back(event);
+	}
+	const vector<CheckpointTableEvent> &GetCheckpointTableEvents() const {
+		return checkpoint_table_events;
+	}
 
 	DatabaseInstance &GetDatabase();
 	idx_t GetTableOid() const;
@@ -65,6 +72,7 @@ protected:
 
 	optional_idx row_group_count;
 	bool rebuild_indexes = false;
+	vector<CheckpointTableEvent> checkpoint_table_events;
 };
 
 class SingleFileTableDataWriter : public TableDataWriter {

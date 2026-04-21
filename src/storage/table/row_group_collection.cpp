@@ -1171,6 +1171,8 @@ struct VacuumState {
 	//! Whether we are allowed to rebuild indexes after a vacuum (only true when vacuum_rebuild_indexes
 	//! threshold is set, the table's row count is within the threshold, and all indexes are bound ART's).
 	bool can_rebuild_indexes = false;
+	bool row_groups_dropped = false;
+	bool row_groups_merged = false;
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
 	optional_idx first_changed_old_row_group;
@@ -1367,6 +1369,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			// empty row group - we can drop it entirely.
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
+			state.row_groups_dropped = true;
 			if (!first_dropped_row_group.IsValid()) {
 				first_dropped_row_group = entry.GetIndex();
 			}
@@ -1399,6 +1402,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			D_ASSERT(entry.GetIndex() == segment_idx);
 			row_group.CommitDrop();
 			checkpoint_state.DropSegment(segment_idx);
+			state.row_groups_dropped = true;
 		}
 	}
 }
@@ -1483,6 +1487,7 @@ bool RowGroupCollection::ScheduleVacuumTasks(CollectionCheckpointState &checkpoi
 		return false;
 	}
 	// schedule the vacuum task
+	state.row_groups_merged = true;
 	state.MarkRowIDsChanged(segment_idx);
 	DUCKDB_LOG(checkpoint_state.writer.GetDatabase(), CheckpointLogType, GetAttached(), *info, segment_idx, merge_count,
 	           target_count, merge_rows, state.row_start);
@@ -1790,6 +1795,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
+	CheckpointTableFlags table_flags = CheckpointTableFlags::NONE;
+	if (vacuum_state.row_groups_dropped) {
+		table_flags |= CheckpointTableFlags::ROW_GROUPS_DROPPED;
+	}
+	if (vacuum_state.row_groups_merged) {
+		table_flags |= CheckpointTableFlags::ROW_GROUPS_MERGED;
+	}
+	if (vacuum_state.row_ids_changed) {
+		table_flags |= CheckpointTableFlags::ROW_IDS_REMAPPED;
+	}
 	// Rebuild indexes if:
 	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
 	// threshold is set, the table's row count is within the threshold,
@@ -1798,15 +1813,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	// 2) we have changed rowids.
 	if (vacuum_state.can_rebuild_indexes && vacuum_state.row_ids_changed) {
 		writer.SetRebuildIndexes();
+		table_flags |= CheckpointTableFlags::INDEXES_REBUILT;
+	}
+	if (table_flags != CheckpointTableFlags::NONE) {
+		CheckpointTableEvent event;
+		event.table_oid = writer.GetTableOid();
+		event.flags = table_flags;
+		event.first_affected_old_row_group = vacuum_state.first_changed_old_row_group;
+		writer.AddCheckpointTableEvent(event);
 	}
 	if (vacuum_state.row_ids_changed) {
 		D_ASSERT(vacuum_state.first_changed_old_row_group.IsValid());
-		CheckpointRowIDChangeInfo info = {writer.GetTableOid(), vacuum_state.first_changed_old_row_group.GetIndex(),
-		                                  true};
-		auto &db = writer.GetDatabase();
-		for (auto &callback : ExtensionCallback::Iterate(db)) {
-			callback->OnCheckpointRowIDsChanged(db, info);
-		}
 	}
 }
 
