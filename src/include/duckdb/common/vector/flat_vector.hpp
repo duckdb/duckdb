@@ -54,6 +54,7 @@ protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
+	virtual buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity);
 
 protected:
 	ValidityMask validity;
@@ -116,8 +117,15 @@ struct FlatVector {
 		return GetDataMutableUnsafe<T>(vector);
 	}
 	static inline idx_t GetCapacity(const Vector &vector) {
-		VerifyFlatVector(vector);
-		return vector.GetBufferRef() ? vector.Buffer().Capacity() : 0;
+		auto &buffer_ref = vector.GetBufferRef();
+		if (!buffer_ref) {
+			return 0;
+		}
+		auto &buffer = *buffer_ref;
+		if (buffer.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
+		}
+		return buffer.Capacity();
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {

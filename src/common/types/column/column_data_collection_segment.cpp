@@ -234,11 +234,11 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto vcount = ReadVectorInternal(state, vector_index, result);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
-		auto &child_vector = ListVector::GetEntry(result);
+		auto &child_vector = ListVector::GetChildMutable(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto &child_vector = ArrayVector::GetEntry(result);
+		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		(void)child_count;
 	} else if (internal_type == PhysicalType::STRUCT) {

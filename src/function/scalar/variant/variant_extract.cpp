@@ -124,7 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
-		result.Shred(shredded_vector);
+		result.Shred(shredded_vector, count);
 		return true;
 	}
 	auto &component = components[path_index];
@@ -256,7 +256,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
 
 	//! Prepare the selection vector to remap index 0 of each row
-	SelectionVector new_sel(0, values_list_size);
+	auto new_sel = SelectionVector::Incremental(values_list_size);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;

@@ -473,7 +473,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &metadata, Vector &value,
                                                                      Vector &typed_value, idx_t offset, idx_t length,
                                                                      idx_t total_size) {
-	auto &child = ListVector::GetEntry(typed_value);
+	auto &child = ListVector::GetChildMutable(typed_value);
 	auto list_size = ListVector::GetListSize(typed_value);
 
 	//! 'value'

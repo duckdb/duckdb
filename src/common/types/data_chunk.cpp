@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
+DataChunk::DataChunk() : count(0) {
 }
 
 DataChunk::~DataChunk() {
@@ -28,7 +28,6 @@ DataChunk::~DataChunk() {
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	D_ASSERT(data.empty());
-	capacity = STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(types[i], nullptr);
 	}
@@ -49,12 +48,10 @@ void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &ty
 }
 
 void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, const vector<bool> &initialize,
-                           idx_t capacity_p) {
+                           idx_t capacity) {
 	D_ASSERT(types.size() == initialize.size());
 	D_ASSERT(data.empty());
 
-	capacity = capacity_p;
-	initial_capacity = capacity_p;
 	for (idx_t i = 0; i < types.size(); i++) {
 		// We copy the type here so we don't create another reference to the same shared_ptr<ExtraTypeInfo>
 		// Otherwise, threads will constantly increment/decrement the atomic ref count to the same shared_ptr
@@ -101,13 +98,11 @@ void DataChunk::Reset() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
-	capacity = initial_capacity;
 }
 
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
-	capacity = 0;
 	SetCardinality(0);
 }
 
@@ -129,17 +124,22 @@ bool DataChunk::AllConstant() const {
 	return true;
 }
 
+void DataChunk::SetCardinality(idx_t count_p) {
+	this->count = count_p;
+	// for(auto &vec : data) {
+	// 	vec.CheckCapacity(count);
+	// }
+}
+
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
-	SetCapacity(chunk);
-	SetCardinality(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
+	SetCardinality(chunk);
 }
 
 void DataChunk::Move(DataChunk &chunk) {
-	SetCapacity(chunk);
 	SetCardinality(chunk);
 	data = std::move(chunk.data);
 	vector_caches = std::move(chunk.vector_caches);
@@ -183,7 +183,6 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 		data.pop_back();
 		vector_caches.pop_back();
 	}
-	other.SetCapacity(*this);
 	other.SetCardinality(*this);
 }
 
@@ -209,7 +208,7 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 	SetCardinality(other.size());
 }
 
-void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
+void DataChunk::Append(const DataChunk &other, bool resize, optional_ptr<SelectionVector> sel, idx_t sel_count) {
 	idx_t new_size = sel ? size() + sel_count : size() + other.size();
 	if (other.size() == 0) {
 		return;
@@ -217,19 +216,17 @@ void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
-	if (new_size > capacity) {
-		if (resize) {
-			auto new_capacity = NextPowerOfTwo(new_size);
-			for (idx_t i = 0; i < ColumnCount(); i++) {
-				data[i].Resize(size(), new_capacity);
-			}
-			capacity = new_capacity;
-		} else {
-			throw InternalException("Can't append chunk to other chunk without resizing");
-		}
-	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		auto capacity = FlatVector::GetCapacity(data[i]);
+		if (new_size > capacity) {
+			if (resize) {
+				auto new_capacity = NextPowerOfTwo(new_size);
+				data[i].Resize(size(), new_capacity);
+			} else {
+				throw InternalException("Can't append chunk to other chunk without resizing");
+			}
+		}
 		if (sel) {
 			VectorOperations::Copy(other.data[i], data[i], *sel, sel_count, 0, size());
 		} else {
@@ -370,7 +367,6 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 #ifdef DEBUG
-	D_ASSERT(size() <= capacity);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());

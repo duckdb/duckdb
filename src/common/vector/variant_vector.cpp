@@ -21,21 +21,21 @@ const Vector &VariantVector::GetChildren(const Vector &vec) {
 }
 
 Vector &VariantVector::GetChildrenKeysIndex(Vector &vec) {
-	auto &children = ListVector::GetEntry(GetChildren(vec));
+	auto &children = ListVector::GetChildMutable(GetChildren(vec));
 	return StructVector::GetEntries(children)[0];
 }
 
 const Vector &VariantVector::GetChildrenKeysIndex(const Vector &vec) {
-	auto &children = ListVector::GetEntry(GetChildren(vec));
+	auto &children = ListVector::GetChild(GetChildren(vec));
 	return StructVector::GetEntries(children)[0];
 }
 
 Vector &VariantVector::GetChildrenValuesIndex(Vector &vec) {
-	auto &children = ListVector::GetEntry(GetChildren(vec));
+	auto &children = ListVector::GetChildMutable(GetChildren(vec));
 	return StructVector::GetEntries(children)[1];
 }
 const Vector &VariantVector::GetChildrenValuesIndex(const Vector &vec) {
-	auto &children = ListVector::GetEntry(GetChildren(vec));
+	auto &children = ListVector::GetChild(GetChildren(vec));
 	return StructVector::GetEntries(children)[1];
 }
 
@@ -47,20 +47,20 @@ const Vector &VariantVector::GetValues(const Vector &vec) {
 }
 
 Vector &VariantVector::GetValuesTypeId(Vector &vec) {
-	auto &values = ListVector::GetEntry(GetValues(vec));
+	auto &values = ListVector::GetChildMutable(GetValues(vec));
 	return StructVector::GetEntries(values)[0];
 }
 const Vector &VariantVector::GetValuesTypeId(const Vector &vec) {
-	auto &values = ListVector::GetEntry(GetValues(vec));
+	auto &values = ListVector::GetChild(GetValues(vec));
 	return StructVector::GetEntries(values)[0];
 }
 
 Vector &VariantVector::GetValuesByteOffset(Vector &vec) {
-	auto &values = ListVector::GetEntry(GetValues(vec));
+	auto &values = ListVector::GetChildMutable(GetValues(vec));
 	return StructVector::GetEntries(values)[1];
 }
 const Vector &VariantVector::GetValuesByteOffset(const Vector &vec) {
-	auto &values = ListVector::GetEntry(GetValues(vec));
+	auto &values = ListVector::GetChild(GetValues(vec));
 	return StructVector::GetEntries(values)[1];
 }
 

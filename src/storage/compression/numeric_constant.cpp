@@ -2,6 +2,10 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -149,21 +153,11 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		}
 		break;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
-		filters_nulls = true;
-		break;
-	case TableFilterType::IS_NULL:
-		filters_valid_values = true;
-		break;
-	case TableFilterType::IS_NOT_NULL:
-		filters_nulls = true;
-		break;
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		Value val(type);
-		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-		filters_nulls = !expr_filter.EvaluateWithConstant(state.executor, val);
+		filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
 		filters_valid_values = false;
 		break;
 	}

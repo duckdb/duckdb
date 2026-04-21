@@ -5,6 +5,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -22,6 +24,25 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr = filter.Cast<ExpressionFilter>().expr;
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+			return false;
+		}
+		auto &op = expr->Cast<BoundOperatorExpression>();
+		if ((op.type != ExpressionType::OPERATOR_IS_NULL && op.type != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		    op.children.size() != 1) {
+			return false;
+		}
+		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	}
+	default:
+		return false;
+	}
+}
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
@@ -393,7 +414,11 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		prune_result = filter.CheckStatistics(state.current->GetNode().stats.statistics);
+		auto &segment_stats =
+		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+		        ? state.child_states[0].current->GetNode().stats.statistics
+		        : state.current->GetNode().stats.statistics;
+		prune_result = filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}

@@ -36,3 +36,15 @@ index 685f23c..342c5b8 100644
  	if (files.empty()) {
  		// Use our own error message to be less confusing
  		throw IOException("Cannot open file \"%s\": No such file or directory", file_path);
+diff --git a/src/excel/xlsx/read_xlsx.cpp b/src/excel/xlsx/read_xlsx.cpp
+index 342c5b8..a634e65 100644
+--- a/src/excel/xlsx/read_xlsx.cpp
++++ b/src/excel/xlsx/read_xlsx.cpp
+@@ -708,7 +708,6 @@ static void Execute(ClientContext &context, TableFunctionInput &data, DataChunk
+ 			TryCastFromString(gstate, options.ignore_errors, col_idx, context, target_col);
+ 		}
+ 	}
+-	output.SetCapacity(row_count);
+ 	output.SetCardinality(row_count);
+ 
+ 	output.Verify();

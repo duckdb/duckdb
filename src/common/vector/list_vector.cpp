@@ -35,6 +35,14 @@ VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacit
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, VectorListBuffer &parent)
+    : StandardVectorBuffer(std::move(allocated_data_p), capacity), size(parent.size) {
+	buffer_type = VectorBufferType::LIST_BUFFER;
+	auto &parent_child = parent.GetChildMutable();
+	child = std::move(parent_child);
+	parent_child = make_uniq<Vector>(Vector::Ref(*child));
+}
+
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	idx_t child_capacity = GetChildCapacity();
 	if (to_reserve > child_capacity) {
@@ -165,6 +173,10 @@ buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data
 	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
 }
 
+buffer_ptr<VectorBuffer> VectorListBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) {
+	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
+}
+
 buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
                                                    idx_t count) const {
 	auto result = StandardVectorBuffer::Flatten(type, sel, count);
@@ -226,7 +238,7 @@ T &ListVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
-		return ListVector::GetEntry(child);
+		return GetEntryInternal<T>(child);
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -235,12 +247,20 @@ T &ListVector::GetEntryInternal(T &vector) {
 	return vector.GetBufferRef()->template Cast<VectorListBuffer>().GetChild();
 }
 
-const Vector &ListVector::GetEntry(const Vector &vector) {
+const Vector &ListVector::GetChild(const Vector &vector) {
 	return GetEntryInternal<const Vector>(vector);
 }
 
-Vector &ListVector::GetEntry(Vector &vector) {
+Vector &ListVector::GetChildMutable(Vector &vector) {
 	return GetEntryInternal<Vector>(vector);
+}
+
+const Vector &ListVector::GetEntry(const Vector &vector) {
+	return GetChild(vector);
+}
+
+Vector &ListVector::GetEntry(Vector &vector) {
+	return GetChildMutable(vector);
 }
 
 void ListVector::Reserve(Vector &vector, idx_t required_capacity) {

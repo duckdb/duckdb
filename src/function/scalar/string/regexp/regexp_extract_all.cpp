@@ -58,7 +58,7 @@ void ExtractSingleTuple(const string_t &string, duckdb_re2::RE2 &pattern, int32_
                         Vector &result, idx_t row) {
 	auto input = CreateStringPiece(string);
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 
 	auto current_list_size = ListVector::GetListSize(result);
 	auto current_list_capacity = ListVector::GetListCapacity(result);
@@ -160,7 +160,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto &output_child = ListVector::GetEntry(result);
+	auto &output_child = ListVector::GetChildMutable(result);
 
 	auto strings_entries = strings.Values<string_t>(args.size());
 	auto pattern_entries = patterns.Values<string_t>(args.size());
@@ -293,7 +293,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 	auto &strings = args.data[0];
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto &struct_vector = ListVector::GetEntry(result);
+	auto &struct_vector = ListVector::GetChildMutable(result);
 	D_ASSERT(struct_vector.GetType().id() == LogicalTypeId::STRUCT);
 	auto &child_entries = StructVector::GetEntries(struct_vector);
 	const idx_t group_count = child_entries.size();

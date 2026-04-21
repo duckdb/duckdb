@@ -270,7 +270,7 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	// set up the list entries
 	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
-	auto &child_entry = ListVector::GetEntry(result);
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);

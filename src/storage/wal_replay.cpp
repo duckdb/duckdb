@@ -947,12 +947,13 @@ void WriteAheadLogDeserializer::ReplayDropTrigger() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	if (!table_name.empty()) {
-		auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
-		auto &duck_table = table.Cast<DuckTableEntry>();
-		auto transaction = catalog.GetCatalogTransaction(context);
-		duck_table.DropTrigger(transaction, info.name, info.cascade);
+	if (table_name.empty()) {
+		throw InternalException("WAL replay: DROP TRIGGER entry has an empty table name for trigger \"%s\"", info.name);
 	}
+	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog.GetName(), info.schema, table_name);
+	auto &duck_table = table.Cast<DuckTableEntry>();
+	auto transaction = catalog.GetCatalogTransaction(context);
+	duck_table.DropTrigger(transaction, info.name, info.cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -984,13 +985,15 @@ void WriteAheadLogDeserializer::ReplaySequenceValue() {
 	auto name = deserializer.ReadProperty<string>(102, "name");
 	auto usage_count = deserializer.ReadProperty<uint64_t>(103, "usage_count");
 	auto counter = deserializer.ReadProperty<int64_t>(104, "counter");
+	auto last_value = deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value");
+
 	if (DeserializeOnly()) {
 		return;
 	}
 
 	// fetch the sequence from the catalog
 	auto &seq = catalog.GetEntry<SequenceCatalogEntry>(context, schema, name);
-	seq.ReplayValue(usage_count, counter);
+	seq.ReplayValue(usage_count, counter, last_value);
 }
 
 //===--------------------------------------------------------------------===//

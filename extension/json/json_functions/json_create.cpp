@@ -459,7 +459,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                              idx_t count) {
 	// Initialize array for the nested values
-	auto &child_v = ListVector::GetEntry(value_v);
+	auto &child_v = ListVector::GetChildMutable(value_v);
 	auto child_count = ListVector::GetListSize(value_v);
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
 	// Fill nested_vals with list values
@@ -487,7 +487,7 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 	value_v.Flatten(count);
 
 	// Initialize array for the nested values
-	auto &child_v = ArrayVector::GetEntry(value_v);
+	auto &child_v = ArrayVector::GetChildMutable(value_v);
 	auto array_size = ArrayType::GetSize(value_v.GetType());
 	auto child_count = count * array_size;
 

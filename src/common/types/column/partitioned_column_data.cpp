@@ -161,7 +161,8 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 		const auto partition_offset = partition_entry.offset - partition_length;
 
 		// Create a selection vector for this partition using the offset into the single selection vector
-		partition_sel.Initialize(state.partition_sel.data() + partition_offset);
+		partition_sel.Initialize(state.partition_sel.data() + partition_offset,
+		                         state.partition_sel.Capacity() - partition_offset);
 
 		if (partition_length >= HalfBufferSize()) {
 			// Slice the input chunk using the selection vector
@@ -178,7 +179,6 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 				// Next batch won't fit in the buffer, flush it to the partition
 				partition.Append(partition_append_state, partition_buffer);
 				partition_buffer.Reset();
-				partition_buffer.SetCapacity(BufferSize());
 			}
 		}
 	}

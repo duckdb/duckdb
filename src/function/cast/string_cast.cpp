@@ -150,7 +150,7 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	}
 	D_ASSERT(total_list_size == total);
 
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_converted =
@@ -404,7 +404,7 @@ bool VectorStringToArray::StringToNestedTypeCastLoop(const string_t *source_data
 	}
 	D_ASSERT(total == child_count);
 
-	auto &result_child = ArrayVector::GetEntry(result);
+	auto &result_child = ArrayVector::GetChildMutable(result);
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool cast_result = cast_data.child_cast_info.Cast(varchar_vector, result_child, child_count, child_parameters);

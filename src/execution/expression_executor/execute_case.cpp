@@ -206,7 +206,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	}
 	case PhysicalType::LIST: {
 		idx_t offset = ListVector::GetListSize(result);
-		auto &list_child = ListVector::GetEntry(vector);
+		auto &list_child = ListVector::GetChild(vector);
 		ListVector::Append(result, list_child, ListVector::GetListSize(vector));
 
 		// all the false offsets need to be incremented by true_child.count

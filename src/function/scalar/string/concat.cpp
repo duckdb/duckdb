@@ -150,7 +150,7 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 			continue;
 		}
 
-		auto &child_vec = ListVector::GetEntry(input);
+		auto &child_vec = ListVector::GetChildMutable(input);
 		ListConcatInputData data(input, child_vec);
 		input.ToUnifiedFormat(count, data.vdata);
 

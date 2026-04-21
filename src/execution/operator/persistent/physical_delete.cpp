@@ -140,7 +140,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			}
 			delete_count = final_count;
 			if (write_sel == &l_state.final_sel) {
-				delete_sel.Initialize(l_state.final_sel.data());
+				delete_sel.Initialize(l_state.final_sel.data(), l_state.final_sel.Capacity());
 			} else {
 				delete_sel = std::move(*large_sel);
 			}

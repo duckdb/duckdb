@@ -75,8 +75,12 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
-	return make_buffer<StandardVectorBuffer>(std::move(new_data), capacity);
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t new_capacity) const {
+	return make_buffer<StandardVectorBuffer>(std::move(new_data), new_capacity);
+}
+
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t new_capacity) {
+	return CreateBuffer(std::move(new_data), new_capacity);
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
@@ -98,7 +102,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, i
 	memcpy(new_data.get(), data_ptr, old_byte_count);
 
 	// create the new buffer
-	auto result = CreateBuffer(std::move(new_data), new_size);
+	auto result = CreateResizeBuffer(std::move(new_data), new_size);
 	// copy over the validity mask
 	auto &new_validity = result->GetValidityMask();
 	new_validity.Resize(new_size);
@@ -191,6 +195,10 @@ void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const 
 	if (!val.IsNull() && val.type() != type) {
 		SetValue(type, index, val.DefaultCastAs(type));
 		return;
+	}
+	if (index >= capacity) {
+		throw InvalidInputException("Vector::SetValue index %d is out of range for vector with capacity %d", index,
+		                            capacity);
 	}
 	validity.Set(index, !val.IsNull());
 	if (val.IsNull()) {
@@ -413,7 +421,7 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 
 	// Set all child entries to NULL.
 	if (internal_type == PhysicalType::ARRAY) {
-		auto &child = ArrayVector::GetEntry(vector);
+		auto &child = ArrayVector::GetChildMutable(vector);
 		auto array_size = ArrayType::GetSize(type);
 		auto child_offset = idx * array_size;
 		for (idx_t i = 0; i < array_size; i++) {

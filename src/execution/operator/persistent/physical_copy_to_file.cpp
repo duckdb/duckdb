@@ -499,12 +499,13 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextTask() {
 		case PartitionedCopyStage::FLUSH:
 			return TryNextFlushTask();
 		default:
-			return std::nullopt;
+			std::nullopt;
+			return nullopt;
 		}
 	}
 	const auto task_stage = static_cast<PartitionedCopyStage>(next_task / group_threads);
 	if (task_stage != group_stage) {
-		return std::nullopt;
+		return nullopt;
 	}
 	PartitionedCopyTask task;
 	task.stage = task_stage;
@@ -518,7 +519,7 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextTask() {
 
 optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 	if (batch_row_idx == count) {
-		return std::nullopt;
+		return nullopt;
 	}
 	if (partition_mask.RowIsValidUnsafe(batch_row_idx)) {
 		batch_states.push_back(make_uniq<PartitionedCopyBatchState>());
@@ -603,7 +604,7 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 
 optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextFlushTask() {
 	if (flush_partition_idx == batch_states.size()) {
-		return std::nullopt;
+		return nullopt;
 	}
 
 	PartitionedCopyTask task;
@@ -864,7 +865,7 @@ optional<PartitionedCopyTask> PartitionedCopyState::TryAssignTask() {
 		return task;
 	}
 
-	return std::nullopt;
+	return nullopt;
 }
 
 void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, const PartitionedCopyTask &task,

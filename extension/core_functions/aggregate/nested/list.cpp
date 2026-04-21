@@ -121,7 +121,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
 	ListVector::Reserve(result, total_len);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		const auto rid = i + offset;

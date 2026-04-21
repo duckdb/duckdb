@@ -24,6 +24,7 @@ public:
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
@@ -32,6 +33,9 @@ public:
 	}
 	const Vector &GetChild() const {
 		return *child;
+	}
+	unique_ptr<Vector> &GetChildMutable() {
+		return child;
 	}
 	void Reserve(idx_t to_reserve);
 
@@ -60,6 +64,7 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
+	buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) override;
 
 private:
 	//! child vectors used for nested data
@@ -82,9 +87,14 @@ struct ListVector {
 		return FlatVector::GetDataMutable<list_entry_t>(v);
 	}
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
+	[[deprecated("Use ListVector::GetChild instead")]] DUCKDB_API static const Vector &GetEntry(const Vector &vector);
 	//! Gets a reference to the underlying child-vector of a list
-	DUCKDB_API static Vector &GetEntry(Vector &vector);
+	[[deprecated("Use ListVector::GetChild or ListVector::GetChildMutable instead")]] DUCKDB_API static Vector &
+	GetEntry(Vector &vector);
+	//! Gets a reference to the underlying child-vector of a list
+	DUCKDB_API static const Vector &GetChild(const Vector &vector);
+	//! Gets a mutable reference to the underlying child-vector of a list
+	DUCKDB_API static Vector &GetChildMutable(Vector &vector);
 	//! Gets the total size of the underlying child-vector of a list
 	DUCKDB_API static idx_t GetListSize(const Vector &vector);
 	//! Sets the total size of the underlying child-vector of a list
