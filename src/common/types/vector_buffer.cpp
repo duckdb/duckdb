@@ -33,6 +33,18 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
+void VectorBuffer::SetVectorSize(idx_t new_size) {
+	if (!HasSize()) {
+		throw InternalException("Non-Flat/Non-Constant vector buffer does not have a size defined");
+	}
+	if (Size() == new_size) {
+		return;
+	}
+	throw InternalException(
+	    "VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d",
+	    new_size, Size());
+}
+
 idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
 	idx_t size = 0;
 	// uncompressed size of individual data entries

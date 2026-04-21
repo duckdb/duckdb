@@ -92,6 +92,14 @@ public:
 	virtual const ValidityMask &GetValidityMask() const {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
+	//! FIXME: should be removed
+	bool HasSize() const {
+		return v_size.IsValid();
+	}
+	idx_t Size() const {
+		return v_size.GetIndex();
+	}
+	virtual void SetVectorSize(idx_t new_size);
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
@@ -166,6 +174,8 @@ protected:
 	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
+	//! FIXME: optional_idx only temporarily...
+	optional_idx v_size;
 
 public:
 	template <class TARGET>
