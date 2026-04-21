@@ -39,8 +39,9 @@ struct PendingIndexRemoval {
 };
 
 //! Collects side effects of dropping a table, column, or index (block marks, index removals) so they can
-//! be applied atomically after the commit chain succeeds. Used both by CommitState for the commit path,
-//! and directly by local-storage / checkpoint paths that want to mark blocks as modified immediately.
+//! be applied after the commit chain succeeds (after a revert or rollback is possible), but before the overall
+//! commit succeeds. Overloads are provided for local storage and checkpoint paths where we want blocks to be
+//! marked as modified immediately.
 class CommitDropBuffer {
 public:
 	explicit CommitDropBuffer(optional_ptr<BlockManager> block_manager);
@@ -84,32 +85,26 @@ private:
 
 class CommitState {
 public:
-	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
-	                     ActiveTransactionState transaction_state, CommitMode commit_mode,
-	                     optional_ptr<BlockManager> block_manager);
+	CommitState(DuckTransaction &transaction, transaction_t commit_id, ActiveTransactionState transaction_state,
+	            CommitMode commit_mode);
 
 public:
-	void CommitEntry(UndoFlags type, data_ptr_t data);
+	//! Dispatch a forward-commit undo entry. Drops register their deferred work into drop_buffer.
+	void CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer &drop_buffer);
+	//! Dispatch a revert-commit undo entry. Never queues drops.
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 	void Flush();
 	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
-	//! Apply all deferred drop side effects. Call only after the commit chain has succeeded.
-	void FinalizeCommitDrops();
-	//! The active transaction state snapshot at the time of commit, read back by UndoBuffer::RevertCommit.
-	ActiveTransactionState GetActiveTransactionState() const;
-
 private:
-	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
+	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitDropBuffer &drop_buffer);
 	void CommitDelete(DeleteInfo &info);
 
 private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
-	ActiveTransactionState transaction_state;
 	IndexDataRemover index_data_remover;
-	CommitDropBuffer drop_buffer;
 };
 
 } // namespace duckdb

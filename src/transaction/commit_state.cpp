@@ -133,19 +133,10 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 // CommitState
 //===--------------------------------------------------------------------===//
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
-                         ActiveTransactionState transaction_state, CommitMode commit_mode,
-                         optional_ptr<BlockManager> block_manager)
-    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state),
-      index_data_remover(transaction, *transaction.context.lock(), GetIndexRemovalType(transaction_state, commit_mode)),
-      drop_buffer(block_manager) {
-}
-
-void CommitState::FinalizeCommitDrops() {
-	drop_buffer.Apply();
-}
-
-ActiveTransactionState CommitState::GetActiveTransactionState() const {
-	return transaction_state;
+                         ActiveTransactionState transaction_state, CommitMode commit_mode)
+    : transaction(transaction_p), commit_id(commit_id),
+      index_data_remover(transaction, *transaction.context.lock(),
+                         GetIndexRemovalType(transaction_state, commit_mode)) {
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
@@ -163,7 +154,7 @@ IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transac
 	return IndexRemovalType::REVERT_MAIN_INDEX;
 }
 
-void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
+void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, CommitDropBuffer &drop_buffer) {
 	if (entry.temporary || entry.Parent().temporary) {
 		return;
 	}
@@ -275,7 +266,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 	}
 }
 
-void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer &drop_buffer) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		auto &old_entry = *Load<CatalogEntry *>(data);
@@ -301,7 +292,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *));
+		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *), drop_buffer);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {

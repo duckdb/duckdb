@@ -15,7 +15,7 @@
 
 namespace duckdb {
 class BufferManager;
-class CommitState;
+class CommitDropBuffer;
 class DuckTransaction;
 class StorageCommitState;
 class WriteAheadLog;
@@ -57,9 +57,9 @@ public:
 	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state);
-	//! Iterate the undo buffer and dispatch each entry to the CommitState. The caller owns the CommitState so that
-	//! deferred drop side effects can be applied after the commit chain succeeds.
-	void Commit(UndoBuffer::IteratorState &iterator_state, CommitState &commit_state);
+	//! Iterate the undo buffer and commit each entry. Deferred drop side effects accumulate in the caller-owned
+	//! drop_buffer so they can be applied after the commit chain succeeds.
+	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info, CommitDropBuffer &drop_buffer);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state
 	void RevertCommit(UndoBuffer::IteratorState &iterator_state, transaction_t transaction_id);
 	//! Rollback the changes made in this UndoBuffer: should be called on
