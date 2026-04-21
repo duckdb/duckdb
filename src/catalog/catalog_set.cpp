@@ -334,14 +334,16 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	}
 
 	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
-	// pointer for this transaction so that a later commit-time LocalStorage::Flush pushes an
-	// AppendInfo referencing the current DuckTableEntry (not the pre-ALTER one).
+	// pointer so that commit-time Flush pushes an AppendInfo referencing the current DuckTableEntry.
 	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
 		auto &tce = value->Cast<TableCatalogEntry>();
 		if (tce.IsDuckTable()) {
 			auto &new_entry = tce.Cast<DuckTableEntry>();
 			auto &new_storage = new_entry.GetStorage();
-			LocalStorage::Get(*transaction.context, new_storage.db).RegisterTableEntry(new_storage, new_entry);
+			auto lstorage = LocalStorage::Get(*transaction.context, new_storage.db).GetStorage(new_storage);
+			if (lstorage) {
+				lstorage->table_entry = &new_entry;
+			}
 		}
 	}
 

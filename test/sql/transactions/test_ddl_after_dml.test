@@ -52,6 +52,12 @@ select * from t1;
 # This test the LocalStorage Flush path: the new LocalTableStorage created
 # by ALTER must still be able to find the post-ALTER DuckTableEntry at commit.
 statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB'
+
+statement ok
 CREATE TABLE t2 (id INT)
 
 statement ok
@@ -64,10 +70,15 @@ statement ok
 ALTER TABLE t2 ADD COLUMN c0 INT DEFAULT 7
 
 statement ok
+ALTER TABLE t2 RENAME TO t3
+
+statement ok
 COMMIT
 
+restart
+
 query II
-SELECT * FROM t2 ORDER BY id
+SELECT * FROM t3 ORDER BY id
 ----
 10	7
 20	7

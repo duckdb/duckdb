@@ -742,7 +742,7 @@ InternalAppender::~InternalAppender() {
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
-	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
+	table.GetStorage().LocalAppend(table.Cast<DuckTableEntry>(), context, collection, bound_constraints, nullptr);
 }
 
 void BaseAppender::Close() {

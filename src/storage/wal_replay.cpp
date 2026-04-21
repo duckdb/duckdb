@@ -48,7 +48,7 @@ public:
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
-	optional_ptr<TableCatalogEntry> current_table;
+	optional_ptr<DuckTableEntry> current_table;
 	MetaBlockPointer checkpoint_id;
 	idx_t wal_version = 1;
 	optional_idx current_position;
@@ -1105,7 +1105,7 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	state.current_table = &catalog.GetEntry<TableCatalogEntry>(context, schema_name, table_name);
+	state.current_table = &catalog.GetEntry<DuckTableEntry>(context, schema_name, table_name);
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
@@ -1206,7 +1206,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		}
 	}
 	TableDeleteState delete_state;
-	storage.Delete(delete_state, context, state.current_table->Cast<DuckTableEntry>(), row_identifiers, chunk.size());
+	storage.Delete(delete_state, context, *state.current_table, row_identifiers, chunk.size());
 }
 
 void WriteAheadLogDeserializer::ReplayUpdate() {

@@ -110,27 +110,28 @@ public:
 	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
 	//! Initializes appending to transaction-local storage
-	void InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	void InitializeLocalAppend(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
 	                           const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Initializes only the delete-indexes of the transaction-local storage
-	void InitializeLocalStorage(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	void InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
 	                            const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a DataChunk to the transaction-local storage of the table.
-	void LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe);
+	void LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry, ClientContext &context, DataChunk &chunk,
+	                 bool unsafe);
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
 	//! Append a chunk to the transaction-local storage of this table and update the delete indexes.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, Vector &row_ids,
 	                 DataChunk &delete_chunk);
 	//! Appends to the transaction-local storage of this table
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe = false);
 	//! Append a chunk to the transaction-local storage of this table.
-	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalWALAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a column data collection with default values to the transaction-local storage of this table.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, ColumnDataCollection &collection,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
@@ -165,7 +166,7 @@ public:
 	//! -> 1 (second subcolumn of struct)
 	//! -> 0 (first subcolumn of INT)
 	//! This method should only be used from the WAL replay. It does not verify update constraints.
-	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+	void UpdateColumn(DuckTableEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Fetches an append lock

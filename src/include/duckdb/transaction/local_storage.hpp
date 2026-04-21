@@ -56,8 +56,8 @@ public:
 
 	reference<DataTable> table_ref;
 	//! The DuckTableEntry visible to this transaction that references table_ref.
-	//! Set when InitializeAppend/InitializeStorage is called and refreshed when ALTER within this
-	//! transaction produces a new DuckTableEntry via DuckTableEntry::AlterEntry.
+	//! Updated through the append path (InitializeAppend, Append, LocalMerge) and
+	//! propagated from parent storage on ALTER operations.
 	optional_ptr<DuckTableEntry> table_entry;
 
 	Allocator &allocator;
@@ -157,12 +157,9 @@ public:
 	//! Initialize the storage and its indexes, but no row groups.
 	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 
-	//! Update the DuckTableEntry associated with a DataTable in this transaction's local storage.
-	//! Called after DuckTableEntry::AlterEntry produces a new DuckTableEntry so that a subsequent
-	//! LocalStorage::Flush can push the AppendInfo with the current DuckTableEntry.
-	void RegisterTableEntry(DataTable &table, DuckTableEntry &table_entry);
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DataChunk &table_chunk, DataTableInfo &data_table_info);
+	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
+	                   DataTableInfo &data_table_info);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage

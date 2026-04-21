@@ -706,7 +706,7 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.InitializeLocalAppend(append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
 		for (auto &insert_chunk : collection.Chunks(transaction)) {
-			storage.LocalAppend(append_state, context.client, insert_chunk, false);
+			storage.LocalAppend(append_state, table, context.client, insert_chunk, false);
 		}
 		storage.FinalizeLocalAppend(append_state);
 	} else {
