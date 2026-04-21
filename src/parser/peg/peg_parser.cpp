@@ -30,6 +30,7 @@ void PEGParser::ParseRules(const char *grammar) {
 		    bracket_count == 0 && !in_or_clause && !rule.tokens.empty()) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
 			AddRule(rule_name, std::move(rule));
+			rule = PEGRule();
 			rule_name = string_t();
 			// look for the subsequent rule
 			parse_state = PEGParseState::RULE_NAME;

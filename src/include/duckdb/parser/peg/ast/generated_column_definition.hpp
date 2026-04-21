@@ -1,5 +1,7 @@
 #pragma once
 #include "duckdb/common/common.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 struct GeneratedColumnDefinition {
