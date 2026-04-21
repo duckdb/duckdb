@@ -55,6 +55,9 @@ public:
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! FIXME: should be removed - all vectors need to have a size eventually
+	bool HasSize() const;
+	idx_t size() const; // NOLINT
 	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
 	DUCKDB_API void CheckCapacity(idx_t capacity) const;
 

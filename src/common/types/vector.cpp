@@ -85,6 +85,20 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
+bool Vector::HasSize() const {
+	if (!buffer) {
+		return true;
+	}
+	return buffer->HasSize();
+}
+
+idx_t Vector::size() const {
+	if (!buffer) {
+		return 0;
+	}
+	return buffer->Size();
+}
+
 void Vector::CheckCapacity(idx_t capacity) const {
 	if (!buffer) {
 		// no buffer - we accept any capacity
