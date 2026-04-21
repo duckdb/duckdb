@@ -2,8 +2,6 @@
 # description: Test unary prefix expression nesting order in peg parser
 # group: [transformer]
 
-require autocomplete
-
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT - + 16;$TEST_PEG_PARSER$);
 
@@ -18,9 +16,6 @@ CALL check_peg_parser($TEST_PEG_PARSER$SELECT + + 16;$TEST_PEG_PARSER$);
 
 query I nosort large_unary
 SELECT + - 9223372036854775808;
-
-statement ok
-call enable_peg_parser();
 
 query I nosort large_unary
 SELECT + - 9223372036854775808;

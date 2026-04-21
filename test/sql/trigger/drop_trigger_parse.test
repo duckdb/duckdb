@@ -2,11 +2,6 @@
 # description: Test parsing of DROP TRIGGER statements
 # group: [trigger]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 # Basic DROP TRIGGER - table does not exist, expect catalog error (not parse/bind error)
 statement error
 DROP TRIGGER my_trigger ON my_table;

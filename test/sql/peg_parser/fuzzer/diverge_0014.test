@@ -2,24 +2,6 @@
 # description: PEG should reject (currently accepts): Not implemented Error: RESET LOCAL is not implemented.
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
-statement error
-EXPLAIN RESET LOCAL result
-----
-Not implemented Error: RESET LOCAL is not implemented.
-
-statement error
-RESET LOCAL allowed_paths
-----
-Not implemented Error: RESET LOCAL is not implemented.
-
-statement ok
-CALL disable_peg_parser();
-
 statement error
 EXPLAIN RESET LOCAL result
 ----

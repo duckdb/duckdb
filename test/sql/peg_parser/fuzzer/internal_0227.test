@@ -2,11 +2,6 @@
 # description: ADD COLUMN with no type (PEG) should give clean error; nested ADD FIELD on missing parent should give clean binder error
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-call disable_peg_parser();
-
 statement ok
 create table mytbl(i bigint);
 
@@ -24,9 +19,6 @@ statement error
 ALTER TABLE mytbl ADD result . v;
 ----
 Parser Error: syntax error at or near ";"
-
-statement ok
-CALL enable_peg_parser();
 
 statement error
 ALTER TABLE mytbl ADD IF NOT EXISTS result . v;
