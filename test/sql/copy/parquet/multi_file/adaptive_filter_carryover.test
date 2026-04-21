@@ -4,7 +4,7 @@
 
 require parquet
 
-# Single threaded so that file-open order is deterministic
+# Deterministic file-open order
 statement ok
 SET threads=1
 
@@ -66,9 +66,74 @@ SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
 ----
 0
 
-# Parallel-mode correctness: under multi-threading the Store path is last-writer-wins on a mutex,
-# so per-file INIT sources become timing-dependent. The feature must still produce correct results
-# and not crash. Baseline the count single-threaded, then re-run with many threads and compare.
+# Check filter-count mismatch
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (SELECT i AS a, i%10 AS b, i%100 AS c, i%7 AS d FROM range(100000) t(i)) TO '{TEST_DIR}/af_mismatch_1.parquet'
+
+statement ok
+COPY (SELECT i AS a, i%10 AS b, i%100 AS c FROM range(100000) t(i)) TO '{TEST_DIR}/af_mismatch_2.parquet'
+
+statement ok
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_mismatch_1.parquet', '{TEST_DIR}/af_mismatch_2.parquet'], union_by_name=true) WHERE a > 100 AND b > 3 AND d IS NULL
+
+query I
+SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
+WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' ORDER BY timestamp LIMIT 1
+----
+initial
+
+# Confirm it's the size check (3 vs 2), not an identity/type miss
+query II
+SELECT
+    (SELECT info['columns'] FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_1.parquet' LIMIT 1),
+    (SELECT info['columns'] FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' LIMIT 1)
+----
+[0, 1, 2]	[0, 1]
+
+# Check columns on different order
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (SELECT i AS a, i%10 AS b, i%100 AS c FROM range(100000) t(i)) TO '{TEST_DIR}/ord_abc.parquet' (ROW_GROUP_SIZE 10000)
+
+statement ok
+COPY (SELECT i%100 AS c, i AS a, i%10 AS b FROM range(100000) t(i)) TO '{TEST_DIR}/ord_cab.parquet' (ROW_GROUP_SIZE 10000)
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/ord_abc.parquet', '{TEST_DIR}/ord_cab.parquet']) WHERE a > 100 AND b > 3 AND c < 50
+----
+59940
+
+query I
+SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
+WHERE event = 'INIT' AND file_path LIKE '%ord_abc.parquet' ORDER BY timestamp LIMIT 1
+----
+initial
+
+query I
+SELECT info['source'] FROM duckdb_logs_parsed('AdaptiveFilter')
+WHERE event = 'INIT' AND file_path LIKE '%ord_cab.parquet' ORDER BY timestamp LIMIT 1
+----
+seeded
+
+# File 2's seeded ordering matches file 1's latest ordering by column identity
+query I
+SELECT first.columns = second.columns FROM
+    (SELECT info['columns'] AS columns, timestamp FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%ord_abc.parquet'
+     ORDER BY timestamp DESC LIMIT 1) AS first,
+    (SELECT info['columns'] AS columns, timestamp FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%ord_cab.parquet' AND info['source'] = 'seeded'
+     ORDER BY timestamp LIMIT 1) AS second
+----
+true
+
 statement ok
 CALL truncate_duckdb_logs()
 
@@ -91,28 +156,25 @@ SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_cross_1.parquet', '{TEST_DIR}/
 ----
 89910
 
-# With 2 threads we got 2 initial
 query I
 SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND info['source'] = 'initial'
 ----
 2
 
-# 1 seeded
 query I
 SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND info['source'] = 'seeded'
 ----
 1
 
-# The seeded file is file 3
 query I
 SELECT file_path LIKE '%af_cross_3.parquet' FROM duckdb_logs_parsed('AdaptiveFilter')
 WHERE event = 'INIT' AND info['source'] = 'seeded'
 ----
 true
 
-# The seeded permutation must equal a previous permutation
+# Seeded permutation must match one produced by a prior file
 query I
 SELECT seeded.permutation IN (
     SELECT permutation FROM duckdb_logs_parsed('AdaptiveFilter')
@@ -122,4 +184,3 @@ FROM duckdb_logs_parsed('AdaptiveFilter') AS seeded
 WHERE event = 'INIT' AND info['source'] = 'seeded'
 ----
 true
-

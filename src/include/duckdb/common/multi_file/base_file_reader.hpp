@@ -55,6 +55,8 @@ public:
 	unique_ptr<DeleteFilter> deletion_filter;
 	//! (Optionally) Cross-file AdaptiveFilter cache.
 	optional_ptr<MultiFileAdaptiveFilterCache> adaptive_filter_cache;
+	//! Global identifiers (which column position of the projected output this filter operates) for the filters
+	vector<MultiFileGlobalIndex> filter_global_indices;
 
 public:
 	const vector<MultiFileColumnDefinition> &GetColumns() const {
