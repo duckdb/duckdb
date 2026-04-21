@@ -33,7 +33,7 @@ private:
 	void PerformCSEReplacement(unique_ptr<Expression> &expr, CSEReplacementState &state);
 
 	//! Main method to extract common subexpressions
-	void ExtractCommonSubExpresions(LogicalOperator &op);
+	void ExtractCommonSubExpressions(LogicalOperator &op);
 
 private:
 	Binder &binder;

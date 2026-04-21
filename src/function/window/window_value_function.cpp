@@ -1575,7 +1575,7 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 				}
 			}
 
-			//	If there is nothing beind us (missing early value) then scan forward
+			//	If there is nothing being us (missing early value) then scan forward
 			if (prev_valid == DConstants::INVALID_INDEX) {
 				for (idx_t n = own_row + 1; n < frame_width; ++n) {
 					auto j = gfstate.value_tree->SelectNth(frames, n).first;
