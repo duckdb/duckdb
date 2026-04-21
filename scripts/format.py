@@ -167,7 +167,7 @@ def run_typos_check():
     typos_targets = get_typos_targets()
     if not typos_targets:
         return 0
-    typos_command = ['typos']
+    typos_command = ['typos', '--force-exclude']
     if not check_only:
         typos_command.append('-w')
     typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
