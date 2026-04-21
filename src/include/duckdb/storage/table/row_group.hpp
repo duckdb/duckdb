@@ -47,12 +47,12 @@ struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
+class CommitDropBuffer;
 class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
 struct SegmentNode;
 enum class ColumnDataType;
-struct CommitDropAccumulator;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -123,8 +123,12 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
-	void CommitDrop(CommitDropAccumulator &acc);
-	void CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc);
+	//! Queues this row group's on-disk blocks into the supplied drop buffer.
+	void CommitDrop(CommitDropBuffer &drop_buffer);
+	//! Queues the given column's on-disk blocks into the supplied drop buffer.
+	void CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer);
+	//! Drops every column's on-disk blocks and marks them as modified immediately.
+	void CommitDrop();
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;

@@ -83,8 +83,6 @@ public:
 		return column_id_set;
 	}
 
-	virtual void CommitDrop() = 0;
-
 public:
 	template <class TARGET>
 	TARGET &Cast() {

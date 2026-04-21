@@ -11,8 +11,8 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
+class CommitState;
 class TableCatalogEntry;
-struct CommitDropAccumulator;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
 struct IndexDataTableInfo {
@@ -48,7 +48,8 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	void CommitDrop(CommitDropAccumulator &acc);
+	//! Schedules this index for removal from its table's index list once the commit chain succeeds.
+	void CommitDrop(CommitState &commit_state);
 };
 
 } // namespace duckdb

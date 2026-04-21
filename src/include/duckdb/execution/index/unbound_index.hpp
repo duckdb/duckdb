@@ -65,6 +65,9 @@ private:
 	unique_ptr<CreateInfo> create_info;
 	//! The serialized storage information of the index.
 	IndexStorageInfo storage_info;
+	//! Cleared when a BoundIndex built from this index's storage has taken ownership of the on-disk blocks,
+	//! so the destructor does not mark them as modified a second time.
+	bool owns_storage = true;
 
 	//! Buffered for index operations during WAL replay. They are replayed upon index binding.
 	BufferedIndexReplays buffered_replays;
@@ -78,8 +81,15 @@ private:
 public:
 	UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo storage_info, TableIOManager &table_io_manager,
 	             AttachedDatabase &db);
+	~UnboundIndex() override;
 
 public:
+	//! Called when ownership of the underlying on-disk blocks has been transferred to a new BoundIndex built from
+	//! this index's storage. After this, the destructor will not mark those blocks as modified.
+	void ReleaseStorageOwnership() {
+		owns_storage = false;
+	}
+
 	bool IsBound() const override {
 		return false;
 	}
@@ -104,8 +114,6 @@ public:
 	const string &GetTableName() const {
 		return GetCreateInfo().table;
 	}
-
-	void CommitDrop() override;
 
 	//! Buffer Index delete or insert (replay_type) data chunk.
 	//! See note above on mapped_column_ids, this function assumes that index_column_chunk maps into

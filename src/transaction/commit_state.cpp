@@ -26,23 +26,37 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// CommitDropAccumulator
+// CommitDropBuffer
 //===--------------------------------------------------------------------===//
-void CommitDropAccumulator::Apply() {
+CommitDropBuffer::CommitDropBuffer(optional_ptr<BlockManager> block_manager) : block_manager(block_manager) {
+}
+
+void CommitDropBuffer::QueueBlockDrop(BlockManager &block_manager_p, block_id_t block_id) {
+	D_ASSERT(block_manager.get() == &block_manager_p);
+	dropped_block_ids.push_back(block_id);
+}
+
+void CommitDropBuffer::QueuePendingIndexRemoval(TableIndexList &indexes, string name) {
+	pending_index_removals.push_back(PendingIndexRemoval {indexes, std::move(name)});
+}
+
+void CommitDropBuffer::Apply() {
 	if (!block_manager) {
 		D_ASSERT(Empty());
 		return;
 	}
-	auto &bm = *block_manager;
-	for (auto id : block_ids) {
-		bm.MarkBlockAsModified(id);
+	for (auto block_id : dropped_block_ids) {
+		block_manager->MarkBlockAsModified(block_id);
 	}
-	for (auto &r : pending_index_removals) {
-		auto &indexes = r.indexes.get();
-		indexes.CommitDrop(r.name);
-		indexes.RemoveIndex(r.name);
+	for (auto &removal : pending_index_removals) {
+		removal.indexes.get().RemoveIndex(removal.name);
 	}
-	Clear();
+	dropped_block_ids.clear();
+	pending_index_removals.clear();
+}
+
+bool CommitDropBuffer::Empty() const {
+	return dropped_block_ids.empty() && pending_index_removals.empty();
 }
 
 //===--------------------------------------------------------------------===//
@@ -119,10 +133,26 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 //===--------------------------------------------------------------------===//
 CommitState::CommitState(DuckTransaction &transaction_p, transaction_t commit_id,
                          ActiveTransactionState transaction_state, CommitMode commit_mode,
-                         CommitDropAccumulator &drop_accumulator_p)
-    : transaction(transaction_p), commit_id(commit_id),
+                         optional_ptr<BlockManager> block_manager)
+    : transaction(transaction_p), commit_id(commit_id), transaction_state(transaction_state),
       index_data_remover(transaction, *transaction.context.lock(), GetIndexRemovalType(transaction_state, commit_mode)),
-      drop_accumulator(drop_accumulator_p) {
+      drop_buffer(block_manager) {
+}
+
+CommitDropBuffer &CommitState::GetDropBuffer() {
+	return drop_buffer;
+}
+
+void CommitState::QueuePendingIndexRemoval(TableIndexList &indexes, string name) {
+	drop_buffer.QueuePendingIndexRemoval(indexes, std::move(name));
+}
+
+void CommitState::FinalizeCommitDrops() {
+	drop_buffer.Apply();
+}
+
+ActiveTransactionState CommitState::GetActiveTransactionState() const {
+	return transaction_state;
 }
 
 IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode) {
@@ -176,7 +206,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 					auto &table_entry = entry.Cast<DuckTableEntry>();
 					D_ASSERT(table_entry.IsDuckTable());
 					// write the alter table in the log
-					table_entry.CommitAlter(column_name, drop_accumulator);
+					table_entry.CommitAlter(column_name, *this);
 				}
 				break;
 			case CatalogType::VIEW_ENTRY:
@@ -219,12 +249,12 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr) {
 			D_ASSERT(table_entry.IsDuckTable());
 
 			// If the table was renamed, we do not need to drop the DataTable.
-			table_entry.CommitDrop(drop_accumulator);
+			table_entry.CommitDrop(*this);
 			break;
 		}
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
-			index_entry.CommitDrop(drop_accumulator);
+			index_entry.CommitDrop(*this);
 			break;
 		}
 		default:

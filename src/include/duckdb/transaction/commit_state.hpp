@@ -32,34 +32,33 @@ struct UpdateInfo;
 
 enum class CommitMode { COMMIT, REVERT_COMMIT };
 
-struct CommitDropAccumulator {
-	struct IndexRemoval {
-		reference<TableIndexList> indexes;
-		string name;
-	};
+//! An index that has been marked for removal from a table's index list once the commit chain succeeds.
+struct PendingIndexRemoval {
+	reference<TableIndexList> indexes;
+	string name;
+};
 
-	explicit CommitDropAccumulator(optional_ptr<BlockManager> block_manager = nullptr) : block_manager(block_manager) {
-	}
+//! Collects side effects of dropping a table, column, or index (block marks, index removals) so they can
+//! be applied atomically after the commit chain succeeds. Used both by CommitState for the commit path,
+//! and directly by local-storage / checkpoint paths that want to mark blocks as modified immediately.
+class CommitDropBuffer {
+public:
+	explicit CommitDropBuffer(optional_ptr<BlockManager> block_manager);
 
-	optional_ptr<BlockManager> block_manager;
-	vector<block_id_t> block_ids;
-	vector<IndexRemoval> pending_index_removals;
-
-	void AddBlock(BlockManager &bm, block_id_t id) {
-		D_ASSERT(block_manager.get() == &bm);
-		block_ids.push_back(id);
-	}
-	void AddPendingIndexRemoval(TableIndexList &indexes, string name) {
-		pending_index_removals.push_back(IndexRemoval {indexes, std::move(name)});
-	}
+public:
+	//! Register an on-disk block to mark as modified during Apply.
+	void QueueBlockDrop(BlockManager &block_manager, block_id_t block_id);
+	//! Register an index to be removed from a table's index list during Apply.
+	void QueuePendingIndexRemoval(TableIndexList &indexes, string name);
+	//! Apply accumulated block marks and index removals, then clear the buffer.
 	void Apply();
-	void Clear() {
-		block_ids.clear();
-		pending_index_removals.clear();
-	}
-	bool Empty() const {
-		return block_ids.empty() && pending_index_removals.empty();
-	}
+	//! True if no work has been queued.
+	bool Empty() const;
+
+private:
+	optional_ptr<BlockManager> block_manager;
+	vector<block_id_t> dropped_block_ids;
+	vector<PendingIndexRemoval> pending_index_removals;
 };
 
 struct IndexDataRemover {
@@ -87,7 +86,7 @@ class CommitState {
 public:
 	explicit CommitState(DuckTransaction &transaction, transaction_t commit_id,
 	                     ActiveTransactionState transaction_state, CommitMode commit_mode,
-	                     CommitDropAccumulator &drop_accumulator);
+	                     optional_ptr<BlockManager> block_manager);
 
 public:
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -96,6 +95,15 @@ public:
 	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
+	//! The deferred-drop buffer. Storage-layer CommitDrop methods push block IDs into it.
+	CommitDropBuffer &GetDropBuffer();
+	//! Register an index to be removed from a table's index list after the commit chain succeeds.
+	void QueuePendingIndexRemoval(TableIndexList &indexes, string name);
+	//! Apply all deferred drop side effects. Call only after the commit chain has succeeded.
+	void FinalizeCommitDrops();
+	//! The active transaction state snapshot at the time of commit, read back by UndoBuffer::RevertCommit.
+	ActiveTransactionState GetActiveTransactionState() const;
+
 private:
 	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data);
 	void CommitDelete(DeleteInfo &info);
@@ -103,8 +111,9 @@ private:
 private:
 	DuckTransaction &transaction;
 	transaction_t commit_id;
+	ActiveTransactionState transaction_state;
 	IndexDataRemover index_data_remover;
-	CommitDropAccumulator &drop_accumulator;
+	CommitDropBuffer drop_buffer;
 };
 
 } // namespace duckdb

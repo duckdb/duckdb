@@ -9,9 +9,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
-#include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/cleanup_state.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/delete_info.hpp"
@@ -194,24 +192,19 @@ void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState>
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
 }
 
-void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info,
-                        CommitDropAccumulator &drop_accumulator) {
-	active_transaction_state = info.active_transactions;
-
-	CommitState state(transaction, info.commit_id, active_transaction_state, CommitMode::COMMIT, drop_accumulator);
-	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
-
-	state.Verify();
+void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, CommitState &commit_state) {
+	active_transaction_state = commit_state.GetActiveTransactionState();
+	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { commit_state.CommitEntry(type, data); });
+	commit_state.Verify();
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitDropAccumulator revert_acc;
-	CommitState state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT, revert_acc);
+	// Revert does not need a block manager: any drops queued during the forward pass are dropped here.
+	CommitState revert_state(transaction, transaction_id, active_transaction_state, CommitMode::REVERT_COMMIT, nullptr);
 	UndoBuffer::IteratorState start_state;
-	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
-
-	state.Verify();
-	// revert_acc dropped here without Apply — nothing was marked, which is the desired behavior on revert
+	IterateEntries(start_state, end_state,
+	               [&](UndoFlags type, data_ptr_t data) { revert_state.RevertCommit(type, data); });
+	revert_state.Verify();
 }
 
 void UndoBuffer::Rollback() {

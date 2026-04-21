@@ -23,7 +23,10 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 	}
 }
 
-void UnboundIndex::CommitDrop() {
+UnboundIndex::~UnboundIndex() {
+	if (!owns_storage) {
+		return;
+	}
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	for (auto &info : storage_info.allocator_infos) {
 		for (auto &block : info.block_pointers) {

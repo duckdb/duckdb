@@ -24,7 +24,6 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
@@ -621,9 +620,6 @@ void ART::ResetStorage(IndexLock &index_lock) {
 		allocator->Reset();
 	}
 	tree.Clear();
-}
-
-void ART::CommitDrop(IndexLock &index_lock) {
 }
 
 idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,

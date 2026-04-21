@@ -374,7 +374,7 @@ void DataTable::RebuildIndexes() {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
 		auto &bound_index = index.Cast<BoundIndex>();
-		bound_index.CommitDrop();
+		bound_index.ResetStorage();
 
 		auto &col_ids = bound_index.GetColumnIds();
 
@@ -1834,8 +1834,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->SetStats(global_stats);
 }
 
-void DataTable::CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc) {
-	row_groups->CommitDropColumn(column_index, acc);
+void DataTable::CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer) {
+	row_groups->CommitDropColumn(column_index, drop_buffer);
 }
 
 void DataTable::Destroy() {
@@ -1850,8 +1850,8 @@ idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 
-void DataTable::CommitDropTable(CommitDropAccumulator &acc) {
-	row_groups->CommitDropTable(acc);
+void DataTable::CommitDropTable(CommitDropBuffer &drop_buffer) {
+	row_groups->CommitDropTable(drop_buffer);
 }
 
 //===--------------------------------------------------------------------===//

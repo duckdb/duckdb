@@ -1264,10 +1264,8 @@ public:
 					}
 				}
 			}
-			// drop the row group after merging (checkpoint path; apply marks immediately)
-			CommitDropAccumulator local_acc(current_row_group.GetBlockManager());
-			current_row_group.CommitDrop(local_acc);
-			local_acc.Apply();
+			// drop the merged row group
+			current_row_group.CommitDrop();
 			checkpoint_state.DropSegment(c_idx);
 		}
 		idx_t total_append_count = 0;
@@ -1358,10 +1356,8 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			}
 		}
 		if (row_group_count == 0) {
-			// empty row group - we can drop it entirely (checkpoint path; apply marks immediately)
-			CommitDropAccumulator local_acc(row_group.GetBlockManager());
-			row_group.CommitDrop(local_acc);
-			local_acc.Apply();
+			// empty row group - we can drop it entirely
+			row_group.CommitDrop();
 			checkpoint_state.DropSegment(entry.GetIndex());
 			dropped_any_rowgroups = true;
 			state.row_group_counts.push_back(row_group_count);
@@ -1391,9 +1387,7 @@ void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkp
 			auto &entry = *checkpoint_state.row_groups.GetSegmentByIndex(NumericCast<int64_t>(segment_idx));
 			auto &row_group = entry.GetNode();
 			D_ASSERT(entry.GetIndex() == segment_idx);
-			CommitDropAccumulator local_acc(row_group.GetBlockManager());
-			row_group.CommitDrop(local_acc);
-			local_acc.Apply();
+			row_group.CommitDrop();
 			checkpoint_state.DropSegment(segment_idx);
 		}
 	}
@@ -1830,18 +1824,30 @@ void RowGroupCollection::Destroy() {
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(column_index, acc);
+		row_group.CommitDropColumn(column_index, drop_buffer);
 	}
 }
 
-void RowGroupCollection::CommitDropTable(CommitDropAccumulator &acc) {
+void RowGroupCollection::CommitDropTable(CommitDropBuffer &drop_buffer) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDrop(acc);
+		row_group.CommitDrop(drop_buffer);
 	}
+}
+
+void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
+	CommitDropBuffer drop_buffer(&GetBlockManager());
+	CommitDropColumn(column_index, drop_buffer);
+	drop_buffer.Apply();
+}
+
+void RowGroupCollection::CommitDropTable() {
+	CommitDropBuffer drop_buffer(&GetBlockManager());
+	CommitDropTable(drop_buffer);
+	drop_buffer.Apply();
 }
 
 //===--------------------------------------------------------------------===//

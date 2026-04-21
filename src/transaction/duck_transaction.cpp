@@ -268,10 +268,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	if (db.HasStorageManager()) {
 		block_manager = db.GetStorageManager().GetBlockManager();
 	}
-	CommitDropAccumulator drop_accumulator(block_manager);
+	CommitState commit_undo_state(*this, commit_info.commit_id, commit_info.active_transactions, CommitMode::COMMIT,
+	                              block_manager);
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_info, drop_accumulator);
+		undo_buffer.Commit(iterator_state, commit_undo_state);
 		// if (DebugForceAbortCommit()) {
 		// 	throw InvalidInputException("Force revert");
 		// }
@@ -279,9 +280,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
 		}
-		// Apply accumulated block marks only after FlushCommit succeeds (or immediately if no WAL).
-		// On the exception path below, the accumulator is dropped without Apply, leaving nothing marked.
-		drop_accumulator.Apply();
+		commit_undo_state.FinalizeCommitDrops();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);

@@ -49,7 +49,7 @@ struct DataTableInfo;
 struct LocalAppendState;
 struct ParallelTableScanState;
 struct TableAppendState;
-struct CommitDropAccumulator;
+class CommitDropBuffer;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -237,8 +237,10 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	void CommitDropTable(CommitDropAccumulator &acc);
-	void CommitDropColumn(const idx_t column_index, CommitDropAccumulator &acc);
+	//! Queues the table's on-disk blocks for reclamation into the supplied drop buffer.
+	void CommitDropTable(CommitDropBuffer &drop_buffer);
+	//! Queues the column's on-disk blocks for reclamation into the supplied drop buffer.
+	void CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
