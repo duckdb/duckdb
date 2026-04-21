@@ -117,6 +117,7 @@ public:
 	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
 	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
 	void SetPreserveBuildForRecursiveReuse(bool preserve) const;
+	bool CanPreserveBuildForRecursiveReuse() const;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	void PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const override;

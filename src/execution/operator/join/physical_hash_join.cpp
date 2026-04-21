@@ -526,6 +526,14 @@ void PhysicalHashJoin::SetPreserveBuildForRecursiveReuse(bool preserve) const {
 	}
 }
 
+bool PhysicalHashJoin::CanPreserveBuildForRecursiveReuse() const {
+	if (!sink_state) {
+		return false;
+	}
+	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
+	return state.preserve_build_for_recursive_reuse && !state.external;
+}
+
 bool PhysicalHashJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
                                            LocalSinkState &state_p) const {
 	auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
@@ -1400,6 +1408,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	           {{"external", to_string(sink.external)}});
 	if (sink.external) {
 		// External Hash Join
+		// Recursive preserved-build reuse only applies to the in-memory finalized HT. External hash join
+		// runs through repeated build/probe rounds with partition/probe-spill state, so it cannot be
+		// treated as a stable materialized build that later recursive iterations may skip entirely.
+		sink.preserve_build_for_recursive_reuse = false;
 		sink.perfect_join_executor.reset();
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);

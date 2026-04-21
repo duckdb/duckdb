@@ -657,6 +657,23 @@ static void ConfigureInvariantRecursiveBuildReuse(const PhysicalRecursiveCTE &op
 	}
 }
 
+static bool InvariantRecursiveBuildsRemainReusable(const PhysicalRecursiveCTE &op) {
+	// Recursive invariant caching may omit these meta-pipelines entirely after the first materialization.
+	// That is only safe if every invariant HASH_JOIN actually kept a reusable in-memory build side.
+	// External/spilled hash joins run through mutable partition/probe-spill rounds and must therefore
+	// stay in the active recursive schedule instead of being treated as "materialized once".
+	for (auto &meta_pipeline_ref : op.invariant_meta_pipelines) {
+		auto sink = meta_pipeline_ref.get().GetSink();
+		if (!sink || sink->type != PhysicalOperatorType::HASH_JOIN) {
+			continue;
+		}
+		if (!sink->Cast<PhysicalHashJoin>().CanPreserveBuildForRecursiveReuse()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static void ProcessRecursiveExecutorTasks(Executor &executor) {
 	// Only drain the recursive executor here. Re-entering the outer query executor while waiting for
 	// recursive work can run unrelated tasks and used to break recursive completion tracking.
@@ -980,7 +997,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 			inline_plan = BuildRecursiveInlinePlan(active_meta_pipelines);
 		}
 		ExecuteRecursiveInlinePlan(gstate, executor, *inline_plan);
-		if (can_cache_invariant_meta_pipelines) {
+		if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 			gstate.invariant_meta_pipelines_materialized = true;
 		}
 		return;
@@ -989,7 +1006,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	vector<shared_ptr<Event>> events;
 	ScheduleRecursivePipelines(active_meta_pipelines, gstate, executor, events);
 	WaitForRecursiveEvents(executor, events);
-	if (can_cache_invariant_meta_pipelines) {
+	if (can_cache_invariant_meta_pipelines && InvariantRecursiveBuildsRemainReusable(*this)) {
 		gstate.invariant_meta_pipelines_materialized = true;
 	}
 }
