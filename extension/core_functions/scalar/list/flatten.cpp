@@ -37,11 +37,10 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
 			const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 			if (!outer_format.validity.RowIsValid(outer_idx)) {
-				flat_list_data.SetInvalid(outer_raw_idx);
+				flat_list_data.WriteNull();
 				continue;
 			}
-			flat_list_data[outer_raw_idx].offset = 0;
-			flat_list_data[outer_raw_idx].length = 0;
+			flat_list_data.WriteValue(list_entry_t(0, 0));
 		}
 		return;
 	}
@@ -92,7 +91,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 
 		if (!outer_format.validity.RowIsValid(outer_idx)) {
-			flat_list_data.SetInvalid(outer_raw_idx);
+			flat_list_data.WriteNull();
 			continue;
 		}
 
@@ -122,7 +121,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		}
 
 		// Assign the result list entry
-		flat_list_data[outer_raw_idx] = list_entry;
+		flat_list_data.WriteValue(list_entry);
 	}
 
 	// Now assing the result

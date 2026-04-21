@@ -78,7 +78,7 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	// Generate row ids
 	// Create sequence for row ids
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<row_t>(result);
+	auto result_data = FlatVector::ScatterWriter<row_t>(result);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
 	}
@@ -100,7 +100,7 @@ void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	auto result_data = FlatVector::Writer<row_t>(result, count);
 	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
+		result_data.WriteValue(UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx)));
 	}
 	state.offset_in_column += GetVectorCount(vector_index);
 }

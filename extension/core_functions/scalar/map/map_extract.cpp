@@ -84,23 +84,21 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		const auto lst_idx = lst_format.sel->get_index(row_idx);
 		if (!lst_format.validity.RowIsValid(lst_idx)) {
-			out_list_data.SetInvalid(row_idx);
+			out_list_data.WriteNull();
 			continue;
 		}
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
 			// We didnt find the key in the map, so return empty list
-			out_list_data[row_idx].offset = offset;
-			out_list_data[row_idx].length = 0;
+			out_list_data.WriteValue(list_entry_t(offset, 0));
 			continue;
 		}
 
 		auto &inc_list = inc_list_data[lst_idx];
 		// Compute the actual position of the value in the map value vector
 		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list_data[row_idx].offset = offset;
-		out_list_data[row_idx].length = 1;
+		out_list_data.WriteValue(list_entry_t(offset, 1));
 		ListVector::Append(result, val_vec, pos + 1, pos);
 		offset++;
 	}

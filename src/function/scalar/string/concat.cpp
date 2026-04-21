@@ -62,7 +62,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::Writer<string_t>(result, args.size());
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
@@ -142,7 +142,6 @@ struct ListConcatInputData {
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
@@ -163,6 +162,7 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	}
 
 	idx_t offset = 0;
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		result_data[i].offset = offset;
 		result_data[i].length = 0;
