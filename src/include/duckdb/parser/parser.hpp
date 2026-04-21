@@ -16,7 +16,6 @@
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "peg/keyword_helper.hpp"
 
 namespace duckdb {
 
