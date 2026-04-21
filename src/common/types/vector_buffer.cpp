@@ -26,28 +26,23 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 	return make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
-	if (type == PhysicalType::LIST) {
-		throw InternalException("VectorBuffer::CreateConstantVector requires full list type");
-	}
-	if (type == PhysicalType::VARCHAR) {
-		return make_buffer<VectorStringBuffer>(1);
-	}
-	return make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(type));
-}
-
-buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {
-	if (type.InternalType() == PhysicalType::LIST) {
-		return make_buffer<VectorListBuffer>(1ULL, type);
-	}
-	return VectorBuffer::CreateConstantVector(type.InternalType());
-}
-
 buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
 	if (type.InternalType() == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
 	}
 	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
+}
+
+void VectorBuffer::SetVectorSize(idx_t new_size) {
+	if (!HasSize()) {
+		throw InternalException("Non-Flat/Non-Constant vector buffer does not have a size defined");
+	}
+	if (Size() == new_size) {
+		return;
+	}
+	throw InternalException(
+	    "VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d",
+	    new_size, Size());
 }
 
 idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -103,7 +98,7 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 	return "";
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
+void VectorBuffer::Resize(idx_t current_size, idx_t new_size) {
 	throw InternalException("VectorBuffer::Resize not supported for this vector type");
 }
 
@@ -154,6 +149,78 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, co
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("SetValue not supported for this buffer type");
+}
+
+void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_sel, idx_t source_count,
+                        idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	if (copy_count == 0) {
+		return;
+	}
+	// traverse vector types until we have a flat / constant vector as source
+	SelectionVector owned_sel;
+	const_reference<SelectionVector> sel_ref(source_sel);
+	const_reference<Vector> source_ref(source_p);
+	bool finished = false;
+	while (!finished) {
+		auto &source = source_ref.get();
+		auto &sel = sel_ref.get();
+		switch (source.GetVectorType()) {
+		case VectorType::DICTIONARY_VECTOR: {
+			// dictionary vector: merge selection vectors
+			auto &child = DictionaryVector::Child(source);
+			auto &dict_sel = DictionaryVector::SelVector(source);
+			// merge the selection vectors and verify the child
+			if (sel.IsSet()) {
+				auto new_buffer = dict_sel.Slice(sel, source_count);
+				owned_sel.Initialize(new_buffer);
+				sel_ref = owned_sel;
+			} else {
+				sel_ref = dict_sel;
+			}
+			source_ref = child;
+			break;
+		}
+		case VectorType::CONSTANT_VECTOR:
+			sel_ref = *ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
+			finished = true;
+			break;
+		case VectorType::FLAT_VECTOR:
+			finished = true;
+			break;
+		default: {
+			// for exotic types we flatten followed by copying
+			Vector flattened_vector(Vector::Ref(source));
+			flattened_vector.Flatten(sel, source_offset + source_count);
+			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
+			     target_offset, copy_count);
+			return;
+		}
+		}
+	}
+
+	// copy over the nullmask
+	auto &source = source_ref.get();
+	auto &sel = sel_ref.get();
+	auto source_type = source_ref.get().GetVectorType();
+	D_ASSERT(source_type == VectorType::CONSTANT_VECTOR || source_type == VectorType::FLAT_VECTOR);
+	auto &validity = GetValidityMask();
+	if (source_type == VectorType::CONSTANT_VECTOR) {
+		const bool valid = !ConstantVector::IsNull(source);
+		for (idx_t i = 0; i < copy_count; i++) {
+			validity.Set(target_offset + i, valid);
+		}
+	} else {
+		auto &smask = FlatVector::Validity(source);
+		validity.CopySel(smask, sel, source_offset, target_offset, copy_count);
+	}
+
+	// now call CopyInternal to perform the copy of the data
+	CopyInternal(source, sel, source_count, source_offset, target_offset, copy_count);
+}
+
+void VectorBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	throw InternalException("Copying data into this buffer type is not supported");
 }
 
 Value VectorBuffer::GetValue(const LogicalType &type, idx_t index) const {

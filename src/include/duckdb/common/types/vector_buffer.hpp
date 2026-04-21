@@ -92,6 +92,14 @@ public:
 	virtual const ValidityMask &GetValidityMask() const {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
+	//! FIXME: should be removed
+	bool HasSize() const {
+		return v_size.IsValid();
+	}
+	idx_t Size() const {
+		return v_size.GetIndex();
+	}
+	virtual void SetVectorSize(idx_t new_size);
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {
@@ -111,8 +119,6 @@ public:
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
 	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
 	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
 
@@ -143,6 +149,9 @@ public:
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
 	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	//! Copy data from another vector into this vectors' buffer
+	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	          idx_t target_offset, idx_t copy_count);
 	//! Produce a string representation of buffer contents (debug only)
 	virtual string ToString(const LogicalType &type, idx_t count) const;
 	virtual string ToString(const LogicalType &type) const;
@@ -156,18 +165,23 @@ public:
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation
-	virtual buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size);
+	virtual void Resize(idx_t current_size, idx_t new_size);
 
 protected:
 	//! Slice the buffer with a selection vector, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end);
+	//! Copy data from another vector into this vectors' buffer
+	virtual void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
 protected:
 	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
+	//! FIXME: optional_idx only temporarily...
+	optional_idx v_size;
 
 public:
 	template <class TARGET>

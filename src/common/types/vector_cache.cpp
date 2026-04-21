@@ -64,7 +64,7 @@ public:
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &list_buffer = result.BufferMutable().Cast<VectorListBuffer>();
-			list_buffer.SetSize(0);
+			list_buffer.SetChildSize(0);
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child);
