@@ -20,6 +20,7 @@ void MacroFunction::Serialize(Serializer &serializer) const {
 	}
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(104, "return_types", return_types, vector<LogicalType>());
 	serializer.WritePropertyWithDefault<bool>(105, "is_procedure", is_procedure, false);
+	serializer.WritePropertyWithDefault<vector<string>>(106, "return_names", return_names, vector<string>());
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
@@ -27,6 +28,13 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	auto parameters = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters");
 	auto default_parameters = deserializer.ReadPropertyWithDefault<InsertionOrderPreservingMap<unique_ptr<ParsedExpression>>>(102, "default_parameters");
 	auto types = deserializer.ReadPropertyWithExplicitDefault<vector<LogicalType>>(103, "types", vector<LogicalType>());
+	// Base-class fields 104/105/106 must be read BEFORE dispatching to the
+	// subclass Deserialize (which reads field 200+), otherwise we read out of
+	// order from the stream -- Serialize writes base fields first, then the
+	// subclass adds its own fields after.
+	auto return_types = deserializer.ReadPropertyWithExplicitDefault<vector<LogicalType>>(104, "return_types", vector<LogicalType>());
+	auto is_procedure = deserializer.ReadPropertyWithExplicitDefault<bool>(105, "is_procedure", false);
+	auto return_names = deserializer.ReadPropertyWithExplicitDefault<vector<string>>(106, "return_names", vector<string>());
 	unique_ptr<MacroFunction> result;
 	switch (type) {
 	case MacroType::SCALAR_MACRO:
@@ -41,8 +49,9 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 	result->parameters = std::move(parameters);
 	result->default_parameters = std::move(default_parameters);
 	result->types = std::move(types);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(104, "return_types", result->return_types);
-	deserializer.ReadPropertyWithDefault<bool>(105, "is_procedure", result->is_procedure);
+	result->return_types = std::move(return_types);
+	result->return_names = std::move(return_names);
+	result->is_procedure = is_procedure;
 	result->FinalizeDeserialization();
 	return result;
 }

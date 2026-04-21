@@ -35,10 +35,16 @@ VacuumOptions ParseOptions(const int32_t options) {
 }
 
 unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGVacuumStmt &stmt) {
+	const char *sdb_option = nullptr;
 	if (stmt.options & duckdb_libpgquery::PGVacuumOption::PG_VACOPT_UPDATE_INDEXES) {
+		sdb_option = "update_indexes";
+	} else if (stmt.options & duckdb_libpgquery::PGVacuumOption::PG_VACOPT_SYNC_STATS) {
+		sdb_option = "sync_stats";
+	}
+	if (sdb_option) {
 		auto pragma = make_uniq<PragmaStatement>();
 		pragma->info->name = "serenedb_vacuum";
-		pragma->info->parameters.push_back(make_uniq<ConstantExpression>(Value("update_indexes")));
+		pragma->info->parameters.push_back(make_uniq<ConstantExpression>(Value(sdb_option)));
 		if (stmt.relation) {
 			pragma->info->parameters.push_back(
 			    make_uniq<ConstantExpression>(Value(string(stmt.relation->relname))));

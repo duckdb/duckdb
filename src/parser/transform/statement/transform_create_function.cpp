@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
@@ -134,13 +135,36 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 		auto &table_macro = macro_func->Cast<TableMacroFunction>();
 		if (table_macro.query_node && table_macro.query_node->type == QueryNodeType::SELECT_NODE) {
 			auto &select = table_macro.query_node->Cast<SelectNode>();
-			idx_t col_idx = 0;
-			for (auto cell = def.returns_table_columns->head; cell && col_idx < select.select_list.size();
-			     cell = cell->next, col_idx++) {
+			// Collect declared column names.
+			vector<string> column_names;
+			for (auto cell = def.returns_table_columns->head; cell; cell = cell->next) {
 				auto &col_def = PGCast<duckdb_libpgquery::PGColumnDef>(
 				    *static_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
-				if (col_def.colname) {
-					select.select_list[col_idx]->alias = col_def.colname;
+				column_names.emplace_back(col_def.colname ? col_def.colname : "");
+			}
+			// If select_list is `SELECT *` (e.g. VALUES body), per-expression
+			// aliases don't apply to the expanded columns -- push the names down
+			// onto the FROM table instead.
+			bool is_star_select = select.select_list.size() == 1 &&
+			                      select.select_list[0]->GetExpressionType() == ExpressionType::STAR;
+			if (is_star_select && select.from_table) {
+				select.from_table->column_name_alias = column_names;
+				if (select.from_table->type == TableReferenceType::EXPRESSION_LIST) {
+					// ExpressionListRef (used by VALUES) ignores column_name_alias
+					// when binding; set expected_names directly so they appear in
+					// the bind context.
+					select.from_table->Cast<ExpressionListRef>().expected_names = column_names;
+				}
+			} else {
+				idx_t col_idx = 0;
+				for (auto &name : column_names) {
+					if (col_idx >= select.select_list.size()) {
+						break;
+					}
+					if (!name.empty()) {
+						select.select_list[col_idx]->alias = name;
+					}
+					col_idx++;
 				}
 			}
 		}
@@ -260,6 +284,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 				} else {
 					macro->return_types.push_back(LogicalType::ANY);
 				}
+				macro->return_names.emplace_back(col_def.colname ? col_def.colname : "");
 			}
 		} else if (is_scalar_returns) {
 			auto &col_def = PGCast<duckdb_libpgquery::PGColumnDef>(
@@ -320,6 +345,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 				scalar_macro->types = std::move(table_macro.types);
 				scalar_macro->default_parameters = std::move(table_macro.default_parameters);
 				scalar_macro->return_types = std::move(table_macro.return_types);
+				scalar_macro->return_names = std::move(table_macro.return_names);
 				scalar_macro->is_procedure = table_macro.is_procedure;
 				macro = std::move(scalar_macro);
 			}

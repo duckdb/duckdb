@@ -1961,7 +1961,8 @@ typedef enum PGVacuumOption {
 	PG_VACOPT_NOWAIT = 1 << 5,               /* don't wait to get lock (autovacuum only) */
 	PG_VACOPT_SKIPTOAST = 1 << 6,            /* don't process the TOAST table, if any */
 	PG_VACOPT_DISABLE_PAGE_SKIPPING = 1 << 7, /* don't skip any pages */
-	PG_VACOPT_UPDATE_INDEXES = 1 << 8        /* update indexes */
+	PG_VACOPT_UPDATE_INDEXES = 1 << 8,        /* update indexes */
+	PG_VACOPT_SYNC_STATS = 1 << 9,            /* sync table stats */
 } PGVacuumOption;
 
 typedef struct PGVacuumStmt {
