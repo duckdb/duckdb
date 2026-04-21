@@ -60,8 +60,8 @@ public:
 	void SetModifications(DatabaseModificationType type) override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
-	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
-	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
+	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state,
+	                     bool has_dropped_entries) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,

@@ -53,7 +53,7 @@ void WALWriteState::CollectDroppedTable(UndoFlags type, data_ptr_t data) {
 	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
 		return;
 	}
-	auto &table_entry = catalog_entry->Cast<DuckTableEntry>();
+	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
 	if (!table_entry.IsDuckTable()) {
 		return;
 	}

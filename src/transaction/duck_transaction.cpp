@@ -215,7 +215,7 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 }
 
 ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
-                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
+                                      unique_ptr<StorageCommitState> &commit_state, bool has_dropped_entries) noexcept {
 	ErrorData error_data;
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
@@ -229,7 +229,7 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		storage->Commit(commit_state.get());
 
 		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
-		undo_buffer.WriteToWAL(*wal, commit_state.get());
+		undo_buffer.WriteToWAL(*wal, commit_state.get(), has_dropped_entries);
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks

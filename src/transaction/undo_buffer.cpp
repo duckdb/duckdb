@@ -186,12 +186,16 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }
 
-void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {
+void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state,
+                            bool has_dropped_entries) {
 	WALWriteState state(transaction, wal, commit_state);
-	// first pass: collect tables that are dropped by the end of this transaction so that data ops targeting them
-	// can be skipped when writing the WAL (see #22124)
-	UndoBuffer::IteratorState drop_scan_state;
-	IterateEntries(drop_scan_state, [&](UndoFlags type, data_ptr_t data) { state.CollectDroppedTable(type, data); });
+	if (has_dropped_entries) {
+		// first pass: collect tables that are dropped by the end of this transaction so that data ops targeting them
+		// can be skipped when writing the WAL (see #22124)
+		UndoBuffer::IteratorState drop_scan_state;
+		IterateEntries(drop_scan_state,
+		               [&](UndoFlags type, data_ptr_t data) { state.CollectDroppedTable(type, data); });
+	}
 	// second pass: actually write to WAL
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry(type, data); });
