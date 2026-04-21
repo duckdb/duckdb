@@ -694,6 +694,16 @@ struct DynamicOrFilterThresholdSetting {
 	static constexpr idx_t SettingIndex = 36;
 };
 
+struct EnableCachingOperatorsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_caching_operators";
+	static constexpr const char *Description = "Enables caching operators that cache intermediate results";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_external_access";
