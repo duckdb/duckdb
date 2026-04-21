@@ -791,15 +791,6 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 	case TableFilterType::IS_NOT_NULL: {
 		return !constant.IsNull();
 	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		for (auto &val : in_filter.values) {
-			if (!constant.IsNull() && val == constant) {
-				return true;
-			}
-		}
-		return false;
-	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
 		for (auto &it : or_filter.child_filters) {
@@ -1140,20 +1131,6 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	case TableFilterType::IS_NOT_NULL:
 		// these filters can just be copied as they don't depend on type
 		return global_filter.Copy();
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = global_filter.Cast<InFilter>();
-		auto in_list = in_filter.values;
-		if (!in_list.empty() && !StatisticsPropagator::CanPropagateCast(in_list[0].type(), target_type)) {
-			// type cannot be converted - abort
-			return nullptr;
-		}
-		for (auto &val : in_list) {
-			if (!val.DefaultTryCastAs(target_type)) {
-				return nullptr;
-			}
-		}
-		return make_uniq<InFilter>(std::move(in_list));
-	}
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
 		                              EnumUtil::ToString(type));

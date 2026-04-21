@@ -486,7 +486,7 @@ struct SortedAggregateFunction {
 			if (!order_state->offset) {
 				//	First one
 				order_state->offset = start;
-				order_state->sel.Initialize(sel_data.data() + order_state->offset);
+				order_state->sel.Initialize(sel_data.data() + order_state->offset, count - order_state->offset);
 				start += order_state->nsel;
 			}
 			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(sidx);

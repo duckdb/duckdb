@@ -20,12 +20,14 @@ class Binder;
  */
 class RecursiveDependentJoinPlanner : public LogicalOperatorVisitor {
 public:
+	static void Plan(Binder &binder, LogicalOperator &op);
+
+private:
 	explicit RecursiveDependentJoinPlanner(Binder &binder) : binder(binder) {
 	}
 	void VisitOperator(LogicalOperator &op) override;
 	unique_ptr<Expression> VisitReplace(BoundSubqueryExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
-private:
 	unique_ptr<LogicalOperator> root;
 	Binder &binder;
 };

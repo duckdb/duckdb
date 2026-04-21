@@ -393,7 +393,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
-	SelectionVector row_sel(0, count);
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
 	if (row.IsValid()) {
 		auto row_index = row.GetIndex();
 		for (idx_t i = 0; i < count; i++) {

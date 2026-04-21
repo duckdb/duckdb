@@ -245,7 +245,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				}
 			}
 			idx_t source_child_size = child_rows.size();
-			SelectionVector child_sel(child_rows.data());
+			SelectionVector child_sel(child_rows.data(), child_rows.size());
 
 			idx_t old_target_child_len = ListVector::GetListSize(target);
 

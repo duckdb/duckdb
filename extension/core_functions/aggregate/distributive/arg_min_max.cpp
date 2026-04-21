@@ -307,7 +307,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		SelectionVector sel(assign_sel);
+		SelectionVector sel(assign_sel, assign_count);
 		Vector sliced_input(arg, sel, assign_count);
 		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);

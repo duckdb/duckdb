@@ -27,7 +27,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
@@ -927,12 +926,11 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 		return;
 	}
 
-	// generate the OR filter
-	auto in_filter = make_uniq<InFilter>(std::move(in_list));
-
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
-	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
+	auto in_expr = ExpressionFilter::CreateInExpression(
+	    make_uniq<BoundReferenceExpression>(info.columns[filter_idx].storage_type, idx_t(0)), std::move(in_list));
+	auto filter = make_uniq<OptionalFilter>(make_uniq<ExpressionFilter>(std::move(in_expr)));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 }
 

@@ -178,7 +178,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		if (assign_count == count) {
 			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
 		} else {
-			SelectionVector sel(assign_sel);
+			SelectionVector sel(assign_sel, STANDARD_VECTOR_SIZE);
 			Vector sliced_input(input, sel, assign_count);
 			CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		}
