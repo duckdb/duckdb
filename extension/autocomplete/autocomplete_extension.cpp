@@ -1,3 +1,4 @@
+#include "duckdb/parser/peg/autocomplete_extension.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -21,7 +22,6 @@
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -362,7 +362,7 @@ public:
 		return ::duckdb::SuggestSettingName(context);
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		return GetGlobalPEGMatcherCache().GetMatcher();
 	}
 
 private:
@@ -458,7 +458,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
@@ -543,7 +543,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 		idx_t max_token_index = 0;
 		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
 
-		auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 		auto match_result = peg_matcher->Root().Match(state);
 		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
 			string token_list;
@@ -571,12 +571,10 @@ class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
 		parser_override = PEGParser;
-		parser_info = make_shared_ptr<PEGMatcherCache>();
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-		auto &cache = info->Cast<PEGMatcherCache>();
-		auto peg_matcher = cache.GetMatcher();
+		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 		auto &root_matcher = peg_matcher->Root();
 
 		vector<MatcherToken> root_tokens;

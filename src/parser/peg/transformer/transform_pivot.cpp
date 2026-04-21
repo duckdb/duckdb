@@ -29,10 +29,22 @@ vector<PivotColumn> PEGTransformerFactory::TransformPivotColumnList(PEGTransform
 	vector<PivotColumn> result;
 	for (auto &pivot_column : pivot_column_list) {
 		auto col = transformer.Transform<PivotColumn>(pivot_column);
+		// Re-wrap multiple pivot expressions into a single row() only when IN entries are
+		// scalar (size 1). For tuple IN entries the unpacked expressions must stay separate
+		// so that each value maps to its corresponding pivot expression.
 		if (col.pivot_expressions.size() > 1) {
-			auto row_function =
-			    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(col.pivot_expressions));
-			col.pivot_expressions.push_back(std::move(row_function));
+			bool has_tuple_entries = false;
+			for (auto &entry : col.entries) {
+				if (entry.values.size() > 1) {
+					has_tuple_entries = true;
+					break;
+				}
+			}
+			if (!has_tuple_entries) {
+				auto row_function = make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row",
+				                                                  std::move(col.pivot_expressions));
+				col.pivot_expressions.push_back(std::move(row_function));
+			}
 		}
 		for (auto &expr : col.pivot_expressions) {
 			if (expr->IsScalar()) {

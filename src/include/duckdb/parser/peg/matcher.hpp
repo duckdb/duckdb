@@ -229,4 +229,7 @@ private:
 	shared_ptr<PEGMatcher> matcher;
 };
 
+//! Returns the process-wide singleton PEGMatcherCache (built once, reused for all parses).
+PEGMatcherCache &GetGlobalPEGMatcherCache();
+
 } // namespace duckdb

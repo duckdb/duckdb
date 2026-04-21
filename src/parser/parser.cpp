@@ -255,8 +255,7 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	// PEG parser: tokenize then transform per statement
-	static PEGMatcherCache matcher_cache;
-	auto peg_matcher = matcher_cache.GetMatcher();
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
@@ -278,6 +277,9 @@ void Parser::ParseQuery(const string &query) {
 			bool parsed = false;
 			if (options.extensions && options.extensions->HasParserExtensions()) {
 				string stmt_text = query.substr(stmt_start, stmt_end - stmt_start);
+				if (stmt_end < query.size() && query[stmt_end] == ';') {
+					stmt_text += ';';
+				}
 				for (auto &ext : options.extensions->ParserExtensions()) {
 					if (!ext.parse_function) {
 						continue;

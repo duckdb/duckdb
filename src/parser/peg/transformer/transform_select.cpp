@@ -796,7 +796,21 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 		return result;
 	}
-	result.pivot_expressions = std::move(func_expr.children);
+	// Unpack row() only when IN list entries are tuples (multi-value).
+	// For scalar IN entries like IN ('xx'), keep row() as a single compound expression
+	// so pivot_expressions.size() matches entry.values.size() (both 1).
+	bool has_tuple_entries = false;
+	for (auto &entry : result.entries) {
+		if (entry.values.size() > 1) {
+			has_tuple_entries = true;
+			break;
+		}
+	}
+	if (has_tuple_entries) {
+		result.pivot_expressions = std::move(func_expr.children);
+	} else {
+		result.pivot_expressions.push_back(std::move(pivot_expression));
+	}
 	return result;
 }
 

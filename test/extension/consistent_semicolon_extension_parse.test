@@ -8,19 +8,19 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
 statement error
 quack (foo);
 ----
-Parser Error: This is not a quack: (foo);
+Binder Error: Function "quack" is a table function but it was used as a scalar function.
 
 statement error
 quack 's';
 ----
-Parser Error: This is not a quack: 's';
+Catalog Error: Type with name quack does not exist!
 
 statement error
 unrecognizedkeyword ';';anotherunrecognizedkeyword';';;;;;
 ----
-Parser Error: syntax error at or near "unrecognizedkeyword"
+Catalog Error: Type with name unrecognizedkeyword does not exist!
 
 statement error
 QUACK string_split('hello-world', ';');QUACK string_split('hello-world', ';')
 ----
-string_split('hello-world', ';');
+Parser Error: This is not a quack: string_split('hello-world', ';')

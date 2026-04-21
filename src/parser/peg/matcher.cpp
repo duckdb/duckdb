@@ -9,8 +9,6 @@
 #include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/parser/peg/peg_parser.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
@@ -22,16 +20,9 @@
 
 namespace duckdb {
 
-static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
-	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
-		if (ext.parser_info) {
-			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
-			if (cache) {
-				return *cache;
-			}
-		}
-	}
-	throw InternalException("PEG autocomplete parser extension not registered");
+PEGMatcherCache &GetGlobalPEGMatcherCache() {
+	static PEGMatcherCache *cache = new PEGMatcherCache();
+	return *cache;
 }
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
