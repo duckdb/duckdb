@@ -48,8 +48,7 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Schedules this index for removal from its table's index list after the commit sequence completes (before the
-	//! actual commit succeeds, but after any point at which we could revert or rollback the transaction).
+	//! Invoked during commit of a DELETED_ENTRY for this index; queues its removal into the drop buffer.
 	void CommitDrop(CommitDropBuffer &drop_buffer);
 };
 

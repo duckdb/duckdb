@@ -38,10 +38,8 @@ struct PendingIndexRemoval {
 	string name;
 };
 
-//! Collects side effects of dropping a table, column, or index (block marks, index removals) so they can
-//! be applied after the commit chain succeeds (after a revert or rollback is possible), but before the overall
-//! commit succeeds. Overloads are provided for local storage and checkpoint paths where we want blocks to be
-//! marked as modified immediately.
+//! Accumulates block marks and index removals during commit so they can be applied together once the
+//! commit chain has succeeded. Dropped without Apply() on revert — nothing gets marked.
 class CommitDropBuffer {
 public:
 	explicit CommitDropBuffer(optional_ptr<BlockManager> block_manager);
