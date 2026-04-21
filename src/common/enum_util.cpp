@@ -179,6 +179,7 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -1100,6 +1101,29 @@ const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value) {
 template<>
 CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value) {
 	return static_cast<CheckpointOnDetach>(StringUtil::StringToEnum(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", value));
+}
+
+const StringUtil::EnumStringLiteral *GetCheckpointTableFlagsValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(CheckpointTableFlags::NONE), "NONE" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::ROW_GROUPS_DROPPED), "ROW_GROUPS_DROPPED" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::0), "0" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::ROW_GROUPS_MERGED), "ROW_GROUPS_MERGED" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::1), "1" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::2), "2" },
+		{ static_cast<uint32_t>(CheckpointTableFlags::3), "3" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<CheckpointTableFlags>(CheckpointTableFlags value) {
+	return StringUtil::EnumToString(GetCheckpointTableFlagsValues(), 7, "CheckpointTableFlags", static_cast<uint32_t>(value));
+}
+
+template<>
+CheckpointTableFlags EnumUtil::FromString<CheckpointTableFlags>(const char *value) {
+	return static_cast<CheckpointTableFlags>(StringUtil::StringToEnum(GetCheckpointTableFlagsValues(), 7, "CheckpointTableFlags", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
