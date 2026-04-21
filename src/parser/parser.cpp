@@ -11,9 +11,10 @@
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/parser/peg/keyword_helper.hpp"
 
 namespace duckdb {
 
@@ -216,55 +217,100 @@ void Parser::ThrowParserOverrideError(ParserOverrideResult &result) {
 }
 
 void Parser::ParseQuery(const string &query) {
-	string parser_error;
-	optional_idx parser_error_location;
 	ValidateUTF8Query(query);
 	{
-		// check if there are any unicode spaces in the string
 		string new_query;
 		if (StripUnicodeSpaces(query, new_query)) {
-			// there are - strip the unicode spaces and re-run the query
 			ParseQuery(new_query);
 			return;
 		}
 	}
-	{
-		if (options.extensions) {
-			bool has_strict_extension_error = false;
-			ErrorData last_strict_extension_error;
-			for (auto &ext : options.extensions->ParserExtensions()) {
-				if (!ext.parser_override) {
-					continue;
-				}
-				if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
-					continue;
-				}
-
-				auto result = ext.parser_override(ext.parser_info.get(), query, options);
-				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-					statements = std::move(result.statements);
-					return;
-				}
-				if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
-					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						has_strict_extension_error = true;
-						last_strict_extension_error = std::move(result.error);
-					} else {
-						has_strict_extension_error = false;
-					}
-					continue;
-				} else if (options.parser_override_setting == AllowParserOverride::FALLBACK_OVERRIDE) {
-					continue;
-				}
+	if (options.extensions) {
+		bool has_strict_extension_error = false;
+		ErrorData last_strict_extension_error;
+		for (auto &ext : options.extensions->ParserExtensions()) {
+			if (!ext.parser_override) {
+				continue;
 			}
-			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE && has_strict_extension_error) {
-				last_strict_extension_error.Throw();
+			if (options.parser_override_setting == AllowParserOverride::DEFAULT_OVERRIDE) {
+				continue;
+			}
+			auto result = ext.parser_override(ext.parser_info.get(), query, options);
+			if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+				statements = std::move(result.statements);
+				return;
+			}
+			if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE) {
+				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					has_strict_extension_error = true;
+					last_strict_extension_error = std::move(result.error);
+				} else {
+					has_strict_extension_error = false;
+				}
+				continue;
 			}
 		}
+		if (options.parser_override_setting == AllowParserOverride::STRICT_OVERRIDE && has_strict_extension_error) {
+			last_strict_extension_error.Throw();
+		}
 	}
+	// PEG parser: tokenize then transform per statement
+	static PEGMatcherCache matcher_cache;
+	auto peg_matcher = matcher_cache.GetMatcher();
+
+	vector<MatcherToken> tokens;
+	ParserTokenizer tokenizer(query, tokens);
+	tokenizer.TokenizeInput();
+	tokenizer.statements.push_back(std::move(tokens));
+
+	for (auto &stmt_tokens : tokenizer.statements) {
+		if (stmt_tokens.empty()) {
+			continue;
+		}
+		idx_t stmt_start = stmt_tokens.front().offset;
+		idx_t stmt_end = stmt_tokens.back().offset + stmt_tokens.back().length;
+
+		unique_ptr<SQLStatement> stmt;
+		try {
+			stmt = PEGTransformerFactory::Transform(stmt_tokens, options,
+			                                        peg_matcher->Root());
+		} catch (ParserException &e) {
+			// fall back to parse_function extensions for unknown statement types
+			bool parsed = false;
+			if (options.extensions && options.extensions->HasParserExtensions()) {
+				string stmt_text = query.substr(stmt_start, stmt_end - stmt_start);
+				for (auto &ext : options.extensions->ParserExtensions()) {
+					if (!ext.parse_function) {
+						continue;
+					}
+					auto result = ext.parse_function(ext.parser_info.get(), stmt_text);
+					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+						estmt->stmt_location = stmt_start;
+						estmt->stmt_length = stmt_end - stmt_start;
+						statements.push_back(std::move(estmt));
+						parsed = true;
+						break;
+					}
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						throw ParserException::SyntaxError(stmt_text, result.error, result.error_location);
+					}
+				}
+			}
+			if (!parsed) {
+				throw;
+			}
+			continue;
+		}
+		stmt->stmt_location = stmt_start;
+		statements.push_back(std::move(stmt));
+	}
+
 	if (!statements.empty()) {
-		auto &last_statement = statements.back();
-		last_statement->stmt_length = query.size() - last_statement->stmt_location;
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			statements[i]->stmt_length = statements[i + 1]->stmt_location - statements[i]->stmt_location;
+		}
+		statements.back()->stmt_length = query.size() - statements.back()->stmt_location;
 		for (auto &statement : statements) {
 			statement->query = query.substr(statement->stmt_location, statement->stmt_length);
 			statement->stmt_location = 0;
@@ -278,39 +324,38 @@ void Parser::ParseQuery(const string &query) {
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {
-	// auto pg_tokens = PostgresParser::Tokenize(query);
-	// vector<SimplifiedToken> result;
-	// result.reserve(pg_tokens.size());
-	// for (auto &pg_token : pg_tokens) {
-	// 	SimplifiedToken token;
-	// 	switch (pg_token.type) {
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_IDENTIFIER:
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
-	// 		break;
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_NUMERIC_CONSTANT:
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT;
-	// 		break;
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_STRING_CONSTANT:
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
-	// 		break;
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_OPERATOR:
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR;
-	// 		break;
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_KEYWORD:
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD;
-	// 		break;
-	// 	// comments are not supported by our tokenizer right now
-	// 	case duckdb_libpgquery::PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_COMMENT: // LCOV_EXCL_START
-	// 		token.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
-	// 		break;
-	// 	default:
-	// 		throw InternalException("Unrecognized token category");
-	// 	} // LCOV_EXCL_STOP
-	// 	token.start = NumericCast<idx_t>(pg_token.start);
-	// 	result.push_back(token);
-	// }
-	// FIXME(dtenwolde)
-	return {};
+	HighlightTokenizer tokenizer(query);
+	tokenizer.TokenizeInput();
+
+	vector<SimplifiedToken> result;
+	result.reserve(tokenizer.tokens.size());
+	for (auto &token : tokenizer.tokens) {
+		SimplifiedToken simplified;
+		simplified.start = token.offset;
+		switch (token.type) {
+		case TokenType::KEYWORD:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD;
+			break;
+		case TokenType::STRING_LITERAL:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_STRING_CONSTANT;
+			break;
+		case TokenType::NUMBER_LITERAL:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_NUMERIC_CONSTANT;
+			break;
+		case TokenType::OPERATOR:
+		case TokenType::TERMINATOR:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR;
+			break;
+		case TokenType::COMMENT:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_COMMENT;
+			break;
+		default:
+			simplified.type = SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
+			break;
+		}
+		result.push_back(simplified);
+	}
+	return result;
 }
 
 vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {

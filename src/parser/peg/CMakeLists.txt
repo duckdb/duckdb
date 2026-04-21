@@ -7,6 +7,7 @@ add_library_unity(
         autocomplete_core.cpp
         keyword_helper.cpp
         keyword_map.cpp
+        matcher.cpp
         peg_parser.cpp
         sql_formatter.cpp
         )
