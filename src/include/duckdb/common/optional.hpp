@@ -29,11 +29,6 @@ public:
 		return has_val;
 	}
 
-	void Invalidate() {
-		has_val = false;
-		value = T();
-	}
-
 	const T &GetValue() const {
 		if (!has_val) {
 			throw InternalException("Attempting to get the value of an optional that is not set");

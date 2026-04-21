@@ -155,7 +155,9 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int64_t>(204, "max_value", max_value);
 	serializer.WritePropertyWithDefault<int64_t>(205, "start_value", start_value);
 	serializer.WritePropertyWithDefault<bool>(206, "cycle", cycle);
-	serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
+	}
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {

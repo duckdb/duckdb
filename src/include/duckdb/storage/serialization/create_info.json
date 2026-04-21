@@ -334,7 +334,8 @@
       {
         "id": 207,
         "name": "last_value",
-        "type": "optional<int64_t>"
+        "type": "optional<int64_t>",
+        "version": "v2.0.0"
       }
     ]
   },
