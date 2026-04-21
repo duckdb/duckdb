@@ -51,6 +51,10 @@ struct ParquetStatisticsUtils {
 	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
 	                                                            const vector<ColumnChunk> &columns, bool can_have_nan);
 
+	static unique_ptr<BaseStatistics> TransformStatisticsFromPageHeader(const LogicalType &type,
+	                                                                    const ParquetColumnSchema &schema,
+	                                                                    const duckdb_parquet::Statistics &page_stats);
+
 	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
 	static bool BloomFilterSupported(const LogicalTypeId &type_id);

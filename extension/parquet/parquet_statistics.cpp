@@ -427,6 +427,56 @@ static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 	return true;
 }
 
+unique_ptr<BaseStatistics>
+ParquetStatisticsUtils::TransformStatisticsFromPageHeader(const LogicalType &type, const ParquetColumnSchema &schema,
+                                                          const duckdb_parquet::Statistics &page_stats) {
+	if (!((page_stats.__isset.min_value || page_stats.__isset.min) &&
+		(page_stats.__isset.max_value || page_stats.__isset.max))) {
+		return nullptr;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::DECIMAL:
+		return CreateNumericStats(type, schema, page_stats);
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		return CreateFloatingPointStats(type, schema, page_stats);
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR: {
+		auto string_stats = StringStats::CreateUnknown(type);
+		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
+		if (page_stats.__isset.min_value && StringColumnReader::IsValid(page_stats.min_value, is_varchar)) {
+			StringStats::SetMin(string_stats, page_stats.min_value);
+		} else if (page_stats.__isset.min && StringColumnReader::IsValid(page_stats.min, is_varchar)) {
+			StringStats::SetMin(string_stats, page_stats.min);
+		}
+		if (page_stats.__isset.max_value && StringColumnReader::IsValid(page_stats.max_value, is_varchar)) {
+			StringStats::SetMax(string_stats, page_stats.max_value);
+		} else if (page_stats.__isset.max && StringColumnReader::IsValid(page_stats.max, is_varchar)) {
+			StringStats::SetMax(string_stats, page_stats.max);
+		}
+		return string_stats.ToUnique();
+	}
+	default:
+		return nullptr;
+	}
+}
+
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
                                                                              const vector<ColumnChunk> &columns,
                                                                              bool can_have_nan) {
