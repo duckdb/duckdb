@@ -283,6 +283,14 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 	}
 }
 
+void Vector::Reserve(idx_t to_reserve) {
+	if (!HasSize()) {
+		throw InternalException("Vector::Reserve can only be called on vectors with a size");
+	}
+	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
+	Resize(size(), to_reserve);
+}
+
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
                   idx_t target_offset, idx_t copy_count) {
 	D_ASSERT(source.GetType() == GetType());
