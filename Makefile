@@ -574,7 +574,6 @@ toolsci:
 		sudo apt-get update -y -qq; \
 		sudo apt-get install -y -qq libcurl4-openssl-dev; \
 	}
-	command -v typos >/dev/null 2>&1 || cargo install --locked typos-cli
 	ls -lh /usr/bin/gcc* /usr/bin/g++*
 	gcc --version
 	g++ --version
