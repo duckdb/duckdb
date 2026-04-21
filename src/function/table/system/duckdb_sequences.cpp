@@ -127,7 +127,10 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		// cycle, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
 		// last_value, BIGINT
-		output.SetValue(col++, count, seq_data.usage_count == 0 ? Value() : Value::BIGINT(seq_data.last_value));
+		output.SetValue(col++, count,
+		                (seq_data.usage_count == 0) || !seq_data.last_value.IsValid()
+		                    ? Value()
+		                    : Value::BIGINT(seq_data.last_value.GetValue()));
 		// sql, LogicalType::VARCHAR
 		output.SetValue(col++, count, Value(seq.ToSQL()));
 
