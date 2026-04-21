@@ -623,6 +623,9 @@ void ART::ResetStorage(IndexLock &index_lock) {
 	tree.Clear();
 }
 
+void ART::CommitDrop(IndexLock &index_lock) {
+}
+
 idx_t ART::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_ids, optional_ptr<SelectionVector> deleted_sel,
                      optional_ptr<SelectionVector> non_deleted_sel) {
 	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
