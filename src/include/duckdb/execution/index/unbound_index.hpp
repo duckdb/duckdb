@@ -80,7 +80,6 @@ public:
 	             AttachedDatabase &db);
 
 public:
-
 	bool IsBound() const override {
 		return false;
 	}
