@@ -64,7 +64,7 @@ void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_si
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
-                              idx_t source_offset) {
+                                     idx_t source_offset) {
 	Reserve(child_size + to_append_size - source_offset);
 	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, child_size);
 	child_size += to_append_size - source_offset;
@@ -169,10 +169,6 @@ void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
-	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
-}
-
-buffer_ptr<VectorBuffer> VectorListBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) {
 	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
 }
 

@@ -144,13 +144,12 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 	return result;
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
 	// resize the validity
 	validity.Resize(new_size);
 	// resize the child
 	child->Resize(current_size * array_size, new_size * array_size);
 	capacity = new_size;
-	return nullptr;
 }
 
 void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {

@@ -81,11 +81,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_
 	return make_buffer<StandardVectorBuffer>(std::move(new_data), new_capacity, type_size);
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t new_capacity) {
-	return CreateBuffer(std::move(new_data), new_capacity);
-}
-
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
+void StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
 	D_ASSERT(current_size <= capacity);
 	auto old_byte_count = current_size * type_size;
 	auto target_byte_count = new_size * type_size;
@@ -102,15 +98,12 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(idx_t current_size, idx_t 
 	auto new_data = allocator.Allocate(target_byte_count);
 	memcpy(new_data.get(), data_ptr, old_byte_count);
 
-	// create the new buffer
-	auto result = CreateResizeBuffer(std::move(new_data), new_size);
-	// copy over the validity mask
-	auto &new_validity = result->GetValidityMask();
-	new_validity.Resize(new_size);
-	if (current_size > 0) {
-		new_validity.CopyRange(validity, current_size);
-	}
-	return result;
+	// update the buffer structure in-place
+	allocated_data = std::move(new_data);
+	data_ptr = allocated_data.get();
+	capacity = new_size;
+	// resize the validity mask
+	validity.Resize(new_size);
 }
 
 template <idx_t TYPE_SIZE>

@@ -40,7 +40,8 @@ public:
 	void Reserve(idx_t to_reserve);
 
 	void AppendToChild(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
-	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
+	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
+	                   idx_t source_offset = 0);
 
 	void PushBack(const Value &insert);
 
@@ -64,7 +65,6 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
-	buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) override;
 
 private:
 	//! child vectors used for nested data

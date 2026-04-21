@@ -47,14 +47,13 @@ public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
-	buffer_ptr<VectorBuffer> Resize(idx_t current_size, idx_t new_size) override;
+	void Resize(idx_t current_size, idx_t new_size) override;
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 
 	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
-	virtual buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity);
 
 protected:
 	ValidityMask validity;

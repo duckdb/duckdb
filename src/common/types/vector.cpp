@@ -279,10 +279,7 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
 	} else {
 		// resize the buffer
-		auto new_buffer = buffer->Resize(current_size, new_size);
-		if (new_buffer) {
-			buffer = std::move(new_buffer);
-		}
+		buffer->Resize(current_size, new_size);
 	}
 }
 

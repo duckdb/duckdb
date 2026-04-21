@@ -98,7 +98,7 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 	return "";
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorBuffer::Resize(idx_t current_size, idx_t new_size) {
 	throw InternalException("VectorBuffer::Resize not supported for this vector type");
 }
 
