@@ -285,7 +285,7 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		}
 		auto stats = ParquetStatisticsUtils::TransformStatisticsFromPageHeader(Type(), Schema(), *page_stats);
 		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+			auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 			trans.Skip(page_hdr.compressed_page_size);
 			page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
 			page_is_filtered_out = true;

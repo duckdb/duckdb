@@ -431,7 +431,7 @@ unique_ptr<BaseStatistics>
 ParquetStatisticsUtils::TransformStatisticsFromPageHeader(const LogicalType &type, const ParquetColumnSchema &schema,
                                                           const duckdb_parquet::Statistics &page_stats) {
 	if (!((page_stats.__isset.min_value || page_stats.__isset.min) &&
-		(page_stats.__isset.max_value || page_stats.__isset.max))) {
+	      (page_stats.__isset.max_value || page_stats.__isset.max))) {
 		return nullptr;
 	}
 	switch (type.id()) {
