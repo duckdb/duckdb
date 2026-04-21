@@ -27,7 +27,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -567,15 +566,6 @@ static bool CollectValuesAndComparisonsFromTableFilter(const TableFilter &filter
 			return true; // No child filters, always OK
 		}
 		return CollectValuesAndComparisonsFromTableFilter(*optional_filter.child_filter, in_values, comparisons);
-	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		for (auto &value : in_filter.values) {
-			if (!value.IsNull()) {
-				in_values.insert(value);
-			}
-		}
-		return true;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();

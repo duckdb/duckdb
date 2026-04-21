@@ -460,7 +460,7 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos) {
 	if (pos >= state.scan_order.size()) {
 		return;
 	}
-	SelectionVector sel(state.scan_order.data() + pos);
+	SelectionVector sel(state.scan_order.data() + pos, state.scan_order.size() - pos);
 	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.scan_order.size() - pos);
 	pos += STANDARD_VECTOR_SIZE;
 
