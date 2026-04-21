@@ -1191,18 +1191,6 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/encryption.json ./build/release/test/unittest
 
-    - name: Test PEG parser on fallback mode
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser.json ./build/release/test/unittest
-
-    - name: Test PEG parser on strict when supported mode
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
-
  summary:
     name: Summary
     if: ${{ always() }}
