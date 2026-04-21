@@ -22,7 +22,6 @@ struct UpdateInfo;
 class CleanupState {
 public:
 	explicit CleanupState(transaction_t lowest_active_transaction);
-	~CleanupState();
 
 	// all tables with indexes that possibly need a vacuum (after e.g. a delete)
 	unordered_map<string, optional_ptr<DataTable>> indexed_tables;
