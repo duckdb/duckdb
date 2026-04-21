@@ -221,8 +221,8 @@ jobs:
         with:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
-      - name: Install format tools
-        run: python3 scripts/ci/retry.py -- make format_tools
+      - name: Install tools
+        run: python3 scripts/ci/retry.py -- make -j format_tools spell_tools
 
       - name: Check format
         run: |

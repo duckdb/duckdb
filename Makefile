@@ -566,7 +566,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools enum-integrity-check check-typos
+.PHONY: toolsci format_tools spell_tools enum-integrity-check check-typos
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -593,6 +593,32 @@ format_tools:
 	clang-format --dump-config
 	black --version
 	@echo "::endgroup::"
+
+spell_tools:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "Skipping spell_tools on non-Linux"; \
+		exit 0; \
+	fi
+	@set -eu; \
+	VERSION=1.45.1; \
+	if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
+		ARCH="aarch64"; \
+	else \
+		ARCH="x86_64"; \
+	fi; \
+	TARGET_FILE="$${ARCH}-unknown-linux-musl"; \
+	FILE_NAME="typos-v$${VERSION}-$${TARGET_FILE}.tar.gz"; \
+	DOWNLOAD_URL="https://github.com/crate-ci/typos/releases/download/v$${VERSION}/$${FILE_NAME}"; \
+	$(PYTHON) scripts/ci/retry.py -- curl --fail --location --silent --show-error --output "/tmp/$${FILE_NAME}" "$${DOWNLOAD_URL}"; \
+	TMP_DIR="$$(mktemp -d)"; \
+	tar -xzf "/tmp/$${FILE_NAME}" -C "$${TMP_DIR}"; \
+	TYPOS_BIN="$$(find "$${TMP_DIR}" -type f -name typos | head -n 1)"; \
+	if [ -w /usr/local/bin ]; then \
+		install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	else \
+		sudo install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	fi; \
+	typos --version
 
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
