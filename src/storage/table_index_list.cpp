@@ -101,9 +101,9 @@ void TableIndexList::RemoveIndex(const string &name) {
 		auto &index = *index_entries[i]->index;
 		if (index.GetIndexName() == name) {
 			if (!index.IsBound()) {
-				index.Cast<UnboundIndex>().MarkStorageAsModified();
 				unbound_count--;
 			}
+			index.ResetStorage();
 			index_entries.erase_at(i);
 			return;
 		}

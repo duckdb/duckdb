@@ -80,6 +80,8 @@ public:
 	             AttachedDatabase &db);
 
 public:
+	void ResetStorage() override;
+
 	bool IsBound() const override {
 		return false;
 	}

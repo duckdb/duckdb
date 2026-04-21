@@ -124,7 +124,7 @@ public:
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
 	virtual void ResetStorage(IndexLock &index_lock) = 0;
 	//! Obtains a lock and calls ResetStorage while holding that lock.
-	void ResetStorage();
+	void ResetStorage() override;
 
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Returns the amount of rows successfully deleted from the index.
