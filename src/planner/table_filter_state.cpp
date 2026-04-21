@@ -94,10 +94,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
 	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		// root nodes - create an empty filter state
-		return make_uniq<TableFilterState>();
 	default:
 		throw InternalException("Unsupported filter type for TableFilterState::Initialize");
 	}

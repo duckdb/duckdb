@@ -462,12 +462,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		}
 		return approved_tuple_count;
 	}
-	case TableFilterType::IS_NULL: {
-		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
-	}
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		// Apply the filter on the child vector
