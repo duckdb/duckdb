@@ -105,6 +105,11 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
 	for (auto &filter : filter_infos) {
+		if (filter->filter && filter->filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+		    filter->filter->GetExpressionType() == ExpressionType::CONJUNCTION_OR && filter->set.get().count >= 2) {
+			or_filters.push_back(filter.get());
+			continue;
+		}
 		if (SingleColumnFilter(*filter)) {
 			// Filter on one relation, (i.e. string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
@@ -409,20 +414,29 @@ DenomInfo CardinalityEstimator::GetDenominator(JoinRelationSet &set) {
 // based on stats (see CalculateUpdatedDenom()).
 template <>
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
-		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
+	double result;
+	auto it = relation_set_2_cardinality.find(new_set.ToString());
+	if (it != relation_set_2_cardinality.end()) {
+		result = it->second.cardinality_before_filters;
+	} else {
+		// can happen if a table has cardinality 0, or a tdom is set to 0
+		auto denom = GetDenominator(new_set);
+		// we pass numerator relations, because for semi and anti joins, we don't want to
+		// include cardinalities of relations on the RHS of a semi/anti join.
+		auto numerator = GetNumerator(denom.numerator_relations);
+		result = numerator / denom.denominator;
+		relation_set_2_cardinality[new_set.ToString()] = CardinalityHelper(result);
 	}
+	return ApplyOrFilterSelectivities(new_set, result);
+}
 
-	// can happen if a table has cardinality 0, or a tdom is set to 0
-	auto denom = GetDenominator(new_set);
-	// we pass numerator relations, because for semi and anti joins, we don't want to
-	// include cardinalities of relations on the RHS of a semi/anti join.
-	auto numerator = GetNumerator(denom.numerator_relations);
-
-	double result = numerator / denom.denominator;
-	auto new_entry = CardinalityHelper(result);
-	relation_set_2_cardinality[new_set.ToString()] = new_entry;
-	return result;
+double CardinalityEstimator::ApplyOrFilterSelectivities(JoinRelationSet &new_set, double cardinality) const {
+	for (auto &filter : or_filters) {
+		if (JoinRelationSet::IsSubset(new_set, filter->set.get())) {
+			cardinality *= RelationStatisticsHelper::DEFAULT_SELECTIVITY;
+		}
+	}
+	return cardinality;
 }
 
 template <>
