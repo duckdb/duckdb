@@ -372,8 +372,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDefaultValue(PEGTra
 unique_ptr<Constraint> PEGTransformerFactory::TransformTopLevelConstraint(PEGTransformer &transformer,
                                                                           ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	// TODO(dtenwolde) figure out what to do with constraint name.
-	auto &opt_constraint_name = list_pr.Child<OptionalParseResult>(0);
 	auto result = transformer.Transform<unique_ptr<Constraint>>(list_pr.Child<ListParseResult>(1));
 	return result;
 }
