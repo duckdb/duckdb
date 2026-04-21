@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class CheckpointLock;
+class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
@@ -83,11 +84,12 @@ public:
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
 
-	void PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
+	void PushDelete(DuckTableEntry &table_entry, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
-	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UndoBufferReference CreateUpdateInfo(idx_t type_size, DataTable &data_table, idx_t entries, idx_t row_group_start);
+	void PushAppend(DuckTableEntry &table_entry, idx_t row_start, idx_t row_count);
+	UndoBufferReference CreateUpdateInfo(DuckTableEntry &table_entry, idx_t type_size, idx_t entries,
+	                                     idx_t row_group_start);
 
 	DuckTransactionManager &GetTransactionManager();
 	bool IsDuckTransaction() const override {
@@ -98,9 +100,6 @@ public:
 
 	//! Get a shared lock on a table
 	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
-
-	//! Hold an owning reference of the table, needed to safely reference it inside the transaction commit/undo logic
-	void ModifyTable(DataTable &tbl);
 
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
@@ -120,10 +119,6 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
-	//! Lock for modified_tables
-	mutex modified_tables_lock;
-	//! Tables that are modified by this transaction
-	reference_map_t<DataTable, shared_ptr<DataTable>> modified_tables;
 	//! Lock for the active_locks map
 	mutex active_locks_lock;
 	struct ActiveTableLock {

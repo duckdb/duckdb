@@ -18,7 +18,7 @@ FilterPropagateResult ValidityColumnData::CheckZonemap(ColumnScanState &state, T
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-void ValidityColumnData::UpdateWithBase(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                         Vector &update_vector, row_t *row_ids, idx_t update_count, ColumnData &base,
                                         idx_t row_group_start) {
 	Vector base_vector(base.type);
@@ -33,7 +33,7 @@ void ValidityColumnData::UpdateWithBase(TransactionData transaction, DataTable &
 		base_vector.Flatten(fetch_count);
 	}
 
-	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
 }
 

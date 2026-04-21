@@ -785,12 +785,6 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 	const auto type = filter.filter_type;
 
 	switch (type) {
-	case TableFilterType::IS_NULL: {
-		return constant.IsNull();
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return !constant.IsNull();
-	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
 		for (auto &it : or_filter.child_filters) {
@@ -1127,10 +1121,6 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		return make_uniq<ExpressionFilter>(make_uniq<BoundComparisonExpression>(
 		    dynamic_filter.filter_data->comparison_type, std::move(lhs), std::move(rhs)));
 	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		// these filters can just be copied as they don't depend on type
-		return global_filter.Copy();
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
 		                              EnumUtil::ToString(type));

@@ -15,8 +15,7 @@
 namespace duckdb {
 
 PhysicalBatchInsert::PhysicalBatchInsert(PhysicalPlan &physical_plan, vector<LogicalType> types_p,
-                                         TableCatalogEntry &table,
-                                         vector<unique_ptr<BoundConstraint>> bound_constraints_p,
+                                         DuckTableEntry &table, vector<unique_ptr<BoundConstraint>> bound_constraints_p,
                                          idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::BATCH_INSERT, std::move(types_p), estimated_cardinality),
       insert_table(&table), insert_types(table.GetTypes()), bound_constraints(std::move(bound_constraints_p)) {
@@ -409,13 +408,13 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 // States
 //===--------------------------------------------------------------------===//
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
-	optional_ptr<TableCatalogEntry> table;
+	optional_ptr<DuckTableEntry> table;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
 		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
-		table = &created_table->Cast<TableCatalogEntry>();
+		table = &created_table->Cast<DuckTableEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -424,7 +423,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 	// heuristic - we start off by allocating 4MB of cache space per column
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN = 4ULL * 1024ULL * 1024ULL;
 	auto minimum_memory_per_thread = table->GetColumns().PhysicalColumnCount() * MINIMUM_MEMORY_PER_COLUMN;
-	auto result = make_uniq<BatchInsertGlobalState>(context, table->Cast<DuckTableEntry>(), minimum_memory_per_thread);
+	auto result = make_uniq<BatchInsertGlobalState>(context, *table, minimum_memory_per_thread);
 	return std::move(result);
 }
 
@@ -648,7 +647,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// finally, merge the row groups into the local storage
 		for (const auto collection_index : final_collections) {
 			auto &collection = data_table.GetOptimisticCollection(context, collection_index);
-			data_table.LocalMerge(context, collection);
+			data_table.LocalMerge(context, table, collection);
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
 
@@ -673,7 +672,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		auto &optimistic_collection = data_table.GetOptimisticCollection(context, entry.collection_index);
 		auto &collection = *optimistic_collection.collection;
 		for (auto &insert_chunk : collection.Chunks(transaction)) {
-			data_table.LocalAppend(append_state, context, insert_chunk, false);
+			data_table.LocalAppend(append_state, table, context, insert_chunk, false);
 		}
 		data_table.ResetOptimisticCollection(context, entry.collection_index);
 	}
