@@ -282,13 +282,6 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(function_children);
 		return std::move(construct_array);
-	} else if (lowercase_name == "position") {
-		if (function_children.size() != 2) {
-			throw ParserException("Wrong number of arguments to __internal_position_operator.");
-		}
-		// swap arguments for POSITION(x IN y)
-		std::swap(function_children[0], function_children[1]);
-		lowercase_name = "position";
 	} else if (lowercase_name == "ifnull") {
 		if (function_children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
@@ -2285,8 +2278,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPositionExpression(
 	auto &position_values = extract_parens.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	//! search_string IN string
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(2)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(0)));
+	auto first_expr = transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(0));
+	auto second_expr = transformer.Transform<unique_ptr<ParsedExpression>>(position_values.Child<ListParseResult>(2));
+	results.push_back(std::move(second_expr));
+	results.push_back(std::move(first_expr));
 	return make_uniq<FunctionExpression>("position", std::move(results));
 }
 
