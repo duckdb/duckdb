@@ -1,5 +1,5 @@
 #include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -8,58 +8,54 @@ IsNullFilter::IsNullFilter() : TableFilter(TableFilterType::IS_NULL) {
 }
 
 FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!stats.CanHaveNull()) {
-		// no null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always true
-		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	throw InternalException("IsNullFilter::CheckStatistics should not be called: IsNullFilters should be converted "
+	                        "to ExpressionFilters before statistics checking");
 }
 
 string IsNullFilter::ToString(const string &column_name) const {
-	return column_name + " IS NULL";
+	throw InternalException("IsNullFilter::ToString should not be called: IsNullFilters should be converted to "
+	                        "ExpressionFilters before rendering");
+}
+
+bool IsNullFilter::Equals(const TableFilter &other_p) const {
+	throw InternalException("IsNullFilter::Equals should not be called: IsNullFilters should be converted to "
+	                        "ExpressionFilters before equality checking");
 }
 
 unique_ptr<TableFilter> IsNullFilter::Copy() const {
-	return make_uniq<IsNullFilter>();
+	throw InternalException("IsNullFilter::Copy should not be called: IsNullFilters should be converted to "
+	                        "ExpressionFilters before copying");
 }
 
 unique_ptr<Expression> IsNullFilter::ToExpression(const Expression &column) const {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
-	result->children.push_back(column.Copy());
-	return std::move(result);
+	return ExpressionFilter::CreateNullCheckExpression(column.Copy(), ExpressionType::OPERATOR_IS_NULL);
 }
 
 IsNotNullFilter::IsNotNullFilter() : TableFilter(TableFilterType::IS_NOT_NULL) {
 }
 
 FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (!stats.CanHaveNull()) {
-		// no null values are possible: always true
-		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	throw InternalException("IsNotNullFilter::CheckStatistics should not be called: IsNotNullFilters should be "
+	                        "converted to ExpressionFilters before statistics checking");
 }
 
 string IsNotNullFilter::ToString(const string &column_name) const {
-	return column_name + " IS NOT NULL";
+	throw InternalException("IsNotNullFilter::ToString should not be called: IsNotNullFilters should be converted "
+	                        "to ExpressionFilters before rendering");
+}
+
+bool IsNotNullFilter::Equals(const TableFilter &other_p) const {
+	throw InternalException("IsNotNullFilter::Equals should not be called: IsNotNullFilters should be converted to "
+	                        "ExpressionFilters before equality checking");
 }
 
 unique_ptr<TableFilter> IsNotNullFilter::Copy() const {
-	return make_uniq<IsNotNullFilter>();
+	throw InternalException("IsNotNullFilter::Copy should not be called: IsNotNullFilters should be converted to "
+	                        "ExpressionFilters before copying");
 }
 
 unique_ptr<Expression> IsNotNullFilter::ToExpression(const Expression &column) const {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-	result->children.push_back(column.Copy());
-	return std::move(result);
+	return ExpressionFilter::CreateNullCheckExpression(column.Copy(), ExpressionType::OPERATOR_IS_NOT_NULL);
 }
 
 } // namespace duckdb

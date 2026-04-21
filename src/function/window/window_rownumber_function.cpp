@@ -86,7 +86,24 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+class WindowRowNumberStreamingState : public WindowExecutorStreamingState {
+public:
+	WindowRowNumberStreamingState() : vec(Value((int64_t)1)) {
+	}
+
+	void Evaluate(idx_t count, Vector &result) {
+		// Set row numbers
+		auto &row_number = *FlatVector::GetDataMutable<int64_t>(vec);
+		auto rdata = FlatVector::GetDataMutable<int64_t>(result);
+		for (idx_t i = 0; i < count; i++) {
+			rdata[i] = row_number++;
+		}
+	}
+	Vector vec;
+};
+
 struct WindowRowNumberExecutor {
+	//! Blocking APIs
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
@@ -97,6 +114,19 @@ struct WindowRowNumberExecutor {
 
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		return true;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowRowNumberStreamingState>();
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowRowNumberStreamingState>().Evaluate(input.size(), result);
+	}
 };
 
 WindowFunction RowNumberFun::GetFunction() {
@@ -104,6 +134,10 @@ WindowFunction RowNumberFun::GetFunction() {
 	    Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr, WindowRowNumberExecutor::GetBounds,
 	    WindowRowNumberExecutor::GetSharing, WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
 	    WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer, WindowRowNumberExecutor::GetData);
+	fun.SetCanStreamCallback(WindowRowNumberExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowRowNumberExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowRowNumberExecutor::StreamData);
+
 	return fun;
 }
 

@@ -27,9 +27,6 @@ namespace duckdb {
 
 static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 	switch (filter.filter_type) {
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		return true;
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr = filter.Cast<ExpressionFilter>().expr;
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
