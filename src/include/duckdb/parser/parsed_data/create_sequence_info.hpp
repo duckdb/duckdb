@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
+
+// FIXME: This is our own duckdb::optional. Make it a std::optional once all migration to c++17  is done.
 #include "duckdb/common/optional.hpp"
 
 namespace duckdb {
@@ -45,7 +47,6 @@ struct CreateSequenceInfo : public CreateInfo {
 	int64_t start_value;
 	//! Whether or not the sequence cycles
 	bool cycle;
-	//! FIXME: This is our own duckdb::optional. Make it a std::optional once all migration to c++17  is done.
 	//! The most recently returned value
 	optional<int64_t> last_value;
 
