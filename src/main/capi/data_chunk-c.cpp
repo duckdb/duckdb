@@ -129,7 +129,7 @@ uint64_t *duckdb_vector_get_validity(duckdb_vector vector) {
 	case duckdb::VectorType::CONSTANT_VECTOR:
 		return duckdb::ConstantVector::Validity(*v).GetData();
 	case duckdb::VectorType::FLAT_VECTOR:
-		return duckdb::FlatVector::Validity(*v).GetData();
+		return duckdb::FlatVector::ValidityMutable(*v).GetData();
 	default:
 		return nullptr;
 	}
@@ -140,7 +140,7 @@ void duckdb_vector_ensure_validity_writable(duckdb_vector vector) {
 		return;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	auto &validity = duckdb::FlatVector::Validity(*v);
+	auto &validity = duckdb::FlatVector::ValidityMutable(*v);
 	validity.EnsureWritable();
 }
 
@@ -191,7 +191,7 @@ duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetChildMutable(*v));
 }
 
 idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
@@ -233,7 +233,7 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetChildMutable(*v));
 }
 
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {

@@ -202,21 +202,29 @@ T &ArrayVector::GetEntryInternal(T &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(vector);
-		return ArrayVector::GetEntry(child);
+		return GetEntryInternal<T>(child);
 	}
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
-	D_ASSERT(vector.buffer);
-	D_ASSERT(vector.buffer->GetBufferType() == VectorBufferType::ARRAY_BUFFER);
-	return vector.buffer->template Cast<VectorArrayBuffer>().GetChild();
+	D_ASSERT(vector.GetBufferRef());
+	D_ASSERT(vector.Buffer().GetBufferType() == VectorBufferType::ARRAY_BUFFER);
+	return vector.GetBufferRef()->template Cast<VectorArrayBuffer>().GetChild();
 }
 
-const Vector &ArrayVector::GetEntry(const Vector &vector) {
+const Vector &ArrayVector::GetChild(const Vector &vector) {
 	return GetEntryInternal<const Vector>(vector);
 }
 
-Vector &ArrayVector::GetEntry(Vector &vector) {
+Vector &ArrayVector::GetChildMutable(Vector &vector) {
 	return GetEntryInternal<Vector>(vector);
+}
+
+const Vector &ArrayVector::GetEntry(const Vector &vector) {
+	return GetChild(vector);
+}
+
+Vector &ArrayVector::GetEntry(Vector &vector) {
+	return GetChildMutable(vector);
 }
 
 idx_t ArrayVector::GetTotalSize(const Vector &vector) {
@@ -225,7 +233,7 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		auto &child = DictionaryVector::Child(vector);
 		return ArrayVector::GetTotalSize(child);
 	}
-	return vector.buffer->Cast<VectorArrayBuffer>().GetChildSize();
+	return vector.Buffer().Cast<VectorArrayBuffer>().GetChildSize();
 }
 
 } // namespace duckdb

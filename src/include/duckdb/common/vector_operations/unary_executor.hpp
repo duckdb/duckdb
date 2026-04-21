@@ -61,7 +61,7 @@ struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteLoop(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
+	                               const SelectionVector *__restrict sel_vector, const ValidityMask &mask,
 	                               ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
 #ifdef DEBUG
 		// ldata may point to a compressed dictionary buffer which can be smaller than ldata + count
@@ -95,7 +95,8 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
+	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,
+	                               bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (mask.CanHaveNull()) {
@@ -165,7 +166,7 @@ private:
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
 			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR: {
@@ -186,7 +187,7 @@ private:
 						auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
 						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
 						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
-						    FlatVector::Validity(result), data, adds_nulls);
+						    FlatVector::ValidityMutable(result), data, adds_nulls);
 						// slice the result with the original offsets
 						auto &offsets = DictionaryVector::SelVector(input);
 						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
@@ -206,7 +207,7 @@ private:
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		}

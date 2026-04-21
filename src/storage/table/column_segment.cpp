@@ -5,9 +5,14 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -457,94 +462,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		}
 		return approved_tuple_count;
 	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		switch (vector.GetType().InternalType()) {
-		case PhysicalType::UINT8: {
-			auto predicate = UTinyIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint8_t>(vdata, predicate, sel, approved_tuple_count,
-			                               constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::UINT16: {
-			auto predicate = USmallIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint16_t>(vdata, predicate, sel, approved_tuple_count,
-			                                constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::UINT32: {
-			auto predicate = UIntegerValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint32_t>(vdata, predicate, sel, approved_tuple_count,
-			                                constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::UINT64: {
-			auto predicate = UBigIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint64_t>(vdata, predicate, sel, approved_tuple_count,
-			                                constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::INT8: {
-			auto predicate = TinyIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int8_t>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::INT16: {
-			auto predicate = SmallIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int16_t>(vdata, predicate, sel, approved_tuple_count,
-			                               constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::INT32: {
-			auto predicate = IntegerValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int32_t>(vdata, predicate, sel, approved_tuple_count,
-			                               constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::INT64: {
-			auto predicate = BigIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int64_t>(vdata, predicate, sel, approved_tuple_count,
-			                               constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::INT128: {
-			auto predicate = HugeIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<hugeint_t>(vdata, predicate, sel, approved_tuple_count,
-			                                 constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::UINT128: {
-			auto predicate = UhugeIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uhugeint_t>(vdata, predicate, sel, approved_tuple_count,
-			                                  constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::FLOAT: {
-			auto predicate = FloatValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<float>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::DOUBLE: {
-			auto predicate = DoubleValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<double>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::VARCHAR: {
-			auto predicate = string_t(StringValue::Get(constant_filter.constant));
-			FilterSelectionSwitch<string_t>(vdata, predicate, sel, approved_tuple_count,
-			                                constant_filter.comparison_type);
-			break;
-		}
-		case PhysicalType::BOOL: {
-			auto predicate = BooleanValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<bool>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
-			break;
-		}
-		default:
-			throw InvalidTypeException(vector.GetType(), "Invalid type for filter pushed down to table comparison");
-		}
-		return approved_tuple_count;
-	}
 	case TableFilterType::IS_NULL: {
 		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
 	}
@@ -610,9 +527,9 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 					continue;
 				}
 				auto current_result_data = result_sel.data() + result_offset;
-				SelectionVector current_result_sel(current_result_data);
+				SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
 				idx_t new_matches =
-				    state.executor.SelectExpression(chunk, current_result_sel, current_sel, current_count);
+				    state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
 				// increment all matches by the offset
 				for (idx_t i = 0; i < new_matches; i++) {
 					current_result_data[i] += offset;
@@ -626,7 +543,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 			DataChunk chunk;
 			chunk.data.emplace_back(Vector::Ref(vector));
 			chunk.SetCardinality(scan_count);
-			approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
+			approved_tuple_count = state.executor->SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		}
 		sel.Initialize(result_sel);
 		return approved_tuple_count;

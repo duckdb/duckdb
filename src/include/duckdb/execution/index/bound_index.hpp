@@ -121,12 +121,16 @@ public:
 	//! Verifies the constraint for a chunk of data.
 	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
-	void CommitDrop() override {
-	}
+	void CommitDrop() override;
 	//! Resets all index storage, clearing the index entirely. The lock obtained from InitializeLock must be held.
 	virtual void ResetStorage(IndexLock &index_lock) = 0;
 	//! Resets all index storage, clearing the index entirely
 	void ResetStorage();
+
+	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	virtual void CommitDrop(IndexLock &index_lock) = 0;
+
+
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held.
 	//! Returns the amount of rows successfully deleted from the index.
 	//! If either deleted_sel or non_deleted_sel are provided the exact rows that were (not) deleted are written there

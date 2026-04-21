@@ -739,7 +739,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// "new_groups_out" contains ALL groups for the chunk, "empty_vector" only the groups for this iteration,
 		// so it's just the same selection vector, but offset by the current "new_group_count".
-		empty_vector.Initialize(new_groups_out.data() + new_group_count);
+		empty_vector.Initialize(new_groups_out.data() + new_group_count, new_groups_out.Capacity() - new_group_count);
 		if (sel_vector->IsSet()) {
 			GroupedAggregateHashTableInnerLoop<true>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
 			                                         remaining_entries, empty_vector, state.group_compare_vector,

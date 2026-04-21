@@ -656,7 +656,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < read_now; i++) {
 			validity.SetInvalid(result_offset + i);
 		}

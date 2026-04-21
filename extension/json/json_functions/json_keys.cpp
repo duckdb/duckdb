@@ -13,7 +13,7 @@ static inline list_entry_t GetJSONKeys(yyjson_val *val, yyjson_alc *, Vector &re
 	}
 
 	// Write the strings to the child vector
-	auto keys = FlatVector::GetDataMutable<string_t>(ListVector::GetEntry(result));
+	auto keys = FlatVector::GetDataMutable<string_t>(ListVector::GetChildMutable(result));
 	size_t idx, max;
 	yyjson_val *key, *child_val;
 	yyjson_obj_foreach(val, idx, max, key, child_val) {
@@ -53,6 +53,12 @@ ScalarFunctionSet JSONFunctions::GetKeysFunction() {
 	ScalarFunctionSet set("json_keys");
 	GetJSONKeysFunctionsInternal(set, LogicalType::VARCHAR);
 	GetJSONKeysFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.arguments.size() == 1 && func.arguments[0].IsJSONType()) {
+			continue;
+		}
+		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
 	return set;
 }
 

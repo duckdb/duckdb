@@ -62,7 +62,7 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
+	                                 STATE_TYPE **__restrict states, const ValidityMask &mask, idx_t count) {
 		if (OP::IgnoreNull() && mask.CanHaveNull()) {
 			AggregateUnaryInput input(aggr_input_data, mask);
 			auto &base_idx = input.input_idx;
@@ -137,7 +137,7 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
-	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
+	                                       STATE_TYPE *__restrict state, idx_t count, const ValidityMask &mask) {
 		AggregateUnaryInput input(aggr_input_data, mask);
 		auto &base_idx = input.input_idx;
 		base_idx = 0;
@@ -287,7 +287,7 @@ public:
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
-			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
+			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::ValidityMutable(input),
 			                                          count);
 #endif
 		} else {
@@ -342,7 +342,7 @@ public:
 		case VectorType::FLAT_VECTOR: {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			UnaryFlatUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, (STATE_TYPE *)state, count,
-			                                                FlatVector::Validity(input));
+			                                                FlatVector::ValidityMutable(input));
 			break;
 		}
 #endif

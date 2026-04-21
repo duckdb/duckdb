@@ -95,7 +95,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	Vector &input_lists = args.data[0];
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (input_lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
@@ -120,7 +120,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(sort_result_vec);
-	auto &child_vector = ListVector::GetEntry(sort_result_vec);
+	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
 	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
@@ -129,13 +129,13 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
 	// lists_indices contains [0, 0, 0, 1, 1]
 	Vector lists_indices(LogicalType::USMALLINT);
-	auto lists_indices_data = FlatVector::GetDataMutable<uint16_t>(lists_indices);
+	auto lists_indices_data = FlatVector::Writer<uint16_t>(lists_indices, STANDARD_VECTOR_SIZE);
 
 	// create the payload_vector, this is just a vector containing incrementing integers
 	// this will later be used as the 'new' selection vector of the child_vector, after
 	// rearranging the payload according to the sorting order
 	Vector payload_vector(LogicalType::UINTEGER);
-	auto payload_vector_data = FlatVector::GetDataMutable<uint32_t>(payload_vector);
+	auto payload_vector_data = FlatVector::Writer<uint32_t>(payload_vector, STANDARD_VECTOR_SIZE);
 
 	// selection vector pointing to the data of the child vector,
 	// used for slicing the child_vector correctly
@@ -186,9 +186,9 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	if (info.is_grade_up) {
 		ListVector::Reserve(result, lists_size);
 		ListVector::SetListSize(result, lists_size);
-		auto result_data = FlatVector::GetDataMutable<list_entry_t>(result);
+		auto result_list_data = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			result_data[i] = list_entries.GetValueUnsafe(i);
+			result_list_data[i] = list_entries.GetValueUnsafe(i);
 		}
 	}
 
@@ -231,7 +231,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		if (info.is_grade_up) {
-			auto &result_entry = ListVector::GetEntry(result);
+			auto &result_entry = ListVector::GetChildMutable(result);
 			auto result_data = FlatVector::GetData<list_entry_t>(result);
 			for (idx_t i = 0; i < count; i++) {
 				if (!result_validity.RowIsValid(i)) {

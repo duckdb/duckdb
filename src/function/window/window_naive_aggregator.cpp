@@ -175,7 +175,7 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 	D_ASSERT(cursor->RowIsVisible(rid));
 	auto s = cursor->RowOffset(rid);
 	auto &scanned = cursor->chunk;
-	SelectionVector sel(&s);
+	SelectionVector sel(&s, 1);
 	leaves.Slice(scanned, sel, 1);
 	leaves.Hash(hashes);
 
@@ -193,7 +193,7 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 
 	auto &scanned = cursor->chunk;
 	auto l = cursor->RowOffset(lhs);
-	SelectionVector lsel(&l);
+	SelectionVector lsel(&l, 1);
 
 	auto rreader = cursor.get();
 	if (!cursor->RowIsVisible(rhs)) {
@@ -203,10 +203,10 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 	}
 	auto rscanned = &rreader->chunk;
 	auto r = rreader->RowOffset(rhs);
-	SelectionVector rsel(&r);
+	SelectionVector rsel(&r, 1);
 
 	sel_t f = 0;
-	SelectionVector fsel(&f);
+	SelectionVector fsel(&f, 1);
 
 	for (column_t c = 0; c < scanned.ColumnCount(); ++c) {
 		Vector left(scanned.data[c], lsel, 1);

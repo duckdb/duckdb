@@ -3,7 +3,7 @@
 
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
@@ -224,6 +224,10 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 }
 
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
+	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		return Cost(*expr_filter.expr);
+	}
 	switch (filter.filter_type) {
 	case TableFilterType::DYNAMIC_FILTER:
 	case TableFilterType::OPTIONAL_FILTER:
@@ -243,10 +247,6 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 			cost += Cost(*child_filter);
 		}
 		return cost;
-	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		return ExpressionCost(constant_filter.constant.type().InternalType(), 1);
 	}
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:

@@ -80,7 +80,7 @@ private:
 	vector<unique_ptr<Expression>> &arguments;
 };
 
-//! Binds the scalar function and creates the function data
+//! Binds the window function and creates the function data
 typedef unique_ptr<FunctionData> (*window_bind_function_t)(BindWindowFunctionInput &input);
 
 //! Validates the additional ordering usage.
@@ -113,6 +113,10 @@ typedef void (*window_sink_function_t)(ExecutionContext &context, DataChunk &sin
 typedef void (*window_finalize_function_t)(ExecutionContext &context, optional_ptr<WindowCollection> collection,
                                            OperatorSinkInput &sink);
 
+//! Computes the function for a single chunk
+typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                           Vector &result, idx_t row_idx, OperatorSinkInput &sink);
+
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                    const WindowFunction &function);
@@ -124,20 +128,21 @@ public:
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
 	               window_bounds_function_t bounds = nullptr, window_sharing_function_t sharing = nullptr,
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
-	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr)
+	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr,
+	               window_evaluate_function_t evaluate = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID), FunctionNullHandling::DEFAULT_NULL_HANDLING),
 	      window_enum(window_enum), bind(bind), bounds(bounds), sharing(sharing), global(global), local(local),
-	      sink(sink), finalize(finalize) {
+	      sink(sink), finalize(finalize), evaluate(evaluate) {
 	}
 
 	WindowFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, ExpressionType window_enum,
 	               window_bind_function_t bind = nullptr, window_bounds_function_t bounds = nullptr,
 	               window_sharing_function_t sharing = nullptr, window_global_function_t global = nullptr,
 	               window_local_function_t local = nullptr, window_sink_function_t sink = nullptr,
-	               window_finalize_function_t finalize = nullptr)
+	               window_finalize_function_t finalize = nullptr, window_evaluate_function_t evaluate = nullptr)
 	    : WindowFunction(string(), arguments, return_type, window_enum, bind, bounds, sharing, global, local, sink,
-	                     finalize) {
+	                     finalize, evaluate) {
 	}
 
 	// clang-format off
@@ -179,6 +184,10 @@ public:
 	window_finalize_function_t GetFinalizeCallback() const { return finalize; }
 	void SetFinalizeCallback(window_finalize_function_t callback) { finalize = callback; }
 
+	bool HasEvaluateCallback() const { return evaluate != nullptr; }
+	window_evaluate_function_t GetEvaluateCallback() const { return evaluate; }
+	void SetEvaluateCallback(window_evaluate_function_t callback) { evaluate = callback; }
+
 	bool HasSerializationCallbacks() const { return false; }
 	void SetSerializeCallback(window_serialize_t callback) { serialize = callback; }
 	void SetDeserializeCallback(window_deserialize_t callback) { deserialize = callback; }
@@ -216,6 +225,8 @@ public:
 	window_sink_function_t sink = nullptr;
 	//! The local state finalize operation
 	window_finalize_function_t finalize = nullptr;
+	//! The thread-local evaluation function
+	window_evaluate_function_t evaluate = nullptr;
 
 	//! Serialization specialization. Not yet implemented
 	window_serialize_t serialize = nullptr;

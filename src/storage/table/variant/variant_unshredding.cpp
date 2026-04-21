@@ -122,7 +122,7 @@ static vector<VariantValue> UnshredTypedObject(UnifiedVariantVectorData &variant
 
 static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant, Vector &typed_value, idx_t count,
                                               optional_ptr<SelectionVector> row_sel) {
-	auto &child_vector = ListVector::GetEntry(typed_value);
+	auto &child_vector = ListVector::GetChildMutable(typed_value);
 
 	D_ASSERT(typed_value.GetType().id() == LogicalTypeId::LIST);
 
@@ -163,11 +163,9 @@ static vector<VariantValue> UnshredTypedArray(UnifiedVariantVectorData &variant,
 
 		auto &list_val = res[i];
 		list_val = VariantValue(VariantValueType::ARRAY);
-		list_val.array_items.reserve(list_entry.length);
-		list_val.array_items.insert(
-		    list_val.array_items.end(),
-		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset)),
-		    std::make_move_iterator(child_values.begin() + static_cast<int64_t>(current_offset + list_entry.length)));
+		list_val.ReserveItems(list_entry.length);
+		list_val.AddItems(child_values.begin() + static_cast<int64_t>(current_offset),
+		                  child_values.begin() + static_cast<int64_t>(current_offset + list_entry.length));
 		current_offset += list_entry.length;
 	}
 	return res;
@@ -194,8 +192,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 		// "typed_value", "untyped_value"
 		auto &child_vectors = StructVector::GetEntries(shredded);
 		D_ASSERT(shredded.GetType().id() == LogicalTypeId::STRUCT);
-		auto &child_entries = StructVector::GetEntries(shredded);
-		D_ASSERT(child_entries.size() <= 2);
+		D_ASSERT(child_vectors.size() <= 2);
 		typed_value_ref = child_vectors[VariantColumnData::TYPED_VALUE_INDEX];
 		if (child_vectors.size() > 1) {
 			D_ASSERT(child_vectors.size() == 2);
@@ -234,7 +231,7 @@ static vector<VariantValue> Unshred(UnifiedVariantVectorData &variant, Vector &s
 			//! Partial shredding, already has a shredded value that this has to be combined into
 			D_ASSERT(res[i].value_type == VariantValueType::OBJECT);
 			D_ASSERT(unshredded.value_type == VariantValueType::OBJECT);
-			auto &object_children = unshredded.object_children;
+			auto object_children = unshredded.TakeObjectChildren();
 			for (auto &entry : object_children) {
 				res[i].AddChild(entry.first, std::move(entry.second));
 			}

@@ -99,6 +99,8 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            julia:
+              - tools/juliapkg/**
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -208,7 +210,8 @@ jobs:
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
             --repository "${{ github.repository }}" \
-            --skip-tests "$skip_tests"
+            --skip-tests "$skip_tests" \
+            --changed-keys "${{ steps.changed.outputs.changed_keys }}"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
@@ -347,6 +350,7 @@ jobs:
     - name: Install
       run: |
         python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
@@ -370,6 +374,36 @@ jobs:
       if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
+ check-clangd-tidy:
+   name: Tidy Check (clangd)
+   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
+   needs: prepare
+   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+   steps:
+     - name: "Checkout"
+       uses: duckdb/duckdb-ci/.github/actions/checkout@main
+       with:
+         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+         fetch_depth: 0
+
+     - name: Install
+       run: |
+         python3 scripts/ci/retry.py -- make toolsci
+         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
+         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+         python3 scripts/ci/retry.py -- make install-clangd-tidy
+
+     - name: Tidy Check
+       run: |
+         mkdir -p ~/.config/clangd
+         cat > ~/.config/clangd/config.yaml <<'EOF'
+         Diagnostics:
+           UnusedIncludes: None
+         EOF
+         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml
@@ -377,6 +411,7 @@ jobs:
     needs:
       - prepare
       - linux-debug
+      - linux-release
     with:
       git_ref: ${{ github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
@@ -434,6 +469,10 @@ jobs:
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
@@ -441,10 +480,10 @@ jobs:
         BUILD_JEMALLOC: 1
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
         DISABLE_SANITIZER: 1
+        SMOKE_UNITTEST: build/release/test/unittest
       with:
         build: python3 scripts/ci/retry.py -- make release
-        # Run all (slow) tests for the release build.
-        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make allunit' }}
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
         bundle: make release-artifact
         upload-name: linux-release-build
         vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -460,6 +499,38 @@ jobs:
 
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
+
+ linux-release-tests:
+    name: Linux Release Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+    steps:
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
+    - name: Install tools
+      run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Download linux release artifact
+      uses: actions/download-artifact@v5
+      with:
+        name: linux-release-build
+        path: build
+
+    - name: Extract linux release artifact
+      run: |
+        rm -rf build/release
+        tar -xzf build/release-artifact.tar.gz -C build
+
+    - name: Run all release unit tests
+      run: make allunit
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
@@ -1012,6 +1083,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
 
+    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
+
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
       shell: bash
@@ -1136,9 +1213,11 @@ jobs:
       - linux-debug-tests
       - regression
       - tidy-check
+      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release
+      - linux-release-tests
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia

@@ -281,9 +281,8 @@ public:
 			}
 		}
 		if (statements.empty()) {
-			auto not_implemented_exception =
-			    NotImplementedException("QuackParser has not yet implemented the statements to transform this query");
-			return ParserOverrideResult(not_implemented_exception);
+			// Return DISPLAY_ORIGINAL_ERROR so postgres parser + parse_function extensions can handle the query.
+			return ParserOverrideResult();
 		}
 		return ParserOverrideResult(std::move(statements));
 	}

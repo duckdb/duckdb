@@ -127,7 +127,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	ListVector::Reserve(result, child_scan_count);
 
 	if (child_scan_count > 0) {
-		auto &child_entry = ListVector::GetEntry(result);
+		auto &child_entry = ListVector::GetChildMutable(result);
 		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
 		    child_entry.GetType().InternalType() != PhysicalType::ARRAY &&
 		    state.child_states[1].offset_in_column + child_scan_count > child_column->GetMaxEntry()) {
@@ -206,7 +206,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 		append_offsets[i] = start_offset + child_count + input_list.length;
 		child_count += input_list.length;
 	}
-	auto &list_child = ListVector::GetEntry(vector);
+	auto &list_child = ListVector::GetChild(vector);
 	Vector child_vector(Vector::Ref(list_child));
 	if (!child_contiguous) {
 		// if the child of the list vector is a non-contiguous vector (i.e. list elements are repeating or have gaps)
@@ -289,7 +289,7 @@ void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &sta
 	auto end_offset = FetchListOffset(UnsafeNumericCast<idx_t>(row_id));
 	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 
-	auto &validity_mask = FlatVector::Validity(result);
+	auto &validity_mask = FlatVector::ValidityMutable(result);
 	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &list_entry = list_data[result_idx];
 	// set the list entry offset to the size of the current list

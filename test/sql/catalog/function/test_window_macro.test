@@ -121,3 +121,28 @@ SELECT my_list(i) OVER (PARTITION BY i % 2) FROM range(6) t(i) ORDER BY i;
 [5, 3, 1]
 [4, 2, 0]
 [5, 3, 1]
+
+statement error
+CREATE MACRO my_lag(x) AS LAG(x);
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_lead(x) AS LEAD(x);
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_rn() AS ROW_NUMBER();
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_rank() AS RANK();
+----
+Binder Error: Window functions are not supported here
+
+statement error
+CREATE MACRO my_dense_rank() AS DENSE_RANK();
+----
+Binder Error: Window functions are not supported here

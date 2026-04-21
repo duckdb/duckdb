@@ -84,9 +84,9 @@ unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(Cas
 
 	for (auto &entry : cast_data.child_cast_info) {
 		unique_ptr<FunctionLocalState> child_state;
-		if (entry.init_local_state) {
-			CastLocalStateParameters child_params(parameters, entry.cast_data);
-			child_state = entry.init_local_state(child_params);
+		if (entry.HasInitLocalState()) {
+			CastLocalStateParameters child_params(parameters, entry.GetCastData());
+			child_state = entry.InitLocalState(child_params);
 		}
 		result->local_states.push_back(std::move(child_state));
 	}
@@ -109,8 +109,8 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 		auto &target_vector = target_children[target_idx];
 
 		auto &child_cast_info = cast_data.child_cast_info[i];
-		CastParameters child_parameters(parameters, child_cast_info.cast_data, l_state.local_states[i]);
-		auto success = child_cast_info.function(source_vector, target_vector, count, child_parameters);
+		CastParameters child_parameters(parameters, child_cast_info.GetCastData(), l_state.local_states[i]);
+		auto success = child_cast_info.Cast(source_vector, target_vector, count, child_parameters);
 		if (!success) {
 			all_converted = false;
 		}
@@ -132,7 +132,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	}
 
 	source.Flatten(count);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity = FlatVector::Validity(source);
 	result.Verify(count);
 	return all_converted;
@@ -151,7 +151,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	bool is_unnamed = StructType::IsUnnamed(source.GetType());
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
-	auto &validity = FlatVector::Validity(varchar_struct);
+	auto &validity = FlatVector::ValidityMutable(varchar_struct);
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
@@ -176,7 +176,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			                                      : VectorCastHelpers::CalculateStringLength;
 
 			children[c].Flatten(count);
-			auto &child_validity = FlatVector::Validity(children[c]);
+			auto &child_validity = FlatVector::ValidityMutable(children[c]);
 			auto data = FlatVector::GetData<string_t>(children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
@@ -206,7 +206,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto write_string_func =
 			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
 
-			auto &child_validity = FlatVector::Validity(children[c]);
+			auto &child_validity = FlatVector::ValidityMutable(children[c]);
 			auto data = FlatVector::GetData<string_t>(children[c]);
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
@@ -256,16 +256,16 @@ StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters
 	auto &cast_data = parameters.cast_data->Cast<StructToMapBoundCastData>();
 	auto result = make_uniq<StructToMapCastLocalState>();
 
-	if (cast_data.key_cast.init_local_state) {
-		CastLocalStateParameters child_params(parameters, cast_data.key_cast.cast_data);
-		result->key_state = cast_data.key_cast.init_local_state(child_params);
+	if (cast_data.key_cast.HasInitLocalState()) {
+		CastLocalStateParameters child_params(parameters, cast_data.key_cast.GetCastData());
+		result->key_state = cast_data.key_cast.InitLocalState(child_params);
 	}
 
 	for (auto &entry : cast_data.value_casts) {
 		unique_ptr<FunctionLocalState> child_state;
-		if (entry.init_local_state) {
-			CastLocalStateParameters child_params(parameters, entry.cast_data);
-			child_state = entry.init_local_state(child_params);
+		if (entry.HasInitLocalState()) {
+			CastLocalStateParameters child_params(parameters, entry.GetCastData());
+			child_state = entry.InitLocalState(child_params);
 		}
 		result->value_states.push_back(std::move(child_state));
 	}
@@ -310,8 +310,8 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Cast keys to result
 	auto &map_keys = MapVector::GetKeys(result);
-	CastParameters key_parameters(parameters, cast_data.key_cast.cast_data, local_state.key_state);
-	auto keys_converted = cast_data.key_cast.function(varchar_keys, map_keys, total_count, key_parameters);
+	CastParameters key_parameters(parameters, cast_data.key_cast.GetCastData(), local_state.key_state);
+	auto keys_converted = cast_data.key_cast.Cast(varchar_keys, map_keys, total_count, key_parameters);
 
 	// Fill the values vector
 	bool values_converted = true;
@@ -319,9 +319,9 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
 		auto &source_field = source_children[field_idx];
 		Vector temp_converted(MapType::ValueType(result.GetType()), count);
-		CastParameters child_params(parameters, cast_data.value_casts[field_idx].cast_data,
+		CastParameters child_params(parameters, cast_data.value_casts[field_idx].GetCastData(),
 		                            local_state.value_states[field_idx]);
-		auto success = cast_data.value_casts[field_idx].function(source_field, temp_converted, count, child_params);
+		auto success = cast_data.value_casts[field_idx].Cast(source_field, temp_converted, count, child_params);
 		if (!success) {
 			values_converted = false;
 		}
