@@ -17,10 +17,6 @@ CleanupState::CleanupState(transaction_t lowest_active_transaction)
     : lowest_active_transaction(lowest_active_transaction), current_table(nullptr), count(0) {
 }
 
-CleanupState::~CleanupState() {
-	Flush();
-}
-
 void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {

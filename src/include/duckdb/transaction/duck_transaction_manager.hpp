@@ -24,7 +24,7 @@ struct DuckCleanupInfo {
 	transaction_t lowest_start_time;
 	vector<unique_ptr<DuckTransaction>> transactions;
 
-	void Cleanup() noexcept;
+	void Cleanup();
 	bool ScheduleCleanup() noexcept;
 };
 
