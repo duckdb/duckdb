@@ -265,7 +265,7 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(0);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			global_child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -331,7 +331,7 @@ MapColumnMapComponent(ClientContext &context,
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(component_idx);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -463,7 +463,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		if (!selected_children.empty()) {
 			auto entry = selected_children.find(i);
 			if (entry != selected_children.end()) {
-				// the column is relevent - set the child index
+				// the column is relevant - set the child index
 				global_child_index = entry->second;
 			} else {
 				// not relevant - ignore the column
