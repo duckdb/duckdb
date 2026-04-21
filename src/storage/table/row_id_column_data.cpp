@@ -100,7 +100,7 @@ void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	auto result_data = FlatVector::Writer<row_t>(result, count);
 	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data.PushValue(UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx)));
+		result_data.WriteValue(UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx)));
 	}
 	state.offset_in_column += GetVectorCount(vector_index);
 }

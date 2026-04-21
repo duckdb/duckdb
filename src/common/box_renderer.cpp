@@ -624,13 +624,13 @@ void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &rend
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
 			// set render length to render length of NULL
-			render_length_data.PushValue(null_render_length);
+			render_length_data.WriteValue(null_render_length);
 			continue;
 		}
 		// non-null - convert value
 		auto input_str = input_values[r].GetValue().GetString();
 		auto result_str = ConvertRenderValue(input_str, original_type);
-		render_length_data.PushValue(Utf8Proc::RenderWidth(result_str));
+		render_length_data.WriteValue(Utf8Proc::RenderWidth(result_str));
 		result_data[r] = result_str;
 	}
 }

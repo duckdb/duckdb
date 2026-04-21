@@ -247,10 +247,10 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
-		result_data.PushValue(values_data[values.sel->get_index(i)]);
+		result_data.WriteValue(values_data[values.sel->get_index(i)]);
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;

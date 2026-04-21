@@ -165,17 +165,17 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(i + start_offset);
 			if (string_number == 0) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
-			result_data.PushWithoutCopying(dictionary_values[string_number]);
+			result_data.WriteStringRef(dictionary_values[string_number]);
 		}
 	} else {
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(start_offset + i);
 			if (string_number == 0) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
 			if (decompress_position > string_number) {
@@ -184,7 +184,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			for (; decompress_position < string_number; decompress_position++) {
 				decompress_offset += string_lengths[decompress_position];
 			}
-			result_data.PushWithoutCopying(FetchStringFromDict(result, decompress_offset, string_number));
+			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 		}
 	}
 	result.Verify(result_offset + scan_count);
@@ -204,7 +204,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 		for (; decompress_position < string_number; decompress_position++) {
 			decompress_offset += string_lengths[decompress_position];
 		}
-		result_data.PushValue(FetchStringFromDict(result, decompress_offset, string_number));
+		result_data.WriteValue(FetchStringFromDict(result, decompress_offset, string_number));
 	}
 }
 

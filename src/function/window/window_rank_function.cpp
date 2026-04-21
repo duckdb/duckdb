@@ -214,7 +214,7 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.PushValue(
+				rdata.WriteValue(
 				    UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
@@ -222,7 +222,7 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				//	Clamp peer to the frame
 				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				rdata.PushValue(UnsafeNumericCast<int64_t>((frame_peer_begin - frame_begin[i]) + 1));
+				rdata.WriteValue(UnsafeNumericCast<int64_t>((frame_peer_begin - frame_begin[i]) + 1));
 			}
 		}
 		return;
@@ -236,7 +236,7 @@ void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata.PushValue(UnsafeNumericCast<int64_t>(lpeer.rank));
+		rdata.WriteValue(UnsafeNumericCast<int64_t>(lpeer.rank));
 	}
 }
 
@@ -344,7 +344,7 @@ void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata.PushValue(NumericCast<int64_t>(lpeer.dense_rank));
+		rdata.WriteValue(NumericCast<int64_t>(lpeer.dense_rank));
 	}
 
 	//	Remember where we left off
@@ -424,7 +424,7 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto rank = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
-				rdata.PushValue(PercentRank(frame_begin[i], frame_end[i], rank));
+				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], rank));
 			}
 		} else {
 			//	Clamp peer to the frame
@@ -432,7 +432,7 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
 				lpeer.rank = (frame_peer_begin - frame_begin[i]) + 1;
-				rdata.PushValue(PercentRank(frame_begin[i], frame_end[i], lpeer.rank));
+				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], lpeer.rank));
 			}
 		}
 		return;
@@ -447,7 +447,7 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata.PushValue(PercentRank(partition_begin[i], partition_end[i], lpeer.rank));
+		rdata.WriteValue(PercentRank(partition_begin[i], partition_end[i], lpeer.rank));
 	}
 }
 
@@ -513,14 +513,14 @@ void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto peer_end = gpeer.token_tree->PeerEnd(frame_begin[i], frame_end[i], row_idx);
-				rdata.PushValue(CumeDist(frame_begin[i], frame_end[i], peer_end));
+				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], peer_end));
 			}
 		} else {
 			auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				//	Clamp the peer end to the frame
 				const auto frame_peer_end = MinValue(peer_end[i], frame_end[i]);
-				rdata.PushValue(CumeDist(frame_begin[i], frame_end[i], frame_peer_end));
+				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], frame_peer_end));
 			}
 		}
 		return;
@@ -530,7 +530,7 @@ void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata.PushValue(CumeDist(partition_begin[i], partition_end[i], peer_end[i]));
+		rdata.WriteValue(CumeDist(partition_begin[i], partition_end[i], peer_end[i]));
 	}
 }
 

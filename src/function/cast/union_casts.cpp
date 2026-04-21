@@ -311,7 +311,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	for (idx_t i = 0; i < count; i++) {
 		auto tag_entry = tag_entries[i];
 		if (!tag_entry.IsValid()) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -320,9 +320,9 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		auto member_entries = member.Values<string_t>(count);
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
-			result_data.PushValue(member_entry.GetValue());
+			result_data.WriteValue(member_entry.GetValue());
 		} else {
-			result_data.PushValue("NULL");
+			result_data.WriteValue("NULL");
 		}
 	}
 

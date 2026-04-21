@@ -113,7 +113,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -128,7 +128,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			array_varchar_length += child_validity.RowIsValid(elem_idx) ? elem.GetSize() : NULL_LENGTH;
 		}
 
-		auto &out_str = result_data.PushEmptyString(array_varchar_length);
+		auto &out_str = result_data.WriteEmptyString(array_varchar_length);
 		auto dataptr = out_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
@@ -185,11 +185,11 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (FlatVector::IsNull(source, i)) {
-			list_data.PushInvalid();
+			list_data.WriteNull();
 			continue;
 		}
 
-		list_data.PushValue(list_entry_t(i * array_size, array_size));
+		list_data.WriteValue(list_entry_t(i * array_size, array_size));
 	}
 	return all_ok;
 }

@@ -639,19 +639,19 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 
 	for (idx_t i = 0; i < count; i++) {
 		//! keys
-		keys_data.PushValue(list_entry_t(keys_offset, keys_sizes[i]));
+		keys_data.WriteValue(list_entry_t(keys_offset, keys_sizes[i]));
 		keys_offset += keys_sizes[i];
 
 		//! children
-		children_data.PushValue(list_entry_t(children_offset, children_sizes[i]));
+		children_data.WriteValue(list_entry_t(children_offset, children_sizes[i]));
 		children_offset += children_sizes[i];
 
 		//! values
-		values_data.PushValue(list_entry_t(values_offset, values_sizes[i]));
+		values_data.WriteValue(list_entry_t(values_offset, values_sizes[i]));
 		values_offset += values_sizes[i];
 
 		//! value
-		blob_data.PushEmptyString(blob_sizes[i]);
+		blob_data.WriteEmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists

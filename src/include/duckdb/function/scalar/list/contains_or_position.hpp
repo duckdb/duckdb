@@ -35,7 +35,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 		// The entire list is NULL, the result is also NULL.
 		if (!list_format.validity.RowIsValid(list_entry_idx)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -48,10 +48,10 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		if (finished || list_entries[list_entry_idx].length == 0) {
 			if (finished || return_pos) {
 				// Return NULL as the position.
-				result_data.PushInvalid();
+				result_data.WriteNull();
 			} else {
 				// Set 'contains' to false.
-				result_data.PushValue(RETURN_TYPE(false));
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
@@ -81,12 +81,12 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 		if (!found) {
 			if (return_pos) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 			} else {
-				result_data.PushValue(RETURN_TYPE(false));
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 		} else {
-			result_data.PushValue(found_value);
+			result_data.WriteValue(found_value);
 		}
 	}
 

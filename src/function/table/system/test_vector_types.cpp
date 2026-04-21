@@ -188,9 +188,9 @@ struct TestVectorSequence {
 		case PhysicalType::LIST: {
 			D_ASSERT(type.id() != LogicalTypeId::MAP);
 			auto data = FlatVector::Writer<list_entry_t>(result, 3);
-			data.PushValue(list_entry_t(0, 2));
-			data.PushValue(list_entry_t(2, 0));
-			data.PushValue(list_entry_t(2, 1));
+			data.WriteValue(list_entry_t(0, 2));
+			data.WriteValue(list_entry_t(2, 0));
+			data.WriteValue(list_entry_t(2, 1));
 
 			GenerateVector(info, ListType::GetChildType(type), ListVector::GetChildMutable(result));
 			ListVector::SetListSize(result, 3);

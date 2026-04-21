@@ -210,11 +210,11 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	vector<uint64_t> list_lengths(args_size, 0);
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
-			result_data.PushInvalid(list_entry_t(total_size, 0));
+			result_data.WriteNull(list_entry_t(total_size, 0));
 		} else {
 			const auto length = info.ListLength(i);
 			list_lengths[i] = length;
-			result_data.PushValue(list_entry_t(total_size, length));
+			result_data.WriteValue(list_entry_t(total_size, length));
 			total_size += length;
 		}
 	}
@@ -231,7 +231,7 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			if (range_idx > 0) {
 				OP::Increment(range_value, increment);
 			}
-			range_data.PushValue(range_value);
+			range_data.WriteValue(range_value);
 		}
 	}
 

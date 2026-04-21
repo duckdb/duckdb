@@ -265,14 +265,14 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 		auto &child_data_entry = child_data[i];
 
 		if (!validity.RowIsValid(i)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
 		list_entry_t entry;
 		entry.offset = total_offset;
 		entry.length = child_data_entry.child_count;
-		result_data.PushValue(entry);
+		result_data.WriteValue(entry);
 		total_offset += entry.length;
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
@@ -462,7 +462,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 			return false;
 		}
 		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data.PushValue(res);
+		result_data.WriteValue(res);
 		free(json_holder.stringified_json);
 		json_holder.stringified_json = nullptr;
 	}

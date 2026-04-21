@@ -30,11 +30,11 @@ void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 		for (idx_t col = 0; col < column_count; col++) {
 			auto input_idx = unified_format[col].sel->get_index(row);
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
 			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
-			result_data.PushValue(input_data[input_idx]);
+			result_data.WriteValue(input_data[input_idx]);
 		}
 	}
 }
@@ -48,7 +48,7 @@ void PopulateChildFallback(DataChunk &args, Vector &result) {
 			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
 			ListVector::PushBack(result, val);
 		}
-		result_data.PushValue(list_entry_t(entry_offset, args.ColumnCount()));
+		result_data.WriteValue(list_entry_t(entry_offset, args.ColumnCount()));
 	}
 }
 
@@ -154,13 +154,13 @@ void ListFunction(DataChunk &args, Vector &result) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
 			const auto input = col_data[col][input_idx];
 			const auto length = input.length;
 			const auto offset = col_offsets[col] + input.offset;
-			result_data.PushValue(list_entry_t(offset, length));
+			result_data.WriteValue(list_entry_t(offset, length));
 		}
 	}
 	ListVector::SetListSize(result, offset_sum);
@@ -234,7 +234,7 @@ void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	const idx_t column_count = args.ColumnCount();
 	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
-		result_data.PushValue(list_entry_t(row * column_count, column_count));
+		result_data.WriteValue(list_entry_t(row * column_count, column_count));
 	}
 	ListVector::SetListSize(result, column_count * args.size());
 }

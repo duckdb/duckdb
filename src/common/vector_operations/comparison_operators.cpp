@@ -195,9 +195,9 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto entry = cmp_data[i];
 		if (!entry.IsValid()) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 		} else {
-			result_data.PushValue(predicate(entry.GetValue()));
+			result_data.WriteValue(predicate(entry.GetValue()));
 		}
 	}
 }

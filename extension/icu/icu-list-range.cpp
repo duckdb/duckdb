@@ -149,11 +149,11 @@ struct ICUListRange : public ICUDateFunc {
 		vector<int64_t> list_lengths(args_size, 0);
 		for (idx_t i = 0; i < args_size; i++) {
 			if (!info.RowIsValid(i)) {
-				result_data.PushInvalid(list_entry_t(NumericCast<uint64_t>(total_size), 0));
+				result_data.WriteNull(list_entry_t(NumericCast<uint64_t>(total_size), 0));
 			} else {
 				const auto length = info.ListLength(i, calendar);
 				list_lengths[i] = length;
-				result_data.PushValue(list_entry_t(NumericCast<uint64_t>(total_size), NumericCast<uint64_t>(length)));
+				result_data.WriteValue(list_entry_t(NumericCast<uint64_t>(total_size), NumericCast<uint64_t>(length)));
 				total_size += length;
 			}
 		}
@@ -170,7 +170,7 @@ struct ICUListRange : public ICUDateFunc {
 				if (range_idx > 0) {
 					info.Increment(range_value, increment, calendar);
 				}
-				range_data.PushValue(range_value);
+				range_data.WriteValue(range_value);
 			}
 		}
 

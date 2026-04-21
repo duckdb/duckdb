@@ -164,7 +164,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		auto &current_args = format_args[idx];
 		if (!entry.IsValid() || current_args.size() != args.ColumnCount() - 1) {
 			// either format string or one of the input arguments is NULL
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -172,7 +172,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 		// finally actually perform the format
 		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), current_args);
-		result_data.PushValue(dynamic_result);
+		result_data.WriteValue(dynamic_result);
 	}
 }
 

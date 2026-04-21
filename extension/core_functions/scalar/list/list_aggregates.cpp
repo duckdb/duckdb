@@ -160,7 +160,7 @@ struct DistinctFunctor {
 			auto &state = *states[sdata.sel->get_index(i)];
 			const idx_t entry_offset = current_offset;
 			if (!state.hist) {
-				list_entries.PushValue(list_entry_t(entry_offset, 0));
+				list_entries.WriteValue(list_entry_t(entry_offset, 0));
 				continue;
 			}
 
@@ -168,7 +168,7 @@ struct DistinctFunctor {
 				OP::template HistogramFinalize<T>(entry.first, child_elements, current_offset);
 				current_offset++;
 			}
-			list_entries.PushValue(list_entry_t(entry_offset, current_offset - entry_offset));
+			list_entries.WriteValue(list_entry_t(entry_offset, current_offset - entry_offset));
 		}
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
@@ -188,10 +188,10 @@ struct UniqueFunctor {
 			auto state = states[sdata.sel->get_index(i)];
 
 			if (!state->hist) {
-				result_data.PushValue(0);
+				result_data.WriteValue(0);
 				continue;
 			}
-			result_data.PushValue(state->hist->size());
+			result_data.WriteValue(state->hist->size());
 		}
 		result.Verify(count);
 	}

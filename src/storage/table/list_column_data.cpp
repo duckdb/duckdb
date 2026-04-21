@@ -118,7 +118,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto offset = data[i].GetValueUnsafe();
 		auto length = offset - current_offset - base_offset;
-		result_data.PushValue(list_entry_t(current_offset, length));
+		result_data.WriteValue(list_entry_t(current_offset, length));
 		current_offset += length;
 	}
 

@@ -24,19 +24,19 @@ struct VectorWriter {
 		D_ASSERT(Exception::UncaughtException() || current_idx == count);
 	}
 
-	void PushValue(const T &value) {
+	void WriteValue(const T &value) {
 		D_ASSERT(current_idx < count);
 		data[current_idx] = value;
 		current_idx++;
 	}
 
-	void PushInvalid() {
+	void WriteNull() {
 		D_ASSERT(current_idx < count);
 		validity.SetInvalid(current_idx);
 		current_idx++;
 	}
 
-	void PushInvalid(const T &value) {
+	void WriteNull(const T &value) {
 		D_ASSERT(current_idx < count);
 		data[current_idx] = value;
 		validity.SetInvalid(current_idx);
@@ -57,26 +57,26 @@ struct VectorWriter<string_t> {
 		D_ASSERT(Exception::UncaughtException() || current_idx == count);
 	}
 
-	inline const string_t &PushValue(string_t val) {
+	inline const string_t &WriteValue(string_t val) {
 		D_ASSERT(current_idx < count);
 		AssignString(current_idx, val);
 		current_idx++;
 		return data[current_idx - 1];
 	}
 
-	inline void PushWithoutCopying(string_t val) {
+	inline void WriteStringRef(string_t val) {
 		D_ASSERT(current_idx < count);
 		data[current_idx] = val;
 		current_idx++;
 	}
 
-	inline void PushInvalid() {
+	inline void WriteNull() {
 		D_ASSERT(current_idx < count);
 		validity.SetInvalid(current_idx);
 		current_idx++;
 	}
 
-	inline string_t &PushEmptyString(idx_t length) {
+	inline string_t &WriteEmptyString(idx_t length) {
 		if (length <= string_t::INLINE_LENGTH) {
 			data[current_idx] = string_t(UnsafeNumericCast<uint32_t>(length));
 		} else {

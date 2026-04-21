@@ -482,7 +482,7 @@ struct MinMaxNOperation {
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
 
@@ -490,7 +490,7 @@ struct MinMaxNOperation {
 			list_entry_t list_entry;
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
-			result_data.PushValue(list_entry);
+			result_data.WriteValue(list_entry);
 
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto heap = state.heap.SortAndGetHeap();

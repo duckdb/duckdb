@@ -93,7 +93,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 		}
 
-		result_data.PushValue(list_entry_t(ListVector::GetListSize(result), keys_list.size()));
+		result_data.WriteValue(list_entry_t(ListVector::GetListSize(result), keys_list.size()));
 		if (all_null) {
 			D_ASSERT(keys_list.empty() && index_to_map.empty());
 			FlatVector::SetNull(result, i, true);

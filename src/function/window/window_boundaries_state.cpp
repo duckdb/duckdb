@@ -496,7 +496,7 @@ void WindowBoundariesState::PartitionBegin(idx_t row_idx, const idx_t count, boo
 	//	OVER()
 	if (partition_count + order_count == 0) {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			partition_begin_data.PushValue(0);
+			partition_begin_data.WriteValue(0);
 		}
 		return;
 	}
@@ -516,7 +516,7 @@ void WindowBoundariesState::PartitionBegin(idx_t row_idx, const idx_t count, boo
 			}
 		}
 
-		partition_begin_data.PushValue(partition_start);
+		partition_begin_data.WriteValue(partition_start);
 	}
 }
 
@@ -526,7 +526,7 @@ void WindowBoundariesState::PartitionEnd(idx_t row_idx, const idx_t count, bool 
 	//	OVER()
 	if (partition_count + order_count == 0) {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			partition_end_data.PushValue(input_size);
+			partition_end_data.WriteValue(input_size);
 		}
 		return;
 	}
@@ -548,7 +548,7 @@ void WindowBoundariesState::PartitionEnd(idx_t row_idx, const idx_t count, bool 
 			is_jump = false;
 		}
 
-		partition_end_data.PushValue(partition_end);
+		partition_end_data.WriteValue(partition_end);
 	}
 }
 
@@ -558,7 +558,7 @@ void WindowBoundariesState::PeerBegin(idx_t row_idx, const idx_t count, bool is_
 	//	OVER()
 	if (partition_count + order_count == 0) {
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-			peer_begin_data.PushValue(0);
+			peer_begin_data.WriteValue(0);
 		}
 		return;
 	}
@@ -582,7 +582,7 @@ void WindowBoundariesState::PeerBegin(idx_t row_idx, const idx_t count, bool is_
 			peer_start = row_idx;
 		}
 
-		peer_begin_data.PushValue(peer_start);
+		peer_begin_data.WriteValue(peer_start);
 	}
 }
 
@@ -604,7 +604,7 @@ void WindowBoundariesState::PeerEnd(idx_t row_idx, const idx_t count) {
 			const auto partition_end = partition_end_data[chunk_idx];
 			prev_end = FindNextStart(order_mask, peer_start + 1, partition_end, n);
 		}
-		peer_end_data.PushValue(prev_end);
+		peer_end_data.WriteValue(prev_end);
 	}
 }
 
@@ -635,7 +635,7 @@ void WindowBoundariesState::ValidBegin(idx_t row_idx, const idx_t count, bool is
 			}
 		}
 
-		valid_begin_data.PushValue(valid_start);
+		valid_begin_data.WriteValue(valid_start);
 	}
 }
 
@@ -666,7 +666,7 @@ void WindowBoundariesState::ValidEnd(idx_t row_idx, const idx_t count, bool is_j
 			}
 		}
 
-		valid_end_data.PushValue(valid_end);
+		valid_end_data.WriteValue(valid_end);
 	}
 }
 

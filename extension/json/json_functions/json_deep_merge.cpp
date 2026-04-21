@@ -98,9 +98,9 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (origs[i] == nullptr) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 		} else {
-			result_data.PushWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
+			result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(origs[i], alc));
 		}
 	}
 

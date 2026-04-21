@@ -316,13 +316,13 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto string_entry = strings_entries[row];
 		if (!string_entry.IsValid()) {
-			list_entries.PushInvalid();
+			list_entries.WriteNull();
 			continue;
 		}
 		auto &string_val = string_entry.GetValue();
 		auto result_list =
 		    ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result);
-		list_entries.PushValue(result_list);
+		list_entries.WriteValue(result_list);
 	}
 }
 

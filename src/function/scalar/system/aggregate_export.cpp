@@ -167,7 +167,7 @@ struct StoreFieldOp {
 
 		for (idx_t row = 0; row < count; row++) {
 			auto src = sources[row] + field_offset;
-			child_data.PushValue(*reinterpret_cast<T *>(src));
+			child_data.WriteValue(*reinterpret_cast<T *>(src));
 		}
 	}
 };
@@ -743,7 +743,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr.PushValue(string_t(const_char_ptr_cast(data_ptr), state_size));
+		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), state_size));
 	}
 }
 

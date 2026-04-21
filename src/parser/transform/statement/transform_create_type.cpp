@@ -28,7 +28,7 @@ Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> colum
 		}
 
 		auto entry_value = string(entry_value_node.val.str);
-		result_data.PushValue(string_t(entry_value));
+		result_data.WriteValue(string_t(entry_value));
 	}
 	return result;
 }

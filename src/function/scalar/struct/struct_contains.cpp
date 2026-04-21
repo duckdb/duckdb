@@ -52,7 +52,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -64,9 +64,9 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 			} else {
-				result_data.PushValue(RETURN_TYPE(false));
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
@@ -99,12 +99,12 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 		if (!found) {
 			if (return_pos) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 			} else {
-				result_data.PushValue(RETURN_TYPE(false));
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 		} else {
-			result_data.PushValue(found_value);
+			result_data.WriteValue(found_value);
 		}
 	}
 }

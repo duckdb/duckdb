@@ -82,7 +82,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 		const auto result_idx = result_offset + row_idx;
 		if (HAS_DEFINES) {
 			if (defines[result_idx] != reader.MaxDefine()) {
-				result_data.PushInvalid();
+				result_data.WriteNull();
 				continue;
 			}
 			if (length_idx >= byte_array_count) {
@@ -93,7 +93,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
-		result_data.PushValue(string_t(char_ptr_cast(block.ptr), str_len));
+		result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		if (VALIDATE_INDIVIDUAL_STRINGS) {
 			string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 		}

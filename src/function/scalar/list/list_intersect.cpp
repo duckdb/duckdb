@@ -98,12 +98,12 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		entry.offset = offset;
 
 		if (!l_valid) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 		if (!r_valid) {
 			entry.length = 0;
-			result_data.PushValue(entry);
+			result_data.WriteValue(entry);
 			continue;
 		}
 
@@ -112,7 +112,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		if (l_list.length == 0 || r_list.length == 0) {
 			entry.length = 0;
-			result_data.PushValue(entry);
+			result_data.WriteValue(entry);
 			continue;
 		}
 
@@ -165,7 +165,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 		entry.length = row_result_length;
 		offset += row_result_length;
-		result_data.PushValue(entry);
+		result_data.WriteValue(entry);
 	}
 
 	ListVector::SetListSize(result, offset);

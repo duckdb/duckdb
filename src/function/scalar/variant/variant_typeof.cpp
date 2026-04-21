@@ -24,7 +24,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!variant.RowIsValid(i)) {
-			result_data.PushValue(string_t("VARIANT_NULL"));
+			result_data.WriteValue(string_t("VARIANT_NULL"));
 			continue;
 		}
 
@@ -38,7 +38,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 				auto decimal_data = VariantUtils::DecodeDecimalData(variant, i, 0);
 				type_str = StringUtil::Format("DECIMAL(%d, %d)", decimal_data.width, decimal_data.scale);
 			}
-			result_data.PushValue(string_t(type_str.c_str()));
+			result_data.WriteValue(string_t(type_str.c_str()));
 			continue;
 		}
 
@@ -52,7 +52,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
 			type_str = StringUtil::Format("ARRAY(%d)", nested_data.child_count);
 		}
-		result_data.PushValue(string_t(type_str.c_str()));
+		result_data.WriteValue(string_t(type_str.c_str()));
 	}
 }
 

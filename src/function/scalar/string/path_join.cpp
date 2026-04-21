@@ -74,10 +74,10 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		string joined;
 		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
-		result_data.PushValue(string_t(joined));
+		result_data.WriteValue(string_t(joined));
 	}
 }
 

@@ -107,7 +107,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 		// NULL MAP
 		if (!keys_data.validity.RowIsValid(keys_idx) || !values_data.validity.RowIsValid(values_idx)) {
-			result_entries.PushInvalid();
+			result_entries.WriteNull();
 			continue;
 		}
 
@@ -142,7 +142,7 @@ static void MapFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		}
 
 		// keys_entry and values_entry have the same length
-		result_entries.PushValue(list_entry_t(offset, keys_entry.length));
+		result_entries.WriteValue(list_entry_t(offset, keys_entry.length));
 		offset += keys_entry.length;
 	}
 	D_ASSERT(offset == result_child_size);

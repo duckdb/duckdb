@@ -86,20 +86,20 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 		auto new_idx = new_data.sel->get_index(i);
 
 		if (!new_data.validity.RowIsValid(new_idx)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
 		auto new_doc = JSONCommon::ReadDocument(new_inputs[new_idx], JSONCommon::READ_FLAG, alc);
 
 		if (!old_data.validity.RowIsValid(old_idx)) {
-			result_data.PushWithoutCopying(JSONCommon::WriteVal<yyjson_val>(new_doc->root, alc));
+			result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_val>(new_doc->root, alc));
 			continue;
 		}
 
 		auto old_doc = JSONCommon::ReadDocument(old_inputs[old_idx], JSONCommon::READ_FLAG, alc);
 		auto diff = MergePatchDiff(doc, old_doc->root, new_doc->root);
-		result_data.PushWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(diff, alc));
+		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(diff, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
 }

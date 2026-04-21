@@ -96,7 +96,7 @@ public:
 		auto &row_number = *FlatVector::GetDataMutable<int64_t>(vec);
 		auto rdata = FlatVector::Writer<int64_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			rdata.PushValue(row_number++);
+			rdata.WriteValue(row_number++);
 		}
 	}
 	Vector vec;
@@ -188,12 +188,12 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 		if (grstate.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				// Row numbers are unique ranks
-				rdata.PushValue(
+				rdata.WriteValue(
 				    UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata.PushValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
+				rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
 			}
 		}
 		return;
@@ -201,7 +201,7 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata.PushValue(UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1));
+		rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1));
 	}
 }
 
@@ -265,7 +265,7 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {
-			rdata.PushInvalid();
+			rdata.WriteNull();
 		} else {
 			auto n_param = ntile_col.GetCell<int64_t>(i);
 			if (n_param < 1) {
@@ -303,7 +303,7 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			}
 			// result has to be between [1, NTILE]
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			rdata.PushValue(result_ntile);
+			rdata.WriteValue(result_ntile);
 		}
 	}
 }

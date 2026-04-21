@@ -114,7 +114,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		list_entry_t entry;
 		entry.length = len;
 		entry.offset = offset;
-		result_data.PushValue(entry);
+		result_data.WriteValue(entry);
 		offset += len;
 	}
 	if (result_size > 0) {

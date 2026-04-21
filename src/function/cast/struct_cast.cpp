@@ -161,7 +161,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -191,7 +191,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 
-		auto &result_str = result_data.PushEmptyString(string_length);
+		auto &result_str = result_data.WriteEmptyString(string_length);
 		auto dataptr = result_str.GetDataWriteable();
 
 		//! Serialize the struct to the string
@@ -303,7 +303,7 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
 			auto &field_name = field_types[field_idx].first;
-			key_data.PushValue(field_name);
+			key_data.WriteValue(field_name);
 		}
 	}
 

@@ -56,7 +56,7 @@ LogicalType PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer
 	Vector enum_vector(LogicalType::VARCHAR, string_literal_list.size());
 	auto string_data = FlatVector::Writer<string_t>(enum_vector, string_literal_list.size());
 	for (auto string_literal : string_literal_list) {
-		string_data.PushValue(string_t(string_literal.get().Cast<StringLiteralParseResult>().result));
+		string_data.WriteValue(string_t(string_literal.get().Cast<StringLiteralParseResult>().result));
 	}
 	return LogicalType::ENUM(enum_vector, string_literal_list.size());
 }

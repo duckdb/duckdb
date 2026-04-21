@@ -72,7 +72,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.PushInvalid();
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -108,7 +108,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += NULL_LENGTH;
 			}
 		}
-		auto &result_str = result_data.PushEmptyString(string_length);
+		auto &result_str = result_data.WriteEmptyString(string_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 

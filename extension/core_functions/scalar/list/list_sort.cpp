@@ -188,7 +188,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ListVector::SetListSize(result, lists_size);
 		auto result_list_data = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			result_list_data.PushValue(list_entries.GetValueUnsafe(i));
+			result_list_data.WriteValue(list_entries.GetValueUnsafe(i));
 		}
 	}
 

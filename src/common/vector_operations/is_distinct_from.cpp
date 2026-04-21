@@ -12,7 +12,7 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data.PushValue(cmp_data[i].GetValueUnsafe() != 0);
+		result_data.WriteValue(cmp_data[i].GetValueUnsafe() != 0);
 	}
 }
 
@@ -24,7 +24,7 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data.PushValue(cmp_data[i].GetValueUnsafe() == 0);
+		result_data.WriteValue(cmp_data[i].GetValueUnsafe() == 0);
 	}
 }
 
