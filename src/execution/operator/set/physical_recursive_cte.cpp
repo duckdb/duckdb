@@ -5,6 +5,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
@@ -166,6 +167,11 @@ public:
 	}
 
 	vector<unique_ptr<PipelineExecutor>> &GetCachedExecutors(Pipeline &pipeline, idx_t max_threads) {
+		// Ordinary pipelines build PipelineExecutors once and discard them after the query finishes.
+		// Recursive CTEs re-enter the same pipelines many times, and correlated recursive invocations can
+		// construct several RecursiveCTEState objects for the same physical plan. Keep a state-local cache
+		// for cheap per-iteration reuse, and spill back into a shared pool so later states can recycle the
+		// already-initialized executors instead of reconstructing them from scratch.
 		lock_guard<mutex> guard(cached_executor_lock);
 		auto entry = cached_executors.find(pipeline);
 		if (entry == cached_executors.end()) {
@@ -268,6 +274,15 @@ public:
 //===--------------------------------------------------------------------===//
 // Recursive CTE Task and Event for optimized execution
 //===--------------------------------------------------------------------===//
+//
+// The normal pipeline scheduler is optimized for one-shot query execution: build the query-wide
+// event graph, allocate PipelineExecutors/tasks, run the pipelines once, then tear that runtime
+// state down. Recursive CTEs repeatedly re-enter the recursive member, often with tiny frontiers,
+// so paying that setup/teardown cost every iteration quickly dominates the actual data processing.
+//
+// The helpers below keep the same pipeline/finalize semantics, but split out a recursive-specific
+// runtime that can reset and reuse executors, selected operator state, and the recursive dependency
+// topology across iterations.
 
 // Recursive iterations often produce small batches. Aim for about half a vector of input per worker
 // before increasing parallelism so scheduler overhead stays low on narrow recursive workloads.
@@ -357,7 +372,12 @@ private:
 	static constexpr const idx_t PARTIAL_CHUNK_COUNT = 50;
 };
 
-//! A pipeline event that uses cached PipelineExecutors for the recursive CTE.
+//! Recursive execute event.
+//! We still use BasePipelineEvent for dependency tracking and task bookkeeping, but the stock
+//! pipeline scheduling path is too expensive here: it assumes a one-shot execution, creates fresh
+//! PipelineExecutors/tasks every time, and resets shared pipeline state immediately before launch.
+//! Recursive CTEs need the same dependency semantics while reusing cached PipelineExecutors, and
+//! root events must sometimes be reset up-front on the main thread to avoid reset-vs-execute races.
 class RecursiveCTEPipelineEvent : public BasePipelineEvent {
 public:
 	RecursiveCTEPipelineEvent(shared_ptr<Pipeline> pipeline_p, RecursiveCTEState &state_p)
@@ -399,6 +419,12 @@ public:
 	}
 };
 
+//! Inline finish event for the single-thread recursive fast path.
+//! PipelineFinishEvent is correct for the general scheduler, but it is intentionally scheduler-centric:
+//! it expects finish work to go back through the task/event machinery. In the single-thread recursive
+//! path that would mostly bounce control back into the scheduler just to run the finish work on the
+//! current thread. This event preserves the same finalize contract, including BLOCKED handling, while
+//! keeping the finish step inline with the cached execute/prepare stages.
 class RecursiveCTEFinishEvent : public BasePipelineEvent {
 public:
 	explicit RecursiveCTEFinishEvent(shared_ptr<Pipeline> pipeline_p) : BasePipelineEvent(std::move(pipeline_p)) {
@@ -561,6 +587,12 @@ static bool RequiresInitializeOnSchedule(Pipeline &pipeline) {
 }
 
 static RecursiveCTEMetaPipelinePlan BuildRecursiveMetaPipelinePlan(MetaPipeline &meta_pipeline) {
+	// MetaPipeline already knows how to classify pipelines for the normal scheduler, but recursive
+	// execution needs that classification in two different forms:
+	// 1. a cached scheduler-free stage plan for the single-thread inline fast path
+	// 2. a per-iteration Event graph for the multi-threaded path
+	// Materializing a tiny neutral plan keeps both paths in sync without forcing the inline path to
+	// instantiate Event objects it will never schedule.
 	RecursiveCTEMetaPipelinePlan result;
 
 	vector<shared_ptr<Pipeline>> pipelines;
@@ -593,6 +625,9 @@ static RecursiveCTEMetaPipelinePlan BuildRecursiveMetaPipelinePlan(MetaPipeline 
 
 static unique_ptr<RecursiveCTEInlinePlan>
 BuildRecursiveInlinePlan(const vector<shared_ptr<MetaPipeline>> &meta_pipelines) {
+	// This is the scheduler-free equivalent of the recursive event graph. It is only used when the
+	// current iteration is capped to one thread; in that case, preserving the same execute ->
+	// prepare-finish -> finish ordering matters, but paying full scheduler/task overhead does not.
 	auto plan = make_uniq<RecursiveCTEInlinePlan>();
 	recursive_cte_inline_stage_map_t stage_map;
 	for (auto &meta_pipeline : meta_pipelines) {
@@ -744,6 +779,12 @@ static bool PipelineDirectlyDependsOnRecursiveInput(Pipeline &pipeline, TableInd
 
 static reference_set_t<const MetaPipeline>
 FindInvariantRecursiveMetaPipelines(const vector<shared_ptr<MetaPipeline>> &meta_pipelines, TableIndex cte_index) {
+	// By default the recursive executor reruns every meta-pipeline in the recursive member each
+	// iteration because the generic scheduling infrastructure does not know which build-side subplans
+	// are independent of the current recursive frontier. For small recursive workloads that repeats
+	// expensive setup for static subplans. Classify only JOIN_BUILD meta-pipelines that are
+	// transitively independent from the recursive input and whose build side does not propagate rows
+	// back into the recursive result, so their materialized state can safely survive later iterations.
 	reference_map_t<const Pipeline, reference<const MetaPipeline>> pipeline_to_meta_pipeline;
 	reference_set_t<const MetaPipeline> variant_meta_pipelines;
 
@@ -885,6 +926,8 @@ static void ConfigureInvariantRecursiveBuildReuse(const PhysicalRecursiveCTE &op
 }
 
 static void ProcessRecursiveExecutorTasks(Executor &executor) {
+	// Only drain the recursive executor here. Re-entering the outer query executor while waiting for
+	// recursive work can run unrelated tasks and used to break recursive completion tracking.
 	if (!executor.WorkOnTasks()) {
 		executor.WaitForTask();
 	}
@@ -915,6 +958,20 @@ static void WaitForRecursiveEvent(Executor &executor, Event &event) {
 	}
 }
 
+// Build the recursive Event chain for one MetaPipeline using the neutral classification from
+// BuildRecursiveMetaPipelinePlan().
+//
+// Why this exists instead of letting MetaPipeline schedule itself directly:
+// - the normal scheduler builds a query-wide, one-shot Event graph; recursive execution only wants
+//   to rebuild the recursive subset for the current iteration
+// - recursive execution may omit already-materialized invariant build pipelines, so the event graph
+//   is not just a replay of the original query schedule
+// - the recursive path needs RecursiveCTEPipelineEvent at the execute edge so it can reuse cached
+//   PipelineExecutors instead of constructing fresh ones every iteration
+//
+// The BASE pipeline anchors the chain for the whole meta-pipeline. Other pipelines either share the
+// BASE finish event, own their own finish chain, or share another pipeline's finish group, mirroring
+// the same finish/finalize semantics as the normal scheduler with less per-iteration setup work.
 static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_pipeline, RecursiveCTEState &state,
                                           Executor &executor, recursive_cte_event_map_t &event_map,
                                           vector<shared_ptr<Event>> &events) {
@@ -930,6 +987,7 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 		}
 		switch (entry.type) {
 		case RecursiveCTEMetaPipelineEntryType::BASE: {
+			// The base pipeline owns the full execute -> prepare-finish -> finish -> complete chain.
 			base_stack = CreateRecursiveEventStack(pipeline.shared_from_this(), state);
 			auto completion = make_shared_ptr<PipelineCompleteEvent>(executor, false);
 			completion->AddDependency(*base_stack.pipeline_finish_event);
@@ -942,6 +1000,8 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 			break;
 		}
 		case RecursiveCTEMetaPipelineEntryType::SHARED_FINISH_GROUP: {
+			// This pipeline executes independently, but its finalize work is merged into an existing
+			// finish group selected by MetaPipeline.
 			D_ASSERT(entry.finish_group);
 			auto group_entry = event_map.find(*entry.finish_group);
 			D_ASSERT(group_entry != event_map.end());
@@ -956,6 +1016,8 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 			break;
 		}
 		case RecursiveCTEMetaPipelineEntryType::HAS_FINISH_EVENT: {
+			// This pipeline needs its own prepare/finish chain, but still joins the BASE completion edge
+			// so the whole meta-pipeline reports done only after every finish stage completed.
 			auto pipeline_stack = CreateRecursiveEventStack(pipeline.shared_from_this(), state);
 			pipeline_stack.pipeline_event->AddDependency(*base_stack.pipeline_finish_event);
 			base_stack.pipeline_complete_event->AddDependency(*pipeline_stack.pipeline_finish_event);
@@ -967,6 +1029,8 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 			break;
 		}
 		case RecursiveCTEMetaPipelineEntryType::SHARED_BASE_FINISH: {
+			// This is the cheapest case: only the execute stage is private, while prepare/finish reuse
+			// the BASE pipeline chain.
 			auto execute = make_shared_ptr<RecursiveCTEPipelineEvent>(pipeline.shared_from_this(), state);
 			base_stack.pipeline_prepare_finish_event->AddDependency(*execute);
 			event_map.emplace(reference<Pipeline>(pipeline),
@@ -988,6 +1052,10 @@ static void ScheduleRecursiveMetaPipeline(const shared_ptr<MetaPipeline> &meta_p
 
 static void ScheduleRecursivePipelines(const vector<shared_ptr<MetaPipeline>> &meta_pipelines, RecursiveCTEState &state,
                                        Executor &executor, vector<shared_ptr<Event>> &events) {
+	// Rebuild only the recursive subset of the event graph for this iteration. Reusing the query's
+	// original scheduler wiring is not enough here: recursive iterations may omit already-materialized
+	// invariant build pipelines, and root execute events need a dedicated prepare step before any task
+	// starts so shared pipeline state is not reset concurrently with active execution.
 	recursive_cte_event_map_t event_map;
 	for (auto &meta_pipeline : meta_pipelines) {
 		ScheduleRecursiveMetaPipeline(meta_pipeline, state, executor, event_map, events);
@@ -1328,6 +1396,13 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	auto active_meta_pipelines = GetActiveRecursiveMetaPipelines(*this, gstate);
 	auto can_cache_invariant_meta_pipelines = allow_reuse && !invariant_meta_pipelines.empty();
 
+	// The generic executor path would rebuild the recursive event graph and allocate fresh
+	// PipelineExecutors/tasks every iteration. Recursive execution keeps the already-built recursive
+	// MetaPipeline, resets only the state that must change, optionally skips invariant build pipelines
+	// after they have been materialized once, and then picks between:
+	// - a cached inline dependency plan when the iteration is effectively single-threaded
+	// - a custom recursive Event graph when the iteration still benefits from parallel execution
+
 	// Reset sink state from the main thread so recursive iterations can reuse or recreate
 	// pipeline-local global sinks without tearing down the rest of the runtime state graph.
 	for (auto &meta_pipeline : active_meta_pipelines) {
@@ -1378,8 +1453,8 @@ static void GatherColumnDataScans(const PhysicalOperator &op, vector<const_refer
 	if (op.type == PhysicalOperatorType::DELIM_SCAN || op.type == PhysicalOperatorType::CTE_SCAN) {
 		delim_scans.push_back(op);
 	}
-	for (auto &child : op.children) {
-		GatherColumnDataScans(child, delim_scans);
+	for (auto child : op.GetChildren()) {
+		GatherColumnDataScans(child.get(), delim_scans);
 	}
 }
 
@@ -1401,6 +1476,7 @@ static void GatherRecursiveScansInternal(PhysicalOperator &op, TableIndex cte_in
 	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
 		auto &delim_join = op.Cast<PhysicalDelimJoin>();
 		GatherRecursiveScansInternal(delim_join.join, cte_index, recursive_scans, visited);
+		GatherRecursiveScansInternal(delim_join.distinct, cte_index, recursive_scans, visited);
 	}
 }
 
@@ -1430,13 +1506,6 @@ static void CountRecursiveReferencesInternal(const PhysicalOperator &op, TableIn
 	for (auto child : op.GetChildren()) {
 		CountRecursiveReferencesInternal(child.get(), cte_index, recursive_reference_count, recurring_reference_count,
 		                                 visited);
-	}
-	if (op.type == PhysicalOperatorType::LEFT_DELIM_JOIN || op.type == PhysicalOperatorType::RIGHT_DELIM_JOIN) {
-		auto &delim_join = op.Cast<PhysicalDelimJoin>();
-		for (auto &scan : delim_join.delim_scans) {
-			CountRecursiveReferencesInternal(scan.get(), cte_index, recursive_reference_count,
-			                                 recurring_reference_count, visited);
-		}
 	}
 }
 
