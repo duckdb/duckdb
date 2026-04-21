@@ -21,10 +21,10 @@ class ErrorData;
 
 enum class CheckpointTableFlags : uint8_t {
 	NONE = 0,
-	ROW_GROUPS_DROPPED = 1 << 0,
-	ROW_GROUPS_MERGED = 1 << 1,
-	ROW_IDS_REMAPPED = 1 << 2,
-	INDEXES_REBUILT = 1 << 3
+	ROW_GROUPS_DROPPED = 0b0001,
+	ROW_GROUPS_MERGED = 0b0010,
+	ROW_IDS_REMAPPED = 0b0100,
+	INDEXES_REBUILT = 0b1000
 };
 
 inline CheckpointTableFlags operator|(CheckpointTableFlags left, CheckpointTableFlags right) {
