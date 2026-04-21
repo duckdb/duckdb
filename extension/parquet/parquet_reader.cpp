@@ -1339,8 +1339,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
 	if (filters) {
-		state.adaptive_filter = CreateMultiFileAdaptiveFilter(adaptive_filter_cache, *filters, filter_global_indices,
-		                                                      Logger::Get(context), file.path);
+		state.adaptive_filter = CreateMultiFileAdaptiveFilter(state.adaptive_filter_cache, *filters,
+		                                                      filter_global_indices, Logger::Get(context), file.path);
 		for (auto &entry : *filters) {
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
@@ -1579,7 +1579,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				is_first_filter = false;
 			}
 			state.adaptive_filter->EndFilter(filter_state);
-			StoreMultiFileAdaptiveFilter(adaptive_filter_cache, *state.adaptive_filter, *filters,
+			StoreMultiFileAdaptiveFilter(state.adaptive_filter_cache, *state.adaptive_filter, *filters,
 			                             filter_global_indices);
 		}
 

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
@@ -34,13 +33,17 @@ struct AdaptiveFilterOrderEntry {
 	}
 };
 
+//! Per-thread cache for learned AdaptiveFilter order.
 class MultiFileAdaptiveFilterCache {
 public:
-	vector<AdaptiveFilterOrderEntry> GetOrdering() const;
-	void StoreOrdering(vector<AdaptiveFilterOrderEntry> ordering);
+	const vector<AdaptiveFilterOrderEntry> &GetOrdering() const {
+		return ordering;
+	}
+	void StoreOrdering(vector<AdaptiveFilterOrderEntry> ordering_p) {
+		ordering = std::move(ordering_p);
+	}
 
 private:
-	mutable mutex lock;
 	vector<AdaptiveFilterOrderEntry> ordering;
 };
 

@@ -23,6 +23,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -121,6 +122,8 @@ struct ParquetReaderScanState {
 
 	//! Adaptive filter
 	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! (Optional) per-thread adaptive filter cache
+	optional_ptr<MultiFileAdaptiveFilterCache> adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
 

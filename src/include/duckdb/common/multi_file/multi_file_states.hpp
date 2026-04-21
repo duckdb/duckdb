@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
@@ -168,8 +167,6 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;
-	//! Cache carrying the learned AdaptiveFilterConfiguration
-	unique_ptr<MultiFileAdaptiveFilterCache> adaptive_filter_cache;
 	atomic<bool> finished {false};
 
 	unique_ptr<GlobalTableFunctionState> global_state;

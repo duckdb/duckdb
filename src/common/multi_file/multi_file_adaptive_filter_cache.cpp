@@ -10,23 +10,13 @@ struct FilterPosition {
 	TableFilterType filter_type;
 };
 
-vector<AdaptiveFilterOrderEntry> MultiFileAdaptiveFilterCache::GetOrdering() const {
-	lock_guard<mutex> guard(lock);
-	return ordering;
-}
-
-void MultiFileAdaptiveFilterCache::StoreOrdering(vector<AdaptiveFilterOrderEntry> ordering_p) {
-	lock_guard<mutex> guard(lock);
-	ordering = std::move(ordering_p);
-}
-
 unique_ptr<AdaptiveFilter> CreateMultiFileAdaptiveFilter(optional_ptr<MultiFileAdaptiveFilterCache> cache,
                                                          const TableFilterSet &filters,
                                                          const vector<MultiFileGlobalIndex> &filter_global_indices,
                                                          Logger &logger, const string &file_path) {
 	unique_ptr<AdaptiveFilterConfiguration> seed;
 	if (cache) {
-		auto ordering = cache->GetOrdering();
+		const auto &ordering = cache->GetOrdering();
 		if (!ordering.empty() && ordering.size() == filters.FilterCount()) {
 			unordered_map<MultiFileGlobalIndex, FilterPosition> by_global;
 			// Lets first get the fitered column -> [permutation_position|filter_type]

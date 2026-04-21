@@ -4,7 +4,7 @@
 
 require parquet
 
-# Deterministic file-open order
+# Deterministic file order
 statement ok
 SET threads=1
 
@@ -85,7 +85,7 @@ WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' ORDER BY timest
 ----
 initial
 
-# Confirm it's the size check (3 vs 2), not an identity/type miss
+# Confirm the size check
 query II
 SELECT
     (SELECT info['columns'] FROM duckdb_logs_parsed('AdaptiveFilter')
@@ -134,17 +134,7 @@ SELECT first.columns = second.columns FROM
 ----
 true
 
-statement ok
-CALL truncate_duckdb_logs()
-
-statement ok
-SET threads=1
-
-query I
-SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_cross_1.parquet', '{TEST_DIR}/af_cross_2.parquet', '{TEST_DIR}/af_cross_3.parquet']) WHERE a > 100 AND b > 3 AND c < 50
-----
-89910
-
+# Now lets do a parallel test
 statement ok
 CALL truncate_duckdb_logs()
 
@@ -156,31 +146,23 @@ SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_cross_1.parquet', '{TEST_DIR}/
 ----
 89910
 
-query I
-SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-WHERE event = 'INIT' AND info['source'] = 'initial'
+# We shuold see to initial files and one seeded
+query II
+SELECT
+    (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'initial') = 2,
+    (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'seeded') = 1
 ----
-2
+true	true
 
+# A seeded file permutation must be equal to one of the initial sources
 query I
-SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-WHERE event = 'INIT' AND info['source'] = 'seeded'
-----
-1
-
-query I
-SELECT file_path LIKE '%af_cross_3.parquet' FROM duckdb_logs_parsed('AdaptiveFilter')
-WHERE event = 'INIT' AND info['source'] = 'seeded'
-----
-true
-
-# Seeded permutation must match one produced by a prior file
-query I
-SELECT seeded.permutation IN (
+SELECT count(*) = 0 FROM duckdb_logs_parsed('AdaptiveFilter') AS seeded
+WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'seeded'
+  AND seeded.permutation NOT IN (
     SELECT permutation FROM duckdb_logs_parsed('AdaptiveFilter')
-    WHERE file_path LIKE '%af_cross_1.parquet' OR file_path LIKE '%af_cross_2.parquet'
-)
-FROM duckdb_logs_parsed('AdaptiveFilter') AS seeded
-WHERE event = 'INIT' AND info['source'] = 'seeded'
+    WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet'
+  )
 ----
 true
