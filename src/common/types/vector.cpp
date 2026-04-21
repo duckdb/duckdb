@@ -287,8 +287,16 @@ void Vector::Reserve(idx_t to_reserve) {
 	if (!HasSize()) {
 		throw InternalException("Vector::Reserve can only be called on vectors with a size");
 	}
+	if (!buffer) {
+		Initialize(VectorDataInitialization::UNINITIALIZED, VectorBuffer::GetReserveSize(to_reserve));
+		return;
+	}
 	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
-	Resize(size(), to_reserve);
+	auto capacity = buffer->Capacity();
+	if (to_reserve <= capacity) {
+		return;
+	}
+	buffer->Resize(capacity, to_reserve);
 }
 
 void Vector::Append(const Value &value) {
