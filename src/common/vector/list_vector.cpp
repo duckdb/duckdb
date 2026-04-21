@@ -57,13 +57,13 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 	}
 }
 
-void VectorListBuffer::Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
+void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
 	Reserve(child_size + to_append_size - source_offset);
 	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, child_size);
 	child_size += to_append_size - source_offset;
 }
 
-void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
+void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
                               idx_t source_offset) {
 	Reserve(child_size + to_append_size - source_offset);
 	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, child_size);
@@ -302,7 +302,7 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 		return;
 	}
 	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
-	target_buffer.Append(source, source_size, source_offset);
+	target_buffer.AppendToChild(source, source_size, source_offset);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
@@ -312,7 +312,7 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 		return;
 	}
 	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
-	target_buffer.Append(source, sel, source_size, source_offset);
+	target_buffer.AppendToChild(source, sel, source_size, source_offset);
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {

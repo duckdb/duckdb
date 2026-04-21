@@ -39,8 +39,8 @@ public:
 	}
 	void Reserve(idx_t to_reserve);
 
-	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
-	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
+	void AppendToChild(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
+	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
 
 	void PushBack(const Value &insert);
 
