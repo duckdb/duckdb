@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_table_with_delete.test
-# description: A DROP TABLE rolled back due to a write-write conflict, forcing the REVERT_MAIN_INDEX_ONLY path.
+# description: A reverted DROP TABLE whose transaction also did a DELETE; exercises the REVERT_MAIN_INDEX_ONLY removal path.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_revert_commit_index_corruption_drop_table.db

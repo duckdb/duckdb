@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_table_with_pk.test
-# description: DROP TABLE with a PK index, rolled back due to a write-write conflict, then re-dropped. Index blocks (FixedSizeAllocator buffers) were marked during the failed commit and never unmarked, so the re-drop hits a MarkBlockAsModified double-mark assertion.
+# description: A reverted DROP TABLE with a PK index must not leave index blocks marked, so a retried DROP TABLE does not hit a double-mark assertion.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_index_block_double_mark_repro.db

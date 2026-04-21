@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_index.test
-# description: DROP INDEX rolled back
+# description: A reverted DROP INDEX must leave the index visible and queryable via index scan.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_drop_index_silent_removal_repro.db

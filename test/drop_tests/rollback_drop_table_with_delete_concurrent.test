@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_table_with_delete_concurrent.test
-# description: A DROP TABLE rolled back due to a write-write conflict, with another open transaction forcing the REVERT_MAIN_INDEX path.
+# description: A reverted DROP TABLE with DELETE and another open snapshot; exercises the REVERT_MAIN_INDEX removal path.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_revert_commit_index_corruption_drop_table_concurrent.db

@@ -1,5 +1,5 @@
 # name: test/drop_tests/concurrent_drop_table.test
-# description: DROP TABLE while a reader holds a snapshot. The index must remain usable to the reader, in-memory index state must be deferred until the snapshot is released, and on-disk blocks must only be reclaimed after both the snapshot releases AND a checkpoint runs.
+# description: DROP TABLE while a concurrent reader holds a snapshot; index stays usable and blocks are reclaimed only after snapshot release plus checkpoint.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_concurrent_drop_table.db

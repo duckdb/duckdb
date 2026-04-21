@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_column.test
-# description: ALTER TABLE DROP COLUMN rolled back due to a write-write conflict, then re-attempted. Column blocks were marked as modified during the failed commit and never unmarked, so the re-attempt hits a MarkBlockAsModified double-mark assertion. Uses non-compressible data so the dropped column's on-disk blocks are not shared via multi_use_blocks refcounting; uses ALTER TABLE ADD COLUMN on the unrelated conflict table so the observable failure is not masked by a successful DROP TABLE commit.
+# description: A reverted ALTER TABLE DROP COLUMN must not leave column blocks marked, so a retried DROP COLUMN does not hit a double-mark assertion.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_drop_column_rollback.db

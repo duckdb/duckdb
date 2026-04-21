@@ -1,5 +1,5 @@
 # name: test/drop_tests/concurrent_drop_index.test
-# description: DROP INDEX while a reader holds a snapshot. DROP INDEX is non-transactional: the reader falls back to a sequential scan, which still returns correct rows via MVCC.
+# description: DROP INDEX while a concurrent reader holds a snapshot; reader falls back to sequential scan via MVCC.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_concurrent_drop_index.db

@@ -1,5 +1,5 @@
 # name: test/drop_tests/revert_commit_index_corruption_drop_table.test
-# description: A DROP TABLE whose commit is reverted by a concurrent DROP must leave the primary-key index intact. Prior to the fix, CommitDrop destroyed the ART during the commit chain, so reverting left the index empty except for rows re-inserted by undo, and concurrent index scans returned wrong results.
+# description: A reverted DROP TABLE must leave the PK index intact so that concurrent index scans keep returning correct rows.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_revert_commit_index_corruption_drop_table.db

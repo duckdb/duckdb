@@ -1,5 +1,5 @@
 # name: test/drop_tests/rollback_drop_table.test
-# description: DROP TABLE rolled back due to a write-write conflict, then re-dropped. Row-group blocks were marked as modified during the failed commit and never unmarked, so the re-drop hits a MarkBlockAsModified double-mark assertion.
+# description: A reverted DROP TABLE must not leave row-group blocks marked, so a retried DROP TABLE does not hit a double-mark assertion.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_row_group_double_mark_repro.db

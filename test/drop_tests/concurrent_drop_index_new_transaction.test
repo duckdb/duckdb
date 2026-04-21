@@ -1,5 +1,5 @@
 # name: test/drop_tests/concurrent_drop_index_new_transaction.test
-# description: A new transaction after a DROP INDEX commit must not see the dropped index when an older snapshot is still active.
+# description: A new transaction must not see a dropped index while an older snapshot is still active.
 # group: [drop_tests]
 
 load {TEST_DIR}/test_race.db
