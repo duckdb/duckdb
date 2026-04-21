@@ -123,9 +123,9 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
-	//! Queues this row group's on-disk blocks into the supplied drop buffer.
+	//! Queues this row group's on-disk blocks into the drop buffer.
 	void CommitDrop(CommitDropBuffer &drop_buffer);
-	//! Queues the given column's on-disk blocks into the supplied drop buffer.
+	//! Queues the given column's on-disk blocks into the drop buffer.
 	void CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer);
 	//! Drops every column's on-disk blocks and marks them as modified immediately.
 	void CommitDrop();

@@ -81,8 +81,9 @@ public:
 
 public:
 	//! Marks the on-disk blocks backing this index as modified so the block manager can reclaim them.
-	//! Only meaningful for an UnboundIndex — bound indexes reclaim their blocks via FixedSizeBuffer destruction.
-	void CommitDrop() override;
+	//! Called by TableIndexList::RemoveIndex; bound indexes release their blocks via FixedSizeBuffer destruction
+	//! and have no equivalent hook.
+	void MarkStorageAsModified();
 
 	bool IsBound() const override {
 		return false;

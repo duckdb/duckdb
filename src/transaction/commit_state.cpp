@@ -41,17 +41,15 @@ void CommitDropBuffer::QueuePendingIndexRemoval(TableIndexList &indexes, string 
 }
 
 void CommitDropBuffer::Apply() {
-	if (!block_manager) {
-		D_ASSERT(Empty());
-		return;
+	if (block_manager) {
+		for (auto block_id : dropped_block_ids) {
+			block_manager->MarkBlockAsModified(block_id);
+		}
+	} else {
+		D_ASSERT(dropped_block_ids.empty());
 	}
-	for (auto block_id : dropped_block_ids) {
-		block_manager->MarkBlockAsModified(block_id);
-	}
+	// RemoveIndex marks any storage held by an unbound index before erasing the entry.
 	for (auto &removal : pending_index_removals) {
-		// CommitDrop marks any on-disk blocks held by an unbound index; bound indexes release theirs via
-		// FixedSizeBuffer destruction when RemoveIndex destroys the entry.
-		removal.indexes.get().CommitDrop(removal.name);
 		removal.indexes.get().RemoveIndex(removal.name);
 	}
 	dropped_block_ids.clear();

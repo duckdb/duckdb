@@ -237,9 +237,9 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	//! Queues the table's on-disk blocks for reclamation into the supplied drop buffer.
+	//! Queues the table's on-disk blocks for reclamation into the drop buffer.
 	void CommitDropTable(CommitDropBuffer &drop_buffer);
-	//! Queues the column's on-disk blocks for reclamation into the supplied drop buffer.
+	//! Queues the column's on-disk blocks for reclamation into the drop buffer.
 	void CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer);
 
 	idx_t ColumnCount() const;

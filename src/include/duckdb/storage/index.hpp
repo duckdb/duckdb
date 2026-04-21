@@ -83,11 +83,6 @@ public:
 		return column_id_set;
 	}
 
-	//! Called from CommitDropBuffer::Apply after the commit chain has succeeded. Implementations must release any
-	//! on-disk storage that would not otherwise be reclaimed by destruction (e.g. block pointers held by an
-	//! UnboundIndex). Bound indexes rely on FixedSizeBuffer destruction and leave this empty.
-	virtual void CommitDrop() = 0;
-
 public:
 	template <class TARGET>
 	TARGET &Cast() {

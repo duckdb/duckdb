@@ -23,7 +23,7 @@ UnboundIndex::UnboundIndex(unique_ptr<CreateInfo> create_info, IndexStorageInfo 
 	}
 }
 
-void UnboundIndex::CommitDrop() {
+void UnboundIndex::MarkStorageAsModified() {
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	for (auto &info : storage_info.allocator_infos) {
 		for (auto &block : info.block_pointers) {

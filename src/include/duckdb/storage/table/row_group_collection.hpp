@@ -123,9 +123,9 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
-	//! Queues block drops for every row group's copy of the column into the supplied buffer.
+	//! Queues block drops for every row group's copy of the column into the drop buffer.
 	void CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer);
-	//! Queues block drops for every row group into the supplied buffer.
+	//! Queues block drops for every row group into the drop buffer.
 	void CommitDropTable(CommitDropBuffer &drop_buffer);
 	//! Drops every row group's copy of the column and immediately marks the blocks as modified.
 	void CommitDropColumn(const idx_t column_index);
