@@ -65,7 +65,6 @@ unique_ptr<MacroFunction> PEGTransformerFactory::TransformMacroDefinition(PEGTra
 				default_expr->SetAlias(parameter.name);
 				macro_function->default_parameters[parameter.name] = std::move(default_expr);
 				macro_function->parameters.push_back(make_uniq<ColumnRefExpression>(parameter.name));
-				macro_function->default_parameters.insert(parameter.name, std::move(default_expr));
 				default_value_found = true;
 			} else {
 				if (default_value_found) {

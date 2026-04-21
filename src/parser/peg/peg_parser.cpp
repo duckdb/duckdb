@@ -31,7 +31,6 @@ void PEGParser::ParseRules(const char *grammar) {
 			// if we see a newline while we are parsing a rule definition we can complete the rule
 			AddRule(rule_name, std::move(rule));
 			rule_name = string_t();
-			rule.Clear();
 			// look for the subsequent rule
 			parse_state = PEGParseState::RULE_NAME;
 			c++;

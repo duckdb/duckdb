@@ -281,7 +281,7 @@ bool BaseTokenizer::TokenizeInput() {
 				if (i < sql.size()) {
 					// Found a complete marker, store it.
 					dollar_marker_start = last_pos + 1;
-					dollar_quote_marker = string(sql.begin() + dollar_marker_start, sql.begin() + i);
+					dollar_quote_marker = sql.substr(dollar_marker_start, i - dollar_marker_start);
 				}
 				break;
 			}

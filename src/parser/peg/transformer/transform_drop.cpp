@@ -80,7 +80,7 @@ unique_ptr<DropStatement> PEGTransformerFactory::TransformDropFunction(PEGTransf
 		throw NotImplementedException("Can only drop one object at a time");
 	}
 	auto function = transformer.Transform<QualifiedName>(function_list[0]);
-	info->catalog = function.catalog == INVALID_CATALOG ? INVALID_CATALOG : function.catalog;
+	info->catalog = function.catalog.empty() ? INVALID_CATALOG : function.catalog;
 	info->schema = function.schema;
 	info->name = function.name;
 	info->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/common.hpp"
+
 namespace duckdb {
 
 struct TransformResultValue {
