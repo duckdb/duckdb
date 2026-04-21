@@ -1110,8 +1110,6 @@ void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 //===--------------------------------------------------------------------===//
 struct WindowFillExecutor : public WindowValueExecutor {
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
-	static void Validate(ClientContext &context, WindowFunction &function, vector<unique_ptr<Expression>> &arguments,
-	                     vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
 	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
@@ -1355,14 +1353,13 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 		throw BinderException("FILL argument must support subtraction");
 	}
 
-	return nullptr;
-}
+	// Can we validate?
+	if (!input.HasOrders() || !input.HasArgumentOrders()) {
+		return nullptr;
+	}
 
-void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
-                                  vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
-                                  vector<OrderByNode> &arg_orders) {
-	BindWindowFunctionInput input(context, function, arguments);
-	WindowValueExecutor::Bind(input);
+	auto &orders = input.GetOrders();
+	auto &arg_orders = input.GetArgumentOrders();
 
 	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
@@ -1382,6 +1379,8 @@ void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &functi
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
 	}
+
+	return nullptr;
 }
 
 void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
@@ -1484,7 +1483,6 @@ WindowFunction FillFun::GetFunction() {
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
 	                   WindowFillExecutor::GetGlobal, WindowFillExecutor::GetLocal, WindowFillLocalState::Sinker,
 	                   WindowFillLocalState::Finalizer, WindowFillExecutor::GetData);
-	fun.SetValidateCallback(WindowFillExecutor::Validate);
 
 	//! Never ignore nulls (that's the point!)
 	fun.can_ignore_nulls = false;
