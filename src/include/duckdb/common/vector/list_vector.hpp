@@ -44,13 +44,13 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() const {
-		return size;
+	idx_t GetChildSize() const {
+		return child_size;
 	}
 
 	idx_t GetChildCapacity() const;
 
-	void SetSize(idx_t new_size);
+	void SetChildSize(idx_t new_size);
 
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
@@ -69,7 +69,7 @@ protected:
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t size = 0;
+	idx_t child_size = 0;
 };
 
 struct ListVector {

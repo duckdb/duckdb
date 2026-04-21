@@ -391,7 +391,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
 		vector.SetBuffer(
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetSize()));
+		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetChildSize()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity));
 	} else {
