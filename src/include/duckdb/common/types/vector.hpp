@@ -40,15 +40,17 @@ public:
 	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
-	//! Create a vector of size tuple_count (non-standard)
+	//! Create a vector of size capacity (non-standard)
 	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE,
 	                           VectorDataInitialization initialize = VectorDataInitialization::UNINITIALIZED);
-	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
+	//! Instantiate a vector from a vector cache
 	DUCKDB_API explicit Vector(const VectorCache &cache);
 	//! Create a non-owning vector that references the specified data
 	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr, idx_t count);
 	//! Create a vector with an explicitly created vector buffer
 	DUCKDB_API Vector(LogicalType type, buffer_ptr<VectorBuffer> buffer);
+	// Copying of vectors is not
+	Vector(const Vector &other) = delete;
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
