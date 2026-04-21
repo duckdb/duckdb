@@ -25,8 +25,10 @@
 namespace duckdb {
 
 WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
-                             optional_ptr<StorageCommitState> commit_state)
-    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr) {
+                             optional_ptr<StorageCommitState> commit_state,
+                             const unordered_set<const DataTableInfo *> &dropped_tables)
+    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr),
+      dropped_tables(dropped_tables) {
 }
 
 void WALWriteState::SwitchTable(DataTableInfo &table_info, UndoFlags new_op) {
@@ -39,27 +41,6 @@ void WALWriteState::SwitchTable(DataTableInfo &table_info, UndoFlags new_op) {
 
 bool WALWriteState::IsDroppedTable(const DataTableInfo &table) const {
 	return dropped_tables.find(&table) != dropped_tables.end();
-}
-
-void WALWriteState::CollectDroppedTable(UndoFlags type, data_ptr_t data) {
-	if (type != UndoFlags::CATALOG_ENTRY) {
-		return;
-	}
-	auto catalog_entry = Load<CatalogEntry *>(data);
-	auto &parent = catalog_entry->Parent();
-	if (parent.type != CatalogType::DELETED_ENTRY) {
-		return;
-	}
-	if (catalog_entry->type != CatalogType::TABLE_ENTRY) {
-		return;
-	}
-	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
-	if (!table_entry.IsDuckTable()) {
-		return;
-	}
-	// the storage pointer is stable across RENAMEs in the same transaction, so any data op touching this table
-	// will point at the same DataTableInfo and we can short-circuit it.
-	dropped_tables.insert(table_entry.GetStorage().GetDataTableInfo().get());
 }
 
 void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {

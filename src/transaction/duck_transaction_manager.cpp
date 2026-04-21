@@ -330,7 +330,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 		// Commit the changes to the WAL.
 		if (!skip_wal_write_due_to_checkpoint) {
-			error = transaction.WriteToWAL(context, db, commit_state, undo_properties.has_dropped_entries);
+			error = transaction.WriteToWAL(context, db, commit_state);
 		}
 
 		// after we finish writing to the WAL we grab the transaction lock again
@@ -346,7 +346,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			D_ASSERT(held_wal_lock.owns_lock());
 			// unlock the transaction lock while we are writing to the WAL
 			t_lock.unlock();
-			error = transaction.WriteToWAL(context, db, commit_state, undo_properties.has_dropped_entries);
+			error = transaction.WriteToWAL(context, db, commit_state);
 			t_lock.lock();
 			skip_wal_write_due_to_checkpoint = false;
 		}

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
@@ -18,6 +19,7 @@ class BufferManager;
 class DuckTransaction;
 class StorageCommitState;
 class WriteAheadLog;
+struct DataTableInfo;
 struct UndoBufferPointer;
 struct CommitInfo;
 
@@ -55,7 +57,8 @@ public:
 	//! Cleanup the undo buffer
 	void Cleanup(transaction_t lowest_active_transaction);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
-	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state, bool has_dropped_entries);
+	void WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state,
+	                const unordered_set<const DataTableInfo *> &dropped_tables);
 	//! Commit the changes made in the UndoBuffer: should be called on commit
 	void Commit(UndoBuffer::IteratorState &iterator_state, CommitInfo &info);
 	//! Revert committed changes made in the UndoBuffer up until the currently committed state

@@ -26,18 +26,16 @@ struct UpdateInfo;
 class WALWriteState {
 public:
 	explicit WALWriteState(DuckTransaction &transaction, WriteAheadLog &log,
-	                       optional_ptr<StorageCommitState> commit_state);
+	                       optional_ptr<StorageCommitState> commit_state,
+	                       const unordered_set<const DataTableInfo *> &dropped_tables);
 
 public:
-	//! First pass over the undo buffer: record the DataTableInfo of every table that is dropped by the end of this
-	//! transaction. Data ops targeting such tables are skipped in CommitEntry, because their contents will be removed
-	//! anyway and keeping them in the WAL can cause replay issues when the rows reference a pre-rename table name
-	//! (see issue #22124).
-	void CollectDroppedTable(UndoFlags type, data_ptr_t data);
 	void CommitEntry(UndoFlags type, data_ptr_t data);
 
 private:
 	void SwitchTable(DataTableInfo &table, UndoFlags new_op);
+	//! Returns true if this table is dropped by the end of the transaction - data ops on it are skipped to avoid
+	//! writing stale USE_TABLE entries that can't be replayed (see issue #22124).
 	bool IsDroppedTable(const DataTableInfo &table) const;
 
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
@@ -50,8 +48,8 @@ private:
 	optional_ptr<StorageCommitState> commit_state;
 
 	optional_ptr<DataTableInfo> current_table_info;
-	//! Tables that are dropped by the end of this transaction - keyed by DataTableInfo identity.
-	unordered_set<const DataTableInfo *> dropped_tables;
+	//! Tables that are dropped by the end of this transaction - populated at PushCatalogEntry time.
+	const unordered_set<const DataTableInfo *> &dropped_tables;
 
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;

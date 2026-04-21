@@ -78,6 +78,15 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 		// then copy over the actual data
 		memcpy(ptr, extra_data, extra_data_size);
 	}
+	// Record the DataTableInfo of any table that is being dropped so WAL serialization can skip row-level ops on it
+	// (see issue #22124). The storage pointer is stable across RENAMEs in the same transaction, so any data op
+	// touching this table has the same DataTableInfo identity.
+	if (entry.Parent().type == CatalogType::DELETED_ENTRY && entry.type == CatalogType::TABLE_ENTRY) {
+		auto &table_entry = entry.Cast<TableCatalogEntry>();
+		if (table_entry.IsDuckTable()) {
+			dropped_tables.insert(table_entry.GetStorage().GetDataTableInfo().get());
+		}
+	}
 }
 
 void DuckTransaction::PushAttach(AttachedDatabase &db) {
@@ -215,7 +224,7 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 }
 
 ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
-                                      unique_ptr<StorageCommitState> &commit_state, bool has_dropped_entries) noexcept {
+                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
 	ErrorData error_data;
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
@@ -229,7 +238,7 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		storage->Commit(commit_state.get());
 
 		auto wal_timer = profiler.StartTimer(MetricType::WRITE_TO_WAL_LATENCY);
-		undo_buffer.WriteToWAL(*wal, commit_state.get(), has_dropped_entries);
+		undo_buffer.WriteToWAL(*wal, commit_state.get(), dropped_tables);
 		if (commit_state->HasRowGroupData()) {
 			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
 			// optimistically written blocks

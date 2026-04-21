@@ -11,6 +11,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
@@ -60,8 +61,15 @@ public:
 	void SetModifications(DatabaseModificationType type) override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
-	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state,
-	                     bool has_dropped_entries) noexcept;
+	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
+	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
+
+	//! Tables that are dropped by the end of this transaction (populated at PushCatalogEntry time).
+	//! WAL serialization consults this set to skip row-level ops on tables that will not exist after commit
+	//! (see issue #22124).
+	const unordered_set<const DataTableInfo *> &GetDroppedTables() const {
+		return dropped_tables;
+	}
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
 	//! commit failed, or an empty string if the commit was sucessful
 	ErrorData Commit(AttachedDatabase &db, CommitInfo &commit_info,
@@ -128,6 +136,9 @@ private:
 	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
+	//! DataTableInfo identities for tables that are dropped by the end of this transaction.
+	//! Populated at PushCatalogEntry time so that WAL serialization does not need to scan the undo buffer (#22124).
+	unordered_set<const DataTableInfo *> dropped_tables;
 };
 
 } // namespace duckdb
