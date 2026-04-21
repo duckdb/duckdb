@@ -130,17 +130,33 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
 	}
 
-	// Apply RETURNS TABLE column aliases to the query's SELECT list
+	// Apply RETURNS TABLE column aliases to the query's SELECT list.
+	//
+	// `returns_table_columns` is shared by two grammar productions:
+	//   1. `RETURNS TABLE(col type, ...)` -- each ColumnDef has a colname.
+	//   2. scalar `RETURNS <type>` -- a single unnamed ColumnDef (colname=NULL)
+	//      synthesized by the grammar so both paths share the type-carrier.
+	// The scalar path has a dedicated alias treatment below (using the
+	// function name); skip it here. For the TABLE path, apply user-declared
+	// names. Columns without a name get synthesized "column_N" defaults so
+	// the binder never sees an empty string (which would trip asserts).
 	if (def.returns_table_columns && macro_func && macro_func->type == MacroType::TABLE_MACRO) {
+		bool is_scalar_shoehorn = def.returns_table_columns->length == 1 &&
+		                          !PGCast<duckdb_libpgquery::PGColumnDef>(
+		                               *static_cast<duckdb_libpgquery::PGNode *>(
+		                                   def.returns_table_columns->head->data.ptr_value))
+		                               .colname;
 		auto &table_macro = macro_func->Cast<TableMacroFunction>();
-		if (table_macro.query_node && table_macro.query_node->type == QueryNodeType::SELECT_NODE) {
+		if (!is_scalar_shoehorn && table_macro.query_node &&
+		    table_macro.query_node->type == QueryNodeType::SELECT_NODE) {
 			auto &select = table_macro.query_node->Cast<SelectNode>();
-			// Collect declared column names.
 			vector<string> column_names;
-			for (auto cell = def.returns_table_columns->head; cell; cell = cell->next) {
+			idx_t idx = 1;
+			for (auto cell = def.returns_table_columns->head; cell; cell = cell->next, ++idx) {
 				auto &col_def = PGCast<duckdb_libpgquery::PGColumnDef>(
 				    *static_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
-				column_names.emplace_back(col_def.colname ? col_def.colname : "");
+				column_names.emplace_back(col_def.colname ? col_def.colname
+				                                          : "column" + to_string(idx));
 			}
 			// If select_list is `SELECT *` (e.g. VALUES body), per-expression
 			// aliases don't apply to the expanded columns -- push the names down
@@ -161,9 +177,7 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 					if (col_idx >= select.select_list.size()) {
 						break;
 					}
-					if (!name.empty()) {
-						select.select_list[col_idx]->alias = name;
-					}
+					select.select_list[col_idx]->alias = name;
 					col_idx++;
 				}
 			}
