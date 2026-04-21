@@ -145,7 +145,7 @@ static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
 
 static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
-		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
+		throw InternalException("CanReplaceConstantOrNull() called on unexpected Table Filter");
 	}
 	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
