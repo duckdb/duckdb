@@ -272,8 +272,7 @@ void Parser::ParseQuery(const string &query) {
 
 		unique_ptr<SQLStatement> stmt;
 		try {
-			stmt = PEGTransformerFactory::Transform(stmt_tokens, options,
-			                                        peg_matcher->Root());
+			stmt = PEGTransformerFactory::Transform(stmt_tokens, options, peg_matcher->Root());
 		} catch (ParserException &e) {
 			// fall back to parse_function extensions for unknown statement types
 			bool parsed = false;

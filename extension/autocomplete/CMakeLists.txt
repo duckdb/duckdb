@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 2.8.12...3.29)
 
 project(AutoCompleteExtension)
 
-set(AUTOCOMPLETE_EXTENSION_FILES
-    autocomplete_extension.cpp )
+set(AUTOCOMPLETE_EXTENSION_FILES autocomplete_extension.cpp)
 
 build_static_extension(autocomplete ${AUTOCOMPLETE_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

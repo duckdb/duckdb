@@ -34,8 +34,6 @@ static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
 	throw InternalException("PEG autocomplete parser extension not registered");
 }
 
-
-
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
 	if (entry != state.added_suggestions.end()) {
