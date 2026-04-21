@@ -239,13 +239,13 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 	return true;
 }
 
-static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
-                                        vector<duckdb_re2::StringPiece> &group_spans, vector<Vector> &child_entries,
-                                        Vector &result, idx_t row) {
+static list_entry_t ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::RE2 &re,
+                                                vector<duckdb_re2::StringPiece> &group_spans,
+                                                vector<Vector> &child_entries, Vector &result) {
 	const idx_t group_count = child_entries.size();
-	auto list_entries = FlatVector::Writer<list_entry_t>(result);
 	idx_t current_list_size = ListVector::GetListSize(result);
-	list_entries[row].offset = current_list_size;
+	list_entry_t result_entry;
+	result_entry.offset = current_list_size;
 
 	auto input_piece = CreateStringPiece(string_val);
 	idx_t startpos = 0;
@@ -277,8 +277,9 @@ static void ExtractStructAllSingleTuple(const string_t &string_val, duckdb_re2::
 			break; // empty match at end
 		}
 	}
-	list_entries[row].length = current_list_size - list_entries[row].offset;
+	result_entry.length = current_list_size - result_entry.offset;
 	ListVector::SetListSize(result, current_list_size);
+	return result_entry;
 }
 
 void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -309,20 +310,19 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 
-	auto list_entries = FlatVector::Writer<list_entry_t>(result, args.size());
-
 	vector<duckdb_re2::StringPiece> group_spans(group_count + 1);
 
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto string_entry = strings_entries[row];
 		if (!string_entry.IsValid()) {
-			list_entries[row].offset = ListVector::GetListSize(result);
-			list_entries[row].length = 0;
-			list_entries.SetInvalid(row);
+			list_entries.WriteNull();
 			continue;
 		}
 		auto &string_val = string_entry.GetValue();
-		ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result, row);
+		auto result_list =
+		    ExtractStructAllSingleTuple(string_val, lstate.constant_pattern, group_spans, child_entries, result);
+		list_entries.WriteValue(result_list);
 	}
 }
 

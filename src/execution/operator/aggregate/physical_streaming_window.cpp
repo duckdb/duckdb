@@ -224,7 +224,7 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 		auto &unfiltered = aggr_state.unfiltered;
 		for (idx_t i = 0; i < count; ++i) {
 			unfiltered += int64_t(filter_mask.RowIsValid(i));
-			data[i] = unfiltered;
+			data.WriteValue(unfiltered);
 		}
 		return;
 	}
