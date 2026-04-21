@@ -95,10 +95,6 @@ public:
 	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
-	//! The deferred-drop buffer. Storage-layer CommitDrop methods push block IDs into it.
-	CommitDropBuffer &GetDropBuffer();
-	//! Register an index to be removed from a table's index list after the commit chain succeeds.
-	void QueuePendingIndexRemoval(TableIndexList &indexes, string name);
 	//! Apply all deferred drop side effects. Call only after the commit chain has succeeded.
 	void FinalizeCommitDrops();
 	//! The active transaction state snapshot at the time of commit, read back by UndoBuffer::RevertCommit.
