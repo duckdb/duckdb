@@ -48,7 +48,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::Writer<list_entry_t>(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 	auto &result_child_vector = ListVector::GetChildMutable(result);
 
 	// Get the default values, if provided.
@@ -66,7 +66,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		// Set to NULL, if the list is NULL.
 		if (!lists_data.validity.RowIsValid(list_idx)) {
-			result_entries.SetInvalid(row_idx);
+			result_entries.WriteNull();
 			continue;
 		}
 
@@ -80,8 +80,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto copy_count = MinValue<ubigint_t>(list_entries[list_idx].length, new_size);
 
 		// Set the result entry.
-		result_entries[row_idx].offset = offset.value;
-		result_entries[row_idx].length = new_size.value;
+		result_entries.WriteValue(list_entry_t(offset.value, new_size.value));
 
 		// Copy the child vector's values.
 		// The number of elements to copy is later determined like so: source_count - source_offset.

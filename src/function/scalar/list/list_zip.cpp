@@ -16,7 +16,6 @@ namespace duckdb {
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t count = args.size();
 	idx_t args_size = args.ColumnCount();
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	bool truncate_flags_set = false;
 
 	// Check flag
@@ -80,6 +79,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	idx_t offset = 0;
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t j = 0; j < count; j++) {
 		idx_t len = lengths[j];
 		for (idx_t i = 0; i < args_size; i++) {
@@ -111,8 +111,10 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 				}
 			}
 		}
-		result_data[j].length = len;
-		result_data[j].offset = offset;
+		list_entry_t entry;
+		entry.length = len;
+		entry.offset = offset;
+		result_data.WriteValue(entry);
 		offset += len;
 	}
 	if (result_size > 0) {

@@ -17,7 +17,7 @@
 namespace duckdb {
 
 template <class T>
-static bool StringEnumCastLoop(const VectorIterator<string_t> &source_data, VectorWriter<T> &result_data,
+static bool StringEnumCastLoop(const VectorIterator<string_t> &source_data, VectorScatterWriter<T> &result_data,
                                const LogicalType &result_type, idx_t count, VectorTryCastData &vector_cast_data) {
 	for (idx_t i = 0; i < count; i++) {
 		auto source_entry = source_data[i];
@@ -43,7 +43,7 @@ static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastPara
 	    source.GetVectorType() == VectorType::CONSTANT_VECTOR ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 
 	auto source_data = source.Values<string_t>(count);
-	auto result_data = FlatVector::Writer<T>(result, count);
+	auto result_data = FlatVector::ScatterWriter<T>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
 	auto cast_result = StringEnumCastLoop(source_data, result_data, result.GetType(), count, vector_cast_data);

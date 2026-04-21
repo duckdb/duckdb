@@ -150,8 +150,9 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, co
 idx_t VectorBuffer::GetReserveSize(idx_t required_capacity) {
 	if (required_capacity > DConstants::MAX_VECTOR_SIZE) {
 		// overflow: throw an exception
-		throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s", required_capacity,
-								  StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+		throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s",
+		                          required_capacity,
+		                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 	}
 	return NextPowerOfTwo(required_capacity);
 }
@@ -163,8 +164,8 @@ void VectorBuffer::Reserve(idx_t required_capacity, VectorAppendMode append_mode
 		return;
 	}
 	if (append_mode == VectorAppendMode::ERROR_ON_NO_SPACE) {
-			throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
-		}
+		throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
+	}
 	auto new_capacity = GetReserveSize(required_capacity);
 	D_ASSERT(new_capacity >= required_capacity);
 	Resize(capacity, new_capacity);
@@ -180,7 +181,8 @@ void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, Vector
 	v_size = v_size.GetIndex() + 1;
 }
 
-void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode) {
+void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size,
+                          VectorAppendMode append_mode) {
 	if (!HasSize()) {
 		throw InternalException("Cannot append to vector without size");
 	}

@@ -41,6 +41,9 @@ public:
 	static ExpressionFilter &GetExpressionFilter(TableFilter &filter, const char *context);
 	//! Build a COMPARE_IN expression over a single-column filter subject.
 	static unique_ptr<Expression> CreateInExpression(unique_ptr<Expression> column, vector<Value> values);
+	//! Build an IS NULL/IS NOT NULL expression over a single-column filter subject.
+	static unique_ptr<Expression> CreateNullCheckExpression(unique_ptr<Expression> column,
+	                                                        ExpressionType expression_type);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);

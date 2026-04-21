@@ -616,20 +616,22 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
 	vector.Flatten(count);
-	auto data = FlatVector::Writer<string_t>(vector, count);
+	auto input_values = vector.Values<string_t>(count);
 	auto &validity = FlatVector::ValidityMutable(vector);
+	auto result_data = FlatVector::ScatterWriter<string_t>(vector);
 	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);
 	for (idx_t r = 0; r < count; r++) {
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
 			// set render length to render length of NULL
-			render_length_data[r] = null_render_length;
+			render_length_data.WriteValue(null_render_length);
 			continue;
 		}
 		// non-null - convert value
-		auto result_str = ConvertRenderValue(data[r].GetString(), original_type);
-		render_length_data[r] = Utf8Proc::RenderWidth(result_str);
-		data[r] = result_str;
+		auto input_str = input_values[r].GetValue().GetString();
+		auto result_str = ConvertRenderValue(input_str, original_type);
+		render_length_data.WriteValue(Utf8Proc::RenderWidth(result_str));
+		result_data[r] = result_str;
 	}
 }
 

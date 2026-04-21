@@ -129,13 +129,13 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
 	// lists_indices contains [0, 0, 0, 1, 1]
 	Vector lists_indices(LogicalType::USMALLINT);
-	auto lists_indices_data = FlatVector::Writer<uint16_t>(lists_indices, STANDARD_VECTOR_SIZE);
+	auto lists_indices_data = FlatVector::ScatterWriter<uint16_t>(lists_indices);
 
 	// create the payload_vector, this is just a vector containing incrementing integers
 	// this will later be used as the 'new' selection vector of the child_vector, after
 	// rearranging the payload according to the sorting order
 	Vector payload_vector(LogicalType::UINTEGER);
-	auto payload_vector_data = FlatVector::Writer<uint32_t>(payload_vector, STANDARD_VECTOR_SIZE);
+	auto payload_vector_data = FlatVector::ScatterWriter<uint32_t>(payload_vector);
 
 	// selection vector pointing to the data of the child vector,
 	// used for slicing the child_vector correctly
@@ -188,7 +188,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ListVector::SetListSize(result, lists_size);
 		auto result_list_data = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			result_list_data[i] = list_entries.GetValueUnsafe(i);
+			result_list_data.WriteValue(list_entries.GetValueUnsafe(i));
 		}
 	}
 
@@ -221,7 +221,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto row_count = result_chunk.size();
 			Vector result_vector(Vector::Ref(result_chunk.data[0]));
 
-			auto result_data = FlatVector::Writer<uint32_t>(result_vector, row_count);
+			auto result_data = FlatVector::GetData<uint32_t>(result_vector);
 			for (idx_t i = 0; i < row_count; i++) {
 				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
 				D_ASSERT(result_data[i] < lists_size);
