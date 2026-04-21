@@ -57,7 +57,7 @@ jobs:
       skip_tests: ${{ inputs.skip_tests }}
 
   prepare-status:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     if: always()
     needs:
       - extensions
