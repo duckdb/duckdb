@@ -73,27 +73,28 @@ jobs:
     if: ${{ github.repository == 'duckdb/duckdb' }}
     steps:
       - name: Run ODBC Vendor
-        if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
+        if: ${{ always() && inputs.is-success && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
           curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
       - name: Run JDBC Vendor
-        if: ${{ inputs.is-success && inputs.override-git-describe == '' }}
+        if: ${{ always() && inputs.is-success && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
           curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
       - name: Run Nightly build status
+        if: ${{ always() }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"event": "${{ inputs.triggering-event }}", "should_publish": "${{ inputs.should-publish }}"}}'
           curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
 
       - name: Call /dispatch
-        if: ${{ inputs.override-git-describe == '' }}
+        if: ${{ always() && inputs.override-git-describe == '' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
           export DATA='{"ref": "${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}", "pypi-index": "prod" }}'
