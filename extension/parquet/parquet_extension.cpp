@@ -10,6 +10,9 @@
 
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "parquet_geometry.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_writer.hpp"
@@ -76,9 +79,20 @@ class ClientContext;
 class DataChunk;
 class PhysicalOperator;
 
+struct GeoBBoxInfo {
+	idx_t geom_col_idx;   // index in the original input schema
+	idx_t bbox_col_idx;   // index in the augmented output schema
+	string geom_col_name; // geometry column name (for geo metadata registration)
+	string bbox_col_name; // injected bbox struct column name
+};
+
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
+	// Bbox columns auto-injected for GeoParquet 1.1 covering (empty for other versions)
+	vector<GeoBBoxInfo> geo_bbox_infos;
+	// Geometry->bbox column pairs where the bbox column already exists in the input schema
+	vector<pair<string, string>> existing_bbox_coverings;
 	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
 	vector<pair<string, string>> kv_metadata;
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -324,12 +338,14 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 				bind_data->geoparquet_version = GeoParquetVersion::NONE;
 			} else if (roption == "V1") {
 				bind_data->geoparquet_version = GeoParquetVersion::V1;
+			} else if (roption == "V1_1") {
+				bind_data->geoparquet_version = GeoParquetVersion::V1_1;
 			} else if (roption == "V2") {
 				bind_data->geoparquet_version = GeoParquetVersion::V2;
 			} else if (roption == "BOTH") {
 				bind_data->geoparquet_version = GeoParquetVersion::BOTH;
 			} else {
-				throw BinderException("Expected geoparquet_version 'NONE', 'V1' or 'BOTH'");
+				throw BinderException("Expected geoparquet_version 'NONE', 'V1', 'V1_1', 'V2' or 'BOTH'");
 			}
 		} else if (loption == "write_timestamp_as_int96") {
 			bind_data->write_timestamp_as_int96 =
@@ -348,6 +364,51 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
+
+	// For GeoParquet 1.1, auto-inject a per-row bbox struct column for each geometry column.
+	// The bbox column enables the 'covering' metadata field, which accelerates spatial queries.
+	if (bind_data->geoparquet_version == GeoParquetVersion::V1_1) {
+		idx_t geom_count = 0;
+		for (auto &t : sql_types) {
+			if (t.id() == LogicalTypeId::GEOMETRY) {
+				geom_count++;
+			}
+		}
+		for (idx_t i = 0; i < sql_types.size(); i++) {
+			if (sql_types[i].id() != LogicalTypeId::GEOMETRY) {
+				continue;
+			}
+			// Naming: "bbox" for single-geometry files, "{col_name}_bbox" for multi-geometry
+			string bbox_col_name = (geom_count == 1) ? "bbox" : (names[i] + "_bbox");
+			// Skip if the user already provided a column with this name
+			bool already_present = false;
+			for (const auto &n : names) {
+				if (StringUtil::CIEquals(n, bbox_col_name)) {
+					already_present = true;
+					break;
+				}
+			}
+			if (already_present) {
+				// bbox column is already in the schema: register covering without injecting a new column
+				bind_data->existing_bbox_coverings.emplace_back(names[i], bbox_col_name);
+				continue;
+			}
+			GeoBBoxInfo info;
+			info.geom_col_idx = i;
+			info.bbox_col_idx = bind_data->sql_types.size();
+			info.geom_col_name = names[i];
+			info.bbox_col_name = bbox_col_name;
+			bind_data->geo_bbox_infos.push_back(info);
+
+			child_list_t<LogicalType> bbox_children = {{"xmin", LogicalType::FLOAT},
+			                                           {"ymin", LogicalType::FLOAT},
+			                                           {"xmax", LogicalType::FLOAT},
+			                                           {"ymax", LogicalType::FLOAT}};
+			bind_data->sql_types.push_back(LogicalType::STRUCT(std::move(bbox_children)));
+			bind_data->column_names.push_back(bbox_col_name);
+		}
+	}
+
 	return std::move(bind_data);
 }
 
@@ -365,6 +426,15 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
 	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
 	    parquet_bind.timestamp_is_adjusted_to_utc);
+
+	// Register bbox covering columns with the geo metadata writer
+	for (const auto &info : parquet_bind.geo_bbox_infos) {
+		global_state->writer->RegisterBBoxCovering(info.geom_col_name, info.bbox_col_name);
+	}
+	// Register pre-existing bbox columns (already in the input schema, no injection needed)
+	for (const auto &pair : parquet_bind.existing_bbox_coverings) {
+		global_state->writer->RegisterBBoxCovering(pair.first, pair.second);
+	}
 	return std::move(global_state);
 }
 
@@ -374,14 +444,81 @@ static void ParquetWriteGetWrittenStatistics(ClientContext &context, FunctionDat
 	global_state.writer->SetWrittenStatistics(statistics);
 }
 
+// Compute per-row bounding boxes from a WKB geometry column and write them into
+// a pre-allocated STRUCT(xmin FLOAT, ymin FLOAT, xmax FLOAT, ymax FLOAT) vector.
+static void ComputeBBoxColumn(Vector &geom_col, Vector &bbox_col, idx_t count) {
+	UnifiedVectorFormat geom_udata;
+	geom_col.ToUnifiedFormat(count, geom_udata);
+	const auto *geom_values = UnifiedVectorFormat::GetData<string_t>(geom_udata);
+
+	bbox_col.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &struct_entries = StructVector::GetEntries(bbox_col);
+	D_ASSERT(struct_entries.size() == 4);
+	for (auto &child : struct_entries) {
+		child.SetVectorType(VectorType::FLAT_VECTOR);
+	}
+	auto *xmin_data = FlatVector::GetDataMutable<float>(struct_entries[0]);
+	auto *ymin_data = FlatVector::GetDataMutable<float>(struct_entries[1]);
+	auto *xmax_data = FlatVector::GetDataMutable<float>(struct_entries[2]);
+	auto *ymax_data = FlatVector::GetDataMutable<float>(struct_entries[3]);
+
+	auto &struct_validity = FlatVector::Validity(bbox_col);
+	// Propagate struct validity into children too
+	for (auto &child : struct_entries) {
+		FlatVector::Validity(child).Initialize(count);
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		auto geom_idx = geom_udata.sel->get_index(i);
+		if (!geom_udata.validity.RowIsValid(geom_idx)) {
+			struct_validity.SetInvalid(i);
+			for (auto &child : struct_entries) {
+				FlatVector::Validity(child).SetInvalid(i);
+			}
+			continue;
+		}
+		GeometryExtent extent = GeometryExtent::Empty();
+		bool has_empty = false;
+		Geometry::GetExtent(geom_values[geom_idx], extent, has_empty);
+		if (extent.HasXY()) {
+			xmin_data[i] = static_cast<float>(extent.x_min);
+			ymin_data[i] = static_cast<float>(extent.y_min);
+			xmax_data[i] = static_cast<float>(extent.x_max);
+			ymax_data[i] = static_cast<float>(extent.y_max);
+		} else {
+			struct_validity.SetInvalid(i);
+			for (auto &child : struct_entries) {
+				FlatVector::Validity(child).SetInvalid(i);
+			}
+		}
+	}
+}
+
 static void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                              LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
-	// append data to the local (buffered) chunk collection
-	local_state.buffer.Append(local_state.append_state, input);
+	if (!bind_data.geo_bbox_infos.empty()) {
+		// Augment the input chunk with auto-computed bbox struct columns.
+		// Use Initialize (not InitializeEmpty) to ensure struct child buffers are allocated.
+		DataChunk augmented;
+		augmented.Initialize(Allocator::DefaultAllocator(), bind_data.sql_types, input.size());
+		// Reference all original columns (zero-copy, replaces the pre-allocated flat vectors)
+		for (idx_t i = 0; i < input.ColumnCount(); i++) {
+			augmented.data[i].Reference(input.data[i]);
+		}
+		// Compute bbox for each geometry column into the pre-allocated struct columns
+		for (const auto &info : bind_data.geo_bbox_infos) {
+			ComputeBBoxColumn(input.data[info.geom_col_idx], augmented.data[info.bbox_col_idx], input.size());
+		}
+		augmented.SetCardinality(input.size());
+		local_state.buffer.Append(local_state.append_state, augmented);
+	} else {
+		// append data to the local (buffered) chunk collection
+		local_state.buffer.Append(local_state.append_state, input);
+	}
 
 	if (local_state.buffer.Count() >= bind_data.row_group_size ||
 	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes) {
@@ -534,6 +671,8 @@ const char *EnumUtil::ToChars<GeoParquetVersion>(GeoParquetVersion value) {
 		return "NONE";
 	case GeoParquetVersion::V1:
 		return "V1";
+	case GeoParquetVersion::V1_1:
+		return "V1_1";
 	case GeoParquetVersion::V2:
 		return "V2";
 	case GeoParquetVersion::BOTH:
@@ -550,6 +689,9 @@ GeoParquetVersion EnumUtil::FromString<GeoParquetVersion>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "V1")) {
 		return GeoParquetVersion::V1;
+	}
+	if (StringUtil::Equals(value, "V1_1")) {
+		return GeoParquetVersion::V1_1;
 	}
 	if (StringUtil::Equals(value, "V2")) {
 		return GeoParquetVersion::V2;
@@ -719,13 +861,39 @@ struct ParquetWriteBatchData : public PreparedBatchData {
 	PreparedRowGroup prepared_row_group;
 };
 
-static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
+static unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data_p,
                                                               GlobalFunctionData &gstate,
                                                               unique_ptr<ColumnDataCollection> collection) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
 	unique_ptr<ParquetWriteTransformData> transform_data;
-	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
+
+	// In batch execution mode, ParquetWriteSink is not called, so bbox columns must be injected here.
+	if (!bind_data.geo_bbox_infos.empty()) {
+		auto augmented = make_uniq<ColumnDataCollection>(context, bind_data.sql_types);
+		ColumnDataAppendState append_state;
+		augmented->InitializeAppend(append_state);
+		for (auto &input_chunk : collection->Chunks()) {
+			// Allocate a fresh chunk for each batch to ensure struct child buffers are clean.
+			DataChunk chunk;
+			chunk.Initialize(Allocator::DefaultAllocator(), bind_data.sql_types, input_chunk.size());
+			// Reference original columns (zero-copy)
+			for (idx_t i = 0; i < input_chunk.ColumnCount(); i++) {
+				chunk.data[i].Reference(input_chunk.data[i]);
+			}
+			// Compute bbox struct columns
+			for (const auto &info : bind_data.geo_bbox_infos) {
+				ComputeBBoxColumn(input_chunk.data[info.geom_col_idx], chunk.data[info.bbox_col_idx],
+				                  input_chunk.size());
+			}
+			chunk.SetCardinality(input_chunk.size());
+			augmented->Append(append_state, chunk);
+		}
+		global_state.writer->PrepareRowGroup(*augmented, result->prepared_row_group, transform_data);
+	} else {
+		global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group, transform_data);
+	}
 	return std::move(result);
 }
 

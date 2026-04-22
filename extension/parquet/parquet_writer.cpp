@@ -487,8 +487,9 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
 
-	// V1 GeoParquet stores geometries as blobs, no logical type
-	auto allow_geometry = geoparquet_version != GeoParquetVersion::V1;
+	// V1 and V1_1 GeoParquet store geometries as blobs, no logical type
+	auto allow_geometry = geoparquet_version != GeoParquetVersion::V1 &&
+	                      geoparquet_version != GeoParquetVersion::V1_1;
 
 	// construct the column writers
 	D_ASSERT(sql_types.size() == unique_names.size());
@@ -1248,6 +1249,10 @@ GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 		geoparquet_data = make_uniq<GeoParquetFileMetadata>(geoparquet_version);
 	}
 	return *geoparquet_data;
+}
+
+void ParquetWriter::RegisterBBoxCovering(const string &geom_column_name, const string &bbox_column_name) {
+	GetGeoParquetData().RegisterBBoxCovering(geom_column_name, bbox_column_name);
 }
 
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {

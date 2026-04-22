@@ -1,0 +1,126 @@
+# name: test/geoparquet/bbox_pruning.test
+# description: GeoParquet 1.1 covering bbox column – row group pruning via spatial predicates
+# group: [geoparquet]
+
+require parquet
+
+require spatial
+
+# ---------------------------------------------------------------------------
+# Setup: write a GeoParquet 1.1 file with two row groups.
+# Cluster A – points near (1,1)   → row group 0
+# Cluster B – points near (100,100) → row group 1
+# row_group_size = 3 forces exactly two row groups.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE TABLE spatial_data AS
+SELECT ST_Point(x, y)::GEOMETRY AS geom
+FROM (VALUES
+    (1.0,   1.0),
+    (1.5,   1.5),
+    (2.0,   2.0),
+    (100.0, 100.0),
+    (100.5, 100.5),
+    (101.0, 101.0)
+) t(x, y);
+
+statement ok
+COPY spatial_data TO '{TEST_DIR}/gpq11.parquet'
+    (FORMAT PARQUET, GEOPARQUET_VERSION 'V1_1', ROW_GROUP_SIZE 3);
+
+# ---------------------------------------------------------------------------
+# 1. Verify the covering metadata was written and is parsed back
+# ---------------------------------------------------------------------------
+
+query I
+SELECT decode(value) LIKE '%"covering":%'
+FROM parquet_kv_metadata('{TEST_DIR}/gpq11.parquet');
+----
+true
+
+query I
+SELECT count(*) > 0
+FROM parquet_schema('{TEST_DIR}/gpq11.parquet')
+WHERE name = 'bbox';
+----
+true
+
+# ---------------------------------------------------------------------------
+# 2. Correctness: spatial bbox operator targeting only cluster A → 3 rows
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE geom && ST_MakeEnvelope(0.0, 0.0, 5.0, 5.0);
+----
+3
+
+# ---------------------------------------------------------------------------
+# 3. Correctness: spatial bbox operator targeting only cluster B → 3 rows
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE geom && ST_MakeEnvelope(99.0, 99.0, 102.0, 102.0);
+----
+3
+
+# ---------------------------------------------------------------------------
+# 4. Correctness: query spanning both clusters → all 6 rows
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE geom && ST_MakeEnvelope(0.0, 0.0, 200.0, 200.0);
+----
+6
+
+# ---------------------------------------------------------------------------
+# 5. Correctness: query outside both clusters → 0 rows
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE geom && ST_MakeEnvelope(50.0, 50.0, 60.0, 60.0);
+----
+0
+
+# ---------------------------------------------------------------------------
+# 6. ST_Intersects should also be pruned (bbox intersection is necessary)
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE ST_Intersects(geom, ST_MakeEnvelope(0.0, 0.0, 5.0, 5.0));
+----
+3
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet'
+WHERE ST_Intersects(geom, ST_MakeEnvelope(50.0, 50.0, 60.0, 60.0));
+----
+0
+
+# ---------------------------------------------------------------------------
+# 7. Files written with V1 (no covering) still return correct results
+# ---------------------------------------------------------------------------
+
+statement ok
+COPY spatial_data TO '{TEST_DIR}/gpq10.parquet'
+    (FORMAT PARQUET, GEOPARQUET_VERSION 'V1', ROW_GROUP_SIZE 3);
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq10.parquet'
+WHERE geom && ST_MakeEnvelope(0.0, 0.0, 5.0, 5.0);
+----
+3
+
+# ---------------------------------------------------------------------------
+# 8. Full scan (no filter) returns all rows
+# ---------------------------------------------------------------------------
+
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/gpq11.parquet';
+----
+6
