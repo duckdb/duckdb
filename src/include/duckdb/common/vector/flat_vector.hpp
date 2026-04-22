@@ -69,6 +69,8 @@ protected:
 
 template <class T>
 struct VectorWriter;
+template <class T>
+struct VectorScatterWriter;
 
 struct FlatVector {
 	static void VerifyFlatVector(const Vector &vector) {
@@ -177,12 +179,16 @@ struct FlatVector {
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 
 	template <class T>
-	static VectorWriter<T> Writer(Vector &vector, idx_t count) {
-		return VectorWriter<T>(vector, count);
+	static VectorWriter<T> Writer(Vector &vector, idx_t count, idx_t offset) {
+		return VectorWriter<T>(vector, count, offset);
 	}
 	template <class T>
-	static auto Writer(Vector &vector) -> decltype(Writer<T>(vector, NumericLimits<idx_t>::Maximum())) {
-		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
+	static VectorWriter<T> Writer(Vector &vector, idx_t count) {
+		return Writer<T>(vector, count, 0ULL);
+	}
+	template <class T>
+	static VectorScatterWriter<T> ScatterWriter(Vector &vector) {
+		return VectorScatterWriter<T>(vector);
 	}
 };
 

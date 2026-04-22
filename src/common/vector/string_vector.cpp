@@ -5,12 +5,21 @@
 
 namespace duckdb {
 
-VectorWriter<string_t>::VectorWriter(Vector &vector, idx_t count)
+VectorWriter<string_t>::VectorWriter(Vector &vector, idx_t count, idx_t offset)
     : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
-      count(count) {
+      count(offset + count), current_idx(offset) {
 }
 
 void VectorWriter<string_t>::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
+}
+
+VectorScatterWriter<string_t>::VectorScatterWriter(Vector &vector)
+    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)),
+      validity(FlatVector::ValidityMutable(vector)) {
+}
+
+void VectorScatterWriter<string_t>::InitializeHeap() {
 	heap = StringVector::GetStringHeap(vector);
 }
 

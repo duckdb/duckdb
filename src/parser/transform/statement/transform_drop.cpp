@@ -31,7 +31,7 @@ unique_ptr<ExtraDropInfo> Transformer::TransformDropTrigger(duckdb_libpgquery::P
 	}
 	auto extra_info = make_uniq<ExtraDropTriggerInfo>();
 	extra_info->base_table = std::move(base_table);
-	return extra_info;
+	return unique_ptr<ExtraDropInfo>(std::move(extra_info));
 }
 
 unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStmt &stmt) {
