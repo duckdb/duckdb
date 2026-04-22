@@ -1,7 +1,5 @@
 #pragma once
 
-#include <duckdb/parser/expression/constant_expression.hpp>
-
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
 
