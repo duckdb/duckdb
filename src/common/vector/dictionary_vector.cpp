@@ -89,11 +89,6 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const
 		result = Slice(type, sel, count);
 		cache.cache[target_data] = result;
 	}
-	if (dictionary_size.IsValid()) {
-		auto &dict_buffer = result->Cast<DictionaryBuffer>();
-		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-		dict_buffer.SetDictionaryId(std::move(dictionary_id));
-	}
 	return result;
 }
 
@@ -103,16 +98,8 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
-	auto dictionary_size = GetDictionarySize();
-	auto dictionary_id = GetDictionaryId();
 	auto sliced_dictionary = GetSelVector().Slice(sel, count);
-	auto entry = GetEntryPtr();
-	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), count, std::move(entry));
-	if (dictionary_size.IsValid()) {
-		auto &dict_buffer = new_buffer->Cast<DictionaryBuffer>();
-		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-		dict_buffer.SetDictionaryId(std::move(dictionary_id));
-	}
+	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), count, entry);
 	return new_buffer;
 }
 
@@ -151,7 +138,7 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalTyp
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
-	entry->size = size;
+	FlatVector::SetSize(entry->data, size);
 	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
 	return entry;
 }
@@ -165,7 +152,6 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	if (!entry.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
-		D_ASSERT(!entry.size.IsValid() || entry.size.GetIndex() == dictionary_size);
 		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
 		VectorOperations::Hash(entry.data, *entry.cached_hashes, dictionary_size);
 	}

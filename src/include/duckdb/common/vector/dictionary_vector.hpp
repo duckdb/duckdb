@@ -20,8 +20,7 @@ public:
 
 public:
 	Vector data;
-	//! Optional size/id to uniquely identify re-occurring dictionaries
-	optional_idx size;
+	//! Optional id to uniquely identify re-occurring dictionaries
 	string id;
 	//! For caching the hashes of a child buffer
 	mutex cached_hashes_lock;
@@ -50,17 +49,14 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
-	void SetDictionarySize(idx_t dict_size) {
-		dictionary_size = dict_size;
-	}
 	optional_idx GetDictionarySize() const {
-		return dictionary_size;
+		return entry->data.HasSize() ? entry->data.size() : optional_idx();
 	}
 	void SetDictionaryId(string id) {
-		dictionary_id = std::move(id);
+		entry->id = std::move(id);
 	}
 	const string &GetDictionaryId() const {
-		return dictionary_id;
+		return entry->id;
 	}
 
 	DictionaryEntry &GetEntry() {
@@ -94,9 +90,6 @@ protected:
 private:
 	SelectionVector sel_vector;
 	buffer_ptr<DictionaryEntry> entry;
-	optional_idx dictionary_size;
-	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent
-	string dictionary_id;
 };
 
 struct DictionaryVector {
@@ -129,19 +122,11 @@ struct DictionaryVector {
 	static inline optional_idx DictionarySize(const Vector &vector) {
 		VerifyDictionary(vector);
 		const auto &dict_buffer = vector.Buffer().Cast<DictionaryBuffer>();
-		const auto &entry = dict_buffer.GetEntry();
-		if (entry.size.IsValid()) {
-			return entry.size;
-		}
 		return dict_buffer.GetDictionarySize();
 	}
 	static inline const string &DictionaryId(const Vector &vector) {
 		VerifyDictionary(vector);
 		const auto &dict_buffer = vector.Buffer().Cast<DictionaryBuffer>();
-		const auto &entry = dict_buffer.GetEntry();
-		if (!entry.id.empty()) {
-			return entry.id;
-		}
 		return dict_buffer.GetDictionaryId();
 	}
 	static inline bool CanCacheHashes(const LogicalType &type) {
