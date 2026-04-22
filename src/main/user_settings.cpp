@@ -143,14 +143,7 @@ CachedGlobalSettings &GlobalUserSettings::GetSettings() const {
 	static __tlssim<CachedGlobalSettings> current_cache_impl;
 #define current_cache (*current_cache_impl.access())
 #else
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
-#endif
 	thread_local CachedGlobalSettings current_cache;
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 #endif
 
 	const auto current_version = settings_version.load(std::memory_order_relaxed);

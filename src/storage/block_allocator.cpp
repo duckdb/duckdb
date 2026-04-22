@@ -201,14 +201,7 @@ BlockAllocatorThreadLocalState &GetBlockAllocatorThreadLocalState(const BlockAll
 	(*local_state).TryInitialize(block_allocator);
 	return *local_state;
 #else
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
-#endif
 	thread_local BlockAllocatorThreadLocalState local_state(block_allocator);
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 	local_state.TryInitialize(block_allocator);
 	return local_state;
 #endif
