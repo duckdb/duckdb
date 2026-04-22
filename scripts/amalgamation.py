@@ -19,6 +19,7 @@ amal_dir = os.path.join('src', 'amalgamation')
 always_excluded = []
 written_files = {}
 
+
 def need_to_write_file(current_file, ignore_excluded=False):
     if amal_dir in current_file:
         return False
@@ -45,6 +46,7 @@ def list_files(dname, file_list):
         elif fname.endswith(('.cpp', '.c', '.cc')):
             if need_to_write_file(fpath):
                 file_list.append(fpath)
+
 
 def list_sources():
     file_list = []
@@ -73,7 +75,6 @@ def list_includes_files(include_dirs):
     return file_list
 
 
-
 def copy_if_different(src, dest):
     if os.path.isfile(dest):
         # dest exists, check if the files are different
@@ -90,6 +91,7 @@ def copy_if_different(src, dest):
 
 def list_includes():
     return list_includes_files(include_paths)
+
 
 def list_include_dirs():
     return include_paths
