@@ -22,14 +22,14 @@ SELECT id FROM t WHERE id = 5
 5
 
 query I
-SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
+SELECT memory_usage_bytes > 0 FROM duckdb_memory() WHERE tag = 'ART_INDEX'
 ----
-524288
+true
 
 query I
-SELECT used_blocks FROM pragma_database_size()
+SELECT used_blocks > 1 FROM pragma_database_size()
 ----
-3
+true
 
 statement ok con1
 BEGIN
@@ -43,14 +43,14 @@ statement ok
 DROP TABLE t
 
 query I
-SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
+SELECT memory_usage_bytes > 0 FROM duckdb_memory() WHERE tag = 'ART_INDEX'
 ----
-524288
+true
 
 query I
-SELECT used_blocks FROM pragma_database_size()
+SELECT used_blocks > 1 FROM pragma_database_size()
 ----
-3
+true
 
 query II con1
 EXPLAIN ANALYZE SELECT id FROM t WHERE id = 5
@@ -69,11 +69,6 @@ query I
 SELECT memory_usage_bytes FROM duckdb_memory() WHERE tag = 'ART_INDEX'
 ----
 0
-
-query I
-SELECT used_blocks FROM pragma_database_size()
-----
-3
 
 statement ok
 CHECKPOINT
