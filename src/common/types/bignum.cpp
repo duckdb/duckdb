@@ -188,7 +188,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	uint8_t *result_data = reinterpret_cast<uint8_t *>(&result[BIGNUM_HEADER_SIZE]);
 	if (is_negative) {
 		for (idx_t i = 0; i < size; i++) {
-			result_data[i] = ~data[i];
+			result_data[i] = static_cast<uint8_t>(~data[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < size; i++) {

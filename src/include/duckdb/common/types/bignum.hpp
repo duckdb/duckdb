@@ -81,7 +81,7 @@ public:
 		for (idx_t i = 0; i < data_byte_size; ++i) {
 			uint8_t byte = static_cast<uint8_t>(data[Bignum::BIGNUM_HEADER_SIZE + i]);
 			if (is_negative) {
-				byte = ~byte;
+				byte = static_cast<uint8_t>(~byte);
 			}
 			abs_value = (abs_value << 8) | byte;
 		}
