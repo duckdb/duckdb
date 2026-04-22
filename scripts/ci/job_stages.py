@@ -44,6 +44,13 @@ MERGE_GROUP_JOBS = [
     "tidy-check",
 ]
 
+RELEASE_JOBS = [
+    "osx",
+    "static-libraries",
+    "release-status",
+    "notify-external-repos",
+]
+
 SKIP_TESTS_JOBS = {
     "linux-debug-tests",
     "regression",
@@ -60,7 +67,12 @@ SUMMARY_JOBS = [
     "summary",
 ]
 
-ALL_JOBS = set(PREPARE_JOBS) | set(PULL_REQUEST_JOBS) | set(NIGHTLY_JOBS) | set(MERGE_GROUP_JOBS) | set(SUMMARY_JOBS)
+ALL_JOBS = set(PREPARE_JOBS)
+ALL_JOBS |= set(PULL_REQUEST_JOBS)
+ALL_JOBS |= set(NIGHTLY_JOBS)
+ALL_JOBS |= set(MERGE_GROUP_JOBS)
+ALL_JOBS |= set(SUMMARY_JOBS)
+ALL_JOBS |= set(RELEASE_JOBS)
 
 
 @dataclass(frozen=True)
@@ -100,6 +112,9 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
 
     if "julia" in selection_input.changed_keys:
         selected_jobs.append("main_julia")
+
+    if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:
+        selected_jobs.extend(RELEASE_JOBS)
 
     return selected_jobs
 

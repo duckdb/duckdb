@@ -421,6 +421,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 }
 
+// typos:off
 static const char *const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
@@ -854,6 +855,7 @@ k9EbTcRNnxCvab/oqjvgyRuSmIES00v8jZOGQZQUpw02RN6yCBeX2i8GPsGjj/T9
 -----END PUBLIC KEY-----
 )", nullptr};
 
+// typos:on
 const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensions) {
 	vector<string> keys;
 	for (idx_t i = 0; public_keys[i]; i++) {

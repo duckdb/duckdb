@@ -2,7 +2,7 @@
 
 Starting with V2.0, window functions will no longer be special cased via enums
 but will be stored in the catalog as a new function type.
-They are in the same namepace as macros and as scalar and aggregate functions.
+They are in the same namespace as macros and as scalar and aggregate functions.
 
 Among other things, this means that extensions will be able to register _new_ window functions.
 New window functions should be functions that _cannot_ be implemented as windowed aggregates.

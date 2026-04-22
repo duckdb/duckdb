@@ -67,12 +67,17 @@ class JobStagesTest(unittest.TestCase):
         self.assertIn("valgrind", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
-    def test_workflow_dispatch_matches_push_selection(self):
+    def test_workflow_dispatch_adds_release_jobs(self):
         for ref_name in ["feature/my-branch", "main"]:
             push_selection = self._compute_job_selection("push", ref_name, "duckdb/duckdb")
             workflow_dispatch_selection = self._compute_job_selection("workflow_dispatch", ref_name, "duckdb/duckdb")
-            self.assertEqual(workflow_dispatch_selection.enabled_jobs, push_selection.enabled_jobs)
+            self.assertTrue(set(push_selection.enabled_jobs).issubset(set(workflow_dispatch_selection.enabled_jobs)))
+            self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
+
+    def test_repository_dispatch_adds_release_jobs(self):
+        selection = self._compute_job_selection("repository_dispatch", "feature/my-branch", "duckdb/duckdb")
+        self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(selection.enabled_jobs)))
 
     def test_regular_branch_excludes_main_only_jobs(self):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
