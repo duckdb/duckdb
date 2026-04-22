@@ -42,17 +42,17 @@ VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(ca
 }
 
 VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p, idx_t capacity)
-    : StandardVectorBuffer(data_ptr_p, capacity) {
+    : StandardVectorBuffer(data_ptr_p, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity)
-    : StandardVectorBuffer(std::move(data_p), capacity), heap(AllocateHeap()) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)), heap(AllocateHeap()) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity, const VectorStringBuffer &other)
-    : StandardVectorBuffer(std::move(data_p), capacity) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {
 		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(auxiliary_data)));
@@ -85,6 +85,21 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
 	return result;
+}
+
+void VectorStringBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto ldata = FlatVector::GetData<string_t>(source);
+	auto tdata = reinterpret_cast<string_t *>(data_ptr);
+	auto &append_heap = GetHeap();
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_sel.get_index(source_offset + i);
+		auto target_idx = target_offset + i;
+		if (!validity.RowIsValid(target_idx)) {
+			continue;
+		}
+		tdata[target_idx] = append_heap.AddBlob(ldata[source_idx]);
+	}
 }
 
 void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

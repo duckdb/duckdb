@@ -135,7 +135,6 @@ struct ListConcatInputData {
 	UnifiedVectorFormat vdata;
 	Vector &input;
 	Vector &child_vec;
-	UnifiedVectorFormat child_vdata;
 	const list_entry_t *input_entries = nullptr;
 };
 
@@ -154,13 +153,10 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		input.ToUnifiedFormat(count, data.vdata);
 
 		data.input_entries = UnifiedVectorFormat::GetData<list_entry_t>(data.vdata);
-		auto list_size = ListVector::GetListSize(input);
-
-		child_vec.ToUnifiedFormat(list_size, data.child_vdata);
-
 		input_data.push_back(std::move(data));
 	}
 
+	vector<sel_t> child_idx_data;
 	idx_t offset = 0;
 	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -177,8 +173,14 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 			}
 			const auto &list_entry = data.input_entries[list_index];
 			result_data[i].length += list_entry.length;
-			ListVector::Append(result, data.child_vec, *data.child_vdata.sel, list_entry.offset + list_entry.length,
-			                   list_entry.offset);
+			if (child_idx_data.size() < list_entry.length) {
+				child_idx_data.resize(NextPowerOfTwo(list_entry.length));
+			}
+			for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
+				child_idx_data[child_idx] = NumericCast<sel_t>(list_entry.offset + child_idx);
+			}
+			SelectionVector child_sel(child_idx_data.data(), list_entry.length);
+			ListVector::Append(result, data.child_vec, child_sel, list_entry.length);
 		}
 		offset += result_data[i].length;
 	}

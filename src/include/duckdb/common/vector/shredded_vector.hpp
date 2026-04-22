@@ -14,7 +14,7 @@ namespace duckdb {
 
 class ShreddedVectorBuffer : public VectorBuffer {
 public:
-	explicit ShreddedVectorBuffer(Vector &shredded_data, idx_t capacity);
+	explicit ShreddedVectorBuffer(Vector &shredded_data, idx_t count);
 	~ShreddedVectorBuffer() override;
 
 public:
@@ -24,7 +24,7 @@ public:
 
 public:
 	idx_t Capacity() const override {
-		return capacity;
+		return Size();
 	}
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
@@ -35,7 +35,6 @@ public:
 
 private:
 	unique_ptr<Vector> shredded_data;
-	idx_t capacity;
 };
 
 struct ShreddedVector {

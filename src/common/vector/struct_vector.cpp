@@ -183,8 +183,7 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+void VectorStructBuffer::Resize(idx_t current_size, idx_t new_size) {
 	// resize over the validity
 	validity.Resize(new_size);
 	// resize the struct children
@@ -192,7 +191,15 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Resize(const LogicalType &type, idx
 		child.Resize(current_size, new_size);
 	}
 	capacity = new_size;
-	return nullptr;
+}
+
+void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto &source_children = StructVector::GetEntries(source);
+	D_ASSERT(source_children.size() == children.size());
+	for (idx_t i = 0; i < source_children.size(); i++) {
+		children[i].Copy(source_children[i], source_sel, source_count, source_offset, target_offset, copy_count);
+	}
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,

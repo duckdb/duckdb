@@ -144,13 +144,12 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 	return result;
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
+void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
 	// resize the validity
 	validity.Resize(new_size);
 	// resize the child
 	child->Resize(current_size * array_size, new_size * array_size);
 	capacity = new_size;
-	return nullptr;
 }
 
 void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
@@ -161,6 +160,24 @@ void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format
 	}
 	format.data = nullptr;
 	format.validity = validity;
+}
+
+void VectorArrayBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                     idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(ArrayType::GetSize(source.GetType()) == array_size);
+
+	auto &source_child = ArrayVector::GetChild(source);
+
+	// Create a selection vector for the child elements
+	SelectionVector child_sel(copy_count * array_size);
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_sel.get_index(source_offset + i);
+		for (idx_t j = 0; j < array_size; j++) {
+			child_sel.set_index(i * array_size + j, source_idx * array_size + j);
+		}
+	}
+	child->Copy(source_child, child_sel, source_count * array_size, 0, target_offset * array_size,
+	            copy_count * array_size);
 }
 
 void VectorArrayBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

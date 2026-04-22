@@ -926,7 +926,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"ExecuteStatement <- 'EXECUTE' Identifier TableFunctionArguments?\n"
 	"CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList\n"
 	"SecretStorageSpecifier <- 'IN' Identifier\n"
-	"CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? 'AS' SelectStatementInternal\n"
+	"CreateViewStmt <- 'RECURSIVE'? 'VIEW' IfNotExists? QualifiedName InsertColumnList? WithList? 'AS' SelectStatementInternal\n"
 	"DescribeStatement <- ShowTables / ShowSelect / ShowAllTables / ShowQualifiedName\n"
 	"ShowSelect <- ShowOrDescribeOrSummarize SelectStatementInternal\n"
 	"ShowAllTables <- ShowOrDescribe 'ALL' 'TABLES'\n"
