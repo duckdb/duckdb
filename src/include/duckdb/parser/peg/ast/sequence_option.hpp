@@ -8,6 +8,7 @@ class SequenceOption {
 public:
 	explicit SequenceOption(SequenceInfo type_p) : type(type_p) {
 	}
+	virtual ~SequenceOption() = default;
 
 public:
 	SequenceInfo type;
