@@ -13,30 +13,30 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	const auto &rhs_type = arguments[1]->return_type;
 
 	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
-		bound_function.arguments[0] = rhs_type;
-		bound_function.arguments[1] = lhs_type;
+		bound_function.GetArguments()[0] = rhs_type;
+		bound_function.GetArguments()[1] = lhs_type;
 		bound_function.SetReturnType(LogicalType::UNKNOWN);
 		return nullptr;
 	}
 
-	bound_function.arguments[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
-	bound_function.arguments[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
+	bound_function.GetArguments()[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
+	bound_function.GetArguments()[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
 
-	if (bound_function.arguments[0].id() != LogicalTypeId::ARRAY ||
-	    bound_function.arguments[1].id() != LogicalTypeId::ARRAY) {
+	if (bound_function.GetArguments()[0].id() != LogicalTypeId::ARRAY ||
+	    bound_function.GetArguments()[1].id() != LogicalTypeId::ARRAY) {
 		throw InvalidInputException(
 		    StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.name));
 	}
 
-	const auto lhs_size = ArrayType::GetSize(bound_function.arguments[0]);
-	const auto rhs_size = ArrayType::GetSize(bound_function.arguments[1]);
+	const auto lhs_size = ArrayType::GetSize(bound_function.GetArguments()[0]);
+	const auto rhs_size = ArrayType::GetSize(bound_function.GetArguments()[1]);
 
 	if (lhs_size != rhs_size) {
 		throw BinderException("%s: Array arguments must be of the same size", bound_function.name);
 	}
 
-	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.arguments[0]);
-	const auto &rhs_element_type = ArrayType::GetChildType(bound_function.arguments[1]);
+	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[0]);
+	const auto &rhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[1]);
 
 	// Resolve common type
 	LogicalType common_type;
@@ -51,8 +51,8 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	}
 
 	// The important part is just that we resolve the size of the input arrays
-	bound_function.arguments[0] = LogicalType::ARRAY(common_type, lhs_size);
-	bound_function.arguments[1] = LogicalType::ARRAY(common_type, rhs_size);
+	bound_function.GetArguments()[0] = LogicalType::ARRAY(common_type, lhs_size);
+	bound_function.GetArguments()[1] = LogicalType::ARRAY(common_type, rhs_size);
 
 	return nullptr;
 }

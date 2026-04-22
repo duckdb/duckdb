@@ -63,7 +63,7 @@ static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input)
 
 	// Since the type of the argument we declared of in `GetFunction` doesn't contain the inner STRUCT type,
 	// we should take it from the arguments
-	bound_function.arguments[0] = arg_type;
+	bound_function.GetArguments()[0] = arg_type;
 
 	// Build unnamed children list using only types, with empty names
 	child_list_t<LogicalType> unnamed_children;

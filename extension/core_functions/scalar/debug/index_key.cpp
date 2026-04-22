@@ -172,16 +172,16 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		                      index_name, key_types.size(), num_key_args);
 	}
 
-	// Set bound_function.arguments to actual types for proper casting.
+	// Set bound_function.GetArguments() to actual types for proper casting.
 	// Note: In case this is ever a bottleneck for testing purposes -- currently, we retain the first two arguments
 	// for execution even though they are only required for binding. This requires us to create a key_chunk
 	// that only references the key columns during execution. We could erase the first two arguments here, but
 	// that also requires some (de)serialization boilerplate, so for now we don't do it.
-	bound_function.arguments.clear();
-	bound_function.arguments.push_back(arguments[0]->return_type);
-	bound_function.arguments.push_back(arguments[1]->return_type);
+	bound_function.GetArguments().clear();
+	bound_function.GetArguments().push_back(arguments[0]->return_type);
+	bound_function.GetArguments().push_back(arguments[1]->return_type);
 	for (auto &key_type : key_types) {
-		bound_function.arguments.push_back(key_type);
+		bound_function.GetArguments().push_back(key_type);
 	}
 
 	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
@@ -226,7 +226,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 ScalarFunction IndexKeyFun::GetFunction() {
 	ScalarFunction fun("index_key", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::BLOB, IndexKeyFunction,
 	                   IndexKeyBind);
-	fun.varargs = LogicalTypeId::ANY;
+	fun.SetVarArgs(LogicalTypeId::ANY);
 	return fun;
 }
 
