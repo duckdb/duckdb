@@ -15,16 +15,16 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(PEGTran
 	auto &parens = list_pr.Child<OptionalParseResult>(4);
 	if (parens.HasResult()) {
 		auto option_list = transformer.Transform<vector<GenericCopyOption>>(parens.GetResult());
-		case_insensitive_map_t<vector<Value>> option_result;
 		for (auto &option : option_list) {
 			if (option.name == "format") {
 				info->format = option.children[0].GetValue<string>();
 				info->is_format_auto_detected = false;
+			} else if (option.expression) {
+				info->parsed_options[StringUtil::Upper(option.name)] = std::move(option.expression);
 			} else {
-				option_result[StringUtil::Upper(option.name)] = option.children;
+				info->options[StringUtil::Upper(option.name)] = option.children;
 			}
 		}
-		info->options = option_result;
 	}
 
 	auto result = make_uniq<ExportStatement>(std::move(info));
