@@ -641,12 +641,6 @@ benchmark:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
-amaldebug:
-	mkdir -p ./build/amaldebug && \
-	$(PYTHON) scripts/amalgamation.py && \
-	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
 
 tidy-check:
 	mkdir -p ./build/tidy && \
@@ -680,7 +674,7 @@ tidy-fix:
 	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	$(PYTHON) scripts/amalgamation.py --compile
+	$(PYTHON) scripts/test_compile.py
 
 format-check: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py --all --check
@@ -689,7 +683,6 @@ format-check-silent: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py --all --check --silent
 
 format-fix: $(FORMAT_SETUP_DEPS)
-	rm -rf src/amalgamation/*
 	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
 
 .PHONY: check-extension-entries
