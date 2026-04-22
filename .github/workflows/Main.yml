@@ -596,10 +596,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v7
@@ -691,10 +690,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - uses: actions/upload-artifact@v7
@@ -820,8 +818,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
@@ -989,30 +986,6 @@ jobs:
     - name: Test Extra
       if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan_extra
-
- amalgamation-tests:
-    name: Amalgamation Tests
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'amalgamation-tests') }}
-    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
-    needs:
-      - prepare
-      - linux-debug
-    env:
-      CC: clang
-      CXX: clang++
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Generate Amalgamation
-      shell: bash
-      run:  |
-          python scripts/amalgamation.py --extended
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
 
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
@@ -1228,7 +1201,6 @@ jobs:
       - vector-sizes
       - valgrind
       - threadsan
-      - amalgamation-tests
       - linux-configs
     steps:
       - name: Check CI status

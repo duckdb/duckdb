@@ -103,8 +103,6 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
         # Dont include the generated header itself recursively
         if file == "enum_util.hpp":
             continue
-        if 'amalgamation' in root:
-            continue
 
         if file.endswith(".hpp"):
             hpp_files.append(os.path.join(root, file))

@@ -25,7 +25,6 @@ PULL_REQUEST_JOBS = [
     "no-string-inline",
     "vector-sizes",
     "threadsan",
-    "amalgamation-tests",
     "linux-configs",
 ]
 
