@@ -852,7 +852,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 		if (constant.IsNull()) {
 			return false;
 		}
-		auto column = make_uniq<BoundReferenceExpression>(constant.type(), 0);
+		auto column = make_uniq<BoundReferenceExpression>(constant.type(), 0ULL);
 		auto expression = dynamic_filter.filter_data->ToExpression(*column);
 		return ExpressionFilter(std::move(expression)).EvaluateWithConstant(context, constant);
 	}
@@ -919,7 +919,7 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 }
 
 static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type) {
-	return make_uniq<BoundReferenceExpression>(type, storage_t(0));
+	return make_uniq<BoundReferenceExpression>(type, 0ULL);
 }
 
 static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
@@ -1116,7 +1116,7 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		if (!new_constant.DefaultTryCastAs(target_type)) {
 			return nullptr;
 		}
-		auto lhs = make_uniq<BoundReferenceExpression>(target_type, 0);
+		auto lhs = make_uniq<BoundReferenceExpression>(target_type, 0ULL);
 		auto rhs = make_uniq<BoundConstantExpression>(std::move(new_constant));
 		return make_uniq<ExpressionFilter>(make_uniq<BoundComparisonExpression>(
 		    dynamic_filter.filter_data->comparison_type, std::move(lhs), std::move(rhs)));
