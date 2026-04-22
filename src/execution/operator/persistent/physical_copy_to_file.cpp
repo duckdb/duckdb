@@ -896,10 +896,6 @@ void PartitionedCopyState::ExecuteTask(ExecutionContext &execution_context, cons
 void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
 	const auto group_idx = task.group_idx;
 	auto &finished_hash_group = hash_groups[group_idx];
-	if (!finished_hash_group) {
-		D_ASSERT(task.stage != PartitionedCopyStage::FLUSH);
-		return;
-	}
 
 	bool hash_group_completed = false;
 	if (task.stage == PartitionedCopyStage::FLUSH) {
