@@ -339,7 +339,9 @@ public:
 	bool HasGetStateTypeCallback() const {
 		return get_state_type != nullptr;
 	}
-	aggregate_get_state_type_t GetStateTypeCallback() const { return get_state_type; }
+	aggregate_get_state_type_t GetStateTypeCallback() const {
+		return get_state_type;
+	}
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		get_state_type = get_state_type_callback;
