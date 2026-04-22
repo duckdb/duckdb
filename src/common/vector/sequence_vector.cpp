@@ -42,7 +42,7 @@ Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
 }
 
 buffer_ptr<VectorBuffer> SequenceBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
-                                                 idx_t count) const {
+                                                              idx_t count) const {
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
 	auto result = flattened_vector.GetBufferRef();

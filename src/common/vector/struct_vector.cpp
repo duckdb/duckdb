@@ -35,6 +35,7 @@ VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const Selectio
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
+	v_size = count;
 }
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
@@ -104,6 +105,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 	}
 	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), end - offset);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 
@@ -212,8 +214,8 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, id
 	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
 }
 
-
-buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                  idx_t count) const {
 	// create a new flat struct buffer
 	// flatten each child using the same sel
 	vector<Vector> result_children;

@@ -56,7 +56,7 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 }
 
 buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
-                                                       idx_t count) const {
+                                                                    idx_t count) const {
 	Vector *source = shredded_data.get();
 	// if a selection vector is provided, slice the shredded data first
 	unique_ptr<Vector> sliced;

@@ -146,8 +146,7 @@ public:
 	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const;
 	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
 	//! The selection vector maps output indices to source indices in this buffer
-	buffer_ptr<VectorBuffer> FlattenSlice(const LogicalType &type, const SelectionVector &sel,
-	                                              idx_t count) const;
+	buffer_ptr<VectorBuffer> FlattenSlice(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Returns the total (uncompressed) data size
 	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
 	//! Returns the total amount of bytes allocated by the vector buffer

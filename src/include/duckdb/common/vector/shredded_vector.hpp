@@ -33,7 +33,8 @@ public:
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:
-	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 private:
 	unique_ptr<Vector> shredded_data;

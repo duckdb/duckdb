@@ -103,7 +103,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
-                                                    idx_t count) const {
+                                                                 idx_t count) const {
 	// now construct the result
 	auto result = make_buffer<VectorArrayBuffer>(nullptr, array_size, count);
 
@@ -137,6 +137,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 	auto &result_child = result->GetChild();
 	result_child.Slice(*child, offset * array_size, end * array_size);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 

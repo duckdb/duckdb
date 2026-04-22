@@ -67,6 +67,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset, type_size);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 
@@ -151,7 +152,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
-												   idx_t count) const {
+                                                                    idx_t count) const {
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
 	auto target_byte_count = allocated_count * type_size;

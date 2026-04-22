@@ -162,9 +162,10 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 		return nullptr;
 	}
 	auto result = SliceInternal(type, offset, end);
-	if (result && v_size.IsValid()) {
-		// propagate the size of the original buffer to the sliced buffer
-		result->v_size = end - offset;
+	if (result) {
+		if (!result->HasSize() || result->Size() != end - offset) {
+			throw InternalException("Slice with offset,end did not set size correctly");
+		}
 	}
 	return result;
 }
@@ -176,8 +177,9 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 	}
 	auto result = SliceInternal(type, sel, count);
 	if (result && v_size.IsValid()) {
-		// propagate the size of the original buffer to the sliced buffer
-		result->v_size = count;
+		if (!result->HasSize() || result->Size() != count) {
+			throw InternalException("Slice with count did not set size correctly");
+		}
 	}
 	return result;
 }
@@ -199,7 +201,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	// default slice: flatten with a selection vector and then wrap in a dictionary
+	// default slice: flatten with a selection vector
 	return FlattenSlice(type, sel, count);
 }
 

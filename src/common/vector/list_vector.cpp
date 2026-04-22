@@ -135,6 +135,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type
 	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<VectorListBuffer>(offset_ptr, end - offset, *this);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 
@@ -198,7 +199,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, idx_
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
-                                                   idx_t count) const {
+                                                                idx_t count) const {
 	// flatten the list offsets
 	auto result = StandardVectorBuffer::FlattenSliceInternal(type, sel, count);
 	// now flatten the child
