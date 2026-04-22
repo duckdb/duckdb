@@ -229,7 +229,7 @@ protected:
 	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
-	//! this funtion try skip page in below conditions:
+	//! this function try skip page in below conditions:
 	//! 1. a previous table filter has filtered out this page
 	//! 2. page statistics could skip page
 	bool PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter);
