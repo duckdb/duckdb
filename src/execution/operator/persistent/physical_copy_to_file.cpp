@@ -499,7 +499,6 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextTask() {
 		case PartitionedCopyStage::FLUSH:
 			return TryNextFlushTask();
 		default:
-			std::nullopt;
 			return nullopt;
 		}
 	}
