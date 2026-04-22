@@ -67,7 +67,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainableStatements(P
 }
 
 vector<GenericCopyOption> PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+                                                                            ParseResult &parse_result) {
 	vector<GenericCopyOption> result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));

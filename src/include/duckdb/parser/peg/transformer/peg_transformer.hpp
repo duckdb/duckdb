@@ -631,8 +631,7 @@ private:
 	static unique_ptr<SQLStatement> TransformExplainStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformExplainableStatements(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
-	static vector<GenericCopyOption> TransformExplainOptionList(PEGTransformer &transformer,
-	                                                            ParseResult &parse_result);
+	static vector<GenericCopyOption> TransformExplainOptionList(PEGTransformer &transformer, ParseResult &parse_result);
 	static GenericCopyOption TransformExplainOption(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// export.gram
