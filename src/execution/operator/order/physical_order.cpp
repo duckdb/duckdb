@@ -42,19 +42,6 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	return make_uniq<OrderGlobalSinkState>(*this, context);
 }
 
-bool PhysicalOrder::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                        LocalSinkState &state_p) const {
-	auto &state = state_p.Cast<OrderLocalSinkState>();
-	state.state.reset();
-	return true;
-}
-
-bool PhysicalOrder::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	auto &state = state_p.Cast<OrderGlobalSinkState>();
-	state.state = state.sort.GetGlobalSinkState(context);
-	return true;
-}
-
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
@@ -125,21 +112,6 @@ unique_ptr<LocalSourceState> PhysicalOrder::GetLocalSourceState(ExecutionContext
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<OrderGlobalSourceState>(context, sink_state->Cast<OrderGlobalSinkState>());
-}
-
-bool PhysicalOrder::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate_p,
-                                          LocalSourceState &state_p) const {
-	auto &gstate = gstate_p.Cast<OrderGlobalSourceState>();
-	auto &state = state_p.Cast<OrderLocalSourceState>();
-	state.state = gstate.sort.GetLocalSourceState(context, *gstate.state);
-	return true;
-}
-
-bool PhysicalOrder::ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state_p) const {
-	auto &state = state_p.Cast<OrderGlobalSourceState>();
-	auto &sink = sink_state->Cast<OrderGlobalSinkState>();
-	state.state = state.sort.GetGlobalSourceState(context, *sink.state);
-	return true;
 }
 
 SourceResultType PhysicalOrder::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
