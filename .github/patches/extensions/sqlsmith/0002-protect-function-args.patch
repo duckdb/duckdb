@@ -1,0 +1,66 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index afd174d..ae18964 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -565,7 +565,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
+ 
+ 	auto result = make_uniq<TableFunctionRef>();
+ 	vector<unique_ptr<ParsedExpression>> children;
+-	for (idx_t i = 0; i < table_function.arguments.size(); i++) {
++	for (idx_t i = 0; i < table_function.GetArguments().size(); i++) {
+ 		children.push_back(GenerateConstant());
+ 	}
+ 	vector<string> names;
+@@ -762,10 +762,10 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		auto offset = RandomValue(scalar_entry.functions.Size());
+ 		auto actual_function = scalar_entry.functions.GetFunctionByOffset(offset);
+ 		name = scalar_entry.name;
+-		arguments = actual_function.arguments;
+-		min_parameters = actual_function.arguments.size();
++		arguments = actual_function.GetArguments();
++		min_parameters = actual_function.GetArguments().size();
+ 		max_parameters = min_parameters;
+-		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
++		if (actual_function.GetVarArgs().id() != LogicalTypeId::INVALID) {
+ 			max_parameters += 5;
+ 		}
+ 		break;
+@@ -776,9 +776,9 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
+ 		    aggregate_entry.functions.GetFunctionByOffset(RandomValue(aggregate_entry.functions.Size()));
+ 
+ 		name = aggregate_entry.name;
+-		min_parameters = actual_function.arguments.size();
++		min_parameters = actual_function.GetArguments().size();
+ 		max_parameters = min_parameters;
+-		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
++		if (actual_function.GetVarArgs().id() != LogicalTypeId::INVALID) {
+ 			max_parameters += 5;
+ 		}
+ 		if (RandomPercentage(10) && !in_window) {
+@@ -944,7 +944,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
+ 	if (function) {
+ 		type = ExpressionType::WINDOW_AGGREGATE;
+ 		name = function->name;
+-		min_parameters = function->arguments.size();
++		min_parameters = function->GetArguments().size();
+ 		max_parameters = min_parameters;
+ 	} else {
+ 		name = Choose<string>({"rank", "rank_dense", "percent_rank", "row_number", "first_value", "last_value",
+@@ -1284,7 +1284,7 @@ string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_functio
+ 	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
+ 
+ 	vector<unique_ptr<ParsedExpression>> children;
+-	for (auto &arg : base_function.arguments) {
++	for (auto &arg : base_function.GetArguments()) {
+ 		// look up the type
+ 		unique_ptr<ParsedExpression> argument;
+ 		if (!always_null) {
+@@ -1319,7 +1319,7 @@ string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_func
+ 	vector<unique_ptr<ParsedExpression>> children;
+ 	vector<unique_ptr<ParsedExpression>> test_vector_types;
+ 	vector<string> column_aliases;
+-	for (auto &arg : base_function.arguments) {
++	for (auto &arg : base_function.GetArguments()) {
+ 		unique_ptr<ParsedExpression> argument;
+ 		if (!always_null) {
+ 			string argument_name = "c" + to_string(column_aliases.size() + 1);

@@ -170,8 +170,8 @@ public:
 	LogicalType &GetVarArgs() {
 		return varargs;
 	} // TODO: Dont expose mutable accessor
-	void SetVarArgs(const LogicalType &varargs_p) {
-		varargs = varargs_p;
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
 	}
 
 	DUCKDB_API virtual string ToString() const;

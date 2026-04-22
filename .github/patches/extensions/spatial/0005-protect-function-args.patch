@@ -1,0 +1,128 @@
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 279cad6..b313294 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -97,15 +97,15 @@ public:
+ 		if (predicates.find(function.name) == predicates.end()) {
+ 			return false;
+ 		}
+-		if (function.arguments.size() < 2) {
++		if (function.GetArguments().size() < 2) {
+ 			// We can only optimize if there are two children
+ 			return false;
+ 		}
+-		if (function.arguments[0] != LogicalType::GEOMETRY()) {
++		if (function.GetArguments()[0] != LogicalType::GEOMETRY()) {
+ 			// We can only optimize if the first child is a GEOMETRY
+ 			return false;
+ 		}
+-		if (function.arguments[1] != LogicalType::GEOMETRY()) {
++		if (function.GetArguments()[1] != LogicalType::GEOMETRY()) {
+ 			// We can only optimize if the second child is a GEOMETRY
+ 			return false;
+ 		}
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index cd1905a..43039c6 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -2887,7 +2887,7 @@ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
+ 
+ 		if (arguments.size() == 2) {
+ 			arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::BOOLEAN(true)));
+-			function.arguments.push_back(LogicalType::BOOLEAN);
++			function.GetArguments().push_back(LogicalType::BOOLEAN);
+ 		}
+ 		return nullptr;
+ 	}
+@@ -2968,7 +2968,7 @@ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
+ 			func.SetDescription("Simplifies a set of geometries while maintaining coverage");
+ 
+ 			// TODO: this is a hack
+-			agg.arguments.push_back(LogicalType::BOOLEAN);
++			agg.GetArguments().push_back(LogicalType::BOOLEAN);
+ 			func.SetFunction(agg);
+ 			func.CanThrowErrors();
+ 
+@@ -3058,7 +3058,7 @@ struct ST_CoverageInvalidEdges_Agg : GEOSCoverageAggFunction {
+ 
+ 		if (arguments.size() == 1) {
+ 			arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::DOUBLE(0.0)));
+-			function.arguments.push_back(LogicalType::DOUBLE);
++			function.GetArguments().push_back(LogicalType::DOUBLE);
+ 		}
+ 		return nullptr;
+ 	}
+@@ -3133,7 +3133,7 @@ struct ST_CoverageInvalidEdges_Agg : GEOSCoverageAggFunction {
+ 			func.CanThrowErrors();
+ 
+ 			// TODO: this is a hack
+-			agg.arguments.push_back(LogicalType::DOUBLE);
++			agg.GetArguments().push_back(LogicalType::DOUBLE);
+ 			func.SetFunction(agg);
+ 			func.CanThrowErrors();
+ 
+diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
+index 7b5b442..6dfb537 100644
+--- a/src/spatial/modules/main/spatial_functions_table.cpp
++++ b/src/spatial/modules/main/spatial_functions_table.cpp
+@@ -132,7 +132,7 @@ struct ST_GeneratePoints {
+ 		set.AddFunction(generate_points);
+ 
+ 		// Overload with seed
+-		generate_points.arguments = {GeoTypes::BOX_2D(), LogicalType::BIGINT, LogicalType::BIGINT};
++		generate_points.GetArguments() = {GeoTypes::BOX_2D(), LogicalType::BIGINT, LogicalType::BIGINT};
+ 		set.AddFunction(generate_points);
+ 		loader.RegisterFunction(set);
+ 
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index 34b85e1..4127b90 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -1266,7 +1266,7 @@ struct ST_AsMVT {
+ 			func.SetFunction(agg);
+ 			for (auto &arg_type : optional_args) {
+ 				// Register all the variants with optional arguments
+-				agg.arguments.push_back(arg_type);
++				agg.GetArguments().push_back(arg_type);
+ 				func.SetFunction(agg);
+ 			}
+ 
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index 1a3a2ae..61429a7 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -301,7 +301,7 @@ struct ST_Transform {
+ 		}
+ 
+ 		// Set return types
+-		func.arguments[0] = geo_arg->return_type;
++		func.GetArguments()[0] = geo_arg->return_type;
+ 		func.SetReturnType(LogicalType::GEOMETRY(*result_crs));
+ 
+ 		// Check if we need to warn for this
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index be83e8b..e075ca5 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -124,7 +124,7 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, B
+ 
+ 		if (has_crs) {
+ 			// Override the type so that we set the CRS
+-			bound_function.arguments[arg_idx] = arg->return_type;
++			bound_function.GetArguments()[arg_idx] = arg->return_type;
+ 		}
+ 	}
+ 
+diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
+index ed0ef5c..e4d5165 100644
+--- a/src/spatial/util/function_builder.hpp
++++ b/src/spatial/util/function_builder.hpp
+@@ -68,7 +68,7 @@ private:
+ };
+ 
+ inline void ScalarFunctionVariantBuilder::AddParameter(const char *name, const LogicalType &type) {
+-	function.arguments.emplace_back(type);
++	function.GetArguments().emplace_back(type);
+ 	description.parameter_names.emplace_back(name);
+ 	description.parameter_types.emplace_back(type);
+ }
