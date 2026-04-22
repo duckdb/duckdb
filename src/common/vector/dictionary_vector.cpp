@@ -92,6 +92,25 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const
 	return result;
 }
 
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionary vectors");
+	}
+	auto &sel_data = GetSelVector().sel_data();
+	if (!sel_data) {
+		throw InternalException("Dictionary buffer without selection vector");
+	}
+	if (offset == 0) {
+		// for offset = 0 all we have to do is update the count - so just create a new buffer
+		return make_uniq<DictionaryBuffer>(sel_data, end, entry);
+	}
+	SelectionVector sliced_sel(sel_vector.data() + offset, end - offset);
+	auto result = make_uniq<DictionaryBuffer>(sliced_sel, end, entry);
+	result->AddAuxiliaryData(make_uniq<SelectionDataHolder>(sel_data));
+	return result;
+}
+
 buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                          idx_t count) {
 	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
