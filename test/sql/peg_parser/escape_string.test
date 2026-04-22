@@ -1,0 +1,69 @@
+# name: test/sql/peg_parser/escape_string.test
+# description: Test escape string capability in PEG parser
+# group: [peg_parser]
+
+require autocomplete
+
+statement ok
+call enable_peg_parser();
+
+query I
+SELECT e'\033' = chr(27);
+----
+true
+
+query I
+SELECT e'\7' = chr(7);
+----
+true
+
+statement error
+SELECT e'\xFF' = chr(255);
+----
+Parser Error: Invalid UTF-8 in escape string literal at byte offset 0: byte mismatch
+
+query I
+SELECT e'\x41' = 'A';
+----
+true
+
+query I
+SELECT e'\101' = 'A';
+----
+true
+
+query I
+SELECT e'\x' = 'x';
+----
+true
+
+query I
+SELECT e'\b' = chr(8);
+----
+true
+
+query I
+SELECT e'\f' = chr(12);
+----
+true
+
+query I
+SELECT e'\n' = chr(10);
+----
+true
+
+query I
+SELECT e'\1012' = 'A2';
+----
+true
+
+statement error
+SELECT e'\400';
+----
+Parser Error: Null character not permitted in escape string literal
+
+statement error
+SELECT e'\000';
+----
+Parser Error: Null character not permitted in escape string literal
+

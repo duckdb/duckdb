@@ -23,6 +23,10 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+FORMAT_VENV ?= build/format-venv
+FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
+FORMAT_SETUP_DEPS := format_venv
+
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
 EXE_SUFFIX := .exe
@@ -41,6 +45,7 @@ ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
+export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 25 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -207,6 +212,27 @@ ifeq (${CONFIGURE_R}, 1)
 endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
+endif
+CLANGD_TIDY_VERSION := 1.1.1
+CLANGD_TIDY_VENV ?= $(abspath build/clangd-tidy-venv)
+ifeq ($(CLANGD_TIDY_BINARY),)
+ifneq ($(wildcard $(CLANGD_TIDY_VENV)/bin/clangd-tidy),)
+CLANGD_TIDY_BINARY := $(CLANGD_TIDY_VENV)/bin/clangd-tidy
+endif
+endif
+ifeq ($(CLANGD_BINARY),)
+ifneq ("${CMAKE_LLVM_PATH}", "")
+CLANGD_BINARY := ${CMAKE_LLVM_PATH}/bin/clangd
+endif
+endif
+ifneq ($(CLANGD_TIDY_BINARY),)
+	CLANGD_TIDY_BINARY_PARAMETER := --clangd-tidy-binary ${CLANGD_TIDY_BINARY}
+endif
+ifneq ($(CLANGD_BINARY),)
+	CLANGD_BINARY_PARAMETER := --clangd-binary ${CLANGD_BINARY}
+endif
+ifneq ($(CLANGD_TIDY_QUERY_DRIVER),)
+	CLANGD_TIDY_QUERY_DRIVER_PARAMETER := --query-driver ${CLANGD_TIDY_QUERY_DRIVER}
 endif
 ifneq ($(TIDY_CHECKS),)
         TIDY_PERFORM_CHECKS := '-checks=${TIDY_CHECKS}'
@@ -544,7 +570,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools enum-integrity-check
+.PHONY: toolsci
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -559,20 +585,55 @@ toolsci:
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
-format_tools:
-	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install --break-system-packages cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+.PHONY: format_tools parser_tools spell_tools
+format_tools: parser_tools spell_tools
+
+parser_tools:
+	$(call ensure_apt_commands,ninja,ninja-build)
+	sudo pip3 install --break-system-packages cxxheaderparser pcpp
 	@echo "::group::Installed Python packages"
 	pip3 freeze
 	@echo "::endgroup::"
-	@echo "::group::Formatter versions and config"
-	clang-format --version
-	clang-format --dump-config
-	black --version
-	@echo "::endgroup::"
 
+spell_tools:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "Skipping spell_tools on non-Linux"; \
+		exit 0; \
+	fi
+	@set -eu; \
+	VERSION=1.45.1; \
+	if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
+		ARCH="aarch64"; \
+	else \
+		ARCH="x86_64"; \
+	fi; \
+	TARGET_FILE="$${ARCH}-unknown-linux-musl"; \
+	FILE_NAME="typos-v$${VERSION}-$${TARGET_FILE}.tar.gz"; \
+	DOWNLOAD_URL="https://github.com/crate-ci/typos/releases/download/v$${VERSION}/$${FILE_NAME}"; \
+	$(PYTHON) scripts/ci/retry.py -- curl --fail --location --silent --show-error --output "/tmp/$${FILE_NAME}" "$${DOWNLOAD_URL}"; \
+	TMP_DIR="$$(mktemp -d)"; \
+	tar -xzf "/tmp/$${FILE_NAME}" -C "$${TMP_DIR}"; \
+	TYPOS_BIN="$$(find "$${TMP_DIR}" -type f -name typos | head -n 1)"; \
+	if [ -w /usr/local/bin ]; then \
+		install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	else \
+		sudo install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	fi; \
+	typos --version
+
+.PHONY: enum-integrity-check
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
+
+.PHONY: format_venv
+format_venv:
+	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
+		mkdir -p "$(dir $(FORMAT_VENV))" && \
+		$(PYTHON) -m venv "$(FORMAT_VENV)"; \
+	fi
+	@$(FORMAT_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install black==24.*
+	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
+	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
 benchmark:
 	mkdir -p ./build/release && \
@@ -593,6 +654,18 @@ tidy-check:
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
 	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
 
+install-clangd-tidy:
+	mkdir -p $(dir $(CLANGD_TIDY_VENV)) && \
+	$(PYTHON) -m venv $(CLANGD_TIDY_VENV) && \
+	$(CLANGD_TIDY_VENV)/bin/pip install --upgrade 'clangd-tidy==$(CLANGD_TIDY_VERSION)'
+
+tidy-check-clangd:
+	mkdir -p ./build/tidy && \
+	cd build/tidy && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
+	trap 'rm -rf ./pchs' EXIT && \
+	$(PYTHON) -u ../../scripts/run-clangd-tidy.py -j $(CI_TIDY_JOBS) ${CLANGD_TIDY_BINARY_PARAMETER} ${CLANGD_BINARY_PARAMETER} ${CLANGD_TIDY_QUERY_DRIVER_PARAMETER}
+
 tidy-check-diff:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
@@ -609,20 +682,20 @@ tidy-fix:
 test_compile: # test compilation of individual cpp files
 	$(PYTHON) scripts/amalgamation.py --compile
 
-format-check:
-	$(PYTHON) scripts/format.py --all --check
+format-check: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check
 
-format-check-silent:
-	$(PYTHON) scripts/format.py --all --check --silent
+format-check-silent: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check --silent
 
-format-fix:
+format-fix: $(FORMAT_SETUP_DEPS)
 	rm -rf src/amalgamation/*
-	$(PYTHON) scripts/format.py --all --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
 
 .PHONY: check-extension-entries
-check-extension-entries: extension_configuration
+check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	$(PYTHON) scripts/generate_extensions_function.py
-	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
 	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
 	@if [ -s extension_entries.hpp.diff ]; then \
 		cat extension_entries.hpp.diff; \
@@ -633,17 +706,17 @@ check-extension-entries: extension_configuration
 		echo "No differences found"; \
 	fi
 
-format-head:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-head: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
 
-format-changes:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-changes: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
 
-format-main:
-	$(PYTHON) scripts/format.py main --fix --noconfirm
+format-main: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm
 
-format-feature:
-	$(PYTHON) scripts/format.py feature --fix --noconfirm
+format-feature: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm
 
 format-configs:
 	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)

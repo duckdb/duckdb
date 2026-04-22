@@ -17,8 +17,8 @@ class StandardVectorBuffer : public VectorBuffer {
 public:
 	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
 	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity);
-	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity, idx_t type_size);
 
 public:
 	data_ptr_t GetData() override {
@@ -43,28 +43,34 @@ public:
 public:
 	idx_t GetAllocationSize() const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
-	buffer_ptr<VectorBuffer> Resize(const LogicalType &type, idx_t current_size, idx_t new_size) override;
+	void Resize(idx_t current_size, idx_t new_size) override;
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	                  idx_t target_offset, idx_t copy_count) override;
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
-	virtual buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity);
 
 protected:
 	ValidityMask validity;
 	data_ptr_t data_ptr;
+	idx_t type_size;
 	idx_t capacity;
 	AllocatedData allocated_data;
 };
 
 template <class T>
 struct VectorWriter;
+template <class T>
+struct VectorScatterWriter;
 
 struct FlatVector {
 	static void VerifyFlatVector(const Vector &vector) {
@@ -117,8 +123,25 @@ struct FlatVector {
 		return GetDataMutableUnsafe<T>(vector);
 	}
 	static inline idx_t GetCapacity(const Vector &vector) {
-		VerifyFlatVector(vector);
-		return vector.GetBufferRef() ? vector.Buffer().Capacity() : 0;
+		auto &buffer_ref = vector.GetBufferRef();
+		if (!buffer_ref) {
+			return 0;
+		}
+		auto &buffer = *buffer_ref;
+		if (buffer.GetVectorType() != VectorType::FLAT_VECTOR) {
+			throw InternalException("FlatVector::GetCapacity requires a flat vector buffer");
+		}
+		return buffer.Capacity();
+	}
+	static void SetSize(Vector &vector, idx_t new_size) {
+		auto &buffer_ref = vector.GetBufferRef();
+		if (!buffer_ref) {
+			if (new_size != 0) {
+				throw InternalException("Calling FlatVector::SetSize on a vector without a buffer with non-zero size");
+			}
+			return;
+		}
+		buffer_ref->SetVectorSize(new_size);
 	}
 	template <class T>
 	static inline const T *GetDataUnsafe(const Vector &vector) {
@@ -156,12 +179,16 @@ struct FlatVector {
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 
 	template <class T>
-	static VectorWriter<T> Writer(Vector &vector, idx_t count) {
-		return VectorWriter<T>(vector, count);
+	static VectorWriter<T> Writer(Vector &vector, idx_t count, idx_t offset) {
+		return VectorWriter<T>(vector, count, offset);
 	}
 	template <class T>
-	static auto Writer(Vector &vector) -> decltype(Writer<T>(vector, NumericLimits<idx_t>::Maximum())) {
-		return Writer<T>(vector, NumericLimits<idx_t>::Maximum());
+	static VectorWriter<T> Writer(Vector &vector, idx_t count) {
+		return Writer<T>(vector, count, 0ULL);
+	}
+	template <class T>
+	static VectorScatterWriter<T> ScatterWriter(Vector &vector) {
+		return VectorScatterWriter<T>(vector);
 	}
 };
 

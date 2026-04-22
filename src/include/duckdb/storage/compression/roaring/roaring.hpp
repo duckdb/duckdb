@@ -20,7 +20,7 @@ namespace roaring {
 
 //! Used for compressed runs/arrays
 static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = 256;
-//! compresed segment size is 256, instead of division we can make use of shifting
+//! compressed segment size is 256, instead of division we can make use of shifting
 static constexpr uint16_t COMPRESSED_SEGMENT_SHIFT_AMOUNT = 8;
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
@@ -48,7 +48,7 @@ static_assert(BITSET_CONTAINER_SENTINEL_VALUE < NumericLimits<uint8_t>::Maximum(
               "The array/bitset size is encoded in a maximum of 8 bits");
 
 static_assert(ROARING_CONTAINER_SIZE % COMPRESSED_SEGMENT_SIZE == 0,
-              "The (maximum) container size has to be cleanly divisable by the segment size");
+              "The (maximum) container size has to be cleanly divisible by the segment size");
 
 static_assert((1 << RUN_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_RUN_IDX,
               "The bitwidth used to store the size of a run container has to be big enough to store the maximum size");

@@ -40,19 +40,27 @@ public:
 	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
 	DUCKDB_API explicit Vector(const Value &value);
-	//! Create a vector of size tuple_count (non-standard)
+	//! Create a vector of size capacity (non-standard)
 	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE,
 	                           VectorDataInitialization initialize = VectorDataInitialization::UNINITIALIZED);
-	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
+	//! Instantiate a vector from a vector cache
 	DUCKDB_API explicit Vector(const VectorCache &cache);
 	//! Create a non-owning vector that references the specified data
 	DUCKDB_API Vector(LogicalType type, data_ptr_t dataptr, idx_t count);
 	//! Create a vector with an explicitly created vector buffer
 	DUCKDB_API Vector(LogicalType type, buffer_ptr<VectorBuffer> buffer);
+	// Copying of vectors is not
+	Vector(const Vector &other) = delete;
 	// but moving of vectors is allowed
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
+	//! FIXME: should be removed - all vectors need to have a size eventually
+	bool HasSize() const;
+	idx_t size() const; // NOLINT
+	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
+	DUCKDB_API void CheckCapacity(idx_t capacity) const;
+
 	//! Create a new vector that references the other vector
 	DUCKDB_API static Vector Ref(const Vector &other);
 
@@ -120,7 +128,7 @@ public:
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
 
 	//! Turn the vector into a shredded variant vector
-	DUCKDB_API void Shred(Vector &shredded_data);
+	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
@@ -135,8 +143,16 @@ public:
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
 
+	DUCKDB_API void Append(const Value &value);
+	DUCKDB_API void Append(const Vector &source, idx_t count);
+	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+	                     idx_t source_offset, idx_t target_offset, idx_t copy_count);
+
 	//! Resizes the vector.
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
+	//! Reserve space for at least "to_reserve" elements
+	DUCKDB_API void Reserve(idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
@@ -150,13 +166,22 @@ public:
 	idx_t GetAllocationSize() const;
 
 	// Getters
-	VectorType GetVectorType() const;
+	inline VectorType GetVectorType() const {
+		auto &buffer_ref = GetBufferRef();
+		if (!buffer_ref) {
+			return VectorType::FLAT_VECTOR;
+		}
+		return buffer_ref->GetVectorType();
+	}
 	inline const LogicalType &GetType() const {
 		return type;
 	}
-
-	VectorBuffer &BufferMutable();
-	const VectorBuffer &Buffer() const;
+	inline VectorBuffer &BufferMutable() {
+		return *buffer;
+	}
+	inline const VectorBuffer &Buffer() const {
+		return *buffer;
+	}
 	inline const buffer_ptr<VectorBuffer> &GetBufferRef() const {
 		return buffer;
 	}

@@ -24,18 +24,18 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	target.ToUnifiedFormat(count, target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
-	vector<const T *> member_datas;
+	vector<const T *> member_data_ptrs;
 	vector<UnifiedVectorFormat> member_vectors;
 	idx_t total_matches = 0;
 	for (auto &member : members) {
 		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
 			member.ToUnifiedFormat(count, member_format);
-			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
+			member_data_ptrs.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;
 		} else {
-			member_datas.push_back(nullptr);
+			member_data_ptrs.push_back(nullptr);
 			member_vectors.push_back(UnifiedVectorFormat());
 		}
 	}
@@ -52,7 +52,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_data.SetInvalid(row);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -64,18 +64,19 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
 
 		bool found = false;
+		RETURN_TYPE found_value {};
 
 		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-			auto &member_data = member_datas[member_idx];
-			if (!member_data) {
+			auto &member_data_ptr = member_data_ptrs[member_idx];
+			if (!member_data_ptr) {
 				continue; // skip if member data is not compatible with the target type
 			}
 			const auto &member_vector = member_vectors[member_idx];
@@ -83,25 +84,28 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 			const auto col_valid = member_vector.validity.RowIsValid(member_data_idx);
 
 			auto is_null = FIND_NULLS && !col_valid && !target_valid;
-			auto both_valid_and_match = col_valid && target_valid &&
-			                            Equals::Operation<T>(member_data[member_data_idx], target_data[target_row_idx]);
+			auto both_valid_and_match =
+			    col_valid && target_valid &&
+			    Equals::Operation<T>(member_data_ptr[member_data_idx], target_data[target_row_idx]);
 
 			if (is_null || both_valid_and_match) {
 				found = true;
 				if (return_pos) {
-					result_data[row] = UnsafeNumericCast<int32_t>(member_idx + 1);
+					found_value = UnsafeNumericCast<int32_t>(member_idx + 1);
 				} else {
-					result_data[row] = true;
+					found_value = RETURN_TYPE(true);
 				}
 			}
 		}
 
 		if (!found) {
 			if (return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
+		} else {
+			result_data.WriteValue(found_value);
 		}
 	}
 }

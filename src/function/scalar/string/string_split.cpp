@@ -122,27 +122,25 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	// count all the splits and set up the list entries
-	auto &child_entry = ListVector::GetEntry(result);
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_entry = input_entries[i];
 		auto delim_entry = delim_entries[i];
 		if (!input_entry.IsValid()) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 		StringSplitInput split_input(result, child_entry, total_splits);
 		if (!delim_entry.IsValid()) {
 			// delim is NULL: copy the complete entry
 			split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
-			result_data[i].length = 1;
-			result_data[i].offset = total_splits;
+			result_data.WriteValue(list_entry_t(total_splits, 1));
 			total_splits++;
 			continue;
 		}
 		auto list_length = StringSplitter::Split<OP>(input_entry.GetValue(), delim_entry.GetValue(), split_input, data);
-		result_data[i].length = list_length;
-		result_data[i].offset = total_splits;
+		result_data.WriteValue(list_entry_t(total_splits, list_length));
 		total_splits += list_length;
 	}
 	ListVector::SetListSize(result, total_splits);

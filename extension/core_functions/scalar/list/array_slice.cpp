@@ -185,7 +185,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -213,11 +213,11 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		sel_length += length;
 
 		if (!clamp_result) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 		} else if (!step_vector) {
-			result_data[i] = OP::SliceValue(result, sliced, begin, end);
+			result_data.WriteValue(OP::SliceValue(result, sliced, begin, end));
 		} else {
-			result_data[i] = OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx);
+			result_data.WriteValue(OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx));
 		}
 	}
 	if (step_vector) {
@@ -236,7 +236,7 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
                   optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
-		result_child_vector = &ListVector::GetEntry(result);
+		result_child_vector = &ListVector::GetChildMutable(result);
 	}
 
 	SelectionVector sel;

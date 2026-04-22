@@ -1,4 +1,4 @@
-#include "duckdb/function/window/window_rank_function.hpp"
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -101,8 +101,41 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 }
 
 //===--------------------------------------------------------------------===//
+// WindowPeerStreamingState
+//===--------------------------------------------------------------------===//
+class WindowPeerStreamingState : public WindowExecutorStreamingState {
+public:
+	explicit WindowPeerStreamingState(const Value &val) : vec(val) {
+	}
+
+	void Evaluate(Vector &result) {
+		// Reference constant vector
+		result.Reference(vec);
+	}
+	Vector vec;
+};
+
+//===--------------------------------------------------------------------===//
 // WindowPeerExecutor
 //===--------------------------------------------------------------------===//
+struct WindowPeerExecutor : public WindowExecutor {
+	//! Blocking APIs
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		return true;
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowPeerStreamingState>().Evaluate(result);
+	}
+};
+
 void WindowPeerExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
 	const auto &wexpr = executor.wexpr;
 	auto &arg_order_idx = executor.arg_order_idx;
@@ -119,6 +152,22 @@ unique_ptr<GlobalSinkState> WindowPeerExecutor::GetGlobal(ClientContext &client,
 //===--------------------------------------------------------------------===//
 // WindowRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowRankExecutor : public WindowPeerExecutor {
+	//! Blocking APIs
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
+	}
+};
+
 class WindowRankLocalState : public WindowPeerLocalState {
 public:
 	WindowRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -141,7 +190,11 @@ void WindowRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWindowE
 WindowFunction RankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK, nullptr,
 	                   WindowRankExecutor::GetBounds, WindowRankExecutor::GetSharing, WindowRankExecutor::GetGlobal,
-	                   WindowRankExecutor::GetLocal, WindowRankLocalState::Sinker, WindowRankLocalState::Finalizer);
+	                   WindowRankExecutor::GetLocal, WindowRankLocalState::Sinker, WindowRankLocalState::Finalizer,
+	                   WindowRankExecutor::GetData);
+	fun.SetCanStreamCallback(WindowRankExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowRankExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowRankExecutor::StreamData);
 	return fun;
 }
 
@@ -149,8 +202,8 @@ unique_ptr<LocalSinkState> WindowRankExecutor::GetLocal(ExecutionContext &contex
 	return make_uniq<WindowRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
-void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                          Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                 idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
 	const auto count = eval_chunk.size();
@@ -161,14 +214,15 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata[i] = UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx));
+				rdata.WriteValue(
+				    UnsafeNumericCast<int64_t>(gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
 			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				//	Clamp peer to the frame
 				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				rdata[i] = UnsafeNumericCast<int64_t>((frame_peer_begin - frame_begin[i]) + 1);
+				rdata.WriteValue(UnsafeNumericCast<int64_t>((frame_peer_begin - frame_begin[i]) + 1));
 			}
 		}
 		return;
@@ -182,13 +236,29 @@ void WindowRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = UnsafeNumericCast<int64_t>(lpeer.rank);
+		rdata.WriteValue(UnsafeNumericCast<int64_t>(lpeer.rank));
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // WindowDenseRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowDenseRankExecutor : public WindowPeerExecutor {
+	//! Blocking APIs
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
+	}
+};
+
 class WindowDenseRankLocalState : public WindowPeerLocalState {
 public:
 	WindowDenseRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -204,8 +274,11 @@ void WindowDenseRankExecutor::GetBounds(WindowBoundsSet &required, const BoundWi
 WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
 	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowDenseRankExecutor::GetGlobal,
-	                   WindowDenseRankExecutor::GetLocal);
+	                   WindowDenseRankExecutor::GetLocal, nullptr, nullptr, WindowDenseRankExecutor::GetData);
 	fun.can_order_by = false;
+	fun.SetCanStreamCallback(WindowDenseRankExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowDenseRankExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowDenseRankExecutor::StreamData);
 	return fun;
 }
 
@@ -213,8 +286,8 @@ unique_ptr<LocalSinkState> WindowDenseRankExecutor::GetLocal(ExecutionContext &c
 	return make_uniq<WindowDenseRankLocalState>(context, gstate.Cast<WindowPeerGlobalState>());
 }
 
-void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                               Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowDenseRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
 	const auto count = eval_chunk.size();
@@ -271,7 +344,7 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = NumericCast<int64_t>(lpeer.dense_rank);
+		rdata.WriteValue(NumericCast<int64_t>(lpeer.dense_rank));
 	}
 
 	//	Remember where we left off
@@ -281,6 +354,22 @@ void WindowDenseRankExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 //===--------------------------------------------------------------------===//
 // WindowPercentRankExecutor
 //===--------------------------------------------------------------------===//
+struct WindowPercentRankExecutor : public WindowPeerExecutor {
+	//! Blocking APIs
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowPeerStreamingState>(Value((double)0));
+	}
+};
+
 class WindowPercentRankLocalState : public WindowPeerLocalState {
 public:
 	WindowPercentRankLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -304,7 +393,11 @@ WindowFunction PercentRankFun::GetFunction() {
 	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_PERCENT_RANK, nullptr,
 	                   WindowPercentRankExecutor::GetBounds, WindowPercentRankExecutor::GetSharing,
 	                   WindowPercentRankExecutor::GetGlobal, WindowPercentRankExecutor::GetLocal,
-	                   WindowPercentRankLocalState::Sinker, WindowPercentRankLocalState::Finalizer);
+	                   WindowPercentRankLocalState::Sinker, WindowPercentRankLocalState::Finalizer,
+	                   WindowPercentRankExecutor::GetData);
+	fun.SetCanStreamCallback(WindowPercentRankExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowPercentRankExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowPercentRankExecutor::StreamData);
 	return fun;
 }
 
@@ -318,8 +411,8 @@ static inline double PercentRank(const idx_t begin, const idx_t end, const uint6
 	return denom > 0 ? ((double)rank - 1) / denom : 0;
 }
 
-void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                                 Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                        Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	auto &lpeer = sink.local_state.Cast<WindowPeerLocalState>();
 	const auto count = eval_chunk.size();
@@ -331,7 +424,7 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto rank = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
-				rdata[i] = PercentRank(frame_begin[i], frame_end[i], rank);
+				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], rank));
 			}
 		} else {
 			//	Clamp peer to the frame
@@ -339,7 +432,7 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
 				lpeer.rank = (frame_peer_begin - frame_begin[i]) + 1;
-				rdata[i] = PercentRank(frame_begin[i], frame_end[i], lpeer.rank);
+				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], lpeer.rank));
 			}
 		}
 		return;
@@ -354,13 +447,22 @@ void WindowPercentRankExecutor::EvaluateInternal(ExecutionContext &context, Data
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		lpeer.NextRank(partition_begin[i], peer_begin[i], row_idx);
-		rdata[i] = PercentRank(partition_begin[i], partition_end[i], lpeer.rank);
+		rdata.WriteValue(PercentRank(partition_begin[i], partition_end[i], lpeer.rank));
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // WindowCumeDistExecutor
 //===--------------------------------------------------------------------===//
+struct WindowCumeDistExecutor : public WindowPeerExecutor {
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 class WindowCumeDistLocalState : public WindowPeerLocalState {
 public:
 	WindowCumeDistLocalState(ExecutionContext &context, const WindowPeerGlobalState &gpstate)
@@ -381,10 +483,11 @@ void WindowCumeDistExecutor::GetBounds(WindowBoundsSet &required, const BoundWin
 	}
 }
 WindowFunction CumeDistFun::GetFunction() {
-	WindowFunction fun(Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr,
-	                   WindowCumeDistExecutor::GetBounds, WindowCumeDistExecutor::GetSharing,
-	                   WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal,
-	                   WindowCumeDistLocalState::Sinker, WindowCumeDistLocalState::Finalizer);
+	WindowFunction fun(
+	    Name, {}, LogicalType::DOUBLE, ExpressionType::WINDOW_CUME_DIST, nullptr, WindowCumeDistExecutor::GetBounds,
+	    WindowCumeDistExecutor::GetSharing, WindowCumeDistExecutor::GetGlobal, WindowCumeDistExecutor::GetLocal,
+	    WindowCumeDistLocalState::Sinker, WindowCumeDistLocalState::Finalizer, WindowCumeDistExecutor::GetData);
+	//	Not streamable?
 	return fun;
 }
 
@@ -398,8 +501,8 @@ static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t pe
 	return denom > 0 ? (num / denom) : 0;
 }
 
-void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
-                                              Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                     Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gpeer = sink.global_state.Cast<WindowPeerGlobalState>();
 	const auto count = eval_chunk.size();
 	auto rdata = FlatVector::Writer<double>(result, count);
@@ -410,14 +513,14 @@ void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				const auto peer_end = gpeer.token_tree->PeerEnd(frame_begin[i], frame_end[i], row_idx);
-				rdata[i] = CumeDist(frame_begin[i], frame_end[i], peer_end);
+				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], peer_end));
 			}
 		} else {
 			auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				//	Clamp the peer end to the frame
 				const auto frame_peer_end = MinValue(peer_end[i], frame_end[i]);
-				rdata[i] = CumeDist(frame_begin[i], frame_end[i], frame_peer_end);
+				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], frame_peer_end));
 			}
 		}
 		return;
@@ -427,7 +530,7 @@ void WindowCumeDistExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata[i] = CumeDist(partition_begin[i], partition_end[i], peer_end[i]);
+		rdata.WriteValue(CumeDist(partition_begin[i], partition_end[i], peer_end[i]));
 	}
 }
 

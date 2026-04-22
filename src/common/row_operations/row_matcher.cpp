@@ -227,7 +227,8 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	Vector sliced(lhs_vector, sel, count);
 
 	if (NO_MATCH_SEL) {
-		SelectionVector no_match_sel_offset(no_match_sel->data() + no_match_count);
+		SelectionVector no_match_sel_offset(no_match_sel->data() + no_match_count,
+		                                    no_match_sel->Capacity() - no_match_count);
 		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
 		no_match_count += count - match_count;
 		return match_count;

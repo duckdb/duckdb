@@ -208,7 +208,7 @@ public:
 	DUCKDB_API virtual bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
-	//! Remvoe a file from disk if it exists - if it does not exist, return false
+	//! Remove a file from disk if it exists - if it does not exist, return false
 	DUCKDB_API virtual bool TryRemoveFile(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Remove multiple files from disk - does not error if any file does not exist
 	DUCKDB_API virtual void RemoveFiles(const vector<string> &filenames, optional_ptr<FileOpener> opener = nullptr);
@@ -271,7 +271,7 @@ public:
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
 
-	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
+	// !Extract a sub-filesystem by name, with ownership transferred, return nullptr if not registered or the subsystem
 	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
 
@@ -301,7 +301,7 @@ public:
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
-	//! Return the name of the filesytem. Used for forming diagnosis messages.
+	//! Return the name of the filesystem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 
 	//! Whether or not a file is remote or local, based only on file path

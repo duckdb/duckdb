@@ -615,7 +615,7 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 		to_substitute.emplace_back(bound_function.varargs);
 	}
 
-	// If the return type is templated, we need to subsitute it as well
+	// If the return type is templated, we need to substitute it as well
 	if (bound_function.GetReturnType().IsTemplated()) {
 		to_substitute.emplace_back(bound_function.GetReturnType());
 	}
@@ -718,7 +718,8 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunct
 
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.Bind(context, children);
+		BindWindowFunctionInput bind_input(context, bound_function, children, &orders, &arg_orders);
+		bind_info = bound_function.Bind(bind_input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.arguments.size(), children.size()));
 	}
@@ -727,10 +728,6 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunct
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
-
-	if (bound_function.HasValidateCallback()) {
-		bound_function.GetValidateCallback()(context, bound_function, children, orders, arg_orders);
-	}
 
 	auto window = make_uniq<WindowFunction>(bound_function);
 	auto result =

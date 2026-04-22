@@ -490,7 +490,7 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 		offset += list_length;
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
 	ListVector::Reserve(result, offset);
 
@@ -536,7 +536,7 @@ static void ReadDataFromArraySegment(const ListSegmentFunctions &functions, cons
 		}
 	}
 
-	auto &child_vector = ArrayVector::GetEntry(result);
+	auto &child_vector = ArrayVector::GetChildMutable(result);
 	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetArrayChildData(segment)));
 	auto array_size = ArrayType::GetSize(result.GetType());
 	auto child_size = array_size * total_count;

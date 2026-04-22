@@ -28,7 +28,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	}
 
 	// Setup inner vec
-	auto &inner_vec = ListVector::GetEntry(outer_vec);
+	auto &inner_vec = ListVector::GetChildMutable(outer_vec);
 	const auto inner_count = ListVector::GetListSize(outer_vec);
 	inner_vec.ToUnifiedFormat(inner_count, inner_format);
 
@@ -37,17 +37,16 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
 			const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 			if (!outer_format.validity.RowIsValid(outer_idx)) {
-				flat_list_data.SetInvalid(outer_raw_idx);
+				flat_list_data.WriteNull();
 				continue;
 			}
-			flat_list_data[outer_raw_idx].offset = 0;
-			flat_list_data[outer_raw_idx].length = 0;
+			flat_list_data.WriteValue(list_entry_t(0, 0));
 		}
 		return;
 	}
 
 	// Setup items vec
-	auto &items_vec = ListVector::GetEntry(inner_vec);
+	auto &items_vec = ListVector::GetChildMutable(inner_vec);
 	const auto items_count = ListVector::GetListSize(inner_vec);
 	items_vec.ToUnifiedFormat(items_count, items_format);
 
@@ -92,7 +91,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
 
 		if (!outer_format.validity.RowIsValid(outer_idx)) {
-			flat_list_data.SetInvalid(outer_raw_idx);
+			flat_list_data.WriteNull();
 			continue;
 		}
 
@@ -122,13 +121,13 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		}
 
 		// Assign the result list entry
-		flat_list_data[outer_raw_idx] = list_entry;
+		flat_list_data.WriteValue(list_entry);
 	}
 
-	// Now assing the result
+	// Now assign the result
 	ListVector::SetListSize(result, sel_idx);
 
-	auto &result_child_vector = ListVector::GetEntry(result);
+	auto &result_child_vector = ListVector::GetChildMutable(result);
 	result_child_vector.Slice(items_vec, sel, sel_idx);
 	result_child_vector.Flatten(sel_idx);
 }

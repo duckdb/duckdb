@@ -64,8 +64,8 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 				FlatVector::ValidityMutable(union_vector).SetAllValid(count);
 			} else {
 				// ensure the tags have the same validity as the member
-				FlatVector::ValidityMutable(union_vector) = FlatVector::ValidityMutable(member_vector);
-				FlatVector::ValidityMutable(tag_vector) = FlatVector::ValidityMutable(member_vector);
+				FlatVector::ValidityMutable(union_vector) = FlatVector::Validity(member_vector);
+				FlatVector::ValidityMutable(tag_vector) = FlatVector::Validity(member_vector);
 			}
 
 			auto tag_data = FlatVector::GetDataMutable<union_tag_t>(tag_vector);

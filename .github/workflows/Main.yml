@@ -2,9 +2,16 @@ name: Main
 on:
   workflow_dispatch:
     inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
       skip_tests:
         type: boolean
         default: false
+      run_all:
+        type: boolean
+        default: true
   repository_dispatch:
   push:
     branches-ignore:
@@ -133,7 +140,7 @@ jobs:
             run_slow_tests=false
           fi
           echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
-          skip_tests="${{ github.event_name == 'workflow_dispatch' && inputs.skip_tests || false }}"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
           # Fall back to GitHub-native runners for forks.
@@ -221,12 +228,12 @@ jobs:
         with:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
-      - name: Install format tools
-        run: python3 scripts/ci/retry.py -- make format_tools
+      - name: Install tools
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
         run: |
-          make format-check-silent enum-integrity-check
+          make format-check-silent enum-integrity-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
@@ -297,7 +304,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-debug-relassert-build
         path: build
@@ -350,6 +357,7 @@ jobs:
     - name: Install
       run: |
         python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
@@ -373,6 +381,36 @@ jobs:
       if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
+ check-clangd-tidy:
+   name: Tidy Check (clangd)
+   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
+   needs: prepare
+   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+   steps:
+     - name: "Checkout"
+       uses: duckdb/duckdb-ci/.github/actions/checkout@main
+       with:
+         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+         fetch_depth: 0
+
+     - name: Install
+       run: |
+         python3 scripts/ci/retry.py -- make toolsci
+         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
+         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+         python3 scripts/ci/retry.py -- make install-clangd-tidy
+
+     - name: Tidy Check
+       run: |
+         mkdir -p ~/.config/clangd
+         cat > ~/.config/clangd/config.yaml <<'EOF'
+         Diagnostics:
+           UnusedIncludes: None
+         EOF
+         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml
@@ -382,10 +420,12 @@ jobs:
       - linux-debug
       - linux-release
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
-      run_all: true
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -402,7 +442,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - uses: mymindstorm/setup-emsdk@v13
+    - uses: mymindstorm/setup-emsdk@v16
       with:
         version: latest
 
@@ -488,7 +528,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
@@ -733,7 +773,7 @@ jobs:
         version: ${{ matrix.version }}
         arch: ${{ matrix.arch }}
 
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-linux-amd64
         path: linux-release-artifacts
@@ -811,10 +851,71 @@ jobs:
       - prepare
       - linux-debug
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
-      run_all: true
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ osx:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'osx') }}
+    uses: ./.github/workflows/OSX.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ static-libraries:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libraries') }}
+    uses: ./.github/workflows/BundleStaticLibs.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+
+ release-status:
+    runs-on: ubuntu-slim
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'release-status') }}
+    needs:
+      - prepare
+      - extensions
+      - osx
+      - windows
+      - static-libraries
+    outputs:
+      success: ${{ steps.set-output.outputs.success }}
+    steps:
+      - id: set-output
+        shell: bash
+        run: |
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+ notify-external-repos:
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'notify-external-repos') }}
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - prepare
+      - release-status
+    with:
+      is-success: ${{ fromJSON(needs.release-status.outputs.success) }}
+      target-branch: ${{ (github.event_name != 'workflow_dispatch') && github.ref || (inputs.git_ref == '' && github.ref || inputs.git_ref) }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: true
+      override-git-describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -1005,7 +1106,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
@@ -1182,6 +1283,7 @@ jobs:
       - linux-debug-tests
       - regression
       - tidy-check
+      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release
@@ -1192,6 +1294,10 @@ jobs:
       - upload-libduckdb-src
       - swift
       - windows
+      - osx
+      - static-libraries
+      - release-status
+      - notify-external-repos
       - no-string-inline
       - vector-sizes
       - valgrind

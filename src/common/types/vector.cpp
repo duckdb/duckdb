@@ -58,7 +58,8 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
 	} else {
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count);
+		auto type_size = GetTypeIdSize(type.InternalType());
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
 	}
 }
 
@@ -85,36 +86,42 @@ Vector::Vector(const Value &value) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
+bool Vector::HasSize() const {
+	if (!buffer) {
+		return true;
+	}
+	return buffer->HasSize();
+}
+
+idx_t Vector::size() const {
+	if (!buffer) {
+		return 0;
+	}
+	return buffer->Size();
+}
+
+void Vector::CheckCapacity(idx_t capacity) const {
+	if (!buffer) {
+		// no buffer - we accept any capacity
+		return;
+	}
+	if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// constant vectors can fit any
+		return;
+	}
+	idx_t buffer_capacity = buffer->Capacity();
+	if (capacity > buffer_capacity) {
+		throw InternalException("Vector::CheckCapacity - capacity %d exceeds buffer capacity %d", capacity,
+		                        buffer_capacity);
+	}
+}
+
 Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
 
 void Vector::Reference(const Value &value) {
-	D_ASSERT(GetType().id() == value.type().id());
-	auto internal_type = value.type().InternalType();
-	if (internal_type == PhysicalType::STRUCT) {
-		auto &child_types = StructType::GetChildTypes(value.type());
-		vector<Vector> child_vectors;
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			child_vectors.emplace_back(value.IsNull() ? Value(child_types[i].second)
-			                                          : StructValue::GetChildren(value)[i]);
-		}
-		auto struct_buffer = make_buffer<VectorStructBuffer>(std::move(child_vectors), 1ULL);
-		buffer = std::move(struct_buffer);
-		if (value.IsNull()) {
-			SetValue(0, value);
-		}
-	} else if (internal_type == PhysicalType::LIST) {
-		buffer = VectorBuffer::CreateConstantVector(value.type());
-		SetValue(0, value);
-	} else if (internal_type == PhysicalType::ARRAY) {
-		buffer = make_buffer<VectorArrayBuffer>(value.type());
-		SetValue(0, value);
-	} else {
-		buffer = VectorBuffer::CreateConstantVector(value.type());
-		SetValue(0, value);
-	}
-	SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::Reference(*this, value);
 }
 
 void Vector::Reference(const Vector &other) {
@@ -272,11 +279,42 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
 	} else {
 		// resize the buffer
-		auto new_buffer = buffer->Resize(GetType(), current_size, new_size);
-		if (new_buffer) {
-			buffer = std::move(new_buffer);
-		}
+		buffer->Resize(current_size, new_size);
 	}
+}
+
+void Vector::Reserve(idx_t to_reserve) {
+	if (!HasSize()) {
+		throw InternalException("Vector::Reserve can only be called on vectors with a size");
+	}
+	if (!buffer) {
+		Initialize(VectorDataInitialization::UNINITIALIZED, VectorBuffer::GetReserveSize(to_reserve));
+		return;
+	}
+	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
+	auto capacity = buffer->Capacity();
+	if (to_reserve <= capacity) {
+		return;
+	}
+	buffer->Resize(capacity, to_reserve);
+}
+
+void Vector::Append(const Value &value) {
+	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, idx_t count) {
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
+	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+                  idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(source.GetType() == GetType());
+	buffer->Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -302,14 +340,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 
 Value Vector::GetValue(idx_t index) const {
 	return GetValue(*this, index);
-}
-
-VectorBuffer &Vector::BufferMutable() {
-	return *buffer;
-}
-
-const VectorBuffer &Vector::Buffer() const {
-	return *buffer;
 }
 
 // LCOV_EXCL_START
@@ -372,11 +402,14 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	Flatten(*FlatVector::IncrementalSelectionVector(), count);
+	auto new_buffer = Buffer().Flatten(GetType(), count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	}
 }
 
 void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), sel, count);
+	auto new_buffer = Buffer().FlattenSlice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -398,13 +431,13 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 	data.logical_type = input.GetType();
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
-		auto &child = ListVector::GetEntry(input);
+		auto &child = ListVector::GetChild(input);
 		auto child_count = ListVector::GetListSize(input);
 		data.children.emplace_back();
 		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::ARRAY) {
-		auto &child = ArrayVector::GetEntry(input);
+		auto &child = ArrayVector::GetChild(input);
 		auto array_size = ArrayType::GetSize(input.GetType());
 		auto child_count = count * array_size;
 		data.children.emplace_back();
@@ -425,7 +458,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
 }
 
-void Vector::Shred(Vector &shredded_data) {
+void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (GetType().id() != LogicalTypeId::VARIANT) {
 		throw InternalException("Vector::Shred can only be used on variant vectors");
 	}
@@ -433,7 +466,7 @@ void Vector::Shred(Vector &shredded_data) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
 }
 
 // FIXME: This should ideally be const
@@ -552,11 +585,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				idx_t byte_data_length = 0;
 
 				// write all the lengths
-				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				auto lengths_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
 					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
+					lengths_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
 					byte_data_length += this_length;
 				}
 
@@ -598,7 +631,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child = ListVector::GetEntry(*this);
+			auto &child = ListVector::GetChildMutable(*this);
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
@@ -631,7 +664,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			Vector serialized_vector(Vector::Ref(*this));
 			serialized_vector.Flatten(count);
 
-			auto &child = ArrayVector::GetEntry(serialized_vector);
+			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
 			auto child_size = array_size * count;
 			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
@@ -785,7 +818,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 			// Read the child vector
 			deserializer.ReadObject(106, "child", [&](Deserializer &obj) {
-				auto &child = ListVector::GetEntry(*this);
+				auto &child = ListVector::GetChildMutable(*this);
 				child.Deserialize(obj, list_size);
 			});
 			break;
@@ -793,7 +826,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		case PhysicalType::ARRAY: {
 			auto array_size = deserializer.ReadProperty<uint64_t>(103, "array_size");
 			deserializer.ReadObject(104, "child", [&](Deserializer &obj) {
-				auto &child = ArrayVector::GetEntry(*this);
+				auto &child = ArrayVector::GetChildMutable(*this);
 				child.Deserialize(obj, array_size * count);
 			});
 			break;
@@ -802,13 +835,6 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
-}
-
-VectorType Vector::GetVectorType() const {
-	if (!buffer) {
-		return VectorType::FLAT_VECTOR;
-	}
-	return Buffer().GetVectorType();
 }
 
 void Vector::SetVectorType(VectorType new_vector_type) {
@@ -919,7 +945,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 		if (child_count == 0) {
 			break;
 		}
-		auto &child_vector = ListVector::GetEntry(vector);
+		auto &child_vector = ListVector::GetChildMutable(vector);
 		// reverse the order of all lists
 		SelectionVector child_sel(child_count);
 		idx_t position = child_count;

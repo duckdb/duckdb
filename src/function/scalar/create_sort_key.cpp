@@ -113,13 +113,13 @@ struct SortKeyVectorData {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto &child_entry = ArrayVector::GetEntry(input);
+			auto &child_entry = ArrayVector::GetChildMutable(input);
 			auto array_size = ArrayType::GetSize(input.GetType());
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, size * array_size, child_modifiers));
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto &child_entry = ListVector::GetEntry(input);
+			auto &child_entry = ListVector::GetChildMutable(input);
 			auto child_size = size == 0 ? 0 : ListVector::GetListSize(input);
 			child_data.push_back(make_uniq<SortKeyVectorData>(child_entry, child_size, child_modifiers));
 			break;
@@ -165,7 +165,7 @@ struct SortKeyConstantOperator {
 			// descending order - so flip bytes
 			data_t flipped_bytes[sizeof(T)];
 			for (idx_t b = 0; b < sizeof(T); b++) {
-				flipped_bytes[b] = ~input[b];
+				flipped_bytes[b] = static_cast<data_t>(~input[b]);
 			}
 			result_value = Radix::DecodeData<T>(flipped_bytes);
 		} else {
@@ -196,7 +196,7 @@ struct SortKeyVarcharOperator {
 		// iterate until we encounter the string delimiter to figure out the string length
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
+			string_delimiter = static_cast<data_t>(~string_delimiter);
 		}
 		idx_t pos;
 		for (pos = 0; input[pos] != string_delimiter; pos++) {
@@ -207,9 +207,9 @@ struct SortKeyVarcharOperator {
 		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
 		for (pos = 0; pos < str_len; pos++) {
 			if (flip_bytes) {
-				str_data[pos] = (~input[pos]) - 1;
+				str_data[pos] = static_cast<data_t>((~input[pos]) - 1);
 			} else {
-				str_data[pos] = input[pos] - 1;
+				str_data[pos] = static_cast<data_t>(input[pos] - 1);
 			}
 		}
 		result_value.Finalize();
@@ -255,8 +255,8 @@ struct SortKeyBlobOperator {
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		data_t escape_character = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
 		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
-			escape_character = ~escape_character;
+			string_delimiter = static_cast<data_t>(~string_delimiter);
+			escape_character = static_cast<data_t>(~escape_character);
 		}
 		idx_t blob_len = 0;
 		idx_t pos;
@@ -276,7 +276,7 @@ struct SortKeyBlobOperator {
 				input_pos++;
 			}
 			if (flip_bytes) {
-				str_data[result_pos++] = ~input[input_pos];
+				str_data[result_pos++] = static_cast<data_t>(~input[input_pos]);
 			} else {
 				str_data[result_pos++] = input[input_pos];
 			}
@@ -512,7 +512,7 @@ void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, con
 		if (info.flip_bytes) {
 			// descending order - so flip bytes
 			for (idx_t b = offset; b < offset + encode_len; b++) {
-				result_ptr[b] = ~result_ptr[b];
+				result_ptr[b] = static_cast<data_t>(~result_ptr[b]);
 			}
 		}
 		offset += encode_len;
@@ -994,7 +994,7 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 	auto &result_validity = is_const ? ConstantVector::Validity(result) : FlatVector::ValidityMutable(result);
 	const auto list_data =
 	    is_const ? ConstantVector::GetData<list_entry_t>(result) : FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto result_idx = result_offset + i;
 		auto &decode_data = decode_data_arr[i];
@@ -1009,9 +1009,9 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 		// list is valid - decode child elements
 		// we don't know how many there will be
 		// decode child elements until we encounter the list delimiter
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
 
 		// get the current list size
@@ -1055,11 +1055,11 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 		// arrays need to encode exactly array_size child elements
 		// however the decoded data still contains a list delimiter
 		// we use this delimiter to verify we successfully decoded the entire array
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
-		auto &child_vector = ArrayVector::GetEntry(result);
+		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto array_size = ArrayType::GetSize(result.GetType());
 
 		idx_t found_elements = 0;

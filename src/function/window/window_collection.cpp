@@ -129,7 +129,6 @@ WindowCursor::WindowCursor(const WindowCollection &paged, vector<column_t> colum
 		state.current_row_index = 0;
 		state.next_row_index = paged.size();
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-		chunk.SetCapacity(state.next_row_index);
 		chunk.SetCardinality(state.next_row_index);
 		return;
 	} else if (chunk.data.empty()) {

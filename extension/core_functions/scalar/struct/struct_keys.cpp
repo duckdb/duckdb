@@ -16,16 +16,16 @@ struct StructKeysBindData : public FunctionData {
 		const auto count = child_types.size();
 
 		ListVector::Reserve(keys_vector, count);
-		auto &list_child = ListVector::GetEntry(keys_vector);
+		auto &list_child = ListVector::GetChildMutable(keys_vector);
 		auto child_data = FlatVector::Writer<string_t>(list_child, count);
 		for (idx_t i = 0; i < count; i++) {
-			child_data[i] = child_types[i].first;
+			child_data.WriteValue(string_t(child_types[i].first));
 		}
 		ListVector::SetListSize(keys_vector, count);
 
 		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
-		list_entries[0] = {0, count};
-		list_entries.SetInvalid(1);
+		list_entries.WriteValue(list_entry_t(0, count));
+		list_entries.WriteNull();
 	}
 
 	bool Equals(const FunctionData &other) const override {

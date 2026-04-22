@@ -26,7 +26,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 
 	if (num_columns > 1) {
 		// Ensure that the child has a validity mask of the correct size

@@ -59,7 +59,7 @@ static bool IsVariantStringType(VariantLogicalType type_id) {
 static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                 const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                 idx_t count) {
-	auto result_data = FlatVector::Writer<string_t>(result);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -74,7 +74,7 @@ static void WriteShreddedString(UnifiedVariantVectorData &variant, Vector &resul
 static void WriteShreddedBoolean(UnifiedVariantVectorData &variant, Vector &result, const SelectionVector &sel,
                                  const SelectionVector &value_index_sel, const SelectionVector &result_sel,
                                  idx_t count) {
-	auto result_data = FlatVector::Writer<bool>(result);
+	auto result_data = FlatVector::ScatterWriter<bool>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
 		auto result_row = result_sel[i];
@@ -262,10 +262,9 @@ void VariantShredding::WriteTypedObjectValues(UnifiedVariantVectorData &variant,
 void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, Vector &result,
                                              const SelectionVector &sel, const SelectionVector &value_index_sel,
                                              const SelectionVector &result_sel, idx_t count) {
-	auto list_data = FlatVector::Writer<list_entry_t>(result);
-
 	auto nested_data = make_unsafe_uniq_array_uninitialized<VariantNestedData>(count);
 
+	auto list_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	idx_t total_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto row = sel[i];
@@ -308,7 +307,7 @@ void VariantShredding::WriteTypedArrayValues(UnifiedVariantVectorData &variant, 
 		}
 	}
 
-	auto &child_vector = ListVector::GetEntry(result);
+	auto &child_vector = ListVector::GetChildMutable(result);
 	WriteVariantValues(variant, child_vector, child_sel, child_value_index_sel, child_result_sel, total_offset);
 }
 

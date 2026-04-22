@@ -140,8 +140,8 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 
 void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
                const vector<RemapColumnInfo> &remap_info) {
-	auto &input_vector = ListVector::GetEntry(input);
-	auto &result_vector = ListVector::GetEntry(result);
+	auto &input_vector = ListVector::GetChildMutable(input);
+	auto &result_vector = ListVector::GetChildMutable(result);
 	auto list_size = ListVector::GetListSize(input);
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
