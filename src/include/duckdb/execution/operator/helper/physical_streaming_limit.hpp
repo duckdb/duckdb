@@ -30,8 +30,6 @@ public:
 	// Operator interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
-	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
-	bool ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 

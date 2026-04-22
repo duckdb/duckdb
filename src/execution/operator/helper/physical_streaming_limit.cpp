@@ -39,18 +39,6 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingLimit::GetGlobalOperatorState(C
 	return make_uniq<StreamingLimitGlobalState>();
 }
 
-bool PhysicalStreamingLimit::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingLimitOperatorState>();
-	PhysicalLimit::SetInitialLimits(limit_val, offset_val, state.limit, state.offset);
-	return true;
-}
-
-bool PhysicalStreamingLimit::ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state_p) const {
-	auto &state = state_p.Cast<StreamingLimitGlobalState>();
-	state.current_offset = 0;
-	return true;
-}
-
 OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingLimitGlobalState>();
