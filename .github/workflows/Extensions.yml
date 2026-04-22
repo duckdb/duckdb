@@ -226,7 +226,7 @@ jobs:
 
       - uses: ./.github/actions/ccache-action
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         name: Download all extensions
         with:
           pattern: '{main-extensions*,rust-based-extensions*,external-extensions*}'
@@ -304,7 +304,7 @@ jobs:
         if: ${{ false && !inputs.skip_tests }}
         id: linux_release_artifact
         continue-on-error: true
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build
