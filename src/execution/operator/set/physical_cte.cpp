@@ -67,14 +67,6 @@ bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &
 	return true;
 }
 
-bool PhysicalCTE::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                      LocalSinkState &state_p) const {
-	auto &state = state_p.Cast<CTELocalState>();
-	state.lhs_data.Reset();
-	state.lhs_data.InitializeAppend(state.append_state);
-	return true;
-}
-
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<CTELocalState>();
 	lstate.lhs_data.Append(lstate.append_state, chunk);
