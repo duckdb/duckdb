@@ -1,0 +1,149 @@
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index d27c65f..279cad6 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -109,7 +109,7 @@ public:
+ 			// We can only optimize if the second child is a GEOMETRY
+ 			return false;
+ 		}
+-		if (function.return_type != LogicalType::BOOLEAN) {
++		if (function.GetReturnType() != LogicalType::BOOLEAN) {
+ 			// We can only optimize if the return type is a BOOLEAN
+ 			return false;
+ 		}
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 4135c83..cd1905a 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -2471,7 +2471,7 @@ struct ST_MemUnion_Agg : GeosUnaryAggFunction {
+ 		auto agg = AggregateFunction::UnaryAggregateDestructor<GeosUnaryAggState, string_t, string_t, ST_MemUnion_Agg>(
+ 		    LogicalType::GEOMETRY(), LogicalType::GEOMETRY());
+ 
+-		agg.bind = GeoTypes::PropagateCRS;
++		agg.SetBindCallback(GeoTypes::PropagateCRS);
+ 
+ 		FunctionBuilder::RegisterAggregate(loader, "ST_MemUnion_Agg", [&](AggregateFunctionBuilder &func) {
+ 			func.SetFunction(agg);
+@@ -2499,7 +2499,7 @@ struct ST_Intersection_Agg : GeosUnaryAggFunction {
+ 		    AggregateFunction::UnaryAggregateDestructor<GeosUnaryAggState, string_t, string_t, ST_Intersection_Agg>(
+ 		        LogicalType::GEOMETRY(), LogicalType::GEOMETRY());
+ 
+-		agg.bind = GeoTypes::PropagateCRS;
++		agg.SetBindCallback(GeoTypes::PropagateCRS);
+ 		FunctionBuilder::RegisterAggregate(loader, "ST_Intersection_Agg", [&](AggregateFunctionBuilder &func) {
+ 			func.SetFunction(agg);
+ 			func.CanThrowErrors();
+diff --git a/src/spatial/modules/main/spatial_functions_aggregate.cpp b/src/spatial/modules/main/spatial_functions_aggregate.cpp
+index 5456a8b..de3d79d 100644
+--- a/src/spatial/modules/main/spatial_functions_aggregate.cpp
++++ b/src/spatial/modules/main/spatial_functions_aggregate.cpp
+@@ -143,7 +143,7 @@ void RegisterSpatialAggregateFunctions(ExtensionLoader &loader) {
+ 	auto agg = AggregateFunction::UnaryAggregate<ExtentAggState, string_t, string_t, ExtentAggFunction>(
+ 	    LogicalType::GEOMETRY(), LogicalType::GEOMETRY());
+ 
+-	agg.bind = GeoTypes::PropagateCRS;
++	agg.SetBindCallback(GeoTypes::PropagateCRS);
+ 
+ 	FunctionBuilder::RegisterAggregate(loader, "ST_Extent_Agg", [&](AggregateFunctionBuilder &func) {
+ 		func.SetFunction(agg);
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index ec69387..1a3a2ae 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -302,7 +302,7 @@ struct ST_Transform {
+ 
+ 		// Set return types
+ 		func.arguments[0] = geo_arg->return_type;
+-		func.return_type = LogicalType::GEOMETRY(*result_crs);
++		func.SetReturnType(LogicalType::GEOMETRY(*result_crs));
+ 
+ 		// Check if we need to warn for this
+ 		if (!explicit_normalize) {
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index 082b436..be83e8b 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -128,16 +128,16 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, B
+ 		}
+ 	}
+ 
+-	const auto return_has_geom = TypeVisitor::Contains(bound_function.return_type, LogicalTypeId::GEOMETRY);
++	const auto return_has_geom = TypeVisitor::Contains(bound_function.GetReturnType(), LogicalTypeId::GEOMETRY);
+ 	if (found_crs && return_has_geom) {
+ 		// If the return type is geometry, we need to set the CRS on it as well
+-		bound_function.return_type =
+-		    TypeVisitor::VisitReplace(bound_function.return_type, [&](const LogicalType &type) {
++		bound_function.SetReturnType(
++		    TypeVisitor::VisitReplace(bound_function.GetReturnType(), [&](const LogicalType &type) {
+ 			    if (type.id() == LogicalTypeId::GEOMETRY) {
+ 				    return LogicalType::GEOMETRY(crs);
+ 			    }
+ 			    return type;
+-		    });
++		    }));
+ 	}
+ 
+ 	return nullptr;
+diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
+index e4c30a0..ed0ef5c 100644
+--- a/src/spatial/util/function_builder.hpp
++++ b/src/spatial/util/function_builder.hpp
+@@ -74,25 +74,25 @@ inline void ScalarFunctionVariantBuilder::AddParameter(const char *name, const L
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::SetReturnType(LogicalType type) {
+-	function.return_type = std::move(type);
++	function.SetReturnType(std::move(type));
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::SetFunction(scalar_function_t fn) {
+-	function.function = fn;
++	function.SetFunctionCallback(fn);
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::SetInit(init_local_state_t init) {
+-	function.init_local_state = init;
++	function.SetInitStateCallback(init);
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::SetBind(bind_scalar_function_t bind) {
+-	function.bind = bind;
++	function.SetBindCallback(bind);
+ }
+ inline void ScalarFunctionVariantBuilder::SetSerialize(function_serialize_t serialize) {
+-	function.serialize = serialize;
++	function.SetSerializeCallback(serialize);
+ }
+ inline void ScalarFunctionVariantBuilder::SetDeserialize(function_deserialize_t deserialize) {
+-	function.deserialize = deserialize;
++	function.SetDeserializeCallback(deserialize);
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::SetDescription(const string &desc) {
+@@ -104,7 +104,7 @@ inline void ScalarFunctionVariantBuilder::SetExample(const string &ex) {
+ }
+ 
+ inline void ScalarFunctionVariantBuilder::CanThrowErrors() {
+-	function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
++	function.SetFallible();
+ }
+ 
+ //------------------------------------------------------------------------------
+@@ -153,7 +153,7 @@ void ScalarFunctionBuilder::AddVariant(CALLBACK &&callback) {
+ 	callback(builder);
+ 
+ 	// A return type is required
+-	if (builder.function.return_type.id() == LogicalTypeId::INVALID) {
++	if (builder.function.GetReturnType().id() == LogicalTypeId::INVALID) {
+ 		throw InternalException("Return type not set in ScalarFunctionBuilder::AddVariant");
+ 	}
+ 
+@@ -226,7 +226,7 @@ inline void AggregateFunctionBuilder::SetTag(const string &key, const string &va
+ 
+ inline void AggregateFunctionBuilder::CanThrowErrors() {
+ 	for (auto &function : set.functions) {
+-		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
++		function.SetFallible();
+ 	}
+ }
+ 

@@ -506,8 +506,8 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
-	D_ASSERT(!table_function.arguments.empty() && table_function.arguments[0] == LogicalType::VARCHAR);
-	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
+	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }

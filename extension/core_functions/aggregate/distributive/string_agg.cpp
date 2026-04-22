@@ -171,7 +171,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
+	string_agg_param.GetArguments().emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

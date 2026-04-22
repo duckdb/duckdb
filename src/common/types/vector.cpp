@@ -58,7 +58,8 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
 	} else {
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count);
+		auto type_size = GetTypeIdSize(type.InternalType());
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
 	}
 }
 
@@ -83,6 +84,20 @@ Vector::Vector(const Value &value) : type(value.type()) {
 }
 
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
+}
+
+bool Vector::HasSize() const {
+	if (!buffer) {
+		return true;
+	}
+	return buffer->HasSize();
+}
+
+idx_t Vector::size() const {
+	if (!buffer) {
+		return 0;
+	}
+	return buffer->Size();
 }
 
 void Vector::CheckCapacity(idx_t capacity) const {
@@ -264,11 +279,42 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
 	} else {
 		// resize the buffer
-		auto new_buffer = buffer->Resize(GetType(), current_size, new_size);
-		if (new_buffer) {
-			buffer = std::move(new_buffer);
-		}
+		buffer->Resize(current_size, new_size);
 	}
+}
+
+void Vector::Reserve(idx_t to_reserve) {
+	if (!HasSize()) {
+		throw InternalException("Vector::Reserve can only be called on vectors with a size");
+	}
+	if (!buffer) {
+		Initialize(VectorDataInitialization::UNINITIALIZED, VectorBuffer::GetReserveSize(to_reserve));
+		return;
+	}
+	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
+	auto capacity = buffer->Capacity();
+	if (to_reserve <= capacity) {
+		return;
+	}
+	buffer->Resize(capacity, to_reserve);
+}
+
+void Vector::Append(const Value &value) {
+	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, idx_t count) {
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
+	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+                  idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(source.GetType() == GetType());
+	buffer->Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -356,11 +402,14 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	Flatten(*FlatVector::IncrementalSelectionVector(), count);
+	auto new_buffer = Buffer().Flatten(GetType(), count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	}
 }
 
 void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), sel, count);
+	auto new_buffer = Buffer().FlattenSlice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -536,11 +585,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				idx_t byte_data_length = 0;
 
 				// write all the lengths
-				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				auto lengths_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
 					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
+					lengths_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
 					byte_data_length += this_length;
 				}
 

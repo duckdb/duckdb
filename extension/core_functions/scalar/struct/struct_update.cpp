@@ -69,24 +69,24 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	child_list_t<LogicalType> new_children;
 	auto &existing_children = StructType::GetChildTypes(arguments[0]->return_type);
 
-	auto incomming_children = case_insensitive_tree_t<idx_t>();
+	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
-	// Validate incomming arguments and record names
+	// Validate incoming arguments and record names
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		auto &child = arguments[arg_idx];
 		if (child->alias.empty()) {
 			throw BinderException("Need named argument for struct update, e.g., a := b");
-		} else if (incomming_children.find(child->alias) != incomming_children.end()) {
+		} else if (incoming_children.find(child->alias) != incoming_children.end()) {
 			throw InvalidInputException("Duplicate named argument provided for %s", child->alias.c_str());
 		}
-		incomming_children.emplace(child->alias, arg_idx);
+		incoming_children.emplace(child->alias, arg_idx);
 	}
 
 	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
 		auto &existing_child = existing_children[field_idx];
-		auto update = incomming_children.find(existing_child.first);
-		if (update == incomming_children.end()) {
+		auto update = incoming_children.find(existing_child.first);
+		if (update == incoming_children.end()) {
 			// No update provided for the named value
 			new_children.push_back(make_pair(existing_child.first, existing_child.second));
 		} else {
@@ -114,13 +114,13 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 
-	auto incomming_children = case_insensitive_tree_t<idx_t>();
+	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.children.size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.return_type);
 
 	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
 		auto &new_child = expr.children[arg_idx];
-		incomming_children.emplace(new_child->alias, arg_idx);
+		incoming_children.emplace(new_child->alias, arg_idx);
 	}
 
 	auto existing_type = child_stats[0].GetType();
@@ -128,8 +128,8 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
-		auto update = incomming_children.find(StructType::GetChildName(existing_type, field_idx));
-		if (update == incomming_children.end()) {
+		auto update = incoming_children.find(StructType::GetChildName(existing_type, field_idx));
+		if (update == incoming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {
 			auto arg_idx = update->second;
@@ -150,7 +150,7 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 ScalarFunction StructUpdateFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

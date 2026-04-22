@@ -20,6 +20,11 @@ from python_helpers import open_utf8
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from format_test_benchmark import format_file_content
 
+# Ensure binaries installed into the current Python environment are discoverable.
+# This is required when invoking this script via an explicit venv python path.
+python_bin_dir = os.path.dirname(os.path.abspath(sys.executable))
+os.environ['PATH'] = python_bin_dir + os.pathsep + os.environ.get('PATH', '')
+
 try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
@@ -152,6 +157,27 @@ if args.directories:
     formatted_directories = args.directories
 
 
+def get_typos_targets():
+    if format_all:
+        return [path for path in formatted_directories if os.path.exists(path)]
+    return sorted(set([f.full_path for f in files if os.path.exists(f.full_path)]))
+
+
+def run_typos_check():
+    typos_targets = get_typos_targets()
+    if not typos_targets:
+        return 0
+    typos_command = ['typos', '--force-exclude']
+    if not check_only:
+        typos_command.append('-w')
+    typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
+    try:
+        return subprocess.call(typos_command)
+    except FileNotFoundError:
+        print('typos not found. Install it with "brew install typos-cli"')
+        return 1
+
+
 def file_is_ignored(full_path):
     if os.path.basename(full_path) in ignored_files:
         return True
@@ -214,7 +240,7 @@ elif os.path.isdir(revision):
     for fname in changed_files:
         print(fname)
 elif not format_all:
-    if revision == 'main':
+    if revision == 'main' and os.environ.get('DUCKDB_FORMAT_SKIP_FETCH') != '1':
         # fetch new changes when comparing to the master
         os.system("git fetch origin main:main")
     print(action + " since branch or revision: " + revision)
@@ -430,6 +456,8 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.shutdown(wait=True, cancel_futures=True)
         raise
 
+typos_status = run_typos_check()
+
 if check_only:
     if len(difference_files) > 0:
         print("")
@@ -440,6 +468,10 @@ if check_only:
             print("- " + fname)
         print('Run "make format-fix" to fix these differences automatically')
         exit(1)
+    if typos_status != 0:
+        exit(1)
     else:
         print("Passed format-check")
         exit(0)
+elif typos_status != 0:
+    exit(1)

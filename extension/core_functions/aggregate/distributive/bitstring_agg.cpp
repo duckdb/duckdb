@@ -271,7 +271,7 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	function.SetStatisticsCallback(
 	    BitstringPropagateStats);        // stores min and max from column stats in BitstringAggBindData
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
-	function.arguments = {type, type, type};
+	function.GetArguments() = {type, type, type};
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	bitstring_agg.AddFunction(function);
 }

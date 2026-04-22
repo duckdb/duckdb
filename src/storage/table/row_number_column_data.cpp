@@ -99,12 +99,12 @@ void RowNumberColumnData::RevertAppend(row_t new_count) {
 	throw InternalException("RowNumberColumnData cannot be appended to");
 }
 
-void RowNumberColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void RowNumberColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                  Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw InternalException("RowNumberColumnData cannot be updated");
 }
 
-void RowNumberColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void RowNumberColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                        const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                        idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw InternalException("RowNumberColumnData cannot be updated");
