@@ -21,14 +21,6 @@ namespace duckdb {
 Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
-struct UnicodeSpace {
-	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
-	}
-
-	idx_t pos;
-	idx_t bytes;
-};
-
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
 	if (unicode_spaces.empty()) {
 		// no unicode spaces found

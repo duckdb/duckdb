@@ -25,6 +25,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -525,7 +526,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
-	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();

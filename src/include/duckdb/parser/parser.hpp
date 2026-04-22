@@ -20,6 +20,14 @@
 namespace duckdb {
 
 class GroupByNode;
+struct UnicodeSpace {
+	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
+	}
+
+	idx_t pos;
+	idx_t bytes;
+};
+
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
