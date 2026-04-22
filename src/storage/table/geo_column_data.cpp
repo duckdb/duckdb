@@ -153,12 +153,12 @@ void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &stat
 // Update
 //----------------------------------------------------------------------------------------------------------------------
 
-void GeoColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void GeoColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                            Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("GEOMETRY Update is not supported");
 }
 
-void GeoColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void GeoColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                  idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("GEOMETRY Update is not supported");

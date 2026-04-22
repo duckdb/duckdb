@@ -2,6 +2,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -974,7 +975,7 @@ string DataTable::TableModification() const {
 	}
 }
 
-void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+void DataTable::InitializeLocalAppend(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
                                       const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
@@ -982,11 +983,11 @@ void DataTable::InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry
 		                           GetTableName(), TableModification());
 	}
 	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.InitializeAppend(state, *this);
+	local_storage.InitializeAppend(state, *this, table);
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
-void DataTable::InitializeLocalStorage(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+void DataTable::InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
                                        const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to insert into table \"%s\" but it has been %s by "
@@ -995,11 +996,12 @@ void DataTable::InitializeLocalStorage(LocalAppendState &state, TableCatalogEntr
 	}
 
 	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.InitializeStorage(state, *this);
+	local_storage.InitializeStorage(state, *this, table);
 	state.constraint_state = InitializeConstraintState(table, bound_constraints);
 }
 
-void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe) {
+void DataTable::LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry, ClientContext &context,
+                            DataChunk &chunk, bool unsafe) {
 	if (chunk.size() == 0) {
 		return;
 	}
@@ -1019,14 +1021,14 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 
 	// Append to the transaction-local data.
 	auto data_table_info = GetDataTableInfo();
-	LocalStorage::Append(state, chunk, *data_table_info);
+	LocalStorage::Append(state, table_entry, chunk, *data_table_info);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe) {
 	LocalAppendState append_state;
 	InitializeLocalAppend(append_state, table, context, bound_constraints);
-	LocalAppend(append_state, context, chunk, unsafe);
+	LocalAppend(append_state, table, context, chunk, unsafe);
 	FinalizeLocalAppend(append_state);
 }
 
@@ -1056,23 +1058,23 @@ OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	return local_storage.GetOptimisticWriter(*this);
 }
 
-void DataTable::LocalMerge(ClientContext &context, OptimisticWriteCollection &collection) {
+void DataTable::LocalMerge(ClientContext &context, DuckTableEntry &table_entry, OptimisticWriteCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.LocalMerge(*this, collection);
+	local_storage.LocalMerge(*this, table_entry, collection);
 }
 
-void DataTable::LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+void DataTable::LocalWALAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
                                const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 
-	storage.LocalAppend(append_state, context, chunk, true);
+	storage.LocalAppend(append_state, table, context, chunk, true);
 	append_state.storage->index_append_mode = IndexAppendMode::INSERT_DUPLICATES;
 	storage.FinalizeLocalAppend(append_state);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints, Vector &row_ids,
                             DataChunk &delete_chunk) {
 	LocalAppendState append_state;
@@ -1080,11 +1082,11 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Da
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 	append_state.storage->AppendToDeleteIndexes(row_ids, delete_chunk);
 
-	storage.LocalAppend(append_state, context, chunk, false);
+	storage.LocalAppend(append_state, table, context, chunk, false);
 	storage.FinalizeLocalAppend(append_state);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
+void DataTable::LocalAppend(DuckTableEntry &table, ClientContext &context, ColumnDataCollection &collection,
                             const vector<unique_ptr<BoundConstraint>> &bound_constraints,
                             optional_ptr<const vector<LogicalIndex>> column_ids) {
 	LocalAppendState append_state;
@@ -1093,7 +1095,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	if (!column_ids || column_ids->empty()) {
 		for (auto &chunk : collection.Chunks()) {
-			storage.LocalAppend(append_state, context, chunk, false);
+			storage.LocalAppend(append_state, table, context, chunk, false);
 		}
 		storage.FinalizeLocalAppend(append_state);
 		return;
@@ -1136,7 +1138,7 @@ void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, Co
 
 	for (auto &chunk : collection.Chunks()) {
 		expression_executor.Execute(chunk, result);
-		storage.LocalAppend(append_state, context, result, false);
+		storage.LocalAppend(append_state, table, context, result, false);
 		result.Reset();
 	}
 	storage.FinalizeLocalAppend(append_state);
@@ -1559,7 +1561,8 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 	return result;
 }
 
-idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector &row_identifiers, idx_t count) {
+idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTableEntry &table_entry,
+                        Vector &row_identifiers, idx_t count) {
 	D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return 0;
@@ -1598,7 +1601,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 				                         fetch_state);
 				VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
 			}
-			delete_count += local_storage.Delete(*this, offset_ids, current_count);
+			delete_count += local_storage.Delete(*this, table_entry, offset_ids, current_count);
 			continue;
 		}
 
@@ -1609,7 +1612,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, Vector 
 			Fetch(transaction, state.verify_chunk, state.col_ids, offset_ids, current_count, fetch_state);
 			VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
 		}
-		delete_count += row_groups->Delete(transaction, *this, ids + current_offset, current_count);
+		delete_count += row_groups->Delete(transaction, table_entry, ids + current_offset, current_count);
 	}
 	return delete_count;
 }
@@ -1711,7 +1714,7 @@ unique_ptr<TableUpdateState> DataTable::InitializeUpdate(TableCatalogEntry &tabl
 	return result;
 }
 
-void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &row_ids,
+void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(column_ids.size() == updates.ColumnCount());
@@ -1749,24 +1752,23 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, Vector &
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
 		row_ids_slice.Flatten(n_local_update);
 
-		LocalStorage::Get(context, db).Update(*this, row_ids_slice, column_ids, updates_slice);
+		LocalStorage::Get(context, db).Update(*this, table_entry, row_ids_slice, column_ids, updates_slice);
 	}
 
 	// otherwise global storage
 	if (n_global_update > 0) {
 		auto &transaction = DuckTransaction::Get(context, db);
-		transaction.ModifyTable(*this);
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
 		row_ids_slice.Flatten(n_global_update);
 
-		row_groups->Update(transaction, *this, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
+		row_groups->Update(transaction, table_entry, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
 		                   updates_slice);
 	}
 }
 
-void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+void DataTable::UpdateColumn(DuckTableEntry &table, ClientContext &context, Vector &row_ids,
                              const vector<column_t> &column_path, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(updates.ColumnCount() == 1);
@@ -1786,7 +1788,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 
 	updates.Flatten();
 	row_ids.Flatten(updates.size());
-	row_groups->UpdateColumn(transaction, *this, row_ids, column_path, updates);
+	row_groups->UpdateColumn(transaction, table, row_ids, column_path, updates);
 }
 
 //===--------------------------------------------------------------------===//

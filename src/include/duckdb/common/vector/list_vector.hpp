@@ -39,18 +39,18 @@ public:
 	}
 	void Reserve(idx_t to_reserve);
 
-	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
-	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
+	void AppendToChild(const Vector &to_append, idx_t to_append_size);
+	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size);
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() const {
-		return size;
+	idx_t GetChildSize() const {
+		return child_size;
 	}
 
 	idx_t GetChildCapacity() const;
 
-	void SetSize(idx_t new_size);
+	void SetChildSize(idx_t new_size);
 
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
@@ -64,12 +64,13 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
-	buffer_ptr<VectorBuffer> CreateResizeBuffer(AllocatedData &&new_data, idx_t capacity) override;
+	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	                  idx_t target_offset, idx_t copy_count) override;
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t size = 0;
+	idx_t child_size = 0;
 };
 
 struct ListVector {
@@ -103,9 +104,8 @@ struct ListVector {
 	DUCKDB_API static idx_t GetListCapacity(const Vector &vector);
 	//! Sets the total capacity of the underlying child-vector of a list
 	DUCKDB_API static void Reserve(Vector &vec, idx_t required_capacity);
-	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
-	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
-	                              idx_t source_offset = 0);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
 	//! Returns the child_vector of list starting at offset until offset + count, and its length
 	DUCKDB_API static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count);

@@ -81,7 +81,7 @@ struct ListTransformFunctor {
 	//! Appends the lambda vector to the result's child vector
 	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
 	                         ListFilterInfo &, LambdaExecuteInfo &) {
-		ListVector::Append(result, lambda_vector, elem_cnt, 0);
+		ListVector::Append(result, lambda_vector, elem_cnt);
 	}
 };
 
@@ -148,7 +148,7 @@ struct ListFilterFunctor {
 		// and append them to the result
 		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
 		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
-		ListVector::Append(result, result_lists, count, 0);
+		ListVector::Append(result, result_lists, count);
 	}
 };
 

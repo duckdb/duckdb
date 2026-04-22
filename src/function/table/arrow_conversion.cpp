@@ -563,7 +563,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
 	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
-	auto result_data = FlatVector::Writer<VALUE_TYPE>(result, count);
+	auto result_data = FlatVector::ScatterWriter<VALUE_TYPE>(result);
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid
@@ -923,14 +923,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			               fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
-			auto result = FlatVector::Writer<string_t>(vector, size);
+			auto result = FlatVector::ScatterWriter<string_t>(vector);
 			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 				if (FlatVector::IsNull(vector, row_idx)) {
 					offset += blob_len;
 					continue;
 				}
 				auto bptr = cdata + offset;
-				result[row_idx] = string_t(bptr, blob_len);
+				result[row_idx] = string_t(bptr, UnsafeNumericCast<uint32_t>(blob_len));
 				offset += blob_len;
 			}
 		}

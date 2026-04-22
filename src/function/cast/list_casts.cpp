@@ -60,7 +60,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
+			tdata.WriteValue(ldata[i]);
 		}
 	}
 	auto &source_cc = ListVector::GetChildMutable(source);
@@ -106,7 +106,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 		auto list = list_data[i];
@@ -128,7 +128,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				list_length += NULL_LENGTH;
 			}
 		}
-		auto &result_str = result_data[i].EmptyString(list_length);
+		auto &result_str = result_data.WriteEmptyString(list_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';

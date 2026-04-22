@@ -4,9 +4,10 @@
 
 namespace duckdb {
 
-ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, idx_t capacity)
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, idx_t count)
     : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
-      shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))), capacity(capacity) {
+      shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
+	v_size = count;
 }
 
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {
