@@ -290,6 +290,9 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(PEGT
 				fk_constraint->fk_columns.push_back(qualified_name.name);
 				column_constraint.constraints.push_back(std::move(fk_constraint));
 			} else if (constraint.name == "ColumnCollation") {
+				if (generated_opt.HasResult()) {
+					throw ParserException("Collations are not supported on generated columns");
+				}
 				if (type.id() == LogicalTypeId::ANY) {
 					throw ParserException("Specify the VARCHAR type for column \"%s\" with collation.",
 					                      qualified_name.ToString());
