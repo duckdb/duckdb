@@ -11,7 +11,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_entries.hpp"
-#include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
@@ -309,32 +308,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	    LogicalCopyToFile::GetNamesWithoutPartitions(unique_column_names, partition_cols, write_partition_columns);
 	auto types_to_write =
 	    LogicalCopyToFile::GetTypesWithoutPartitions(select_node.types, partition_cols, write_partition_columns);
-
-	// If copying from a table, propagate NOT NULL constraints
-	if (!copy_info.table.empty()) {
-		auto entry =
-		    Catalog::GetEntry(context, copy_info.catalog, copy_info.schema,
-		                      EntryLookupInfo(CatalogType::TABLE_ENTRY, copy_info.table), OnEntryNotFound::RETURN_NULL);
-		if (entry && entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry->Cast<TableCatalogEntry>();
-			case_insensitive_map_t<idx_t> name_to_idx;
-			for (idx_t i = 0; i < names_to_write.size(); i++) {
-				name_to_idx[names_to_write[i]] = i;
-			}
-			bind_input.not_null_columns.resize(names_to_write.size(), false);
-			for (auto &constraint : table.GetConstraints()) {
-				if (constraint->type != ConstraintType::NOT_NULL) {
-					continue;
-				}
-				auto &not_null = constraint->Cast<NotNullConstraint>();
-				const auto &col_name = table.GetColumn(not_null.index).GetName();
-				auto it = name_to_idx.find(col_name);
-				if (it != name_to_idx.end()) {
-					bind_input.not_null_columns[it->second] = true;
-				}
-			}
-		}
-	}
 
 	auto function_data = function.copy_to_bind(context, bind_input, names_to_write, types_to_write);
 

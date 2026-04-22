@@ -17,6 +17,8 @@
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -350,7 +352,33 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
-	bind_data->not_null_columns = input.not_null_columns;
+
+	// Determine non-nullable columns from table statistics (if copying from a table)
+	auto &copy_info = input.info;
+	if (!copy_info.table.empty()) {
+		auto entry =
+		    Catalog::GetEntry(context, copy_info.catalog, copy_info.schema,
+		                      EntryLookupInfo(CatalogType::TABLE_ENTRY, copy_info.table), OnEntryNotFound::RETURN_NULL);
+		if (entry && entry->type == CatalogType::TABLE_ENTRY) {
+			auto &table = entry->Cast<TableCatalogEntry>();
+			auto &columns = table.GetColumns();
+			case_insensitive_map_t<column_t> name_to_col;
+			for (auto &col : columns.Logical()) {
+				name_to_col[col.GetName()] = col.Oid();
+			}
+			bind_data->not_null_columns.resize(names.size(), false);
+			for (idx_t i = 0; i < names.size(); i++) {
+				auto it = name_to_col.find(names[i]);
+				if (it != name_to_col.end()) {
+					auto stats = table.GetStatistics(context, it->second);
+					if (stats && !stats->CanHaveNull()) {
+						bind_data->not_null_columns[i] = true;
+					}
+				}
+			}
+		}
+	}
+
 	return std::move(bind_data);
 }
 
