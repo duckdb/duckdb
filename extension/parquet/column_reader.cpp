@@ -262,18 +262,10 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		if (!dictionary_decoder.HasFilteredOutAllValues()) {
 			return false;
 		}
-		// the page has been filtered out!
-		// skip forward
-		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-		trans.Skip(page_hdr.compressed_page_size);
-		page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
 		encoding = ColumnEncoding::DICTIONARY;
 		page_is_filtered_out = true;
-		return true;
-	}
-
-	// try to use page statistics to skip this page if could.
-	if (filter) {
+	} else if (filter) {
+		// try to use page statistics to skip this page if could.
 		const duckdb_parquet::Statistics *page_stats = nullptr;
 		if (is_v1 && v1_header.__isset.statistics) {
 			page_stats = &v1_header.statistics;
@@ -285,15 +277,18 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		}
 		auto stats = ParquetStatisticsUtils::TransformStatisticsFromPageHeader(Type(), Schema(), *page_stats);
 		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-			auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-			trans.Skip(page_hdr.compressed_page_size);
-			page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
 			page_is_filtered_out = true;
-			return true;
 		}
 	}
+	if (page_is_filtered_out) {
+		// the page has been filtered out!
+		// skip forward
+		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+		trans.Skip(page_hdr.compressed_page_size);
+		page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	}
 
-	return false;
+	return page_is_filtered_out;
 }
 
 void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
