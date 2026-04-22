@@ -202,23 +202,18 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                     idx_t count) const {
-	if (!input_sel.IsSet() && GetVectorType() == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (GetVectorType() == VectorType::FLAT_VECTOR) {
 		for (auto &child : children) {
-			child.Flatten(input_sel, count);
+			child.Flatten(count);
 		}
 		return nullptr;
 	}
-	// determine the selection vector to use
-	SelectionVector owned_sel;
-	const_reference<SelectionVector> sel_ref(input_sel);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
-		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto &sel = sel_ref.get();
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
 
+
+buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	// create a new flat struct buffer
 	// flatten each child using the same sel
 	vector<Vector> result_children;

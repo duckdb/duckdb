@@ -37,7 +37,7 @@ Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) con
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
+buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                          idx_t count) const {
 	auto result = make_buffer<VectorStringBuffer>(count);
 

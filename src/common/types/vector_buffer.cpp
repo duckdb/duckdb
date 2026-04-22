@@ -34,14 +34,14 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 }
 
 void VectorBuffer::SetVectorSize(idx_t new_size) {
-	switch(vector_type) {
+	switch (vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		break;
 	case VectorType::FLAT_VECTOR:
 		if (new_size > Capacity()) {
 			throw InternalException(
-				"Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
-				Capacity());
+			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
+			    Capacity());
 		}
 		break;
 	case VectorType::DICTIONARY_VECTOR:
@@ -118,7 +118,41 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	// FIXME: this should just be using size.GetIndex()...
+	if (v_size.IsValid()) {
+		if (count > v_size.GetIndex()) {
+			throw InternalException("Flatten called with count that exceeds the size of the vector");
+		}
+		count = v_size.GetIndex();
+	}
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSlice(const LogicalType &type, const SelectionVector &sel,
+                                                    idx_t count) const {
+	buffer_ptr<VectorBuffer> result;
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// if the vector is a constant vector the input selection vector does not matter
+		// we always need to select the first value
+		SelectionVector owned_sel;
+		auto &constant_sel = *ConstantVector::ZeroSelectionVector(count, owned_sel);
+		result = FlattenSliceInternal(type, constant_sel, count);
+	} else {
+		result = FlattenSliceInternal(type, sel, count);
+	}
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                            idx_t count) const {
 	throw InternalException("Unimplemented type for flatten");
 }
 
@@ -166,14 +200,15 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	// default slice: flatten with a selection vector and then wrap in a dictionary
-	return Flatten(type, sel, count);
+	return FlattenSlice(type, sel, count);
 }
 
 idx_t VectorBuffer::GetReserveSize(idx_t required_capacity) {
 	if (required_capacity > DConstants::MAX_VECTOR_SIZE) {
 		// overflow: throw an exception
-		throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s", required_capacity,
-								  StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+		throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s",
+		                          required_capacity,
+		                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
 	}
 	return NextPowerOfTwo(required_capacity);
 }
@@ -185,8 +220,8 @@ void VectorBuffer::Reserve(idx_t required_capacity, VectorAppendMode append_mode
 		return;
 	}
 	if (append_mode == VectorAppendMode::ERROR_ON_NO_SPACE) {
-			throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
-		}
+		throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
+	}
 	auto new_capacity = GetReserveSize(required_capacity);
 	D_ASSERT(new_capacity >= required_capacity);
 	Resize(capacity, new_capacity);
@@ -202,7 +237,8 @@ void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, Vector
 	v_size = v_size.GetIndex() + 1;
 }
 
-void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode) {
+void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size,
+                          VectorAppendMode append_mode) {
 	if (!HasSize()) {
 		throw InternalException("Cannot append to vector without size");
 	}

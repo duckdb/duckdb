@@ -142,9 +142,12 @@ public:
 	static idx_t GetReserveSize(idx_t required_capacity);
 
 	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
+	//! Returns a new buffer, or nullptr if already flat
+	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const;
+	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
 	//! The selection vector maps output indices to source indices in this buffer
-	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
-	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	buffer_ptr<VectorBuffer> FlattenSlice(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const;
 	//! Returns the total (uncompressed) data size
 	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
 	//! Returns the total amount of bytes allocated by the vector buffer
@@ -186,6 +189,8 @@ protected:
 	//! Copy data from another vector into this vectors' buffer
 	virtual void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
 	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);
+	virtual buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                                      idx_t count) const;
 
 protected:
 	VectorType vector_type;
