@@ -20,6 +20,9 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
                                        SetScope scope, const Value &value) {
 	auto &target_type = extension_option.type;
 	Value target_value = value.CastAs(context, target_type);
+	if (target_value.IsNull()) {
+		throw InvalidInputException("Extension parameter \'%s\' cannot be set to NULL", name);
+	}
 	if (extension_option.set_function) {
 		extension_option.set_function(context, scope, target_value);
 	}
@@ -82,6 +85,9 @@ SourceResultType PhysicalSet::GetDataInternal(ExecutionContext &context, DataChu
 	SetScope variable_scope = GetSettingScope(*option, scope);
 
 	Value input_val = value.CastAs(context.client, DBConfig::ParseLogicalType(option->parameter_type));
+	if (input_val.IsNull()) {
+		throw InvalidInputException("Option \'%s\' cannot be set to NULL", name);
+	}
 	if (option->default_value) {
 		if (option->set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);

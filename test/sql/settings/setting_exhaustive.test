@@ -76,3 +76,8 @@ statement error
 SET explain_output='unknown';
 ----
 <REGEX>:.*unrecognized value.*
+
+statement error
+SET threads = 1%0;
+----
+Invalid Input Error: Option 'threads' cannot be set to NULL
