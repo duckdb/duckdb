@@ -849,7 +849,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpres
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeOp(PEGTransformer &transformer,
                                                                              ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &not_expr = list_pr.Child<OptionalParseResult>(0);
+	(void)list_pr.Child<OptionalParseResult>(0);
 	auto &inner_list = list_pr.Child<ListParseResult>(1);
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list.Child<ChoiceParseResult>(0).GetResult());
 	return expr;

@@ -222,7 +222,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 			}
 			// filter is true or null; we can replace this with a not null filter
 			auto not_null = ExpressionFilter::CreateNullCheckExpression(
-			    make_uniq<BoundReferenceExpression>(stats.GetType(), 0), ExpressionType::OPERATOR_IS_NOT_NULL);
+			    make_uniq<BoundReferenceExpression>(stats.GetType(), storage_t(0)), ExpressionType::OPERATOR_IS_NOT_NULL);
 			get.table_filters.SetFilterByColumnIndex(table_filter_column,
 			                                         make_uniq<ExpressionFilter>(std::move(not_null)));
 			break;
