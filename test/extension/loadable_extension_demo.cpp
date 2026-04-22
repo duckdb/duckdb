@@ -178,8 +178,9 @@ public:
 		// start returning values
 		// either fill up the chunk or return all the remaining columns
 		idx_t count = 0;
+		auto &quack_col = output.data[0];
 		while (data.offset < bind_data.number_of_quacks && count < STANDARD_VECTOR_SIZE) {
-			output.SetValue(0, count, Value("QUACK"));
+			quack_col.Append(Value("QUACK"));
 			data.offset++;
 			count++;
 		}

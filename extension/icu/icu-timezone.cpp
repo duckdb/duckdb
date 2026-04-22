@@ -56,6 +56,16 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContex
 static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUTimeZoneData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+	// abbrev, VARCHAR
+	auto &abbrev = output.data[1];
+	// utc_offset, INTERVAL
+	auto &utc_offset = output.data[2];
+	// is_dst, BOOLEAN
+	auto &is_dst = output.data[3];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		UErrorCode status = U_ZERO_ERROR;
 		auto long_id = data.tzs->snext(status);
@@ -66,7 +76,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		//	The LONG name is the one we looked up
 		std::string utf8;
 		long_id->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
 
 		//	We don't have the zone tree for determining abbreviated names,
 		//	so the SHORT name is the shortest, lexicographically first equivalent TZ without a slash.
@@ -78,13 +87,13 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			if (eid.indexOf(char16_t('/')) >= 0) {
 				continue;
 			}
-			utf8.clear();
-			eid.toUTF8String(utf8);
-			if (utf8.size() < short_id.size() || (utf8.size() == short_id.size() && utf8 < short_id)) {
-				short_id = utf8;
+			std::string eid_utf8;
+			eid.toUTF8String(eid_utf8);
+			if (eid_utf8.size() < short_id.size() ||
+			    (eid_utf8.size() == short_id.size() && eid_utf8 < short_id)) {
+				short_id = eid_utf8;
 			}
 		}
-		output.SetValue(1, index, Value(short_id));
 
 		duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
@@ -94,11 +103,13 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			break;
 		}
 
+		name_col.Append(Value(utf8));
+		abbrev.Append(Value(short_id));
 		//	What PG reports is the total offset for today,
 		//	which is the ICU total offset (i.e., "raw") plus the DST offset.
 		raw_offset_ms += dst_offset_ms;
-		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
-		output.SetValue(3, index, Value(dst_offset_ms != 0));
+		utc_offset.Append(Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
+		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
 	output.SetCardinality(index);
