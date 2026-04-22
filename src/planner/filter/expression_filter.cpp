@@ -49,7 +49,7 @@ unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Ex
 	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
 	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
 	result->children.push_back(std::move(column));
-	return result;
+	return std::move(result);
 }
 
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
