@@ -1181,6 +1181,8 @@ struct VacuumState {
 	//! Whether any operation (empty group drop or vacuum merge) actually remapped row IDs
 	bool row_ids_changed = false;
 	optional_idx first_changed_old_row_group;
+	bool collect_checkpoint_events = false;
+	idx_t old_row_group_count = 0;
 	idx_t row_start = 0;
 	idx_t next_vacuum_idx = 0;
 	vector<optional_idx> row_group_counts;
@@ -1194,10 +1196,22 @@ struct VacuumState {
 	}
 
 	void MarkDroppedRowGroup(idx_t row_group_idx) {
+		if (!collect_checkpoint_events) {
+			return;
+		}
+		if (lineage.empty()) {
+			lineage.resize(old_row_group_count);
+		}
 		lineage[row_group_idx].dropped = true;
 	}
 
 	void MarkMergedRowGroup(idx_t row_group_idx, idx_t target_segment_idx, idx_t target_segment_count) {
+		if (!collect_checkpoint_events) {
+			return;
+		}
+		if (lineage.empty()) {
+			lineage.resize(old_row_group_count);
+		}
 		lineage[row_group_idx].merged = true;
 		lineage[row_group_idx].target_segment_idx = target_segment_idx;
 		lineage[row_group_idx].target_segment_count = target_segment_count;
@@ -1406,7 +1420,9 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                optional_idx checkpoint_row_group_count) {
-	state.lineage.resize(checkpoint_state.SegmentCount());
+	auto callbacks = ExtensionCallback::Iterate(checkpoint_state.writer.GetDatabase());
+	state.collect_checkpoint_events = callbacks.begin() != callbacks.end();
+	state.old_row_group_count = checkpoint_state.SegmentCount();
 	auto options = checkpoint_state.writer.GetCheckpointOptions();
 	// currently we can only vacuum deletes if we are doing a full checkpoint
 	state.can_vacuum_deletes = options.type != CheckpointType::CONCURRENT_CHECKPOINT;
@@ -1890,7 +1906,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 	total_rows = new_total_rows;
 	SetRowGroups(std::move(new_row_groups));
 	Verify();
-	auto row_group_lineage = BuildCheckpointRowGroupLineage(vacuum_state, checkpoint_state);
+	vector<CheckpointRowGroupLineageEntry> row_group_lineage;
+	if (vacuum_state.collect_checkpoint_events) {
+		row_group_lineage = BuildCheckpointRowGroupLineage(vacuum_state, checkpoint_state);
+	}
 	bool indexes_rebuilt = false;
 	// Rebuild indexes if:
 	// 1) can_rebuild_indexes is set (it is set when the vacuum_rebuild_indexes
@@ -1902,7 +1921,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		writer.SetRebuildIndexes();
 		indexes_rebuilt = true;
 	}
-	if (vacuum_state.row_ids_changed || indexes_rebuilt || !row_group_lineage.empty()) {
+	if (vacuum_state.collect_checkpoint_events &&
+	    (vacuum_state.row_ids_changed || indexes_rebuilt || !row_group_lineage.empty())) {
 		CheckpointTableEvent event;
 		event.table_oid = writer.GetTableOid();
 		event.first_affected_old_row_group = vacuum_state.first_changed_old_row_group;
