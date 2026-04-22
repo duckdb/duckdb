@@ -87,23 +87,6 @@ bool CTEInlining::EndsInAggregateOrDistinct(const LogicalOperator &op) {
 	return false;
 }
 
-static bool HasSideEffects(const LogicalOperator &op) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE:
-		return true;
-	default:
-		break;
-	}
-	for (auto &child : op.children) {
-		if (HasSideEffects(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static bool EndsInDummyScan(const LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_DUMMY_SCAN || op.type == LogicalOperatorType::LOGICAL_EMPTY_RESULT ||
 	    op.type == LogicalOperatorType::LOGICAL_CTE_REF) {

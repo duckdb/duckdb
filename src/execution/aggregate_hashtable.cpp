@@ -1079,7 +1079,7 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t initial_capacity, idx
 	// This avoids clearing a large pointer table (O(max_capacity)) when prior iterations
 	// processed few rows. The HT will grow during the iteration if more groups are encountered.
 	const auto effective_capacity = GetCapacityForCount(prev_count);
-	if (!hash_map || capacity < effective_capacity) {
+	if (!hash_map.IsSet() || capacity < effective_capacity) {
 		Resize(effective_capacity);
 	} else {
 		// Logically shrink to effective_capacity: only zero the portion we need.
