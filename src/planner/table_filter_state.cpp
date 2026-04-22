@@ -69,11 +69,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 		auto &optional_filter = filter.Cast<OptionalFilter>();
 		return optional_filter.InitializeState(context);
 	}
-
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		return Initialize(context, *struct_filter.child_filter);
-	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conj_filter = filter.Cast<ConjunctionOrFilter>();
 		auto result = make_uniq<ConjunctionOrFilterState>();

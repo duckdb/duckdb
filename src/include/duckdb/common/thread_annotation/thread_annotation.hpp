@@ -24,3 +24,12 @@
 // in the constructor, and released in the destructor. Such classes require special handling because the
 // constructor and destructor refer to the capability via different names.
 #define DUCKDB_SCOPED_CAPABILITY DUCKDB_THREAD_ANNOTATION_ATTRIBUTE(scoped_lockable)
+
+#if defined(__clang__) && defined(__has_attribute)
+#if __has_attribute(no_thread_safety_analysis)
+#define DUCKDB_NO_THREAD_SAFETY_ANALYSIS __attribute__((no_thread_safety_analysis))
+#endif
+#endif
+#ifndef DUCKDB_NO_THREAD_SAFETY_ANALYSIS
+#define DUCKDB_NO_THREAD_SAFETY_ANALYSIS
+#endif

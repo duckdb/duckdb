@@ -99,7 +99,7 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 			throw InternalException(
 			    "BindRowIdColumns could not find the row id column in the virtual columns list of the table");
 		}
-		// check if this column has alraedy been projected
+		// check if this column has already been projected
 		idx_t column_idx;
 		for (column_idx = 0; column_idx < column_ids.size(); ++column_idx) {
 			if (column_ids[column_idx].GetPrimaryIndex() == row_id_column) {

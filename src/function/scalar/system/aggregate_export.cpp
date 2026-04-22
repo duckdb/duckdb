@@ -743,7 +743,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), state_size));
+		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), UnsafeNumericCast<uint32_t>(state_size)));
 	}
 }
 

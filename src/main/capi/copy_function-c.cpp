@@ -685,7 +685,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 			}
 		}
 
-		// Assing the option as a named parameter
+		// Assign the option as a named parameter
 		named_parameters[opt.first] = param_value;
 	}
 
