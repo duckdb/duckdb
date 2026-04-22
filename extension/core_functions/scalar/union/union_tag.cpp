@@ -34,7 +34,7 @@ unique_ptr<FunctionData> UnionTagBind(BindScalarFunctionInput &input) {
 		throw InternalException("Can't get tags from an empty union");
 	}
 
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);
 	auto result_data = FlatVector::Writer<string_t>(varchar_vector, member_count);

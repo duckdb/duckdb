@@ -1776,7 +1776,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	switch (GetDatePartSpecifier(part_name)) {
 	case DatePartSpecifier::JULIAN_DAY:
 		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "julian";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {
@@ -1799,7 +1799,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 		break;
 	case DatePartSpecifier::EPOCH:
 		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "epoch";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {

@@ -28,44 +28,44 @@ unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
-			bound_function.arguments.emplace_back(LogicalType::BOOLEAN);
+			bound_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
 			break;
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
-			bound_function.arguments.emplace_back(LogicalType::BIGINT);
+			bound_function.GetArguments().emplace_back(LogicalType::BIGINT);
 			break;
 		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
-			bound_function.arguments.emplace_back(LogicalType::UBIGINT);
+			bound_function.GetArguments().emplace_back(LogicalType::UBIGINT);
 			break;
 		case LogicalTypeId::HUGEINT:
-			bound_function.arguments.emplace_back(LogicalType::HUGEINT);
+			bound_function.GetArguments().emplace_back(LogicalType::HUGEINT);
 			break;
 		case LogicalTypeId::UHUGEINT:
-			bound_function.arguments.emplace_back(LogicalType::UHUGEINT);
+			bound_function.GetArguments().emplace_back(LogicalType::UHUGEINT);
 			break;
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
-			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
 			break;
 		case LogicalTypeId::VARCHAR:
-			bound_function.arguments.push_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
-			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
 			break;
 		case LogicalTypeId::UNKNOWN:
 			// parameter: accept any input and rebind later
-			bound_function.arguments.emplace_back(LogicalType::ANY);
+			bound_function.GetArguments().emplace_back(LogicalType::ANY);
 			break;
 		default:
 			// all other types: add cast to string
-			bound_function.arguments.emplace_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().emplace_back(LogicalType::VARCHAR);
 			break;
 		}
 	}
@@ -180,7 +180,7 @@ ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
-	printf_fun.varargs = LogicalType::ANY;
+	printf_fun.SetVarArgs(LogicalType::ANY);
 	printf_fun.SetFallible();
 	return printf_fun;
 }
@@ -189,7 +189,7 @@ ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
-	format_fun.varargs = LogicalType::ANY;
+	format_fun.SetVarArgs(LogicalType::ANY);
 	format_fun.SetFallible();
 	return format_fun;
 }
