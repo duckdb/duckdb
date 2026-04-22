@@ -138,7 +138,7 @@ PivotColumnEntry PivotColumnEntry::Copy() const {
 	return result;
 }
 
-static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &expr, Value &value) {
+static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &expr, Value &value) {
 	switch (expr.GetExpressionType()) {
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
@@ -151,7 +151,7 @@ static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &exp
 					return false;
 				}
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatability(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
 					return false;
 				}
 				values.emplace_back(child->GetAlias(), std::move(child_value));
@@ -163,7 +163,7 @@ static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &exp
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatability(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
 					return false;
 				}
 				values.emplace_back(std::move(child_value));
@@ -180,12 +180,12 @@ static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &exp
 			return true;
 		} else if (function.function_name == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatability(*function.children[0], keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.children[0], keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatability(*function.children[1], values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.children[1], values)) {
 				return false;
 			}
 
@@ -207,7 +207,7 @@ static bool TryFoldConstantForBackwardsCompatability(const ParsedExpression &exp
 	case ExpressionType::OPERATOR_CAST: {
 		auto &cast = expr.Cast<CastExpression>();
 		Value dummy_value;
-		if (!TryFoldConstantForBackwardsCompatability(*cast.child, dummy_value)) {
+		if (!TryFoldConstantForBackwardsCompatibility(*cast.child, dummy_value)) {
 			return false;
 		}
 
@@ -262,7 +262,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 	}
 	default: {
 		Value val;
-		if (!TryFoldConstantForBackwardsCompatability(*expr, val)) {
+		if (!TryFoldConstantForBackwardsCompatibility(*expr, val)) {
 			return false;
 		}
 		values.push_back(std::move(val));

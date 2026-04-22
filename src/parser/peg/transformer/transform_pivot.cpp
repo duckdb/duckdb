@@ -224,7 +224,8 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformUnpivotStatement(PEG
 		name_and_values = transformer.Transform<UnpivotNameValues>(unpivot_names_opt.GetResult());
 		auto unpivot_list_size = name_and_values.column.unpivot_names.size();
 		if (unpivot_list_size != 1) {
-			throw NotImplementedException("Only expectd a single value after NAME, got %d instead.", unpivot_list_size);
+			throw NotImplementedException("Only expected a single value after NAME, got %d instead.",
+			                              unpivot_list_size);
 		}
 		auto &col = name_and_values.column;
 		for (auto &expr : target_list) {

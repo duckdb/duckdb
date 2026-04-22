@@ -141,7 +141,7 @@ jobs:
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install
         run: |
@@ -149,7 +149,7 @@ jobs:
           python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build/current
@@ -160,7 +160,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: linux-base-build
           path: build/base
@@ -225,7 +225,7 @@ jobs:
           path: benchmark/fivetran
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build/current
@@ -236,7 +236,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-base-build
           path: build/base
@@ -265,7 +265,7 @@ jobs:
           python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build/current
@@ -276,7 +276,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-base-build
           path: build/base
@@ -340,7 +340,7 @@ jobs:
           python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build/current
@@ -351,7 +351,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-base-build
           path: build/base
@@ -380,7 +380,7 @@ jobs:
           python3 scripts/ci/retry.py -- pip install tqdm
 
       - name: Download current release artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-release-build
           path: build/current
@@ -391,7 +391,7 @@ jobs:
           tar -xzf build/current/release-artifact.tar.gz -C build/current
 
       - name: Download base artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: linux-base-build
           path: build/base
