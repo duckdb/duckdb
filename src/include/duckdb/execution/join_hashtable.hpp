@@ -554,9 +554,7 @@ public:
 
 	//! Delete blocks that belong to the current partitioned HT
 	void Reset();
-	//! Reset this HT for a fresh build/probe iteration while keeping the object reusable
-	void ResetForNewIteration();
-	//! Like ResetForNewIteration(), but collapses the sink collection to a single partition.
+	//! Collapses the sink collection to a single partition.
 	//! Used by recursive CTEs to avoid per-iteration overhead of managing many radix partitions
 	//! when only one thread is building the hash table.
 	void ResetForNewIterationSinglePartition();

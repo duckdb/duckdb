@@ -1883,29 +1883,6 @@ static void ResetCorrelatedMarkJoinInfo(JoinHashTable &ht) {
 	info.result_chunk.Reset();
 }
 
-void JoinHashTable::ResetForNewIteration() {
-	data_collection->Reset();
-	if (radix_bits != initial_radix_bits) {
-		radix_bits = initial_radix_bits;
-		sink_collection = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
-		                                                       radix_bits, layout_ptr->ColumnCount() - 1);
-	} else {
-		sink_collection->Reset();
-	}
-	InitializePartitionMasks();
-	capacity = DConstants::INVALID_INDEX;
-	bitmask = DConstants::INVALID_INDEX;
-	finalized = false;
-	has_null = false;
-	chains_longer_than_one = false;
-	total_probe_matches = 0;
-	load_factor = DEFAULT_LOAD_FACTOR;
-	should_build_bloom_filter = false;
-	prefix_range_filter.reset();
-	should_build_prefix_range_filter = false;
-	ResetCorrelatedMarkJoinInfo(*this);
-}
-
 void JoinHashTable::ResetForNewIterationSinglePartition() {
 	data_collection->Reset();
 	// Always use a single partition (radix_bits=0) to avoid per-iteration overhead of resetting
