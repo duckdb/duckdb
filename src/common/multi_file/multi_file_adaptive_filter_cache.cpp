@@ -6,7 +6,7 @@ namespace duckdb {
 
 void MultiFileAdaptiveFilterCache::InitializeAdaptiveFilter(const TableFilterSet &filters,
                                                             const vector<MultiFileGlobalIndex> &filter_global_indices,
-                                                            Logger &logger, const string &file_path) {
+                                                            shared_ptr<Logger> logger, const string &file_path) {
 	vector<idx_t> identities;
 	for (const auto &global_index : filter_global_indices) {
 		identities.push_back(global_index.GetIndex());
@@ -17,7 +17,7 @@ void MultiFileAdaptiveFilterCache::InitializeAdaptiveFilter(const TableFilterSet
 	} else {
 		filter = make_uniq<AdaptiveFilter>(filters, identities);
 	}
-	filter->SetLogger(logger, file_path, source, identities);
+	filter->SetLogger(std::move(logger), file_path, source, identities);
 }
 
 } // namespace duckdb

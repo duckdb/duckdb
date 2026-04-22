@@ -12,7 +12,7 @@ struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
 		if (HasContext()) {
-			adaptive_filter->SetLogger(Logger::Get(GetContext()));
+			adaptive_filter->SetLogger(GetContext().logger);
 		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;

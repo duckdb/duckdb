@@ -263,7 +263,6 @@ AdaptiveFilterLogType::AdaptiveFilterLogType() : LogType(NAME, LEVEL, GetLogType
 LogicalType AdaptiveFilterLogType::GetLogType() {
 	child_list_t<LogicalType> child_list = {
 	    {"event", LogicalType::VARCHAR},
-	    {"filter_id", LogicalType::VARCHAR},
 	    {"file_path", LogicalType::VARCHAR},
 	    {"permutation", LogicalType::VARCHAR},
 	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
@@ -271,14 +270,13 @@ LogicalType AdaptiveFilterLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-string AdaptiveFilterLogType::ConstructLogMessage(const string &filter_id, const char *event, const string &file_path,
+string AdaptiveFilterLogType::ConstructLogMessage(const char *event, const string &file_path,
                                                   const vector<idx_t> &permutation,
                                                   const vector<pair<string, string>> &info) {
 	auto permutation_str =
 	    "[" + StringUtil::Join(permutation, permutation.size(), ", ", [](idx_t v) { return to_string(v); }) + "]";
 	child_list_t<Value> child_list = {
 	    {"event", Value(event)},
-	    {"filter_id", Value(filter_id)},
 	    {"file_path", Value(file_path)},
 	    {"permutation", Value(std::move(permutation_str))},
 	    {"info", StringPairIterableToMap(info)},

@@ -168,8 +168,8 @@ public:
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(const string &filter_id, const char *event, const string &file_path,
-	                                  const vector<idx_t> &permutation, const vector<pair<string, string>> &info);
+	static string ConstructLogMessage(const char *event, const string &file_path, const vector<idx_t> &permutation,
+	                                  const vector<pair<string, string>> &info);
 };
 
 } // namespace duckdb

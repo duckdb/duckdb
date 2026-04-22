@@ -21,8 +21,8 @@ class TableFilterSet;
 class MultiFileAdaptiveFilterCache {
 public:
 	void InitializeAdaptiveFilter(const TableFilterSet &filters,
-	                              const vector<MultiFileGlobalIndex> &filter_global_indices, Logger &logger,
-	                              const string &file_path);
+	                              const vector<MultiFileGlobalIndex> &filter_global_indices,
+	                              shared_ptr<Logger> logger, const string &file_path);
 
 	AdaptiveFilter &GetAdaptiveFilter() const {
 		if (!filter) {

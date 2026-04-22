@@ -1338,8 +1338,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 	state.scan_filters.clear();
 	if (filters) {
-		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, Logger::Get(context),
-		                                                     file.path);
+		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, context.logger, file.path);
 		for (auto &entry : *filters) {
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}

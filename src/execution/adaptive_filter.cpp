@@ -27,13 +27,13 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	right_random_border = 100 * (conj_expr.children.size() - 1);
 }
 
-AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos)
+AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos_p)
     : observe_interval(10), execute_interval(20), warmup(true) {
 	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
 	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
 		swap_likeliness.push_back(100);
 	}
-	filter_global_pos = std::move(filter_global_pos);
+	filter_global_pos = std::move(filter_global_pos_p);
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
@@ -63,9 +63,9 @@ bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_
 	return true;
 }
 
-void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source,
+void AdaptiveFilter::SetLogger(shared_ptr<Logger> logger_p, string file_path, AdaptiveFilterSource source,
                                const vector<idx_t> &filter_identities) {
-	logger = &logger_p;
+	logger = std::move(logger_p);
 	log_file_path = std::move(file_path);
 	vector<pair<string, string>> info;
 	info.emplace_back("source", EnumUtil::ToChars(source));
@@ -83,12 +83,7 @@ void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, strin
 	if (!logger) {
 		return;
 	}
-	if (!logger->ShouldLog(AdaptiveFilterLogType::NAME, AdaptiveFilterLogType::LEVEL)) {
-		return;
-	}
-	auto filter_id = to_string(reinterpret_cast<uintptr_t>(this));
-	auto msg = AdaptiveFilterLogType::ConstructLogMessage(filter_id, event, log_file_path, permutation, info);
-	logger->WriteLog(AdaptiveFilterLogType::NAME, AdaptiveFilterLogType::LEVEL, msg);
+	DUCKDB_LOG(logger, AdaptiveFilterLogType, event, log_file_path, permutation, info);
 }
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {

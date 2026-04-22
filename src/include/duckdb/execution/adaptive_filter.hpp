@@ -11,8 +11,8 @@
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/chrono.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -44,7 +44,8 @@ public:
 		return permutation;
 	}
 
-	void SetLogger(Logger &logger, string file_path = "", AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL,
+	void SetLogger(shared_ptr<Logger> logger, string file_path = "",
+	               AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL,
 	               const vector<idx_t> &filter_identities = {});
 
 private:
@@ -66,7 +67,7 @@ private:
 	bool observe = false;
 	bool warmup = false;
 	RandomEngine generator;
-	optional_ptr<Logger> logger;
+	shared_ptr<Logger> logger;
 	string log_file_path;
 };
 } // namespace duckdb
