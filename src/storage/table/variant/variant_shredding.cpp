@@ -764,7 +764,6 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	VariantUtils::FinalizeVariantKeys(unshredded, dictionary, keys_selvec, ListVector::GetListSize(keys));
 	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
-	keys_entry.Flatten(ListVector::GetListSize(keys));
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		unshredded.SetVectorType(VectorType::CONSTANT_VECTOR);

@@ -68,8 +68,8 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		result_size += len;
 	}
 
-	ListVector::Reserve(result, result_size);
 	ListVector::SetListSize(result, result_size);
+	ListVector::Reserve(result, result_size);
 	auto &result_struct = ListVector::GetChildMutable(result);
 	auto &struct_entries = StructVector::GetEntries(result_struct);
 	vector<SelectionVector> selections;

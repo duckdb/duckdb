@@ -34,6 +34,10 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 }
 
 void VectorBuffer::SetVectorSize(idx_t new_size) {
+	if (HasSize() && Size() == new_size) {
+		// nop: size is the same as previous size
+		return;
+	}
 	switch (vector_type) {
 	case VectorType::CONSTANT_VECTOR:
 		break;
@@ -43,13 +47,6 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
 			    Capacity());
 		}
-		break;
-	case VectorType::DICTIONARY_VECTOR:
-	case VectorType::SHREDDED_VECTOR:
-	case VectorType::SEQUENCE_VECTOR:
-	case VectorType::FSST_VECTOR:
-		// these vectors already have an implicit size; allow updating v_size for consistency
-		// (e.g. when used as the child of a list that tracks size via v_size)
 		break;
 	default:
 		throw InternalException("Non-Flat/Non-Constant vector buffer cannot have their size changed");

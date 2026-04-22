@@ -76,7 +76,6 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
 	result->SetVectorSize(end - offset);
-	;
 	return result;
 }
 
