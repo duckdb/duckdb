@@ -26,6 +26,7 @@ struct AdaptiveFilterConfiguration {
 	vector<idx_t> permutation;
 	vector<idx_t> swap_likeliness;
 	bool disable_permutations = false;
+	vector<idx_t> filter_global_pos;
 };
 
 enum class AdaptiveFilterSource : uint8_t {
@@ -36,11 +37,13 @@ enum class AdaptiveFilterSource : uint8_t {
 class AdaptiveFilter {
 public:
 	explicit AdaptiveFilter(const Expression &expr);
-	explicit AdaptiveFilter(const TableFilterSet &table_filters);
+	explicit AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos = {});
 	AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilterConfiguration seed);
 
 public:
 	void AdaptRuntimeStatistics(double duration);
+
+	bool Remap(const TableFilterSet &new_filters, vector<idx_t> new_ids);
 
 	AdaptiveFilterState BeginFilter() const;
 	void EndFilter(AdaptiveFilterState state);

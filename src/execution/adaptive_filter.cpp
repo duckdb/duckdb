@@ -6,6 +6,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 
@@ -26,12 +27,13 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	right_random_border = 100 * (conj_expr.children.size() - 1);
 }
 
-AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters)
+AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos)
     : observe_interval(10), execute_interval(20), warmup(true) {
 	config.permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
 	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
 		config.swap_likeliness.push_back(100);
 	}
+	config.filter_global_pos = std::move(filter_global_pos);
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
@@ -40,6 +42,32 @@ AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilt
 	D_ASSERT(config.permutation.size() == table_filters.FilterCount());
 	D_ASSERT(config.swap_likeliness.size() + 1 == table_filters.FilterCount() || table_filters.FilterCount() == 0);
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
+}
+
+bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_ids) {
+	if (new_ids.size() != config.filter_global_pos.size() || new_ids.size() != new_filters.FilterCount()) {
+		// missing filter cant remap
+		return false;
+	}
+	unordered_map<idx_t, idx_t> new_position_by_identity;
+	for (idx_t i = 0; i < new_ids.size(); i++) {
+		new_position_by_identity.emplace(new_ids[i], i);
+	}
+	vector<idx_t> old_to_new(config.filter_global_pos.size());
+	for (idx_t i = 0; i < config.filter_global_pos.size(); i++) {
+		auto it = new_position_by_identity.find(config.filter_global_pos[i]);
+		if (it == new_position_by_identity.end()) {
+			// missing filter cant remap
+			return false;
+		}
+		old_to_new[i] = it->second;
+	}
+	for (auto &p : config.permutation) {
+		p = old_to_new[p];
+	}
+	config.filter_global_pos = std::move(new_ids);
+	right_random_border = 100 * (new_filters.FilterCount() - 1);
+	return true;
 }
 
 void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilterSource source,

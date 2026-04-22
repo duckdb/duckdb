@@ -17,15 +17,6 @@ namespace duckdb {
 class Logger;
 class TableFilterSet;
 
-struct GlobalPosition {
-	MultiFileGlobalIndex global_index;
-	TableFilterType filter_type;
-
-	bool operator==(const GlobalPosition &other) const {
-		return global_index == other.global_index && filter_type == other.filter_type;
-	}
-};
-
 //! Per-thread cache for learned AdaptiveFilter order.
 class MultiFileAdaptiveFilterCache {
 public:
@@ -38,13 +29,11 @@ public:
 			throw InternalException(
 			    "Filter from MultiFileAdaptiveFilterCache must be initialized by 'InitializeAdaptiveFilter' first.");
 		}
-		D_ASSERT(filter);
 		return *filter;
 	}
 
 private:
 	unique_ptr<AdaptiveFilter> filter;
-	vector<GlobalPosition> positions;
 };
 
 } // namespace duckdb
