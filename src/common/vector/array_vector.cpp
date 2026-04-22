@@ -93,22 +93,17 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 	child->Verify(child_sel, child_count);
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                    idx_t count) const {
-	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector
 		child->Flatten(GetChildSize());
 		return nullptr;
 	}
-	// figure out which selection vector to use
-	SelectionVector owned_sel;
-	const_reference<SelectionVector> sel_ref(input_sel);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant - all zero's
-		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto &sel = sel_ref.get();
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
 
+buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                 idx_t count) const {
 	// now construct the result
 	auto result = make_buffer<VectorArrayBuffer>(nullptr, array_size, count);
 
@@ -133,6 +128,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, con
 	child_result->Flatten(child_sel, target_child_size);
 
 	result->child = std::move(child_result);
+	result->SetVectorSize(count);
 	return result;
 }
 
@@ -141,6 +137,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 	auto &result_child = result->GetChild();
 	result_child.Slice(*child, offset * array_size, end * array_size);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 

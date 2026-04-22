@@ -55,8 +55,8 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	return result_vec.GetValue(0);
 }
 
-buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                       idx_t count) const {
+buffer_ptr<VectorBuffer> ShreddedVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                    idx_t count) const {
 	Vector *source = shredded_data.get();
 	// if a selection vector is provided, slice the shredded data first
 	unique_ptr<Vector> sliced;
@@ -69,7 +69,9 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, 
 	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
 	// now flatten the unshredded vector
 	unshredded_vector.Flatten(count);
-	return unshredded_vector.GetBufferRef();
+	auto result = unshredded_vector.GetBufferRef();
+	result->SetVectorSize(count);
+	return result;
 }
 
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {
