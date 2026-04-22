@@ -321,7 +321,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
-		// in the next interation, we have a selection vector with the keys that do not match
+		// in the next iteration, we have a selection vector with the keys that do not match
 		row_sel = state.keys_no_match_sel;
 		has_row_sel = true;
 
