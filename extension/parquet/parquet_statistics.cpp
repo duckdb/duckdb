@@ -428,12 +428,9 @@ static bool ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 }
 
 unique_ptr<BaseStatistics>
-ParquetStatisticsUtils::TransformStatisticsFromPageHeader(const LogicalType &type, const ParquetColumnSchema &schema,
-                                                          const duckdb_parquet::Statistics &page_stats) {
-	if (!((page_stats.__isset.min_value || page_stats.__isset.min) &&
-	      (page_stats.__isset.max_value || page_stats.__isset.max))) {
-		return nullptr;
-	}
+ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, const ParquetColumnSchema &schema,
+                                                   const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
+                                                   optional_ptr<const ColumnChunk> column_chunk) {
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -452,29 +449,92 @@ ParquetStatisticsUtils::TransformStatisticsFromPageHeader(const LogicalType &typ
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
-		return CreateNumericStats(type, schema, page_stats);
+		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-		return CreateFloatingPointStats(type, schema, page_stats);
+		if (can_have_nan) {
+			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
+			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+			return CreateFloatingPointStats(type, schema, parquet_stats);
+		} else {
+			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
+			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
+			// probably the best we can do for now.
+			return CreateNumericStats(type, schema, parquet_stats);
+		}
+		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
-		if (page_stats.__isset.min_value && StringColumnReader::IsValid(page_stats.min_value, is_varchar)) {
-			StringStats::SetMin(string_stats, page_stats.min_value);
-		} else if (page_stats.__isset.min && StringColumnReader::IsValid(page_stats.min, is_varchar)) {
-			StringStats::SetMin(string_stats, page_stats.min);
+		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
+			StringStats::SetMin(string_stats, parquet_stats.min_value);
+		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
+			StringStats::SetMin(string_stats, parquet_stats.min);
 		}
-		if (page_stats.__isset.max_value && StringColumnReader::IsValid(page_stats.max_value, is_varchar)) {
-			StringStats::SetMax(string_stats, page_stats.max_value);
-		} else if (page_stats.__isset.max && StringColumnReader::IsValid(page_stats.max, is_varchar)) {
-			StringStats::SetMax(string_stats, page_stats.max);
+		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
+			StringStats::SetMax(string_stats, parquet_stats.max_value);
+		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
+			StringStats::SetMax(string_stats, parquet_stats.max);
 		}
 		return string_stats.ToUnique();
 	}
-	default:
-		return nullptr;
+	case LogicalTypeId::GEOMETRY: {
+		if (!column_chunk) {
+			break;
+		}
+		auto geo_stats = GeometryStats::CreateUnknown(type);
+		if (column_chunk->meta_data.__isset.geospatial_statistics) {
+			if (column_chunk->meta_data.geospatial_statistics.__isset.bbox) {
+				auto &bbox = column_chunk->meta_data.geospatial_statistics.bbox;
+				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
+
+				// xmin > xmax is allowed if the geometry crosses the antimeridian,
+				// but we don't handle this right now
+				if (bbox.xmin <= bbox.xmax) {
+					stats_bbox.x_min = bbox.xmin;
+					stats_bbox.x_max = bbox.xmax;
+				}
+
+				if (bbox.ymin <= bbox.ymax) {
+					stats_bbox.y_min = bbox.ymin;
+					stats_bbox.y_max = bbox.ymax;
+				}
+
+				if (bbox.__isset.zmin && bbox.__isset.zmax && bbox.zmin <= bbox.zmax) {
+					stats_bbox.z_min = bbox.zmin;
+					stats_bbox.z_max = bbox.zmax;
+				}
+
+				if (bbox.__isset.mmin && bbox.__isset.mmax && bbox.mmin <= bbox.mmax) {
+					stats_bbox.m_min = bbox.mmin;
+					stats_bbox.m_max = bbox.mmax;
+				}
+			}
+			if (column_chunk->meta_data.geospatial_statistics.__isset.geospatial_types) {
+				auto &types = column_chunk->meta_data.geospatial_statistics.geospatial_types;
+				auto &stats_types = GeometryStats::GetTypes(geo_stats);
+
+				// if types are set but empty, that still means "any type" - so we leave stats_types as-is (unknown)
+				// otherwise, clear and set to the actual types
+
+				if (!types.empty()) {
+					stats_types.Clear();
+					for (auto &geom_type : types) {
+						stats_types.AddWKBType(geom_type);
+					}
+				}
+			}
+		}
+		return geo_stats.ToUnique();
 	}
+	default:
+		break;
+	} // end of type switch
+
+	// no specific stats, only create unknown stats to hold validity information
+	auto unknown_stats = BaseStatistics::CreateUnknown(type);
+	return unknown_stats.ToUnique();
 }
 
 unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(const ParquetColumnSchema &schema,
@@ -558,110 +618,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return nullptr;
 	}
 	auto &parquet_stats = column_chunk.meta_data.statistics;
-
-	switch (type.id()) {
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::DECIMAL:
-		row_group_stats = CreateNumericStats(type, schema, parquet_stats);
-		break;
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-		if (can_have_nan) {
-			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
-			// does, we create stats without an upper max value, as NaN compares larger than anything else.
-			row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
-		} else {
-			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
-			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
-			// probably the best we can do for now.
-			row_group_stats = CreateNumericStats(type, schema, parquet_stats);
-		}
-		break;
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR: {
-		auto string_stats = StringStats::CreateUnknown(type);
-		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
-		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min_value);
-		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min);
-		}
-		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max_value);
-		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max);
-		}
-		row_group_stats = string_stats.ToUnique();
-		break;
-	}
-	case LogicalTypeId::GEOMETRY: {
-		auto geo_stats = GeometryStats::CreateUnknown(type);
-		if (column_chunk.meta_data.__isset.geospatial_statistics) {
-			if (column_chunk.meta_data.geospatial_statistics.__isset.bbox) {
-				auto &bbox = column_chunk.meta_data.geospatial_statistics.bbox;
-				auto &stats_bbox = GeometryStats::GetExtent(geo_stats);
-
-				// xmin > xmax is allowed if the geometry crosses the antimeridian,
-				// but we don't handle this right now
-				if (bbox.xmin <= bbox.xmax) {
-					stats_bbox.x_min = bbox.xmin;
-					stats_bbox.x_max = bbox.xmax;
-				}
-
-				if (bbox.ymin <= bbox.ymax) {
-					stats_bbox.y_min = bbox.ymin;
-					stats_bbox.y_max = bbox.ymax;
-				}
-
-				if (bbox.__isset.zmin && bbox.__isset.zmax && bbox.zmin <= bbox.zmax) {
-					stats_bbox.z_min = bbox.zmin;
-					stats_bbox.z_max = bbox.zmax;
-				}
-
-				if (bbox.__isset.mmin && bbox.__isset.mmax && bbox.mmin <= bbox.mmax) {
-					stats_bbox.m_min = bbox.mmin;
-					stats_bbox.m_max = bbox.mmax;
-				}
-			}
-			if (column_chunk.meta_data.geospatial_statistics.__isset.geospatial_types) {
-				auto &types = column_chunk.meta_data.geospatial_statistics.geospatial_types;
-				auto &stats_types = GeometryStats::GetTypes(geo_stats);
-
-				// if types are set but empty, that still means "any type" - so we leave stats_types as-is (unknown)
-				// otherwise, clear and set to the actual types
-
-				if (!types.empty()) {
-					stats_types.Clear();
-					for (auto &geom_type : types) {
-						stats_types.AddWKBType(geom_type);
-					}
-				}
-			}
-		}
-		row_group_stats = geo_stats.ToUnique();
-		break;
-	}
-	default:
-		// no specific stats, only create unknown stats to hold validity information
-		auto unknown_stats = BaseStatistics::CreateUnknown(type);
-		row_group_stats = unknown_stats.ToUnique();
-		break;
-	} // end of type switch
+	row_group_stats = TransformParquetStatistics(type, schema, parquet_stats, can_have_nan, &column_chunk);
 
 	// null count is generic
 	if (row_group_stats) {

@@ -272,10 +272,13 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const Ta
 		} else if (!is_v1 && v2_header.__isset.statistics) {
 			page_stats = &v2_header.statistics;
 		}
-		if (!page_stats) {
+
+		if (!page_stats || !((page_stats->__isset.min_value || page_stats->__isset.min) &&
+		                     (page_stats->__isset.max_value || page_stats->__isset.max))) {
 			return false;
 		}
-		auto stats = ParquetStatisticsUtils::TransformStatisticsFromPageHeader(Type(), Schema(), *page_stats);
+		auto stats =
+		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
 		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			page_is_filtered_out = true;
 		}
