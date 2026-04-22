@@ -16,12 +16,12 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
-		config.permutation.push_back(idx);
+		permutation.push_back(idx);
 		if (conj_expr.children[idx]->CanThrow()) {
-			config.disable_permutations = true;
+			disable_permutations = true;
 		}
 		if (idx != conj_expr.children.size() - 1) {
-			config.swap_likeliness.push_back(100);
+			swap_likeliness.push_back(100);
 		}
 	}
 	right_random_border = 100 * (conj_expr.children.size() - 1);
@@ -29,23 +29,16 @@ AdaptiveFilter::AdaptiveFilter(const Expression &expr) : observe_interval(10), e
 
 AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos)
     : observe_interval(10), execute_interval(20), warmup(true) {
-	config.permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
+	permutation = ExpressionHeuristics::GetInitialOrder(table_filters);
 	for (idx_t idx = 1; idx < table_filters.FilterCount(); idx++) {
-		config.swap_likeliness.push_back(100);
+		swap_likeliness.push_back(100);
 	}
-	config.filter_global_pos = std::move(filter_global_pos);
-	right_random_border = 100 * (table_filters.FilterCount() - 1);
-}
-
-AdaptiveFilter::AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilterConfiguration seed)
-    : config(std::move(seed)), observe_interval(10), execute_interval(20), warmup(false) {
-	D_ASSERT(config.permutation.size() == table_filters.FilterCount());
-	D_ASSERT(config.swap_likeliness.size() + 1 == table_filters.FilterCount() || table_filters.FilterCount() == 0);
+	filter_global_pos = std::move(filter_global_pos);
 	right_random_border = 100 * (table_filters.FilterCount() - 1);
 }
 
 bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_ids) {
-	if (new_ids.size() != config.filter_global_pos.size() || new_ids.size() != new_filters.FilterCount()) {
+	if (new_ids.size() != filter_global_pos.size() || new_ids.size() != new_filters.FilterCount()) {
 		// missing filter cant remap
 		return false;
 	}
@@ -53,19 +46,19 @@ bool AdaptiveFilter::Remap(const TableFilterSet &new_filters, vector<idx_t> new_
 	for (idx_t i = 0; i < new_ids.size(); i++) {
 		new_position_by_identity.emplace(new_ids[i], i);
 	}
-	vector<idx_t> old_to_new(config.filter_global_pos.size());
-	for (idx_t i = 0; i < config.filter_global_pos.size(); i++) {
-		auto it = new_position_by_identity.find(config.filter_global_pos[i]);
+	vector<idx_t> old_to_new(filter_global_pos.size());
+	for (idx_t i = 0; i < filter_global_pos.size(); i++) {
+		auto it = new_position_by_identity.find(filter_global_pos[i]);
 		if (it == new_position_by_identity.end()) {
 			// missing filter cant remap
 			return false;
 		}
 		old_to_new[i] = it->second;
 	}
-	for (auto &p : config.permutation) {
+	for (auto &p : permutation) {
 		p = old_to_new[p];
 	}
-	config.filter_global_pos = std::move(new_ids);
+	filter_global_pos = std::move(new_ids);
 	right_random_border = 100 * (new_filters.FilterCount() - 1);
 	return true;
 }
@@ -76,9 +69,9 @@ void AdaptiveFilter::SetLogger(Logger &logger_p, string file_path, AdaptiveFilte
 	log_file_path = std::move(file_path);
 	vector<pair<string, string>> info;
 	info.emplace_back("source", EnumUtil::ToChars(source));
-	if (!filter_identities.empty() && filter_identities.size() == config.permutation.size()) {
+	if (!filter_identities.empty() && filter_identities.size() == permutation.size()) {
 		auto columns_str = "[" +
-		                   StringUtil::Join(config.permutation, config.permutation.size(), ", ",
+		                   StringUtil::Join(permutation, permutation.size(), ", ",
 		                                    [&](idx_t p) { return to_string(filter_identities[p]); }) +
 		                   "]";
 		info.emplace_back("columns", std::move(columns_str));
@@ -94,12 +87,12 @@ void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, strin
 		return;
 	}
 	auto filter_id = to_string(reinterpret_cast<uintptr_t>(this));
-	auto msg = AdaptiveFilterLogType::ConstructLogMessage(filter_id, event, log_file_path, config.permutation, info);
+	auto msg = AdaptiveFilterLogType::ConstructLogMessage(filter_id, event, log_file_path, permutation, info);
 	logger->WriteLog(AdaptiveFilterLogType::NAME, AdaptiveFilterLogType::LEVEL, msg);
 }
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
-	if (config.permutation.size() <= 1 || config.disable_permutations) {
+	if (permutation.size() <= 1 || disable_permutations) {
 		return AdaptiveFilterState();
 	}
 	AdaptiveFilterState state;
@@ -108,7 +101,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 }
 
 void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
-	if (config.permutation.size() <= 1 || config.disable_permutations) {
+	if (permutation.size() <= 1 || disable_permutations) {
 		// nothing to permute
 		return;
 	}
@@ -120,7 +113,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 	iteration_count++;
 	runtime_sum += duration;
 
-	D_ASSERT(!config.disable_permutations);
+	D_ASSERT(!disable_permutations);
 	if (!warmup) {
 		// the last swap was observed
 		if (observe && iteration_count == observe_interval) {
@@ -129,16 +122,16 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			string action;
 			if (prev_mean - trial_mean <= 0) {
 				// reverse swap because runtime didn't decrease
-				std::swap(config.permutation[swap_idx], config.permutation[swap_idx + 1]);
+				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
 				// decrease swap likeliness, but make sure there is always a small likeliness left
-				if (config.swap_likeliness[swap_idx] > 1) {
-					config.swap_likeliness[swap_idx] /= 2;
+				if (swap_likeliness[swap_idx] > 1) {
+					swap_likeliness[swap_idx] /= 2;
 				}
 				action = "reverted";
 			} else {
 				// keep swap because runtime decreased, reset likeliness
-				config.swap_likeliness[swap_idx] = 100;
+				swap_likeliness[swap_idx] = 100;
 				action = "kept";
 			}
 			LogEvent("REORDER", {{"action", action},
@@ -162,9 +155,9 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 			idx_t likeliness = random_number - 100 * swap_idx; // random number between [0, 100)
 
 			// check if swap is going to happen
-			if (config.swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
+			if (swap_likeliness[swap_idx] > likeliness) { // always true for the first swap of an index
 				// swap
-				std::swap(config.permutation[swap_idx], config.permutation[swap_idx + 1]);
+				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
 
 				// observe whether swap will be applied
 				observe = true;

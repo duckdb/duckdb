@@ -22,13 +22,6 @@ struct AdaptiveFilterState {
 	time_point<high_resolution_clock> start_time;
 };
 
-struct AdaptiveFilterConfiguration {
-	vector<idx_t> permutation;
-	vector<idx_t> swap_likeliness;
-	bool disable_permutations = false;
-	vector<idx_t> filter_global_pos;
-};
-
 enum class AdaptiveFilterSource : uint8_t {
 	INITIAL,
 	SEEDED,
@@ -38,7 +31,6 @@ class AdaptiveFilter {
 public:
 	explicit AdaptiveFilter(const Expression &expr);
 	explicit AdaptiveFilter(const TableFilterSet &table_filters, vector<idx_t> filter_global_pos = {});
-	AdaptiveFilter(const TableFilterSet &table_filters, AdaptiveFilterConfiguration seed);
 
 public:
 	void AdaptRuntimeStatistics(double duration);
@@ -48,8 +40,8 @@ public:
 	AdaptiveFilterState BeginFilter() const;
 	void EndFilter(AdaptiveFilterState state);
 
-	const AdaptiveFilterConfiguration &GetConfiguration() const {
-		return config;
+	const vector<idx_t> &GetPermutation() const {
+		return permutation;
 	}
 
 	void SetLogger(Logger &logger, string file_path = "", AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL,
@@ -59,7 +51,10 @@ private:
 	void LogEvent(const char *event, const vector<pair<string, string>> &info);
 
 private:
-	AdaptiveFilterConfiguration config;
+	vector<idx_t> permutation;
+	vector<idx_t> swap_likeliness;
+	bool disable_permutations = false;
+	vector<idx_t> filter_global_pos;
 	//! used for adaptive expression reordering
 	idx_t iteration_count = 0;
 	idx_t swap_idx = 0;

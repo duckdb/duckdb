@@ -1561,7 +1561,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			// first load the columns that are used in filters
 			auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
 			auto filter_state = adaptive_filter.BeginFilter();
-			const auto &permutation = adaptive_filter.GetConfiguration().permutation;
+			const auto &permutation = adaptive_filter.GetPermutation();
 			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 				if (filter_count == 0) {
 					// if no rows are left we can stop checking filters

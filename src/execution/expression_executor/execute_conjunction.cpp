@@ -65,7 +65,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
-		const auto &permutation = state.adaptive_filter->GetConfiguration().permutation;
+		const auto &permutation = state.adaptive_filter->GetPermutation();
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
 		idx_t false_count = 0;
@@ -105,7 +105,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	} else {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
-		const auto &permutation = state.adaptive_filter->GetConfiguration().permutation;
+		const auto &permutation = state.adaptive_filter->GetPermutation();
 
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;

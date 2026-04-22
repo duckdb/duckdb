@@ -8,7 +8,6 @@ void MultiFileAdaptiveFilterCache::InitializeAdaptiveFilter(const TableFilterSet
                                                             const vector<MultiFileGlobalIndex> &filter_global_indices,
                                                             Logger &logger, const string &file_path) {
 	vector<idx_t> identities;
-	identities.reserve(filter_global_indices.size());
 	for (const auto &global_index : filter_global_indices) {
 		identities.push_back(global_index.GetIndex());
 	}

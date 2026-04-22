@@ -686,7 +686,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
 				auto &filter_list = filter_info.GetFilterList();
-				const auto &permutation = adaptive_filter->GetConfiguration().permutation;
+				const auto &permutation = adaptive_filter->GetPermutation();
 				for (idx_t i = 0; i < filter_list.size(); i++) {
 					auto filter_idx = permutation[i];
 					auto &filter = filter_list[filter_idx];
