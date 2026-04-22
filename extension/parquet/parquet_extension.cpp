@@ -362,18 +362,19 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 		if (entry && entry->type == CatalogType::TABLE_ENTRY) {
 			auto &table = entry->Cast<TableCatalogEntry>();
 			auto &columns = table.GetColumns();
-			case_insensitive_map_t<column_t> name_to_col;
+			unordered_map<string, column_t> name_to_col;
 			for (auto &col : columns.Logical()) {
 				name_to_col[col.GetName()] = col.Oid();
 			}
 			bind_data->not_null_columns.resize(names.size(), false);
 			for (idx_t i = 0; i < names.size(); i++) {
 				auto it = name_to_col.find(names[i]);
-				if (it != name_to_col.end()) {
-					auto stats = table.GetStatistics(context, it->second);
-					if (stats && !stats->CanHaveNull()) {
-						bind_data->not_null_columns[i] = true;
-					}
+				if (it == name_to_col.end()) {
+					continue;
+				}
+				auto stats = table.GetStatistics(context, it->second);
+				if (stats && !stats->CanHaveNull()) {
+					bind_data->not_null_columns[i] = true;
 				}
 			}
 		}
