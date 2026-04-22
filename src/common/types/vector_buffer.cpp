@@ -34,15 +34,26 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 }
 
 void VectorBuffer::SetVectorSize(idx_t new_size) {
-	if (!HasSize()) {
-		throw InternalException("Non-Flat/Non-Constant vector buffer does not have a size defined");
-	}
-	if (Size() == new_size) {
+	if (HasSize() && Size() == new_size) {
+		// nop: size is the same as previous size
 		return;
 	}
-	throw InternalException(
-	    "VectorBuffer size cannot be adjusted for this buffer type - and new size %d differs from current size %d",
-	    new_size, Size());
+	switch (vector_type) {
+	case VectorType::CONSTANT_VECTOR:
+		break;
+	case VectorType::FLAT_VECTOR:
+		if (new_size > Capacity()) {
+			throw InternalException(
+			    "Vector::SetSize out of range - trying to set size to %d for vector with capacity %d", new_size,
+			    Capacity());
+		}
+		break;
+	default:
+		// non-flat/non-constant vector buffers manage their size internally (based on their underlying data)
+		// SetVectorSize is a no-op for these vector types
+		return;
+	}
+	v_size = new_size;
 }
 
 idx_t VectorBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -106,7 +117,41 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	// FIXME: this should just be using size.GetIndex()...
+	if (v_size.IsValid()) {
+		if (count > v_size.GetIndex()) {
+			throw InternalException("Flatten called with count that exceeds the size of the vector");
+		}
+		count = v_size.GetIndex();
+	}
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSlice(const LogicalType &type, const SelectionVector &sel,
+                                                    idx_t count) const {
+	buffer_ptr<VectorBuffer> result;
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		// if the vector is a constant vector the input selection vector does not matter
+		// we always need to select the first value
+		SelectionVector owned_sel;
+		auto &constant_sel = *ConstantVector::ZeroSelectionVector(count, owned_sel);
+		result = FlattenSliceInternal(type, constant_sel, count);
+	} else {
+		result = FlattenSliceInternal(type, sel, count);
+	}
+	if (result && (!result->HasSize() || result->Size() != count)) {
+		throw InternalException("FlattenSliceInternal did not set size correctly");
+	}
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                            idx_t count) const {
 	throw InternalException("Unimplemented type for flatten");
 }
 
@@ -115,7 +160,13 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 		// constant vectors do not need to get sliced
 		return nullptr;
 	}
-	return SliceInternal(type, offset, end);
+	auto result = SliceInternal(type, offset, end);
+	if (result) {
+		if (!result->HasSize() || result->Size() != end - offset) {
+			throw InternalException("Slice with offset,end did not set size correctly");
+		}
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
@@ -123,7 +174,13 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 		// constant vectors do not need to get sliced
 		return nullptr;
 	}
-	return SliceInternal(type, sel, count);
+	auto result = SliceInternal(type, sel, count);
+	if (result && v_size.IsValid()) {
+		if (!result->HasSize() || result->Size() != count) {
+			throw InternalException("Slice with count did not set size correctly");
+		}
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
@@ -143,8 +200,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, id
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) {
-	// default slice: flatten with a selection vector and then wrap in a dictionary
-	return Flatten(type, sel, count);
+	// default slice: flatten with a selection vector
+	return FlattenSlice(type, sel, count);
 }
 
 idx_t VectorBuffer::GetReserveSize(idx_t required_capacity) {

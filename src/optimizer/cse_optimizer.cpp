@@ -38,7 +38,7 @@ void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonSubExpresions(op);
+		ExtractCommonSubExpressions(op);
 		break;
 	default:
 		break;
@@ -137,7 +137,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 	                                      [&](unique_ptr<Expression> &child) { PerformCSEReplacement(child, state); });
 }
 
-void CommonSubExpressionOptimizer::ExtractCommonSubExpresions(LogicalOperator &op) {
+void CommonSubExpressionOptimizer::ExtractCommonSubExpressions(LogicalOperator &op) {
 	D_ASSERT(op.children.size() == 1);
 
 	// first we count for each expression with children how many types it occurs

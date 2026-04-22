@@ -2,9 +2,16 @@ name: Main
 on:
   workflow_dispatch:
     inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
       skip_tests:
         type: boolean
         default: false
+      run_all:
+        type: boolean
+        default: true
   repository_dispatch:
   push:
     branches-ignore:
@@ -133,7 +140,7 @@ jobs:
             run_slow_tests=false
           fi
           echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
-          skip_tests="${{ github.event_name == 'workflow_dispatch' && inputs.skip_tests || false }}"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
           # Fall back to GitHub-native runners for forks.
@@ -221,12 +228,12 @@ jobs:
         with:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
-      - name: Install format tools
-        run: python3 scripts/ci/retry.py -- make format_tools
+      - name: Install tools
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
         run: |
-          make format-check-silent enum-integrity-check
+          make format-check-silent enum-integrity-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
@@ -297,7 +304,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-debug-relassert-build
         path: build
@@ -413,10 +420,12 @@ jobs:
       - linux-debug
       - linux-release
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
-      run_all: true
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
@@ -433,7 +442,7 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
-    - uses: mymindstorm/setup-emsdk@v13
+    - uses: mymindstorm/setup-emsdk@v16
       with:
         version: latest
 
@@ -519,7 +528,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
@@ -596,10 +605,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v7
@@ -691,10 +699,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - uses: actions/upload-artifact@v7
@@ -764,7 +771,7 @@ jobs:
         version: ${{ matrix.version }}
         arch: ${{ matrix.arch }}
 
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-linux-amd64
         path: linux-release-artifacts
@@ -820,8 +827,7 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
@@ -842,10 +848,71 @@ jobs:
       - prepare
       - linux-debug
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
-      run_all: true
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ osx:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'osx') }}
+    uses: ./.github/workflows/OSX.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ static-libraries:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libraries') }}
+    uses: ./.github/workflows/BundleStaticLibs.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+
+ release-status:
+    runs-on: ubuntu-slim
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'release-status') }}
+    needs:
+      - prepare
+      - extensions
+      - osx
+      - windows
+      - static-libraries
+    outputs:
+      success: ${{ steps.set-output.outputs.success }}
+    steps:
+      - id: set-output
+        shell: bash
+        run: |
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+ notify-external-repos:
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'notify-external-repos') }}
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - prepare
+      - release-status
+    with:
+      is-success: ${{ fromJSON(needs.release-status.outputs.success) }}
+      target-branch: ${{ (github.event_name != 'workflow_dispatch') && github.ref || (inputs.git_ref == '' && github.ref || inputs.git_ref) }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: true
+      override-git-describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -990,30 +1057,6 @@ jobs:
       if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan_extra
 
- amalgamation-tests:
-    name: Amalgamation Tests
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'amalgamation-tests') }}
-    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
-    needs:
-      - prepare
-      - linux-debug
-    env:
-      CC: clang
-      CXX: clang++
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Generate Amalgamation
-      shell: bash
-      run:  |
-          python scripts/amalgamation.py --extended
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
-
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
@@ -1036,7 +1079,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
@@ -1224,11 +1267,14 @@ jobs:
       - upload-libduckdb-src
       - swift
       - windows
+      - osx
+      - static-libraries
+      - release-status
+      - notify-external-repos
       - no-string-inline
       - vector-sizes
       - valgrind
       - threadsan
-      - amalgamation-tests
       - linux-configs
     steps:
       - name: Check CI status

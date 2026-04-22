@@ -24,9 +24,9 @@ JSONTransformOptions::JSONTransformOptions() : parameters(false, &error_message)
 }
 
 JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplicate_key_p, bool error_missing_key_p,
-                                           bool error_unkown_key_p)
+                                           bool error_unknown_key_p)
     : strict_cast(strict_cast_p), error_duplicate_key(error_duplicate_key_p), error_missing_key(error_missing_key_p),
-      error_unknown_key(error_unkown_key_p), parameters(false, &error_message) {
+      error_unknown_key(error_unknown_key_p), parameters(false, &error_message) {
 }
 
 //! Forward declaration for recursion
@@ -78,7 +78,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -87,7 +87,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	}
 	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalTypeId::SQLNULL;
+		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {
 		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
 			throw BinderException("Cannot cast JSON structure to string");
@@ -95,9 +95,9 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
-		bound_function.return_type = StructureStringToType(doc->root, context);
+		bound_function.SetReturnType(StructureStringToType(doc->root, context));
 	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 static inline string_t GetString(yyjson_val *val) {
@@ -999,7 +999,7 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformFunctionInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }
@@ -1014,7 +1014,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

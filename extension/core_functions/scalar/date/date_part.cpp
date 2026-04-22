@@ -1776,7 +1776,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 	switch (GetDatePartSpecifier(part_name)) {
 	case DatePartSpecifier::JULIAN_DAY:
 		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "julian";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {
@@ -1799,7 +1799,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 		break;
 	case DatePartSpecifier::EPOCH:
 		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "epoch";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 		switch (arguments[0]->return_type.id()) {
@@ -2007,7 +2007,7 @@ struct StructDatePart {
 		auto &child_entries = StructVector::GetEntries(result);
 
 		// The first computer of a part "owns" it
-		// and other requestors just reference the owner
+		// and other requesters just reference the owner
 		vector<size_t> owners(int(DatePartSpecifier::JULIAN_DAY) + 1, child_entries.size());
 		for (size_t col = 0; col < child_entries.size(); ++col) {
 			const auto part_index = size_t(info.part_codes[col]);

@@ -265,7 +265,7 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(0);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			global_child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -331,7 +331,7 @@ MapColumnMapComponent(ClientContext &context,
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(component_idx);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -463,7 +463,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		if (!selected_children.empty()) {
 			auto entry = selected_children.find(i);
 			if (entry != selected_children.end()) {
-				// the column is relevent - set the child index
+				// the column is relevant - set the child index
 				global_child_index = entry->second;
 			} else {
 				// not relevant - ignore the column
@@ -600,7 +600,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 	auto remap_fun = RemapStructFun::GetFunction();
 	auto bind_data = remap_fun.Bind(context, children);
 	;
-	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
+	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.GetArguments()[0]);
 	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));
 }

@@ -22,8 +22,8 @@ public:
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
 		serializer.WriteProperty(500, "name", function.name);
-		serializer.WriteProperty(501, "arguments", function.arguments);
-		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
+		serializer.WriteProperty(501, "arguments", function.GetArguments());
+		serializer.WriteProperty(502, "original_arguments", function.GetOriginalArguments());
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
@@ -87,8 +87,8 @@ public:
 		                                                         arguments, original_arguments);
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		if (has_serialize) {
-			function.arguments = std::move(arguments);
-			function.original_arguments = std::move(original_arguments);
+			function.GetArguments() = std::move(arguments);
+			function.GetOriginalArguments() = std::move(original_arguments);
 		}
 		return make_pair(std::move(function), has_serialize);
 	}

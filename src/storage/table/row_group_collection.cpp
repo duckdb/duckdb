@@ -1652,7 +1652,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
 			if (metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
-				throw InternalException("Colum start pointers changed during metadata reuse");
+				throw InternalException("Column start pointers changed during metadata reuse");
 			}
 
 			// Capture blocks that have been written

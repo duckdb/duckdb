@@ -79,7 +79,7 @@ public:
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void Seek(FileHandle &handle, idx_t location) override;
-	//! Return the current seek posiiton in the file.
+	//! Return the current seek position in the file.
 	idx_t SeekPosition(FileHandle &handle) override;
 
 	//! Whether or not we can seek into the file
