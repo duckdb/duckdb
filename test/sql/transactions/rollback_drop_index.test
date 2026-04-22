@@ -1,6 +1,6 @@
-# name: test/drop_tests/rollback_drop_index.test
+# name: test/sql/transactions/rollback_drop_index.test
 # description: A reverted DROP INDEX must leave the index visible and queryable via index scan.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_drop_index_silent_removal_repro.db
 

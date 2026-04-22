@@ -1,6 +1,6 @@
-# name: test/drop_tests/revert_commit_index_corruption_drop_table.test
+# name: test/sql/transactions/revert_commit_index_corruption_drop_table.test
 # description: A reverted DROP TABLE must leave the PK index intact so that concurrent index scans keep returning correct rows.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_revert_commit_index_corruption_drop_table.db
 

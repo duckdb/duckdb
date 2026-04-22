@@ -1,6 +1,6 @@
-# name: test/drop_tests/rollback_drop_column.test
+# name: test/sql/transactions/rollback_drop_column.test
 # description: A reverted ALTER TABLE DROP COLUMN must not leave column blocks marked, so a retried DROP COLUMN does not hit a double-mark assertion.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_drop_column_rollback.db
 

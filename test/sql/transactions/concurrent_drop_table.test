@@ -1,6 +1,6 @@
-# name: test/drop_tests/concurrent_drop_table.test
+# name: test/sql/transactions/concurrent_drop_table.test
 # description: DROP TABLE while a concurrent reader holds a snapshot; index stays usable and blocks are reclaimed only after snapshot release plus checkpoint.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_concurrent_drop_table.db
 

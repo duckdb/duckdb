@@ -1,6 +1,6 @@
-# name: test/drop_tests/rollback_drop_table.test
+# name: test/sql/transactions/rollback_drop_table.test
 # description: A reverted DROP TABLE must not leave row-group blocks marked, so a retried DROP TABLE does not hit a double-mark assertion.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_row_group_double_mark_repro.db
 

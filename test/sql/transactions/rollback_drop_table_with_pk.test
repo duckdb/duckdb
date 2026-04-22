@@ -1,6 +1,6 @@
-# name: test/drop_tests/rollback_drop_table_with_pk.test
+# name: test/sql/transactions/rollback_drop_table_with_pk.test
 # description: A reverted DROP TABLE with a PK index must not leave index blocks marked, so a retried DROP TABLE does not hit a double-mark assertion.
-# group: [drop_tests]
+# group: [transactions]
 
 load {TEST_DIR}/test_index_block_double_mark_repro.db
 

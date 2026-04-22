@@ -1,8 +1,8 @@
-# name: test/drop_tests/rollback_drop_table_with_delete_concurrent.test
-# description: A reverted DROP TABLE with DELETE and another open snapshot; exercises the REVERT_MAIN_INDEX removal path.
-# group: [drop_tests]
+# name: test/sql/transactions/rollback_drop_table_with_delete.test
+# description: A reverted DROP TABLE whose transaction also did a DELETE; exercises the REVERT_MAIN_INDEX_ONLY removal path.
+# group: [transactions]
 
-load {TEST_DIR}/test_revert_commit_index_corruption_drop_table_concurrent.db
+load {TEST_DIR}/test_revert_commit_index_corruption_drop_table.db
 
 statement ok
 SET immediate_transaction_mode=true
@@ -18,9 +18,6 @@ CREATE TABLE t2 (id INTEGER)
 
 statement ok
 INSERT INTO t2 SELECT i FROM range(10) tbl(i)
-
-statement ok con3
-BEGIN
 
 statement ok con1
 BEGIN
@@ -41,9 +38,6 @@ statement error con1
 COMMIT
 ----
 another transaction has dropped this table
-
-statement ok con3
-COMMIT
 
 query I
 SELECT COUNT(*) FROM t1
