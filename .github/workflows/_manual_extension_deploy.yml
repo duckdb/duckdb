@@ -115,7 +115,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         name: Download extensions
         with:
           pattern: extensions-${{ inputs.duckdb_ref }}*
@@ -162,7 +162,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp
