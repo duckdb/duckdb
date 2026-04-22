@@ -63,5 +63,20 @@ TEST_CASE("Checkpoint callbacks report table events", "[api]") {
 	REQUIRE(table_event.table_oid == table_oid);
 	REQUIRE(table_event.first_affected_old_row_group.IsValid());
 	REQUIRE(table_event.first_affected_old_row_group.GetIndex() == 0);
-	REQUIRE(HasCheckpointTableFlag(table_event.flags, CheckpointTableFlags::ROW_IDS_REMAPPED));
+	REQUIRE(table_event.row_ids_remapped);
+	REQUIRE(!table_event.indexes_rebuilt);
+	REQUIRE(!table_event.row_group_lineage.empty());
+
+	bool found_dropped_prefix = false;
+	bool found_remapped_target = false;
+	for (auto &lineage_entry : table_event.row_group_lineage) {
+		if (lineage_entry.kind == CheckpointRowGroupLineageKind::DROP && lineage_entry.old_row_group_index == 0) {
+			found_dropped_prefix = true;
+		}
+		if (lineage_entry.new_row_group_index.IsValid()) {
+			found_remapped_target = true;
+		}
+	}
+	REQUIRE(found_dropped_prefix);
+	REQUIRE(found_remapped_target);
 }

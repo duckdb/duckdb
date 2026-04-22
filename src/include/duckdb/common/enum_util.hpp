@@ -120,7 +120,7 @@ enum class CheckpointAbort : uint8_t;
 
 enum class CheckpointOnDetach : uint8_t;
 
-enum class CheckpointTableFlags : uint8_t;
+enum class CheckpointRowGroupLineageKind : uint8_t;
 
 enum class ChunkInfoType : uint8_t;
 
@@ -654,7 +654,7 @@ template<>
 const char* EnumUtil::ToChars<CheckpointOnDetach>(CheckpointOnDetach value);
 
 template<>
-const char* EnumUtil::ToChars<CheckpointTableFlags>(CheckpointTableFlags value);
+const char* EnumUtil::ToChars<CheckpointRowGroupLineageKind>(CheckpointRowGroupLineageKind value);
 
 template<>
 const char* EnumUtil::ToChars<ChunkInfoType>(ChunkInfoType value);
@@ -1387,7 +1387,7 @@ template<>
 CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value);
 
 template<>
-CheckpointTableFlags EnumUtil::FromString<CheckpointTableFlags>(const char *value);
+CheckpointRowGroupLineageKind EnumUtil::FromString<CheckpointRowGroupLineageKind>(const char *value);
 
 template<>
 ChunkInfoType EnumUtil::FromString<ChunkInfoType>(const char *value);

@@ -19,31 +19,22 @@ class ClientContext;
 class DatabaseInstance;
 class ErrorData;
 
-enum class CheckpointTableFlags : uint8_t {
-	NONE = 0,
-	ROW_GROUPS_DROPPED = 0b0001,
-	ROW_GROUPS_MERGED = 0b0010,
-	ROW_IDS_REMAPPED = 0b0100,
-	INDEXES_REBUILT = 0b1000
+enum class CheckpointRowGroupLineageKind : uint8_t { DROP, REMAP, MERGE };
+
+struct CheckpointRowGroupLineageEntry {
+	CheckpointRowGroupLineageKind kind;
+	idx_t old_row_group_index;
+	idx_t old_row_group_count;
+	optional_idx new_row_group_index;
+	idx_t new_row_group_count;
 };
-
-inline CheckpointTableFlags operator|(CheckpointTableFlags left, CheckpointTableFlags right) {
-	return static_cast<CheckpointTableFlags>(static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
-}
-
-inline CheckpointTableFlags &operator|=(CheckpointTableFlags &left, CheckpointTableFlags right) {
-	left = left | right;
-	return left;
-}
-
-inline bool HasCheckpointTableFlag(CheckpointTableFlags flags, CheckpointTableFlags flag) {
-	return (static_cast<uint8_t>(flags) & static_cast<uint8_t>(flag)) != 0;
-}
 
 struct CheckpointTableEvent {
 	idx_t table_oid;
 	optional_idx first_affected_old_row_group;
-	CheckpointTableFlags flags = CheckpointTableFlags::NONE;
+	bool row_ids_remapped = false;
+	bool indexes_rebuilt = false;
+	vector<CheckpointRowGroupLineageEntry> row_group_lineage;
 };
 
 struct CheckpointEventInfo {

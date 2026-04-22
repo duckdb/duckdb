@@ -1103,25 +1103,23 @@ CheckpointOnDetach EnumUtil::FromString<CheckpointOnDetach>(const char *value) {
 	return static_cast<CheckpointOnDetach>(StringUtil::StringToEnum(GetCheckpointOnDetachValues(), 3, "CheckpointOnDetach", value));
 }
 
-const StringUtil::EnumStringLiteral *GetCheckpointTableFlagsValues() {
+const StringUtil::EnumStringLiteral *GetCheckpointRowGroupLineageKindValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(CheckpointTableFlags::NONE), "NONE" },
-		{ static_cast<uint32_t>(CheckpointTableFlags::ROW_GROUPS_DROPPED), "ROW_GROUPS_DROPPED" },
-		{ static_cast<uint32_t>(CheckpointTableFlags::ROW_GROUPS_MERGED), "ROW_GROUPS_MERGED" },
-		{ static_cast<uint32_t>(CheckpointTableFlags::ROW_IDS_REMAPPED), "ROW_IDS_REMAPPED" },
-		{ static_cast<uint32_t>(CheckpointTableFlags::INDEXES_REBUILT), "INDEXES_REBUILT" }
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::DROP), "DROP" },
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::REMAP), "REMAP" },
+		{ static_cast<uint32_t>(CheckpointRowGroupLineageKind::MERGE), "MERGE" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<CheckpointTableFlags>(CheckpointTableFlags value) {
-	return StringUtil::EnumToString(GetCheckpointTableFlagsValues(), 5, "CheckpointTableFlags", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<CheckpointRowGroupLineageKind>(CheckpointRowGroupLineageKind value) {
+	return StringUtil::EnumToString(GetCheckpointRowGroupLineageKindValues(), 3, "CheckpointRowGroupLineageKind", static_cast<uint32_t>(value));
 }
 
 template<>
-CheckpointTableFlags EnumUtil::FromString<CheckpointTableFlags>(const char *value) {
-	return static_cast<CheckpointTableFlags>(StringUtil::StringToEnum(GetCheckpointTableFlagsValues(), 5, "CheckpointTableFlags", value));
+CheckpointRowGroupLineageKind EnumUtil::FromString<CheckpointRowGroupLineageKind>(const char *value) {
+	return static_cast<CheckpointRowGroupLineageKind>(StringUtil::StringToEnum(GetCheckpointRowGroupLineageKindValues(), 3, "CheckpointRowGroupLineageKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetChunkInfoTypeValues() {
