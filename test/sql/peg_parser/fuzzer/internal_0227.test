@@ -18,7 +18,7 @@ Binder Error: Table "mytbl" does not have a column with name "result"
 statement error
 ALTER TABLE mytbl ADD result . v;
 ----
-Parser Error: syntax error at or near ";"
+Parser Error: Column definition requires a type or generated expression
 
 statement error
 ALTER TABLE mytbl ADD IF NOT EXISTS result . v;

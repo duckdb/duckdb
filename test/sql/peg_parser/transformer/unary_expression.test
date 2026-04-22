@@ -2,6 +2,8 @@
 # description: Test unary prefix expression nesting order in peg parser
 # group: [transformer]
 
+require autocomplete
+
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$SELECT - + 16;$TEST_PEG_PARSER$);
 
