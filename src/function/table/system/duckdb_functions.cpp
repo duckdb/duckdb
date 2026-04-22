@@ -626,7 +626,7 @@ static optional_idx GetFunctionDescriptionIndex(vector<FunctionDescription> &fun
 }
 
 template <class T, class OP>
-bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &output, idx_t output_offset) {
+bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &output) {
 	auto &function = entry.Cast<T>();
 	vector<LogicalType> parameter_types_vector = OP::GetParameterLogicalTypes(function, function_idx);
 	Value parameter_types_value = OP::GetParameterTypes(function, function_idx);
@@ -637,73 +637,70 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	idx_t col = 0;
 
 	// database_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function.schema.catalog.GetName()));
+	output.data[col++].Append(Value(function.schema.catalog.GetName()));
 
 	// database_oid, BIGINT
-	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.schema.catalog.GetOid())));
+	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.schema.catalog.GetOid())));
 
 	// schema_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function.schema.name));
+	output.data[col++].Append(Value(function.schema.name));
 
 	// function_name, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(function.name));
+	output.data[col++].Append(Value(function.name));
 
 	// alias_of, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset,
-	                function.alias_of.empty() || function.alias_of == function.name ? Value()
-	                                                                                : Value(function.alias_of));
+	output.data[col++].Append(
+	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of));
 
 	// function_type, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
+	output.data[col++].Append(Value(OP::GetFunctionType()));
 
 	// function_description, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset,
-	                (function_description.description.empty()) ? Value() : Value(function_description.description));
+	output.data[col++].Append(function_description.description.empty() ? Value()
+	                                                                   : Value(function_description.description));
 
 	// comment, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, function.comment);
+	output.data[col++].Append(Value(function.comment));
 
 	// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, Value::MAP(function.tags));
+	output.data[col++].Append(Value::MAP(function.tags));
 
 	// return_type, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, OP::GetReturnType(function, function_idx));
+	output.data[col++].Append(OP::GetReturnType(function, function_idx));
 
 	// parameters, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset,
-	                GetParameterNames<T, OP>(function, function_idx, function_description, parameter_types_value));
+	output.data[col++].Append(
+	    GetParameterNames<T, OP>(function, function_idx, function_description, parameter_types_value));
 
 	// parameter_types, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset, parameter_types_value);
+	output.data[col++].Append(parameter_types_value);
 
 	// varargs, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, OP::GetVarArgs(function, function_idx));
+	output.data[col++].Append(OP::GetVarArgs(function, function_idx));
 
 	// macro_definition, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, OP::GetMacroDefinition(function, function_idx));
+	output.data[col++].Append(OP::GetMacroDefinition(function, function_idx));
 
 	// has_side_effects, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, OP::IsVolatile(function, function_idx));
+	output.data[col++].Append(OP::IsVolatile(function, function_idx));
 
 	// internal, LogicalType::BOOLEAN
-	output.SetValue(col++, output_offset, Value::BOOLEAN(function.internal));
+	output.data[col++].Append(Value::BOOLEAN(function.internal));
 
 	// extension_name, LogicalType::VARCHAR - display empty as NULL
-	output.SetValue(col++, output_offset, function.extension_name.empty() ? Value() : Value(function.extension_name));
+	output.data[col++].Append(function.extension_name.empty() ? Value() : Value(function.extension_name));
 
 	// function_oid, LogicalType::BIGINT
-	output.SetValue(col++, output_offset, Value::BIGINT(NumericCast<int64_t>(function.oid)));
+	output.data[col++].Append(Value::BIGINT(NumericCast<int64_t>(function.oid)));
 
 	// examples, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset,
-	                Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.examples)));
+	output.data[col++].Append(Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.examples)));
 
 	// stability, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));
+	output.data[col++].Append(OP::ResultType(function, function_idx));
 
 	// categories, LogicalType::LIST(LogicalType::VARCHAR)
-	output.SetValue(col++, output_offset,
-	                Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.categories)));
+	output.data[col++].Append(Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.categories)));
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }
@@ -731,31 +728,31 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 		switch (entry.type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<ScalarFunctionCatalogEntry, ScalarFunctionExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<AggregateFunctionCatalogEntry, AggregateFunctionExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry,
-			                                                                            output, count);
+			finished =
+			    ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::MACRO_ENTRY:
-			finished = ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(entry, data.offset_in_entry, output,
-			                                                                        count);
+			finished =
+			    ExtractFunctionData<ScalarMacroCatalogEntry, MacroExtractor>(entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::TABLE_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<TableFunctionCatalogEntry, TableFunctionExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::PRAGMA_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<PragmaFunctionCatalogEntry, PragmaFunctionExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::WINDOW_FUNCTION_ENTRY:
 			finished = ExtractFunctionData<WindowFunctionCatalogEntry, WindowFunctionExtractor>(
-			    entry, data.offset_in_entry, output, count);
+			    entry, data.offset_in_entry, output);
 			break;
 		default:
 			throw InternalException("FIXME: unrecognized function type in duckdb_functions");
