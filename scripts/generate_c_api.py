@@ -705,7 +705,7 @@ def create_extension_api_struct(
 
     if with_create_method:
         extension_struct_finished += COMMENT_HEADER("Struct Create Method")
-        extension_struct_finished += f"inline {DUCKDB_EXT_API_STRUCT_TYPENAME} {create_method_name}() {{\n"
+        extension_struct_finished += f"static inline {DUCKDB_EXT_API_STRUCT_TYPENAME} {create_method_name}() {{\n"
         extension_struct_finished += f"    {DUCKDB_EXT_API_STRUCT_TYPENAME} result;\n"
 
         for api_version_entry in api_definition:

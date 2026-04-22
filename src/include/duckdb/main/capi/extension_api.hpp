@@ -682,7 +682,7 @@ typedef struct {
 //===--------------------------------------------------------------------===//
 // Struct Create Method
 //===--------------------------------------------------------------------===//
-inline duckdb_ext_api_v1 CreateAPIv1() {
+static inline duckdb_ext_api_v1 CreateAPIv1() {
 	duckdb_ext_api_v1 result;
 	result.duckdb_open = duckdb_open;
 	result.duckdb_open_ext = duckdb_open_ext;
