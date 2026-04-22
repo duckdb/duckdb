@@ -24,9 +24,8 @@ PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
 FORMAT_VENV ?= build/format-venv
-FORMAT_VENV_PYTHON := $(FORMAT_VENV)/bin/python
-FORMAT_PYTHON := $(FORMAT_VENV_PYTHON)
-FORMAT_SETUP_DEPS := format-venv-tools
+FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
+FORMAT_SETUP_DEPS := format_venv
 
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
@@ -571,7 +570,7 @@ define ensure_apt_commands
 	fi
 endef
 
-.PHONY: toolsci format_tools spell_tools enum-integrity-check format-venv-tools
+.PHONY: toolsci
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
@@ -586,7 +585,10 @@ toolsci:
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
-format_tools:
+.PHONY: format_tools parser_tools spell_tools
+format_tools: parser_tools spell_tools
+
+parser_tools:
 	$(call ensure_apt_commands,ninja,ninja-build)
 	sudo pip3 install --break-system-packages cxxheaderparser pcpp
 	@echo "::group::Installed Python packages"
@@ -619,17 +621,19 @@ spell_tools:
 	fi; \
 	typos --version
 
+.PHONY: enum-integrity-check
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
 
-format-venv-tools:
-	@if [ ! -x "$(FORMAT_VENV_PYTHON)" ]; then \
+.PHONY: format_venv
+format_venv:
+	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
 		mkdir -p "$(dir $(FORMAT_VENV))" && \
 		$(PYTHON) -m venv "$(FORMAT_VENV)"; \
 	fi
-	@$(FORMAT_VENV_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install black==24.*
-	@$(FORMAT_VENV_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install cmake-format
-	@$(FORMAT_VENV_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_VENV_PYTHON) -m pip install clang_format==11.0.1
+	@$(FORMAT_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install black==24.*
+	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
+	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
 benchmark:
 	mkdir -p ./build/release && \

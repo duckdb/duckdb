@@ -317,7 +317,7 @@ jobs:
 
       - name: Install format tools
         if: ${{ !inputs.skip_tests }}
-        run: python3 scripts/ci/retry.py -- make format_tools
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check if extension_entries.hpp is up to date
         if: ${{ !inputs.skip_tests }}
