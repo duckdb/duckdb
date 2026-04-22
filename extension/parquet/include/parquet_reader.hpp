@@ -274,7 +274,7 @@ private:
 	                                         idx_t &next_file_idx, ClientContext &context);
 
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context) const;
-	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
+	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);

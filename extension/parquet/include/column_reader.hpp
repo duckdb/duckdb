@@ -116,7 +116,7 @@ public:
 		return column_schema;
 	}
 
-	inline idx_t ColumnIndex() const {
+	inline idx_t ColumnSchemaIndex() const {
 		return column_schema.column_index;
 	}
 	inline idx_t MaxDefine() const {
@@ -137,7 +137,7 @@ public:
 			throw InvalidInputException("File is encrypted but no encryption algorithm is set");
 		}
 
-		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
+		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnSchemaIndex());
 	}
 
 	virtual idx_t FileOffset() const;
@@ -334,6 +334,7 @@ protected:
 	const ParquetColumnSchema &column_schema;
 
 	const ParquetReader &reader;
+
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 

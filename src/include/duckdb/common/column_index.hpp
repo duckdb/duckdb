@@ -43,6 +43,7 @@ public:
 	      child_indexes(std::move(child_indexes_p)) {
 	}
 
+public:
 	inline bool operator==(const ColumnIndex &rhs) const {
 		if (has_index != rhs.has_index) {
 			return false;
@@ -126,6 +127,15 @@ public:
 	}
 	vector<ColumnIndex> &GetChildIndexesMutable() {
 		return child_indexes;
+	}
+
+	ColumnIndex CopyWithIndex(idx_t new_index) const {
+		auto res = *this;
+		if (!has_index) {
+			throw InternalException("Can't perform 'CopyWithIndex' on ColumnIndex without a primary index!");
+		}
+		res.index = new_index;
+		return res;
 	}
 
 	bool IsPushdownExtract() const {

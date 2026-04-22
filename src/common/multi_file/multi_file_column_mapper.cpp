@@ -463,7 +463,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		if (!selected_children.empty()) {
 			auto entry = selected_children.find(i);
 			if (entry != selected_children.end()) {
-				// the column is relevent - set the child index
+				// the column is relevant - set the child index
 				global_child_index = entry->second;
 			} else {
 				// not relevant - ignore the column
@@ -523,6 +523,10 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		                                                          std::move(default_expressions), std::move(bind_data));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
+	if (global_index.IsPushdownExtract()) {
+		//! FIXME: cast_type: null is too naive
+		result.column_index->SetPushdownExtractType(local_column.type, nullptr);
+	}
 	result.mapping = std::move(mapping);
 	return result;
 }
@@ -546,7 +550,7 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	if (global_column.children.empty()) {
 		// not a struct - map the column directly
 		result.column_map = Value(local_column.name);
-		result.column_index = make_uniq<ColumnIndex>(local_idx.GetIndex());
+		result.column_index = make_uniq<ColumnIndex>(global_index.CopyWithIndex(local_idx.GetIndex()));
 		result.mapping = std::move(mapping);
 		result.local_column = local_column;
 		return result;
@@ -678,7 +682,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				expressions.push_back(std::move(expr));
 
 				MultiFileLocalColumnId local_id(reader.columns.size());
-				ColumnIndex local_index(local_id.GetId());
+				auto local_index = global_id.CopyWithIndex(local_id.GetId());
 
 				// add the virtual column to the reader
 				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
@@ -705,15 +709,14 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				ThrowColumnNotFoundError(global_column.name);
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
-			ColumnIndex local_index(local_id.GetId());
+			auto local_index = global_id.CopyWithIndex(local_id.GetId());
 			auto &local_type = local_columns[local_id.GetId()].type;
 			auto &global_type = global_column.type;
 			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx.GetIndex());
 			if (global_type != local_type) {
 				reader.cast_map[local_id.GetId()] = global_type;
-			} else {
-				// if types are equivalent we can push the parent ColumnIndex mapping
-				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+				// if types are not equivalent we need to remove the child indexes
+				local_index.GetChildIndexesMutable().clear();
 			}
 			reader_data.expressions.push_back(std::move(expr));
 

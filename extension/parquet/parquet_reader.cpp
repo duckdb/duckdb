@@ -448,9 +448,10 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
-                                                              const vector<ColumnIndex> &indexes,
+unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
                                                               const ParquetColumnSchema &schema) const {
+	auto &indexes = index.GetChildIndexes();
+
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
 		return make_uniq<RowNumberColumnReader>(*this, schema);
@@ -466,13 +467,13 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		children.resize(schema.children.size());
 		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
+				children[child_index] =
+				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
 		} else {
 			for (idx_t i = 0; i < indexes.size(); i++) {
 				auto child_index = indexes[i].GetPrimaryIndex();
-				children[child_index] =
-				    CreateReaderRecursive(context, indexes[i].GetChildIndexes(), schema.children[child_index]);
+				children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
 			}
 		}
 		switch (schema.type.id()) {
@@ -481,7 +482,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
 		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
+			return make_uniq<StructColumnReader>(*this, schema, index, std::move(children));
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -493,7 +494,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-			children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
+			children[child_index] = CreateReaderRecursive(context, index, schema.children[child_index]);
 		}
 		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 	}
@@ -503,7 +504,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) const {
-	auto ret = CreateReaderRecursive(context, column_indexes, *root_schema);
+	ColumnIndex root_index(DConstants::INVALID_INDEX, column_indexes);
+	auto ret = CreateReaderRecursive(context, root_index, *root_schema);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
@@ -1235,8 +1237,8 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
 	auto col_idx = MultiFileLocalIndex(i);
-	auto column_id = column_ids[col_idx];
-	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
+	auto &column_id = column_indexes[col_idx];
+	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id.GetPrimaryIndex());
 
 	// keep track of column and row group ordinal if data is encrypted
 	if (metadata->crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
@@ -1246,19 +1248,24 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
+		auto storage_index = StorageIndex::FromColumnIndex(column_id);
+		if (stats && storage_index.IsPushdownExtract()) {
+			stats = stats->PushdownExtract(storage_index.GetChildIndex(0));
+		}
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
 		if (stats && filter_entry) {
 			auto &filter = *filter_entry;
 
+			auto schema_column_index = column_reader.ColumnSchemaIndex();
 			FilterPropagateResult prune_result;
-			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
+			bool is_generated_column = schema_column_index >= group.columns.size();
 			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
 			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
 			bool has_min_max = false;
 			if (!is_generated_column) {
-				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
-				              group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value;
+				has_min_max = group.columns[schema_column_index].meta_data.statistics.__isset.min_value &&
+				              group.columns[schema_column_index].meta_data.statistics.__isset.max_value;
 			}
 			if (is_expression) {
 				// no pruning possible for expressions
@@ -1267,8 +1274,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
-				prune_result = CheckParquetStringFilter(
-				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
+				prune_result =
+				    CheckParquetStringFilter(*stats, group.columns[schema_column_index].meta_data.statistics, filter);
 			} else if (!is_generated_column && has_min_max &&
 			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
 			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
@@ -1276,16 +1283,15 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 				// based on nan
-				prune_result = CheckParquetFloatFilter(
-				    column_reader, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
+				prune_result = CheckParquetFloatFilter(column_reader,
+				                                       group.columns[schema_column_index].meta_data.statistics, filter);
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
 			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
-			                                                group.columns[column_reader.ColumnIndex()].meta_data,
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[schema_column_index].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
@@ -1389,7 +1395,11 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
-		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+		auto column_stats = column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
+		if (!storage_index.IsPushdownExtract()) {
+			return column_stats;
+		}
+		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {

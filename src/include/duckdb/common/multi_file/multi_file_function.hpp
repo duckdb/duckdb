@@ -365,20 +365,26 @@ public:
 		auto &reader = *lstate.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
-		auto &local_column_ids = reader.column_ids;
+		auto &local_column_ids = reader.column_indexes;
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
-			auto local_idx = MultiFileLocalIndex(i);
-			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = reader.cast_map.find(local_id);
-			auto expr_entry = reader.expression_map.find(local_id);
+			auto &local_id = local_column_ids[i];
+
+			auto primary_index = local_id.GetPrimaryIndex();
+			auto cast_entry = reader.cast_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(primary_index);
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
 				intermediate_chunk_types.push_back(expr_entry->second->return_type);
 			} else {
-				auto &col = local_columns[local_id];
-				intermediate_chunk_types.push_back(col.type);
+				auto &col = local_columns[primary_index];
+				//! FIXME: do we need to check whether the MultiFileInfo implementation supports pushdown ??
+				if (local_id.HasType()) {
+					intermediate_chunk_types.push_back(local_id.GetScanType());
+				} else {
+					intermediate_chunk_types.push_back(col.type);
+				}
 			}
 		}
 		lstate.scan_chunk.Destroy();
@@ -710,6 +716,53 @@ public:
 			return merged_stats;
 		}
 		return bind_data.initial_reader->GetStatistics(context, col_name);
+	}
+
+	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
+	                                                             TableFunctionGetStatisticsInput &input) {
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &column_index = input.column_index;
+
+		if (!bind_data.initial_reader) {
+			// no reader
+			return nullptr;
+		}
+		// scanning single file and we have the metadata read already
+		if (column_index.IsVirtualColumn()) {
+			return nullptr;
+		}
+
+		auto primary_index = column_index.GetPrimaryIndex();
+		const auto &col_name = bind_data.names[primary_index];
+
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+			if (!bind_data.file_options.union_by_name) {
+				// multiple files, but no union_by_name: no luck!
+				return nullptr;
+			}
+
+			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
+			if (!merged_stats) {
+				return nullptr;
+			}
+
+			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
+				auto &union_reader = *bind_data.union_readers[i];
+				auto stats = union_reader.GetStatistics(context, col_name);
+				if (!stats || merged_stats->GetType() != stats->GetType()) {
+					return nullptr;
+				}
+				merged_stats->Merge(*stats);
+			}
+			return merged_stats;
+		}
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (!result || !column_index.IsPushdownExtract()) {
+			return result;
+		}
+		auto storage_index = StorageIndex::FromColumnIndex(column_index);
+		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
 	}
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,

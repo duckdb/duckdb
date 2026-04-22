@@ -221,8 +221,8 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-	D_ASSERT(ColumnIndex() < columns.size());
-	chunk = &columns[ColumnIndex()];
+	D_ASSERT(ColumnSchemaIndex() < columns.size());
+	chunk = &columns[ColumnSchemaIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
 	D_ASSERT(chunk->__isset.meta_data);
