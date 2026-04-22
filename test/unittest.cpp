@@ -10,16 +10,23 @@
 
 using namespace duckdb;
 
-int main(int argc_in, char *argv[]) {
+#ifdef DUCKDB_FUZZER
+namespace duckdb {
+int RunAFLFuzzerLoop(int argc, char *argv[]);
+}
+#endif
+
+static int InitializeEnvironment(int argc_in, char *argv[], int &new_argc, duckdb::unique_ptr<char *[]> &new_argv,
+                                 string &test_directory, string &dir) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	string test_directory = DUCKDB_ROOT_DIRECTORY;
+	test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	auto &test_config = TestConfiguration::Get();
 	test_config.Initialize();
 
 	idx_t argc = NumericCast<idx_t>(argc_in);
-	int new_argc = 0;
-	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
+	new_argc = 0;
+	new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (idx_t i = 0; i < argc; i++) {
 		string argument(argv[i]);
 		if (argument == "--test-dir") {
@@ -43,7 +50,8 @@ int main(int argc_in, char *argv[]) {
 	test_config.ChangeWorkingDirectory(test_directory);
 
 	// delete the testing directory if it exists
-	auto dir = TestCreatePath("");
+	dir = TestCreatePath("");
+#ifndef DUCKDB_FUZZER
 	try {
 		TestDeleteDirectory(dir);
 		// create the empty testing directory
@@ -52,6 +60,7 @@ int main(int argc_in, char *argv[]) {
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
+#endif
 
 	// Override the home dir so the .duckdb dir is isolated per test process.
 #ifdef DUCKDB_WINDOWS
@@ -65,6 +74,23 @@ int main(int argc_in, char *argv[]) {
 		return 1;
 	}
 #endif
+	return 0;
+}
+
+int main(int argc_in, char *argv[]) {
+	int new_argc = 0;
+	duckdb::unique_ptr<char *[]> new_argv;
+	string test_directory;
+	string dir;
+	auto init_result = InitializeEnvironment(argc_in, argv, new_argc, new_argv, test_directory, dir);
+	if (init_result != 0) {
+		return init_result;
+	}
+
+#ifdef DUCKDB_FUZZER
+	return duckdb::RunAFLFuzzerLoop(argc_in, argv);
+#else
+	auto &test_config = TestConfiguration::Get();
 
 	if (test_config.GetSkipCompiledTests()) {
 		Catch::getMutableRegistryHub().clearTests();
@@ -92,4 +118,5 @@ int main(int argc_in, char *argv[]) {
 	}
 
 	return result;
+#endif
 }

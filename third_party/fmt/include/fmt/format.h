@@ -679,8 +679,10 @@ class basic_memory_buffer : private Allocator, public internal::buffer<T> {
 
 template <typename T, std::size_t SIZE, typename Allocator>
 void basic_memory_buffer<T, SIZE, Allocator>::grow(std::size_t size) {
+#ifndef DUCKDB_FUZZER
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
   if (size > 1000) throw std::runtime_error("fuzz mode - won't grow that much");
+#endif
 #endif
   std::size_t old_capacity = this->capacity();
   std::size_t new_capacity = old_capacity + old_capacity / 2;

@@ -92,9 +92,14 @@
 #endif
 
 /*
+ * If defined, all the features necessary for background threads are present.
+ */
+#define JEMALLOC_BACKGROUND_THREAD
+
+/*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(JEMALLOC_BACKGROUND_THREAD)
 #define JEMALLOC_OS_UNFAIR_LOCK
 #endif
 
@@ -533,11 +538,6 @@
 
 /* pthread_setaffinity_np support */
 /* #undef JEMALLOC_HAVE_PTHREAD_SETAFFINITY_NP */
-
-/*
- * If defined, all the features necessary for background threads are present.
- */
-#define JEMALLOC_BACKGROUND_THREAD
 
 /*
  * If defined, jemalloc symbols are not exported (doesn't work when

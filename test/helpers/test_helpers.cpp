@@ -100,6 +100,11 @@ string GetTestDirectory() {
 }
 
 string TestDirectoryPath() {
+#ifdef DUCKDB_FUZZER
+	// Use a hardcoded, non-existing path because the fuzzer should not
+	// read/write any files to or from that path.
+	return "/missing/fuzzer/test/dir";
+#endif
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto test_directory = GetTestDirectory();
 	if (!fs->DirectoryExists(test_directory)) {

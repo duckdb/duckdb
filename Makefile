@@ -37,6 +37,7 @@ T ?=
 
 CI_CPU_COUNT := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || printf '%s\n' "$${NUMBER_OF_PROCESSORS:-1}")
 CI_BUILD_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 80 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+export CI_BUILD_JOBS
 ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
@@ -424,6 +425,58 @@ debug: ${EXTENSION_CONFIG_STEP}
 
 release: ${EXTENSION_CONFIG_STEP}
 	$(call cmake_build,build/release,Release,${FORCE_WARN_UNUSED_FLAG})
+
+.PHONY: fuzzer_tools fuzzer fuzzer_smoke
+fuzzer_tools:
+	@uname_s="$$(uname -s)"; \
+	if [ "$$uname_s" != "Linux" ]; then \
+		echo "Error: fuzzer_tools is Linux-only"; \
+		exit 1; \
+	fi
+	sudo apt-get update -y -qq
+	sudo apt-get install -y -qq build-essential python3-dev automake cmake git flex bison libglib2.0-dev libpixman-1-dev python3-setuptools cargo libgtk-3-dev
+	sudo apt-get install -y -qq lld-18 llvm-18 llvm-18-dev clang-18 || sudo apt-get install -y -qq lld llvm llvm-dev clang
+	gcc_major="$$(gcc --version | head -n1 | sed 's/\..*//' | sed 's/.* //')"; \
+	sudo apt-get install -y -qq "gcc-$${gcc_major}-plugin-dev" "libstdc++-$${gcc_major}-dev"
+	./scripts/ci/afl_build.sh
+
+fuzzer: ${EXTENSION_CONFIG_STEP}
+	@eval "$$(./scripts/ci/afl_detect_cxx.sh)"; \
+	rm -rf ./build/fuzzer && \
+	mkdir -p ./build/fuzzer && \
+	cd build/fuzzer && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} $$AFL_LTO_CMAKE_VAR ${CMAKE_VARS_BUILD} -DCMAKE_C_COMPILER=$$CC -DCMAKE_CXX_COMPILER=$$CXX -DDUCKDB_FUZZER=1 -DFORCE_DEBUG=1 -DBUILD_EXTENSIONS="jemalloc" -DBUILD_UNITTESTS=1 -DENABLE_UNITTEST_CPP_TESTS=0 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release --target unittest
+
+FUZZ_SMOKE_SECS ?= 30
+fuzzer_smoke:
+	@command -v afl-fuzz >/dev/null 2>&1 || { echo "Error: afl-fuzz is required (run: brew install afl++)"; exit 1; }
+	@mkdir -p build/fuzzer/smoke/in && \
+	printf "statement ok\nSELECT 42;\n\nquery I\nSELECT 7;\n----\n7\n" > build/fuzzer/smoke/in/seed1.test && \
+	OUT_DIR=build/fuzzer/smoke/out-$$(date +%s) && \
+	AFL_SKIP_CPUFREQ=1 python3 ./scripts/ci/afl_sandbox.py --writable-dir "$$OUT_DIR" -- \
+	afl-fuzz -i build/fuzzer/smoke/in -o $$OUT_DIR -V ${FUZZ_SMOKE_SECS} -- ./build/fuzzer/test/unittest --writable-dir "$$OUT_DIR"
+
+.PHONY: fuzz_sql_corpus fuzz_sql_dict
+fuzz_sql_corpus:
+	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
+	export AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && \
+	python3 -u scripts/ci/afl_corpus.py \
+	--target "./build/fuzzer/test/unittest --writable-dir \"$${CORPUS_SQL_CMIN}\"" \
+	--afl-cmin "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$${CORPUS_SQL_CMIN}\" -- afl-cmin -e -t 1000" \
+	--output-dir "$${CORPUS_SQL_CMIN}"
+
+FUZZ_SQL_DICT_SECS ?= 60
+fuzz_sql_dict:
+	: "$${CORPUS_SQL_CMIN:?Error: CORPUS_SQL_CMIN is required}" && \
+	: "$${CORPUS_SQL_DICT:?Error: CORPUS_SQL_DICT is required}" && \
+	export AFL_MAP_SIZE="$$(sh ./scripts/ci/afl_map_size.sh)" && AFL_SKIP_CPUFREQ=1 \
+	python3 -u scripts/ci/afl_dict.py \
+	--target "./build/fuzzer/test/unittest --writable-dir \"$$(dirname "$${CORPUS_SQL_DICT}")\"" \
+	--input-dir "$${CORPUS_SQL_CMIN}" \
+	--output-file "$${CORPUS_SQL_DICT}" \
+	--fuzz-secs "${FUZZ_SQL_DICT_SECS}" \
+	--afl-fuzz "python3 ./scripts/ci/afl_sandbox.py --writable-dir \"$$(dirname "$${CORPUS_SQL_DICT}")\" -- afl-fuzz"
 
 WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake

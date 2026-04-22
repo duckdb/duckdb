@@ -100,6 +100,15 @@ if (DUCKDB_LINKER)
   message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
 endif()
 
+if(CMAKE_LTO)
+  if(DEFINED ENV{CI_BUILD_JOBS} AND NOT "$ENV{CI_BUILD_JOBS}" STREQUAL "")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--threads=$ENV{CI_BUILD_JOBS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--threads=$ENV{CI_BUILD_JOBS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--threads=$ENV{CI_BUILD_JOBS}")
+    message(STATUS "Using ld --threads=$ENV{CI_BUILD_JOBS} from CI_BUILD_JOBS")
+  endif()
+endif()
+
 
 # Determine install paths
 # default to gnu standard installation directories (lib, bin, include)
@@ -512,6 +521,7 @@ option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
+option(DUCKDB_FUZZER "Build unittest with AFL++ persistent fuzzing harness" FALSE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
@@ -648,6 +658,10 @@ endif()
 
 if(FORCE_DEBUG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG")
+endif()
+
+if(DUCKDB_FUZZER)
+  add_compile_definitions(DUCKDB_FUZZER=1)
 endif()
 
 if(STANDALONE_DEBUG)
