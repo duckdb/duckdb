@@ -96,15 +96,15 @@ WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' ORDER BY timest
 ----
 INITIAL
 
-# Confirm the size check
+# Confirm the size check — compare column counts, not heuristic-dependent ordering
 query II
 SELECT
-    (SELECT info['columns'] FROM duckdb_logs_parsed('AdaptiveFilter')
+    (SELECT len(info['columns']::INTEGER[]) FROM duckdb_logs_parsed('AdaptiveFilter')
      WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_1.parquet' LIMIT 1),
-    (SELECT info['columns'] FROM duckdb_logs_parsed('AdaptiveFilter')
+    (SELECT len(info['columns']::INTEGER[]) FROM duckdb_logs_parsed('AdaptiveFilter')
      WHERE event = 'INIT' AND file_path LIKE '%af_mismatch_2.parquet' LIMIT 1)
 ----
-[0, 1, 2]	[0, 1]
+3	2
 
 # Check columns on different order
 statement ok
