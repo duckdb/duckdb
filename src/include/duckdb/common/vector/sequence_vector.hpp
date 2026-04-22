@@ -18,19 +18,20 @@ public:
 
 	int64_t start;
 	int64_t increment;
-	//! FIXME: should not be necessary once vector has count
-	idx_t seq_count;
 
 public:
 	idx_t Capacity() const override {
-		return seq_count;
+		return Size();
 	}
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	string ToString(const LogicalType &type, idx_t count) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 };
 
 struct SequenceVector {

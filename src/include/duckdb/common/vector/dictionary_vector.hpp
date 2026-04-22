@@ -39,7 +39,7 @@ public:
 
 public:
 	idx_t Capacity() const override {
-		return sel_count;
+		return Size();
 	}
 	const SelectionVector &GetSelVector() const {
 		return sel_vector;
@@ -80,7 +80,7 @@ public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
@@ -88,10 +88,11 @@ public:
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 private:
 	SelectionVector sel_vector;
-	idx_t sel_count;
 	buffer_ptr<DictionaryEntry> entry;
 	optional_idx dictionary_size;
 	//! A unique identifier for the dictionary that can be used to check if two dictionaries are equivalent

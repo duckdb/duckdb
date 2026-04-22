@@ -125,7 +125,7 @@ public:
 
 	void CalculateDeltaStats() {
 		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
-		// 		 we could support this with some clever substract trickery?
+		// 		 we could support this with some clever subtract trickery?
 		if (maximum > static_cast<T>(NumericLimits<T_S>::Maximum())) {
 			return;
 		}

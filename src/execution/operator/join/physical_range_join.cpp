@@ -109,7 +109,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, Inter
 	global_source = sort->GetGlobalSourceState(client, *global_sink);
 }
 
-void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
+void PhysicalRangeJoin::GlobalSortedTable::InitializeMatches() {
 	found_match = make_unsafe_uniq_array_uninitialized<bool>(Count());
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }

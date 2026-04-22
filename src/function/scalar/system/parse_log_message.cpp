@@ -84,7 +84,7 @@ void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &re
 ScalarFunction ParseLogMessage::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
 	                          ParseLogMessageBind, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
-	fun.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	fun.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
 	return fun;
 }
 

@@ -179,16 +179,14 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 		}
 		return true;
 	}
-	case TableFilterType::IS_NOT_NULL:
-		return true;
 	case TableFilterType::EXPRESSION_FILTER: {
 		// expression filters can only be pushed into the dictionary if they filter out NULL values
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(filter, "DictionaryDecoder::DictionarySupportsFilter");
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		auto emits_nulls = expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()));
 		return !emits_nulls;
 	}
-	case TableFilterType::IS_NULL:
 	case TableFilterType::DYNAMIC_FILTER:
 	case TableFilterType::OPTIONAL_FILTER:
 	case TableFilterType::STRUCT_EXTRACT:

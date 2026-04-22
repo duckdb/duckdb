@@ -56,7 +56,8 @@ jobs:
         python-version: '3.12'
 
     - uses: ./.github/actions/ccache-action
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment (x64)
+      uses: ./.github/actions/setup-msvc-env
 
     - name: Build
       shell: bash
@@ -134,7 +135,8 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
 
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment for export check (x64)
+      uses: ./.github/actions/setup-msvc-env
     - name: Duckdb.dll export symbols with C++ on Windows
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
@@ -159,9 +161,11 @@ jobs:
         python-version: '3.12'
 
     - uses: ./.github/actions/ccache-action
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment (x86 target)
+      uses: ./.github/actions/setup-msvc-env
       with:
-        arch: amd64_x86
+        arch: x86
+        host_arch: x64
 
     - name: Build
       shell: bash
@@ -198,9 +202,11 @@ jobs:
          python-version: '3.12'
 
      - uses: ./.github/actions/ccache-action
-     - uses: ilammy/msvc-dev-cmd@v1
+     - name: Set up MSVC environment (arm64 target)
+       uses: ./.github/actions/setup-msvc-env
        with:
-         arch: amd64_arm64
+         arch: arm64
+         host_arch: x64
 
      - name: Build
        shell: bash
@@ -338,11 +344,11 @@ jobs:
      - win-release-64
      - win-release-arm64
    steps:
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-windows-arm64
 
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-windows-amd64
 
