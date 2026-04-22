@@ -49,7 +49,8 @@ public:
 	               const vector<idx_t> &filter_identities = {});
 
 private:
-	void LogEvent(const char *event, const vector<pair<string, string>> &info);
+	vector<pair<string, string>> BuildInitInfo(AdaptiveFilterSource source,
+	                                           const vector<idx_t> &filter_identities) const;
 
 private:
 	vector<idx_t> permutation;

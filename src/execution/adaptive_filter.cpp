@@ -67,6 +67,14 @@ void AdaptiveFilter::SetLogger(shared_ptr<Logger> logger_p, string file_path, Ad
                                const vector<idx_t> &filter_identities) {
 	logger = std::move(logger_p);
 	log_file_path = std::move(file_path);
+	if (!logger) {
+		return;
+	}
+	DUCKDB_LOG(logger, AdaptiveFilterLogType, "INIT", log_file_path, permutation, BuildInitInfo(source, filter_identities));
+}
+
+vector<pair<string, string>> AdaptiveFilter::BuildInitInfo(AdaptiveFilterSource source,
+                                                           const vector<idx_t> &filter_identities) const {
 	vector<pair<string, string>> info;
 	info.emplace_back("source", EnumUtil::ToChars(source));
 	if (!filter_identities.empty() && filter_identities.size() == permutation.size()) {
@@ -76,14 +84,7 @@ void AdaptiveFilter::SetLogger(shared_ptr<Logger> logger_p, string file_path, Ad
 		                   "]";
 		info.emplace_back("columns", std::move(columns_str));
 	}
-	LogEvent("INIT", info);
-}
-
-void AdaptiveFilter::LogEvent(const char *event, const vector<pair<string, string>> &info) {
-	if (!logger) {
-		return;
-	}
-	DUCKDB_LOG(logger, AdaptiveFilterLogType, event, log_file_path, permutation, info);
+	return info;
 }
 
 AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
@@ -114,7 +115,7 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 		if (observe && iteration_count == observe_interval) {
 			// keep swap if runtime decreased, else reverse swap
 			auto trial_mean = runtime_sum / static_cast<double>(iteration_count);
-			string action;
+			const char *action;
 			if (prev_mean - trial_mean <= 0) {
 				// reverse swap because runtime didn't decrease
 				std::swap(permutation[swap_idx], permutation[swap_idx + 1]);
@@ -129,10 +130,14 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 				swap_likeliness[swap_idx] = 100;
 				action = "kept";
 			}
-			LogEvent("REORDER", {{"action", action},
-			                     {"swap_idx", to_string(swap_idx)},
-			                     {"prev_mean_us", StringUtil::Format("%.3f", prev_mean * 1e6)},
-			                     {"trial_mean_us", StringUtil::Format("%.3f", trial_mean * 1e6)}});
+			if (logger) {
+				DUCKDB_LOG(logger, AdaptiveFilterLogType, "REORDER", log_file_path, permutation,
+				           (vector<pair<string, string>> {
+				               {"action", action},
+				               {"swap_idx", to_string(swap_idx)},
+				               {"prev_mean_us", StringUtil::Format("%.3f", prev_mean * 1e6)},
+				               {"trial_mean_us", StringUtil::Format("%.3f", trial_mean * 1e6)}}));
+			}
 			observe = false;
 
 			// reset values
