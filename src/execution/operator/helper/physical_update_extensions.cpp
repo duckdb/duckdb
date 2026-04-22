@@ -13,21 +13,26 @@ SourceResultType PhysicalUpdateExtensions::GetDataInternal(ExecutionContext &con
 	}
 
 	idx_t count = 0;
+
+	// extension_name VARCHAR
+	auto &extension_name = chunk.data[0];
+	// repository VARCHAR
+	auto &repository = chunk.data[1];
+	// update_result VARCHAR
+	auto &update_result = chunk.data[2];
+	// previous_version VARCHAR
+	auto &previous_version = chunk.data[3];
+	// current_version VARCHAR
+	auto &current_version = chunk.data[4];
+
 	while (data.offset < data.update_result_entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.update_result_entries[data.offset];
 
-		// return values:
-		idx_t col = 0;
-		// extension_name LogicalType::VARCHAR
-		chunk.SetValue(col++, count, Value(entry.extension_name));
-		// repository LogicalType::VARCHAR
-		chunk.SetValue(col++, count, Value(entry.repository));
-		// update_result
-		chunk.SetValue(col++, count, Value(EnumUtil::ToString(entry.tag)));
-		// previous_version LogicalType::VARCHAR
-		chunk.SetValue(col++, count, Value(entry.prev_version));
-		// current_version LogicalType::VARCHAR
-		chunk.SetValue(col++, count, Value(entry.installed_version));
+		extension_name.Append(Value(entry.extension_name));
+		repository.Append(Value(entry.repository));
+		update_result.Append(Value(EnumUtil::ToString(entry.tag)));
+		previous_version.Append(Value(entry.prev_version));
+		current_version.Append(Value(entry.installed_version));
 
 		data.offset++;
 		count++;

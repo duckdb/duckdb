@@ -5,11 +5,21 @@
 
 namespace duckdb {
 
-FlatVector::FlatStringWriter::FlatStringWriter(Vector &vector, idx_t count)
-    : vector(vector), data(GetDataMutable<string_t>(vector)), validity(Validity(vector)), count(count) {
+VectorWriter<string_t>::VectorWriter(Vector &vector, idx_t count, idx_t offset)
+    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
+      count(offset + count), current_idx(offset) {
 }
 
-void FlatVector::FlatStringWriter::InitializeHeap() {
+void VectorWriter<string_t>::InitializeHeap() {
+	heap = StringVector::GetStringHeap(vector);
+}
+
+VectorScatterWriter<string_t>::VectorScatterWriter(Vector &vector)
+    : vector(vector), data(FlatVector::GetDataMutable<string_t>(vector)),
+      validity(FlatVector::ValidityMutable(vector)) {
+}
+
+void VectorScatterWriter<string_t>::InitializeHeap() {
 	heap = StringVector::GetStringHeap(vector);
 }
 
@@ -32,17 +42,17 @@ VectorStringBuffer::VectorStringBuffer(idx_t capacity) : StandardVectorBuffer(ca
 }
 
 VectorStringBuffer::VectorStringBuffer(data_ptr_t data_ptr_p, idx_t capacity)
-    : StandardVectorBuffer(data_ptr_p, capacity) {
+    : StandardVectorBuffer(data_ptr_p, capacity, sizeof(string_t)) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity)
-    : StandardVectorBuffer(std::move(data_p), capacity), heap(AllocateHeap()) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)), heap(AllocateHeap()) {
 	buffer_type = VectorBufferType::STRING_BUFFER;
 }
 
 VectorStringBuffer::VectorStringBuffer(AllocatedData &&data_p, idx_t capacity, const VectorStringBuffer &other)
-    : StandardVectorBuffer(std::move(data_p), capacity) {
+    : StandardVectorBuffer(std::move(data_p), capacity, sizeof(string_t)) {
 	auto auxiliary_data = other.GetAuxiliaryData();
 	if (auxiliary_data) {
 		AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(std::move(auxiliary_data)));
@@ -74,7 +84,23 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 	if (auxiliary_data) {
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
+	result->SetVectorSize(end - offset);
 	return result;
+}
+
+void VectorStringBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                      idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto ldata = FlatVector::GetData<string_t>(source);
+	auto tdata = reinterpret_cast<string_t *>(data_ptr);
+	auto &append_heap = GetHeap();
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_sel.get_index(source_offset + i);
+		auto target_idx = target_offset + i;
+		if (!validity.RowIsValid(target_idx)) {
+			continue;
+		}
+		tdata[target_idx] = append_heap.AddBlob(ldata[source_idx]);
+	}
 }
 
 void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
@@ -126,9 +152,9 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_da
 	return make_buffer<VectorStringBuffer>(std::move(new_data), capacity, *this);
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                     idx_t count) const {
-	auto result = StandardVectorBuffer::Flatten(type, sel, count);
+buffer_ptr<VectorBuffer> VectorStringBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                  idx_t count) const {
+	auto result = StandardVectorBuffer::FlattenSliceInternal(type, sel, count);
 	if (!result) {
 		// already flat - bail
 		return nullptr;
@@ -162,14 +188,14 @@ VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
 		                        vector.GetType());
 	}
 	// check if the main buffer is a VectorStringBuffer
-	if (!vector.buffer) {
-		vector.buffer = make_buffer<VectorStringBuffer>(nullptr, 0);
+	if (!vector.GetBufferRef()) {
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(nullptr, 0));
 	}
-	if (vector.buffer->GetBufferType() != VectorBufferType::STRING_BUFFER) {
+	if (vector.Buffer().GetBufferType() != VectorBufferType::STRING_BUFFER) {
 		throw InternalException(
 		    "StringVector::GetStringBuffer called on a vector - but that vector does NOT have a string buffer");
 	}
-	return vector.buffer->Cast<VectorStringBuffer>();
+	return vector.BufferMutable().Cast<VectorStringBuffer>();
 }
 
 ArenaAllocator &StringVector::GetStringAllocator(Vector &vector) {

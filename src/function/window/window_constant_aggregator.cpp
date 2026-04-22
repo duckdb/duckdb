@@ -263,7 +263,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			}
 
 			//	Find the first value in [end, filtered)
-			sel.Initialize(filter_sel->data() + filter_idx);
+			sel.Initialize(filter_sel->data() + filter_idx, filtered - filter_idx);
 			idx_t nsel = 0;
 			for (; filter_idx < filtered; ++filter_idx, ++nsel) {
 				auto idx = filter_sel->get_index(filter_idx);

@@ -37,8 +37,11 @@ public:
 
 public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
@@ -49,24 +52,24 @@ private:
 struct FSSTVector {
 	static inline const ValidityMask &Validity(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.buffer->GetValidityMask();
+		return vector.Buffer().GetValidityMask();
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return vector.buffer->GetValidityMask();
+		return vector.BufferMutable().GetValidityMask();
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		auto &validity = vector.buffer->GetValidityMask();
+		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Initialize(new_validity);
 	}
 	static inline const string_t *GetCompressedData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return reinterpret_cast<string_t *>(vector.buffer->GetData());
+		return reinterpret_cast<const string_t *>(vector.GetBufferRef()->GetData());
 	}
 	static inline string_t *GetCompressedData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
-		return reinterpret_cast<string_t *>(vector.buffer->GetData());
+		return reinterpret_cast<string_t *>(vector.BufferMutable().GetData());
 	}
 
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);

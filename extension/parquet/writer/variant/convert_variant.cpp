@@ -777,7 +777,7 @@ static void CreateValues(UnifiedVariantVectorData &variant, Vector &value, optio
                          optional_ptr<const SelectionVector> value_index_sel,
                          optional_ptr<const SelectionVector> result_sel,
                          optional_ptr<ParquetVariantShreddingState> shredding_state, idx_t count) {
-	auto &validity = FlatVector::Validity(value);
+	auto &validity = FlatVector::ValidityMutable(value);
 	auto value_data = FlatVector::GetDataMutable<string_t>(value);
 
 	for (idx_t i = 0; i < count; i++) {

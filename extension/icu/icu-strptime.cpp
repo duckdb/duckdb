@@ -112,30 +112,25 @@ struct ICUStrptime : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
-
-		if (ConstantVector::IsNull(fmt_arg)) {
-			ConstantVector::SetNull(result);
-		} else {
-			UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
-				ParseResult parsed;
-				for (auto &format : info.formats) {
-					if (format.Parse(input, parsed)) {
-						if (parsed.is_special) {
-							return parsed.ToTimestamp();
-						} else {
-							// Set TZ first, if any.
-							if (!parsed.tz.empty()) {
-								SetTimeZone(calendar, parsed.tz);
-							}
-
-							return GetTime(calendar, ToMicros(calendar, parsed, format));
+		UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
+			ParseResult parsed;
+			for (auto &format : info.formats) {
+				if (format.Parse(input, parsed)) {
+					if (parsed.is_special) {
+						return parsed.ToTimestamp();
+					} else {
+						// Set TZ first, if any.
+						if (!parsed.tz.empty()) {
+							SetTimeZone(calendar, parsed.tz);
 						}
+
+						return GetTime(calendar, ToMicros(calendar, parsed, format));
 					}
 				}
+			}
 
-				throw InvalidInputException(parsed.FormatError(input, info.formats[0].format_specifier));
-			});
-		}
+			throw InvalidInputException(parsed.FormatError(input, info.formats[0].format_specifier));
+		});
 	}
 
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -246,7 +241,7 @@ struct ICUStrptime : public ICUDateFunc {
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
 			auto &function = functions[i];
-			if (types == function.arguments) {
+			if (types == function.GetArguments()) {
 				best_index = i;
 				break;
 			}
@@ -428,20 +423,19 @@ struct ICUStrftime : public ICUDateFunc {
 		if (fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(fmt_arg)) {
-				ConstantVector::SetNull(result);
-			} else {
-				StrfTimeFormat format;
-				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
-
-				UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
-				    src_arg, result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-					    if (Timestamp::IsFinite(input)) {
-						    return Operation(calendar.get(), input, tz_name, format, result);
-					    } else {
-						    return StringVector::AddString(result, Timestamp::ToString(input));
-					    }
-				    });
+				throw InternalException("ICUStrfTime called with constant NULL format");
 			}
+			StrfTimeFormat format;
+			ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
+
+			UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+			    src_arg, result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+				    if (Timestamp::IsFinite(input)) {
+					    return Operation(calendar.get(), input, tz_name, format, result);
+				    } else {
+					    return StringVector::AddString(result, Timestamp::ToString(input));
+				    }
+			    });
 		} else {
 			BinaryExecutor::ExecuteWithNulls<timestamp_t, string_t, string_t>(
 			    src_arg, fmt_arg, result, args.size(),

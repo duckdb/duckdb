@@ -50,6 +50,12 @@ ScalarFunctionSet JSONFunctions::GetExtractFunction() {
 	ScalarFunctionSet set("json_extract");
 	GetExtractFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.GetArguments()[0].IsJSONType() && func.GetArguments()[1].IsNumeric()) {
+			continue;
+		}
+		func.SetFallible();
+	}
 	return set;
 }
 
@@ -68,6 +74,12 @@ ScalarFunctionSet JSONFunctions::GetExtractStringFunction() {
 	ScalarFunctionSet set("json_extract_string");
 	GetExtractStringFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractStringFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.GetArguments()[0].IsJSONType() && func.GetArguments()[1].IsNumeric()) {
+			continue;
+		}
+		func.SetFallible();
+	}
 	return set;
 }
 

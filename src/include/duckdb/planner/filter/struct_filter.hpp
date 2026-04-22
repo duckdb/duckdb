@@ -9,11 +9,10 @@
 #pragma once
 
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class StructFilter : public TableFilter {
 public:
 	static constexpr const TableFilterType TYPE = TableFilterType::STRUCT_EXTRACT;

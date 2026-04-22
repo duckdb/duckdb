@@ -66,7 +66,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
@@ -237,7 +237,7 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	D_ASSERT(hdr.uncompressed_page_size > 0);
 	D_ASSERT(hdr.compressed_page_size > 0);
 
-	if (write_info.compressed_buf) {
+	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
@@ -440,7 +440,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	             write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
 
-	if (write_info.compressed_buf) {
+	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();

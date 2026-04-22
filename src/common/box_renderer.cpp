@@ -616,20 +616,22 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
 	vector.Flatten(count);
-	auto data = FlatVector::Writer<string_t>(vector, count);
-	auto &validity = FlatVector::Validity(vector);
+	auto input_values = vector.Values<string_t>(count);
+	auto &validity = FlatVector::ValidityMutable(vector);
+	auto result_data = FlatVector::ScatterWriter<string_t>(vector);
 	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);
 	for (idx_t r = 0; r < count; r++) {
 		if (!validity.RowIsValid(r)) {
 			// null - no need to convert
 			// set render length to render length of NULL
-			render_length_data[r] = null_render_length;
+			render_length_data.WriteValue(null_render_length);
 			continue;
 		}
 		// non-null - convert value
-		auto result_str = ConvertRenderValue(data[r].GetString(), original_type);
-		render_length_data[r] = Utf8Proc::RenderWidth(result_str);
-		data[r] = result_str;
+		auto input_str = input_values[r].GetValue().GetString();
+		auto result_str = ConvertRenderValue(input_str, original_type);
+		render_length_data.WriteValue(Utf8Proc::RenderWidth(result_str));
+		result_data[r] = result_str;
 	}
 }
 
@@ -859,14 +861,13 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	res_coll.InitializeAppend(append_state);
 	for (idx_t c = 0; c < column_names.size(); c++) {
 		vector<column_t> column_ids {c * 2, c * 2 + 1};
-		auto row_index = row_chunk.size();
 		idx_t current_index = 0;
 		auto &column_name = column_names[c];
 		auto type_name = RenderType(result_types[c]);
-		row_chunk.SetValue(current_index++, row_index, column_name);
-		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(column_name)));
-		row_chunk.SetValue(current_index++, row_index, type_name);
-		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(type_name)));
+		row_chunk.data[current_index++].Append(Value(column_name));
+		row_chunk.data[current_index++].Append(Value::UBIGINT(Utf8Proc::RenderWidth(column_name)));
+		row_chunk.data[current_index++].Append(type_name);
+		row_chunk.data[current_index++].Append(Value::UBIGINT(Utf8Proc::RenderWidth(type_name)));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.render_values->Chunks(column_ids)) {
 				if (context.IsInterrupted()) {
@@ -875,8 +876,8 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					auto val = chunk.GetValue(0, r);
 					auto length = chunk.GetValue(1, r);
-					row_chunk.SetValue(current_index++, row_index, val);
-					row_chunk.SetValue(current_index++, row_index, length);
+					row_chunk.data[current_index++].Append(val);
+					row_chunk.data[current_index++].Append(length);
 				}
 			}
 		}
@@ -925,7 +926,7 @@ string BoxRendererImplementation::ConvertRenderValue(const string &input) {
 				result += 'f';
 				break;
 			case 13:
-				// cariage return
+				// carriage return
 				result += 'r';
 				break;
 			case 27:

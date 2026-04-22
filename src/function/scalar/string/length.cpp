@@ -94,7 +94,7 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 	// otherwise we flatten and inherit the null values of the parent
 	result.Flatten(args.size());
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t r = 0; r < args.size(); r++) {
 		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
@@ -118,7 +118,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
@@ -179,7 +179,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 	}
 	auto type = arguments[0]->return_type;
 	if (type.id() == LogicalTypeId::ARRAY) {
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
 
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
@@ -198,7 +198,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 
 	} else if (type.id() == LogicalTypeId::LIST) {
 		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		return nullptr;
 	} else {
 		// Unreachable

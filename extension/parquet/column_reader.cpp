@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <utility>
 
+#include "parquet_statistics.hpp"
+
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
@@ -246,10 +248,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 	group_rows_available = chunk->meta_data.num_values;
 }
 
-bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
-	if (!dictionary_decoder.HasFilteredOutAllValues()) {
-		return false;
-	}
+bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter) {
 	if (page_hdr.type != PageType::DATA_PAGE && page_hdr.type != PageType::DATA_PAGE_V2) {
 		// we can only filter out data pages
 		return false;
@@ -258,19 +257,41 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	auto &v1_header = page_hdr.data_page_header;
 	auto &v2_header = page_hdr.data_page_header_v2;
 	auto page_encoding = is_v1 ? v1_header.encoding : v2_header.encoding;
-	if (page_encoding != Encoding::PLAIN_DICTIONARY && page_encoding != Encoding::RLE_DICTIONARY) {
-		// not a dictionary page
-		return false;
-	}
-	// the page has been filtered out!
-	// skip forward
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-	trans.Skip(page_hdr.compressed_page_size);
 
-	page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
-	encoding = ColumnEncoding::DICTIONARY;
-	page_is_filtered_out = true;
-	return true;
+	if (page_encoding == Encoding::PLAIN_DICTIONARY || page_encoding == Encoding::RLE_DICTIONARY) {
+		if (!dictionary_decoder.HasFilteredOutAllValues()) {
+			return false;
+		}
+		encoding = ColumnEncoding::DICTIONARY;
+		page_is_filtered_out = true;
+	} else if (filter) {
+		// try to use page statistics to skip this page if could.
+		const duckdb_parquet::Statistics *page_stats = nullptr;
+		if (is_v1 && v1_header.__isset.statistics) {
+			page_stats = &v1_header.statistics;
+		} else if (!is_v1 && v2_header.__isset.statistics) {
+			page_stats = &v2_header.statistics;
+		}
+
+		if (!page_stats || !((page_stats->__isset.min_value || page_stats->__isset.min) &&
+		                     (page_stats->__isset.max_value || page_stats->__isset.max))) {
+			return false;
+		}
+		auto stats =
+		    ParquetStatisticsUtils::TransformParquetStatistics(Type(), Schema(), *page_stats, /*can_have_nan=*/true);
+		if (stats && filter->CheckStatistics(*stats) == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			page_is_filtered_out = true;
+		}
+	}
+	if (page_is_filtered_out) {
+		// the page has been filtered out!
+		// skip forward
+		auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+		trans.Skip(page_hdr.compressed_page_size);
+		page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	}
+
+	return page_is_filtered_out;
 }
 
 void ColumnReader::ReadEncrypted(duckdb_apache::thrift::TBase &object) {
@@ -328,7 +349,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		throw InvalidInputException("Failed to read file \"%s\": Page sizes can't be < 0", Reader().GetFileName());
 	}
 
-	if (PageIsFilteredOut(page_hdr)) {
+	if (PageIsFilteredOut(page_hdr, filter)) {
 		// this page has been filtered out so we don't need to read it
 		return;
 	}
@@ -656,7 +677,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < read_now; i++) {
 			validity.SetInvalid(result_offset + i);
 		}

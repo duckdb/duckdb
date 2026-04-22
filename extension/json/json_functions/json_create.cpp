@@ -122,10 +122,10 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
 				                      arguments[i]->GetName());
 			}
-			bound_function.arguments.push_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
 		} else {
 			// Value, cast to types that we can put in JSON
-			bound_function.arguments.push_back(GetJSONType(const_struct_names, type));
+			bound_function.GetArguments().push_back(GetJSONType(const_struct_names, type));
 		}
 	}
 	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
@@ -459,7 +459,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                              idx_t count) {
 	// Initialize array for the nested values
-	auto &child_v = ListVector::GetEntry(value_v);
+	auto &child_v = ListVector::GetChildMutable(value_v);
 	auto child_count = ListVector::GetListSize(value_v);
 	auto nested_vals = JSONCommon::AllocateArray<yyjson_mut_val *>(doc, child_count);
 	// Fill nested_vals with list values
@@ -487,7 +487,7 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 	value_v.Flatten(count);
 
 	// Initialize array for the nested values
-	auto &child_v = ArrayVector::GetEntry(value_v);
+	auto &child_v = ArrayVector::GetChildMutable(value_v);
 	auto array_size = ArrayType::GetSize(value_v.GetType());
 	auto child_count = count * array_size;
 
@@ -701,7 +701,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 
 	// Write JSON values to string
 	auto objects = FlatVector::GetDataMutable<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
 	for (idx_t i = 0; i < count; i++) {
@@ -732,7 +732,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
@@ -740,7 +740,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
@@ -748,21 +748,21 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 

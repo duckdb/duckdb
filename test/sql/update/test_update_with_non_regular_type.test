@@ -1,0 +1,35 @@
+# name: test/sql/update/test_update_with_non_regular_type.test
+# description: Test UPDATE on tables with columns that don't support regular (in-place) updates
+# group: [update]
+
+# --- LIST ---
+
+statement ok
+CREATE TABLE t1 (id VARCHAR, new_id VARCHAR, tags VARCHAR[], g GEOMETRY);
+
+statement ok
+INSERT INTO t1 VALUES ('A', 'B', ARRAY['tag1', 'tag2'], 'POINT(1 2)');
+
+statement ok
+UPDATE t1 SET new_id = 'C' WHERE id='A';
+
+statement ok
+UPDATE t1 SET tags = ['tag3'] WHERE id='A';
+
+statement ok
+UPDATE t1 SET g = 'POINT(3 4)' WHERE id='A';
+
+statement ok
+CREATE TABLE t2 (id INT, val VARCHAR, tags VARCHAR[], g GEOMETRY);
+
+statement ok
+INSERT INTO t2 VALUES (1, 'A', ARRAY['tag1', 'tag2'], 'POINT (5 6)');
+
+statement ok
+UPDATE t2 SET val = t1.new_id FROM t1 WHERE t2.val=t1.id;
+
+statement ok
+UPDATE t2 SET tags = ['tag3'] FROM t1 WHERE t2.val=t1.new_id;
+
+statement ok
+UPDATE t2 SET g = 'POINT(0 0)' FROM t1 WHERE t2.val=t1.new_id;

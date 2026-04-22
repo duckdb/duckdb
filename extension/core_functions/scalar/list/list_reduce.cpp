@@ -80,7 +80,7 @@ void ReferenceAccumulator(ReduceExecuteInfo &execute_info, Vector &target, Vecto
 			                        source.GetType().ToString(), target.GetType().ToString());
 		}
 		execute_info.accumulator_cast->SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::Validity(*execute_info.accumulator_cast).SetAllValid(count);
+		FlatVector::ValidityMutable(*execute_info.accumulator_cast).SetAllValid(count);
 		VectorOperations::Cast(execute_info.context, source, *execute_info.accumulator_cast, count, true);
 		target.Reference(*execute_info.accumulator_cast);
 	} else {
@@ -334,7 +334,7 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.arguments.push_back(LogicalType::ANY);
+	fun.GetArguments().push_back(LogicalType::ANY);
 	set.AddFunction(fun);
 	return set;
 }

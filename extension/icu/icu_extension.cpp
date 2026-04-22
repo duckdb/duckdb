@@ -367,6 +367,10 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
 			break;
@@ -381,7 +385,7 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 		//	The calendar name is all we have
 		std::string utf8;
 		calendar->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
+		name_col.Append(Value(utf8));
 
 		++index;
 	}

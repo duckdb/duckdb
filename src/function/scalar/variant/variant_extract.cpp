@@ -124,7 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
-		result.Shred(shredded_vector);
+		result.Shred(shredded_vector, count);
 		return true;
 	}
 	auto &component = components[path_index];
@@ -244,19 +244,19 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[i] = values_data[values.sel->get_index(i)];
+		result_data.WriteValue(values_data[values.sel->get_index(i)]);
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
 
 	//! Prepare the selection vector to remap index 0 of each row
-	SelectionVector new_sel(0, values_list_size);
+	auto new_sel = SelectionVector::Incremental(values_list_size);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -312,10 +312,10 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
 	                               VariantExtractPropagateStats);
 
-	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetArguments() = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.arguments = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetArguments() = {variant_type, LogicalType::UINTEGER};
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

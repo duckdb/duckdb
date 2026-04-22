@@ -37,7 +37,7 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
@@ -56,7 +56,6 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		// Loop through all the maps per list
 		// we cant do better because all the entries of the child vector have to be contiguous
 		// so we cant start the next row before we have finished the one before it
-		auto &result_entry = result_data[i];
 		vector<MapKeyIndexPair> index_to_map;
 		vector<Value> keys_list;
 		bool all_null = true;
@@ -94,8 +93,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 		}
 
-		result_entry.offset = ListVector::GetListSize(result);
-		result_entry.length = keys_list.size();
+		result_data.WriteValue(list_entry_t(ListVector::GetListSize(result), keys_list.size()));
 		if (all_null) {
 			D_ASSERT(keys_list.empty() && index_to_map.empty());
 			FlatVector::SetNull(result, i, true);
@@ -135,7 +133,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		// Prepared statement
-		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+		bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 		return nullptr;
 	}
@@ -149,7 +147,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 		auto &map = arg->return_type;
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
-			bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+			bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 			bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 			return nullptr;
 		}
@@ -188,7 +186,7 @@ ScalarFunction MapConcatFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

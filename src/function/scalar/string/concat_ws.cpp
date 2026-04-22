@@ -37,11 +37,11 @@ static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const S
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::Writer<string_t>(result);
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto ridx = rsel.get_index(i);
 		// allocate an empty string of the required size
-		result_data[ridx] = StringVector::EmptyString(result, result_lengths[ridx]);
+		result_data[ridx].EmptyString(result_lengths[ridx]);
 		// we reuse the result_lengths vector to store the currently appended size
 		result_lengths[ridx] = 0;
 		has_results[ridx] = false;
@@ -98,7 +98,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		// default case: loop over nullmask and create a non-null selection vector
 		idx_t not_null_count = 0;
 		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < args.size(); i++) {
 			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
 				result_mask.SetInvalid(i);
@@ -115,10 +115,10 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	for (auto &arg : bound_function.arguments) {
+	for (auto &arg : bound_function.GetArguments()) {
 		arg = LogicalType::VARCHAR;
 	}
-	bound_function.varargs = LogicalType::VARCHAR;
+	bound_function.SetVarArgs(LogicalType::VARCHAR);
 	return nullptr;
 }
 
@@ -133,7 +133,7 @@ ScalarFunction ConcatWsFun::GetFunction() {
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
 	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatWSFunction);
-	concat_ws.varargs = LogicalType::ANY;
+	concat_ws.SetVarArgs(LogicalType::ANY);
 	concat_ws.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunction(concat_ws);
 }

@@ -15,7 +15,7 @@ SELECT * FROM t1 where rowid = 6;
 query II
 EXPLAIN SELECT * FROM t1 where rowid = 6;
 ----
-physical_plan	<REGEX>:.*Filters: rowid=6.*
+physical_plan	<REGEX>:.*Filters:.*rowid = 6.*
 
 query I
 SELECT * FROM t1 where rowid = 200000;
@@ -25,7 +25,7 @@ SELECT * FROM t1 where rowid = 200000;
 query II
 EXPLAIN SELECT * FROM t1 where rowid = 200000;
 ----
-physical_plan	<REGEX>:.*Filters: rowid=200000.*
+physical_plan	<REGEX>:.*Filters:.*rowid = 200000.*
 
 query I
 SELECT * FROM t1 where rowid IN (SELECT rowid FROM t1 ORDER BY rowid DESC LIMIT 10) ORDER BY rowid;

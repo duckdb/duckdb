@@ -49,6 +49,12 @@ public:
 	WindowBoundariesState state;
 };
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 class WindowExecutor {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;
@@ -92,7 +98,7 @@ public:
 
 protected:
 	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
-	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
+	                              idx_t row_idx, OperatorSinkInput &sink) const;
 };
 
 } // namespace duckdb

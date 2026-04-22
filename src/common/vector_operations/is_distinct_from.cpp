@@ -10,9 +10,9 @@ void VectorOperations::DistinctFrom(Vector &left, Vector &right, Vector &result,
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
 	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i].GetValueUnsafe() != 0;
+		result_data.WriteValue(cmp_data[i].GetValueUnsafe() != 0);
 	}
 }
 
@@ -22,9 +22,9 @@ void VectorOperations::NotDistinctFrom(Vector &left, Vector &right, Vector &resu
 	VectorOperations::DistinctComparator(left, right, comparator_result, count);
 	auto cmp_data = comparator_result.Values<int8_t>(count);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<bool>(result);
+	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = cmp_data[i].GetValueUnsafe() == 0;
+		result_data.WriteValue(cmp_data[i].GetValueUnsafe() == 0);
 	}
 }
 

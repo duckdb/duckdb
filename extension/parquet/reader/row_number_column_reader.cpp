@@ -54,9 +54,9 @@ void RowNumberColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, d
 }
 
 idx_t RowNumberColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	auto data_ptr = FlatVector::GetDataMutable<int64_t>(result);
+	auto data_ptr = FlatVector::Writer<int64_t>(result, num_values);
 	for (idx_t i = 0; i < num_values; i++) {
-		data_ptr[i] = UnsafeNumericCast<int64_t>(row_group_offset++);
+		data_ptr.WriteValue(UnsafeNumericCast<int64_t>(row_group_offset++));
 	}
 	return num_values;
 }

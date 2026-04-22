@@ -58,7 +58,7 @@ struct CastParameters {
 	}
 	CastParameters(bool strict, string *error_message) : CastParameters(nullptr, strict, error_message, nullptr) {
 	}
-	CastParameters(BoundCastData *cast_data, bool strict, string *error_message,
+	CastParameters(optional_ptr<BoundCastData> cast_data, bool strict, string *error_message,
 	               optional_ptr<FunctionLocalState> local_state, bool nullify_parent_p = false)
 	    : cast_data(cast_data), strict(strict), error_message(error_message), local_state(local_state),
 	      nullify_parent(nullify_parent_p) {
@@ -111,12 +111,36 @@ struct BoundCastInfo {
 	BoundCastInfo( // NOLINT: allow explicit cast from cast_function_t
 	    cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr,
 	    init_cast_local_state_t init_local_state = nullptr);
-	cast_function_t function;
-	init_cast_local_state_t init_local_state;
-	unique_ptr<BoundCastData> cast_data;
+
+	bool Cast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) const {
+		auto all_ok = function(source, result, count, parameters);
+		FlatVector::SetSize(result, count);
+		return all_ok;
+	}
 
 public:
 	BoundCastInfo Copy() const;
+	optional_ptr<BoundCastData> GetCastData() const {
+		return cast_data;
+	}
+	bool HasInitLocalState() const {
+		return init_local_state;
+	}
+	unique_ptr<FunctionLocalState> InitLocalState(CastLocalStateParameters &parameters) const {
+		return init_local_state(parameters);
+	}
+	bool HasFunction() const {
+		return function;
+	}
+	bool IsNopCast() const;
+	void SetFunction(cast_function_t new_function) {
+		function = new_function;
+	}
+
+private:
+	cast_function_t function;
+	init_cast_local_state_t init_local_state;
+	unique_ptr<BoundCastData> cast_data;
 };
 
 struct BindCastInput {

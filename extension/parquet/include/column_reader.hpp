@@ -229,8 +229,10 @@ protected:
 	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
-	//! Check if a previous table filter has filtered out this page
-	bool PageIsFilteredOut(PageHeader &page_hdr);
+	//! this function tries to skip a page in the below conditions:
+	//! 1. a previous table filter has filtered out this page
+	//! 2. page statistics can be used to skip page
+	bool PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
@@ -252,7 +254,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -286,7 +288,7 @@ private:
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
 		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);

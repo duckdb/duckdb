@@ -52,36 +52,37 @@ public:
 		D_ASSERT(type == result.GetType());
 		auto internal_type = type.InternalType();
 		buffer->ClearAuxiliaryData();
-		AssignSharedPointer(result.buffer, buffer);
-		result.buffer->ResetCapacity(capacity);
+		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
+		result.BufferMutable().ResetCapacity(capacity);
+		result.BufferMutable().SetVectorSize(0ULL);
 		// use SetVectorTypeOnly to avoid propagating to children
 		// for nested types (struct/array/list) children may have stale incompatible buffers
 		// from a previous execution - they will be reset individually below
-		result.buffer->SetVectorTypeOnly(VectorType::FLAT_VECTOR);
+		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer
 			// propagate through child
 			auto &child_cache = *child_caches[0];
-			auto &list_buffer = result.buffer->Cast<VectorListBuffer>();
-			list_buffer.SetSize(0);
+			auto &list_buffer = result.BufferMutable().Cast<VectorListBuffer>();
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child);
+			list_buffer.SetChildSize(0);
 			break;
 		}
 		case PhysicalType::ARRAY: {
 			// reinitialize the VectorArrayBuffer
 			// propagate through child
 			auto &child_cache = *child_caches[0];
-			auto &array_child = result.buffer->Cast<VectorArrayBuffer>().GetChild();
+			auto &array_child = result.BufferMutable().Cast<VectorArrayBuffer>().GetChild();
 			child_cache.ResetFromCache(array_child);
 			break;
 		}
 		case PhysicalType::STRUCT: {
 			// reinitialize the VectorStructBuffer
 			// propagate through children
-			auto &children = result.buffer->Cast<VectorStructBuffer>().GetChildren();
+			auto &children = result.BufferMutable().Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
 				auto &child_cache = *child_caches[i];
 				child_cache.ResetFromCache(children[i]);

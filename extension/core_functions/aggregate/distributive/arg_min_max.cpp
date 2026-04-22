@@ -192,7 +192,7 @@ struct ArgMinMaxBase {
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -307,7 +307,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		SelectionVector sel(assign_sel);
+		SelectionVector sel(assign_sel, assign_count);
 		Vector sliced_input(arg, sel, assign_count);
 		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
@@ -357,7 +357,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -401,7 +401,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                         AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
+	function.GetArguments() = {type, by_type};
 	function.return_type = type;
 	return function;
 #endif
@@ -462,7 +462,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
+	function.GetArguments() = {type, by_type};
 	function.return_type = type;
 #endif
 	return function;

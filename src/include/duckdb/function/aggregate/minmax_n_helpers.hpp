@@ -408,7 +408,7 @@ struct MinMaxFixedValueOrNull {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::Validity(vector).Set(idx, value.is_valid);
+		FlatVector::ValidityMutable(vector).Set(idx, value.is_valid);
 		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
@@ -473,24 +473,24 @@ struct MinMaxNOperation {
 		// Resize the list vector to fit the new entries
 		ListVector::Reserve(result, old_len + new_entries);
 
-		auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
-		auto &child_data = ListVector::GetEntry(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
+		auto &child_data = ListVector::GetChildMutable(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
-			const auto rid = i + offset;
 			const auto state_idx = state_format.sel->get_index(i);
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				result_data.SetInvalid(rid);
+				result_data.WriteNull();
 				continue;
 			}
 
 			// Add the entries to the list vector
-			auto &list_entry = result_data[rid];
+			list_entry_t list_entry;
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
+			result_data.WriteValue(list_entry);
 
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto heap = state.heap.SortAndGetHeap();
