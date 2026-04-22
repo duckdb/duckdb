@@ -44,9 +44,10 @@ void CommitDropState::FinalizeCommit() {
 		for (auto block_id : dropped_block_ids) {
 			block_manager->MarkBlockAsModified(block_id);
 		}
-	} else {
-		D_ASSERT(dropped_block_ids.empty());
 	}
+	// assert that !block_manager -> dropped_block_ids.empty()
+	D_ASSERT(block_manager || dropped_block_ids.empty());
+
 	for (auto &removal : pending_index_removals) {
 		removal.indexes.get().RemoveIndex(removal.name);
 	}
