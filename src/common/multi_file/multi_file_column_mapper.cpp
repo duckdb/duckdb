@@ -577,24 +577,25 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	}
 }
 
-unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
-                                              ColumnMapResult &mapping, const MultiFileColumnDefinition &global_column,
-                                              bool is_trivially_mappable) {
+static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
+                                                     ColumnMapResult &mapping, const LogicalType &global_column_type,
+                                                     const ColumnIndex &column_index, bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
-	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx.GetIndex());
-	if (!global_column.type.IsNested() ||
+	auto local_column_type = column_index.HasType() ? column_index.GetScanType() : local_column.type;
+	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
+	if (!global_column_type.IsNested() ||
 	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
 	    is_trivially_mappable) {
 		// not a struct - potentially add a cast
-		if (local_column.type != global_column.type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+		if (local_column_type != global_column_type) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column_type);
 		}
 		return expr;
 	}
 	// generate the remap_struct function call
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(expr));
-	children.push_back(make_uniq<BoundConstantExpression>(Value(global_column.type)));
+	children.push_back(make_uniq<BoundConstantExpression>(Value(global_column_type)));
 	children.push_back(make_uniq<BoundConstantExpression>(std::move(mapping.column_map)));
 	if (!mapping.default_value) {
 		children.push_back(make_uniq<BoundConstantExpression>(Value()));
@@ -603,9 +604,8 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 	}
 	auto remap_fun = RemapStructFun::GetFunction();
 	auto bind_data = remap_fun.Bind(context, children);
-	;
 	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
-	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
+	return make_uniq<BoundFunctionExpression>(global_column_type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));
 }
 
@@ -737,7 +737,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto local_index = std::move(column_map.column_index);
 		auto local_id = local_index->GetPrimaryIndex();
 		auto &local_type = local_columns[local_id].type;
-		auto expr = ConstructMapExpression(context, local_idx, column_map, global_column, trivial_map);
+		auto global_column_type = global_id.HasType() ? global_id.GetScanType() : global_column.type;
+		auto expr =
+		    ConstructMapExpression(context, local_idx, column_map, global_column_type, *local_index, trivial_map);
 		reader_data.expressions.push_back(std::move(expr));
 		auto filter_conversion = trivial_map ? FilterConversionType::COPY_DIRECTLY : FilterConversionType::CAST_FILTER;
 
