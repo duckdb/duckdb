@@ -248,10 +248,6 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 		}
 		return cost;
 	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		return Cost(*struct_filter.child_filter);
-	}
 	default:
 		return 1000;
 	}
