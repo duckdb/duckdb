@@ -39,18 +39,19 @@ struct PendingIndexRemoval {
 };
 
 //! Accumulates block marks and index removals during commit so they can be applied together once the
-//! commit chain has succeeded. Dropped without Apply() on revert — nothing gets marked.
-class CommitDropBuffer {
+//! commit chain has succeeded and FlushCommit() has been called, since these are side effects that can't be reverted
+//! if we need to rollback a transaction.
+class CommitDropState {
 public:
-	explicit CommitDropBuffer(optional_ptr<BlockManager> block_manager);
+	explicit CommitDropState(optional_ptr<BlockManager> block_manager);
 
 public:
 	//! Register an on-disk block to mark as modified during Apply.
-	void QueueBlockDrop(BlockManager &block_manager, block_id_t block_id);
+	void DropBlock(block_id_t block_id);
 	//! Register an index to be removed from a table's index list during Apply.
-	void QueuePendingIndexRemoval(TableIndexList &indexes, string name);
+	void RemoveIndex(TableIndexList &indexes, string name);
 	//! Apply accumulated block marks and index removals, then clear the buffer.
-	void Apply();
+	void FinalizeCommit();
 	//! True if no work has been queued.
 	bool Empty() const;
 
@@ -87,14 +88,14 @@ public:
 	                     ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 public:
-	void CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer &drop_buffer);
+	void CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info);
 	void RevertCommit(UndoFlags type, data_ptr_t data);
 	void Flush();
 	void Verify();
 	static IndexRemovalType GetIndexRemovalType(ActiveTransactionState transaction_state, CommitMode commit_mode);
 
 private:
-	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitDropBuffer &drop_buffer);
+	void CommitEntryDrop(CatalogEntry &entry, data_ptr_t extra_data, CommitInfo &info);
 	void CommitDelete(DeleteInfo &info);
 
 private:

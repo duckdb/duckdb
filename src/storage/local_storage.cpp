@@ -286,16 +286,16 @@ OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
 void LocalTableStorage::Rollback() {
 	optimistic_writer.Rollback();
 
-	CommitDropBuffer drop_buffer(&row_groups->collection->GetBlockManager());
+	CommitDropState drop_state(&row_groups->collection->GetBlockManager());
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;
 		}
-		collection->collection->CommitDropTable(drop_buffer);
+		collection->collection->CommitDropTable(drop_state);
 	}
 	optimistic_collections.clear();
-	row_groups->collection->CommitDropTable(drop_buffer);
-	drop_buffer.Apply();
+	row_groups->collection->CommitDropTable(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 //===--------------------------------------------------------------------===//

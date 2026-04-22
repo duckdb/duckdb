@@ -1824,30 +1824,30 @@ void RowGroupCollection::Destroy() {
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(column_index, drop_buffer);
+		row_group.CommitDropColumn(column_index, drop_state);
 	}
 }
 
-void RowGroupCollection::CommitDropTable(CommitDropBuffer &drop_buffer) {
+void RowGroupCollection::CommitDropTable(CommitDropState &drop_state) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDrop(drop_buffer);
+		row_group.CommitDrop(drop_state);
 	}
 }
 
 void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
-	CommitDropBuffer drop_buffer(&GetBlockManager());
-	CommitDropColumn(column_index, drop_buffer);
-	drop_buffer.Apply();
+	CommitDropState drop_state(&GetBlockManager());
+	CommitDropColumn(column_index, drop_state);
+	drop_state.FinalizeCommit();
 }
 
 void RowGroupCollection::CommitDropTable() {
-	CommitDropBuffer drop_buffer(&GetBlockManager());
-	CommitDropTable(drop_buffer);
-	drop_buffer.Apply();
+	CommitDropState drop_state(&GetBlockManager());
+	CommitDropTable(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 //===--------------------------------------------------------------------===//

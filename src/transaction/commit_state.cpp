@@ -26,21 +26,20 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// CommitDropBuffer
+// CommitDropState
 //===--------------------------------------------------------------------===//
-CommitDropBuffer::CommitDropBuffer(optional_ptr<BlockManager> block_manager) : block_manager(block_manager) {
+CommitDropState::CommitDropState(optional_ptr<BlockManager> block_manager) : block_manager(block_manager) {
 }
 
-void CommitDropBuffer::QueueBlockDrop(BlockManager &block_manager_p, block_id_t block_id) {
-	D_ASSERT(block_manager.get() == &block_manager_p);
+void CommitDropState::DropBlock(block_id_t block_id) {
 	dropped_block_ids.push_back(block_id);
 }
 
-void CommitDropBuffer::QueuePendingIndexRemoval(TableIndexList &indexes, string name) {
+void CommitDropState::RemoveIndex(TableIndexList &indexes, string name) {
 	pending_index_removals.push_back(PendingIndexRemoval {indexes, std::move(name)});
 }
 
-void CommitDropBuffer::Apply() {
+void CommitDropState::FinalizeCommit() {
 	if (block_manager) {
 		for (auto block_id : dropped_block_ids) {
 			block_manager->MarkBlockAsModified(block_id);
@@ -55,7 +54,7 @@ void CommitDropBuffer::Apply() {
 	pending_index_removals.clear();
 }
 
-bool CommitDropBuffer::Empty() const {
+bool CommitDropState::Empty() const {
 	return dropped_block_ids.empty() && pending_index_removals.empty();
 }
 
@@ -153,7 +152,8 @@ IndexRemovalType CommitState::GetIndexRemovalType(ActiveTransactionState transac
 	return IndexRemovalType::REVERT_MAIN_INDEX;
 }
 
-void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, CommitDropBuffer &drop_buffer) {
+void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, CommitInfo &info) {
+	auto &drop_state = *info.drop_state;
 	if (entry.temporary || entry.Parent().temporary) {
 		return;
 	}
@@ -189,7 +189,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 					auto &table_entry = entry.Cast<DuckTableEntry>();
 					D_ASSERT(table_entry.IsDuckTable());
 					// write the alter table in the log
-					table_entry.CommitAlter(column_name, drop_buffer);
+					table_entry.CommitAlter(column_name, drop_state);
 				}
 				break;
 			case CatalogType::VIEW_ENTRY:
@@ -232,12 +232,12 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 			D_ASSERT(table_entry.IsDuckTable());
 
 			// If the table was renamed, we do not need to drop the DataTable.
-			table_entry.CommitDrop(drop_buffer);
+			table_entry.CommitDrop(drop_state);
 			break;
 		}
 		case CatalogType::INDEX_ENTRY: {
 			auto &index_entry = entry.Cast<DuckIndexEntry>();
-			index_entry.CommitDrop(drop_buffer);
+			index_entry.CommitDrop(drop_state);
 			break;
 		}
 		default:
@@ -265,7 +265,7 @@ void CommitState::CommitEntryDrop(CatalogEntry &entry, data_ptr_t dataptr, Commi
 	}
 }
 
-void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer &drop_buffer) {
+void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info) {
 	switch (type) {
 	case UndoFlags::CATALOG_ENTRY: {
 		auto &old_entry = *Load<CatalogEntry *>(data);
@@ -291,7 +291,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitDropBuffer 
 		CatalogSet::UpdateTimestamp(old_entry.Parent(), commit_id);
 
 		// drop any blocks associated with the catalog entry if possible (e.g. in case of a DROP or ALTER)
-		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *), drop_buffer);
+		CommitEntryDrop(old_entry, data + sizeof(CatalogEntry *), info);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {

@@ -1834,8 +1834,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->SetStats(global_stats);
 }
 
-void DataTable::CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer) {
-	row_groups->CommitDropColumn(column_index, drop_buffer);
+void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
+	row_groups->CommitDropColumn(column_index, drop_state);
 }
 
 void DataTable::Destroy() {
@@ -1850,8 +1850,8 @@ idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 
-void DataTable::CommitDropTable(CommitDropBuffer &drop_buffer) {
-	row_groups->CommitDropTable(drop_buffer);
+void DataTable::CommitDropTable(CommitDropState &drop_state) {
+	row_groups->CommitDropTable(drop_state);
 }
 
 //===--------------------------------------------------------------------===//

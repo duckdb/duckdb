@@ -11,11 +11,13 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/transaction/undo_buffer.hpp"
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
 class CheckpointLock;
+class CommitDropState;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
@@ -27,6 +29,7 @@ struct UndoBufferProperties;
 struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
+	optional_ptr<CommitDropState> drop_state;
 };
 
 class DuckTransaction : public Transaction {

@@ -268,10 +268,11 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	if (db.HasStorageManager()) {
 		block_manager = db.GetStorageManager().GetBlockManager();
 	}
-	CommitDropBuffer drop_buffer(block_manager);
+	CommitDropState drop_state(block_manager);
+	commit_info.drop_state = &drop_state;
 	try {
 		storage->Commit(commit_state.get());
-		undo_buffer.Commit(iterator_state, commit_info, drop_buffer);
+		undo_buffer.Commit(iterator_state, commit_info);
 		// if (DebugForceAbortCommit()) {
 		// 	throw InvalidInputException("Force revert");
 		// }
@@ -279,7 +280,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 			// if we have written to the WAL - flush after the commit has been successful
 			commit_state->FlushCommit();
 		}
-		drop_buffer.Apply();
+		drop_state.FinalizeCommit();
 		return ErrorData();
 	} catch (std::exception &ex) {
 		undo_buffer.RevertCommit(iterator_state, this->transaction_id);

@@ -1318,7 +1318,7 @@ void DuckTableEntry::SetAsRoot() {
 	storage->SetTableName(name);
 }
 
-void DuckTableEntry::CommitAlter(string &column_name, CommitDropBuffer &drop_buffer) {
+void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_state) {
 	D_ASSERT(!column_name.empty());
 	optional_idx logical_column_idx;
 	auto column_path = StringUtil::Split(column_name, '.');
@@ -1342,11 +1342,11 @@ void DuckTableEntry::CommitAlter(string &column_name, CommitDropBuffer &drop_buf
 	}
 	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
-	storage->CommitDropColumn(column_index, drop_buffer);
+	storage->CommitDropColumn(column_index, drop_state);
 }
 
-void DuckTableEntry::CommitDrop(CommitDropBuffer &drop_buffer) {
-	storage->CommitDropTable(drop_buffer);
+void DuckTableEntry::CommitDrop(CommitDropState &drop_state) {
+	storage->CommitDropTable(drop_state);
 }
 
 DataTable &DuckTableEntry::GetStorage() {

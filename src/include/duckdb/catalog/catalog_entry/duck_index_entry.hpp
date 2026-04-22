@@ -11,7 +11,7 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
-class CommitDropBuffer;
+class CommitDropState;
 class TableCatalogEntry;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
@@ -48,8 +48,8 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Invoked during commit of a DELETED_ENTRY for this index; queues its removal into the drop buffer.
-	void CommitDrop(CommitDropBuffer &drop_buffer);
+	//! Invoked during commit of a DELETED_ENTRY for this index; accumulates its removal into the drop state.
+	void CommitDrop(CommitDropState &drop_state);
 };
 
 } // namespace duckdb

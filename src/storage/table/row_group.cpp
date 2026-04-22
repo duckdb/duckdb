@@ -497,35 +497,33 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	return row_group;
 }
 
-void RowGroup::CommitDrop(CommitDropBuffer &drop_buffer) {
+void RowGroup::CommitDrop(CommitDropState &drop_state) {
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		CommitDropColumn(column_idx, drop_buffer);
+		CommitDropColumn(column_idx, drop_state);
 	}
 }
 
 struct BlockIdDropper : public BlockIdVisitor {
-	explicit BlockIdDropper(BlockManager &block_manager, CommitDropBuffer &drop_buffer)
-	    : block_manager(block_manager), drop_buffer(drop_buffer) {
+	explicit BlockIdDropper(CommitDropState &drop_state) : drop_state(drop_state) {
 	}
 
 	void Visit(block_id_t block_id) override {
-		drop_buffer.QueueBlockDrop(block_manager, block_id);
+		drop_state.DropBlock(block_id);
 	}
 
-	BlockManager &block_manager;
-	CommitDropBuffer &drop_buffer;
+	CommitDropState &drop_state;
 };
 
-void RowGroup::CommitDropColumn(const idx_t column_index, CommitDropBuffer &drop_buffer) {
+void RowGroup::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
 	auto &column = GetColumn(column_index);
-	BlockIdDropper dropper(GetBlockManager(), drop_buffer);
+	BlockIdDropper dropper(drop_state);
 	column.VisitBlockIds(dropper);
 }
 
 void RowGroup::CommitDrop() {
-	CommitDropBuffer drop_buffer(&GetBlockManager());
-	CommitDrop(drop_buffer);
-	drop_buffer.Apply();
+	CommitDropState drop_state(&GetBlockManager());
+	CommitDrop(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
