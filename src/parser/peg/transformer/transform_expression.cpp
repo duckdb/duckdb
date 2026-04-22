@@ -2348,6 +2348,10 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTypeLiteral(PEGTran
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto colid = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto type = LogicalType(TransformStringToLogicalTypeId(colid));
+	if (type.id() == LogicalTypeId::LIST) {
+		throw ParserException("Cannot convert to type %s, requires exactly one type modifier",
+		                      EnumUtil::ToString(type.id()));
+	}
 	if (type == LogicalTypeId::UNBOUND) {
 		type = LogicalType::UNBOUND(make_uniq<TypeExpression>(colid, vector<unique_ptr<ParsedExpression>>()));
 	}
