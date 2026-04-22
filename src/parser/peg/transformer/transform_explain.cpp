@@ -1,5 +1,7 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -62,6 +64,38 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainableStatements(P
 		return transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 	}
 	return transformer.Transform<unique_ptr<SQLStatement>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+vector<GenericCopyOption> PEGTransformerFactory::TransformExplainOptionList(PEGTransformer &transformer,
+                                                                             ParseResult &parse_result) {
+	vector<GenericCopyOption> result;
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	auto option_list = ExtractParseResultsFromList(extract_parens);
+	for (auto &option : option_list) {
+		result.push_back(transformer.Transform<GenericCopyOption>(option));
+	}
+	return result;
+}
+
+GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	GenericCopyOption copy_option;
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	copy_option.name = StringUtil::Lower(transformer.Transform<string>(list_pr.GetChild(0)));
+	auto &optional_expression = list_pr.Child<OptionalParseResult>(1);
+	if (!optional_expression.HasResult()) {
+		return copy_option;
+	}
+	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
+	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().value));
+	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
+	} else {
+		copy_option.expression = std::move(expression);
+	}
+	return copy_option;
 }
 
 } // namespace duckdb

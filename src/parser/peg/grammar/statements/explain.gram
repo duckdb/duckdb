@@ -1,4 +1,7 @@
-ExplainStatement <- 'EXPLAIN' 'ANALYZE'? GenericCopyOptionList? ExplainableStatements
+ExplainStatement <- 'EXPLAIN' 'ANALYZE'? ExplainOptionList? ExplainableStatements
+ExplainOptionList <- Parens(List(ExplainOption))
+ExplainOption <- ExplainOptionName Expression?
+ExplainOptionName <- 'ANALYZE' / 'ANALYSE' / ColId / FuncNameKeyword / TypeNameKeyword
 
 ExplainableStatements <-
     AlterStatement /

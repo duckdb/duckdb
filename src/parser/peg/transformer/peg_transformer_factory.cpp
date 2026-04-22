@@ -401,6 +401,9 @@ void PEGTransformerFactory::RegisterExplain() {
 	// explain.gram
 	REGISTER_TRANSFORM(TransformExplainStatement);
 	REGISTER_TRANSFORM(TransformExplainableStatements);
+	REGISTER_TRANSFORM(TransformExplainOptionList);
+	REGISTER_TRANSFORM(TransformExplainOption);
+	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
 }
 
 void PEGTransformerFactory::RegisterExport() {

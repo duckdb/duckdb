@@ -253,7 +253,6 @@ void Parser::ParseQuery(const string &query) {
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
 	tokenizer.statements.push_back(std::move(tokens));
-
 	for (auto &stmt_tokens : tokenizer.statements) {
 		if (stmt_tokens.empty()) {
 			continue;
