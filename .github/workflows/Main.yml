@@ -276,8 +276,8 @@ jobs:
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: gcc
-      CXX: g++
+      CC: clang
+      CXX: clang++
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -501,6 +501,8 @@ jobs:
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
+      CC: clang
+      CXX: clang++
       GEN: ninja
 
     steps:
