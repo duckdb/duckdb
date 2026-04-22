@@ -140,7 +140,7 @@ jobs:
             run_slow_tests=false
           fi
           echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
-          skip_tests="${{ inputs.skip_tests }}"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
 
           # Fall back to GitHub-native runners for forks.
