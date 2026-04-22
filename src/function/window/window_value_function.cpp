@@ -1027,10 +1027,119 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 //===--------------------------------------------------------------------===//
 // WindowNthValueExecutor
 //===--------------------------------------------------------------------===//
+class WindowNthValueStreamingState : public WindowExecutorStreamingState {
+public:
+	static bool ComputeNthIndex(ClientContext &client, const BoundWindowExpression &wexpr, idx_t &nth_index) {
+		auto &nth_expr = wexpr.children[1];
+		if (nth_expr && (nth_expr->HasParameter() || !nth_expr->IsFoldable())) {
+			return false;
+		}
+		auto nth_value = ExpressionExecutor::EvaluateScalar(client, *nth_expr);
+		if (nth_value.IsNull()) {
+			return false;
+		}
+		Value bigint_value;
+		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			return false;
+		}
+		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
+		//	Streaming this will have the same behaviour if we use a 0 index.
+		const auto bigint = bigint_value.GetValue<int64_t>();
+		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
+		return true;
+	}
+	WindowNthValueStreamingState(ClientContext &client, const BoundWindowExpression &wexpr)
+	    : wexpr(wexpr), prev(Value(wexpr.return_type)), eval(client), arg(wexpr.children[0]->return_type),
+	      sel(STANDARD_VECTOR_SIZE) {
+		ComputeNthIndex(client, wexpr, nth_index);
+		eval.AddExpression(*wexpr.children[0]);
+	}
+
+	void StreamData(ExecutionContext &context, DataChunk &input, Vector &result);
+
+	const BoundWindowExpression &wexpr;
+	//! A constant vector holding the repeated value
+	Vector prev;
+	//! The target N
+	idx_t nth_index = DConstants::INVALID_INDEX;
+	//! The current N
+	idx_t nth_count = 0;
+	//! An executor for computing the argument
+	ExpressionExecutor eval;
+	//! A reusable argument
+	Vector arg;
+	//! A reusable selection vector
+	SelectionVector sel;
+};
+
 struct WindowNthValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can only stream Nth Value if N is positive constant.
+		idx_t nth_index;
+		if (!WindowNthValueStreamingState::ComputeNthIndex(client, wexpr, nth_index)) {
+			return false;
+		}
+
+		// We can stream Nth values if they are "running totals"
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowNthValueStreamingState>(client, wexpr);
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowNthValueStreamingState>().StreamData(context, input, result);
+	}
 };
+
+void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChunk &input, Vector &result) {
+	//	If we haven't reached the chunk with the value yet, reference the current value
+	const auto count = input.size();
+	if (!wexpr.ignore_nulls && nth_count + count < nth_index) {
+		result.Reference(prev);
+		nth_count += count;
+		return;
+	}
+	//	If we have found the Nth value already, reference the current value.
+	if (nth_index <= nth_count) {
+		result.Reference(prev);
+		return;
+	}
+
+	eval.ExecuteExpression(input, arg);
+
+	UnifiedVectorFormat unified;
+	arg.ToUnifiedFormat(count, unified);
+	const auto &validity = unified.validity;
+
+	//	Split the result between NULLs and the Nth Value
+	Vector split(wexpr.children[0]->return_type, 2);
+	sel_t s = 0;
+	split.SetValue(s, prev.GetValue(0));
+
+	// If we are ignoring NULLS and there are NULLS, search for a non-NULL value.
+	const bool any_value = wexpr.ignore_nulls && !validity.CannotHaveNull();
+	for (idx_t i = 0; i < count; ++i) {
+		if (!any_value || validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+			++nth_count;
+		}
+		// One-based comparison.
+		if (nth_count == nth_index) {
+			auto v = arg.GetValue(i);
+			prev.Reference(v);
+			s = 1;
+			split.SetValue(s, v);
+		}
+		sel.set_index(i, s);
+	}
+	result.Slice(split, sel, count);
+}
 
 WindowFunction NthValueFun::GetFunction() {
 	WindowFunction fun(
@@ -1038,6 +1147,9 @@ WindowFunction NthValueFun::GetFunction() {
 	    WindowNthValueExecutor::Bind, WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
 	    WindowNthValueExecutor::GetGlobal, WindowNthValueExecutor::GetLocal, WindowValueLocalState::Sinker,
 	    WindowValueLocalState::Finalizer, WindowNthValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowNthValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowNthValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowNthValueExecutor::StreamData);
 	return fun;
 }
 
