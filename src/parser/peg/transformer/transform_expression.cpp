@@ -571,6 +571,7 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformBoundedList
 // Expression <- LambdaArrowExpression
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpression(PEGTransformer &transformer,
                                                                         ParseResult &parse_result) {
+	auto stack_check = transformer.StackCheck();
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 }
@@ -603,6 +604,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalOrExpression
 		return expr;
 	}
 	auto &or_expr_repeat = or_expr_opt.GetResult().Cast<RepeatParseResult>();
+	auto or_depth_guard = transformer.StackCheck(or_expr_repeat.GetChildren().size());
 	for (auto &or_expr : or_expr_repeat.GetChildren()) {
 		auto &inner_list_pr = or_expr.get().Cast<ListParseResult>();
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
@@ -621,6 +623,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformLogicalAndExpressio
 		return expr;
 	}
 	auto &and_expr_repeat = and_expr_opt.GetResult().Cast<RepeatParseResult>();
+	auto and_depth_guard = transformer.StackCheck(and_expr_repeat.GetChildren().size());
 	for (auto &and_expr : and_expr_repeat.GetChildren()) {
 		auto &inner_list_pr = and_expr.get().Cast<ListParseResult>();
 		auto right_expr = transformer.Transform<unique_ptr<ParsedExpression>>(inner_list_pr.Child<ListParseResult>(1));
@@ -738,6 +741,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 		return expr;
 	}
 	auto &comparison_repeat = comparison_opt.GetResult().Cast<RepeatParseResult>();
+	auto cmp_depth_guard = transformer.StackCheck(comparison_repeat.GetChildren().size());
 	for (auto &comparison_expr : comparison_repeat.GetChildren()) {
 		auto &inner_list_pr = comparison_expr.get().Cast<ListParseResult>();
 		auto comparison_operator = transformer.Transform<ExpressionType>(inner_list_pr.Child<ListParseResult>(0));
@@ -1092,6 +1096,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBitwiseExpression(P
 		return expr;
 	}
 	auto &bit_repeat = bit_operator_opt.GetResult().Cast<RepeatParseResult>();
+	auto bit_depth_guard = transformer.StackCheck(bit_repeat.GetChildren().size());
 	for (auto &bit_expr : bit_repeat.GetChildren()) {
 		auto &inner_list_pr = bit_expr.get().Cast<ListParseResult>();
 		auto bit = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
@@ -1122,6 +1127,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformAdditiveExpression(
 		return expr;
 	}
 	auto &term_repeat = term_opt.GetResult().Cast<RepeatParseResult>();
+	auto add_depth_guard = transformer.StackCheck(term_repeat.GetChildren().size());
 	for (auto &term_expr : term_repeat.GetChildren()) {
 		auto &inner_list_pr = term_expr.get().Cast<ListParseResult>();
 		auto term = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));
@@ -1155,6 +1161,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMultiplicativeExpre
 		return expr;
 	}
 	auto &factor_repeat = factor_opt.GetResult().Cast<RepeatParseResult>();
+	auto mul_depth_guard = transformer.StackCheck(factor_repeat.GetChildren().size());
 	for (auto &factor_expr : factor_repeat.GetChildren()) {
 		auto &inner_list_pr = factor_expr.get().Cast<ListParseResult>();
 		auto factor = transformer.Transform<string>(inner_list_pr.Child<ListParseResult>(0));

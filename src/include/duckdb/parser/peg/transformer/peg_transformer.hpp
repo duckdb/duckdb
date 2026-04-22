@@ -28,6 +28,7 @@
 #include "duckdb/parser/peg/ast/window_frame.hpp"
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/parser/parser_options.hpp"
+#include "duckdb/common/stack_checker.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
@@ -190,6 +191,19 @@ public:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 
 	bool in_window_definition = false;
+
+	friend class StackChecker<PEGTransformer>;
+	idx_t stack_depth = 0;
+
+	StackChecker<PEGTransformer> StackCheck(idx_t extra_stack = 1) {
+		if (stack_depth + extra_stack >= options.max_expression_depth) {
+			throw ParserException(
+			    "Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+			    "increase the maximum expression depth.",
+			    options.max_expression_depth);
+		}
+		return StackChecker<PEGTransformer>(*this, extra_stack);
+	}
 
 	ParserOptions options;
 };
