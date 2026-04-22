@@ -49,7 +49,9 @@ buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const 
 	}
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
-	return flattened_vector.GetBufferRef();
+	auto result = flattened_vector.GetBufferRef();
+	result->SetVectorSize(count);
+	return result;
 }
 
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {

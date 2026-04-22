@@ -69,7 +69,9 @@ buffer_ptr<VectorBuffer> ShreddedVectorBuffer::Flatten(const LogicalType &type, 
 	VariantUtils::UnshredVariantData(*source, unshredded_vector, count);
 	// now flatten the unshredded vector
 	unshredded_vector.Flatten(count);
-	return unshredded_vector.GetBufferRef();
+	auto result = unshredded_vector.GetBufferRef();
+	result->SetVectorSize(count);
+	return result;
 }
 
 const Vector &ShreddedVector::GetUnshreddedVector(const Vector &vec) {

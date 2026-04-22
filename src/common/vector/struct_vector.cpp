@@ -230,6 +230,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, co
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);
+	result->SetVectorSize(count);
 	return result;
 }
 

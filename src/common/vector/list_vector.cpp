@@ -304,7 +304,17 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		throw InternalException("ListVector::SetListSize called on dictionary vector");
 	}
-	vec.BufferMutable().Cast<VectorListBuffer>().SetChildSize(size);
+	auto &list_buffer = vec.BufferMutable().Cast<VectorListBuffer>();
+	// ensure the child has enough capacity before setting its size (if the child is a flat/constant buffer)
+	auto &child_buffer = list_buffer.GetChild().GetBufferRef();
+	if (child_buffer) {
+		auto vtype = child_buffer->GetVectorType();
+		if ((vtype == VectorType::FLAT_VECTOR || vtype == VectorType::CONSTANT_VECTOR) &&
+		    size > child_buffer->Capacity()) {
+			list_buffer.Reserve(size);
+		}
+	}
+	list_buffer.SetChildSize(size);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size) {

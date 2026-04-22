@@ -133,6 +133,7 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, con
 	child_result->Flatten(child_sel, target_child_size);
 
 	result->child = std::move(child_result);
+	result->SetVectorSize(count);
 	return result;
 }
 

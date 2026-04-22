@@ -174,13 +174,14 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto child_count = count * array_size;
 
 	ListVector::Reserve(result, child_count);
-	ListVector::SetListSize(result, child_count);
 
 	auto &source_child = ArrayVector::GetChildMutable(source);
 	auto &result_child = ListVector::GetChildMutable(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.Cast(source_child, result_child, child_count, child_parameters);
+	// set the list size after the child cast, since the cast may have replaced the child buffer
+	ListVector::SetListSize(result, child_count);
 
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

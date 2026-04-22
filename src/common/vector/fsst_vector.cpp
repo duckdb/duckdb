@@ -63,6 +63,7 @@ buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type
 			result_data[target_idx] = string_t(nullptr, 0);
 		}
 	}
+	result->SetVectorSize(count);
 	return result;
 }
 

@@ -44,6 +44,13 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 				Capacity());
 		}
 		break;
+	case VectorType::DICTIONARY_VECTOR:
+	case VectorType::SHREDDED_VECTOR:
+	case VectorType::SEQUENCE_VECTOR:
+	case VectorType::FSST_VECTOR:
+		// these vectors already have an implicit size; allow updating v_size for consistency
+		// (e.g. when used as the child of a list that tracks size via v_size)
+		break;
 	default:
 		throw InternalException("Non-Flat/Non-Constant vector buffer cannot have their size changed");
 	}
@@ -120,7 +127,12 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 		// constant vectors do not need to get sliced
 		return nullptr;
 	}
-	return SliceInternal(type, offset, end);
+	auto result = SliceInternal(type, offset, end);
+	if (result && v_size.IsValid()) {
+		// propagate the size of the original buffer to the sliced buffer
+		result->v_size = end - offset;
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
@@ -128,7 +140,12 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 		// constant vectors do not need to get sliced
 		return nullptr;
 	}
-	return SliceInternal(type, sel, count);
+	auto result = SliceInternal(type, sel, count);
+	if (result && v_size.IsValid()) {
+		// propagate the size of the original buffer to the sliced buffer
+		result->v_size = count;
+	}
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
