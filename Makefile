@@ -689,9 +689,9 @@ format-fix: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
 
 .PHONY: check-extension-entries
-check-extension-entries: extension_configuration
+check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	$(PYTHON) scripts/generate_extensions_function.py
-	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
 	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
 	@if [ -s extension_entries.hpp.diff ]; then \
 		cat extension_entries.hpp.diff; \
