@@ -228,12 +228,12 @@ jobs:
         with:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
-      - name: Install format tools
-        run: python3 scripts/ci/retry.py -- make format_tools
+      - name: Install tools
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
         run: |
-          make format-check-silent enum-integrity-check
+          make format-check-silent enum-integrity-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code

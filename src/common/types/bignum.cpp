@@ -198,6 +198,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	return result;
 }
 
+// typos:ignore-next-line
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
 string Bignum::BignumToVarchar(const bignum_t &blob) {
 	string decimal_string;
