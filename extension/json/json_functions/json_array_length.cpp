@@ -33,7 +33,7 @@ ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		if (func.arguments.size() == 1 && func.arguments[0].IsJSONType()) {
+		if (func.GetArguments().size() == 1 && func.GetArguments()[0].IsJSONType()) {
 			continue;
 		}
 		func.SetFallible();

@@ -353,7 +353,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
                                                                 ScalarFunction &bound_function) {
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}

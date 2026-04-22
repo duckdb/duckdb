@@ -194,15 +194,15 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	auto &child_type = arguments[0]->return_type;
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.arguments[1] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[1] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
@@ -214,7 +214,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	if (!StructType::IsUnnamed(child_type)) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.name);
 	}
-	bound_function.arguments[0] = child_type;
+	bound_function.GetArguments()[0] = child_type;
 
 	// the value type must match one of the struct's children
 	LogicalType max_child_type = arguments[1]->return_type;
@@ -226,7 +226,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		}
 
 		new_child_types.push_back(max_child_type);
-		bound_function.arguments[1] = max_child_type;
+		bound_function.GetArguments()[1] = max_child_type;
 	}
 
 	child_list_t<LogicalType> cast_children;
@@ -234,7 +234,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		cast_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
 	}
 
-	bound_function.arguments[0] = LogicalType::STRUCT(cast_children);
+	bound_function.GetArguments()[0] = LogicalType::STRUCT(cast_children);
 
 	return nullptr;
 }

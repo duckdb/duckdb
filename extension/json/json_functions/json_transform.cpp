@@ -78,7 +78,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}

@@ -26,7 +26,7 @@ ScalarFunctionSet JSONFunctions::GetValueFunction() {
 	GetValueFunctionsInternal(set, LogicalType::VARCHAR);
 	GetValueFunctionsInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		if (func.arguments[0].IsJSONType() && func.arguments[1].IsNumeric()) {
+		if (func.GetArguments()[0].IsJSONType() && func.GetArguments()[1].IsNumeric()) {
 			continue;
 		}
 		func.SetFallible();

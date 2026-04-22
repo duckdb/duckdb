@@ -184,7 +184,7 @@ void duckdb_aggregate_function_add_parameter(duckdb_aggregate_function function,
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	aggregate_function.arguments.push_back(*logical_type);
+	aggregate_function.GetArguments().push_back(*logical_type);
 }
 
 void duckdb_aggregate_function_set_return_type(duckdb_aggregate_function function, duckdb_logical_type type) {
@@ -315,7 +315,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		    duckdb::TypeVisitor::Contains(aggregate_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
-		for (const auto &argument : aggregate_function.arguments) {
+		for (const auto &argument : aggregate_function.GetArguments()) {
 			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
 				return DuckDBError;
 			}

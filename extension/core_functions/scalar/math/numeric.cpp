@@ -182,7 +182,7 @@ static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &inpu
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT));
 		break;
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -380,7 +380,7 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFuncti
 			break;
 		}
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(width, 0));
 	return nullptr;
 }
@@ -576,7 +576,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 			}
 		}
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(width, target_scale));
 	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }

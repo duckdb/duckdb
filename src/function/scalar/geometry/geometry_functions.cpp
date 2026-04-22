@@ -99,7 +99,7 @@ static unique_ptr<FunctionData> BindCRSFunction(BindScalarFunctionInput &input) 
 	}
 
 	// Propagate the CRS from the input argument to the parameter type
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 

@@ -241,7 +241,7 @@ struct ICUStrptime : public ICUDateFunc {
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
 			auto &function = functions[i];
-			if (types == function.arguments) {
+			if (types == function.GetArguments()) {
 				best_index = i;
 				break;
 			}

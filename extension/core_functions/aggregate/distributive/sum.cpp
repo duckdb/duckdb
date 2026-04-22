@@ -237,7 +237,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
-	function.arguments[0] = decimal_type;
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;

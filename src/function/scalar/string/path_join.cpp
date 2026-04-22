@@ -85,7 +85,7 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 ScalarFunction PathJoinFun::GetFunction() {
 	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
-	path_join.varargs = LogicalType::VARCHAR;
+	path_join.SetVarArgs(LogicalType::VARCHAR);
 	path_join.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return path_join;
 }

@@ -296,7 +296,7 @@ struct VectorMinMaxBase {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
@@ -370,7 +370,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return make_uniq<ArgMinMaxFunctionData>();
 	}
