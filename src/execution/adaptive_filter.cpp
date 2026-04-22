@@ -70,7 +70,8 @@ void AdaptiveFilter::SetLogger(shared_ptr<Logger> logger_p, string file_path, Ad
 	if (!logger) {
 		return;
 	}
-	DUCKDB_LOG(logger, AdaptiveFilterLogType, "INIT", log_file_path, permutation, BuildInitInfo(source, filter_identities));
+	DUCKDB_LOG(logger, AdaptiveFilterLogType, "INIT", log_file_path, permutation,
+	           BuildInitInfo(source, filter_identities));
 }
 
 vector<pair<string, string>> AdaptiveFilter::BuildInitInfo(AdaptiveFilterSource source,
@@ -131,12 +132,12 @@ void AdaptiveFilter::AdaptRuntimeStatistics(double duration) {
 				action = "kept";
 			}
 			if (logger) {
-				DUCKDB_LOG(logger, AdaptiveFilterLogType, "REORDER", log_file_path, permutation,
-				           (vector<pair<string, string>> {
-				               {"action", action},
-				               {"swap_idx", to_string(swap_idx)},
-				               {"prev_mean_us", StringUtil::Format("%.3f", prev_mean * 1e6)},
-				               {"trial_mean_us", StringUtil::Format("%.3f", trial_mean * 1e6)}}));
+				DUCKDB_LOG(
+				    logger, AdaptiveFilterLogType, "REORDER", log_file_path, permutation,
+				    (vector<pair<string, string>> {{"action", action},
+				                                   {"swap_idx", to_string(swap_idx)},
+				                                   {"prev_mean_us", StringUtil::Format("%.3f", prev_mean * 1e6)},
+				                                   {"trial_mean_us", StringUtil::Format("%.3f", trial_mean * 1e6)}}));
 			}
 			observe = false;
 
