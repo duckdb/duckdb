@@ -3,15 +3,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/assert.hpp"
-
-#if defined(__clang__) && defined(__has_attribute)
-#if __has_attribute(no_thread_safety_analysis)
-#define DUCKDB_NO_THREAD_SAFETY_ANALYSIS __attribute__((no_thread_safety_analysis))
-#endif
-#endif
-#ifndef DUCKDB_NO_THREAD_SAFETY_ANALYSIS
-#define DUCKDB_NO_THREAD_SAFETY_ANALYSIS
-#endif
+#include "duckdb/common/thread_annotation/thread_annotation.hpp"
 
 namespace duckdb {
 
