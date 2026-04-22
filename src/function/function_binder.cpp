@@ -734,7 +734,7 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunct
 
 	auto window = make_uniq<WindowFunction>(bound_function);
 	auto result =
-	    make_uniq<BoundWindowExpression>(bound_function.return_type, nullptr, std::move(window), std::move(bind_info));
+	    make_uniq<BoundWindowExpression>(bound_function.GetReturnType(), nullptr, std::move(window), std::move(bind_info));
 	result->children = std::move(children);
 
 	return result;

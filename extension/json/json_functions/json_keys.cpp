@@ -57,7 +57,7 @@ ScalarFunctionSet JSONFunctions::GetKeysFunction() {
 		if (func.arguments.size() == 1 && func.arguments[0].IsJSONType()) {
 			continue;
 		}
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

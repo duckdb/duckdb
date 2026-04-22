@@ -225,7 +225,7 @@ public:
 		return collation_handling;
 	}
 
-public:
+protected:
 	//! Return type of the function
 	LogicalType return_type;
 	//! The stability of the function (see FunctionStability enum for more info)

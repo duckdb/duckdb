@@ -773,9 +773,9 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
-	function.state_size = bind_data->aggr.GetStateSizeCallback();
-	function.initialize = bind_data->aggr.GetStateInitCallback();
-	function.combine = bind_data->aggr.GetStateCombineCallback();
+	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
+	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
+	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
 
 	function.SetReturnType(arguments[0]->return_type);
 

@@ -232,6 +232,21 @@ public:
 	//! The expression enum for the window function
 	const ExpressionType window_enum;
 
+public:
+	auto CanDistinct() const { return can_distinct; }
+	auto CanFilter() const { return can_filter; }
+	auto CanOrderBy() const { return can_order_by; }
+	auto CanExclude() const { return can_exclude; }
+	auto CanIgnoreNulls() const { return can_ignore_nulls; }
+
+	auto SetCanDistinct(bool value) { can_distinct = value; }
+	auto SetCanFilter(bool value) { can_filter = value; }
+	auto SetCanOrderBy(bool value) { can_order_by = value; }
+	auto SetCanExclude(bool value) { can_exclude = value; }
+	auto SetCanIgnoreNulls(bool value) { can_ignore_nulls = value; }
+
+protected:
+
 	//! Does the window function support DISTINCT?
 	bool can_distinct = false;
 	//! Does the window function support FILTER?
@@ -274,9 +289,25 @@ public:
 	window_serialize_t serialize = nullptr;
 	window_deserialize_t deserialize = nullptr;
 
-public:
 	//! Additional function info, passed to the bind
 	shared_ptr<WindowFunctionInfo> function_info;
+
+public:
+	bool HasExtraFunctionInfo() const {
+		return function_info != nullptr;
+	}
+	WindowFunctionInfo &GetExtraFunctionInfo() const {
+		D_ASSERT(function_info.get());
+		return *function_info;
+	}
+	void SetExtraFunctionInfo(shared_ptr<WindowFunctionInfo> info) {
+		function_info = std::move(info);
+	}
+	template <class T, class... ARGS>
+	void SetExtraFunctionInfo(ARGS &&... args) {
+		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
+	}
+
 
 public:
 	bool operator==(const WindowFunction &rhs) const {

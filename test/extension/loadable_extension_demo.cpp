@@ -230,7 +230,7 @@ public:
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 

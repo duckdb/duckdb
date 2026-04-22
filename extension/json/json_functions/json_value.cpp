@@ -29,7 +29,7 @@ ScalarFunctionSet JSONFunctions::GetValueFunction() {
 		if (func.arguments[0].IsJSONType() && func.arguments[1].IsNumeric()) {
 			continue;
 		}
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

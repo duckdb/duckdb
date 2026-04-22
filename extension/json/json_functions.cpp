@@ -80,7 +80,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 		bound_function.arguments[1] = LogicalType::VARCHAR;
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
-		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
+		bound_function.SetReturnType(LogicalType::LIST(bound_function.GetReturnType()));
 	}
 	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }

@@ -96,8 +96,8 @@ LogicalType GetSumStateType(const AggregateFunction &function) {
 
 	LogicalType value_type = GetValueLogicalType<T>();
 	// Use the return type when its physical representation matches the state type
-	if (function.return_type.InternalType() == value_type.InternalType()) {
-		value_type = function.return_type;
+	if (function.GetReturnType().InternalType() == value_type.InternalType()) {
+		value_type = function.GetReturnType();
 	}
 	child_types.emplace_back("value", value_type);
 

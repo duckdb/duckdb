@@ -184,7 +184,7 @@ unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &inpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	function.return_type = arguments[0]->return_type;
+	function.SetReturnType(arguments[0]->return_type);
 
 	return nullptr;
 }
@@ -540,7 +540,7 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &in
 	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
-		function.arguments[2] = function.return_type;
+		function.arguments[2] = function.GetReturnType();
 	}
 
 	return nullptr;
@@ -1487,7 +1487,7 @@ WindowFunction FillFun::GetFunction() {
 	fun.SetValidateCallback(WindowFillExecutor::Validate);
 
 	//! Never ignore nulls (that's the point!)
-	fun.can_ignore_nulls = false;
+	fun.SetCanIgnoreNulls(false);
 
 	return fun;
 }

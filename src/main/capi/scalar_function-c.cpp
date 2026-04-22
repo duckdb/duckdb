@@ -224,7 +224,7 @@ using duckdb::GetCScalarFunctionSet;
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
 	                                           duckdb::CScalarFunctionBind);
-	function->init_local_state = duckdb::CScalarFunctionInit;
+	function->SetInitStateCallback(duckdb::CScalarFunctionInit);
 	function->SetExtraFunctionInfo<duckdb::CScalarFunctionInfo>();
 	return reinterpret_cast<duckdb_scalar_function>(function);
 }

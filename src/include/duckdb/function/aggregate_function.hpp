@@ -265,7 +265,7 @@ public:
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
 	// clang-format on
 
-public:
+protected:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
 	//! The hashed aggregate state initialization function
@@ -301,6 +301,28 @@ public:
 
 	aggregate_get_state_type_t get_state_type = nullptr;
 
+	//! Additional function info, passed to the bind
+	shared_ptr<AggregateFunctionInfo> function_info;
+
+public:
+	bool HasExtraFunctionInfo() const {
+		return function_info != nullptr;
+	}
+
+	AggregateFunctionInfo &GetExtraFunctionInfo() const {
+		D_ASSERT(function_info.get());
+		return *function_info;
+	}
+
+	void SetExtraFunctionInfo(shared_ptr<AggregateFunctionInfo> info) {
+		function_info = std::move(info);
+	}
+
+	template <class T, class... ARGS>
+	void SetExtraFunctionInfo(ARGS &&... args) {
+		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
+	}
+
 	AggregateOrderDependent GetOrderDependent() const {
 		return order_dependent;
 	}
@@ -317,6 +339,7 @@ public:
 	bool HasGetStateTypeCallback() const {
 		return get_state_type != nullptr;
 	}
+	aggregate_get_state_type_t GetStateTypeCallback() const { return get_state_type; }
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		get_state_type = get_state_type_callback;
@@ -330,9 +353,6 @@ public:
 		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
 		return result;
 	}
-
-	//! Additional function info, passed to the bind
-	shared_ptr<AggregateFunctionInfo> function_info;
 
 public:
 	bool operator==(const AggregateFunction &rhs) const {
