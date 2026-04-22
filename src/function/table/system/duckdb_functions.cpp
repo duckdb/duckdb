@@ -649,9 +649,8 @@ bool ExtractFunctionData(CatalogEntry &entry, idx_t function_idx, DataChunk &out
 	output.data[col++].Append(Value(function.name));
 
 	// alias_of, LogicalType::VARCHAR
-	output.data[col++].Append(function.alias_of.empty() || function.alias_of == function.name
-	                              ? Value()
-	                              : Value(function.alias_of));
+	output.data[col++].Append(
+	    function.alias_of.empty() || function.alias_of == function.name ? Value() : Value(function.alias_of));
 
 	// function_type, LogicalType::VARCHAR
 	output.data[col++].Append(Value(OP::GetFunctionType()));
@@ -736,8 +735,8 @@ void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p,
 			    entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::TABLE_MACRO_ENTRY:
-			finished = ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry,
-			                                                                            output);
+			finished =
+			    ExtractFunctionData<TableMacroCatalogEntry, TableMacroExtractor>(entry, data.offset_in_entry, output);
 			break;
 		case CatalogType::MACRO_ENTRY:
 			finished =

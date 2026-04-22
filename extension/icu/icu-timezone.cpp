@@ -89,8 +89,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			}
 			std::string eid_utf8;
 			eid.toUTF8String(eid_utf8);
-			if (eid_utf8.size() < short_id.size() ||
-			    (eid_utf8.size() == short_id.size() && eid_utf8 < short_id)) {
+			if (eid_utf8.size() < short_id.size() || (eid_utf8.size() == short_id.size() && eid_utf8 < short_id)) {
 				short_id = eid_utf8;
 			}
 		}
