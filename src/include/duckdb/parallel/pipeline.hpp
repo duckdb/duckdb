@@ -165,6 +165,7 @@ private:
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
+	bool TryGetMaxThreads(idx_t &max_threads);
 	bool ScheduleParallel(shared_ptr<Event> &event);
 };
 

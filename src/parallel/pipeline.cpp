@@ -98,7 +98,7 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 	event->SetTasks(std::move(tasks));
 }
 
-bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+bool Pipeline::TryGetMaxThreads(idx_t &max_threads) {
 	// check if the sink, source and all intermediate operators support parallelism
 	if (!sink->ParallelSink()) {
 		return false;
@@ -106,21 +106,15 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	auto max_threads = source_state->MaxThreads();
+	max_threads = source_state->MaxThreads();
 
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		if (!op.ParallelOperator()) {
 			return false;
 		}
-		max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
-	}
-
-	auto partition_info = sink->RequiredPartitionInfo();
-	if (partition_info.batch_index) {
-		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
-			throw InternalException(
-			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		if (op.op_state) {
+			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
 		}
 	}
 
@@ -135,7 +129,37 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (max_threads > active_threads) {
 		max_threads = active_threads;
 	}
+
+	return true;
+}
+
+bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+	idx_t max_threads;
+
+	if (!TryGetMaxThreads(max_threads)) {
+		return false;
+	}
+
+	// Handle partition requirements specific to scheduling
+	auto partition_info = sink->RequiredPartitionInfo();
+	if (partition_info.batch_index) {
+		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
+			throw InternalException(
+			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		}
+	}
+
 	return LaunchScanTasks(event, max_threads);
+}
+
+idx_t Pipeline::GetMaxThreads() {
+	idx_t max_threads;
+
+	if (!TryGetMaxThreads(max_threads)) {
+		return 1; // Fallback for unsupported parallelism
+	}
+
+	return max_threads;
 }
 
 bool Pipeline::IsOrderDependent() const {
@@ -174,37 +198,6 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask(event);
 	}
-}
-
-idx_t Pipeline::GetMaxThreads() {
-	if (!sink->ParallelSink() || !source->ParallelSource()) {
-		return 1;
-	}
-	if (!source_state) {
-		return 1;
-	}
-	auto max_threads = source_state->MaxThreads();
-	for (auto &op_ref : operators) {
-		auto &op = op_ref.get();
-		if (!op.ParallelOperator()) {
-			return 1;
-		}
-		if (op.op_state) {
-			max_threads = MinValue<idx_t>(max_threads, op.op_state->MaxThreads(max_threads));
-		}
-	}
-	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto active_threads = NumericCast<idx_t>(scheduler.NumberOfThreads());
-	if (max_threads > active_threads) {
-		max_threads = active_threads;
-	}
-	if (sink && sink->sink_state) {
-		max_threads = sink->sink_state->MaxThreads(max_threads);
-	}
-	if (max_threads > active_threads) {
-		max_threads = active_threads;
-	}
-	return max_threads;
 }
 
 bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
