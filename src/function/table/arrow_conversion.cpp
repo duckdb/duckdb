@@ -385,7 +385,7 @@ static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) +
 	    internal_type * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	FlatVector::SetData(vector, data_ptr, size);
+	FlatVector::SetData(vector, data_ptr, count_t(size));
 }
 
 template <class T>
@@ -765,7 +765,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -783,7 +783,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -801,7 +801,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
 			for (idx_t row = 0; row < size; row++) {

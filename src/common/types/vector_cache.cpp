@@ -105,7 +105,7 @@ private:
 	//! Buffer data for the vector (if any)
 	buffer_ptr<VectorBuffer> buffer;
 	//! Capacity of the vector
-	idx_t capacity;
+	capacity_t capacity;
 };
 
 VectorCache::VectorCache() {
