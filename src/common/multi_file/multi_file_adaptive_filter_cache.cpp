@@ -5,86 +5,84 @@
 
 namespace duckdb {
 
+static vector<GlobalPosition> BuildSignature(const TableFilterSet &filters,
+                                             const vector<MultiFileGlobalIndex> &filter_global_indices) {
+	vector<GlobalPosition> signature;
+	idx_t pos = 0;
+	for (auto &entry : filters) {
+		signature.push_back({filter_global_indices[pos], entry.Filter().filter_type});
+		pos++;
+	}
+	return signature;
+}
+
 struct FilterPosition {
 	idx_t position;
 	TableFilterType filter_type;
 };
 
-unique_ptr<AdaptiveFilter> CreateMultiFileAdaptiveFilter(optional_ptr<MultiFileAdaptiveFilterCache> cache,
-                                                         const TableFilterSet &filters,
-                                                         const vector<MultiFileGlobalIndex> &filter_global_indices,
-                                                         Logger &logger, const string &file_path) {
-	unique_ptr<AdaptiveFilterConfiguration> seed;
-	if (cache) {
-		const auto &ordering = cache->GetOrdering();
-		if (!ordering.empty() && ordering.size() == filters.FilterCount()) {
-			unordered_map<MultiFileGlobalIndex, FilterPosition> by_global;
-			// Lets first get the fitered column -> [permutation_position|filter_type]
-			idx_t permutation_pos = 0;
-			for (auto &entry : filters) {
-				by_global.emplace(filter_global_indices[permutation_pos],
-				                  FilterPosition {permutation_pos, entry.Filter().filter_type});
-				permutation_pos++;
-			}
-			vector<idx_t> permutation;
-			vector<idx_t> swap_likeliness;
-			bool compatible = true;
-			// for the cached order, we now get the permutation and swap_likeness (based on global column index)
-			for (idx_t i = 0; i < ordering.size(); i++) {
-				auto it = by_global.find(ordering[i].global_index);
-				if (it == by_global.end() || it->second.filter_type != ordering[i].filter_type) {
-					compatible = false;
-					break;
-				}
-				permutation.push_back(it->second.position);
-				if (i + 1 < ordering.size()) {
-					swap_likeliness.push_back(ordering[i].swap_likeliness);
-				}
-			}
-			if (compatible) {
-				// if they are compatible, all filters in the right place, we create the config seed
-				seed = make_uniq<AdaptiveFilterConfiguration>();
-				seed->permutation = std::move(permutation);
-				seed->swap_likeliness = std::move(swap_likeliness);
-			}
+static unique_ptr<AdaptiveFilterConfiguration> RemapConfig(const AdaptiveFilterConfiguration &cached_config,
+                                                           const vector<GlobalPosition> &cached_signature,
+                                                           const TableFilterSet &filters,
+                                                           const vector<MultiFileGlobalIndex> &filter_global_indices) {
+	if (cached_signature.size() != filters.FilterCount()) {
+		return nullptr;
+	}
+	unordered_map<MultiFileGlobalIndex, FilterPosition> by_global;
+	idx_t pos = 0;
+	for (auto &entry : filters) {
+		by_global.emplace(filter_global_indices[pos], FilterPosition {pos, entry.Filter().filter_type});
+		pos++;
+	}
+	vector<idx_t> permutation;
+	vector<idx_t> swap_likeliness;
+	for (idx_t i = 0; i < cached_config.permutation.size(); i++) {
+		auto cached_pos = cached_config.permutation[i];
+		auto &cached_entry = cached_signature[cached_pos];
+		auto it = by_global.find(cached_entry.global_index);
+		if (it == by_global.end() || it->second.filter_type != cached_entry.filter_type) {
+			return nullptr;
+		}
+		permutation.push_back(it->second.position);
+		if (i + 1 < cached_config.permutation.size()) {
+			swap_likeliness.push_back(cached_config.swap_likeliness[i]);
 		}
 	}
-	unique_ptr<AdaptiveFilter> result;
-	AdaptiveFilterSource source;
-	if (seed) {
-		result = make_uniq<AdaptiveFilter>(filters, std::move(*seed));
-		source = AdaptiveFilterSource::SEEDED;
+	auto seed = make_uniq<AdaptiveFilterConfiguration>();
+	seed->permutation = std::move(permutation);
+	seed->swap_likeliness = std::move(swap_likeliness);
+	return seed;
+}
+
+void MultiFileAdaptiveFilterCache::InitializeAdaptiveFilter(const TableFilterSet &filters,
+                                                            const vector<MultiFileGlobalIndex> &filter_global_indices,
+                                                            Logger &logger, const string &file_path) {
+	auto current_signature = BuildSignature(filters, filter_global_indices);
+	AdaptiveFilterSource source = AdaptiveFilterSource::INITIAL;
+	if (filter) {
+		if (positions == current_signature) {
+			// Same filter order
+			source = AdaptiveFilterSource::SEEDED;
+		} else {
+			// Different order, we gotta remap
+			auto seed = RemapConfig(filter->GetConfiguration(), positions, filters, filter_global_indices);
+			if (seed) {
+				filter = make_uniq<AdaptiveFilter>(filters, std::move(*seed));
+				source = AdaptiveFilterSource::SEEDED;
+			} else {
+				filter = make_uniq<AdaptiveFilter>(filters);
+			}
+		}
 	} else {
-		result = make_uniq<AdaptiveFilter>(filters);
-		source = AdaptiveFilterSource::INITIAL;
+		filter = make_uniq<AdaptiveFilter>(filters);
 	}
-	// extract the global ids, for the logger
+	positions = std::move(current_signature);
+
 	vector<idx_t> global_ids;
 	for (const auto &global_index : filter_global_indices) {
 		global_ids.push_back(global_index.GetIndex());
 	}
-	result->SetLogger(logger, file_path, source, global_ids);
-	return result;
-}
-
-void StoreMultiFileAdaptiveFilter(optional_ptr<MultiFileAdaptiveFilterCache> cache, const AdaptiveFilter &filter,
-                                  const TableFilterSet &filters,
-                                  const vector<MultiFileGlobalIndex> &filter_global_indices) {
-	if (!cache) {
-		return;
-	}
-	vector<TableFilterType> types_by_pos;
-	for (auto &entry : filters) {
-		types_by_pos.push_back(entry.Filter().filter_type);
-	}
-	const auto &config = filter.GetConfiguration();
-	vector<AdaptiveFilterOrderEntry> ordering;
-	for (idx_t i = 0; i < config.permutation.size(); i++) {
-		auto permutation = config.permutation[i];
-		idx_t swap_likeness = i < config.swap_likeliness.size() ? config.swap_likeliness[i] : 0;
-		ordering.emplace_back(filter_global_indices[permutation], types_by_pos[permutation], swap_likeness);
-	}
-	cache->StoreOrdering(std::move(ordering));
+	filter->SetLogger(logger, file_path, source, global_ids);
 }
 
 } // namespace duckdb

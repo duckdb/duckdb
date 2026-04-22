@@ -98,8 +98,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 struct ParquetReadLocalState : public LocalTableFunctionState {
 	ParquetReaderScanState scan_state;
 	vector<idx_t> group_indexes;
-	//! Per-thread AdaptiveFilterConfiguration cache
-	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -727,7 +725,6 @@ bool ParquetReader::TryInitializeScan(ClientContext &context, GlobalTableFunctio
 void ParquetReader::PrepareScan(ClientContext &context, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &lstate_p) {
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
-	lstate.scan_state.adaptive_filter_cache = &lstate.adaptive_filter_cache;
 	InitializeScan(context, lstate.scan_state, lstate.group_indexes);
 }
 

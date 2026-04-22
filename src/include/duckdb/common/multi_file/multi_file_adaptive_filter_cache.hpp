@@ -17,18 +17,11 @@ namespace duckdb {
 class Logger;
 class TableFilterSet;
 
-struct AdaptiveFilterOrderEntry {
-	AdaptiveFilterOrderEntry(MultiFileGlobalIndex global_index, TableFilterType filter_type,
-	                         idx_t swap_likeliness = 100)
-	    : global_index(global_index), filter_type(filter_type), swap_likeliness(swap_likeliness) {
-	}
-
+struct GlobalPosition {
 	MultiFileGlobalIndex global_index;
 	TableFilterType filter_type;
-	//! exploration weight for swapping, same as on adaptive filtering
-	idx_t swap_likeliness;
 
-	bool operator==(const AdaptiveFilterOrderEntry &other) const {
+	bool operator==(const GlobalPosition &other) const {
 		return global_index == other.global_index && filter_type == other.filter_type;
 	}
 };
@@ -36,26 +29,22 @@ struct AdaptiveFilterOrderEntry {
 //! Per-thread cache for learned AdaptiveFilter order.
 class MultiFileAdaptiveFilterCache {
 public:
-	const vector<AdaptiveFilterOrderEntry> &GetOrdering() const {
-		return ordering;
-	}
-	void StoreOrdering(vector<AdaptiveFilterOrderEntry> ordering_p) {
-		ordering = std::move(ordering_p);
+	void InitializeAdaptiveFilter(const TableFilterSet &filters,
+	                              const vector<MultiFileGlobalIndex> &filter_global_indices, Logger &logger,
+	                              const string &file_path);
+
+	AdaptiveFilter &GetAdaptiveFilter() const {
+		if (!filter) {
+			throw InternalException(
+			    "Filter from MultiFileAdaptiveFilterCache must be initialized by 'InitializeAdaptiveFilter' first.");
+		}
+		D_ASSERT(filter);
+		return *filter;
 	}
 
 private:
-	vector<AdaptiveFilterOrderEntry> ordering;
+	unique_ptr<AdaptiveFilter> filter;
+	vector<GlobalPosition> positions;
 };
-
-//! Construct an AdaptiveFilter
-unique_ptr<AdaptiveFilter> CreateMultiFileAdaptiveFilter(optional_ptr<MultiFileAdaptiveFilterCache> cache,
-                                                         const TableFilterSet &filters,
-                                                         const vector<MultiFileGlobalIndex> &filter_global_indices,
-                                                         Logger &logger, const string &file_path);
-
-//! Cache an Adaptive Filter
-void StoreMultiFileAdaptiveFilter(optional_ptr<MultiFileAdaptiveFilterCache> cache, const AdaptiveFilter &filter,
-                                  const TableFilterSet &filters,
-                                  const vector<MultiFileGlobalIndex> &filter_global_indices);
 
 } // namespace duckdb

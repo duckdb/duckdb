@@ -120,10 +120,8 @@ struct ParquetReaderScanState {
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
-	//! Adaptive filter
-	unique_ptr<AdaptiveFilter> adaptive_filter;
-	//! (Optional) per-thread adaptive filter cache
-	optional_ptr<MultiFileAdaptiveFilterCache> adaptive_filter_cache;
+	//! Per-thread adaptive filter cache
+	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
 
