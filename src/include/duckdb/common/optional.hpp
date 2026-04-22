@@ -18,7 +18,7 @@ struct nullopt_t { // NOLINT
 	}
 };
 
-inline constexpr nullopt_t nullopt {}; // NOLINT
+constexpr nullopt_t nullopt {}; // NOLINT
 
 template <typename T>
 class optional {
@@ -27,7 +27,7 @@ public:
 	}
 	optional(T value) : has_val(true), value(std::move(value)) { // NOLINT: allow implicit conversion
 	}
-	constexpr optional(nullopt_t) : optional() { // NOLINT: allow implicit conversion
+	optional(nullopt_t) : optional() { // NOLINT: allow implicit conversion
 	}
 
 	bool IsValid() const {
