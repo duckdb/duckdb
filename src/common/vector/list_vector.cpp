@@ -57,17 +57,16 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 	}
 }
 
-void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_size, idx_t source_offset) {
-	Reserve(child_size + to_append_size - source_offset);
-	VectorOperations::Copy(to_append, *child, to_append_size, source_offset, child_size);
-	child_size += to_append_size - source_offset;
+void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_size) {
+	Reserve(child_size + to_append_size);
+	VectorOperations::Copy(to_append, *child, to_append_size, 0, child_size);
+	child_size += to_append_size;
 }
 
-void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
-                                     idx_t source_offset) {
-	Reserve(child_size + to_append_size - source_offset);
-	VectorOperations::Copy(to_append, *child, sel, to_append_size, source_offset, child_size);
-	child_size += to_append_size - source_offset;
+void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size) {
+	Reserve(child_size + to_append_size);
+	VectorOperations::Copy(to_append, *child, sel, to_append_size, 0, child_size);
+	child_size += to_append_size;
 }
 
 void VectorListBuffer::PushBack(const Value &insert) {
@@ -327,23 +326,22 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 	vec.BufferMutable().Cast<VectorListBuffer>().SetChildSize(size);
 }
 
-void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
-	if (source_size - source_offset == 0) {
+void ListVector::Append(Vector &target, const Vector &source, idx_t source_size) {
+	if (source_size == 0) {
 		//! Nothing to add
 		return;
 	}
 	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
-	target_buffer.AppendToChild(source, source_size, source_offset);
+	target_buffer.AppendToChild(source, source_size);
 }
 
-void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
-                        idx_t source_offset) {
-	if (source_size - source_offset == 0) {
+void ListVector::Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size) {
+	if (source_size == 0) {
 		//! Nothing to add
 		return;
 	}
 	auto &target_buffer = target.BufferMutable().Cast<VectorListBuffer>();
-	target_buffer.AppendToChild(source, sel, source_size, source_offset);
+	target_buffer.AppendToChild(source, sel, source_size);
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {

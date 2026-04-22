@@ -39,9 +39,8 @@ public:
 	}
 	void Reserve(idx_t to_reserve);
 
-	void AppendToChild(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
-	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size,
-	                   idx_t source_offset = 0);
+	void AppendToChild(const Vector &to_append, idx_t to_append_size);
+	void AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size);
 
 	void PushBack(const Value &insert);
 
@@ -105,9 +104,8 @@ struct ListVector {
 	DUCKDB_API static idx_t GetListCapacity(const Vector &vector);
 	//! Sets the total capacity of the underlying child-vector of a list
 	DUCKDB_API static void Reserve(Vector &vec, idx_t required_capacity);
-	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset = 0);
-	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
-	                              idx_t source_offset = 0);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, idx_t source_size);
+	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
 	//! Returns the child_vector of list starting at offset until offset + count, and its length
 	DUCKDB_API static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count);

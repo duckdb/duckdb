@@ -147,6 +147,51 @@ buffer_ptr<VectorBuffer> VectorBuffer::SliceInternal(const LogicalType &type, co
 	return Flatten(type, sel, count);
 }
 
+idx_t VectorBuffer::GetReserveSize(idx_t required_capacity) {
+	if (required_capacity > DConstants::MAX_VECTOR_SIZE) {
+		// overflow: throw an exception
+		throw OutOfRangeException("Cannot resize vector to %d rows: maximum allowed vector size is %s",
+		                          required_capacity,
+		                          StringUtil::BytesToHumanReadableString(DConstants::MAX_VECTOR_SIZE));
+	}
+	return NextPowerOfTwo(required_capacity);
+}
+
+void VectorBuffer::Reserve(idx_t required_capacity, VectorAppendMode append_mode) {
+	auto capacity = Capacity();
+	if (required_capacity <= capacity) {
+		// enough space
+		return;
+	}
+	if (append_mode == VectorAppendMode::ERROR_ON_NO_SPACE) {
+		throw InternalException("Can't append to vector without resizing - but resizing was explicitly disabled");
+	}
+	auto new_capacity = GetReserveSize(required_capacity);
+	D_ASSERT(new_capacity >= required_capacity);
+	Resize(capacity, new_capacity);
+}
+
+void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode) {
+	if (!HasSize()) {
+		throw InternalException("Can only append to vector with a size");
+	}
+	auto new_capacity = v_size.GetIndex() + 1;
+	Reserve(new_capacity, append_mode);
+	SetValue(type, v_size.GetIndex(), val);
+	v_size = v_size.GetIndex() + 1;
+}
+
+void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size,
+                          VectorAppendMode append_mode) {
+	if (!HasSize()) {
+		throw InternalException("Cannot append to vector without size");
+	}
+	auto current_size = Size();
+	Reserve(current_size + append_size, append_mode);
+	Copy(source, sel, append_size, 0, current_size, append_size);
+	v_size = v_size.GetIndex() + append_size;
+}
+
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
 	throw InternalException("SetValue not supported for this buffer type");
 }

@@ -38,6 +38,8 @@ enum class VectorBufferType : uint8_t {
 	SEQUENCE_BUFFER    // VectorType::SEQUENCE      - Any             - Holds linear numeric sequence (start, increment)
 };
 
+enum class VectorAppendMode { ALLOW_RESIZE, ERROR_ON_NO_SPACE };
+
 struct AuxiliaryDataHolder {
 	virtual ~AuxiliaryDataHolder() = default;
 
@@ -136,6 +138,9 @@ public:
 	}
 
 public:
+	//! Returns the actual size to reserve (a power-of-two)
+	static idx_t GetReserveSize(idx_t required_capacity);
+
 	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
 	//! The selection vector maps output indices to source indices in this buffer
 	//! Returns a new buffer, or nullptr if already flat with an unset selection vector
@@ -149,6 +154,12 @@ public:
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
 	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	//! Resize if the vector does not have enough capacity, or throw an error, depending on VectorAppendMode
+	void Reserve(idx_t required_capacity, VectorAppendMode append_mode);
+	//! Append a value to the vector (flat / constant vectors only)
+	void AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode);
+	//! Append a vector to this buffer, sliced by the source_sel
+	void Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode);
 	//! Copy data from another vector into this vectors' buffer
 	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	          idx_t target_offset, idx_t copy_count);
