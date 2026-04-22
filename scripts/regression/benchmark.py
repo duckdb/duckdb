@@ -77,7 +77,7 @@ class BenchmarkRunnerConfig:
         )
         parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
         parser.add_argument(
-            "--no-summary", type=str, default=False, help="No failures summary is outputed when passing this flag."
+            "--no-summary", type=str, default=False, help="No failures summary is outputted when passing this flag."
         )
 
         # Parse arguments

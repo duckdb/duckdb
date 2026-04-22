@@ -229,8 +229,10 @@ protected:
 	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
-	//! Check if a previous table filter has filtered out this page
-	bool PageIsFilteredOut(PageHeader &page_hdr);
+	//! this funtion try skip page in below conditions:
+	//! 1. a previous table filter has filtered out this page
+	//! 2. page statistics could skip page
+	bool PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,

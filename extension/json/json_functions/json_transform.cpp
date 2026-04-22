@@ -24,9 +24,9 @@ JSONTransformOptions::JSONTransformOptions() : parameters(false, &error_message)
 }
 
 JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplicate_key_p, bool error_missing_key_p,
-                                           bool error_unkown_key_p)
+                                           bool error_unknown_key_p)
     : strict_cast(strict_cast_p), error_duplicate_key(error_duplicate_key_p), error_missing_key(error_missing_key_p),
-      error_unknown_key(error_unkown_key_p), parameters(false, &error_message) {
+      error_unknown_key(error_unknown_key_p), parameters(false, &error_message) {
 }
 
 //! Forward declaration for recursion

@@ -49,7 +49,9 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 		}
 		break;
 	default:
-		throw InternalException("Non-Flat/Non-Constant vector buffer cannot have their size changed");
+		// non-flat/non-constant vector buffers manage their size internally (based on their underlying data)
+		// SetVectorSize is a no-op for these vector types
+		return;
 	}
 	v_size = new_size;
 }

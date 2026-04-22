@@ -124,7 +124,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 		flat_list_data.WriteValue(list_entry);
 	}
 
-	// Now assing the result
+	// Now assign the result
 	ListVector::SetListSize(result, sel_idx);
 
 	auto &result_child_vector = ListVector::GetChildMutable(result);

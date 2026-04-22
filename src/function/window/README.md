@@ -2,7 +2,7 @@
 
 Starting with V2.0, window functions will no longer be special cased via enums
 but will be stored in the catalog as a new function type.
-They are in the same namepace as macros and as scalar and aggregate functions.
+They are in the same namespace as macros and as scalar and aggregate functions.
 
 Among other things, this means that extensions will be able to register _new_ window functions.
 New window functions should be functions that _cannot_ be implemented as windowed aggregates.
@@ -37,7 +37,7 @@ This will tell the serialization code to read and write any state information th
 
 ### Binding Flags
 
-The binding flags are used by the bind to check whether the function can support various windowing modifiers:
+The binding flags are used by the binder to check whether the function can support various windowing modifiers:
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
@@ -53,18 +53,25 @@ Two notable exceptions are:
 * `can_ignore_nulls` is not supported by `FILL` (interpolating `NULL`s is what it does);
 * `can_order_by` is not supported by `DENSE_RANK`.
 
-### Binding Functions
+### Binding Function
 
-The binder internals are currently only set up to validate function arguments,
-but window functions also have ordering arguments that need validation.
-For this reason there are two API for binding and validating specific window function calls:
+The binder internals are currently only set up to validate function _arguments_,
+but window functions also have ordering arguments that may need validation.
+For this reason, the `window_bind_function_t` function is passed two optional arguments in the
+`BindWindowFunctionInput` struct:
 
-* `window_bind_function_t` - This performs the usual binding operations of argument validation and override.
-* `window_validate_function_t` - This performs additional checks of the ordering arguments after binding.
+* `ClientContext &` - The query context;
+* `WindowFunction &` - The window function being bound;
+* `vector<unique_ptr<Expression>> &arguments` - The arguments being bound;
+* `optional_ptr<vector<OrderByNode>> orders` - The `ORDER BY` _framing_ (not always available);
+* `optional_ptr<vector<OrderByNode>> arg_orders` - The `ORDER BY` _arguments_ (not always available);
 
-Among the builtin functions, these are only defined by the "value" functions (`XXX_VALUE`, `FILL`, `LEAD`/`LAG`).
+If they are present, then the binding function should validate them as well as the arguments.
+
+Among the builtin functions, binding is only defined by the "value" functions (`XXX_VALUE`, `FILL`, `LEAD`/`LAG`).
+Ordering validation is only implemented by `FILL`.
 Note that the binding APIs can return an optional `FunctionData` subclass,
-but none of the builtin window functions need such an object.
+but none of the builtin window functions use such an object.
 
 ## Blocking APIs
 

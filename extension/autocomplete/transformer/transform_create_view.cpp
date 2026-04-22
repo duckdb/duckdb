@@ -106,7 +106,28 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 	info->schema = qualified_name.schema;
 	info->view_name = qualified_name.name;
 	info->aliases = column_list;
-	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(6));
+	auto &with_list_opt = list_pr.Child<OptionalParseResult>(5);
+	if (with_list_opt.HasResult()) {
+		auto options_expr =
+		    transformer.Transform<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(with_list_opt.GetResult());
+		for (auto &option_entry : options_expr) {
+			if (!StringUtil::CIEquals(option_entry.first, "defer_binding")) {
+				throw ParserException("Only DEFER_BINDING is currently supported as option for CREATE VIEW");
+			}
+			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
+				throw InvalidInputException("Defer binding option must be a constant value");
+			}
+			auto &val = option_entry.second->Cast<ConstantExpression>().value;
+			if (val.IsNull()) {
+				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
+			} else if (val.type().id() != LogicalTypeId::BOOLEAN) {
+				throw InvalidInputException("Defer binding option must be a boolean");
+			} else if (BooleanValue::Get(val)) {
+				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
+			}
+		}
+	}
+	auto select_statement = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.Child<ListParseResult>(7));
 	if (list_pr.Child<OptionalParseResult>(0).HasResult()) {
 		ConvertToRecursiveView(info, select_statement->node);
 	} else {

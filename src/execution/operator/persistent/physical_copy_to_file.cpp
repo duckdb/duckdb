@@ -206,7 +206,7 @@ CopyToFunctionGlobalState::~CopyToFunctionGlobalState() {
 		try {
 			fs.TryRemoveFile(file);
 		} catch (...) {
-			// TryRemoveFile migth fail for a varieaty of reasons, but we can't really propagate error codes here, so
+			// TryRemoveFile might fail for a varieaty of reasons, but we can't really propagate error codes here, so
 			// best effort cleanup
 		}
 	}
