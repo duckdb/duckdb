@@ -18,6 +18,7 @@
 namespace duckdb {
 class CheckpointLock;
 class CommitDropState;
+class DuckTableEntry;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
