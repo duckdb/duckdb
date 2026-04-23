@@ -73,6 +73,7 @@ jobs:
       runners: ${{ steps.config.outputs.runners }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
+      static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
@@ -215,6 +216,11 @@ jobs:
               '[{runner: $runner, arch: "arm64"}]'
           )
 
+          static_libs_linux_matrix=$(
+            jq -nc --arg runner "$runner_linux_x64" \
+              '[{runner: $runner, arch: "amd64", image: "quay.io/pypa/manylinux_2_28_x86_64"}]'
+          )
+
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
               jq -c --arg runner "$runner_linux_arm64" \
@@ -227,6 +233,13 @@ jobs:
             )
           fi
 
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            static_libs_linux_matrix=$(
+              jq -c --arg runner "$runner_linux_arm64" \
+                '. += [{runner: $runner, arch: "arm64", image: "quay.io/pypa/manylinux_2_28_aarch64"}]' <<<"$static_libs_linux_matrix"
+            )
+          fi
+
           python3 scripts/ci/job_stages.py \
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
@@ -235,8 +248,11 @@ jobs:
             --changed-keys "${{ steps.changed.outputs.changed_keys }}"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
-          echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
-          echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
+          {
+            echo "linux_cli_matrix=$linux_cli_matrix"
+            echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
+            echo "static_libs_linux_matrix=$static_libs_linux_matrix"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -896,22 +912,14 @@ jobs:
 
  static-libs-linux:
     name: Static Libs Linux (${{ matrix.config.arch }})
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-linux') && (github.ref_name == 'main' || matrix.config.run_on_pr) }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-linux') }}
     needs:
       - prepare
       - linux-release
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - runner: ubuntu-latest
-            arch: amd64
-            image: quay.io/pypa/manylinux_2_28_x86_64
-            run_on_pr: true
-          - runner: ubuntu-24.04-arm
-            arch: arm64
-            image: quay.io/pypa/manylinux_2_28_aarch64
-            run_on_pr: false
+        config: ${{ fromJson(needs.prepare.outputs.static_libs_linux_matrix) }}
     runs-on: ${{ matrix.config.runner }}
     container:
       image: ${{ matrix.config.image }}
