@@ -219,9 +219,10 @@ unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
 	return nullptr;
 }
 
-static string NormalizeTimeZone(const string &tz_str) {
-	if (GetKnownTimeZone(tz_str)) {
-		return tz_str;
+unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	duckdb::unique_ptr<icu::TimeZone> tz;
+	if (tz = GetKnownTimeZone(tz_str)) {
+		return tz;
 	}
 
 	//	Map UTC±NN00 to Etc/UTC±N
@@ -270,16 +271,17 @@ static string NormalizeTimeZone(const string &tz_str) {
 			mapped += '0';
 		}
 		// Final sanity check
-		if (GetKnownTimeZone(mapped)) {
-			return mapped;
+		if (tz = GetKnownTimeZone(mapped)) {
+			tz_str = mapped;
+			return tz;
 		}
 	} while (false);
 
-	return tz_str;
+	return nullptr;
 }
 
 unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
-	auto tz = GetKnownTimeZone(tz_str);
+	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
 	}
@@ -336,7 +338,6 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	auto tz_str = StringValue::Get(parameter);
-	tz_str = NormalizeTimeZone(tz_str);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
 }
@@ -478,8 +479,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
 	// If the environment TZ is invalid, look for some alternatives
-	tz_string = NormalizeTimeZone(tz_string);
-	if (!GetKnownTimeZone(tz_string)) {
+	tz = GetNormalizedTimeZone(tz_string);
+	if (!tz) {
 		tz_string = "UTC";
 	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
