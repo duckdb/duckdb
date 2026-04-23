@@ -6,7 +6,7 @@ if len(sys.argv) < 2 or not os.path.isfile(sys.argv[1]):
     print("Usage: [libduckdb dynamic library file, release build]")
     exit(1)
 
-res = subprocess.run('nm -g -C -P'.split(' ') + [sys.argv[1]], check=True, capture_output=True)
+res = subprocess.run('nm -g --demangle=gnu-v3 -P'.split(' ') + [sys.argv[1]], check=True, capture_output=True)
 if res.returncode != 0:
     raise ValueError('Failed to run `nm`')
 
