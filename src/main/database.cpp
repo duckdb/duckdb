@@ -56,6 +56,10 @@ DBConfig::DBConfig() {
 	secret_manager = make_uniq<SecretManager>();
 	http_util = make_shared_ptr<HTTPUtil>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
+	auto env_user_agent = FileSystem::GetEnvVariable("DUCKDB_CUSTOM_USER_AGENT");
+	if (!env_user_agent.empty()) {
+		options.custom_user_agent = std::move(env_user_agent);
+	}
 }
 
 DBConfig::DBConfig(bool read_only) : DBConfig::DBConfig() {
