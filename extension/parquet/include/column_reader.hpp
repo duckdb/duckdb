@@ -43,7 +43,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
@@ -94,13 +93,8 @@ public:
 	void Initialize(const LogicalType &type);
 
 public:
-	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
-
-public:
 	ClientContext &context;
 	unsafe_vector<ParquetColumnScanState> child_states;
-	//! (optionally) the expression state for any pushed down expression(s)
-	unique_ptr<PushedDownExpressionState> expression_state;
 	//! index of the current column that's being scanned
 	ColumnIndex index;
 };

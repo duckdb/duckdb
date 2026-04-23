@@ -467,24 +467,35 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 
-		bool create_all_readers = indexes.empty();
-		for (auto &index : indexes) {
-			if (index.IsPushdownExtract()) {
-				//! FIXME: to be safe, we create all readers when we have a pushdown extract index
-				//! To fix this, we need to merge all indexes to be able to determine which children are referenced
-				create_all_readers = true;
-				break;
-			}
-		}
-		if (create_all_readers) {
+		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] =
 				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
 		} else {
-			for (idx_t i = 0; i < indexes.size(); i++) {
-				auto child_index = indexes[i].GetPrimaryIndex();
-				children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
+			if (column_id.IsPushdownExtract()) {
+				D_ASSERT(indexes.size() == 1);
+				auto &child = indexes[0];
+				auto child_index = child.GetPrimaryIndex();
+				auto &child_schema = schema.children[child_index];
+				auto &child_type = StructType::GetChildTypes(schema.type)[child_index].second;
+
+				auto column_reader = CreateReaderRecursive(context, child, child_schema);
+				if (!child.HasChildren() && child_type != child.GetType()) {
+					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
+					auto cast_expression =
+					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
+					auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader),
+					                                                     std::move(cast_expression), child_schema);
+					children[0] = std::move(expr_reader);
+				} else {
+					children[0] = std::move(column_reader);
+				}
+			} else {
+				for (idx_t i = 0; i < indexes.size(); i++) {
+					auto child_index = indexes[i].GetPrimaryIndex();
+					children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
+				}
 			}
 		}
 		switch (schema.type.id()) {
