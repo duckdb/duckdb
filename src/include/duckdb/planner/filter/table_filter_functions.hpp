@@ -29,11 +29,11 @@ enum class SelectivityOptionalFilterType : uint8_t;
 void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &selectivity_threshold,
                                    idx_t &n_vectors_to_check);
 
-unique_ptr<Expression> CreateOptionalFilterExpression(unique_ptr<Expression> child_expr, const LogicalType &target_type);
+unique_ptr<Expression> CreateOptionalFilterExpression(unique_ptr<Expression> child_expr,
+                                                      const LogicalType &target_type);
 unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expression> child_expr,
                                                                  const LogicalType &target_type,
-                                                                 float selectivity_threshold,
-                                                                 idx_t n_vectors_to_check);
+                                                                 float selectivity_threshold, idx_t n_vectors_to_check);
 unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
                                                      const LogicalType &target_type);
 

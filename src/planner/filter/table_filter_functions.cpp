@@ -106,7 +106,7 @@ void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<Fun
 }
 
 unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	auto key_type = function.arguments.empty() ? LogicalType::ANY : function.arguments[0];
+	auto key_type = function.GetArguments().empty() ? LogicalType::ANY : function.GetArguments()[0];
 	if (function.name == BloomFilterScalarFun::NAME) {
 		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
 	}

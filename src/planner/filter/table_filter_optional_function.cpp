@@ -60,8 +60,8 @@ ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_typ
 	func.SetSelectCallback(OptionalFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(OptionalFilterScalarFun::FilterPrune);
-	func.serialize = OptionalFilterSerialize;
-	func.deserialize = OptionalFilterDeserialize;
+	func.SetSerializeCallback(OptionalFilterSerialize);
+	func.SetDeserializeCallback(OptionalFilterDeserialize);
 	return func;
 }
 

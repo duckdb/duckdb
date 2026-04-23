@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-LegacyConjunctionOrFilter::LegacyConjunctionOrFilter() : LegacyConjunctionFilter(TableFilterType::LEGACY_CONJUNCTION_OR) {
+LegacyConjunctionOrFilter::LegacyConjunctionOrFilter()
+    : LegacyConjunctionFilter(TableFilterType::LEGACY_CONJUNCTION_OR) {
 }
 
 unique_ptr<Expression> LegacyConjunctionOrFilter::ToExpression(const Expression &column) const {
@@ -15,7 +16,8 @@ unique_ptr<Expression> LegacyConjunctionOrFilter::ToExpression(const Expression 
 	return std::move(conjunction);
 }
 
-LegacyConjunctionAndFilter::LegacyConjunctionAndFilter() : LegacyConjunctionFilter(TableFilterType::LEGACY_CONJUNCTION_AND) {
+LegacyConjunctionAndFilter::LegacyConjunctionAndFilter()
+    : LegacyConjunctionFilter(TableFilterType::LEGACY_CONJUNCTION_AND) {
 }
 
 unique_ptr<Expression> LegacyConjunctionAndFilter::ToExpression(const Expression &column) const {

@@ -120,8 +120,8 @@ ScalarFunction SelectivityOptionalFilterScalarFun::GetFunction(const LogicalType
 	func.SetSelectCallback(SelectivityOptionalFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(SelectivityOptionalFilterScalarFun::FilterPrune);
-	func.serialize = SelectivityOptionalFilterSerialize;
-	func.deserialize = SelectivityOptionalFilterDeserialize;
+	func.SetSerializeCallback(SelectivityOptionalFilterSerialize);
+	func.SetDeserializeCallback(SelectivityOptionalFilterDeserialize);
 	return func;
 }
 

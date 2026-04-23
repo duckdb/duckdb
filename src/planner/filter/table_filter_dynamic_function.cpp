@@ -78,8 +78,8 @@ ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type
 	func.SetSelectCallback(DynamicFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(DynamicFilterScalarFun::FilterPrune);
-	func.serialize = TableFilterFunctionSerialize;
-	func.deserialize = TableFilterFunctionDeserialize;
+	func.SetSerializeCallback(TableFilterFunctionSerialize);
+	func.SetDeserializeCallback(TableFilterFunctionDeserialize);
 	return func;
 }
 

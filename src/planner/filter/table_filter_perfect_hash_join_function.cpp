@@ -20,8 +20,7 @@
 namespace duckdb {
 
 PerfectHashJoinFunctionData::PerfectHashJoinFunctionData(optional_ptr<const PerfectHashJoinExecutor> executor_p,
-                                                         const string &key_column_name_p,
-                                                         float selectivity_threshold_p,
+                                                         const string &key_column_name_p, float selectivity_threshold_p,
                                                          idx_t n_vectors_to_check_p)
     : executor(executor_p), key_column_name(key_column_name_p), selectivity_threshold(selectivity_threshold_p),
       n_vectors_to_check(n_vectors_to_check_p) {
@@ -36,8 +35,8 @@ bool PerfectHashJoinFunctionData::Equals(const FunctionData &other_p) const {
 	return executor.get() == other.executor.get() && key_column_name == other.key_column_name;
 }
 
-static idx_t SelectPerfectHashJoin(Vector &input, const PerfectHashJoinFunctionData &func_data, SelectionVector &result_sel,
-                                   idx_t count) {
+static idx_t SelectPerfectHashJoin(Vector &input, const PerfectHashJoinFunctionData &func_data,
+                                   SelectionVector &result_sel, idx_t count) {
 	D_ASSERT(func_data.executor);
 	idx_t approved_count = 0;
 	func_data.executor->FillSelectionVectorSwitchProbe(input, count, result_sel, approved_count, nullptr);
@@ -148,8 +147,8 @@ ScalarFunction PerfectHashJoinScalarFun::GetFunction(const LogicalType &input_ty
 	func.SetSelectCallback(PerfectHashJoinSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(PerfectHashJoinScalarFun::FilterPrune);
-	func.serialize = TableFilterFunctionSerialize;
-	func.deserialize = TableFilterFunctionDeserialize;
+	func.SetSerializeCallback(TableFilterFunctionSerialize);
+	func.SetDeserializeCallback(TableFilterFunctionDeserialize);
 	return func;
 }
 
