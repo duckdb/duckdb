@@ -52,8 +52,6 @@ RELEASE_JOBS = [
     "static-libs-linux",
     "static-libs-osx",
     "static-libs-windows-mingw",
-    "release-status",
-    "notify-external-repos",
 ]
 
 SKIP_TESTS_JOBS = {
