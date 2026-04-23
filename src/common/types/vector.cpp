@@ -56,10 +56,10 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
+		buffer = make_buffer<VectorStringBuffer>(dataptr, count_t(count));
 	} else {
 		auto type_size = GetTypeIdSize(type.InternalType());
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count_t(count), type_size);
 	}
 }
 
@@ -160,11 +160,6 @@ void Vector::Reinterpret(const Vector &other) {
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
 		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
-		auto dict_size = old_dict.GetDictionarySize();
-		if (dict_size.IsValid()) {
-			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
-		}
-		buffer->Cast<DictionaryBuffer>().SetDictionaryId(old_dict.GetDictionaryId());
 	}
 }
 
@@ -209,13 +204,16 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	Slice(sel, count);
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size);
+	if (!HasSize() || dictionary_size != size()) {
+		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
+	Slice(sel, count);
 }
 
 void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	if (!dict.HasSize() || dict.size() != dictionary_size) {
+		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
+	}
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
 }
@@ -228,9 +226,9 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
-void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
-	auto &type = GetType();
+void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity_p) {
 	auto internal_type = type.InternalType();
+	auto capacity = capacity_t(capacity_p);
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
