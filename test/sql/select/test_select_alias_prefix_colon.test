@@ -112,3 +112,48 @@ from "r" : range(1)
 ----
 0
 
+query I
+from r(n) : range(1)
+----
+0
+
+query I
+select n from r(n) : range(1, 3)
+----
+1
+2
+
+statement error
+from r() : range(1)
+----
+syntax error
+
+query I
+select x from t(x) : a
+----
+42
+
+query I
+select x from s(x) : (select i from a)
+----
+42
+
+statement ok
+create table c(i integer)
+
+statement ok
+insert into c values (42)
+
+query I
+select i from j(x) : (a join c using(i))
+----
+42
+
+# complex case: join of a table-function, a subquery and a base table, each with prefix alias(column)
+query III
+select r.x, s.y, tb.z
+from r(x) : range(1, 2)
+join s(y) : (select i from a) on true
+join tb(z) : c on true
+----
+1	42	42

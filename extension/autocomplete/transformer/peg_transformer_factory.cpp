@@ -822,8 +822,12 @@ void PEGTransformerFactory::RegisterSelect() {
 
 	REGISTER_TRANSFORM(TransformInnerTableRef);
 	REGISTER_TRANSFORM(TransformTableFunction);
-	REGISTER_TRANSFORM(TransformTableFunctionLateralOpt);
-	REGISTER_TRANSFORM(TransformTableFunctionAliasColon);
+	REGISTER_TRANSFORM(TransformPrefixAliasTableRef);
+	REGISTER_TRANSFORM(TransformPrefixAliasTableRefBody);
+	REGISTER_TRANSFORM(TransformPrefixAliasTableFunction);
+	REGISTER_TRANSFORM(TransformPrefixAliasBaseTable);
+	REGISTER_TRANSFORM(TransformPrefixAliasSubquery);
+	REGISTER_TRANSFORM(TransformPrefixAliasParensTable);
 	REGISTER_TRANSFORM(TransformTableAliasColon);
 	REGISTER_TRANSFORM(TransformQualifiedTableFunction);
 	REGISTER_TRANSFORM(TransformTableSubquery);

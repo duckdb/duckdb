@@ -735,6 +735,65 @@ makeRecursiveViewSelect(char *relname, PGList *aliases, PGNode *query)
 	return (PGNode *) s;
 }
 
+/*
+ * Build a PGAlias with an optional column list from a func_table node
+ * parsed for the prefix-alias syntax "IDENT(col, ...):".  The grammar
+ * has to reuse func_table here to avoid a reduce/reduce conflict, so we
+ * validate at reduce time that the shape is a plain IDENT with a
+ * non-empty list of simple column identifiers and no function-call
+ * decorations.  On any shape mismatch we call parser_yyerror, which does
+ * not return.
+ */
+static PGAlias *
+makePrefixAliasFromFuncTable(PGRangeFunction *n, core_yyscan_t yyscanner)
+{
+	const char *const err = "syntax error at or near \":\"";
+
+	if (n->is_rowsfrom || n->ordinality || list_length(n->functions) != 1)
+		parser_yyerror(err);
+
+	PGList	   *func_data = (PGList *) linitial(n->functions);
+	if (!func_data || list_length(func_data) != 2)
+		parser_yyerror(err);
+
+	PGNode	   *func_node = (PGNode *) linitial(func_data);
+	if (!func_node || !IsA(func_node, PGFuncCall))
+		parser_yyerror(err);
+
+	PGFuncCall *func = (PGFuncCall *) func_node;
+	if (func->agg_order || func->agg_filter || func->agg_within_group ||
+		func->agg_star || func->agg_distinct || func->func_variadic ||
+		func->over || func->export_state ||
+		func->agg_ignore_nulls != PGIgnoreNulls::PG_DEFAULT_NULLS)
+		parser_yyerror(err);
+
+	if (list_length(func->funcname) != 1 || !IsA(linitial(func->funcname), PGString))
+		parser_yyerror(err);
+
+	if (!func->args || list_length(func->args) == 0)
+		parser_yyerror(err);
+
+	PGAlias    *alias = makeNode(PGAlias);
+	alias->aliasname = pstrdup(strVal(linitial(func->funcname)));
+
+	PGList	   *colnames = NIL;
+	PGListCell *cell;
+	foreach(cell, func->args)
+	{
+		PGNode	   *arg = (PGNode *) lfirst(cell);
+		if (!arg || !IsA(arg, PGColumnRef))
+			parser_yyerror(err);
+
+		PGColumnRef *colref = (PGColumnRef *) arg;
+		if (list_length(colref->fields) != 1 || !IsA(linitial(colref->fields), PGString))
+			parser_yyerror(err);
+
+		colnames = lappend(colnames, makeString(pstrdup(strVal(linitial(colref->fields)))));
+	}
+	alias->colnames = colnames;
+	return alias;
+}
+
 /* parser_init()
  * Initialize to parse one query string
  */

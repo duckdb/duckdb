@@ -1260,14 +1260,20 @@ DistinctAll <- 'ALL'
 DistinctOn <- 'DISTINCT' DistinctOnTargets?
 DistinctOnTargets <- 'ON' Parens(List(Expression))
 
-InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
+InnerTableRef <- PrefixAliasTableRef / ValuesRef / TableFunction / TableSubquery / BaseTableRef / ParensTableRef
 
 TableRef <- InnerTableRef JoinOrPivot*
+PrefixAliasTableRef <- TableAliasColon PrefixAliasTableRefBody
+PrefixAliasTableRefBody <- PrefixAliasTableFunction / PrefixAliasBaseTable / PrefixAliasSubquery / PrefixAliasParensTable
+PrefixAliasTableFunction <- QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
+PrefixAliasBaseTable <- BaseTableName AtClause? SampleClause?
+PrefixAliasSubquery <- SubqueryReference SampleClause?
+PrefixAliasParensTable <- Parens(TableRef) SampleClause?
 TableSubquery <- Lateral? SubqueryReference TableAlias?
-BaseTableRef <- TableAliasColon? BaseTableName TableAlias? AtClause? SampleClause?
-TableAliasColon <- ColIdOrString ':'
+BaseTableRef <- BaseTableName TableAlias? AtClause? SampleClause?
+TableAliasColon <- ColIdOrString ColumnAliases? ':'
 ValuesRef <- ValuesClause TableAlias?
-ParensTableRef <- TableAliasColon? Parens(TableRef) TableAlias? SampleClause?
+ParensTableRef <- Parens(TableRef) TableAlias? SampleClause?
 
 JoinOrPivot <- JoinClause / TablePivotClause / TableUnpivotClause
 
@@ -1287,9 +1293,7 @@ BaseTableName <- CatalogReservedSchemaTable / SchemaReservedTable / TableName
 SchemaReservedTable <- SchemaQualification ReservedTableName
 CatalogReservedSchemaTable <- CatalogQualification ReservedSchemaQualification ReservedTableName
 
-TableFunction <- TableFunctionLateralOpt / TableFunctionAliasColon
-TableFunctionLateralOpt <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
-TableFunctionAliasColon <- TableAliasColon QualifiedTableFunction TableFunctionArguments WithOrdinality? SampleClause?
+TableFunction <- Lateral? QualifiedTableFunction TableFunctionArguments WithOrdinality? TableAlias?
 WithOrdinality <- 'WITH' 'ORDINALITY'
 QualifiedTableFunction <- CatalogQualification? SchemaQualification? TableFunctionName
 TableFunctionArguments <- Parens(List(FunctionArgument)?)
