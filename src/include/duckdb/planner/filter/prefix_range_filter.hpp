@@ -19,8 +19,7 @@
 
 namespace duckdb {
 
-struct JoinFilterTableFilterState;
-
+//! Runtime prefix-range filter state used by join pushdown and internal tablefilter functions.
 class PrefixRangeFilter {
 public:
 	struct BuildState {
@@ -46,11 +45,13 @@ public:
 	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
 	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
 	virtual bool IsInitialized() const = 0;
+	static bool SupportedType(const LogicalType &type);
 	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
 	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
 };
 
-class PrefixRangeTableFilter final : public TableFilter {
+//! DEPRECATED - only preserved for backwards-compatible expression conversion
+class LegacyPrefixRangeTableFilter final : public TableFilter {
 private:
 	optional_ptr<PrefixRangeFilter> filter;
 
@@ -58,29 +59,13 @@ private:
 	LogicalType key_type;
 
 public:
-	static constexpr auto TYPE = TableFilterType::PREFIX_RANGE_FILTER;
-	static bool SupportedType(const LogicalType &type);
-	static unique_ptr<PrefixRangeFilter> CreateBitmap(const LogicalType &type);
+	static constexpr auto TYPE = TableFilterType::LEGACY_PREFIX_RANGE_FILTER;
 
 public:
-	explicit PrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
-	                                const LogicalType &key_type_p);
-
-	const LogicalType &GetKeyType() const {
-		return key_type;
-	}
-
-	string ToString(const string &column_name) const override;
-
-	idx_t Filter(Vector &keys, SelectionVector &sel, idx_t &approved_tuple_count,
-	             JoinFilterTableFilterState &state) const;
-	bool FilterValue(const Value &value) const;
-
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
+	explicit LegacyPrefixRangeTableFilter(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,
+	                                      const LogicalType &key_type_p);
 
 private:
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 
 	void Serialize(Serializer &serializer) const override;
