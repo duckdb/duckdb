@@ -62,6 +62,7 @@ jobs:
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
+      git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
@@ -84,11 +85,24 @@ jobs:
     env:
       GEN: ninja
     steps:
+      - name: Resolve git sha
+        id: resolve_git_sha
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.git_ref }}" ]]; then
+            resolved_sha="$(gh api "/repos/${{ github.repository }}/commits" -f sha="${{ inputs.git_ref }}" -f per_page=1 --jq '.[0].sha')"
+          else
+            resolved_sha="${{ github.sha }}"
+          fi
+          echo "git_sha=$resolved_sha" >> "$GITHUB_OUTPUT"
+          echo "Using git_sha=$resolved_sha"
+
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
           fetch_depth: 0
+          ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
 
       - name: Detect changes
         id: changed
@@ -262,6 +276,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -300,6 +315,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
@@ -333,6 +350,7 @@ jobs:
       - linux-debug
       - linux-release
     with:
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       build_current_release: false
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
@@ -353,6 +371,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       run: |
@@ -393,6 +412,7 @@ jobs:
        with:
          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
          fetch_depth: 0
+         ref: ${{ needs.prepare.outputs.git_sha }}
 
      - name: Install
        run: |
@@ -421,7 +441,7 @@ jobs:
       - linux-release
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -441,6 +461,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: mymindstorm/setup-emsdk@v16
       with:
@@ -470,6 +492,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -523,6 +546,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -555,6 +579,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -652,6 +678,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -764,7 +792,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.sha }}
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: julia-actions/setup-julia@v2
       with:
@@ -818,7 +846,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.sha }}
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Deploy
       shell: bash
@@ -838,6 +866,7 @@ jobs:
       - prepare
       - linux-debug
     with:
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
@@ -849,7 +878,7 @@ jobs:
       - linux-debug
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -861,7 +890,7 @@ jobs:
     needs: prepare
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
@@ -872,7 +901,7 @@ jobs:
     needs: prepare
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
 
  release-status:
@@ -909,7 +938,7 @@ jobs:
     with:
       is-success: ${{ fromJSON(needs.release-status.outputs.success) }}
       target-branch: ${{ (github.event_name != 'workflow_dispatch') && github.ref || (inputs.git_ref == '' && github.ref || inputs.git_ref) }}
-      duckdb-sha: ${{ github.sha }}
+      duckdb-sha: ${{ needs.prepare.outputs.git_sha }}
       triggering-event: ${{ github.event_name }}
       should-publish: true
       override-git-describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
@@ -934,6 +963,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -964,6 +995,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -996,6 +1029,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       shell: bash
@@ -1038,6 +1073,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -1069,6 +1106,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: actions/setup-python@v6
       with:

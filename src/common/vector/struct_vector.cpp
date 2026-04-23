@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capacity)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), capacity(capacity) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
@@ -16,7 +16,7 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, idx_t capacity_p)
+VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, capacity_t capacity_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), children(std::move(children_p)),
       capacity(capacity_p) {
 	validity.Resize(capacity);
@@ -103,9 +103,10 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 	for (idx_t i = 0; i < children.size(); i++) {
 		result_children.emplace_back(children[i], offset, end);
 	}
-	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), end - offset);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
-	result->SetVectorSize(end - offset);
+	auto count = count_t(end - offset);
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(count));
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->SetVectorSize(count);
 	return result;
 }
 
@@ -223,7 +224,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalT
 		result_children.emplace_back(Vector::Ref(children[i]));
 		result_children[i].Flatten(sel, count);
 	}
-	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), count);
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.CopySel(validity, sel, 0, 0, count);

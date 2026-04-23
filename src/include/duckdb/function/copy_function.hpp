@@ -189,7 +189,7 @@ enum class CopyFunctionFlushBatchReason : uint8_t {
 	//! Flush because of current batch size in bytes
 	BATCH_SIZE_BYTES,
 	//! Flush because it's the last batch
-	LAST_BATCH
+	FORCED_FLUSH
 };
 
 struct CopyFunctionBatchAnalyzer {

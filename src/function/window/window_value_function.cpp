@@ -149,7 +149,9 @@ public:
 	}
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr)), sel(STANDARD_VECTOR_SIZE) {
+	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr)), sel(STANDARD_VECTOR_SIZE), eval(client),
+	      arg(wexpr.children[0]->return_type) {
+		eval.AddExpression(*wexpr.children[0]);
 	}
 
 	const BoundWindowExpression &wexpr;
@@ -157,6 +159,10 @@ public:
 	Vector vec;
 	//! A reusable selection vector
 	SelectionVector sel;
+	//! An executor for computing the argument
+	ExpressionExecutor eval;
+	//! A reusable argument vector
+	Vector arg;
 };
 
 //===--------------------------------------------------------------------===//
@@ -803,9 +809,8 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 	// then look for a non-NULL value and update it
 	if (wexpr.ignore_nulls && ConstantVector::IsNull(sstate.vec)) {
 		//	Find the first non-NULL value
-		ExpressionExecutor executor(context.client);
-		executor.AddExpression(*wexpr.children[0]);
-		Vector arg(wexpr.children[0]->return_type);
+		auto &executor = sstate.eval;
+		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(count, unified);
@@ -920,11 +925,10 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 	auto &sstate = state.Cast<WindowValueStreamingState>();
 	auto &wexpr = sstate.wexpr;
 	const auto count = input.size();
-	ExpressionExecutor executor(context.client);
-	executor.AddExpression(*wexpr.children[0]);
+	auto &executor = sstate.eval;
 	if (wexpr.ignore_nulls) {
 		auto &prev = sstate.vec;
-		Vector arg(wexpr.children[0]->return_type);
+		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
 		arg.ToUnifiedFormat(count, unified);
@@ -1027,7 +1031,7 @@ void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval
 //===--------------------------------------------------------------------===//
 // WindowNthValueExecutor
 //===--------------------------------------------------------------------===//
-class WindowNthValueStreamingState : public WindowExecutorStreamingState {
+class WindowNthValueStreamingState : public WindowValueStreamingState {
 public:
 	static bool ComputeNthIndex(ClientContext &client, const BoundWindowExpression &wexpr, idx_t &nth_index) {
 		auto &nth_expr = wexpr.children[1];
@@ -1048,28 +1052,18 @@ public:
 		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
 		return true;
 	}
-	WindowNthValueStreamingState(ClientContext &client, const BoundWindowExpression &wexpr)
-	    : wexpr(wexpr), prev(Value(wexpr.return_type)), eval(client), arg(wexpr.children[0]->return_type),
-	      sel(STANDARD_VECTOR_SIZE) {
+	WindowNthValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
+	    : WindowValueStreamingState(client, input, wexpr) {
+		vec.SetValue(0, Value(wexpr.return_type));
 		ComputeNthIndex(client, wexpr, nth_index);
-		eval.AddExpression(*wexpr.children[0]);
 	}
 
 	void StreamData(ExecutionContext &context, DataChunk &input, Vector &result);
 
-	const BoundWindowExpression &wexpr;
-	//! A constant vector holding the repeated value
-	Vector prev;
 	//! The target N
 	idx_t nth_index = DConstants::INVALID_INDEX;
 	//! The current N
 	idx_t nth_count = 0;
-	//! An executor for computing the argument
-	ExpressionExecutor eval;
-	//! A reusable argument
-	Vector arg;
-	//! A reusable selection vector
-	SelectionVector sel;
 };
 
 struct WindowNthValueExecutor : public WindowValueExecutor {
@@ -1090,7 +1084,7 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 	}
 	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
 	                                                      const BoundWindowExpression &wexpr) {
-		return make_uniq<WindowNthValueStreamingState>(client, wexpr);
+		return make_uniq<WindowNthValueStreamingState>(client, input, wexpr);
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
 	                       Vector &result, LocalSourceState &state) {
@@ -1102,13 +1096,13 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	//	If we haven't reached the chunk with the value yet, reference the current value
 	const auto count = input.size();
 	if (!wexpr.ignore_nulls && nth_count + count < nth_index) {
-		result.Reference(prev);
+		result.Reference(vec);
 		nth_count += count;
 		return;
 	}
 	//	If we have found the Nth value already, reference the current value.
 	if (nth_index <= nth_count) {
-		result.Reference(prev);
+		result.Reference(vec);
 		return;
 	}
 
@@ -1121,7 +1115,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	//	Split the result between NULLs and the Nth Value
 	Vector split(wexpr.children[0]->return_type, 2);
 	sel_t s = 0;
-	split.SetValue(s, prev.GetValue(0));
+	split.SetValue(s, vec.GetValue(0));
 
 	// If we are ignoring NULLS and there are NULLS, search for a non-NULL value.
 	const bool any_value = wexpr.ignore_nulls && !validity.CannotHaveNull();
@@ -1132,7 +1126,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		// One-based comparison.
 		if (nth_count == nth_index) {
 			auto v = arg.GetValue(i);
-			prev.Reference(v);
+			vec.Reference(v);
 			s = 1;
 			split.SetValue(s, v);
 		}
