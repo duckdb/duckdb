@@ -465,25 +465,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
 
-		//! FIXME: defaults to true
-		bool create_all_readers = indexes.empty();
-		for (auto &index : indexes) {
-			if (index.IsPushdownExtract()) {
-				//! FIXME: to be safe, we create all readers when we have a pushdown extract index
-				//! To fix this, we need to merge all indexes to be able to determine which children are referenced
-				create_all_readers = true;
-				break;
-			}
-		}
-		if (create_all_readers) {
+		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
 			}
 		} else {
-			//! TODO: need to merge all indexes to figure out which child columns are requested
-			//! A trivial merge based on the 'GetPrimaryIndex' isn't sufficient
-			//! Because we could be selecting a.b.c1 and a.b.c2
-
 			for (idx_t i = 0; i < indexes.size(); i++) {
 				auto child_index = indexes[i].GetPrimaryIndex();
 				children[child_index] =
