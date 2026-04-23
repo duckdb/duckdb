@@ -908,7 +908,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
+    : BaseFileReader(std::move(file_p)), context(context_p), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
@@ -989,8 +989,9 @@ unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &contex
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+    : BaseFileReader(string()), context(context_p), fs(CachingFileSystem::Get(context_p)),
+      allocator(BufferAllocator::Get(context_p)), metadata(std::move(metadata_p)),
+      parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	InitializeSchema(context_p);
 }
 
@@ -1377,6 +1378,15 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
+
+	auto &root_column = state.root_reader->Cast<StructColumnReader>();
+	state.scan_states.reserve(column_indexes.size());
+	for (idx_t i = 0; i < column_indexes.size(); i++) {
+		auto &column_id = column_indexes[i];
+		auto &column_reader = root_column.GetChildReader(column_id.GetPrimaryIndex());
+		state.scan_states.emplace_back(context);
+		state.scan_states[i].Initialize(column_reader.Type(), column_id);
+	}
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
@@ -1605,7 +1615,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
-				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, column_indexes[local_idx]);
+				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, state.scan_states[local_idx]);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
@@ -1631,7 +1641,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr, column_indexes[col_idx]);
+			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr, state.scan_states[col_idx]);
 			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
@@ -1647,7 +1657,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, column_indexes[col_idx]);
+			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, state.scan_states[col_idx]);
 			auto rows_read = child_reader.Read(reader_input, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

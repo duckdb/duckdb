@@ -1038,4 +1038,88 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 	throw NotImplementedException(schema.type.ToString());
 }
 
+ParquetColumnScanState::ParquetColumnScanState(ClientContext &context) : context(context) {
+}
+
+void ParquetColumnScanState::PushDownCast(const LogicalType &original_type, const LogicalType &cast_type) {
+	D_ASSERT(!expression_state);
+
+	auto input = make_uniq<BoundReferenceExpression>(original_type, 0ULL);
+	auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), cast_type);
+	expression_state = make_uniq<PushedDownExpressionState>(context);
+	expression_state->target.Initialize(context, {cast_type});
+	expression_state->input.Initialize(context, {original_type});
+	expression_state->executor.AddExpression(*cast_expression);
+	expression_state->expression = std::move(cast_expression);
+}
+
+void ParquetColumnScanState::Initialize(const LogicalType &type) {
+	ColumnIndex column_id(0);
+	Initialize(type, column_id);
+}
+
+void ParquetColumnScanState::Initialize(const LogicalType &type, const ColumnIndex &column_id) {
+	auto &children = column_id.GetChildIndexes();
+
+	index = column_id;
+
+	D_ASSERT(type.id() != LogicalTypeId::INVALID);
+	D_ASSERT(type.id() != LogicalTypeId::VALIDITY);
+
+	if (type.id() == LogicalTypeId::VARIANT) {
+		if (column_id.IsPushdownExtract()) {
+			throw NotImplementedException("Parquet VARIANT extract pushdown");
+		}
+		child_states.reserve(3);
+		for (idx_t i = 0; i < 3; i++) {
+			child_states.emplace_back(context);
+		}
+		//! FIXME: how do we initialize this???
+		return;
+	}
+
+	D_ASSERT(child_states.empty());
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		// struct children
+		auto &struct_children = StructType::GetChildTypes(type);
+		child_states.reserve(struct_children.size());
+		if (children.empty()) {
+			// scan all struct children
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				child_states.emplace_back(context);
+				child_states[i].Initialize(struct_children[i].second);
+			}
+		} else {
+			if (column_id.IsPushdownExtract()) {
+				D_ASSERT(children.size() == 1);
+				auto &child = children[0];
+				auto child_index = child.GetPrimaryIndex();
+				auto &child_type = StructType::GetChildTypes(type)[child_index].second;
+				if (!child.HasChildren() && child_type != child.GetType()) {
+					PushDownCast(child_type, child.GetType());
+				}
+				child_states.emplace_back(context);
+				child_states[0].Initialize(struct_children[child_index].second, child);
+			} else {
+				for (idx_t i = 0; i < children.size(); i++) {
+					child_states.emplace_back(context);
+				}
+				for (idx_t i = 0; i < children.size(); i++) {
+					auto &child = children[i];
+					auto index = child.GetPrimaryIndex();
+					child_states[index].Initialize(struct_children[index].second, child);
+				}
+			}
+		}
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		// list child
+		child_states.emplace_back(context);
+		child_states[0].Initialize(ListType::GetChildType(type));
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		// array child
+		child_states.emplace_back(context);
+		child_states[0].Initialize(ArrayType::GetChildType(type));
+	}
+}
+
 } // namespace duckdb

@@ -68,13 +68,30 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &index = input.index;
+	auto &scan_state = input.scan_state;
 
-	if (index.IsPushdownExtract()) {
-		auto &child_index = index.GetChildIndexes()[0];
-		auto &child_reader = child_readers[child_index.GetPrimaryIndex()];
-		ColumnReaderInput child_input(num_values, define_out, repeat_out, child_index);
-		return child_reader->Read(child_input, result);
+	if (scan_state.index.IsPushdownExtract()) {
+		auto &child_index = scan_state.index.GetChildIndexes()[0];
+		auto child_physical_index = child_index.GetPrimaryIndex();
+		auto &child_reader = child_readers[child_physical_index];
+		ColumnReaderInput child_input(num_values, define_out, repeat_out, scan_state.child_states[0]);
+
+		if (scan_state.expression_state) {
+			auto &expression_state = *scan_state.expression_state;
+			auto &executor = expression_state.executor;
+			auto &target = expression_state.target;
+			auto &input = expression_state.input;
+
+			target.Reset();
+			input.Reset();
+			auto scan_count = child_reader->Read(child_input, input.data[0]);
+			input.SetCardinality(scan_count);
+			executor.Execute(input, target);
+			result.Reference(target.data[0]);
+			return scan_count;
+		} else {
+			return child_reader->Read(child_input, result);
+		}
 	}
 
 	auto &struct_entries = StructVector::GetEntries(result);
@@ -93,7 +110,7 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			ConstantVector::SetNull(target_vector);
 			continue;
 		}
-		ColumnReaderInput child_input(num_values, define_out, repeat_out, ColumnIndex(i));
+		ColumnReaderInput child_input(num_values, define_out, repeat_out, scan_state.child_states[i]);
 		auto child_num_values = child->Read(child_input, target_vector);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;

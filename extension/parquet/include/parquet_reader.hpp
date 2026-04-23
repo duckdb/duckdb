@@ -108,6 +108,8 @@ struct ParquetReaderScanState {
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
+	vector<ParquetColumnScanState> scan_states;
+
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
@@ -193,6 +195,7 @@ public:
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
 
+	ClientContext &context;
 	mutable CachingFileSystem fs;
 	Allocator &allocator;
 	shared_ptr<ParquetFileMetadataCache> metadata;

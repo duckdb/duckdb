@@ -43,7 +43,9 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -83,17 +85,38 @@ enum class ColumnEncoding {
 	PLAIN
 };
 
+struct ParquetColumnScanState {
+public:
+	explicit ParquetColumnScanState(ClientContext &context);
+
+public:
+	void Initialize(const LogicalType &type, const ColumnIndex &index);
+	void Initialize(const LogicalType &type);
+
+public:
+	void PushDownCast(const LogicalType &original_type, const LogicalType &cast_type);
+
+public:
+	ClientContext &context;
+	unsafe_vector<ParquetColumnScanState> child_states;
+	//! (optionally) the expression state for any pushed down expression(s)
+	unique_ptr<PushedDownExpressionState> expression_state;
+	//! index of the current column that's being scanned
+	ColumnIndex index;
+};
+
 struct ColumnReaderInput {
 public:
-	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, const ColumnIndex &index)
-	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out), index(index) {
+	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
+	                  ParquetColumnScanState &scan_state)
+	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out), scan_state(scan_state) {
 	}
 
 public:
 	uint64_t num_values;
 	data_ptr_t define_out;
 	data_ptr_t repeat_out;
-	const ColumnIndex &index;
+	ParquetColumnScanState &scan_state;
 };
 
 class ColumnReader {

@@ -96,6 +96,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
+	auto &scan_state = input.scan_state;
 
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
 	bool finished = false;
@@ -115,7 +116,8 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
 
-			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr, ColumnIndex(0));
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr,
+			                              scan_state.child_states[0]);
 			child_actual_num_values = child_column_reader->Read(child_input, read_vector);
 		} else {
 			// we do: use the overflow values
@@ -203,7 +205,8 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr, ColumnIndex(0));
+	ParquetColumnScanState empty_scan_state(Reader().context);
+	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr, empty_scan_state);
 	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);
 	pending_skips = 0;
 }

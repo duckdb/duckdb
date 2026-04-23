@@ -523,9 +523,11 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		                                                          std::move(default_expressions), std::move(bind_data));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
+	if (global_index.HasType()) {
+		result.column_index->SetType(global_index.GetType());
+	}
 	if (global_index.IsPushdownExtract()) {
-		//! FIXME: cast_type: null is too naive
-		result.column_index->SetPushdownExtractType(local_column.type, nullptr);
+		result.column_index->SetPushdownExtract();
 	}
 	result.mapping = std::move(mapping);
 	return result;
