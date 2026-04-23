@@ -1,8 +1,6 @@
 #include "duckdb/planner/filter/bloom_filter.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
@@ -81,157 +79,29 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 	return (bf_entry & mask) == mask;
 }
 
-string BFTableFilter::ToString(const string &column_name) const {
-	return column_name + " IN BF(" + key_column_name + ")";
+unique_ptr<Expression> LegacyBFTableFilter::ToExpression(const Expression &column) const {
+	auto function = BloomFilterScalarFun::GetFunction(column.return_type);
+	auto bind_data =
+	    make_uniq<BloomFilterFunctionData>(filter, filters_null_values, key_column_name, key_type, 0.0f, idx_t(0));
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(column.Copy());
+	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(function), std::move(arguments),
+	                                          std::move(bind_data));
 }
 
-idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approved_tuple_count,
-                            JoinFilterTableFilterState &state) const {
-	state.PrepareSlicedKeys(keys_v, sel, approved_tuple_count);
-	VectorOperations::Hash(state.keys_sliced_v, state.hashes_v, approved_tuple_count);
-
-	idx_t found_count;
-	if (state.hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		const auto constant_hash = *ConstantVector::GetData<hash_t>(state.hashes_v);
-		const bool found = this->filter.LookupOne(constant_hash);
-		found_count = found ? approved_tuple_count : 0;
-	} else {
-		state.hashes_v.Flatten();
-		found_count = this->filter.LookupHashes(state.hashes_v, state.probe_sel, approved_tuple_count);
-	}
-
-	// all the elements have been found, we don't need to translate anything
-	if (found_count == approved_tuple_count) {
-		return approved_tuple_count;
-	}
-
-	if (sel.IsSet()) {
-		for (idx_t idx = 0; idx < found_count; idx++) {
-			const idx_t flat_sel_idx = state.probe_sel.get_index(idx);
-			const idx_t original_sel_idx = sel.get_index(flat_sel_idx);
-			sel.set_index(idx, original_sel_idx);
-		}
-	} else {
-		sel.Initialize(state.probe_sel);
-	}
-
-	approved_tuple_count = found_count;
-	return approved_tuple_count;
-}
-
-bool BFTableFilter::FilterValue(const Value &value) const {
-	const auto hash = value.Hash();
-	return filter.LookupOne(hash);
-}
-
-template <class T>
-static FilterPropagateResult TemplatedCheckStatistics(const BloomFilter &bf, T min, T max) {
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Invalid stats
-	}
-	T range_typed;
-	idx_t range;
-	if (!TrySubtractOperator::Operation(max, min, range_typed) || !TryCast::Operation(range_typed, range) ||
-	    range >= DEFAULT_STANDARD_VECTOR_SIZE) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE; // Overflow or too wide of a range
-	}
-
-	T val = min;
-	idx_t hits = 0;
-	for (idx_t i = 0; i <= range; i++) {
-		hits += bf.LookupOne(Hash(val));
-		val += i < range; // Avoids potential signed integer overflow on the last iteration
-	}
-
-	if (hits == 0) {
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	if (hits == range + 1) {
-		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
-	}
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-}
-
-FilterPropagateResult BFTableFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!TypeIsInteger(key_type.InternalType()) || !NumericStats::HasMinMax(stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	auto min_val = NumericStats::Min(stats);
-	auto max_val = NumericStats::Max(stats);
-
-	// The filter was built with key_type (condition_type), but stats are in storage_type
-	if (stats.GetType() != key_type && (!min_val.DefaultTryCastAs(key_type) || !max_val.DefaultTryCastAs(key_type))) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	switch (key_type.InternalType()) {
-	case PhysicalType::UINT8:
-		return TemplatedCheckStatistics<uint8_t>(filter, min_val.GetValueUnsafe<uint8_t>(),
-		                                         max_val.GetValueUnsafe<uint8_t>());
-	case PhysicalType::UINT16:
-		return TemplatedCheckStatistics<uint16_t>(filter, min_val.GetValueUnsafe<uint16_t>(),
-		                                          max_val.GetValueUnsafe<uint16_t>());
-	case PhysicalType::UINT32:
-		return TemplatedCheckStatistics<uint32_t>(filter, min_val.GetValueUnsafe<uint32_t>(),
-		                                          max_val.GetValueUnsafe<uint32_t>());
-	case PhysicalType::UINT64:
-		return TemplatedCheckStatistics<uint64_t>(filter, min_val.GetValueUnsafe<uint64_t>(),
-		                                          max_val.GetValueUnsafe<uint64_t>());
-	case PhysicalType::UINT128:
-		return TemplatedCheckStatistics<uhugeint_t>(filter, min_val.GetValueUnsafe<uhugeint_t>(),
-		                                            max_val.GetValueUnsafe<uhugeint_t>());
-	case PhysicalType::INT8:
-		return TemplatedCheckStatistics<int8_t>(filter, min_val.GetValueUnsafe<int8_t>(),
-		                                        max_val.GetValueUnsafe<int8_t>());
-	case PhysicalType::INT16:
-		return TemplatedCheckStatistics<int16_t>(filter, min_val.GetValueUnsafe<int16_t>(),
-		                                         max_val.GetValueUnsafe<int16_t>());
-	case PhysicalType::INT32:
-		return TemplatedCheckStatistics<int32_t>(filter, min_val.GetValueUnsafe<int32_t>(),
-		                                         max_val.GetValueUnsafe<int32_t>());
-	case PhysicalType::INT64:
-		return TemplatedCheckStatistics<int64_t>(filter, min_val.GetValueUnsafe<int64_t>(),
-		                                         max_val.GetValueUnsafe<int64_t>());
-	case PhysicalType::INT128:
-		return TemplatedCheckStatistics<hugeint_t>(filter, min_val.GetValueUnsafe<hugeint_t>(),
-		                                           max_val.GetValueUnsafe<hugeint_t>());
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-}
-
-bool BFTableFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<BFTableFilter>();
-	return RefersToSameObject(filter, other.filter) && filters_null_values == other.filters_null_values &&
-	       key_column_name == other.key_column_name && key_type == other.key_type;
-}
-unique_ptr<TableFilter> BFTableFilter::Copy() const {
-	return make_uniq<BFTableFilter>(this->filter, this->filters_null_values, this->key_column_name, this->key_type);
-}
-
-unique_ptr<Expression> BFTableFilter::ToExpression(const Expression &column) const {
-	auto bound_constant = make_uniq<BoundConstantExpression>(Value(true));
-	return std::move(bound_constant);
-}
-
-void BFTableFilter::Serialize(Serializer &serializer) const {
+void LegacyBFTableFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WriteProperty<bool>(200, "filters_null_values", filters_null_values);
 	serializer.WriteProperty<string>(201, "key_column_name", key_column_name);
 	serializer.WriteProperty<LogicalType>(202, "key_type", key_type);
 }
 
-unique_ptr<TableFilter> BFTableFilter::Deserialize(Deserializer &deserializer) {
+unique_ptr<TableFilter> LegacyBFTableFilter::Deserialize(Deserializer &deserializer) {
 	auto filters_null_values = deserializer.ReadProperty<bool>(200, "filters_null_values");
 	auto key_column_name = deserializer.ReadProperty<string>(201, "key_column_name");
 	auto key_type = deserializer.ReadProperty<LogicalType>(202, "key_type");
 
-	BloomFilter filter;
-	auto result = make_uniq<BFTableFilter>(filter, filters_null_values, key_column_name, key_type);
+	auto result = make_uniq<LegacyBFTableFilter>(nullptr, filters_null_values, key_column_name, key_type);
 	return std::move(result);
 }
 
