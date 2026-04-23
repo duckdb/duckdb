@@ -794,7 +794,7 @@ typedef struct {
 // Typedefs mapping functions to struct entries
 //===--------------------------------------------------------------------===//
 // When building as a static extension, DuckDB symbols are resolved directly at link time.
-// The vtable (duckdb_ext_api) is not used — skip these macro redirections.
+// The vtable (duckdb_ext_api) is not used - skip these macro redirections.
 #ifndef DUCKDB_BUILD_STATIC_EXTENSION
 // Version v1.2.0
 #define duckdb_open                                    duckdb_ext_api.duckdb_open
@@ -1395,17 +1395,18 @@ typedef struct {
 #define duckdb_create_selection_vector                 duckdb_ext_api.duckdb_create_selection_vector
 #define duckdb_destroy_selection_vector                duckdb_ext_api.duckdb_destroy_selection_vector
 #define duckdb_selection_vector_get_data_ptr           duckdb_ext_api.duckdb_selection_vector_get_data_ptr
+
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
 //===--------------------------------------------------------------------===//
-// This goes in the c/c++ file containing the entrypoint (handle
 #ifdef DUCKDB_BUILD_STATIC_EXTENSION
-// No vtable global needed for static builds — DuckDB symbols are resolved directly at link time
+// No vtable global needed for static builds - DuckDB symbols are resolved directly at link time
 #define DUCKDB_EXTENSION_GLOBAL
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
 #else
+// This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL duckdb_ext_api_v1 duckdb_ext_api = {0};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)                                                   \
@@ -1434,7 +1435,7 @@ typedef struct {
 #ifdef DUCKDB_EXTENSION_NAME
 
 // Main entrypoint: opens (and closes) a connection automatically for the extension to register its functionality
-// through. DUCKDB_EXTENSION_API_INIT is a no-op when DUCKDB_BUILD_STATIC_EXTENSION is defined.
+// through
 #define DUCKDB_EXTENSION_ENTRYPOINT                                                                                    \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_connection connection, duckdb_extension_info info, struct duckdb_extension_access * access);            \
@@ -1463,5 +1464,4 @@ typedef struct {
 		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(info, access);                       \
 	}                                                                                                                  \
 	DUCKDB_EXTENSION_EXTERN_C_GUARD_CLOSE static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)
-
-#endif // DUCKDB_EXTENSION_NAME
+#endif
