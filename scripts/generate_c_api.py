@@ -849,15 +849,25 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
         typedefs += '\n'
 
     duckdb_ext_h += COMMENT_HEADER("Typedefs mapping functions to struct entries")
+    duckdb_ext_h += "// When building as a static extension, DuckDB symbols are resolved directly at link time.\n"
+    duckdb_ext_h += "// The vtable (duckdb_ext_api) is not used - skip these macro redirections.\n"
+    duckdb_ext_h += "#ifndef DUCKDB_BUILD_STATIC_EXTENSION\n"
     duckdb_ext_h += typedefs
+    duckdb_ext_h += "#endif // DUCKDB_BUILD_STATIC_EXTENSION\n"
     duckdb_ext_h += "\n"
 
     # Add The struct global macros
     duckdb_ext_h += COMMENT_HEADER("Struct Global Macros")
-    duckdb_ext_h += f"""// This goes in the c/c++ file containing the entrypoint (handle
+    duckdb_ext_h += f"""#ifdef DUCKDB_BUILD_STATIC_EXTENSION
+// No vtable global needed for static builds - DuckDB symbols are resolved directly at link time
+#define DUCKDB_EXTENSION_GLOBAL
+#define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version)
+#else
+// This goes in the c/c++ file containing the entrypoint (handle
 #define DUCKDB_EXTENSION_GLOBAL {DUCKDB_EXT_API_STRUCT_TYPENAME} {DUCKDB_EXT_API_VAR_NAME} = {{0}};
 // Initializes the C Extension API: First thing to call in the extension entrypoint
 #define DUCKDB_EXTENSION_API_INIT(info, access, minimum_api_version) {DUCKDB_EXT_API_STRUCT_TYPENAME} * res = ({DUCKDB_EXT_API_STRUCT_TYPENAME} *)access->get_api(info, minimum_api_version); if (!res) {{return false;}}; {DUCKDB_EXT_API_VAR_NAME} = *res;
+#endif // DUCKDB_BUILD_STATIC_EXTENSION
 """
     duckdb_ext_h += f"""
 // Place in global scope of any C/C++ file that needs to access the extension API
