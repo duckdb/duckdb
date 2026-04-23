@@ -1147,6 +1147,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto &reader = *reader_data.reader;
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
+	map<idx_t, MultiFileGlobalIndex> local_to_global;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get();
@@ -1192,6 +1193,12 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
+		local_to_global.emplace(local_id, global_index);
+	}
+	reader.filter_global_indices.clear();
+	reader.filter_global_indices.reserve(local_to_global.size());
+	for (auto &p : local_to_global) {
+		reader.filter_global_indices.push_back(p.second);
 	}
 	return result;
 }

@@ -24,6 +24,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/allocator.hpp"
@@ -1337,10 +1338,10 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(context, file, flags);
 	}
-	state.adaptive_filter.reset();
 	state.scan_filters.clear();
 	if (filters) {
-		state.adaptive_filter = make_uniq<AdaptiveFilter>(*filters);
+		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, context.logger,
+		                                                     file.path);
 		for (auto &entry : *filters) {
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
@@ -1571,13 +1572,15 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 		if (filters) {
 			// first load the columns that are used in filters
-			auto filter_state = state.adaptive_filter->BeginFilter();
+			auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+			auto filter_state = adaptive_filter.BeginFilter();
+			const auto &permutation = adaptive_filter.GetPermutation();
 			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 				if (filter_count == 0) {
 					// if no rows are left we can stop checking filters
 					break;
 				}
-				auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+				auto &scan_filter = state.scan_filters[permutation[i]];
 				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
@@ -1588,7 +1591,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
-			state.adaptive_filter->EndFilter(filter_state);
+			adaptive_filter.EndFilter(filter_state);
 		}
 
 		// we still may have to read some cols
