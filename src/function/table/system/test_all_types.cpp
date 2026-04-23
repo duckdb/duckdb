@@ -423,7 +423,7 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &vals = data.entries[data.offset++];
 		for (idx_t col_idx = 0; col_idx < vals.size(); col_idx++) {
-			output.SetValue(col_idx, count, vals[col_idx]);
+			output.data[col_idx].Append(vals[col_idx]);
 		}
 		count++;
 	}

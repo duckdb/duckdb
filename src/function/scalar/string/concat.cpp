@@ -205,16 +205,16 @@ void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
 	if (is_operator) {
-		bound_function.arguments[0] = type;
-		bound_function.arguments[1] = type;
+		bound_function.GetArguments()[0] = type;
+		bound_function.GetArguments()[1] = type;
 		bound_function.SetReturnType(type);
 		return;
 	}
 
-	for (auto &arg : bound_function.arguments) {
+	for (auto &arg : bound_function.GetArguments()) {
 		arg = type;
 	}
-	bound_function.varargs = type;
+	bound_function.SetVarArgs(type);
 	bound_function.SetReturnType(type);
 }
 
@@ -299,8 +299,8 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 		if (is_operator) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
-		} else if (bound_function.varargs.id() == LogicalTypeId::LIST ||
-		           bound_function.varargs.id() == LogicalTypeId::ARRAY) {
+		} else if (bound_function.GetVarArgs().id() == LogicalTypeId::LIST ||
+		           bound_function.GetVarArgs().id() == LogicalTypeId::ARRAY) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 		} else {
@@ -344,7 +344,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
 	auto fun =
 	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
-	fun.varargs = LogicalType::LIST(LogicalType::ANY);
+	fun.SetVarArgs(LogicalType::LIST(LogicalType::ANY));
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
@@ -360,7 +360,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
 	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
-	concat.varargs = LogicalType::ANY;
+	concat.SetVarArgs(LogicalType::ANY);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }

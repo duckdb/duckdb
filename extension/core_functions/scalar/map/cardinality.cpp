@@ -39,7 +39,7 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 
 ScalarFunction CardinalityFun::GetFunction() {
 	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return fun;
 }
