@@ -5272,19 +5272,19 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetTableFilterTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(TableFilterType::CONSTANT_COMPARISON), "CONSTANT_COMPARISON" },
-		{ static_cast<uint32_t>(TableFilterType::IS_NULL), "IS_NULL" },
-		{ static_cast<uint32_t>(TableFilterType::IS_NOT_NULL), "IS_NOT_NULL" },
-		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_OR), "CONJUNCTION_OR" },
-		{ static_cast<uint32_t>(TableFilterType::CONJUNCTION_AND), "CONJUNCTION_AND" },
-		{ static_cast<uint32_t>(TableFilterType::STRUCT_EXTRACT), "STRUCT_EXTRACT" },
-		{ static_cast<uint32_t>(TableFilterType::OPTIONAL_FILTER), "OPTIONAL_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::IN_FILTER), "IN_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::DYNAMIC_FILTER), "DYNAMIC_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_CONSTANT_COMPARISON), "LEGACY_CONSTANT_COMPARISON" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_IS_NULL), "LEGACY_IS_NULL" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_IS_NOT_NULL), "LEGACY_IS_NOT_NULL" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_CONJUNCTION_OR), "LEGACY_CONJUNCTION_OR" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_CONJUNCTION_AND), "LEGACY_CONJUNCTION_AND" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_STRUCT_EXTRACT), "LEGACY_STRUCT_EXTRACT" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_OPTIONAL_FILTER), "LEGACY_OPTIONAL_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_IN_FILTER), "LEGACY_IN_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_DYNAMIC_FILTER), "LEGACY_DYNAMIC_FILTER" },
 		{ static_cast<uint32_t>(TableFilterType::EXPRESSION_FILTER), "EXPRESSION_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::BLOOM_FILTER), "BLOOM_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::PERFECT_HASH_JOIN_FILTER), "PERFECT_HASH_JOIN_FILTER" },
-		{ static_cast<uint32_t>(TableFilterType::PREFIX_RANGE_FILTER), "PREFIX_RANGE_FILTER" }
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_BLOOM_FILTER), "LEGACY_BLOOM_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_PERFECT_HASH_JOIN_FILTER), "LEGACY_PERFECT_HASH_JOIN_FILTER" },
+		{ static_cast<uint32_t>(TableFilterType::LEGACY_PREFIX_RANGE_FILTER), "LEGACY_PREFIX_RANGE_FILTER" }
 	};
 	return values;
 }
