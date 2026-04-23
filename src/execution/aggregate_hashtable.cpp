@@ -465,8 +465,8 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		result_addresses[i] = dict_addresses[dict_idx];
 	}
 
-	// finally process the aggregates
-	UpdateAggregates(payload, filter);
+	// finally process the aggregates (ht_offsets are only valid for unique entries, not the full payload)
+	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
 }
@@ -509,9 +509,9 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		result_addresses[i] = aggregate_address;
 	}
 
-	// process the aggregates
+	// process the aggregates (ht_offsets are only valid for the single constant group, not the full payload)
 	// FIXME: we can use simple_update here if the aggregates support it
-	UpdateAggregates(payload, filter);
+	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
 }
@@ -543,7 +543,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, state.hashes, payload, filter);
 }
 
-void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter) {
+void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                  bool ht_offsets_valid) {
 	// Now every cell has an entry, update the aggregates
 	auto &aggregates = layout_ptr->GetAggregates();
 
@@ -551,7 +552,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 	// kernels; everyone else keeps using the regular scatter path.
 	ClusteredAggr clustered;
 	bool use_clustered = false;
-	if (any_clustered && !skip_lookups && capacity <= InitialCapacity()) {
+	if (any_clustered && !skip_lookups && ht_offsets_valid && capacity <= InitialCapacity()) {
 		if (!clustered_arena) {
 			clustered_arena =
 			    make_unsafe_uniq_array_uninitialized<uint16_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);

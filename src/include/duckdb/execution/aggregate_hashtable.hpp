@@ -228,7 +228,7 @@ private:
 	//! Reinserts tuples (triggered by Resize)
 	void ReinsertTuples(PartitionedTupleData &data);
 
-	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid = true);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
