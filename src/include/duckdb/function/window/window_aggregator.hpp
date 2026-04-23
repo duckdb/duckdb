@@ -116,7 +116,7 @@ public:
 	const idx_t state_size;
 	//! The window exclusion clause
 	const WindowExcludeMode exclude_mode;
-	//! Partition collection column indicies
+	//! Partition collection column indices
 	vector<column_t> child_idx;
 };
 

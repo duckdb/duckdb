@@ -38,6 +38,7 @@ class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
+struct ExtraDropInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -140,6 +141,8 @@ private:
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGAlterSeqStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGDropStmt &stmt);
+	static unique_ptr<ExtraDropInfo> TransformDropTrigger(duckdb_libpgquery::PGList &obj_list,
+	                                                      string &trigger_name_out);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt);
 	InsertColumnOrder TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order);
@@ -302,8 +305,8 @@ private:
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
 	void TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map);
-	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
-	                                                  CommonTableExpressionInfo &info);
+	unique_ptr<QueryNode> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
+	                                            CommonTableExpressionInfo &info);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
 	unique_ptr<ParsedExpression> TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,

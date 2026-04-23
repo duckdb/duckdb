@@ -440,7 +440,7 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) returns the number of rows that have been scanned
 	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan

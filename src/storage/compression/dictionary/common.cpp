@@ -47,10 +47,10 @@ bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	for (auto entry : scan_vector.Values<string_t>(count)) {
 		idx_t string_size = 0;
 		bool new_string = false;
-		auto row_is_valid = entry.is_valid;
+		auto row_is_valid = entry.IsValid();
 
 		if (row_is_valid) {
-			auto &str = entry.value;
+			auto &str = entry.GetValue();
 			string_size = str.GetSize();
 			if (string_size >= StringUncompressed::GetStringBlockLimit(info.GetBlockSize())) {
 				// Big strings not implemented for dictionary compression
@@ -73,7 +73,7 @@ bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		if (!row_is_valid) {
 			AddNull();
 		} else if (new_string) {
-			AddNewString(entry.value);
+			AddNewString(entry.GetValue());
 		} else {
 			AddLastLookup();
 		}

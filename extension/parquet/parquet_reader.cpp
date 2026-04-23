@@ -1,5 +1,9 @@
 #include "parquet_reader.hpp"
 
+#include <string.h>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
@@ -10,23 +14,55 @@
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
-#include "mbedtls_wrapper.hpp"
 #include "reader/row_number_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "thrift_tools.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "duckdb/logging/log_type.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/setting_info.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/transport/TTransport.h"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -428,6 +464,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
+
 		if (indexes.empty()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
@@ -526,6 +563,38 @@ static bool IsGeometryType(const SchemaElement &s_ele, const ParquetFileMetadata
 	}
 
 	return false;
+}
+
+static bool IsVariantType(const SchemaElement &root, const vector<ParquetColumnSchema> &children) {
+	if (children.size() < 2) {
+		return false;
+	}
+	//! Names have to be 'metadata' and 'value' respectively
+	//! But apparently some writers can mix the order, so we are more lenient
+	if (children[0].name != "metadata" && children[1].name != "metadata") {
+		return false;
+	}
+	if (children[0].name != "value" && children[1].name != "value") {
+		return false;
+	}
+
+	//! Verify types
+	if (children[0].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (children[1].parquet_type != duckdb_parquet::Type::BYTE_ARRAY) {
+		return false;
+	}
+	if (children.size() == 3) {
+		auto &typed_value = children[2];
+		if (typed_value.name != "typed_value") {
+			return false;
+		}
+		throw NotImplementedException("Shredded Variants are not supported yet");
+	} else if (children.size() != 2) {
+		return false;
+	}
+	return true;
 }
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
@@ -629,6 +698,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 		const bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
 		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
 		bool is_variant = s_ele.__isset.logicalType && s_ele.logicalType.__isset.VARIANT == true;
+		if (!is_variant && parquet_options.variant_legacy_encoding && IsVariantType(s_ele, child_schemas)) {
+			is_variant = true;
+		}
 
 		if (!is_map_kv && this_idx > 0) {
 			// check if the parent node of this is a map
@@ -797,6 +869,9 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	Value lookup_value;
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
+	}
+	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
+		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
 
@@ -1105,13 +1180,25 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		}
 		return and_result;
 	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &min_value = pq_col_stats.min_value;
-		auto &max_value = pq_col_stats.max_value;
-		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
+		auto &expr = *expr_filter.expr;
+
+		// Handle comparison expressions (from ConstantFilter conversion)
+		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
+			auto &comp = expr.Cast<BoundComparisonExpression>();
+			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+				auto &constant = comp.right->Cast<BoundConstantExpression>();
+				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
+					auto &min_value = pq_col_stats.min_value;
+					auto &max_value = pq_col_stats.max_value;
+					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+					                                 comp.type, StringValue::Get(constant.value));
+				}
+			}
+		}
+		return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 	}
 	default:
 		return filter.CheckStatistics(stats);
@@ -1499,8 +1586,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
-				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
+				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
+				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
+				                    state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
@@ -1524,7 +1612,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
+			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
+			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
 			result.Slice(state.sel, filter_count);
@@ -1539,7 +1628,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
+			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
+			auto rows_read = child_reader.Read(reader_input, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, scan_count, rows_read);

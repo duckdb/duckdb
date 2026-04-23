@@ -5,8 +5,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTransformer &transformer,
-                                                                          optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto comment_on_type = transformer.Transform<CatalogType>(list_pr.Child<ListParseResult>(2));
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(3));
 	auto comment_value = transformer.Transform<Value>(list_pr.Child<ListParseResult>(5));
@@ -41,19 +41,17 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommentStatement(PEGTra
 	return std::move(result);
 }
 
-CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transformer,
-                                                          optional_ptr<ParseResult> parse_result) {
-	auto list_pr = parse_result->Cast<ListParseResult>();
-	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).result);
+CatalogType PEGTransformerFactory::TransformCommentOnType(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.TransformEnum<CatalogType>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer,
-                                                   optional_ptr<ParseResult> parse_result) {
+Value PEGTransformerFactory::TransformCommentValue(PEGTransformer &transformer, ParseResult &parse_result) {
 	// CommentValue <- 'NULL'i / StringLiteral
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.result->type == ParseResultType::STRING) {
-		return Value(choice_pr.result->Cast<StringLiteralParseResult>().result);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.GetResult().type == ParseResultType::STRING) {
+		return Value(choice_pr.GetResult().Cast<StringLiteralParseResult>().result);
 	}
 	return Value();
 }

@@ -110,7 +110,7 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
+		struct _stati64 status; // typos:ignore
 		_wstati64(wpath, &status);
 		if (status.st_mode & S_IFREG) {
 			return true;
@@ -122,7 +122,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
+		struct _stati64 status; // typos:ignore
 		_wstati64(wpath, &status);
 		if (status.st_mode & _S_IFCHR) {
 			return true;
@@ -454,7 +454,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 				if (rc == -1) {
 					extended_error += ". Also, failed closing file";
 				}
-				extended_error += ". See also https://duckdb.org/docs/stable/connect/concurrency";
+				extended_error += ". See also https://duckdb.org/docs/current/connect/concurrency";
 				throw IOException({{"errno", std::to_string(retained_errno)}}, "Could not set lock on file \"%s\": %s",
 				                  path, extended_error);
 			}

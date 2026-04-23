@@ -49,6 +49,10 @@ bool DuckCatalog::IsDuckCatalog() {
 	return true;
 }
 
+bool DuckCatalog::SupportsMultipleDMLCTEs() const {
+	return true;
+}
+
 optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 	return dependency_manager.get();
 }

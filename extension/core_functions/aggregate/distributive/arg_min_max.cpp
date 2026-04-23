@@ -185,12 +185,14 @@ struct ArgMinMaxBase {
 	}
 
 	template <ArgMinMaxNullHandling NULL_HANDLING>
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -305,7 +307,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		SelectionVector sel(assign_sel);
+		SelectionVector sel(assign_sel, assign_count);
 		Vector sliced_input(arg, sel, assign_count);
 		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
@@ -348,12 +350,14 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 	}
 
 	template <ArgMinMaxNullHandling NULL_HANDLING>
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &context = input.GetClientContext();
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
 		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
 			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
 		}
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -397,7 +401,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                         AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
+	function.GetArguments() = {type, by_type};
 	function.return_type = type;
 	return function;
 #endif
@@ -458,7 +462,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
+	function.GetArguments() = {type, by_type};
 	function.return_type = type;
 #endif
 	return function;
@@ -518,8 +522,10 @@ AggregateFunction GetDecimalArgMinMaxFunction(const LogicalType &by_type, const 
 }
 
 template <class OP, ArgMinMaxNullHandling NULL_HANDLING>
-unique_ptr<FunctionData> BindDecimalArgMinMax(ClientContext &context, AggregateFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->return_type;
 	auto by_type = arguments[1]->return_type;
 
@@ -848,8 +854,9 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 }
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
-unique_ptr<FunctionData> ArgMinMaxNBind(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

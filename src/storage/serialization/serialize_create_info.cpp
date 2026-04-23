@@ -155,6 +155,9 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<int64_t>(204, "max_value", max_value);
 	serializer.WritePropertyWithDefault<int64_t>(205, "start_value", start_value);
 	serializer.WritePropertyWithDefault<bool>(206, "cycle", cycle);
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
+	}
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
@@ -166,6 +169,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<int64_t>(204, "max_value", result->max_value);
 	deserializer.ReadPropertyWithDefault<int64_t>(205, "start_value", result->start_value);
 	deserializer.ReadPropertyWithDefault<bool>(206, "cycle", result->cycle);
+	deserializer.ReadPropertyWithDefault<optional<int64_t>>(207, "last_value", result->last_value);
 	return std::move(result);
 }
 
@@ -200,7 +204,7 @@ void CreateTriggerInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty<TriggerEventType>(205, "event_type", event_type);
 	serializer.WritePropertyWithDefault<vector<string>>(206, "columns", columns);
 	serializer.WriteProperty<TriggerForEach>(207, "for_each", for_each);
-	serializer.WritePropertyWithDefault<string>(208, "sql_body_text", sql_body_text);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", trigger_action);
 }
 
 unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer) {
@@ -212,7 +216,7 @@ unique_ptr<CreateInfo> CreateTriggerInfo::Deserialize(Deserializer &deserializer
 	deserializer.ReadProperty<TriggerEventType>(205, "event_type", result->event_type);
 	deserializer.ReadPropertyWithDefault<vector<string>>(206, "columns", result->columns);
 	deserializer.ReadProperty<TriggerForEach>(207, "for_each", result->for_each);
-	deserializer.ReadPropertyWithDefault<string>(208, "sql_body_text", result->sql_body_text);
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(208, "trigger_action", result->trigger_action);
 	return std::move(result);
 }
 

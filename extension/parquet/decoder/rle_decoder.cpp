@@ -1,9 +1,19 @@
 #include "decoder/rle_decoder.hpp"
+
+#include <algorithm>
+#include <stdexcept>
+
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "reader/templated_column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class Vector;
 
 RLEDecoder::RLEDecoder(ColumnReader &reader) : reader(reader), decoded_data_buffer(reader.encoding_buffers[0]) {
 }

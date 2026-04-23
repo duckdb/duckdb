@@ -20,6 +20,11 @@ from python_helpers import open_utf8
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from format_test_benchmark import format_file_content
 
+# Ensure binaries installed into the current Python environment are discoverable.
+# This is required when invoking this script via an explicit venv python path.
+python_bin_dir = os.path.dirname(os.path.abspath(sys.executable))
+os.environ['PATH'] = python_bin_dir + os.pathsep + os.environ.get('PATH', '')
+
 try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
@@ -152,6 +157,27 @@ if args.directories:
     formatted_directories = args.directories
 
 
+def get_typos_targets():
+    if format_all:
+        return [path for path in formatted_directories if os.path.exists(path)]
+    return sorted(set([f.full_path for f in files if os.path.exists(f.full_path)]))
+
+
+def run_typos_check():
+    typos_targets = get_typos_targets()
+    if not typos_targets:
+        return 0
+    typos_command = ['typos', '--force-exclude']
+    if not check_only:
+        typos_command.append('-w')
+    typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
+    try:
+        return subprocess.call(typos_command)
+    except FileNotFoundError:
+        print('typos not found. Install it with "brew install typos-cli"')
+        return 1
+
+
 def file_is_ignored(full_path):
     if os.path.basename(full_path) in ignored_files:
         return True
@@ -192,7 +218,7 @@ if check_only:
 
 def get_changed_files(revision):
     proc = subprocess.Popen(['git', 'diff', '--name-only', revision], stdout=subprocess.PIPE)
-    files = proc.stdout.read().decode('utf8').split('\n')
+    files = proc.stdout.read().decode('utf8', errors='backslashreplace').split('\n')
     changed_files = []
     for f in files:
         if not can_format_file(f):
@@ -214,7 +240,7 @@ elif os.path.isdir(revision):
     for fname in changed_files:
         print(fname)
 elif not format_all:
-    if revision == 'main':
+    if revision == 'main' and os.environ.get('DUCKDB_FORMAT_SKIP_FETCH') != '1':
         # fetch new changes when comparing to the master
         os.system("git fetch origin main:main")
     print(action + " since branch or revision: " + revision)
@@ -299,7 +325,7 @@ def get_formatted_text(f, full_path, directory, ext):
     if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage' or ext == '.benchmark':
         # optimization: import and call the function directly
         # instead of running a subprocess
-        with open(full_path, "r", encoding="utf-8") as f:
+        with open(full_path, "r", encoding="utf-8", errors='surrogateescape') as f:
             original_lines = f.readlines()
         formatted, status = format_file_content(full_path, original_lines)
         if formatted is None:
@@ -308,10 +334,13 @@ def get_formatted_text(f, full_path, directory, ext):
         return formatted
     proc_command = format_commands[ext].split(' ') + [full_path]
     proc = subprocess.Popen(
-        proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(full_path) if ext == '.py' else None
+        proc_command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=open(full_path, encoding='utf8', errors='backslashreplace') if ext == '.py' else None,
     )
-    new_text = proc.stdout.read().decode('utf8')
-    stderr = proc.stderr.read().decode('utf8')
+    new_text = proc.stdout.read().decode('utf8', errors='backslashreplace')
+    stderr = proc.stderr.read().decode('utf8', errors='backslashreplace')
     if len(stderr) > 0:
         print(os.getcwd())
         print("Failed to format file " + full_path)
@@ -331,7 +360,7 @@ def file_is_generated(text):
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    with open_utf8(full_path, 'r') as f:
+    with open_utf8(full_path, 'r', errors='surrogateescape') as f:
         old_text = f.read()
     # do not format auto-generated files
     if file_is_generated(old_text) and ext != '.py':
@@ -361,7 +390,7 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
-        with open_utf8(tmpfile, 'w+', newline='\n') as f:
+        with open_utf8(tmpfile, 'w+', newline='\n', errors='surrogateescape') as f:
             f.write(new_text)
         shutil.move(tmpfile, full_path)
 
@@ -427,6 +456,8 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.shutdown(wait=True, cancel_futures=True)
         raise
 
+typos_status = run_typos_check()
+
 if check_only:
     if len(difference_files) > 0:
         print("")
@@ -437,6 +468,10 @@ if check_only:
             print("- " + fname)
         print('Run "make format-fix" to fix these differences automatically')
         exit(1)
+    if typos_status != 0:
+        exit(1)
     else:
         print("Passed format-check")
         exit(0)
+elif typos_status != 0:
+    exit(1)

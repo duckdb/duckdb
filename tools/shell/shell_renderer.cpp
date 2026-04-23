@@ -323,7 +323,7 @@ bool RenderingQueryResult::TryConvertChunk() {
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < result.ColumnCount(); c++) {
 			auto &str_vec = varchar_chunk->data[c];
-			auto strings = duckdb::FlatVector::GetData<duckdb::string_t>(str_vec);
+			auto strings = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(str_vec);
 			for (idx_t r = 0; r < varchar_chunk->size(); r++) {
 				if (duckdb::FlatVector::IsNull(str_vec, r)) {
 					continue;
@@ -1629,6 +1629,7 @@ public:
 
 private:
 	duckdb::BoxRendererConfig config;
+	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
 	unique_ptr<duckdb::ColumnDataCollectionWrapper> wrapper;
 	string error_str;
@@ -1667,7 +1668,9 @@ ModeDuckBoxRenderer::ModeDuckBoxRenderer(ShellState &state) : ShellRenderer(stat
 	config.decimal_separator = state.decimal_separator;
 	config.thousand_separator = state.thousand_separator;
 	config.large_number_rendering = static_cast<duckdb::LargeNumberRendering>(static_cast<int>(large_rendering));
-	config.hidden_rows_hint = "use .last to show entire result";
+	if (state.pager_mode != PagerMode::PAGER_OFF) {
+		config.hidden_rows_hint = "use .last to show entire result";
+	}
 }
 
 void ModeDuckBoxRenderer::RemoveRenderLimits() {
@@ -1682,7 +1685,8 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 	auto &con = *state.conn;
 	try {
 		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(materialized.Collection());
-		render_state = renderer.Prepare(*con.context, result.metadata.column_names, *wrapper);
+		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
+		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
 		// store the error - throw on render
 		error_str = ex.what();

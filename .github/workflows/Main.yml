@@ -1,6 +1,17 @@
 name: Main
 on:
   workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: boolean
+        default: false
+      run_all:
+        type: boolean
+        default: true
   repository_dispatch:
   push:
     branches-ignore:
@@ -48,8 +59,8 @@ jobs:
     # We run all other jobs on PRs only if they are not draft PR
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
-      (github.event.action != 'synchronize' || github.event.pull_request.user.login == 'smvv')
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-small' || 'ubuntu-latest' }}
+      (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
@@ -62,36 +73,27 @@ jobs:
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
+      changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
+      changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
+      run_slow_tests: ${{ steps.config.outputs.run_slow_tests }}
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
+      enabled_jobs: ${{ steps.config.outputs.enabled_jobs }}
+      save_cache: ${{ steps.config.outputs.save_cache }}
+      runner_provider: ${{ steps.config.outputs.runner_provider }}
+      skip_tests: ${{ steps.config.outputs.skip_tests }}
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
-      # Avoid downloading blobs >50 KB until they are actually needed by git.
-      GIT_FETCH_FILTER: blob:limit=50k
-      GIT_CONFIG_COUNT: 1
-      GIT_CONFIG_KEY_0: checkout.workers
-      GIT_CONFIG_VALUE_0: 4
     steps:
-      - uses: actions/checkout@v6
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
-          filter: ${{ env.GIT_FETCH_FILTER }}
-
-      - name: Fetch PR base branch history
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          # changed-files needs base branch history for merge-base lookup
-          # and the exact base SHA for comparison.
-          git fetch --no-tags --depth=100 --filter="${GIT_FETCH_FILTER}" origin \
-            +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} \
-            ${{ github.event.pull_request.base.sha }}
+          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+          fetch_depth: 0
 
       - name: Detect changes
         id: changed
         uses: tj-actions/changed-files@v47
         with:
-          base_sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          skip_initial_fetch: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           files_yaml: |
             github:
               - .github/**
@@ -99,6 +101,13 @@ jobs:
               - .github/config/**
               - .github/patches/**
               - extensions/**
+            tests:
+              - test/**/*.test
+            tests_slow:
+              - test/**/*.cpp
+              - test/**/*.test_slow
+            julia:
+              - tools/juliapkg/**
 
       - name: Check CI
         if: steps.changed.outputs.github_any_changed == 'true'
@@ -108,7 +117,7 @@ jobs:
           shellcheck --version
           echo "::endgroup::"
           echo "::group::Install actionlint"
-          bash <(curl --retry 5 https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          python3 scripts/ci/retry.py -- bash -c 'bash <(curl --fail --retry 5 --retry-all-errors https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)'
           echo "::endgroup::"
           ./actionlint -color
           make test_ci
@@ -125,8 +134,18 @@ jobs:
 
           echo "extra_exclude_archs=$extra_exclude_archs" >> "$GITHUB_OUTPUT"
 
+          if [[ "${{ steps.changed.outputs.tests_slow_any_changed }}" == "true" || "${{ github.ref_name }}" == "main" ]]; then
+            run_slow_tests=true
+          else
+            run_slow_tests=false
+          fi
+          echo "run_slow_tests=$run_slow_tests" >> "$GITHUB_OUTPUT"
+          skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
+          echo "skip_tests=$skip_tests" >> "$GITHUB_OUTPUT"
+
           # Fall back to GitHub-native runners for forks.
           if [[ "${{ github.repository }}" == "duckdb/duckdb" ]]; then
+            runner_provider=namespace
             runner_linux_small=namespace-profile-linux-small
             runner_linux_x64=namespace-profile-linux-x64
             runner_linux_22_x64=namespace-profile-linux-22-x64
@@ -135,6 +154,7 @@ jobs:
             runner_macos_arm64=namespace-profile-macos-arm64
             runner_macos_14_arm64=namespace-profile-macos-14-arm64
           else
+            runner_provider=github
             runner_linux_small=ubuntu-latest
             runner_linux_x64=ubuntu-latest
             runner_linux_22_x64=ubuntu-22.04
@@ -145,6 +165,7 @@ jobs:
           fi
 
           {
+            echo "runner_provider=$runner_provider"
             echo "runner_linux_small=$runner_linux_small"
             echo "runner_linux_x64=$runner_linux_x64"
             echo "runner_linux_22_x64=$runner_linux_22_x64"
@@ -192,25 +213,27 @@ jobs:
             )
           fi
 
+          python3 scripts/ci/job_stages.py \
+            --event "${{ github.event_name }}" \
+            --ref_name "${{ github.ref_name }}" \
+            --repository "${{ github.repository }}" \
+            --skip-tests "$skip_tests" \
+            --changed-keys "${{ steps.changed.outputs.changed_keys }}"
+
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
           echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
           echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
 
+      - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(steps.config.outputs.save_cache) }}
+
       - name: Install tools
-        run: |
-          make format_tools
-          echo "::group::Installed Python packages"
-          pip3 freeze
-          echo "::endgroup::"
+        run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
         run: |
-          echo "::group::Formatter versions and config"
-          clang-format --version
-          clang-format --dump-config
-          black --version
-          echo "::endgroup::"
-          make format-check-silent enum-integrity-check
+          make format-check-silent enum-integrity-check -j -Otarget
           echo "::group::Check generated files"
           make generate-files
           git diff --exit-code
@@ -219,6 +242,7 @@ jobs:
  linux-debug:
     name: Linux Debug
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
@@ -233,7 +257,11 @@ jobs:
       EXTENSIONS_STATIC_BUILD: 0
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -242,28 +270,29 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Build
-      run: python3 scripts/ci/retry.py -- make relassert
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
 
-    - name: Smoke tests
-      run: make smoke
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      with:
+        build: python3 scripts/ci/retry.py -- make relassert
+        test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
+        bundle: make relassert-artifact
+        upload-name: linux-debug-relassert-build
+        upload-path: build/relassert-artifact.tar.gz
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
-    - name: Prepare relassert artifact
-      run: make relassert-artifact
-
-    - name: Upload relassert build artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: linux-debug-relassert-build
-        path: build/relassert-artifact.tar.gz
-        if-no-files-found: error
-
  linux-debug-tests:
     name: Linux Debug Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug-tests') }}
     needs:
       - prepare
       - linux-debug
@@ -275,7 +304,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-debug-relassert-build
         path: build
@@ -296,6 +325,7 @@ jobs:
       run: make unittest_relassert
 
  regression:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'regression') }}
     uses: ./.github/workflows/Regression.yml
     secrets: inherit
     needs:
@@ -304,11 +334,14 @@ jobs:
       - linux-release
     with:
       build_current_release: false
+      run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
       runner_linux_small: ${{ needs.prepare.outputs.runner_linux_small }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  tidy-check:
     name: Tidy Check
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
     runs-on: ubuntu-24.04
     env:
@@ -324,10 +357,13 @@ jobs:
     - name: Install
       run: |
         python3 scripts/ci/retry.py -- make toolsci
+        python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Download clang-tidy-cache
       if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
@@ -345,136 +381,172 @@ jobs:
       if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
+ check-clangd-tidy:
+   name: Tidy Check (clangd)
+   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
+   needs: prepare
+   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+
+   steps:
+     - name: "Checkout"
+       uses: duckdb/duckdb-ci/.github/actions/checkout@main
+       with:
+         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
+         fetch_depth: 0
+
+     - name: Install
+       run: |
+         python3 scripts/ci/retry.py -- make toolsci
+         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
+         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
+         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
+         python3 scripts/ci/retry.py -- make install-clangd-tidy
+
+     - name: Tidy Check
+       run: |
+         mkdir -p ~/.config/clangd
+         cat > ~/.config/clangd/config.yaml <<'EOF'
+         Diagnostics:
+           UnusedIncludes: None
+         EOF
+         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+
  extensions:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
     uses: ./.github/workflows/Extensions.yml
     secrets: inherit
     needs:
       - prepare
       - linux-debug
+      - linux-release
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
-      skip_tests: false
-      run_all: true
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
+      save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
  wasm-eh:
     name: Wasm EH
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-eh') }}
     needs:
       - prepare
       - linux-debug
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+    env:
+      GEN: make
 
     steps:
     - uses: actions/checkout@v6
 
-    - uses: mymindstorm/setup-emsdk@v13
+    - uses: mymindstorm/setup-emsdk@v16
       with:
         version: latest
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
     - name: Build
       run: make wasm_ci
 
  linux-release:
     name: Linux Release
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
-
-    - uses: ./.github/actions/linux_release_build
       with:
-        artifact_name: linux-release-build
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Write changed tests file
+      shell: bash
+      run: printf '%s\n' "${{ needs.prepare.outputs.changed_tests_files }}" | tr ' ' '\n' | sed '/^$/d' > "${{ runner.temp }}/changed_tests.txt"
+
+    - name: Build DuckDB
+      uses: duckdb/duckdb-ci/build-duckdb@main
+      env:
+        BUILD_BENCHMARK: 1
+        BUILD_JEMALLOC: 1
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        DISABLE_SANITIZER: 1
+        SMOKE_UNITTEST: build/release/test/unittest
+      with:
+        build: python3 scripts/ci/retry.py -- make release
+        test: ${{ fromJson(needs.prepare.outputs.skip_tests) && 'true' || 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' }}
+        bundle: make release-artifact
+        upload-name: linux-release-build
+        vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
+        save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - name: Clean
+      run: make clean
 
     - name: Build linux default release
-      run: make clean release
-
-    - name: Prepare linux default release artifact
-      run: |
-        make release-artifact
-        mv build/release-artifact.tar.gz build/linux-default-release.tar.gz
-
-    - name: Upload linux default release artifact
-      uses: actions/upload-artifact@v7
+      uses: duckdb/duckdb-ci/build-duckdb@main
       with:
-        name: linux-default-release-build
-        path: build/linux-default-release.tar.gz
-        if-no-files-found: error
+        build: python3 scripts/ci/retry.py -- make release
+
+    - name: Symbol Checks
+      run: make -j4 --output-sync=target symbol-checks
 
  linux-release-tests:
     name: Linux Release Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
     needs:
       - prepare
       - linux-release
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
-    - uses: actions/checkout@v6
+    - name: "Checkout"
+      uses: duckdb/duckdb-ci/.github/actions/checkout@main
+      with:
+        runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+        fetch_depth: 0
+
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - name: Download release build artifact
-      uses: actions/download-artifact@v5
+    - name: Download linux release artifact
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
 
-    - name: Extract release build artifact
-      shell: bash
+    - name: Extract linux release artifact
       run: |
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
-    - name: Test
+    - name: Run all release unit tests
       run: make allunit
-
- symbol-leakage:
-    name: Symbol Leakage
-    runs-on: ubuntu-24.04
-    needs:
-      - prepare
-      - linux-release
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Download linux default release artifact
-      uses: actions/download-artifact@v5
-      with:
-        name: linux-default-release-build
-        path: build
-
-    - name: Extract linux default release artifact
-      run: |
-        rm -rf build/release
-        tar -xzf build/linux-default-release.tar.gz -C build
-
-    - name: Symbol Leakage Test
-      run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Banned Symbol Check
-      run: python3 scripts/banned_symbols_check.py --directory build/release/src
 
  linux-release-cli:
     name: Linux CLI (${{ matrix.config.arch }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -490,11 +562,13 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install pytest
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         python3 -m pip install --break-system-packages pytest
 
     - uses: ./.github/actions/ccache-action
       with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-glibc
 
     - name: Build
@@ -531,10 +605,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v7
@@ -546,21 +619,31 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Release tests
-      run: make alltest_release_tag
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
+      shell: bash
+      run: |
+        if [[ "${{ needs.prepare.outputs.run_slow_tests }}" == "true" ]]; then
+          make alltest_release_tag
+        else
+          make test_release_tag
+        fi
 
     - name: Tools Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-musl-release-cli:
     name: Linux CLI (${{ matrix.config.arch }}-musl)
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-musl-release-cli') }}
     needs:
       - prepare
-      - linux-release-tests
+      - linux-release
     strategy:
       fail-fast: false
       matrix:
@@ -577,6 +660,7 @@ jobs:
 
     - uses: ./.github/actions/ccache-action
       with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
         key: linux-cli-${{ matrix.config.arch }}-musl
 
     - name: Build
@@ -615,10 +699,9 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip build/release/duckdb
         gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
-        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-${{ matrix.config.arch }}-musl.zip build/release/src/libduckdb*.* src/include/duckdb.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.zip duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - uses: actions/upload-artifact@v7
@@ -630,11 +713,15 @@ jobs:
           duckdb_cli-linux-${{ matrix.config.arch }}-musl.gz
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
+      env:
+        RUN_SLOW_TESTS: ${{ needs.prepare.outputs.run_slow_tests }}
       run: |
         docker run   \
         -v"$PWD:$PWD" \
         -e CI=1      \
+        -e RUN_SLOW_TESTS="$RUN_SLOW_TESTS" \
         alpine:3.22                                                         \
         sh -c "
           set -e
@@ -645,7 +732,11 @@ jobs:
             py3-pytest
           cd \"$PWD\"
           echo Release tests
-          make alltest_release_tag
+          if [ \"\$RUN_SLOW_TESTS\" = \"true\" ]; then
+            make alltest_release_tag
+          else
+            make test_release_tag
+          fi
           echo Tools Tests
           python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
           echo Examples
@@ -655,8 +746,10 @@ jobs:
 
  main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ github.ref_name == 'main' }}
-    needs: linux-release-cli
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'main_julia') }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -678,7 +771,7 @@ jobs:
         version: ${{ matrix.version }}
         arch: ${{ matrix.arch }}
 
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-linux-amd64
         path: linux-release-artifacts
@@ -694,6 +787,7 @@ jobs:
         ls -lah build/release/src/libduckdb.so*
 
     - name: Run Tests
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: |
         JULIA_DUCKDB_LIBRARY="$(pwd)/build/release/src/libduckdb.so"
@@ -714,7 +808,10 @@ jobs:
 
  upload-libduckdb-src:
     name: Upload libduckdb-src.zip
-    needs: linux-release-cli
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'upload-libduckdb-src') }}
+    needs:
+      - prepare
+      - linux-release-cli
     runs-on: ubuntu-latest
 
     steps:
@@ -730,11 +827,11 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
@@ -744,19 +841,82 @@ jobs:
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'windows') }}
     uses: ./.github/workflows/Windows.yml
     secrets: inherit
     needs:
       - prepare
       - linux-debug
     with:
-      git_ref: ${{ github.sha }}
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
-      skip_tests: false
-      run_all: true
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ osx:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'osx') }}
+    uses: ./.github/workflows/OSX.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+      run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
+
+ static-libraries:
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libraries') }}
+    uses: ./.github/workflows/BundleStaticLibs.yml
+    secrets: inherit
+    needs: prepare
+    with:
+      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+
+ release-status:
+    runs-on: ubuntu-slim
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'release-status') }}
+    needs:
+      - prepare
+      - extensions
+      - osx
+      - windows
+      - static-libraries
+    outputs:
+      success: ${{ steps.set-output.outputs.success }}
+    steps:
+      - id: set-output
+        shell: bash
+        run: |
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+ notify-external-repos:
+    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'notify-external-repos') }}
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - prepare
+      - release-status
+    with:
+      is-success: ${{ fromJSON(needs.release-status.outputs.success) }}
+      target-branch: ${{ (github.event_name != 'workflow_dispatch') && github.ref || (inputs.git_ref == '' && github.ref || inputs.git_ref) }}
+      duckdb-sha: ${{ github.sha }}
+      triggering-event: ${{ github.event_name }}
+      should-publish: true
+      override-git-describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'no-string-inline') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -779,22 +939,26 @@ jobs:
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
         run: python3 scripts/ci/retry.py -- make relassert
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_relassert
 
  vector-sizes:
     name: Vector Sizes
-    runs-on: ${{ needs.prepare.outputs.runner_linux_22_x64 }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'vector-sizes') }}
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
       - linux-debug
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
       DUCKDB_TEST_DESCRIPTION: 'Compiled with STANDARD_VECTOR_SIZE=2. Use require vector_size 2048 to skip tests.'
 
@@ -805,18 +969,23 @@ jobs:
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
+        with:
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
       - name: Build
         run: STANDARD_VECTOR_SIZE=2 make reldebug
 
       - name: Test
+        if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
         run: make unittest_reldebug
 
  valgrind:
     name: Valgrind
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'valgrind') }}
     runs-on: ubuntu-24.04
-    needs: linux-debug
+    needs:
+      - prepare
+      - linux-debug
     env:
       CC: clang
       CXX: clang++
@@ -835,6 +1004,8 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq valgrind clang
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
       shell: bash
@@ -845,11 +1016,13 @@ jobs:
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
       run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  threadsan:
     name: Thread Sanitizer
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'threadsan') }}
     needs:
       - prepare
       - linux-debug
@@ -870,40 +1043,25 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
+      with:
+        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Build
       run: THREADSAN=1 make reldebug
 
     - name: Test
+      if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: make unittest_threadsan
 
- amalgamation-tests:
-    name: Amalgamation Tests
-    runs-on: ${{ needs.prepare.outputs.runner_linux_small }}
-    needs:
-      - prepare
-      - linux-debug
-    env:
-      CC: clang
-      CXX: clang++
-
-    steps:
-    - uses: actions/checkout@v6
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - name: Generate Amalgamation
-      shell: bash
-      run:  |
-          python scripts/amalgamation.py --extended
-          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
+    - name: Test Extra
+      if: ${{ github.ref_name == 'main' && !fromJson(needs.prepare.outputs.skip_tests) }}
+      run: make unittest_threadsan_extra
 
  # TODO: Consider bringing back fts
  # TODO: DEBUG_STACKTRACE: 1 + reldebug ?
  linux-configs:
     name: Tests a release build with different configurations
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-configs') }}
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
@@ -921,7 +1079,7 @@ jobs:
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
-      uses: actions/download-artifact@v5
+      uses: actions/download-artifact@v8
       with:
         name: linux-release-build
         path: build
@@ -967,6 +1125,12 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/wal_verification.json ./build/release/test/unittest
+
+    - name: test/configs/vacuum_rebuild_indexes_force_storage.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
@@ -1081,3 +1245,53 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
+
+ summary:
+    name: Summary
+    if: ${{ always() }}
+    runs-on: ubuntu-slim
+    needs:
+      - prepare
+      - linux-debug
+      - linux-debug-tests
+      - regression
+      - tidy-check
+      - check-clangd-tidy
+      - extensions
+      - wasm-eh
+      - linux-release
+      - linux-release-tests
+      - linux-release-cli
+      - linux-musl-release-cli
+      - main_julia
+      - upload-libduckdb-src
+      - swift
+      - windows
+      - osx
+      - static-libraries
+      - release-status
+      - notify-external-repos
+      - no-string-inline
+      - vector-sizes
+      - valgrind
+      - threadsan
+      - linux-configs
+    steps:
+      - name: Check CI status
+        shell: bash
+        run: |
+          NEEDS_JSON='${{ toJSON(needs) }}'
+
+          failed_or_cancelled=$(
+            jq -r '
+              to_entries[]
+              | select(.value.result == "failure" or .value.result == "cancelled")
+              | "\(.key): \(.value.result)"
+            ' <<<"$NEEDS_JSON"
+          )
+
+          if [[ -n "$failed_or_cancelled" ]]; then
+            echo "One or more required jobs failed or were cancelled."
+            echo "$failed_or_cancelled"
+            exit 1
+          fi

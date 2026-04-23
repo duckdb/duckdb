@@ -684,7 +684,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
-	// Mininum of the two
+	// Minimum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 
@@ -924,8 +924,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		chunk.data[entry].Reference(scan_chunk.data[chunk_index++]);
 	}
 	for (auto null_group : radix_ht.null_groups) {
-		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(chunk.data[null_group], true);
+		ConstantVector::SetNull(chunk.data[null_group]);
 	}
 	D_ASSERT(radix_ht.grouping_set.size() + radix_ht.null_groups.size() == radix_ht.op.GroupCount());
 	for (idx_t col_idx = 0; col_idx < radix_ht.op.aggregates.size(); col_idx++) {
@@ -973,8 +972,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// For each column in the aggregates, set to initial state
 			chunk.SetCardinality(1);
 			for (auto null_group : null_groups) {
-				chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[null_group], true);
+				ConstantVector::SetNull(chunk.data[null_group]);
 			}
 			ArenaAllocator allocator(BufferAllocator::Get(context.client));
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {

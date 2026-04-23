@@ -325,6 +325,15 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
+    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+        # Use the pre-cloned source from extension/external/<name> (populated by
+        # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
+        set("${NAME}_extension_fc_SOURCE_DIR" "${CMAKE_SOURCE_DIR}/extension/external/${NAME}")
+        if(NOT EXISTS "${${NAME}_extension_fc_SOURCE_DIR}/.git")
+            message(FATAL_ERROR
+                "DUCKDB_NEW_EXTENSION_BUILD is set but extension '${NAME}' was not found at "
+                "extension/external/${NAME}. Run 'make sync_out_of_tree_extensions' first.")
+        endif()
     else()
         unset(PATCH_COMMAND)
         if (${APPLY_PATCHES})
@@ -353,6 +362,8 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
 
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
+    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+        message(STATUS "Load extension '${NAME}' from extension/external/${NAME} @ ${EXTERNAL_EXTENSION_VERSION}")
     else()
         message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
     endif()

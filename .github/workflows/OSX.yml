@@ -27,6 +27,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'test/configs/**'
@@ -88,16 +89,6 @@ jobs:
       if: ${{ !inputs.skip_tests }}
       shell: bash
       run: make unittest_release
-
-    - name: Amalgamation
-      if: ${{ !inputs.skip_tests }}
-      shell: bash
-      run: |
-        python scripts/amalgamation.py --extended
-        cd src/amalgamation
-        clang++ -std=c++17 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DNDEBUG -O0 -std=c++17 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DDEBUG -O0 -std=c++17 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
@@ -174,8 +165,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
-          python scripts/amalgamation.py
-          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          zip -j -y libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/include/duckdb.h
 
           mkdir build/release_arm64 build/release_amd64
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb

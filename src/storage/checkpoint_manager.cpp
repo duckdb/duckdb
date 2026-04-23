@@ -8,6 +8,8 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_trigger_info.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -146,6 +148,20 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 		}
 		for (auto &view : views) {
 			entries.push_back(view.get());
+		}
+
+		// Scan triggers from each table directly (triggers are nested under their table)
+		for (auto &table_entry : tables) {
+			auto &table = table_entry.get().Cast<TableCatalogEntry>();
+			if (!table.IsDuckTable()) {
+				continue;
+			}
+			auto &duck_table = table.Cast<DuckTableEntry>();
+			duck_table.ScanTriggersNonTransactional([&](CatalogEntry &entry) {
+				if (!entry.internal) {
+					entries.push_back(entry);
+				}
+			});
 		}
 
 		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
@@ -317,12 +333,12 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 		// truncate the WAL
 		if (has_wal) {
-			unique_ptr<lock_guard<mutex>> owned_wal_lock;
-			optional_ptr<lock_guard<mutex>> wal_lock;
+			unique_lock<mutex> owned_wal_lock;
+			optional_ptr<unique_lock<mutex>> wal_lock;
 			if (!options.wal_lock) {
 				// not holding the WAL lock yet - grab it
 				owned_wal_lock = storage_manager.GetWALLock();
-				wal_lock = *owned_wal_lock;
+				wal_lock = owned_wal_lock;
 			} else {
 				// we already have the WAL lock - just refer to it
 				wal_lock = options.wal_lock;
@@ -440,6 +456,11 @@ void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
 		WriteIndex(index, serializer);
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY: {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		WriteTrigger(trigger, serializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -489,6 +510,10 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 		ReadIndex(transaction, deserializer);
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY: {
+		ReadTrigger(transaction, deserializer);
+		break;
+	}
 	default:
 		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
@@ -518,10 +543,31 @@ void CheckpointReader::ReadView(CatalogTransaction transaction, Deserializer &de
 }
 
 //===--------------------------------------------------------------------===//
+// Triggers
+//===--------------------------------------------------------------------===//
+void CheckpointWriter::WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer) {
+	serializer.WriteProperty(100, "trigger", &trigger);
+}
+
+void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "trigger");
+	auto &trigger_info = info->Cast<CreateTriggerInfo>();
+	trigger_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	auto &schema = catalog.GetSchema(transaction, trigger_info.schema);
+	auto table_entry = schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, trigger_info.base_table->table_name);
+	if (!table_entry) {
+		throw IOException("corrupt database file - trigger entry without table entry");
+	}
+	auto &duck_table = table_entry->Cast<DuckTableEntry>();
+	duck_table.CreateTrigger(transaction, trigger_info);
+}
+
+//===--------------------------------------------------------------------===//
 // Sequences
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
-	serializer.WriteProperty(100, "sequence", &seq);
+	auto info = seq.GetInfo();
+	serializer.WriteProperty(100, "sequence", info.get());
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {

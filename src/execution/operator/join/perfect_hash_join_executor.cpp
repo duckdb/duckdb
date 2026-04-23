@@ -9,6 +9,10 @@ PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p,
     : join(join_p), ht(ht_p) {
 }
 
+const LogicalType &PerfectHashJoinExecutor::GetKeyType() const {
+	return ht.equality_types[0];
+}
+
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -129,7 +133,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 //===--------------------------------------------------------------------===//
 // Build
 //===--------------------------------------------------------------------===//
-bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::BuildPerfectHashTable() {
 	// First, allocate memory for each build column
 	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : join.rhs_output_columns.col_types) {
@@ -141,15 +145,15 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	bitmap_build_idx.SetAllInvalid(build_size);
 
 	// Now fill columns with build data
-	return FullScanHashTable(key_type);
+	return FullScanHashTable();
 }
 
-bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
+bool PerfectHashJoinExecutor::FullScanHashTable() {
 	auto &data_collection = ht.GetDataCollection();
 
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
-	Vector build_vector(key_type, ht.Count());
+	Vector build_vector(GetKeyType(), ht.Count());
 	auto key_count = ht.ScanKeyColumn(tuples_addresses, build_vector, 0);
 
 	// Now fill the selection vector using the build keys and create a sequential vector
@@ -175,7 +179,7 @@ bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
 		auto &vector = perfect_hash_table[i]->data;
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-		auto &col_mask = FlatVector::Validity(vector);
+		auto &col_mask = FlatVector::ValidityMutable(vector);
 		col_mask.Reset(build_size);
 		data_collection.Gather(tuples_addresses, sel_tuples, key_count, output_col_idx, vector, sel_build, nullptr);
 		// This ensures the empty entries are set to NULL, so that the emitted dictionary vectors make sense
@@ -295,7 +299,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	for (idx_t i = 0; i < join.rhs_output_columns.col_types.size(); i++) {
 		auto &result_vector = result.data[lhs_output_columns.ColumnCount() + i];
 		D_ASSERT(result_vector.GetType() == ht.layout_ptr->GetTypes()[ht.output_columns[i]]);
-		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec);
+		result_vector.Dictionary(perfect_hash_table[i], state.build_sel_vec, probe_sel_count);
 	}
 	return OperatorResultType::NEED_MORE_INPUT;
 }
@@ -376,7 +380,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		if (!entry.IsValid()) {
 			continue;
 		}
-		const auto &input_value = entry.value;
+		const auto &input_value = entry.GetValue();
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			// subtract min value to get the idx

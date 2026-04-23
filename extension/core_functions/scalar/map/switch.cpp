@@ -41,8 +41,9 @@ idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
 	return DConstants::INVALID_INDEX;
 }
 
-unique_ptr<FunctionData> SwitchBindReturnType(ClientContext &context, ScalarFunction &function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	auto map_index = FindMapArgumentIndex(arguments);
 	if (map_index == DConstants::INVALID_INDEX) {
 		throw BinderException("Switch: No map argument found");

@@ -330,6 +330,12 @@
         "id": 206,
         "name": "cycle",
         "type": "bool"
+      },
+      {
+        "id": 207,
+        "name": "last_value",
+        "type": "optional<int64_t>",
+        "version": "v2.0.0"
       }
     ]
   },
@@ -374,8 +380,8 @@
       },
       {
         "id": 208,
-        "name": "sql_body_text",
-        "type": "string"
+        "name": "trigger_action",
+        "type": "QueryNode*"
       }
     ]
   }

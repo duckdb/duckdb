@@ -16,10 +16,10 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.result);
+	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
 	if (!transformer.named_parameter_map.empty()) {
 		// Avoid overriding a previous move with nothing
 		result->named_param_map = transformer.named_parameter_map;
@@ -27,8 +27,37 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransforme
 	return result;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-                                                          Matcher &root_matcher) {
+static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
+                                                             const vector<MatcherToken> &tokens, ParseResult &stmt_pr,
+                                                             optional_idx terminator_offset) {
+	auto stmt = transformer.Transform<unique_ptr<SQLStatement>>(stmt_pr);
+
+	if (!transformer.named_parameter_map.empty()) {
+		stmt->named_param_map = transformer.named_parameter_map;
+	}
+	if (!transformer.pivot_entries.empty()) {
+		stmt = transformer.CreatePivotStatement(std::move(stmt));
+	}
+	transformer.Clear();
+
+	// Calculate location and length cleanly
+	if (stmt_pr.offset.IsValid()) {
+		stmt->stmt_location = stmt_pr.offset.GetIndex();
+
+		idx_t end_index =
+		    terminator_offset.IsValid() ? terminator_offset.GetIndex() : (tokens.back().offset + tokens.back().length);
+
+		stmt->stmt_length = end_index - stmt->stmt_location;
+	}
+
+	return stmt;
+}
+
+vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+                                                                  Matcher &root_matcher) {
+	if (tokens.empty()) {
+		return {};
+	}
 	string token_stream;
 	for (auto &token : tokens) {
 		token_stream += token.text + " ";
@@ -44,31 +73,75 @@ unique_ptr<SQLStatement> PEGTransformerFactory::Transform(vector<MatcherToken> &
 		if (error_token_idx >= tokens.size()) {
 			error_token_idx = tokens.size() - 1;
 		}
-		auto &error_token = tokens[error_token_idx];
-		string token_list;
-		for (idx_t i = 0; i < tokens.size(); i++) {
-			if (!token_list.empty()) {
-				token_list += "\n";
-			}
-			if (i < 10) {
-				token_list += " ";
-			}
-			token_list += to_string(i) + ":" + tokens[i].text;
+		idx_t stmt_start = error_token_idx;
+		while (stmt_start > 0 && tokens[stmt_start - 1].text != ";") {
+			stmt_start--;
 		}
+		idx_t stmt_end = error_token_idx;
+		while (stmt_end < tokens.size() && tokens[stmt_end].text != ";") {
+			stmt_end++;
+		}
+		if (stmt_start < stmt_end && (stmt_start > 0 || stmt_end < tokens.size())) {
+			vector<MatcherToken> statement_tokens;
+			statement_tokens.reserve(stmt_end - stmt_start);
+			for (idx_t i = stmt_start; i < stmt_end; i++) {
+				statement_tokens.push_back(tokens[i]);
+			}
+			Transform(statement_tokens, options, root_matcher);
+		}
+
+		auto &error_token = tokens[error_token_idx];
 		auto error_message = "syntax error at or near \"" + error_token.text + "\"";
 		throw ParserException::SyntaxError(token_stream, error_message, error_token.offset);
 	}
-	match_result->name = "Statement";
+	match_result->name = "Program";
+
+	// Program <- Statement? (';'+ Statement)* ';'*
+	// Program[0] = optional first Statement
+	// Program[1] = optional repeat of groups: (';'+ Statement)
+	// Program[2] = optional repeat of trailing ';'
+	auto &prog = match_result->Cast<ListParseResult>();
+
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
 	auto &factory = GetInstance();
 	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
 	                           factory.parser.rules, factory.enum_mappings, options);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(match_result);
-	if (!transformer.pivot_entries.empty()) {
-		result = transformer.CreatePivotStatement(std::move(result));
+
+	vector<unique_ptr<SQLStatement>> result;
+	optional_ptr<ParseResult> current_stmt;
+	auto &first_stmt = prog.Child<OptionalParseResult>(0);
+	if (first_stmt.HasResult()) {
+		current_stmt = first_stmt.GetResult();
 	}
-	transformer.Clear();
+
+	auto &statement_repeat = prog.Child<OptionalParseResult>(1);
+	if (statement_repeat.HasResult()) {
+		auto &repeat = statement_repeat.GetResult().Cast<RepeatParseResult>();
+		for (auto &child : repeat.GetChildren()) {
+			auto &child_list = child.get().Cast<ListParseResult>();
+			auto &separators = child_list.Child<RepeatParseResult>(0);
+			auto &next_stmt = child_list.GetChild(1);
+			if (current_stmt) {
+				auto separator_children = separators.GetChildren();
+				auto &separator_terminator = separator_children[0].get();
+				result.push_back(
+				    ExtractAndTransformStatement(transformer, tokens, *current_stmt, separator_terminator.offset));
+			}
+			current_stmt = next_stmt;
+		}
+	}
+	if (current_stmt) {
+		optional_idx trailing_terminator;
+		auto &trailing_repeat = prog.Child<OptionalParseResult>(2);
+		if (trailing_repeat.HasResult()) {
+			auto trailing_children = trailing_repeat.GetResult().Cast<RepeatParseResult>().GetChildren();
+			if (!trailing_children.empty()) {
+				trailing_terminator = trailing_children[0].get().offset;
+			}
+		}
+		result.push_back(ExtractAndTransformStatement(transformer, tokens, *current_stmt, trailing_terminator));
+	}
 	return result;
 }
 
@@ -116,6 +189,12 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
+void PEGTransformerFactory::RegisterAnalyze() {
+	// analyze.gram
+	REGISTER_TRANSFORM(TransformAnalyzeStatement);
+	REGISTER_TRANSFORM(TransformAnalyzeTarget);
+}
+
 void PEGTransformerFactory::RegisterAttach() {
 	// attach.gram
 	REGISTER_TRANSFORM(TransformAttachStatement);
@@ -126,16 +205,9 @@ void PEGTransformerFactory::RegisterAttach() {
 	REGISTER_TRANSFORM(TransformDatabasePath);
 }
 
-void PEGTransformerFactory::RegisterAnalyze() {
-	// analyze.gram
-	REGISTER_TRANSFORM(TransformAnalyzeStatement);
-	REGISTER_TRANSFORM(TransformAnalyzeTarget);
-}
-
 void PEGTransformerFactory::RegisterCall() {
 	// call.gram
 	REGISTER_TRANSFORM(TransformCallStatement);
-	REGISTER_TRANSFORM(TransformTableFunctionArguments);
 }
 
 void PEGTransformerFactory::RegisterCheckpoint() {
@@ -156,7 +228,6 @@ void PEGTransformerFactory::RegisterCommon() {
 	REGISTER_TRANSFORM(TransformStringLiteral);
 	REGISTER_TRANSFORM(TransformType);
 	REGISTER_TRANSFORM(TransformArrayBounds);
-	REGISTER_TRANSFORM(TransformArrayKeyword);
 	REGISTER_TRANSFORM(TransformSquareBracketsArray);
 	REGISTER_TRANSFORM(TransformTimeType);
 	REGISTER_TRANSFORM(TransformTimeZone);
@@ -197,7 +268,6 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformCopyTable);
 	REGISTER_TRANSFORM(TransformFromOrTo);
 	REGISTER_TRANSFORM(TransformCopyFileName);
-	REGISTER_TRANSFORM(TransformIdentifierColId);
 	REGISTER_TRANSFORM(TransformCopyOptions);
 	REGISTER_TRANSFORM(TransformSpecializedOptionList);
 	REGISTER_TRANSFORM(TransformSpecializedOption);
@@ -332,6 +402,7 @@ void PEGTransformerFactory::RegisterCreateView() {
 void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformCreateTriggerStmt);
 	REGISTER_TRANSFORM(TransformForEachClause);
+	REGISTER_TRANSFORM(TransformTriggerName);
 	REGISTER_TRANSFORM(TransformTriggerTiming);
 	REGISTER_TRANSFORM(TransformTriggerEvent);
 	REGISTER_TRANSFORM(TransformTriggerEventInsert);
@@ -385,6 +456,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropIndex);
 	REGISTER_TRANSFORM(TransformQualifiedIndexName);
 	REGISTER_TRANSFORM(TransformDropSequence);
+	REGISTER_TRANSFORM(TransformCollationName);
 	REGISTER_TRANSFORM(TransformDropCollation);
 	REGISTER_TRANSFORM(TransformDropType);
 	REGISTER_TRANSFORM(TransformDropBehavior);
@@ -469,6 +541,7 @@ void PEGTransformerFactory::RegisterExpression() {
 
 	REGISTER_TRANSFORM(TransformParameter);
 	REGISTER_TRANSFORM(TransformAnonymousParameter);
+	REGISTER_TRANSFORM(TransformQuestionMarkNumberedParameter);
 	REGISTER_TRANSFORM(TransformColLabelParameter);
 	REGISTER_TRANSFORM(TransformNumberedParameter);
 	REGISTER_TRANSFORM(TransformPositionalExpression);
@@ -490,11 +563,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformFunctionIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedFunctionName);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaFunctionName);
-	REGISTER_TRANSFORM(TransformOperator);
-	REGISTER_TRANSFORM(TransformConjunctionOperator);
-	REGISTER_TRANSFORM(TransformIsOperator);
-	REGISTER_TRANSFORM(TransformInOperator);
-	REGISTER_TRANSFORM(TransformBetweenOperator);
 	REGISTER_TRANSFORM(TransformParenthesisExpression);
 	REGISTER_TRANSFORM(TransformIndirection);
 	REGISTER_TRANSFORM(TransformCastOperator);
@@ -704,12 +772,11 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformSchemaQualification);
 	REGISTER_TRANSFORM(TransformCatalogQualification);
 	REGISTER_TRANSFORM(TransformQualifiedName);
-	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformCatalogReservedSchemaIdentifier);
 	REGISTER_TRANSFORM(TransformSchemaReservedIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformReservedIdentifierOrStringLiteral);
-	REGISTER_TRANSFORM(TransformTableNameIdentifierOrStringLiteral);
 	REGISTER_TRANSFORM(TransformWhereClause);
+	REGISTER_TRANSFORM(TransformTableFunctionArguments);
 
 	REGISTER_TRANSFORM(TransformTargetList);
 	REGISTER_TRANSFORM(TransformAliasedExpression);
@@ -831,6 +898,9 @@ void PEGTransformerFactory::RegisterSet() {
 	REGISTER_TRANSFORM(TransformSetVariable);
 	REGISTER_TRANSFORM(TransformStandardAssignment);
 	REGISTER_TRANSFORM(TransformVariableList);
+	REGISTER_TRANSFORM(TransformZoneValue);
+	REGISTER_TRANSFORM(TransformZoneIntervalWithInterval);
+	REGISTER_TRANSFORM(TransformZoneIntervalWithPrecision);
 }
 
 void PEGTransformerFactory::RegisterTransaction() {
@@ -1073,27 +1143,25 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterEnums();
 }
 
-vector<optional_ptr<ParseResult>>
-PEGTransformerFactory::ExtractParseResultsFromList(optional_ptr<ParseResult> parse_result) {
+vector<reference<ParseResult>> PEGTransformerFactory::ExtractParseResultsFromList(ParseResult &parse_result) {
 	// List(D) <- D (',' D)* ','?
-	vector<optional_ptr<ParseResult>> result;
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	vector<reference<ParseResult>> result;
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	result.push_back(list_pr.GetChild(0));
-	auto opt_child = list_pr.Child<OptionalParseResult>(1);
+	auto &opt_child = list_pr.Child<OptionalParseResult>(1);
 	if (opt_child.HasResult()) {
-		auto repeat_result = opt_child.optional_result->Cast<RepeatParseResult>();
-		for (auto &child : repeat_result.children) {
-			auto &list_child = child->Cast<ListParseResult>();
+		auto &repeat_result = opt_child.GetResult().Cast<RepeatParseResult>();
+		for (auto &child : repeat_result.GetChildren()) {
+			auto &list_child = child.get().Cast<ListParseResult>();
 			result.push_back(list_child.GetChild(1));
 		}
 	}
-
 	return result;
 }
 
-optional_ptr<ParseResult> PEGTransformerFactory::ExtractResultFromParens(optional_ptr<ParseResult> parse_result) {
+ParseResult &PEGTransformerFactory::ExtractResultFromParens(ParseResult &parse_result) {
 	// Parens(D) <- '(' D ')'
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return list_pr.GetChild(1);
 }
 

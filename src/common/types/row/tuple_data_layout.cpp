@@ -167,18 +167,18 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 
 	// Compute row width
 	sort_width = 0;
-	bool all_valid_and_truely_constant = true;
+	bool all_valid_and_truly_constant = true;
 	for (idx_t order_idx = 0; order_idx < orders.size(); order_idx++) {
 		const auto &order = orders[order_idx];
 		const auto &logical_type = order.expression->return_type;
 		const auto physical_type = logical_type.InternalType();
 
-		if (all_valid_and_truely_constant && order.stats && !order.stats->CanHaveNull() &&
+		if (all_valid_and_truly_constant && order.stats && !order.stats->CanHaveNull() &&
 		    TypeIsConstantSize(physical_type) && sort_width < 7) {
 			// We don't have to sort by this byte, all values are valid
 			sort_skippable_bytes.emplace_back(sort_width);
 		} else {
-			all_valid_and_truely_constant = false;
+			all_valid_and_truly_constant = false;
 		}
 
 		if (TypeIsConstantSize(physical_type)) {

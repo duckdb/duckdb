@@ -33,8 +33,8 @@ public:
 		AppendOffsets(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
-		SelectionVector child_sel(child_indices.data());
-		auto &child = ListVector::GetEntry(input);
+		SelectionVector child_sel(child_indices.data(), child_indices.size());
+		auto &child = ListVector::GetChild(input);
 		auto child_size = child_indices.size();
 		Vector child_copy(child.GetType());
 		child_copy.Slice(child, child_sel, child_size);

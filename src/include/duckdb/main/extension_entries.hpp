@@ -411,6 +411,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_quote", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_plan", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_strip_nulls", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_structure", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1142,7 +1143,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
-    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+    {"parquet", "parquet"},
+    {"json", "json"},
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

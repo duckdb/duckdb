@@ -6,8 +6,8 @@
 namespace duckdb {
 
 unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTypeStmt(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto result = make_uniq<CreateStatement>();
 	auto if_not_exists = list_pr.Child<OptionalParseResult>(1).HasResult();
 	auto qualified_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(2));
@@ -22,43 +22,41 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateTypeStmt(PEGTr
 }
 
 unique_ptr<CreateTypeInfo> PEGTransformerFactory::TransformCreateType(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
+                                                                      ParseResult &parse_result) {
 	auto result = make_uniq<CreateTypeInfo>();
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.result->name == "EnumSelectType") {
-		result->query = transformer.Transform<unique_ptr<SelectStatement>>(choice_pr.result);
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	if (choice_pr.GetResult().name == "EnumSelectType") {
+		result->query = transformer.Transform<unique_ptr<SelectStatement>>(choice_pr.GetResult());
 		result->type = LogicalType::INVALID;
 	} else {
-		result->type = transformer.Transform<LogicalType>(choice_pr.result);
+		result->type = transformer.Transform<LogicalType>(choice_pr.GetResult());
 	}
 	return result;
 }
 
 unique_ptr<SelectStatement> PEGTransformerFactory::TransformEnumSelectType(PEGTransformer &transformer,
-                                                                           optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
 	return transformer.Transform<unique_ptr<SelectStatement>>(extract_parens);
 }
 
 LogicalType PEGTransformerFactory::TransformEnumStringLiteralList(PEGTransformer &transformer,
-                                                                  optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
-	auto extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto string_list_opt = extract_parens->Cast<OptionalParseResult>();
+                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto &string_list_opt = extract_parens.Cast<OptionalParseResult>();
 	if (!string_list_opt.HasResult()) {
 		Vector enum_vector(LogicalType::VARCHAR, (idx_t)0);
 		return LogicalType::ENUM(enum_vector, 0);
 	}
-	auto string_literal_list = ExtractParseResultsFromList(string_list_opt.optional_result);
+	auto string_literal_list = ExtractParseResultsFromList(string_list_opt.GetResult());
 
 	Vector enum_vector(LogicalType::VARCHAR, string_literal_list.size());
-	auto string_data = FlatVector::GetData<string_t>(enum_vector);
-	idx_t pos = 0;
+	auto string_data = FlatVector::Writer<string_t>(enum_vector, string_literal_list.size());
 	for (auto string_literal : string_literal_list) {
-		string_data[pos++] =
-		    StringVector::AddString(enum_vector, string_literal->Cast<StringLiteralParseResult>().result);
+		string_data.WriteValue(string_t(string_literal.get().Cast<StringLiteralParseResult>().result));
 	}
 	return LogicalType::ENUM(enum_vector, string_literal_list.size());
 }

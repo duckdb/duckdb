@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -334,6 +335,10 @@ void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	serializer.WriteProperty(102, "name", sequence.name);
 	serializer.WriteProperty(103, "usage_count", val.usage_count);
 	serializer.WriteProperty(104, "counter", val.counter);
+	// we only support writing last_value from version 2.0.0 onwards
+	if (storage_manager.GetStorageVersion() >= 8) {
+		serializer.WriteProperty(105, "last_value", val.entry->GetData().last_value);
+	}
 	serializer.End();
 }
 
@@ -428,6 +433,23 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 	WriteAheadLogSerializer serializer(*this, WALType::DROP_TYPE);
 	serializer.WriteProperty(101, "schema", entry.schema.name);
 	serializer.WriteProperty(102, "name", entry.name);
+	serializer.End();
+}
+
+//===--------------------------------------------------------------------===//
+// TRIGGERS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::CREATE_TRIGGER);
+	serializer.WriteProperty(101, "trigger", &entry);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteDropTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::DROP_TRIGGER);
+	serializer.WriteProperty(101, "schema", entry.schema.name);
+	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(103, "table", entry.base_table->table_name);
 	serializer.End();
 }
 

@@ -109,19 +109,35 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 }
 
 //===----------------------------------------------------------------------===//
+// Delta Only Variant Legacy Encoding
+//===----------------------------------------------------------------------===//
+void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.variant_legacy_encoding);
+}
+
+//===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
 void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
 	}
 }
 
 void AllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.allocator_flush_threshold = DBConfigOptions().allocator_flush_threshold;
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
 	}
 }
 
@@ -713,6 +729,15 @@ void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Vacuum Rebuild Indexes
+//===----------------------------------------------------------------------===//
+void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db || info.context) {
+		throw InvalidInputException("Cannot change vacuum_rebuild_indexes setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -1156,7 +1181,7 @@ void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &inp
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_http_logging = input.GetValue<bool>();
 
-	// NOTE: this is a deprecated setting: we mimick the old behaviour by setting the log storage output to STDOUT and
+	// NOTE: this is a deprecated setting: we mimic the old behaviour by setting the log storage output to STDOUT and
 	// enabling logging for http only. Note that this behaviour is slightly wonky in that it sets all sorts of logging
 	// config
 	auto &log_manager = LogManager::Get(context);
@@ -1276,6 +1301,9 @@ void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.SetDefaultMaxMemory();
+	if (db) {
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+	}
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {

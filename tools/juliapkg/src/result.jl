@@ -87,6 +87,15 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
     return unsafe_wrap(Array, data_ptr, len; own = false) |> copy
 end
 
+function convert_geometry(
+    column_data::ColumnConversionData,
+    val::Ptr{Cvoid},
+    idx::UInt64
+)::Base.CodeUnits{UInt8, String}
+    data_ptr, len = _string_data_ptr(val, idx)
+    return codeunits(unsafe_string(data_ptr, len))
+end
+
 convert_date(column_data::ColumnConversionData, val) = convert(Date, val)
 convert_time(column_data::ColumnConversionData, val) = convert(Time, val)
 convert_time_tz(column_data::ColumnConversionData, val) = convert(Time, convert(duckdb_time_tz, val))
@@ -518,6 +527,8 @@ function get_conversion_function(logical_type::LogicalType)::Function
         return convert_string
     elseif type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
         return convert_blob
+    elseif type == DUCKDB_TYPE_GEOMETRY
+        return convert_geometry
     elseif type == DUCKDB_TYPE_DATE
         return convert_date
     elseif type == DUCKDB_TYPE_TIME
@@ -556,7 +567,10 @@ end
 
 function get_conversion_loop_function(logical_type::LogicalType)::Function
     type = get_type_id(logical_type)
-    if type == DUCKDB_TYPE_VARCHAR || type == DUCKDB_TYPE_BLOB || type == DUCKDB_TYPE_BIT
+    if type == DUCKDB_TYPE_VARCHAR ||
+       type == DUCKDB_TYPE_BLOB ||
+       type == DUCKDB_TYPE_BIT ||
+       type == DUCKDB_TYPE_GEOMETRY
         return convert_vector_string
     elseif type == DUCKDB_TYPE_LIST
         return convert_vector_list

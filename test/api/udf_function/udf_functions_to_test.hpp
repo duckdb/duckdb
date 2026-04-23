@@ -135,7 +135,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[0]);
 		auto &validity = FlatVector::Validity(input.data[0]);
 
@@ -156,7 +156,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 	}
 	default: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
 		auto mask = FlatVector::Validity(input.data[0]);
 		FlatVector::SetValidity(result, mask);
@@ -180,7 +180,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[1]);
 		auto &validity = FlatVector::Validity(input.data[0]);
 
@@ -201,7 +201,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 	}
 	default: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
 		auto &mask = FlatVector::Validity(input.data[1]);
 		FlatVector::SetValidity(result, mask);
@@ -225,7 +225,7 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 	switch (GetTypeId<TYPE>()) {
 	case PhysicalType::VARCHAR: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<string_t>(result);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		auto ldata = FlatVector::GetData<string_t>(input.data[2]);
 		auto &validity = FlatVector::Validity(input.data[0]);
 
@@ -246,7 +246,7 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 	}
 	default: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetData<TYPE>(result);
+		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
 		auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
 		auto &mask = FlatVector::Validity(input.data[2]);
 		FlatVector::SetValidity(result, mask);
@@ -306,7 +306,7 @@ static void udf_max_flat(DataChunk &args, ExpressionState &state, Vector &result
 	D_ASSERT(TypeIsNumeric(GetTypeId<TYPE>()));
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<TYPE>(result);
+	auto result_data = FlatVector::GetDataMutable<TYPE>(result);
 
 	// Initialize the result vector with the minimum value from TYPE.
 	memset(result_data, std::numeric_limits<TYPE>::min(), args.size() * sizeof(TYPE));
@@ -494,7 +494,7 @@ struct UDFSum {
 		} else {
 			inputs[0].Flatten(input_count);
 			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
+			auto sdata = FlatVector::GetDataMutable<STATE_TYPE *>(states);
 			auto mask = FlatVector::Validity(inputs[0]);
 			if (mask.CanHaveNull()) {
 				// potential NULL values and NULL values are ignored
@@ -550,20 +550,21 @@ struct UDFSum {
 	template <class STATE_TYPE>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
-		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
+		auto sdata = source.Values<const STATE_TYPE *>(count);
+		auto tdata = FlatVector::GetDataMutable<STATE_TYPE *>(target);
 		// OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
 		for (idx_t i = 0; i < count; i++) {
-			if (!sdata[i]->isset) {
+			auto &state = *sdata[i].GetValue();
+			if (!state.isset) {
 				// source is NULL, nothing to do
 				return;
 			}
 			if (!tdata[i]->isset) {
 				// target is NULL, use source value directly
-				*tdata[i] = *sdata[i];
+				*tdata[i] = state;
 			} else {
 				// else perform the operation
-				tdata[i]->value += sdata[i]->value;
+				tdata[i]->value += state.value;
 			}
 		}
 	}
@@ -581,9 +582,9 @@ struct UDFSum {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
-				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Validity(result),
+				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::ValidityMutable(result),
 				                                          i + offset);
 			}
 		}

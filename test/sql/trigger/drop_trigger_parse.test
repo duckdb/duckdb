@@ -7,82 +7,80 @@ require autocomplete
 statement ok
 call enable_peg_parser();
 
-# Parsing succeeds but bind/execution will fail since catalog support is not yet implemented
-
-# Basic DROP TRIGGER
+# Basic DROP TRIGGER - table does not exist, expect catalog error (not parse/bind error)
 statement error
 DROP TRIGGER my_trigger ON my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# DROP TRIGGER IF EXISTS
+# DROP TRIGGER IF EXISTS - table does not exist, still errors (IF EXISTS only guards the trigger)
 statement error
 DROP TRIGGER IF EXISTS my_trigger ON my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# Schema-qualified trigger name
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
-# Schema-qualified table name
+# Schema-qualified table name - catalog error (table doesn't exist)
 statement error
 DROP TRIGGER my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# Both schema-qualified
+# Schema-qualified trigger name with schema-qualified table
 statement error
 DROP TRIGGER my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
-# DROP TRIGGER IF EXISTS with schema-qualified names
+# DROP TRIGGER IF EXISTS with schema-qualified trigger name
 statement error
 DROP TRIGGER IF EXISTS my_schema.my_trigger ON my_schema.my_table;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
-# CASCADE
+# CASCADE - table does not exist, expect catalog error
 statement error
 DROP TRIGGER my_trigger ON my_table CASCADE;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# RESTRICT
+# RESTRICT - table does not exist, expect catalog error
 statement error
 DROP TRIGGER my_trigger ON my_table RESTRICT;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# IF EXISTS with CASCADE
+# IF EXISTS with CASCADE - table does not exist, still errors (IF EXISTS only guards the trigger)
 statement error
 DROP TRIGGER IF EXISTS my_trigger ON my_table CASCADE;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
-# IF EXISTS with RESTRICT
+# IF EXISTS with RESTRICT - table does not exist, still errors (IF EXISTS only guards the trigger)
 statement error
 DROP TRIGGER IF EXISTS my_trigger ON my_table RESTRICT;
 ----
-DROP TRIGGER is not yet supported
+<REGEX>:.*my_table.*
 
 # Syntax errors - missing ON keyword
 statement error
 DROP TRIGGER my_trigger my_table;
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing table name
 statement error
 DROP TRIGGER my_trigger ON;
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing trigger name
 statement error
 DROP TRIGGER ON my_table;
 ----
-syntax error
+yntax error

@@ -58,9 +58,11 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
-unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
+unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	bool constant = false;
 	string path;
 	idx_t len = 0;
@@ -73,12 +75,12 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 		}
 	}
 	if (arguments[1]->return_type.IsIntegral()) {
-		bound_function.arguments[1] = LogicalType::BIGINT;
+		bound_function.GetArguments()[1] = LogicalType::BIGINT;
 	} else {
-		bound_function.arguments[1] = LogicalType::VARCHAR;
+		bound_function.GetArguments()[1] = LogicalType::VARCHAR;
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
-		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
+		bound_function.SetReturnType(LogicalType::LIST(bound_function.GetReturnType()));
 	}
 	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
@@ -99,9 +101,11 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 	return paths == other.paths && lens == other.lens;
 }
 
-unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                        vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
+unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -184,6 +188,7 @@ vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
 
 	functions.push_back(GetPrettyPrintFunction());
 	functions.push_back(GetNormalizeFunction());
+	functions.push_back(GetStripNullsFunction());
 
 	return functions;
 }
@@ -267,7 +272,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 
 static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &) {
 	UnifiedVectorFormat child_format;
-	ListVector::GetEntry(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
+	ListVector::GetChildMutable(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
 	const auto input_jsons = UnifiedVectorFormat::GetData<string_t>(child_format);
 
 	static constexpr char const *NULL_STRING = "NULL";
@@ -358,7 +363,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    }
 
 		    // Populate list
-		    const auto result_jsons = FlatVector::GetData<string_t>(ListVector::GetEntry(result));
+		    const auto result_jsons = FlatVector::GetDataMutable<string_t>(ListVector::GetChildMutable(result));
 		    size_t arr_idx, max;
 		    yyjson_val *val;
 		    yyjson_arr_foreach(doc->root, arr_idx, max, val) {
@@ -371,7 +376,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 		    return {current_size, arr_len};
 	    });
 
-	JSONAllocator::AddBuffer(ListVector::GetEntry(result), alc);
+	JSONAllocator::AddBuffer(ListVector::GetChildMutable(result), alc);
 	return success;
 }
 

@@ -230,7 +230,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	    1;
 
 	auto state_f_data = statef.GetData();
-	auto state_p_data = FlatVector::GetData<data_ptr_t>(statep);
+	auto state_p_data = ConstantVector::GetData<data_ptr_t>(statep);
 
 	auto &child_idx = gstate.aggregator.child_idx;
 	for (column_t c = 0; c < child_idx.size(); ++c) {
@@ -263,7 +263,7 @@ void WindowConstantAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 			}
 
 			//	Find the first value in [end, filtered)
-			sel.Initialize(filter_sel->data() + filter_idx);
+			sel.Initialize(filter_sel->data() + filter_idx, filtered - filter_idx);
 			idx_t nsel = 0;
 			for (; filter_idx < filtered; ++filter_idx, ++nsel) {
 				auto idx = filter_sel->get_index(filter_idx);

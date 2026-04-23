@@ -847,7 +847,8 @@ TEST_CASE("Path attributes", "[file_system]") {
 	std::string input;
 
 	SECTION("IsAbsolute + IsLocal") {
-		bool is_absolute_exp = false, is_local_exp = false;
+		bool is_absolute_exp = false;
+		bool is_local_exp = false;
 		enum AbsType { REL = false, ABS = true };
 		enum LocalTypeType { REMOTE = false, LOCAL_ = true };
 

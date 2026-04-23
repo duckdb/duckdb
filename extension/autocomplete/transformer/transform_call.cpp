@@ -6,8 +6,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformCallStatement(PEGTransformer &transformer,
-                                                                       optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto table_function_name = transformer.Transform<QualifiedName>(list_pr.Child<ListParseResult>(1));
 	auto function_children =
 	    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr.Child<ListParseResult>(2));

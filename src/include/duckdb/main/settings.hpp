@@ -91,6 +91,16 @@ static constexpr idx_t SETTING_INDEX_BASE = __COUNTER__ + 1;
 // Start of the auto-generated list of settings structures
 //===----------------------------------------------------------------------===//
 
+struct DeltaOnlyVariantEncodingEnabledSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "__delta_only_variant_encoding_enabled";
+	static constexpr const char *Description = "Enables the Parquet reader to identify a Variant structurally.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AccessModeSetting {
 	using RETURN_TYPE = AccessMode;
 	static constexpr const char *Name = "access_mode";
@@ -1025,7 +1035,7 @@ struct IeeeFloatingPointOpsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "ieee_floating_point_ops";
 	static constexpr const char *Description =
-	    "Use IEE754-compliant floating point operations (returning NAN instead of errors/NULL).";
+	    "Use IEEE 754 behavior for supported floating point operations, returning NAN/INF instead of errors/NULL.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "true";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
@@ -1573,6 +1583,19 @@ struct UsernameSetting {
 	static constexpr const char *DefaultValue = "";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct VacuumRebuildIndexesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "vacuum_rebuild_indexes";
+	static constexpr const char *Description =
+	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
+	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct ValidateExternalFileCacheSetting {

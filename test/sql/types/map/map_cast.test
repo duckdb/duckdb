@@ -35,3 +35,8 @@ query I
 SELECT MAP([1, 2, 3], ['A', 'B', 'C'])::MAP(TINYINT, VARCHAR)
 ----
 {1=A, 2=B, 3=C}
+
+query I
+SELECT TRY_CAST([MAP{'a':1}, MAP{'3':3}, MAP{'b':2}] AS MAP(INT,INT)[])
+----
+[NULL, {3=3}, NULL]

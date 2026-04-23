@@ -104,8 +104,20 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
+			if (cte.children[0]->HasSideEffects()) {
+				// DML CTEs must always execute for side effects even when unreferenced
+				return;
+			}
 			// this CTE is not referenced, we can remove it
 			op = std::move(op->children[1]);
+			return;
+		}
+		if (cte.children[0]->HasSideEffects()) {
+			// Never inline a DML CTE: inlining removes the LOGICAL_MATERIALIZED_CTE
+			// node that guarantees the DML executes exactly once and before the query
+			// side reads the modified table.  With ref_count==1, inlining would merge
+			// the DML into the query pipeline so it no longer precedes the scan.
+			// With ref_count>1 and requires_copy, the DML would execute once per copy.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {

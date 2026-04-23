@@ -49,3 +49,51 @@ SELECT date, name FROM ranked WHERE rn = 1 ORDER BY ALL
 2022-01-01	A
 2022-02-01	A
 
+# issue 21788
+statement ok
+CREATE TABLE t_load_runs(run_id INTEGER PRIMARY KEY, ingestion_key BIGINT, ingestion_status INTEGER, transform_status INTEGER);
+
+statement ok
+INSERT INTO t_load_runs VALUES (42, 42, 42, 42);
+
+statement ok
+CREATE TABLE t_data(descr VARCHAR, lang VARCHAR, tenant VARCHAR, lev BIGINT, categ VARCHAR, _ingested_on_utc BIGINT);
+
+statement ok
+INSERT INTO t_data VALUES ('mydescr', 'en', 'mytenant', 42, 'mycat', 42);
+
+query TTTT
+WITH raw_data AS (
+  SELECT row_number() OVER (PARTITION BY categ, tenant, lev, lang ORDER BY _ingested_on_utc DESC) AS rn, *
+  FROM t_data
+  WHERE _ingested_on_utc IN (SELECT ingestion_key FROM t_load_runs WHERE ingestion_status = 42 AND transform_status != 1)
+), v1 AS (
+  SELECT * FROM raw_data WHERE rn = 1
+)
+SELECT tenant, lang, descr, categ FROM v1
+----
+mytenant	en	mydescr	mycat
+
+# issue #21820
+statement ok
+CREATE OR REPLACE TABLE t1 (
+     t  INTEGER,
+     d  VARCHAR,
+     v  VARCHAR,
+     b  BOOLEAN,
+     v2 VARCHAR
+);
+
+statement ok
+INSERT INTO t1 VALUES (5, 'd', 'v', FALSE, 'a');
+
+statement ok
+CREATE OR REPLACE TABLE t2 (c1 VARCHAR, c2 VARCHAR);
+
+statement ok
+INSERT INTO t2
+SELECT t, v2
+FROM t1
+WHERE v IN ('n', 'v')
+  AND b = FALSE
+QUALIFY ROW_NUMBER() OVER (PARTITION BY d ORDER BY t DESC) = 1;

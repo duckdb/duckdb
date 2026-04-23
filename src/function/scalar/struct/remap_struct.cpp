@@ -101,17 +101,16 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
-		auto list_data = FlatVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto list_data = ConstantVector::GetData<list_entry_t>(input);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto entries = input.Values<list_entry_t>(result_size);
 		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < result_size; i++) {
 				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
@@ -119,7 +118,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 			}
 			has_top_level_null = result_validity.CanHaveNull();
 		}
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
 			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
@@ -141,8 +140,8 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 
 void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
                const vector<RemapColumnInfo> &remap_info) {
-	auto &input_vector = ListVector::GetEntry(input);
-	auto &result_vector = ListVector::GetEntry(result);
+	auto &input_vector = ListVector::GetChildMutable(input);
+	auto &result_vector = ListVector::GetChildMutable(result);
 	auto list_size = ListVector::GetListSize(input);
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
@@ -151,17 +150,16 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
-		auto list_data = FlatVector::GetData<list_entry_t>(input);
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto list_data = ConstantVector::GetData<list_entry_t>(input);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
 		auto entries = input.Values<list_entry_t>(result_size);
 		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < result_size; i++) {
 				if (!entries[i].IsValid()) {
 					result_validity.SetInvalid(i);
@@ -169,7 +167,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 			}
 			has_top_level_null = result_validity.CanHaveNull();
 		}
-		auto result_list_data = FlatVector::GetData<list_entry_t>(result);
+		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
 			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
@@ -196,14 +194,13 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result);
 			return;
 		}
 	} else {
 		auto validity_entries = input.Validity(result_size);
 		if (validity_entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 			for (idx_t i = 0; i < result_size; i++) {
 				if (!validity_entries.IsValid(i)) {
 					result_validity.SetInvalid(i);
@@ -537,8 +534,10 @@ struct RemapEntry {
 	}
 };
 
-unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFunction &bound_function,
-                                         vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 4);
 	for (idx_t arg_idx = 0; arg_idx < 3; arg_idx++) {
 		auto &arg = arguments[arg_idx];
@@ -610,10 +609,10 @@ unique_ptr<FunctionData> RemapStructBind(ClientContext &context, ScalarFunction 
 	// push a cast for argument 0 to match up the source types to the target
 	auto new_type = RemapEntry::RemapCast(from_type, remap_map);
 
-	bound_function.arguments[0] = std::move(new_type);
-	bound_function.arguments[1] = arguments[1]->return_type;
-	bound_function.arguments[2] = arguments[2]->return_type;
-	bound_function.arguments[3] = arguments[3]->return_type;
+	bound_function.GetArguments()[0] = std::move(new_type);
+	bound_function.GetArguments()[1] = arguments[1]->return_type;
+	bound_function.GetArguments()[2] = arguments[2]->return_type;
+	bound_function.GetArguments()[3] = arguments[3]->return_type;
 	bound_function.SetReturnType(arguments[1]->return_type);
 
 	return make_uniq<RemapStructBindData>(std::move(remap));

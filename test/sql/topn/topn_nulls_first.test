@@ -19,7 +19,7 @@ PRAGMA explain_output='OPTIMIZED_ONLY'
 query II nosort
 EXPLAIN SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;
 ----
-logical_opt	<REGEX>:.*TOP_N.*optional: v IS NULL.*
+logical_opt	<REGEX>:.*TOP_N.*optional:.*v IS NULL.*
 
 query I
 SELECT v FROM topn_nulls ORDER BY v NULLS FIRST LIMIT 6;

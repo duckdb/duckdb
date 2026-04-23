@@ -8,12 +8,35 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "core_functions/scalar/math_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 #include <cmath>
 #include <cstdint>
 
 namespace duckdb {
+
+template <class ERROR_OP, class IEEE_OP>
+static unique_ptr<FunctionData> BindIEEEFloatingUnary(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(input.GetClientContext())) {
+		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, IEEE_OP>);
+	} else {
+		bound_function.SetFunctionCallback(ScalarFunction::UnaryFunction<double, double, ERROR_OP>);
+	}
+	return nullptr;
+}
+
+template <class ERROR_OP, class IEEE_OP>
+static unique_ptr<FunctionData> BindIEEEFloatingBinary(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	if (Settings::Get<IeeeFloatingPointOpsSetting>(input.GetClientContext())) {
+		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, IEEE_OP>);
+	} else {
+		bound_function.SetFunctionCallback(ScalarFunction::BinaryFunction<double, double, double, ERROR_OP>);
+	}
+	return nullptr;
+}
 
 template <class TR, class OP>
 static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalType &type) {
@@ -141,8 +164,9 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 }
 
 template <class OP>
-static unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->return_type;
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
@@ -158,7 +182,7 @@ static unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, Scala
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::HUGEINT));
 		break;
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -331,8 +355,9 @@ static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state
 }
 
 template <class OP>
-static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context, ScalarFunction &bound_function,
-                                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// ceil essentially removes the scale
 	auto &decimal_type = arguments[0]->return_type;
 	auto scale = DecimalType::GetScale(decimal_type);
@@ -355,7 +380,7 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &c
 			break;
 		}
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(width, 0));
 	return nullptr;
 }
@@ -487,8 +512,10 @@ void GenericRoundPrecisionDecimal(DataChunk &input, ExpressionState &state, Vect
 }
 
 template <typename NEGOP, typename POSOP>
-unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &decimal_type = arguments[0]->return_type;
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -549,7 +576,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, Scala
 			}
 		}
 	}
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(width, target_scale));
 	return make_uniq<RoundPrecisionFunctionData>(round_value);
 }
@@ -967,11 +994,18 @@ struct SqrtOperator {
 		return std::sqrt(input);
 	}
 };
+
+struct IEEESqrtOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::sqrt(input);
+	}
+};
 } // namespace
 
 ScalarFunction SqrtFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, SqrtOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<SqrtOperator, IEEESqrtOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1013,10 +1047,17 @@ struct LnOperator {
 	}
 };
 
+struct IEEELnOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log(input);
+	}
+};
+
 } // namespace
 ScalarFunction LnFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LnOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<LnOperator, IEEELnOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1039,11 +1080,18 @@ struct Log10Operator {
 	}
 };
 
+struct IEEELog10Operator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log10(input);
+	}
+};
+
 } // namespace
 
 ScalarFunction Log10Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log10Operator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>);
 	function.SetFallible();
 	return function;
 }
@@ -1058,9 +1106,16 @@ struct LogBaseOperator {
 	static inline TR Operation(TA b, TB x) {
 		auto divisor = Log10Operator::Operation<TA, TR>(b);
 		if (divisor == 0) {
-			throw OutOfRangeException("divison by zero in based logarithm");
+			throw OutOfRangeException("division by zero in based logarithm");
 		}
 		return Log10Operator::Operation<TB, TR>(x) / divisor;
+	}
+};
+
+struct IEEELogBaseOperator {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA b, TB x) {
+		return IEEELog10Operator::Operation<TB, TR>(x) / IEEELog10Operator::Operation<TA, TR>(b);
 	}
 };
 
@@ -1068,10 +1123,10 @@ struct LogBaseOperator {
 
 ScalarFunctionSet LogFun::GetFunctions() {
 	ScalarFunctionSet funcs;
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                 ScalarFunction::UnaryFunction<double, double, Log10Operator>));
-	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                                 ScalarFunction::BinaryFunction<double, double, double, LogBaseOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                                 BindIEEEFloatingUnary<Log10Operator, IEEELog10Operator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                                 BindIEEEFloatingBinary<LogBaseOperator, IEEELogBaseOperator>));
 	for (auto &function : funcs.functions) {
 		function.SetFallible();
 	}
@@ -1094,11 +1149,18 @@ struct Log2Operator {
 		return std::log2(input);
 	}
 };
+
+struct IEEELog2Operator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::log2(input);
+	}
+};
 } // namespace
 
 ScalarFunction Log2Fun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, Log2Operator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<Log2Operator, IEEELog2Operator>);
 	function.SetFallible();
 	return function;
 }
@@ -1287,8 +1349,8 @@ struct SinOperator {
 } // namespace
 
 ScalarFunction SinFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<SinOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<SinOperator>, SinOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1306,8 +1368,8 @@ struct CosOperator {
 } // namespace
 
 ScalarFunction CosFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<CosOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<CosOperator>, CosOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1325,8 +1387,8 @@ struct TanOperator {
 } // namespace
 
 ScalarFunction TanFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<TanOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<TanOperator>, TanOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1344,11 +1406,18 @@ struct ASinOperator {
 		return (double)std::asin(input);
 	}
 };
+
+struct IEEEASinOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::asin(input);
+	}
+};
 } // namespace
 
 ScalarFunction AsinFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ASinOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<ASinOperator>, IEEEASinOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1400,11 +1469,18 @@ struct ACos {
 		return (double)std::acos(input);
 	}
 };
+
+struct IEEEACos {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return (double)std::acos(input);
+	}
+};
 } // namespace
 
 ScalarFunction AcosFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteDoubleWrapper<ACos>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteDoubleWrapper<ACos>, IEEEACos>);
 	function.SetFallible();
 	return function;
 }
@@ -1504,17 +1580,27 @@ struct AtanhOperator {
 		if (input < -1 || input > 1) {
 			throw InvalidInputException("ATANH is undefined outside [-1,1]");
 		}
-		if (input == -1 || input == 1) {
+		if (input == 1) {
 			return INFINITY;
 		}
+		if (input == -1) {
+			return -INFINITY;
+		}
+		return (double)std::atanh(input);
+	}
+};
+
+struct IEEEAtanhOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
 		return (double)std::atanh(input);
 	}
 };
 } // namespace
 
 ScalarFunction AtanhFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, AtanhOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<AtanhOperator, IEEEAtanhOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1548,8 +1634,8 @@ struct CotOperator {
 };
 } // namespace
 ScalarFunction CotFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, NoInfiniteNoZeroDoubleWrapper<CotOperator>>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<NoInfiniteNoZeroDoubleWrapper<CotOperator>, CotOperator>);
 	function.SetFallible();
 	return function;
 }
@@ -1567,11 +1653,18 @@ struct GammaOperator {
 		return std::tgamma(input);
 	}
 };
+
+struct IEEEGammaOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::tgamma(input);
+	}
+};
 } // namespace
 
 ScalarFunction GammaFun::GetFunction() {
-	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                           ScalarFunction::UnaryFunction<double, double, GammaOperator>);
+	auto func = ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                           BindIEEEFloatingUnary<GammaOperator, IEEEGammaOperator>);
 	func.SetFallible();
 	return func;
 }
@@ -1589,11 +1682,18 @@ struct LogGammaOperator {
 		return std::lgamma(input);
 	}
 };
+
+struct IEEELogGammaOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		return std::lgamma(input);
+	}
+};
 } // namespace
 
 ScalarFunction LogGammaFun::GetFunction() {
-	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                        ScalarFunction::UnaryFunction<double, double, LogGammaOperator>);
+	ScalarFunction function({LogicalType::DOUBLE}, LogicalType::DOUBLE, nullptr,
+	                        BindIEEEFloatingUnary<LogGammaOperator, IEEELogGammaOperator>);
 	function.SetFallible();
 	return function;
 }
