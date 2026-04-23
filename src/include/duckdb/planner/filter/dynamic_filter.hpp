@@ -18,6 +18,7 @@
 namespace duckdb {
 class Expression;
 
+//! Runtime dynamic-filter state shared by internal tablefilter functions.
 struct DynamicFilterData {
 public:
 	DynamicFilterData(ExpressionType comparison_type, Value constant);
@@ -31,24 +32,24 @@ public:
 
 	void SetValue(Value val);
 	void Reset();
+	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
+	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+	                                             const Value &constant);
 };
 
-class DynamicFilter : public TableFilter {
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
+class LegacyDynamicFilter : public TableFilter {
 public:
-	static constexpr const TableFilterType TYPE = TableFilterType::DYNAMIC_FILTER;
+	static constexpr const TableFilterType TYPE = TableFilterType::LEGACY_DYNAMIC_FILTER;
 
 public:
-	DynamicFilter();
-	explicit DynamicFilter(shared_ptr<DynamicFilterData> filter_data);
+	LegacyDynamicFilter();
+	explicit LegacyDynamicFilter(shared_ptr<DynamicFilterData> filter_data);
 
 	//! The shared, dynamic filter data
 	shared_ptr<DynamicFilterData> filter_data;
 
 public:
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	string ToString(const string &column_name) const override;
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
