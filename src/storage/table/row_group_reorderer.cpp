@@ -86,10 +86,11 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
 		if (qualifying_tuples >= row_limit) {
-			return;
+			return true;
 		}
 		ordered_row_groups.emplace_back(row_group);
 	}
+	return false;
 }
 
 template <typename It, typename End>
@@ -108,7 +109,7 @@ void InsertAllRowGroups(It it, const End &end, vector<reference<SegmentNode<RowG
 	}
 }
 
-void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
+bool SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, const optional_idx row_limit,
                        const idx_t row_group_offset, const OrderType order_type, const OrderByColumnType column_type,
                        vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
 	const auto stat_type = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
@@ -116,23 +117,27 @@ void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
 		auto end = row_group_map.end();
 		auto it = SkipOffsetPrunedRowGroups(row_group_map.begin(), end, row_group_offset);
 		if (it == end) {
-			return;
+			return false;
 		}
 		if (row_limit.IsValid()) {
-			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
+			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
+			                    stat_type);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
+			return false;
 		}
 	} else {
 		auto end = row_group_map.rend();
 		auto it = SkipOffsetPrunedRowGroups(row_group_map.rbegin(), end, row_group_offset);
 		if (it == end) {
-			return;
+			return false;
 		}
 		if (row_limit.IsValid()) {
-			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
+			return AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type,
+			                    stat_type);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
+			return false;
 		}
 	}
 }
@@ -349,10 +354,14 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
 		                  options.column_type, ordered_row_groups);
 	} else {
-		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-		                  options.column_type, ordered_row_groups);
+		auto pruned_by_limit = SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset,
+		                                         options.order_type, options.column_type, ordered_row_groups);
 		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
-		AppendRowGroups(null_only_groups, 0, ordered_row_groups);
+		// Once an ascending NULLS LAST limit is already satisfied by earlier non-null row groups, null-only
+		// groups cannot contribute to the ordered prefix anymore.
+		if (!pruned_by_limit || options.order_type != OrderType::ASCENDING) {
+			AppendRowGroups(null_only_groups, 0, ordered_row_groups);
+		}
 	}
 
 	if (ordered_row_groups.empty()) {
