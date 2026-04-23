@@ -11,16 +11,17 @@ buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 	auto &type = value.type();
 	auto internal_type = type.InternalType();
 	buffer_ptr<VectorBuffer> result;
+	capacity_t capacity(1ULL);
 	if (internal_type == PhysicalType::STRUCT) {
-		result = make_buffer<VectorStructBuffer>(value.type(), 1ULL);
+		result = make_buffer<VectorStructBuffer>(value.type(), capacity);
 	} else if (internal_type == PhysicalType::LIST) {
-		result = make_buffer<VectorListBuffer>(1ULL, value.type());
+		result = make_buffer<VectorListBuffer>(capacity, value.type());
 	} else if (internal_type == PhysicalType::ARRAY) {
-		result = make_buffer<VectorArrayBuffer>(value.type());
+		result = make_buffer<VectorArrayBuffer>(value.type(), capacity);
 	} else if (internal_type == PhysicalType::VARCHAR) {
-		result = make_buffer<VectorStringBuffer>(1);
+		result = make_buffer<VectorStringBuffer>(capacity);
 	} else {
-		result = make_buffer<StandardVectorBuffer>(1ULL, GetTypeIdSize(internal_type));
+		result = make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(internal_type));
 	}
 	result->SetValue(type, 0, value);
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);

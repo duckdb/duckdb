@@ -411,23 +411,26 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
         for dirname in files_per_directory.keys():
             current_files = files_per_directory[dirname]
             cmake_file = os.path.join(dirname, 'CMakeLists.txt')
-            unity_build = False
+            unity_files = []
             if os.path.isfile(cmake_file) and len(current_files) > 1:
                 with open(cmake_file, 'r') as f:
                     text = f.read()
-                    if 'add_library_unity' in text:
-                        unity_build = True
-                        # re-order the files in the unity build so that they follow the same order as the CMake
-                        scores = {}
-                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|cc|c|cxx))', text)]
-                        score = 0
-                        for filename in filenames:
-                            scores[filename] = score
-                            score += 1
-                        current_files.sort(
-                            key=lambda x: scores[os.path.basename(x)] if os.path.basename(x) in scores else 99999
-                        )
-            if not unity_build:
+                    # Find the unity files in groups
+                    pos = 0
+                    end = len(text)
+                    while pos < end:
+                        lib = text.find('add_library_unity', pos)
+                        if lib == -1:
+                            break
+                        pos = text.find(')', lib)
+                        if pos == -1:
+                            break
+                        filenames = [x[0] for x in re.findall('([a-zA-Z0-9_]+[.](cpp|cc|c|cxx))', text[lib:pos])]
+                        # Remove the unity files from the CMake list
+                        unity_set = set(filenames)
+                        unity_files += [x for x in current_files if os.path.basename(x) in unity_set]
+                        current_files = [x for x in current_files if os.path.basename(x) not in unity_set]
+            if current_files:
                 if short_paths:
                     # replace source files with "__"
                     for file in current_files:
@@ -436,10 +439,10 @@ def build_package(target_dir, extensions, linenumbers=False, unity_count=32, fol
                 else:
                     # directly use the source files
                     new_source_files += [os.path.join(folder_name, file) for file in current_files]
-            else:
+            if unity_files:
                 unity_base = dirname.replace(os.path.sep, '_')
                 unity_name = f'ub_{unity_base}.cpp'
-                new_source_files.append(generate_unity_build(current_files, unity_name, linenumbers))
+                new_source_files.append(generate_unity_build(unity_files, unity_name, linenumbers))
         return new_source_files
 
     original_sources = source_list

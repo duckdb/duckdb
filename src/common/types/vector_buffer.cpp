@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, capacity_t capacity) {
 	if (type == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
 	}
@@ -26,7 +26,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 	return make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, capacity_t capacity) {
 	if (type.InternalType() == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
 	}
