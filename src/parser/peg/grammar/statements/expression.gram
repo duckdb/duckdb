@@ -158,7 +158,7 @@ OperatorGreaterThanEquals <- '>='
 BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
 BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
-EscapeClause <- 'ESCAPE' Expression
+EscapeClause <- 'ESCAPE' ComparisonExpression
 
 LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp
 LikeToken      <- 'LIKE' / '~~'

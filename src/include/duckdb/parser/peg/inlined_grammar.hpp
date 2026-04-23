@@ -838,7 +838,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?\n"
 	"BetweenInLikeOp <- 'NOT'? (BetweenClause / InClause / LikeClause)\n"
 	"LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?\n"
-	"EscapeClause <- 'ESCAPE' Expression\n"
+	"EscapeClause <- 'ESCAPE' ComparisonExpression\n"
 	"LikeVariations <- SimilarToToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotSimilarToOp\n"
 	"LikeToken      <- 'LIKE' / '~~'\n"
 	"ILikeToken     <- 'ILIKE' / '~~*'\n"

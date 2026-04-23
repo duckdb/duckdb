@@ -191,6 +191,9 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformCopyFileName(PEGTra
 	string file_name;
 	if (choice_pr.type == ParseResultType::IDENTIFIER) {
 		file_name = choice_pr.Cast<IdentifierParseResult>().identifier;
+		if (StringUtil::CIEquals(file_name, "stdout")) {
+			file_name = "/dev/stdout";
+		}
 	} else {
 		file_name = transformer.Transform<string>(choice_pr);
 	}
