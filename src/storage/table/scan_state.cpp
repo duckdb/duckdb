@@ -122,11 +122,11 @@ AdaptiveFilterState ScanFilterInfo::BeginFilter() const {
 	return adaptive_filter->BeginFilter();
 }
 
-void ScanFilterInfo::EndFilter(AdaptiveFilterState state) {
+void ScanFilterInfo::EndFilter(AdaptiveFilterState state, idx_t survivor_count) {
 	if (!adaptive_filter) {
 		return;
 	}
-	adaptive_filter->EndFilter(state);
+	adaptive_filter->EndFilter(state, survivor_count);
 }
 
 void ColumnScanState::NextInternal(idx_t count) {

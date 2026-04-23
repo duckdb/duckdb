@@ -195,7 +195,7 @@ public:
 
 	optional_ptr<AdaptiveFilter> GetAdaptiveFilter();
 	AdaptiveFilterState BeginFilter() const;
-	void EndFilter(AdaptiveFilterState state);
+	void EndFilter(AdaptiveFilterState state, idx_t survivor_count);
 
 	//! Whether or not there is any filter we need to execute
 	bool HasFilters() const;

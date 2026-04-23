@@ -1485,7 +1485,19 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				    GetFileName());
 			}
 
-			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			bool filters_look_unselective = false;
+			if (filters) {
+				auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+				if (adaptive_filter.GetFilterCallsObserved() >=
+				        ParquetReaderPrefetchConfig::MIN_FILTER_CALLS_OBSERVED_FOR_PREFETCH &&
+				    adaptive_filter.GetFilterMatchRatio() >
+				        ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO) {
+					filters_look_unselective = true;
+				}
+			}
+
+			if ((!filters || filters_look_unselective) &&
+			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
 				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
@@ -1595,7 +1607,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
-			adaptive_filter.EndFilter(filter_state);
+			adaptive_filter.EndFilter(filter_state, filter_count);
 		}
 
 		// we still may have to read some cols

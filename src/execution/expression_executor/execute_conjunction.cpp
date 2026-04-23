@@ -100,7 +100,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			}
 		}
 		// adapt runtime statistics
-		state.adaptive_filter->EndFilter(filter_state);
+		state.adaptive_filter->EndFilter(filter_state, current_count);
 		return current_count;
 	} else {
 		// get runtime statistics
@@ -139,7 +139,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		}
 
 		// adapt runtime statistics
-		state.adaptive_filter->EndFilter(filter_state);
+		state.adaptive_filter->EndFilter(filter_state, result_count);
 		return result_count;
 	}
 }

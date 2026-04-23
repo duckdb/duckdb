@@ -39,10 +39,20 @@ public:
 	bool Remap(const TableFilterSet &new_filters, vector<idx_t> new_ids);
 
 	AdaptiveFilterState BeginFilter() const;
-	void EndFilter(AdaptiveFilterState state);
+	void EndFilter(AdaptiveFilterState state, idx_t survivor_count);
 
 	const vector<idx_t> &GetPermutation() const {
 		return permutation;
+	}
+
+	idx_t GetTotalFilterCalls() const {
+		return total_filter_calls;
+	}
+	double GetFilterMatchRatio() const {
+		if (total_filter_calls == 0) {
+			return 1.0;
+		}
+		return static_cast<double>(filter_calls_with_matches) / static_cast<double>(total_filter_calls);
 	}
 
 	void SetLogger(shared_ptr<Logger> logger, string file_path = "",
@@ -68,6 +78,8 @@ private:
 	double prev_mean = 0;
 	bool observe = false;
 	bool warmup = false;
+	idx_t total_filter_calls = 0;
+	idx_t filter_calls_with_matches = 0;
 	RandomEngine generator;
 	shared_ptr<Logger> logger;
 	string log_file_path;

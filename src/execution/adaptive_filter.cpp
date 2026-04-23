@@ -97,7 +97,11 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 	return state;
 }
 
-void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
+void AdaptiveFilter::EndFilter(AdaptiveFilterState state, idx_t survivor_count) {
+	total_filter_calls++;
+	if (survivor_count > 0) {
+		filter_calls_with_matches++;
+	}
 	if (permutation.size() <= 1 || disable_permutations) {
 		// nothing to permute
 		return;
