@@ -306,8 +306,7 @@ public:
 			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
 			auto run_count = cs.group_runs[r].count;
 			auto local_state = state;
-			SelectionVector run_sel;
-			run_sel.Initialize(const_cast<sel_t *>(cluster_iter + pos));
+			SelectionVector run_sel(const_cast<sel_t *>(cluster_iter + pos), run_count);
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(vals, aggr_input_data, &local_state, run_count, idata.validity,
 			                                            run_sel);
 			state = local_state;
