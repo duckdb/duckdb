@@ -721,8 +721,13 @@ void ColumnReader::FinishRead(idx_t read_count) {
 	group_rows_available -= read_count;
 }
 
-idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 	idx_t result_offset = 0;
+
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
+
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
@@ -739,27 +744,32 @@ idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, dat
 	return num_values;
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	BeginRead(define_out, repeat_out);
-	return ReadInternal(num_values, define_out, repeat_out, result);
+idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	BeginRead(input.define_out, input.repeat_out);
+	return ReadInternal(input, result);
 }
 
-void ColumnReader::Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-                          const SelectionVector &sel, idx_t approved_tuple_count) {
+void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+                          idx_t approved_tuple_count) {
+	auto &num_values = input.num_values;
 	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
-		DirectSelect(num_values, define_out, repeat_out, result_out, sel, approved_tuple_count);
+		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
-	Read(num_values, define_out, repeat_out, result_out);
+	Read(input, result);
 }
 
-void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                const SelectionVector &sel, idx_t approved_tuple_count) {
+void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+                                idx_t approved_tuple_count) {
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
+
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
-	auto read_now = ReadPageHeaders(num_values);
+	auto read_now = ReadPageHeaders(to_read);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
@@ -768,32 +778,36 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 		PlainSelect(block, define_ptr, read_now, result, sel, approved_tuple_count);
 
 		page_rows_available -= read_now;
-		FinishRead(num_values);
+		FinishRead(to_read);
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(num_values, define_out, repeat_out, result);
+	ReadInternal(input, result);
 }
 
-void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                          const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-                          idx_t &approved_tuple_count, bool is_first_filter) {
+void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                          TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+                          bool is_first_filter) {
+	auto &num_values = input.num_values;
 	if (SupportsDirectFilter() && is_first_filter) {
-		DirectFilter(num_values, define_out, repeat_out, result, filter, filter_state, sel, approved_tuple_count);
+		DirectFilter(input, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
-	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count);
+	Select(input, result, sel, approved_tuple_count);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
-void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-                                idx_t &approved_tuple_count) {
+void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                                TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count) {
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
+
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
-	auto read_now = ReadPageHeaders(num_values, &filter, &filter_state);
+	auto read_now = ReadPageHeaders(to_read, &filter, &filter_state);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -808,11 +822,11 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 			dictionary_decoder.Filter(define_ptr, read_now, result, sel, approved_tuple_count);
 		}
 		page_rows_available -= read_now;
-		FinishRead(num_values);
+		FinishRead(to_read);
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(num_values, define_out, repeat_out, result);
+	ReadInternal(input, result);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
