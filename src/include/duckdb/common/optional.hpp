@@ -13,12 +13,21 @@
 namespace duckdb {
 
 //! FIXME: Remove this in favor of std::optional once all migration to c++17  is done.
+struct nullopt_t { // NOLINT
+	constexpr explicit nullopt_t() {
+	}
+};
+
+constexpr nullopt_t nullopt {}; // NOLINT
+
 template <typename T>
 class optional {
 public:
 	optional() : has_val(false), value(T()) {
 	}
 	optional(T value) : has_val(true), value(std::move(value)) { // NOLINT: allow implicit conversion
+	}
+	optional(nullopt_t) : optional() { // NOLINT: allow implicit conversion
 	}
 
 	bool IsValid() const {
@@ -48,6 +57,10 @@ public:
 
 	inline bool operator!=(const optional &rhs) const {
 		return !(*this == rhs);
+	}
+
+	const inline T &operator*() const {
+		return GetValue();
 	}
 
 private:

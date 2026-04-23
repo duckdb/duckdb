@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/size.hpp"
 
 namespace duckdb {
 
@@ -120,9 +121,10 @@ public:
 		return nullptr;
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
-	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 
 	inline VectorType GetVectorType() const {
 		return vector_type;
