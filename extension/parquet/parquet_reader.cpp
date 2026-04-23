@@ -464,11 +464,26 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		if (indexes.empty()) {
+
+		//! FIXME: defaults to true
+		bool create_all_readers = indexes.empty();
+		for (auto &index : indexes) {
+			if (index.IsPushdownExtract()) {
+				//! FIXME: to be safe, we create all readers when we have a pushdown extract index
+				//! To fix this, we need to merge all indexes to be able to determine which children are referenced
+				create_all_readers = true;
+				break;
+			}
+		}
+		if (create_all_readers) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 				children[child_index] = CreateReaderRecursive(context, indexes, schema.children[child_index]);
 			}
 		} else {
+			//! TODO: need to merge all indexes to figure out which child columns are requested
+			//! A trivial merge based on the 'GetPrimaryIndex' isn't sufficient
+			//! Because we could be selecting a.b.c1 and a.b.c2
+
 			for (idx_t i = 0; i < indexes.size(); i++) {
 				auto child_index = indexes[i].GetPrimaryIndex();
 				children[child_index] =
@@ -1585,8 +1600,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
-				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
+				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, result_vector);
+				child_reader.Filter(reader_input, scan_filter.filter, *scan_filter.filter_state, state.sel,
+				                    filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
@@ -1610,7 +1626,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
+			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr, result_vector);
+			child_reader.Select(reader_input, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
 			result.Slice(state.sel, filter_count);
@@ -1625,7 +1642,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
+			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, result_vector);
+			auto rows_read = child_reader.Read(reader_input);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, scan_count, rows_read);

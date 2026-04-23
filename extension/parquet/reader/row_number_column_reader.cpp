@@ -38,27 +38,25 @@ void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<C
 	}
 }
 
-void RowNumberColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
-                                   Vector &result_out, const TableFilter &filter, TableFilterState &filter_state,
+void RowNumberColumnReader::Filter(ColumnReaderInput input, const TableFilter &filter, TableFilterState &filter_state,
                                    SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) {
 	// check the row id stats if this filter has any chance of passing
-	auto prune_result = RowGroup::CheckRowIdFilter(filter, row_group_offset, row_group_offset + num_values);
+	auto prune_result = RowGroup::CheckRowIdFilter(filter, row_group_offset, row_group_offset + input.num_values);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 		// filter is always false - don't read anything
 		approved_tuple_count = 0;
-		Skip(num_values);
+		Skip(input.num_values);
 		return;
 	}
-	ColumnReader::Filter(num_values, define_out, repeat_out, result_out, filter, filter_state, sel,
-	                     approved_tuple_count, is_first_filter);
+	ColumnReader::Filter(input, filter, filter_state, sel, approved_tuple_count, is_first_filter);
 }
 
-idx_t RowNumberColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	auto data_ptr = FlatVector::Writer<int64_t>(result, num_values);
-	for (idx_t i = 0; i < num_values; i++) {
+idx_t RowNumberColumnReader::Read(ColumnReaderInput input) {
+	auto data_ptr = FlatVector::Writer<int64_t>(input.result, input.num_values);
+	for (idx_t i = 0; i < input.num_values; i++) {
 		data_ptr.WriteValue(UnsafeNumericCast<int64_t>(row_group_offset++));
 	}
-	return num_values;
+	return input.num_values;
 }
 
 } // namespace duckdb

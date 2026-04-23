@@ -44,14 +44,15 @@ void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<
 	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
-idx_t ExpressionColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t ExpressionColumnReader::Read(ColumnReaderInput input) {
 	intermediate_chunk.Reset();
 	auto &intermediate_vector = intermediate_chunk.data[0];
 
-	auto amount = child_reader->Read(num_values, define_out, repeat_out, intermediate_vector);
+	ColumnReaderInput child_input(input.num_values, input.define_out, input.repeat_out, intermediate_vector);
+	auto amount = child_reader->Read(child_input);
 	// Execute the expression
 	intermediate_chunk.SetCardinality(amount);
-	executor.ExecuteExpression(intermediate_chunk, result);
+	executor.ExecuteExpression(intermediate_chunk, input.result);
 	return amount;
 }
 

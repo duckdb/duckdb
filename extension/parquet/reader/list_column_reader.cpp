@@ -111,8 +111,9 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 			auto child_req_num_values =
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
-			child_actual_num_values =
-			    child_column_reader->Read(child_req_num_values, child_defines_ptr, child_repeats_ptr, read_vector);
+
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr, read_vector);
+			child_actual_num_values = child_column_reader->Read(child_input);
 		} else {
 			// we do: use the overflow values
 			child_actual_num_values = overflow_child_count;
@@ -183,9 +184,9 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 	return result_offset;
 }
 
-idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) {
-	ApplyPendingSkips(define_out, repeat_out);
-	return ReadInternal<TemplatedListReader>(num_values, define_out, repeat_out, result_out);
+idx_t ListColumnReader::Read(ColumnReaderInput input) {
+	ApplyPendingSkips(input.define_out, input.repeat_out);
+	return ReadInternal<TemplatedListReader>(input.num_values, input.define_out, input.repeat_out, input.result);
 }
 
 ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
