@@ -1632,7 +1632,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
 		auto pointer =
-		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+		    new_row_group->Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
 		if (debug_verify_blocks) {
 			pointer_copy = pointer;
 		}
