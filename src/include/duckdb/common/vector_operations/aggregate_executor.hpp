@@ -296,7 +296,7 @@ public:
 	// Clustered local-state path: copy state once per run, update via UnaryUpdateLoop, flush back.
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatterClusteredLocalState(Vector &input, AggregateInputData &aggr_input_data, idx_t count,
-	                                            const sel_t *cluster_iter) {
+	                                            sel_t *cluster_iter) {
 		auto &cs = *aggr_input_data.clustered;
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
@@ -306,7 +306,7 @@ public:
 			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
 			auto run_count = cs.group_runs[r].count;
 			auto local_state = state;
-			SelectionVector run_sel(const_cast<sel_t *>(cluster_iter + pos), run_count);
+			SelectionVector run_sel(cluster_iter + pos, run_count);
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(vals, aggr_input_data, &local_state, run_count, idata.validity,
 			                                            run_sel);
 			state = local_state;

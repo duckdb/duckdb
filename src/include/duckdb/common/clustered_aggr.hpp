@@ -43,12 +43,11 @@ struct ClusteredAggr {
 	void AdvanceStates(idx_t payload_size);
 
 	//! Returns sel for flat input, a composed dict sel for simple dictionary input, or nullptr.
-	const sel_t *ClusterIter(const Vector &input, idx_t count) const;
+	sel_t *ClusterIter(const Vector &input, idx_t count);
 
 private:
-	//! Scratch for dictionary composition. Logical-const: ClusterIter updates it.
-	mutable sel_t composed_sel_data[STANDARD_VECTOR_SIZE];
-	mutable const sel_t *cached_dict_sel = nullptr;
+	sel_t composed_sel_data[STANDARD_VECTOR_SIZE];
+	const sel_t *cached_dict_sel = nullptr;
 };
 
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.

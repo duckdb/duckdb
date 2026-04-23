@@ -108,7 +108,7 @@ void ClusteredAggr::AdvanceStates(idx_t payload_size) {
 	}
 }
 
-const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const {
+sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) {
 	switch (input.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		return sel;
