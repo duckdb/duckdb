@@ -939,7 +939,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
 
       - uses: ./.github/actions/ccache-action
         with:
