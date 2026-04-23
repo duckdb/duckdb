@@ -85,14 +85,15 @@ enum class ColumnEncoding {
 
 struct ColumnReaderInput {
 public:
-	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out)
-	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out) {
+	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, const ColumnIndex &index)
+	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out), index(index) {
 	}
 
 public:
 	uint64_t num_values;
 	data_ptr_t define_out;
 	data_ptr_t repeat_out;
+	const ColumnIndex &index;
 };
 
 class ColumnReader {

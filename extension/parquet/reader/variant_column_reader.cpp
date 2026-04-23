@@ -105,10 +105,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
-	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out);
+	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out, ColumnIndex(0));
 	auto metadata_values = child_readers[metadata_reader_idx]->Read(metadata_reader_input, metadata_intermediate);
 
-	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out);
+	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out, ColumnIndex(0));
 	auto value_values = child_readers[value_reader_idx]->Read(value_reader_input, value_intermediate);
 
 	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
@@ -121,7 +121,7 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		ColumnReaderInput child_input(num_values, define_out, repeat_out);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out, ColumnIndex(0));
 		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(

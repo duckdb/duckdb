@@ -492,7 +492,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
 		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, index, std::move(children));
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -1605,7 +1605,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = root_reader.GetChildReader(column_id);
-				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
+				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, column_indexes[local_idx]);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
@@ -1631,7 +1631,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
+			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr, column_indexes[col_idx]);
 			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
@@ -1647,7 +1647,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
+			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, column_indexes[col_idx]);
 			auto rows_read = child_reader.Read(reader_input, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

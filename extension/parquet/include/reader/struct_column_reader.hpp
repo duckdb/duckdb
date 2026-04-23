@@ -18,12 +18,9 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
 
 public:
-	StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema, const ColumnIndex &index,
+	StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                   vector<unique_ptr<ColumnReader>> child_readers_p);
-
 	vector<unique_ptr<ColumnReader>> child_readers;
-	//! The pushed down projection information about the column and its children
-	ColumnIndex index;
 
 public:
 	ColumnReader &GetChildReader(idx_t child_idx);

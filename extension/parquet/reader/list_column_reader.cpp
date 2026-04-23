@@ -115,7 +115,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
 
-			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr);
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr, ColumnIndex(0));
 			child_actual_num_values = child_column_reader->Read(child_input, read_vector);
 		} else {
 			// we do: use the overflow values
@@ -203,7 +203,7 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr);
+	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr, ColumnIndex(0));
 	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);
 	pending_skips = 0;
 }
