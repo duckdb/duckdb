@@ -178,8 +178,9 @@ public:
 		// start returning values
 		// either fill up the chunk or return all the remaining columns
 		idx_t count = 0;
+		auto &quack_col = output.data[0];
 		while (data.offset < bind_data.number_of_quacks && count < STANDARD_VECTOR_SIZE) {
-			output.SetValue(0, count, Value("QUACK"));
+			quack_col.Append(Value("QUACK"));
 			data.offset++;
 			count++;
 		}
@@ -230,7 +231,7 @@ public:
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.return_type = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
 
@@ -561,7 +562,7 @@ static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.arguments[0] = arguments[0]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->return_type;
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
 	}
@@ -585,8 +586,8 @@ static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
 		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
 
 		auto new_max_val = left_max_val + right_max_val;
-		bound_function.arguments[0] = arguments[0]->return_type;
-		bound_function.arguments[1] = arguments[1]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->return_type;
+		bound_function.GetArguments()[1] = arguments[1]->return_type;
 		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
@@ -613,7 +614,7 @@ static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.arguments[0] = arguments[0]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->return_type;
 		bound_function.SetReturnType(arguments[0]->return_type);
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");

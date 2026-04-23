@@ -609,10 +609,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	// push a cast for argument 0 to match up the source types to the target
 	auto new_type = RemapEntry::RemapCast(from_type, remap_map);
 
-	bound_function.arguments[0] = std::move(new_type);
-	bound_function.arguments[1] = arguments[1]->return_type;
-	bound_function.arguments[2] = arguments[2]->return_type;
-	bound_function.arguments[3] = arguments[3]->return_type;
+	bound_function.GetArguments()[0] = std::move(new_type);
+	bound_function.GetArguments()[1] = arguments[1]->return_type;
+	bound_function.GetArguments()[2] = arguments[2]->return_type;
+	bound_function.GetArguments()[3] = arguments[3]->return_type;
 	bound_function.SetReturnType(arguments[1]->return_type);
 
 	return make_uniq<RemapStructBindData>(std::move(remap));

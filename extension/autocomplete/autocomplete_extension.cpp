@@ -427,23 +427,26 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// suggestion, VARCHAR
+	auto &suggestion = output.data[0];
+	// suggestion_start, INTEGER
+	auto &suggestion_start = output.data[1];
+	// suggestion_type, VARCHAR
+	auto &suggestion_type = output.data[2];
+	// suggestion_score, VARCHAR
+	auto &suggestion_score = output.data[3];
+	// extra_char, VARCHAR
+	auto &extra_char = output.data[4];
+
 	while (data.offset < bind_data.suggestions.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.suggestions[data.offset++];
 
-		// suggestion, VARCHAR
-		output.SetValue(0, count, Value(entry.text));
-
-		// suggestion_start, INTEGER
-		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
-
-		// suggestion_type, VARCHAR
-		output.SetValue(2, count, Value(entry.type));
-
-		// suggestion-score, VARCHAR
-		output.SetValue(3, count, Value::UBIGINT(entry.score));
-
-		// extra_char, VARCHAR
-		output.SetValue(4, count, entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
+		suggestion.Append(Value(entry.text));
+		suggestion_start.Append(Value::INTEGER(NumericCast<int32_t>(entry.pos)));
+		suggestion_type.Append(Value(entry.type));
+		suggestion_score.Append(Value::UBIGINT(entry.score));
+		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
 	output.SetCardinality(count);
@@ -498,17 +501,20 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// offset, INTEGER
+	auto &offset_col = output.data[0];
+	// token_type, VARCHAR
+	auto &token_type = output.data[1];
+	// word, VARCHAR
+	auto &word = output.data[2];
+
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
 
-		// offset, INTEGER
-		output.SetValue(0, count, Value::INTEGER(NumericCast<int32_t>(entry.offset)));
-
-		// token_type, VARCHAR
-		output.SetValue(1, count, Value(TokenTypeToString(entry.type)));
-
-		// word, VARCHAR
-		output.SetValue(2, count, Value(entry.text));
+		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
+		token_type.Append(Value(TokenTypeToString(entry.type)));
+		word.Append(Value(entry.text));
 		count++;
 	}
 	output.SetCardinality(count);

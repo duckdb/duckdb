@@ -275,7 +275,7 @@ WindowFunction DenseRankFun::GetFunction() {
 	WindowFunction fun({}, LogicalType::BIGINT, ExpressionType::WINDOW_RANK_DENSE, nullptr,
 	                   WindowDenseRankExecutor::GetBounds, nullptr, WindowDenseRankExecutor::GetGlobal,
 	                   WindowDenseRankExecutor::GetLocal, nullptr, nullptr, WindowDenseRankExecutor::GetData);
-	fun.can_order_by = false;
+	fun.SetCanOrderBy(false);
 	fun.SetCanStreamCallback(WindowDenseRankExecutor::CanStream);
 	fun.SetStreamingStateCallback(WindowDenseRankExecutor::GetStreamingState);
 	fun.SetStreamingDataCallback(WindowDenseRankExecutor::StreamData);
