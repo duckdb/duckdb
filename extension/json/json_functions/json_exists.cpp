@@ -27,7 +27,7 @@ ScalarFunctionSet JSONFunctions::GetExistsFunction() {
 	GetExistsFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExistsFunctionsInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

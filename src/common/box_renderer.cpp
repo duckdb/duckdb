@@ -861,14 +861,13 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 	res_coll.InitializeAppend(append_state);
 	for (idx_t c = 0; c < column_names.size(); c++) {
 		vector<column_t> column_ids {c * 2, c * 2 + 1};
-		auto row_index = row_chunk.size();
 		idx_t current_index = 0;
 		auto &column_name = column_names[c];
 		auto type_name = RenderType(result_types[c]);
-		row_chunk.SetValue(current_index++, row_index, column_name);
-		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(column_name)));
-		row_chunk.SetValue(current_index++, row_index, type_name);
-		row_chunk.SetValue(current_index++, row_index, Value::UBIGINT(Utf8Proc::RenderWidth(type_name)));
+		row_chunk.data[current_index++].Append(Value(column_name));
+		row_chunk.data[current_index++].Append(Value::UBIGINT(Utf8Proc::RenderWidth(column_name)));
+		row_chunk.data[current_index++].Append(type_name);
+		row_chunk.data[current_index++].Append(Value::UBIGINT(Utf8Proc::RenderWidth(type_name)));
 		for (auto &collection : input) {
 			for (auto &chunk : collection.render_values->Chunks(column_ids)) {
 				if (context.IsInterrupted()) {
@@ -877,8 +876,8 @@ vector<RenderDataCollection> BoxRendererImplementation::PivotCollections(vector<
 				for (idx_t r = 0; r < chunk.size(); r++) {
 					auto val = chunk.GetValue(0, r);
 					auto length = chunk.GetValue(1, r);
-					row_chunk.SetValue(current_index++, row_index, val);
-					row_chunk.SetValue(current_index++, row_index, length);
+					row_chunk.data[current_index++].Append(val);
+					row_chunk.data[current_index++].Append(length);
 				}
 			}
 		}

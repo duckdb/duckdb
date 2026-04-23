@@ -192,7 +192,7 @@ static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParame
 			}
 			result->local_states.push_back(std::move(child_state));
 		}
-		return result;
+		return std::move(result);
 	} else {
 		auto member_cast_info = cast_data.member_casts[0].Copy();
 		if (!member_cast_info.HasInitLocalState()) {

@@ -600,7 +600,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 	auto remap_fun = RemapStructFun::GetFunction();
 	auto bind_data = remap_fun.Bind(context, children);
 	;
-	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
+	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.GetArguments()[0]);
 	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));
 }
@@ -984,7 +984,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			result->children.push_back(std::move(rewritten_child));
 		}
-		return result;
+		return std::move(result);
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
@@ -1000,7 +1000,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
 			result->children.push_back(std::move(child.expr));
-			return result;
+			return std::move(result);
 		}
 		case ExpressionType::COMPARE_IN: {
 			if (op.children.empty()) {
@@ -1022,7 +1022,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 				}
 				result->children.push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
 			}
-			return result;
+			return std::move(result);
 		}
 		default:
 			return nullptr;

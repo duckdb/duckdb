@@ -184,7 +184,7 @@ unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &inpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	function.return_type = arguments[0]->return_type;
+	function.SetReturnType(arguments[0]->return_type);
 
 	return nullptr;
 }
@@ -540,7 +540,7 @@ unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &in
 	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
-		function.arguments[2] = function.return_type;
+		function.GetArguments()[2] = function.GetReturnType();
 	}
 
 	return nullptr;
@@ -582,13 +582,13 @@ WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 
 	for (auto &func : funcs.functions) {
-		if (func.arguments.size() != nargs) {
+		if (func.GetArguments().size() != nargs) {
 			continue;
 		}
 
-		func.arguments[0] = type;
+		func.GetArguments()[0] = type;
 		if (nargs > 2) {
-			func.arguments[2] = type;
+			func.GetArguments()[2] = type;
 		}
 		return func;
 	}
@@ -1597,7 +1597,7 @@ WindowFunction FillFun::GetFunction() {
 	                   WindowFillLocalState::Finalizer, WindowFillExecutor::GetData);
 
 	//! Never ignore nulls (that's the point!)
-	fun.can_ignore_nulls = false;
+	fun.SetCanIgnoreNulls(false);
 
 	return fun;
 }

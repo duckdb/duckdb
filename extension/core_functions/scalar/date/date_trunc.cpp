@@ -583,7 +583,7 @@ unique_ptr<FunctionData> DateTruncBind(BindScalarFunctionInput &input) {
 	const auto part_name = part_value.ToString();
 	const auto part_code = GetDatePartSpecifier(part_name);
 
-	switch (bound_function.arguments[1].id()) {
+	switch (bound_function.GetArguments()[1].id()) {
 	case LogicalType::TIMESTAMP:
 		bound_function.SetStatisticsCallback(DateTruncStats<timestamp_t, timestamp_t>(part_code));
 		break;

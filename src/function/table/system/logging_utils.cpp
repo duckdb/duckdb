@@ -145,7 +145,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
 	enable_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
 
-	enable_fun.varargs = LogicalType::ANY;
+	enable_fun.SetVarArgs(LogicalType::ANY);
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_logging", {}, DisableLogging, BindDisableLogging, nullptr, nullptr);

@@ -1459,9 +1459,9 @@ shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
 	buffer << t.rdbuf();
 	auto grammar_string = buffer.str();
 
-	new_matcher->root = factory.CreateMatcher(grammar_string.c_str(), "Statement");
+	new_matcher->root = factory.CreateMatcher(grammar_string.c_str(), "Program");
 #else
-	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Statement");
+	new_matcher->root = factory.CreateMatcher(const_char_ptr_cast(INLINED_PEG_GRAMMAR), "Program");
 #endif
 	std::unique_lock<std::mutex> lock(mutex);
 	if (!matcher) {

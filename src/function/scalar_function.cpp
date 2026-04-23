@@ -29,8 +29,9 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.arguments && return_type == rhs.return_type && varargs == rhs.varargs &&
-	       bind == rhs.bind && statistics == rhs.statistics && bind_lambda == rhs.bind_lambda;
+	return name == rhs.name && arguments == rhs.GetArguments() && return_type == rhs.return_type &&
+	       varargs == rhs.GetVarArgs() && bind == rhs.bind && statistics == rhs.statistics &&
+	       bind_lambda == rhs.bind_lambda;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
@@ -39,12 +40,12 @@ bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 
 bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 	// number of types
-	if (this->arguments.size() != rhs.arguments.size()) {
+	if (this->GetArguments().size() != rhs.GetArguments().size()) {
 		return false;
 	}
 	// argument types
-	for (idx_t i = 0; i < this->arguments.size(); ++i) {
-		if (this->arguments[i] != rhs.arguments[i]) {
+	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
+		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
 			return false;
 		}
 	}
@@ -53,7 +54,7 @@ bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 		return false;
 	}
 	// varargs
-	if (this->varargs != rhs.varargs) {
+	if (this->GetVarArgs() != rhs.GetVarArgs()) {
 		return false;
 	}
 
