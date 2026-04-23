@@ -1,16 +1,17 @@
 diff --git a/test/sql/copy/invalid_option.test b/test/sql/copy/invalid_option.test
+index 2d1da31..3fe4eb2 100644
 --- a/test/sql/copy/invalid_option.test
 +++ b/test/sql/copy/invalid_option.test
-@@ -8,7 +8,7 @@
+@@ -8,7 +8,7 @@ COPY (
  	ROOT_NAME 'test'
  );
  ----
 -Invalid Configuration Error: The following option(s) are not recognized: key: 'NOT_RECOGNIZED'
 +Invalid Configuration Error: The following option(s) are not recognized: key: 'not_recognized'
-
+ 
  statement error
  COPY (
-@@ -18,4 +18,4 @@
+@@ -18,4 +18,4 @@ COPY (
  	ROOT_NAME 'test'
  );
  ----
