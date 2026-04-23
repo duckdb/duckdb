@@ -31,7 +31,7 @@ CALL dbgen(sf=1, children =100, step = 0);
 query IIII
 select * from nation
 ----
-0	ALGERIA	0	furiously regular requests. platelets affix furious
+0	ALGERIA	0	 haggle. carefully final deposits detect slyly agai
 
 query I
 select count(*) from lineitem
@@ -180,5 +180,4 @@ select count (*) from (SELECT * FROM db1.test_schema.{tpch_tbl} EXCEPT SELECT * 
 0
 
 endloop
-
 

@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <limits>
 #include "dbgen/dss.h"
 #include "dbgen/rnd.h"
 
@@ -129,7 +130,10 @@ UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed)
 	int32_t nLow32 = (int32_t)nLow, nHigh32 = (int32_t)nHigh;
 
 	if ((nHigh == MAX_LONG) && (nLow == 0)) {
-		dRange = (double)((DSS_HUGE)(nHigh32 - nLow32) + 1);
+		// The reference DBGEN does dRange = DOUBLE_CAST (nHigh32 - nLow32 + 1);
+		// This results in integer overflow
+		// The integer overflow is undefined behavior in C++, but in 2s complement arithmetic, gives us int32_min
+		dRange = (double)std::numeric_limits<int32_t>::min();
 	} else {
 		dRange = (double)(nHigh - nLow + 1);
 	}
