@@ -139,7 +139,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_filter);
 			}
 
-			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+			if (!ExpressionFilter::IsOptionalFilter(entry.Filter())) {
 				has_non_optional_filters = true;
 			}
 		}
@@ -449,8 +449,8 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
-	auto expr_filter = ExpressionFilter::FromTableFilter(filter, base_stats.GetType());
-	auto &expr = *expr_filter->expr;
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RelationStatisticsHelper::InspectTableFilter");
+	auto &expr = *expr_filter.expr;
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj.children) {
