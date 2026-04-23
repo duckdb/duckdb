@@ -1,5 +1,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
@@ -10,6 +11,9 @@ namespace duckdb {
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
 		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
+		if (HasContext()) {
+			adaptive_filter->SetLogger(GetContext().logger);
+		}
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
@@ -61,6 +65,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
+		const auto &permutation = state.adaptive_filter->GetPermutation();
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
 		idx_t false_count = 0;
@@ -74,8 +79,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
-			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
 			                      current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
@@ -101,6 +105,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 	} else {
 		// get runtime statistics
 		auto filter_state = state.adaptive_filter->BeginFilter();
+		const auto &permutation = state.adaptive_filter->GetPermutation();
 
 		const SelectionVector *current_sel = sel;
 		idx_t current_count = count;
@@ -115,8 +120,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
-			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
+			idx_t tcount = Select(*expr.children[permutation[i]], state.child_states[permutation[i]].get(), current_sel,
 			                      current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
