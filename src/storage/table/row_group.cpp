@@ -741,8 +741,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
 				auto &filter_list = filter_info.GetFilterList();
+				const auto &permutation = adaptive_filter->GetPermutation();
 				for (idx_t i = 0; i < filter_list.size(); i++) {
-					auto filter_idx = adaptive_filter->permutation[i];
+					auto filter_idx = permutation[i];
 					auto &filter = filter_list[filter_idx];
 					if (filter.IsAlwaysTrue()) {
 						// this filter is always true - skip it
@@ -1262,9 +1263,29 @@ const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 	return column_pointers;
 }
 
+bool RowGroup::CanReuseMetadata(RowGroupWriter &writer) const {
+	if (!Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase())) {
+		// disabled by configuration
+		return false;
+	}
+	if (column_pointers.empty()) {
+		// no existing metadata on disk - cannot re-use
+		return false;
+	}
+	if (HasChanges()) {
+		// we have changes - need to rewrite
+		return false;
+	}
+	auto &table_writer = writer.GetTableWriter();
+	if (table_writer.RequireLegacyStartRow() && table_writer.RowIdsChanged()) {
+		// row-ids changed and we are targeting an old storage version that requires "start_row" - cannot re-use
+		return false;
+	}
+	return true;
+}
+
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
-	if (Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase()) && !column_pointers.empty() &&
-	    !HasChanges()) {
+	if (CanReuseMetadata(writer)) {
 		// we have existing metadata and the row group has not been changed
 		// re-use previous metadata
 		RowGroupWriteData result;
@@ -1316,8 +1337,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
 		if (metadata_manager) {
 			row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
-		}
-		if (metadata_manager) {
+
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
 			for (auto &block_pointer : write_data.existing_extra_metadata_blocks) {
