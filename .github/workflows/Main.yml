@@ -40,6 +40,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  DUCKDB_CUSTOM_USER_AGENT: 'ci/${{ github.repository }}/${{ github.workflow }}'
 
 jobs:
  check-draft:
