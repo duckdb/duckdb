@@ -4,6 +4,7 @@
 namespace duckdb {
 
 const char INLINED_PEG_GRAMMAR[] = {
+	"Program <- Statement? (';'+ Statement)* ';'*\n"
 	"Statement <-\n"
 	"	CreateStatement /\n"
 	"	SelectStatement /\n"
@@ -39,6 +40,8 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"	ExpressionStatement\n"
 	"ExpressionStatement <- List(ExpressionAlias)\n"
 	"ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression\n"
+	"SemiList1(D) <- D (';' D)*\n"
+	"SemiList(D) <- SemiList1(D) ';'?\n"
 	"CatalogName <- Identifier\n"
 	"SchemaName <- Identifier\n"
 	"ReservedSchemaName <- Identifier\n"

@@ -246,56 +246,44 @@ void Parser::ParseQuery(const string &query) {
 			last_strict_extension_error.Throw();
 		}
 	}
-	// PEG parser: tokenize then transform per statement
+	// PEG parser: tokenize then transform
 	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
-	tokenizer.statements.push_back(std::move(tokens));
-	for (auto &stmt_tokens : tokenizer.statements) {
-		if (stmt_tokens.empty()) {
-			continue;
-		}
-		idx_t stmt_start = stmt_tokens.front().offset;
-		idx_t stmt_end = stmt_tokens.back().offset + stmt_tokens.back().length;
-
-		unique_ptr<SQLStatement> stmt;
+	if (!tokens.empty()) {
 		try {
-			stmt = PEGTransformerFactory::Transform(stmt_tokens, options, peg_matcher->Root());
+			auto peg_statements = PEGTransformerFactory::Transform(tokens, options, peg_matcher->Root());
+			for (auto &stmt : peg_statements) {
+				statements.push_back(std::move(stmt));
+			}
 		} catch (ParserException &e) {
 			// fall back to parse_function extensions for unknown statement types
 			bool parsed = false;
 			if (options.extensions && options.extensions->HasParserExtensions()) {
-				string stmt_text = query.substr(stmt_start, stmt_end - stmt_start);
-				if (stmt_end < query.size() && query[stmt_end] == ';') {
-					stmt_text += ';';
-				}
 				for (auto &ext : options.extensions->ParserExtensions()) {
 					if (!ext.parse_function) {
 						continue;
 					}
-					auto result = ext.parse_function(ext.parser_info.get(), stmt_text);
+					auto result = ext.parse_function(ext.parser_info.get(), query);
 					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 						auto estmt = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-						estmt->stmt_location = stmt_start;
-						estmt->stmt_length = stmt_end - stmt_start;
+						estmt->stmt_location = 0;
+						estmt->stmt_length = query.size();
 						statements.push_back(std::move(estmt));
 						parsed = true;
 						break;
 					}
 					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-						throw ParserException::SyntaxError(stmt_text, result.error, result.error_location);
+						throw ParserException::SyntaxError(query, result.error, result.error_location);
 					}
 				}
 			}
 			if (!parsed) {
 				throw;
 			}
-			continue;
 		}
-		stmt->stmt_location = stmt_start;
-		statements.push_back(std::move(stmt));
 	}
 
 	if (!statements.empty()) {

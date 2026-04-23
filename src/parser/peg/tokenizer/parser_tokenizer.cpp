@@ -6,7 +6,9 @@ ParserTokenizer::ParserTokenizer(const string &sql, vector<MatcherToken> &tokens
 }
 
 void ParserTokenizer::OnStatementEnd(idx_t pos) {
-	statements.push_back(std::move(tokens));
-	tokens.clear();
+	// Always emit ';' as a TERMINATOR token so the grammar can consume it.
+	// Statement boundaries are determined by the PEG grammar (Program rule), not the tokenizer.
+	tokens.emplace_back(";", pos, TokenType::TERMINATOR);
 }
+
 } // namespace duckdb

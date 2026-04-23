@@ -10,8 +10,6 @@ public:
 	~ParserTokenizer() override = default;
 
 	void OnStatementEnd(idx_t pos) override;
-
-	vector<vector<MatcherToken>> statements;
 };
 
 } // namespace duckdb

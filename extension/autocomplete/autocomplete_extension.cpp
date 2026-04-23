@@ -539,34 +539,32 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	if (!allow_complete) {
 		return nullptr;
 	}
-	tokenizer.statements.push_back(std::move(root_tokens));
 
-	for (auto &tokens : tokenizer.statements) {
-		if (tokens.empty()) {
-			continue;
-		}
-		vector<MatcherSuggestion> suggestions;
-		ParseResultAllocator parse_allocator;
-		idx_t max_token_index = 0;
-		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
+	if (root_tokens.empty()) {
+		return nullptr;
+	}
 
-		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
-		auto match_result = peg_matcher->Root().Match(state);
-		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
-			string token_list;
-			for (idx_t i = 0; i < tokens.size(); i++) {
-				if (!token_list.empty()) {
-					token_list += "\n";
-				}
-				if (i < 10) {
-					token_list += " ";
-				}
-				token_list += to_string(i) + ":" + tokens[i].text;
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto match_result = peg_matcher->Root().Match(state);
+	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+		string token_list;
+		for (idx_t i = 0; i < root_tokens.size(); i++) {
+			if (!token_list.empty()) {
+				token_list += "\n";
 			}
-			throw BinderException(
-			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-			    state.token_index, tokens[state.token_index].text, token_list);
+			if (i < 10) {
+				token_list += " ";
+			}
+			token_list += to_string(i) + ":" + root_tokens[i].text;
 		}
+		throw BinderException(
+		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+		    state.token_index, root_tokens[state.token_index].text, token_list);
 	}
 	return nullptr;
 }
@@ -585,39 +583,26 @@ public:
 		auto &root_matcher = peg_matcher->Root();
 
 		vector<MatcherToken> root_tokens;
-		string clean_sql;
 
 		ParserTokenizer tokenizer(query, root_tokens);
 		tokenizer.TokenizeInput();
-		tokenizer.statements.push_back(std::move(root_tokens));
 
 		try {
 			vector<unique_ptr<SQLStatement>> result;
-			for (auto &tokenized_statement : tokenizer.statements) {
-				if (tokenized_statement.empty()) {
-					continue;
-				}
-				auto statement = PEGTransformerFactory::Transform(tokenized_statement, options, root_matcher);
-				if (statement) {
-					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
-					                tokenized_statement[tokenized_statement.size() - 1].length;
-					statement->stmt_length = last_pos - tokenized_statement[0].offset;
-				}
-				statement->query = query;
-				result.push_back(std::move(statement));
+			if (!root_tokens.empty()) {
+				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
 			}
 			if (!result.empty()) {
 				auto &last_statement = result.back();
 				last_statement->stmt_length = query.size() - last_statement->stmt_location;
-				for (auto &statement : result) {
-					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-					statement->stmt_location = 0;
-					statement->stmt_length = statement->query.size();
-					if (statement->type == StatementType::CREATE_STATEMENT) {
-						auto &create = statement->Cast<CreateStatement>();
-						create.info->sql = statement->query;
-					}
+			}
+			for (auto &statement : result) {
+				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+				statement->stmt_location = 0;
+				statement->stmt_length = statement->query.size();
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
 				}
 			}
 			return ParserOverrideResult(std::move(result));
