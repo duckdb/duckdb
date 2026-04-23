@@ -10,6 +10,12 @@
         "test/extension/loadable_parser_override.test",
         "test/extension/consistent_semicolon_extension_parse.test"
       ]
+    },
+    {
+      "reason": "This test verifies pg_err_pos reset behavior specific to the Postgres parser internals (errhint from LIMIT #,# grammar rule), which does not apply to the PEG parser",
+      "paths": [
+        "test/sql/parser/pg_err_pos_reset.test"
+      ]
     }
   ]
 }
