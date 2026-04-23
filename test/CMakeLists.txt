@@ -9,6 +9,8 @@ add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
+set(UNITTEST_OBJECT_FILES)
+
 if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(api)
   add_subdirectory(appender)
@@ -47,14 +49,19 @@ else()
   add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 endif()
 
-add_executable(unittest unittest.cpp ${ALL_OBJECT_FILES})
+add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(unittest PRIVATE -Wno-error=maybe-uninitialized)
 endif()
 
-target_link_libraries(unittest duckdb_static test_helpers)
-
-link_extension_libraries(unittest "")
+if(TARGET duckdb)
+  # Some tests reference internal third-party symbols (e.g. duckdb_re2/duckdb_mbedtls)
+  # that are linked into duckdb but not exported from the shared library on all platforms.
+  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
+else()
+  target_link_libraries(unittest duckdb_static test_helpers)
+  link_extension_libraries(unittest "")
+endif()
 
 duckdb_codesign_for_debugging(unittest)
