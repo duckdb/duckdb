@@ -560,8 +560,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			clustered_right_cursor = make_unsafe_uniq_array<uint16_t *>(InitialCapacity());
 		}
 		auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
-		auto group_ids = reinterpret_cast<const uintptr_t *>(ht_offsets);
-		if (clustered.TryClustered(group_ids, payload.size(), clustered_arena.get(), clustered_left_cursor.get(),
+		if (clustered.TryClustered(ht_offsets, payload.size(), clustered_arena.get(), clustered_left_cursor.get(),
 		                           clustered_right_cursor.get())) {
 			use_clustered = true;
 			const auto aggr_offset = layout_ptr->GetAggrOffset();

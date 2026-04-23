@@ -35,7 +35,7 @@ struct ClusteredAggr {
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! Uses two cursors per group to keep each group's positions contiguous and ascending.
 	//! On success fills sel[], group_runs[].count, and group_id_per_run[].
-	bool TryClustered(const uintptr_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
+	bool TryClustered(const uint64_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
 	                  uint16_t **right_cursor);
 
 	//! Advance all run state pointers by payload_size.

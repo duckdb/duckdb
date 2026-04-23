@@ -137,9 +137,20 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 
 	// Build the clustered permutation once and let clustered-aware kernels opt in.
+	// TryClustered takes uint64_t* group IDs; copy from uintptr_t on 32-bit platforms.
 	ClusteredAggr clustered;
+	uint64_t group_ids_buf[STANDARD_VECTOR_SIZE];
+	const uint64_t *group_ids_ptr;
+	if constexpr (sizeof(uintptr_t) == sizeof(uint64_t)) {
+		group_ids_ptr = reinterpret_cast<const uint64_t *>(address_data);
+	} else {
+		for (idx_t i = 0; i < groups.size(); i++) {
+			group_ids_buf[i] = static_cast<uint64_t>(address_data[i]);
+		}
+		group_ids_ptr = group_ids_buf;
+	}
 	const bool use_clustered =
-	    any_clustered && clustered.TryClustered(address_data, groups.size(), clustered_arena.get(),
+	    any_clustered && clustered.TryClustered(group_ids_ptr, groups.size(), clustered_arena.get(),
 	                                            clustered_left_cursor.get(), clustered_right_cursor.get());
 	if (use_clustered) {
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {

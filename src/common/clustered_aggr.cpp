@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-bool ClusteredAggr::TryClustered(const uintptr_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
+bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
                                  uint16_t **right_cursor) {
 	// Each group gets one arena slot. The left cursor writes the first half backwards,
 	// the right cursor writes the second half forwards, so every group's final range is
@@ -18,7 +18,7 @@ bool ClusteredAggr::TryClustered(const uintptr_t *group_ids, idx_t count, uint16
 	uint16_t *next_slot = arena;
 	uint16_t *const arena_end = arena + MAX_GROUPS * BUCKET_CAP;
 
-	auto allocate_slot = [&](uintptr_t gid) {
+	auto allocate_slot = [&](uint64_t gid) {
 		if (next_slot == arena_end) {
 			return false;
 		}
