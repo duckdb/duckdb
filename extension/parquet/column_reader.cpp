@@ -723,20 +723,25 @@ void ColumnReader::FinishRead(idx_t read_count) {
 
 idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 	idx_t result_offset = 0;
-	auto to_read = input.num_values;
+
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
+
+	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
 		auto read_now = ReadPageHeaders(to_read);
 
-		ReadData(read_now, input.define_out, input.repeat_out, result, result_offset);
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
 		result_offset += read_now;
 		to_read -= read_now;
 	}
-	FinishRead(input.num_values);
+	FinishRead(num_values);
 
-	return input.num_values;
+	return num_values;
 }
 
 idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
@@ -746,7 +751,8 @@ idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 
 void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
                           idx_t approved_tuple_count) {
-	if (SupportsDirectSelect() && approved_tuple_count < input.num_values) {
+	auto &num_values = input.num_values;
+	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
 		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
@@ -755,14 +761,15 @@ void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const Select
 
 void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
                                 idx_t approved_tuple_count) {
-	auto to_read = input.num_values;
-
+	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
 
+	auto to_read = num_values;
+
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
-	auto read_now = ReadPageHeaders(input.num_values);
+	auto read_now = ReadPageHeaders(to_read);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
@@ -771,7 +778,7 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 		PlainSelect(block, define_ptr, read_now, result, sel, approved_tuple_count);
 
 		page_rows_available -= read_now;
-		FinishRead(input.num_values);
+		FinishRead(to_read);
 		return;
 	}
 	// fallback to regular read + filter
@@ -781,20 +788,22 @@ void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const 
 void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
                           TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
                           bool is_first_filter) {
+	auto &num_values = input.num_values;
 	if (SupportsDirectFilter() && is_first_filter) {
 		DirectFilter(input, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
 	Select(input, result, sel, approved_tuple_count);
-	ApplyFilter(result, filter, filter_state, input.num_values, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
 void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
                                 TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count) {
-	auto to_read = input.num_values;
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
+
+	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
