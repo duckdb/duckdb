@@ -7,13 +7,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/planner/filter/selectivity_optional_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 #include "duckdb/planner/table_filter_state.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -56,104 +55,40 @@ double SelectivityOptionalFilterState::SelectivityStats::GetSelectivity() const 
 	return static_cast<double>(tuples_accepted) / static_cast<double>(tuples_processed);
 }
 
-static float GetSelectivityThresholdForType(SelectivityOptionalFilterType type) {
-	static constexpr float MIN_MAX_THRESHOLD = 0.9f;
-	static constexpr float BF_THRESHOLD = 0.5f;
-	static constexpr float PHJ_THRESHOLD = 0.3f;
-	static constexpr float PRF_THRESHOLD = 0.5f;
-
-	switch (type) {
-	case SelectivityOptionalFilterType::MIN_MAX:
-		return MIN_MAX_THRESHOLD;
-	case SelectivityOptionalFilterType::BF:
-		return BF_THRESHOLD;
-	case SelectivityOptionalFilterType::PHJ:
-		return PHJ_THRESHOLD;
-	case SelectivityOptionalFilterType::PRF:
-		return PRF_THRESHOLD;
-	default:
-		throw NotImplementedException("GetSelectivityThresholdForType");
-	}
-}
-
-static idx_t GetCheckNForType(SelectivityOptionalFilterType type) {
-	static constexpr idx_t MIN_MAX_CHECK_N = 6;
-	static constexpr idx_t BF_CHECK_N = 6;
-	static constexpr idx_t PHJ_CHECK_N = 6;
-	static constexpr idx_t PRF_CHECK_N = 6;
-
-	switch (type) {
-	case SelectivityOptionalFilterType::MIN_MAX:
-		return MIN_MAX_CHECK_N;
-	case SelectivityOptionalFilterType::BF:
-		return BF_CHECK_N;
-	case SelectivityOptionalFilterType::PHJ:
-		return PHJ_CHECK_N;
-	case SelectivityOptionalFilterType::PRF:
-		return PRF_CHECK_N;
-	default:
-		throw NotImplementedException("GetCheckNForType");
-	}
-}
-
-SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, float selectivity_threshold,
-                                                     idx_t n_vectors_to_check)
-    : OptionalFilter(std::move(filter)), selectivity_threshold(selectivity_threshold),
+LegacySelectivityOptionalFilter::LegacySelectivityOptionalFilter(unique_ptr<TableFilter> filter,
+                                                                 float selectivity_threshold, idx_t n_vectors_to_check)
+    : LegacyOptionalFilter(std::move(filter)), selectivity_threshold(selectivity_threshold),
       n_vectors_to_check(n_vectors_to_check) {
 }
 
-SelectivityOptionalFilter::SelectivityOptionalFilter(unique_ptr<TableFilter> filter, SelectivityOptionalFilterType type)
-    : SelectivityOptionalFilter(std::move(filter), GetSelectivityThresholdForType(type), GetCheckNForType(type)) {
+LegacySelectivityOptionalFilter::LegacySelectivityOptionalFilter(unique_ptr<TableFilter> filter,
+                                                                 SelectivityOptionalFilterType type) {
+	float threshold;
+	idx_t vectors_to_check;
+	GetThresholdAndVectorsToCheck(type, threshold, vectors_to_check);
+	child_filter = std::move(filter);
+	selectivity_threshold = threshold;
+	n_vectors_to_check = vectors_to_check;
 }
 
-FilterPropagateResult SelectivityOptionalFilter::CheckStatistics(BaseStatistics &stats) const {
-	return child_filter->CheckStatistics(stats);
-}
-
-void SelectivityOptionalFilter::Serialize(Serializer &serializer) const {
-	OptionalFilter::Serialize(serializer);
+void LegacySelectivityOptionalFilter::Serialize(Serializer &serializer) const {
+	LegacyOptionalFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<float>(201, "selectivity_threshold", selectivity_threshold);
 	serializer.WritePropertyWithDefault<idx_t>(202, "n_vectors_to_check", n_vectors_to_check);
 }
 
-unique_ptr<TableFilter> SelectivityOptionalFilter::Deserialize(Deserializer &deserializer) {
-	auto result = unique_ptr<SelectivityOptionalFilter>(new SelectivityOptionalFilter(nullptr, 0.5f, 100));
+unique_ptr<TableFilter> LegacySelectivityOptionalFilter::Deserialize(Deserializer &deserializer) {
+	auto result = unique_ptr<LegacySelectivityOptionalFilter>(new LegacySelectivityOptionalFilter(nullptr, 0.5f, 100));
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableFilter>>(200, "child_filter", result->child_filter);
 	deserializer.ReadPropertyWithDefault<float>(201, "selectivity_threshold", result->selectivity_threshold);
 	deserializer.ReadPropertyWithDefault<idx_t>(202, "n_vectors_to_check", result->n_vectors_to_check);
 	return std::move(result);
 }
-void SelectivityOptionalFilter::FiltersNullValues(const LogicalType &type, bool &filters_nulls,
-                                                  bool &filters_valid_values, TableFilterState &filter_state) const {
-	const auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
-	return ConstantFun::FiltersNullValues(type, *this->child_filter, filters_nulls, filters_valid_values,
-	                                      *state.child_state);
-}
-unique_ptr<TableFilterState> SelectivityOptionalFilter::InitializeState(ClientContext &context) const {
-	D_ASSERT(child_filter);
-	auto child_filter_state = TableFilterState::Initialize(context, *child_filter);
-	return make_uniq<SelectivityOptionalFilterState>(std::move(child_filter_state), this->n_vectors_to_check,
-	                                                 this->selectivity_threshold);
-}
 
-idx_t SelectivityOptionalFilter::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                                 TableFilterState &filter_state, const idx_t scan_count,
-                                                 idx_t &approved_tuple_count) const {
-	auto &state = filter_state.Cast<SelectivityOptionalFilterState>();
-	if (state.stats.IsActive()) {
-		const idx_t approved_before = approved_tuple_count;
-		const idx_t accepted_count = ColumnSegment::FilterSelection(
-		    sel, vector, vdata, *child_filter, *state.child_state, scan_count, approved_tuple_count);
-		state.stats.Update(accepted_count, approved_before);
-		return accepted_count;
-	}
-	state.stats.Update(0, 0);
-	return scan_count;
-}
-
-unique_ptr<TableFilter> SelectivityOptionalFilter::Copy() const {
-	auto copy = make_uniq<SelectivityOptionalFilter>(child_filter->Copy(), selectivity_threshold, n_vectors_to_check);
-	return unique_ptr_cast<SelectivityOptionalFilter, TableFilter>(std::move(copy));
+unique_ptr<Expression> LegacySelectivityOptionalFilter::ToExpression(const Expression &column) const {
+	auto child_expr = child_filter ? child_filter->ToExpression(column) : nullptr;
+	return CreateSelectivityOptionalFilterExpression(std::move(child_expr), column.return_type, selectivity_threshold,
+	                                                 n_vectors_to_check);
 }
 
 } // namespace duckdb

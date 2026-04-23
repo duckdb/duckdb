@@ -49,27 +49,19 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 
 enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
 
-class SelectivityOptionalFilter final : public OptionalFilter {
+//! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
+class LegacySelectivityOptionalFilter final : public LegacyOptionalFilter {
 public:
 	float selectivity_threshold;
 	idx_t n_vectors_to_check;
 
-	SelectivityOptionalFilter(unique_ptr<TableFilter> filter, SelectivityOptionalFilterType type);
-	SelectivityOptionalFilter(unique_ptr<TableFilter> filter, float selectivity_threshold, idx_t n_vectors_to_check);
+	LegacySelectivityOptionalFilter(unique_ptr<TableFilter> filter, SelectivityOptionalFilterType type);
+	LegacySelectivityOptionalFilter(unique_ptr<TableFilter> filter, float selectivity_threshold,
+	                                idx_t n_vectors_to_check);
 
 public:
-	unique_ptr<TableFilter> Copy() const override;
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
+	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
-	void FiltersNullValues(const LogicalType &type, bool &filters_nulls, bool &filters_valid_values,
-	                       TableFilterState &filter_state) const override;
-	unique_ptr<TableFilterState> InitializeState(ClientContext &context) const override;
-	idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-	                      TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count) const override;
-
-	bool IsOnlyForZoneMapFiltering() const override {
-		return false;
-	}
 };
 } // namespace duckdb
