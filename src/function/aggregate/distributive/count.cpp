@@ -269,7 +269,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
-	fun.clustered_optimized = true;
+	fun.SetClusteredOptimized(true);
 	return fun;
 }
 

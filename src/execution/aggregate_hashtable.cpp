@@ -701,7 +701,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	if (Count() + chunk_size > capacity || Count() + chunk_size > ResizeThreshold()) {
 		Verify();
 		// Jump from the small clustered capacity straight to the normal HT size.
-		Resize(MaxValue<idx_t>(capacity * 2, STANDARD_VECTOR_SIZE * 2));
+		Resize(MaxValue<idx_t>(capacity * 2, static_cast<idx_t>(STANDARD_VECTOR_SIZE) * 2));
 	}
 	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 

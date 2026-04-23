@@ -234,6 +234,8 @@ public:
 	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
+	bool IsClusteredOptimized() const { return clustered_optimized; }
+	void SetClusteredOptimized(bool value) { clustered_optimized = value; }
 	// clang-format on
 
 public:
@@ -271,7 +273,6 @@ public:
 	AggregateDistinctDependent distinct_dependent;
 	//! True when the update path can consume ClusteredAggr directly.
 	bool clustered_optimized = false;
-
 	aggregate_get_state_type_t get_state_type = nullptr;
 
 	AggregateOrderDependent GetOrderDependent() const {
