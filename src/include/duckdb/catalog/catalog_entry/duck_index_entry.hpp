@@ -48,7 +48,7 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Invoked during commit of a DELETED_ENTRY for this index; accumulates its removal into the drop state.
+	//! Saves index removal into drop_state to be removed after FlushCommit().
 	void CommitDrop(CommitDropState &drop_state);
 };
 

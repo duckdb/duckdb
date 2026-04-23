@@ -100,12 +100,6 @@
       "paths": [
         "test/fuzzer/sqlsmith/nullif_map_with_config.test"
       ]
-    },
-    {
-      "reason": "In-memory ART assertions incompatible with force_restart.",
-      "paths": [
-        "test/sql/transactions/concurrent_drop_table.test"
-      ]
     }
   ]
 }

@@ -46,11 +46,13 @@ public:
 	explicit CommitDropState(optional_ptr<BlockManager> block_manager);
 
 public:
-	//! Register an on-disk block to mark as modified during Apply.
+	//! Register an on-disk block to mark as modified during FinalizeCommit.
 	void DropBlock(block_id_t block_id);
-	//! Register an index to be removed from a table's index list during Apply.
+	//! Register an index to be removed from a table's index list during FinalizeCommit. Index removal will drop in
+	//! memory index data and also marks all blocks on disk as free blocks allowing for reclamation. Block marking for
+	//! indexes is handled implicitly along destruction paths for index memory.
 	void RemoveIndex(TableIndexList &indexes, string name);
-	//! Apply accumulated block marks and index removals, then clear the buffer.
+	//! Finalize accumulated block marks and index removals.
 	void FinalizeCommit();
 	//! True if no work has been queued.
 	bool Empty() const;
