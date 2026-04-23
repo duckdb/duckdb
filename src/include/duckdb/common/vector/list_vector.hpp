@@ -16,15 +16,15 @@ namespace duckdb {
 
 class VectorListBuffer : public StandardVectorBuffer {
 public:
-	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector);
-	explicit VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
-	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
-	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector);
-	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
-	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
-	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
+	explicit VectorListBuffer(Allocator &allocator, capacity_t capacity, unique_ptr<Vector> vector);
+	explicit VectorListBuffer(Allocator &allocator, capacity_t capacity, const LogicalType &list_type,
+	                          capacity_t child_capacity = capacity_t(STANDARD_VECTOR_SIZE));
+	explicit VectorListBuffer(capacity_t capacity, const LogicalType &list_type,
+	                          capacity_t child_capacity = capacity_t(STANDARD_VECTOR_SIZE));
+	explicit VectorListBuffer(data_ptr_t data, count_t count, const Vector &vector);
+	explicit VectorListBuffer(data_ptr_t data, count_t count, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, count_t count, const VectorListBuffer &parent);
+	explicit VectorListBuffer(AllocatedData allocated_data, count_t count, VectorListBuffer &parent);
 	~VectorListBuffer() override;
 
 public:
@@ -62,7 +62,7 @@ public:
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
-	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
+	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, count_t count) const override;
 	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

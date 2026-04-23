@@ -56,10 +56,10 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
+		buffer = make_buffer<VectorStringBuffer>(dataptr, count_t(count));
 	} else {
 		auto type_size = GetTypeIdSize(type.InternalType());
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count_t(count), type_size);
 	}
 }
 
@@ -226,9 +226,9 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
-void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
-	auto &type = GetType();
+void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity_p) {
 	auto internal_type = type.InternalType();
+	auto capacity = capacity_t(capacity_p);
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {

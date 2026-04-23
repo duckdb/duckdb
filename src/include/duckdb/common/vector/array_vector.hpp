@@ -14,8 +14,8 @@ namespace duckdb {
 
 class VectorArrayBuffer : public VectorBuffer {
 public:
-	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity);
-	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE);
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, capacity_t initial_capacity);
+	explicit VectorArrayBuffer(const LogicalType &array, capacity_t initial = capacity_t(STANDARD_VECTOR_SIZE));
 	~VectorArrayBuffer() override;
 
 public:
