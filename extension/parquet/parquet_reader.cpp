@@ -1174,12 +1174,15 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
                                                       const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
+	auto &expr = *expr_filter.expr;
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
+	    expr.type == ExpressionType::CONJUNCTION_AND) {
+		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		for (auto &child_filter : conjunction_filter.child_filters) {
-			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
+		for (auto &child : conjunction.children) {
+			auto child_filter = ExpressionFilter(child->Copy());
+			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, child_filter);
 			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
@@ -1189,45 +1192,37 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		}
 		return and_result;
 	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
-		auto &expr = *expr_filter.expr;
-
-		// Handle comparison expressions (from ConstantFilter conversion)
-		if (BoundComparisonExpression::IsComparison(expr)) {
-			auto &comp = expr.Cast<BoundFunctionExpression>();
-			auto &right = BoundComparisonExpression::Right(comp);
-			if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				auto &constant = right.Cast<BoundConstantExpression>();
-				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
-					auto &min_value = pq_col_stats.min_value;
-					auto &max_value = pq_col_stats.max_value;
-					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-					                                 comp.GetExpressionType(), StringValue::Get(constant.value));
-				}
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+			auto &constant = right.Cast<BoundConstantExpression>();
+			if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
+				auto &min_value = pq_col_stats.min_value;
+				auto &max_value = pq_col_stats.max_value;
+				return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
+				                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
+				                                 comp.GetExpressionType(), StringValue::Get(constant.value));
 			}
 		}
-		return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
 	}
-	default:
-		return filter.CheckStatistics(stats);
-	}
+	return expr_filter.CheckStatistics(stats);
 }
 
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
                                                      const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
 	// check both stats against the filter
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetFloatFilter");
 	auto &type = reader.Type();
 	auto nan_stats = NumericStats::CreateUnknown(type);
 	auto nan_value = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(nan_stats, nan_value);
 	NumericStats::SetMax(nan_stats, nan_value);
-	auto nan_prune = filter.CheckStatistics(nan_stats);
+	auto nan_prune = expr_filter.CheckStatistics(nan_stats);
 
 	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
-	auto prune = filter.CheckStatistics(*min_max_stats);
+	auto prune = expr_filter.CheckStatistics(*min_max_stats);
 
 	// if EITHER of them cannot be pruned - we cannot prune
 	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
@@ -1294,7 +1289,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				prune_result = CheckParquetFloatFilter(column_reader,
 				                                       group.columns[schema_column_index].meta_data.statistics, filter);
 			} else {
-				prune_result = filter.CheckStatistics(*stats);
+				auto &expr_filter =
+				    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
+				prune_result = expr_filter.CheckStatistics(*stats);
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
@@ -1542,7 +1539,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					// check if any filter is non-optional
 					bool has_non_optional_filter = false;
 					for (auto &entry : *filters) {
-						if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+						if (!ExpressionFilter::IsRootOptionalFilter(entry.Filter())) {
 							has_non_optional_filter = true;
 						}
 					}
@@ -1557,7 +1554,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					bool has_filter = false;
 					if (filters) {
 						auto filter = filters->TryGetFilterByColumnIndex(col_idx);
-						if (filter && filter->filter_type != TableFilterType::OPTIONAL_FILTER) {
+						if (filter && !ExpressionFilter::IsRootOptionalFilter(*filter)) {
 							has_filter = true;
 						}
 					}
