@@ -924,7 +924,6 @@ jobs:
     container:
       image: ${{ matrix.config.image }}
     env:
-      CMAKE_BUILD_PARALLEL_LEVEL: 3
       EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
       ENABLE_EXTENSION_AUTOINSTALL: 1
