@@ -28,7 +28,6 @@ public:
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
