@@ -76,7 +76,8 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 			meta_pipeline.AssignNextBatchIndex(union_pipeline);
 		}
 	} else {
-		bool can_saturate_threads = ContainsSink(children[0].get()) && children[0].get().CanSaturateThreads(current.GetClientContext());
+		bool can_saturate_threads =
+		    ContainsSink(children[0].get()) && children[0].get().CanSaturateThreads(current.GetClientContext());
 		for (idx_t i = 1; i < children.size(); i++) {
 			auto &union_pipeline = union_pipelines[children.size() - i - 1].get();
 			vector<shared_ptr<Pipeline>> dependencies;
