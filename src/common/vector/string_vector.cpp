@@ -84,6 +84,7 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &ty
 	if (auxiliary_data) {
 		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 	}
+	result->SetVectorSize(end - offset);
 	return result;
 }
 
@@ -151,9 +152,9 @@ buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_da
 	return make_buffer<VectorStringBuffer>(std::move(new_data), capacity, *this);
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                     idx_t count) const {
-	auto result = StandardVectorBuffer::Flatten(type, sel, count);
+buffer_ptr<VectorBuffer> VectorStringBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                  idx_t count) const {
+	auto result = StandardVectorBuffer::FlattenSliceInternal(type, sel, count);
 	if (!result) {
 		// already flat - bail
 		return nullptr;

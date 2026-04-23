@@ -92,47 +92,62 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// database_name, VARCHAR
+	auto &database_name = output.data[0];
+	// database_oid, BIGINT
+	auto &database_oid = output.data[1];
+	// schema_name, VARCHAR
+	auto &schema_name = output.data[2];
+	// schema_oid, BIGINT
+	auto &schema_oid = output.data[3];
+	// sequence_name, VARCHAR
+	auto &sequence_name = output.data[4];
+	// sequence_oid, BIGINT
+	auto &sequence_oid = output.data[5];
+	// comment, VARCHAR
+	auto &comment = output.data[6];
+	// tags, MAP(VARCHAR, VARCHAR)
+	auto &tags = output.data[7];
+	// temporary, BOOLEAN
+	auto &temporary = output.data[8];
+	// start_value, BIGINT
+	auto &start_value = output.data[9];
+	// min_value, BIGINT
+	auto &min_value = output.data[10];
+	// max_value, BIGINT
+	auto &max_value = output.data[11];
+	// increment_by, BIGINT
+	auto &increment_by = output.data[12];
+	// cycle, BOOLEAN
+	auto &cycle = output.data[13];
+	// last_value, BIGINT
+	auto &last_value = output.data[14];
+	// sql, VARCHAR
+	auto &sql = output.data[15];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &seq = data.entries[data.offset++].get();
 		auto seq_data = seq.GetData();
 
-		// return values:
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, count, seq.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.catalog.GetOid())));
-		// schema_name, VARCHAR
-		output.SetValue(col++, count, Value(seq.schema.name));
-		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.schema.oid)));
-		// sequence_name, VARCHAR
-		output.SetValue(col++, count, Value(seq.name));
-		// sequence_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(seq.oid)));
-		// comment, VARCHAR
-		output.SetValue(col++, count, Value(seq.comment));
-		// tags, MAP(VARCHAR, VARCHAR)
-		output.SetValue(col++, count, Value::MAP(seq.tags));
-		// temporary, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(seq.temporary));
-		// start_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq_data.start_value));
-		// min_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq_data.min_value));
-		// max_value, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq_data.max_value));
-		// increment_by, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(seq_data.increment));
-		// cycle, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(seq_data.cycle));
-		// last_value, BIGINT
-		output.SetValue(col++, count,
-		                (seq_data.usage_count == 0) || !seq_data.last_value.IsValid()
-		                    ? Value()
-		                    : Value::BIGINT(seq_data.last_value.GetValue()));
-		// sql, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(seq.ToSQL()));
+		database_name.Append(Value(seq.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(seq.catalog.GetOid())));
+		schema_name.Append(Value(seq.schema.name));
+		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(seq.schema.oid)));
+		sequence_name.Append(Value(seq.name));
+		sequence_oid.Append(Value::BIGINT(NumericCast<int64_t>(seq.oid)));
+		comment.Append(Value(seq.comment));
+		tags.Append(Value::MAP(seq.tags));
+		temporary.Append(Value::BOOLEAN(seq.temporary));
+		start_value.Append(Value::BIGINT(seq_data.start_value));
+		min_value.Append(Value::BIGINT(seq_data.min_value));
+		max_value.Append(Value::BIGINT(seq_data.max_value));
+		increment_by.Append(Value::BIGINT(seq_data.increment));
+		cycle.Append(Value::BOOLEAN(seq_data.cycle));
+		last_value.Append((seq_data.usage_count == 0) || !seq_data.last_value.IsValid()
+		                      ? Value()
+		                      : Value::BIGINT(seq_data.last_value.GetValue()));
+		sql.Append(Value(seq.ToSQL()));
 
 		count++;
 	}

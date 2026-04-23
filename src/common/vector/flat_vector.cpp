@@ -67,6 +67,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset, type_size);
 	result->GetValidityMask().Slice(validity, offset, end - offset);
+	result->SetVectorSize(end - offset);
 	return result;
 }
 
@@ -142,20 +143,16 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                       idx_t count) const {
-	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	SelectionVector owned_sel;
-	const_reference<SelectionVector> sel_ref(input_sel);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
-		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto &sel = sel_ref.get();
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                    idx_t count) const {
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
 	auto target_byte_count = allocated_count * type_size;
@@ -166,6 +163,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
 
 	auto result = CreateBuffer(std::move(new_data), count);
+	result->SetVectorSize(count);
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.Resize(allocated_count);
@@ -436,8 +434,7 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	auto old_validity = std::move(vector.BufferMutable().GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
-		vector.SetBuffer(
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetChildSize()));
+		vector.SetBuffer(make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
 		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity));
 	} else {
@@ -445,6 +442,8 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, capacity, type_size));
 	}
 	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
+	// set the size of the new buffer so child->size() works for list parents using GetChildSize()
+	vector.BufferMutable().SetVectorSize(capacity);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {

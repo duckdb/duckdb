@@ -74,7 +74,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 	auto rowid_binding = update_op.children.back()->GetColumnBindings().back();
 
 	// We're looking for the GET operator that produces this rowid, and therefore produce this binding.
-	// There might be projections in betweeen though, so we need to traverse through them.
+	// There might be projections in between though, so we need to traverse through them.
 	auto target_binding = rowid_binding;
 	vector<reference<unique_ptr<LogicalOperator>>> stack;
 

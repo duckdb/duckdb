@@ -44,19 +44,25 @@ void DuckDBEvictionQueuesFunction(ClientContext &context, TableFunctionInput &da
 		return;
 	}
 	idx_t count = 0;
+
+	// queue_index, BIGINT
+	auto &queue_index = output.data[0];
+	// queue_type, VARCHAR
+	auto &queue_type = output.data[1];
+	// approximate_size, BIGINT
+	auto &approximate_size = output.data[2];
+	// dead_nodes, BIGINT
+	auto &dead_nodes = output.data[3];
+	// total_insertions, BIGINT
+	auto &total_insertions = output.data[4];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
-		idx_t col = 0;
-		// queue_index, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(UnsafeNumericCast<int64_t>(entry.queue_index)));
-		// queue_type, VARCHAR
-		output.SetValue(col++, count, Value(entry.queue_type));
-		// approximate_size, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(UnsafeNumericCast<int64_t>(entry.approximate_size)));
-		// dead_nodes, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(UnsafeNumericCast<int64_t>(entry.dead_nodes)));
-		// total_insertions, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(UnsafeNumericCast<int64_t>(entry.total_insertions)));
+		queue_index.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.queue_index)));
+		queue_type.Append(Value(entry.queue_type));
+		approximate_size.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.approximate_size)));
+		dead_nodes.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.dead_nodes)));
+		total_insertions.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.total_insertions)));
 		count++;
 	}
 	output.SetCardinality(count);

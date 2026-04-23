@@ -767,7 +767,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
 	if (options.storage_version.IsValid()) {
-		// storage version specified explicity - use requested storage version
+		// storage version specified explicitly - use requested storage version
 		auto requested_compat_version = options.storage_version.GetIndex();
 		if (requested_compat_version < header.serialization_compatibility) {
 			throw InvalidInputException(

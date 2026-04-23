@@ -21,7 +21,7 @@ public:
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
 	explicit VectorListBuffer(idx_t capacity, const LogicalType &list_type,
 	                          idx_t child_capacity = STANDARD_VECTOR_SIZE);
-	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector, idx_t child_size);
+	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector);
 	explicit VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, const VectorListBuffer &parent);
 	explicit VectorListBuffer(AllocatedData allocated_data, idx_t capacity, VectorListBuffer &parent);
@@ -45,18 +45,17 @@ public:
 	void PushBack(const Value &insert);
 
 	idx_t GetChildSize() const {
-		return child_size;
+		return child->size();
 	}
 
 	idx_t GetChildCapacity() const;
-
 	void SetChildSize(idx_t new_size);
 
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
@@ -66,11 +65,12 @@ protected:
 	buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const override;
 	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	                  idx_t target_offset, idx_t copy_count) override;
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t child_size = 0;
 };
 
 struct ListVector {
