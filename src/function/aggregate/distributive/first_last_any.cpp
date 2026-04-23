@@ -1,8 +1,10 @@
+#include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/planner/expression.hpp"
+#include <type_traits>
 
 namespace duckdb {
 
@@ -10,6 +12,7 @@ namespace {
 
 template <class T>
 struct FirstState {
+	using VALUE_TYPE = T;
 	T value;
 	bool is_set;
 	bool is_null;
@@ -29,6 +32,11 @@ struct FirstFunctionBase {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunction : public FirstFunctionBase {
+	template <class STATE>
+	static constexpr bool SupportsClusteredLocalState() {
+		return !LAST || !std::is_same_v<typename STATE::VALUE_TYPE, string_t>;
+	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (LAST || !state.is_set) {
@@ -49,6 +57,58 @@ struct FirstFunction : public FirstFunctionBase {
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+	}
+
+	// Clustered early-exit: first/any_value scan forward and stop at the first valid value;
+	// last scans backward and stops at the first valid value from the end.
+	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
+	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, const sel_t *sel,
+	                                       const SelectionVector &isel, ValidityMask &validity, idx_t pos, idx_t end) {
+		if constexpr (LAST) {
+			for (idx_t k = end; k > pos; k--) {
+				auto idx = isel.get_index(sel[k - 1]);
+				if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
+					state.is_set = true;
+					state.is_null = false;
+					state.value = vals[idx];
+					return;
+				}
+				if (!SKIP_NULLS) {
+					state.is_set = true;
+					state.is_null = true;
+					return;
+				}
+			}
+		} else {
+			if (state.is_set) {
+				return;
+			}
+			for (idx_t k = pos; k < end; k++) {
+				auto idx = isel.get_index(sel[k]);
+				if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
+					state.is_set = true;
+					state.is_null = false;
+					state.value = vals[idx];
+					return;
+				}
+				if (!SKIP_NULLS) {
+					state.is_set = true;
+					state.is_null = true;
+					return;
+				}
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP>
+	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
+	                               const sel_t *sel, const SelectionVector &isel, ValidityMask &validity, idx_t pos,
+	                               idx_t end) {
+		if (validity.CanHaveNull()) {
+			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, sel, isel, validity, pos, end);
+		} else {
+			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, sel, isel, validity, pos, end);
+		}
 	}
 
 	template <class STATE, class OP>
@@ -115,6 +175,11 @@ struct FirstFunctionStringBase : public FirstFunctionBase {
 
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
+	template <class STATE>
+	static constexpr bool SupportsClusteredLocalState() {
+		return !LAST;
+	}
+
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (LAST || !state.is_set) {
@@ -127,6 +192,49 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
+	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
+	                                       const sel_t *sel, const SelectionVector &isel, ValidityMask &validity,
+	                                       idx_t pos, idx_t end) {
+		if constexpr (LAST) {
+			for (idx_t k = end; k > pos; k--) {
+				auto idx = isel.get_index(sel[k - 1]);
+				bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
+				FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
+				                                                                         vals[idx], is_null);
+				if (state.is_set) {
+					return;
+				}
+			}
+		} else {
+			if (state.is_set) {
+				return;
+			}
+			for (idx_t k = pos; k < end; k++) {
+				auto idx = isel.get_index(sel[k]);
+				bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
+				FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
+				                                                                         vals[idx], is_null);
+				if (state.is_set) {
+					return;
+				}
+			}
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE_TYPE, class OP>
+	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
+	                               const sel_t *sel, const SelectionVector &isel, ValidityMask &validity, idx_t pos,
+	                               idx_t end) {
+		if (validity.CanHaveNull()) {
+			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, unary_input, sel, isel, validity,
+			                                                              pos, end);
+		} else {
+			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, unary_input, sel, isel, validity,
+			                                                             pos, end);
+		}
 	}
 
 	template <class T, class STATE>

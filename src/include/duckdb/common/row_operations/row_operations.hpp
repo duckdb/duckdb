@@ -14,6 +14,8 @@
 
 namespace duckdb {
 
+struct ClusteredAggr;
+
 class ArenaAllocator;
 struct AggregateObject;
 struct AggregateFilterData;
@@ -42,7 +44,7 @@ struct RowOperations {
 	static void DestroyStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses, idx_t count);
 	//! update - aligned addresses
 	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload,
-	                         idx_t arg_idx, idx_t count);
+	                         idx_t arg_idx, idx_t count, optional_ptr<const ClusteredAggr> clustered = nullptr);
 	//! filtered update - aligned addresses
 	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
 	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);

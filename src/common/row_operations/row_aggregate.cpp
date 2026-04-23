@@ -46,8 +46,10 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 }
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
-                                 DataChunk &payload, idx_t arg_idx, idx_t count) {
+                                 DataChunk &payload, idx_t arg_idx, idx_t count,
+                                 optional_ptr<const ClusteredAggr> clustered) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+	aggr_input_data.clustered = clustered;
 	aggr.function.GetStateUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data,
 	                                       aggr.child_count, addresses, count);
 }

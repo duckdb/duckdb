@@ -109,6 +109,8 @@ struct NumericMinMaxBase : public MinMaxBase {
 };
 
 struct MinOperation : public NumericMinMaxBase {
+	static constexpr bool CLUSTERED_LOCAL_STATE = true;
+
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
@@ -132,6 +134,8 @@ struct MinOperation : public NumericMinMaxBase {
 };
 
 struct MaxOperation : public NumericMinMaxBase {
+	static constexpr bool CLUSTERED_LOCAL_STATE = true;
+
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {

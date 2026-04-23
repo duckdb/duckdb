@@ -1,3 +1,4 @@
+#include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -130,6 +131,32 @@ struct CountFunction : public BaseCountFunction {
 
 	static void CountScatter(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                         idx_t count) {
+		// COUNT(col) clustered fast path: for each run, add run count when input is all-valid
+		// or count validity bits per-run otherwise. Use ClusterIter which returns a chunk-wide
+		// sel that already composes any DICT sel with cs.sel — single indirection per tuple.
+		if (aggr_input_data.clustered) {
+			if (auto *cluster_iter = aggr_input_data.clustered->ClusterIter(inputs[0], count)) {
+				auto &cs = *aggr_input_data.clustered;
+				UnifiedVectorFormat idata;
+				inputs[0].ToUnifiedFormat(count, idata);
+				const bool all_valid = !idata.validity.CanHaveNull();
+				idx_t pos = 0;
+				for (idx_t r = 0; r < cs.n_group_runs; r++) {
+					auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
+					const idx_t run_count = cs.group_runs[r].count;
+					if (all_valid) {
+						state += UnsafeNumericCast<STATE>(run_count);
+					} else {
+						const idx_t end = pos + run_count;
+						for (idx_t k = pos; k < end; k++) {
+							state += idata.validity.RowIsValidUnsafe(cluster_iter[k]);
+						}
+					}
+					pos += run_count;
+				}
+				return;
+			}
+		}
 		auto &input = inputs[0];
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetDataMutable<STATE *>(states);
@@ -242,6 +269,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
+	fun.clustered_optimized = true;
 	return fun;
 }
 

@@ -48,6 +48,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
+	all_clustered = AllAggregatesClustered(aggregate_objects_p);
+	any_clustered = AnyAggregatesClustered(aggregate_objects_p);
+
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 
@@ -203,7 +206,8 @@ idx_t GroupedAggregateHashTable::Count() const {
 }
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {
-	return STANDARD_VECTOR_SIZE * 2ULL;
+	// Keep small HTs clusterable; the first growth jumps past this.
+	return ClusteredAggr::MAX_GROUPS;
 }
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
@@ -288,7 +292,7 @@ idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
-	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
+	D_ASSERT(size >= ClusteredAggr::MAX_GROUPS);
 	D_ASSERT(IsPowerOfTwo(size));
 	if (Count() != 0 && size < capacity) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
@@ -542,14 +546,45 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	// Now every cell has an entry, update the aggregates
 	auto &aggregates = layout_ptr->GetAggregates();
+
+	// addresses[] stays in input order. ClusteredAggr is an optional hint for clustered-aware
+	// kernels; everyone else keeps using the regular scatter path.
+	ClusteredAggr clustered;
+	bool use_clustered = false;
+	if (any_clustered && !skip_lookups && capacity <= InitialCapacity()) {
+		if (!clustered_arena) {
+			clustered_arena =
+			    make_unsafe_uniq_array_uninitialized<uint16_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
+			clustered_left_cursor = make_unsafe_uniq_array<uint16_t *>(InitialCapacity());
+			clustered_right_cursor = make_unsafe_uniq_array<uint16_t *>(InitialCapacity());
+		}
+		auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
+		auto group_ids = reinterpret_cast<const uintptr_t *>(ht_offsets);
+		if (clustered.TryClustered(group_ids, payload.size(), clustered_arena.get(), clustered_left_cursor.get(),
+		                           clustered_right_cursor.get())) {
+			use_clustered = true;
+			const auto aggr_offset = layout_ptr->GetAggrOffset();
+			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+				auto slot = static_cast<idx_t>(clustered.group_id_per_run[r]);
+				clustered.group_runs[r].state = entries[slot].GetPointer() + aggr_offset;
+			}
+		}
+	}
+
+	const bool skip_addresses = use_clustered && all_clustered;
+
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
-			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
-			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+			if (!skip_addresses) {
+				VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+			}
+			if (use_clustered) {
+				clustered.AdvanceStates(aggr.payload_size);
+			}
 			continue;
 		}
 		D_ASSERT(i == filter[filter_idx]);
@@ -558,12 +593,17 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
 			                                    payload, payload_idx);
 		} else {
-			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size(),
+			                            use_clustered ? &clustered : nullptr);
 		}
 
-		// Move to the next aggregate
 		payload_idx += aggr.child_count;
-		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+		if (!skip_addresses) {
+			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+		}
+		if (use_clustered) {
+			clustered.AdvanceStates(aggr.payload_size);
+		}
 		filter_idx++;
 	}
 
@@ -660,7 +700,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto chunk_size = groups.size();
 	if (Count() + chunk_size > capacity || Count() + chunk_size > ResizeThreshold()) {
 		Verify();
-		Resize(capacity * 2);
+		// Jump from the small clustered capacity straight to the normal HT size.
+		Resize(MaxValue<idx_t>(capacity * 2, STANDARD_VECTOR_SIZE * 2));
 	}
 	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 

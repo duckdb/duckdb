@@ -74,6 +74,7 @@ add_library_unity(
   tree_renderer.cpp
   types.cpp
   bignum.cpp
+  clustered_aggr.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

@@ -11,9 +11,11 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include <type_traits>
 
 namespace duckdb {
 
@@ -249,6 +251,15 @@ private:
 public:
 	template <class STATE_TYPE, class OP>
 	static void NullaryScatter(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
+		// COUNT(*) can add run lengths directly.
+		if (aggr_input_data.clustered) {
+			auto &cs = *aggr_input_data.clustered;
+			for (idx_t r = 0; r < cs.n_group_runs; r++) {
+				OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state),
+				                                               aggr_input_data, cs.group_runs[r].count);
+			}
+			return;
+		}
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			OP::template ConstantOperation<STATE_TYPE, OP>(**sdata, aggr_input_data, count);
@@ -269,8 +280,115 @@ public:
 		OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(state), aggr_input_data, count);
 	}
 
+	// True if OP allows the clustered path to copy the aggregate state locally per run and
+	// flush it back once at the end.
+	template <class OP, class = void>
+	struct HasClusteredLocalState : std::false_type {};
+	template <class OP>
+	struct HasClusteredLocalState<OP, std::void_t<decltype(OP::CLUSTERED_LOCAL_STATE)>>
+	    : std::bool_constant<OP::CLUSTERED_LOCAL_STATE> {};
+
+	template <class OP, class STATE, class = void>
+	struct HasClusteredLocalStateForState : std::false_type {};
+	template <class OP, class STATE>
+	struct HasClusteredLocalStateForState<OP, STATE,
+	                                      std::void_t<decltype(OP::template SupportsClusteredLocalState<STATE>())>>
+	    : std::bool_constant<OP::template SupportsClusteredLocalState<STATE>()> {};
+
+	// Strong clustered path: copy the aggregate state once per run, update the local copy,
+	// then flush it back once.
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void UnaryScatterClusteredLocalState(Vector &input, AggregateInputData &aggr_input_data, idx_t count,
+	                                            const sel_t *cluster_iter) {
+		auto &cs = *aggr_input_data.clustered;
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
+		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
+		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
+		idx_t pos = 0;
+		for (idx_t r = 0; r < cs.n_group_runs; r++) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
+			const idx_t end = pos + cs.group_runs[r].count;
+			auto local_state = state;
+			bool any_valid = false;
+			if (OP::IgnoreNull() && idata.validity.CanHaveNull()) {
+				for (idx_t k = pos; k < end; k++) {
+					const auto idx = cluster_iter[k];
+					unary_input.input_idx = idx;
+					if (idata.validity.RowIsValidUnsafe(idx)) {
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(local_state, vals[idx], unary_input);
+						any_valid = true;
+					}
+				}
+			} else {
+				for (idx_t k = pos; k < end; k++) {
+					unary_input.input_idx = cluster_iter[k];
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(local_state, vals[unary_input.input_idx],
+					                                                   unary_input);
+				}
+				any_valid = true;
+			}
+			if (any_valid) {
+				state = local_state;
+			}
+			pos = end;
+		}
+	}
+
+	// SFINAE: true if OP defines ClusteredOperation (early-exit optimization for first/last/any_value).
+	template <class OP, class = void>
+	struct HasClusteredOperation : std::false_type {};
+	template <class OP>
+	struct HasClusteredOperation<OP, std::void_t<decltype(&OP::template ClusteredOperation<int32_t, int32_t, OP>)>>
+	    : std::true_type {};
+
+	// Generic clustered loop: keep one state pointer per run instead of per tuple.
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static void UnaryScatterClusteredGeneric(Vector &input, AggregateInputData &aggr_input_data, idx_t count) {
+		auto &cs = *aggr_input_data.clustered;
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
+		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
+		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
+		idx_t pos = 0;
+		for (idx_t r = 0; r < cs.n_group_runs; r++) {
+			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
+			const idx_t end = pos + cs.group_runs[r].count;
+			if constexpr (HasClusteredOperation<OP>::value) {
+				OP::template ClusteredOperation<INPUT_TYPE, STATE_TYPE, OP>(state, vals, unary_input, cs.sel,
+				                                                            *idata.sel, idata.validity, pos, end);
+			} else if (OP::IgnoreNull() && idata.validity.CanHaveNull()) {
+				for (idx_t k = pos; k < end; k++) {
+					auto idx = idata.sel->get_index(cs.sel[k]);
+					unary_input.input_idx = idx;
+					if (idata.validity.RowIsValidUnsafe(idx)) {
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, vals[idx], unary_input);
+					}
+				}
+			} else {
+				for (idx_t k = pos; k < end; k++) {
+					auto idx = idata.sel->get_index(cs.sel[k]);
+					unary_input.input_idx = idx;
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, vals[idx], unary_input);
+				}
+			}
+			pos = end;
+		}
+	}
+
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatter(Vector &input, Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
+		if (aggr_input_data.clustered) {
+			if constexpr (HasClusteredLocalState<OP>::value || HasClusteredLocalStateForState<OP, STATE_TYPE>::value) {
+				if (auto *cluster_iter = aggr_input_data.clustered->ClusterIter(input, count)) {
+					UnaryScatterClusteredLocalState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, count,
+					                                                            cluster_iter);
+					return;
+				}
+			}
+			UnaryScatterClusteredGeneric<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, count);
+			return;
+		}
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {

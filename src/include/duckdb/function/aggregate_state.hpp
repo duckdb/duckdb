@@ -13,6 +13,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {
@@ -35,6 +36,7 @@ struct AggregateInputData {
 	optional_ptr<FunctionData> bind_data;
 	ArenaAllocator &allocator;
 	AggregateCombineType combine_type;
+	optional_ptr<const ClusteredAggr> clustered;
 };
 
 struct AggregateUnaryInput {

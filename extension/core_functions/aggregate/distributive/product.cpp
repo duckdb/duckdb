@@ -14,6 +14,8 @@ struct ProductState {
 };
 
 struct ProductFunction {
+	static constexpr bool CLUSTERED_LOCAL_STATE = true;
+
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = 1;

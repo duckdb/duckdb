@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/common/clustered_aggr.hpp"
 
 namespace duckdb {
 
@@ -60,6 +61,15 @@ protected:
 	unique_ptr<ArenaAllocator> aggregate_allocator;
 	//! Owning arena allocators that this HT has data from
 	vector<unique_ptr<ArenaAllocator>> stored_allocators;
+
+	//! Scratch buffers for ClusteredAggr::TryClustered.
+	unsafe_unique_array<uint16_t> clustered_arena;
+	unsafe_unique_array<uint16_t *> clustered_left_cursor;
+	unsafe_unique_array<uint16_t *> clustered_right_cursor;
+	//! True iff every aggregate in this layout is clustered-aware and unfiltered.
+	bool all_clustered = false;
+	//! True iff at least one aggregate benefits from clustering.
+	bool any_clustered = false;
 
 private:
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)

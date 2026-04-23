@@ -15,6 +15,7 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/common/clustered_aggr.hpp"
 
 namespace duckdb {
 
@@ -201,6 +202,15 @@ private:
 
 		RowOperationsState row_state;
 	} state;
+
+	//! Scratch buffers for ClusteredAggr::TryClustered, allocated on first use.
+	unsafe_unique_array<uint16_t> clustered_arena;
+	unsafe_unique_array<uint16_t *> clustered_left_cursor;
+	unsafe_unique_array<uint16_t *> clustered_right_cursor;
+	//! True iff every aggregate in this layout is clustered-aware and unfiltered.
+	bool all_clustered = false;
+	//! True iff at least one aggregate benefits from clustering.
+	bool any_clustered = false;
 
 private:
 	//! Disabled the copy constructor
