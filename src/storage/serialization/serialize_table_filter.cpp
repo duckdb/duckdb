@@ -25,6 +25,9 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	auto filter_type = deserializer.ReadProperty<TableFilterType>(100, "filter_type");
 	unique_ptr<TableFilter> result;
 	switch (filter_type) {
+	case TableFilterType::EXPRESSION_FILTER:
+		result = ExpressionFilter::Deserialize(deserializer);
+		break;
 	case TableFilterType::LEGACY_CONJUNCTION_AND:
 		result = LegacyConjunctionAndFilter::Deserialize(deserializer);
 		break;
@@ -36,9 +39,6 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 		break;
 	case TableFilterType::LEGACY_DYNAMIC_FILTER:
 		result = LegacyDynamicFilter::Deserialize(deserializer);
-		break;
-	case TableFilterType::EXPRESSION_FILTER:
-		result = ExpressionFilter::Deserialize(deserializer);
 		break;
 	case TableFilterType::LEGACY_IN_FILTER:
 		result = LegacyInFilter::Deserialize(deserializer);
@@ -59,6 +59,17 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 		throw SerializationException("Unsupported type for deserialization of TableFilter!");
 	}
 	return result;
+}
+
+void ExpressionFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "expr", expr);
+}
+
+unique_ptr<TableFilter> ExpressionFilter::Deserialize(Deserializer &deserializer) {
+	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "expr");
+	auto result = duckdb::unique_ptr<ExpressionFilter>(new ExpressionFilter(std::move(expr)));
+	return std::move(result);
 }
 
 void LegacyConjunctionAndFilter::Serialize(Serializer &serializer) const {
@@ -102,17 +113,6 @@ void LegacyDynamicFilter::Serialize(Serializer &serializer) const {
 
 unique_ptr<TableFilter> LegacyDynamicFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LegacyDynamicFilter>(new LegacyDynamicFilter());
-	return std::move(result);
-}
-
-void ExpressionFilter::Serialize(Serializer &serializer) const {
-	TableFilter::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "expr", expr);
-}
-
-unique_ptr<TableFilter> ExpressionFilter::Deserialize(Deserializer &deserializer) {
-	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "expr");
-	auto result = duckdb::unique_ptr<ExpressionFilter>(new ExpressionFilter(std::move(expr)));
 	return std::move(result);
 }
 
