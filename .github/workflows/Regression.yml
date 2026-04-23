@@ -2,6 +2,8 @@ name: Regression
 on:
   workflow_call:
     inputs:
+      git_ref:
+        type: string
       base_hash:
         type: string
       build_current_release:
@@ -21,6 +23,9 @@ on:
         type: boolean
   workflow_dispatch:
     inputs:
+      git_ref:
+        description: 'Git ref to test for current release'
+        type: string
       base_hash:
         description: 'Base hash'
         type: string
@@ -51,6 +56,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GIT_REF: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref_name, '_feature') && 'feature' || 'main') }}
   BASE_HASH: ${{ inputs.base_hash }}
 
@@ -65,6 +71,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ env.GIT_REF }}
 
       - name: Install tools
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -142,6 +149,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
 
       - name: Install
         run: |
@@ -209,6 +218,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
 
       - name: Install
         run: |
@@ -258,6 +269,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
 
       - name: Install
         run: |
@@ -333,6 +346,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
 
       - name: Install
         run: |
@@ -373,6 +388,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.GIT_REF }}
 
       - name: Install
         run: |
