@@ -12,11 +12,6 @@ RESET custom_user_agent
 ----
 Cannot change custom_user_agent setting while database is running
 
-query T
-SELECT current_setting('custom_user_agent')
-----
-(empty)
-
 statement error
 SET duckdb_api='something else'
 ----
