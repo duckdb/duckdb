@@ -13,6 +13,7 @@
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
