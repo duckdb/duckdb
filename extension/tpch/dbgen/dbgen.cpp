@@ -631,7 +631,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		return;
 	}
 
-	load_dists(10 * 1024 * 1024, &base_context); // 10MiB
+	load_dists(300 * 1024 * 1024, &base_context); // 300MiB
 	/* have to do this after init */
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
