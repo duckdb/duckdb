@@ -260,6 +260,31 @@ function(build_static_extension NAME PARAMETERS)
     list(REMOVE_AT FILES 0)
     add_library(${NAME}_extension STATIC ${FILES})
     target_link_libraries(${NAME}_extension duckdb_static)
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CPP")
+endfunction()
+
+function(build_static_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0 1 2 3)
+    add_library(${NAME}_extension STATIC ${FILES})
+    target_link_libraries(${NAME}_extension duckdb_static)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_VERSION_MAJOR})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_VERSION_MINOR})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_VERSION_PATCH})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
+endfunction()
+
+function(build_static_extension_capi_unstable NAME PARAMETERS)
+    set(FILES "${ARGV}")
+    list(REMOVE_AT FILES 0)
+    add_library(${NAME}_extension STATIC ${FILES})
+    target_link_libraries(${NAME}_extension duckdb_static)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+    target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+    set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND "CAPI")
 endfunction()
 
 # Internal extension register function
@@ -316,6 +341,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_TEST_PATH ${TEST_PATH} PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION ${EXTENSION_VERSION} PARENT_SCOPE)
+
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
