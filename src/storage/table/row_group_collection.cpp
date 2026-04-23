@@ -1604,16 +1604,18 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			D_ASSERT(checkpoint_state.SegmentIsDropped(segment_idx));
 			continue;
 		}
-		auto &row_group = entry->GetNode();
+		auto &existing_row_group = entry->GetNode();
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
-			new_total_rows += row_group.count;
+			new_total_rows += existing_row_group.count;
 
 			auto lock = global_stats.GetLock();
-			for (idx_t column_idx = 0; column_idx < row_group.GetColumnCount(); column_idx++) {
-				global_stats.GetStats(*lock, column_idx).Statistics().Merge(*row_group.GetStatistics(column_idx));
+			for (idx_t column_idx = 0; column_idx < existing_row_group.GetColumnCount(); column_idx++) {
+				global_stats.GetStats(*lock, column_idx)
+				    .Statistics()
+				    .Merge(*existing_row_group.GetStatistics(column_idx));
 			}
 			continue;
 		}
@@ -1625,6 +1627,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// row group was unchanged - emit previous row group
 			new_row_group = entry->ReferenceNode();
 		}
+		auto &row_group = *new_row_group;
 		RowGroupPointer pointer_copy;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
@@ -1632,7 +1635,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
 		auto pointer =
-		    new_row_group->Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
+		    row_group.Checkpoint(std::move(row_group_write_data), *row_group_writer, global_stats, row_start);
 		if (debug_verify_blocks) {
 			pointer_copy = pointer;
 		}
@@ -1705,17 +1708,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (all_written_block_ids != all_quick_read_block_ids ||
 			    all_quick_read_block_ids != all_full_read_block_ids) {
 				std::stringstream oss;
-				oss << "Written: ";
+				oss << "\nWritten: ";
 				for (auto &block : all_written_blocks) {
 					oss << block << ", ";
 				}
-				oss << "\n";
-				oss << "Quick read: ";
+				oss << "\nQuick read: ";
 				for (auto &block : all_quick_read_blocks) {
 					oss << block << ", ";
 				}
-				oss << "\n";
-				oss << "Full read: ";
+				oss << "\nFull read: ";
 				for (auto &block : all_full_read_blocks) {
 					oss << block << ", ";
 				}
