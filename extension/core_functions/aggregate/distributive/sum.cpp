@@ -26,7 +26,6 @@ struct SumSetOperation {
 };
 
 struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
@@ -38,7 +37,6 @@ struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 };
 
 struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHugeint> {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
@@ -51,7 +49,6 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, AddToHug
 
 template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
@@ -66,7 +63,6 @@ using NumericSumOperation = DoubleSumOperation<RegularAdd>;
 using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {

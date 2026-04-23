@@ -23,15 +23,14 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	total_groups = (uint64_t)1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
-	all_clustered = AllAggregatesClustered(aggregate_objects_p);
-	any_clustered = AnyAggregatesClustered(aggregate_objects_p);
+	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
+	clustered_state.any_clustered = AnyAggregatesClustered(aggregate_objects_p);
 	layout_ptr->Initialize(std::move(aggregate_objects_p));
 	tuple_size = layout_ptr->GetRowWidth();
 
-	// Scratch for ClusteredAggr::TryClustered.
-	clustered_arena = make_unsafe_uniq_array_uninitialized<uint16_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
-	clustered_left_cursor = make_unsafe_uniq_array<uint16_t *>(total_groups);
-	clustered_right_cursor = make_unsafe_uniq_array<uint16_t *>(total_groups);
+	if (clustered_state.any_clustered) {
+		clustered_state.Initialize(total_groups);
+	}
 
 	// allocate and null initialize the data
 	owned_data = make_unsafe_uniq_array_uninitialized<data_t>(tuple_size * total_groups);
@@ -136,31 +135,63 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		ComputeGroupLocation(groups.data[i], group_minima[i], address_data, current_shift, groups.size());
 	}
 
-	// Build the clustered permutation once and let clustered-aware kernels opt in.
-	// TryClustered takes uint64_t* group IDs; copy from uintptr_t on 32-bit platforms.
+	if (AddChunkClustered(address_data, payload, groups.size())) {
+		return;
+	}
+
+	// Non-clustered path: convert group ids to state pointers and update aggregates.
+	for (idx_t i = 0; i < groups.size(); i++) {
+		const auto group = address_data[i];
+		if (group >= total_groups) {
+			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
+			                            "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
+			                            "disable_optimizer to disable optimizations that rely on correct statistics",
+			                            group, total_groups);
+		}
+		group_is_set[group] = true;
+		address_data[i] = uintptr_t(data) + group * tuple_size;
+	}
+
+	idx_t payload_idx = 0;
+	auto &aggregates = layout_ptr->GetAggregates();
+	RowOperationsState row_state(*aggregate_allocator);
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggregate = aggregates[aggr_idx];
+		if (aggregate.filter) {
+			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
+			                                    payload, payload_idx);
+		} else {
+			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, payload.size());
+		}
+		payload_idx += aggregate.child_count;
+		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
+	}
+}
+
+bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataChunk &payload, idx_t count) {
+	// Build the clustered permutation from raw group ids.
 	ClusteredAggr clustered;
 	uint64_t group_ids_buf[STANDARD_VECTOR_SIZE];
 	const uint64_t *group_ids_ptr;
 	if constexpr (sizeof(uintptr_t) == sizeof(uint64_t)) {
 		group_ids_ptr = reinterpret_cast<const uint64_t *>(address_data);
 	} else {
-		for (idx_t i = 0; i < groups.size(); i++) {
+		for (idx_t i = 0; i < count; i++) {
 			group_ids_buf[i] = static_cast<uint64_t>(address_data[i]);
 		}
 		group_ids_ptr = group_ids_buf;
 	}
-	const bool use_clustered =
-	    any_clustered && clustered.TryClustered(group_ids_ptr, groups.size(), clustered_arena.get(),
-	                                            clustered_left_cursor.get(), clustered_right_cursor.get());
-	if (use_clustered) {
-		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto group_id = static_cast<idx_t>(clustered.group_id_per_run[r]);
-			group_is_set[group_id] = true;
-			clustered.group_runs[r].state = data + group_id * tuple_size;
-		}
+	if (!clustered_state.TryBuild(clustered, group_ids_ptr, count)) {
+		return false;
 	}
-	// Skip addresses only when every aggregate uses clustered state directly.
-	bool skip_addresses = use_clustered && all_clustered;
+	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+		auto group_id = static_cast<idx_t>(clustered.group_id_per_run[r]);
+		group_is_set[group_id] = true;
+		clustered.group_runs[r].state = data + group_id * tuple_size;
+	}
+
+	// When all aggregates are clustered-aware, we can skip maintaining per-tuple addresses.
+	bool skip_addresses = clustered_state.all_clustered;
 	if (skip_addresses) {
 		for (idx_t c = 0; c < payload.ColumnCount(); c++) {
 			auto vt = payload.data[c].GetVectorType();
@@ -171,17 +202,8 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		}
 	}
 	if (!skip_addresses) {
-		for (idx_t i = 0; i < groups.size(); i++) {
-			const auto group = address_data[i];
-			if (group >= total_groups) {
-				throw InvalidInputException(
-				    "Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
-				    "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
-				    "disable_optimizer to disable optimizations that rely on correct statistics",
-				    group, total_groups);
-			}
-			group_is_set[group] = true;
-			address_data[i] = uintptr_t(data) + group * tuple_size;
+		for (idx_t i = 0; i < count; i++) {
+			address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;
 		}
 	}
 
@@ -190,22 +212,19 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	RowOperationsState row_state(*aggregate_allocator);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
-		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
 			                                    payload, payload_idx);
 		} else {
-			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, payload.size(),
-			                            use_clustered ? &clustered : nullptr);
+			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, count, &clustered);
 		}
-		payload_idx += input_count;
+		payload_idx += aggregate.child_count;
 		if (!skip_addresses) {
-			VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), payload.size());
+			VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), count);
 		}
-		if (use_clustered) {
-			clustered.AdvanceStates(aggregate.payload_size);
-		}
+		clustered.AdvanceStates(aggregate.payload_size);
 	}
+	return true;
 }
 
 void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {

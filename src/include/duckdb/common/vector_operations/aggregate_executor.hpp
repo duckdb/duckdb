@@ -283,23 +283,17 @@ public:
 	template <class...>
 	using void_t_helper = void;
 
-	// True if OP allows the clustered path to copy the aggregate state locally per run and
-	// flush it back once at the end.
-	template <class OP, class = void>
-	struct HasClusteredLocalState : std::false_type {};
-	template <class OP>
-	struct HasClusteredLocalState<OP, void_t_helper<decltype(OP::CLUSTERED_LOCAL_STATE)>>
-	    : std::integral_constant<bool, OP::CLUSTERED_LOCAL_STATE> {};
-
+	// Whether the clustered path may copy the aggregate state locally per run and flush it back once.
+	// Default: auto-deduce from std::is_trivially_copyable<STATE>.
+	// Override: if the OP defines SupportsClusteredLocalState<STATE>(), that takes priority.
 	template <class OP, class STATE, class = void>
-	struct HasClusteredLocalStateForState : std::false_type {};
+	struct ShouldUseClusteredLocalState : std::is_trivially_copyable<STATE> {};
 	template <class OP, class STATE>
-	struct HasClusteredLocalStateForState<OP, STATE,
-	                                      void_t_helper<decltype(OP::template SupportsClusteredLocalState<STATE>())>>
+	struct ShouldUseClusteredLocalState<OP, STATE,
+	                                    void_t_helper<decltype(OP::template SupportsClusteredLocalState<STATE>())>>
 	    : std::integral_constant<bool, OP::template SupportsClusteredLocalState<STATE>()> {};
 
-	// Strong clustered path: copy the aggregate state once per run, update the local copy,
-	// then flush it back once.
+	// Clustered local-state path: copy state once per run, update via UnaryUpdateLoop, flush back.
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatterClusteredLocalState(Vector &input, AggregateInputData &aggr_input_data, idx_t count,
 	                                            const sel_t *cluster_iter) {
@@ -307,34 +301,16 @@ public:
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
-		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
 		idx_t pos = 0;
 		for (idx_t r = 0; r < cs.n_group_runs; r++) {
 			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
-			const idx_t end = pos + cs.group_runs[r].count;
+			auto run_count = cs.group_runs[r].count;
 			auto local_state = state;
-			bool any_valid = false;
-			if (OP::IgnoreNull() && idata.validity.CanHaveNull()) {
-				for (idx_t k = pos; k < end; k++) {
-					const auto idx = cluster_iter[k];
-					unary_input.input_idx = idx;
-					if (idata.validity.RowIsValidUnsafe(idx)) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(local_state, vals[idx], unary_input);
-						any_valid = true;
-					}
-				}
-			} else {
-				for (idx_t k = pos; k < end; k++) {
-					unary_input.input_idx = cluster_iter[k];
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(local_state, vals[unary_input.input_idx],
-					                                                   unary_input);
-				}
-				any_valid = true;
-			}
-			if (any_valid) {
-				state = local_state;
-			}
-			pos = end;
+			SelectionVector run_sel(const_cast<sel_t *>(cluster_iter + pos));
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(vals, aggr_input_data, &local_state, run_count, idata.validity,
+			                                            run_sel);
+			state = local_state;
+			pos += run_count;
 		}
 	}
 
@@ -413,8 +389,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void UnaryScatter(Vector &input, Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		if (aggr_input_data.clustered) {
-			using try_local = std::integral_constant<bool, HasClusteredLocalState<OP>::value ||
-			                                                   HasClusteredLocalStateForState<OP, STATE_TYPE>::value>;
+			using try_local = ShouldUseClusteredLocalState<OP, STATE_TYPE>;
 			if (!TryUnaryScatterClusteredLocal<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, count,
 			                                                               try_local {})) {
 				UnaryScatterClusteredGeneric<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, count);

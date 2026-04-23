@@ -131,8 +131,6 @@ struct BitwiseOperation {
 };
 
 struct BitAndOperation : public BitwiseOperation {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value &= typename STATE::TYPE(input);
@@ -141,8 +139,6 @@ struct BitAndOperation : public BitwiseOperation {
 };
 
 struct BitOrOperation : public BitwiseOperation {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value |= typename STATE::TYPE(input);
@@ -151,8 +147,6 @@ struct BitOrOperation : public BitwiseOperation {
 };
 
 struct BitXorOperation : public BitwiseOperation {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
-
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value ^= typename STATE::TYPE(input);

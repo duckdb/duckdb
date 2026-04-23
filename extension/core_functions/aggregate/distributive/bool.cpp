@@ -14,8 +14,6 @@ struct BoolState {
 };
 
 struct BoolAndFunFunction {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
-
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = true;
@@ -56,8 +54,6 @@ struct BoolAndFunFunction {
 };
 
 struct BoolOrFunFunction {
-	static constexpr bool CLUSTERED_LOCAL_STATE = true;
-
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = false;

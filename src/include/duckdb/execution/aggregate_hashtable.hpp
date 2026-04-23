@@ -203,14 +203,7 @@ private:
 		RowOperationsState row_state;
 	} state;
 
-	//! Scratch buffers for ClusteredAggr::TryClustered, allocated on first use.
-	unsafe_unique_array<uint16_t> clustered_arena;
-	unsafe_unique_array<uint16_t *> clustered_left_cursor;
-	unsafe_unique_array<uint16_t *> clustered_right_cursor;
-	//! True iff every aggregate in this layout is clustered-aware and unfiltered.
-	bool all_clustered = false;
-	//! True iff at least one aggregate benefits from clustering.
-	bool any_clustered = false;
+	ClusteredAggregateState clustered_state;
 
 private:
 	//! Disabled the copy constructor
@@ -229,6 +222,7 @@ private:
 	void ReinsertTuples(PartitionedTupleData &data);
 
 	void UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid = true);
+	bool UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter, bool ht_offsets_valid);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,

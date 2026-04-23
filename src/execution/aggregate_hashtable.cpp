@@ -48,8 +48,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
-	all_clustered = AllAggregatesClustered(aggregate_objects_p);
-	any_clustered = AnyAggregatesClustered(aggregate_objects_p);
+	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
+	clustered_state.any_clustered = AnyAggregatesClustered(aggregate_objects_p);
+	if (clustered_state.any_clustered) {
+		clustered_state.Initialize(InitialCapacity());
+	}
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -543,36 +546,23 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, state.hashes, payload, filter);
 }
 
-void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter,
-                                                 bool ht_offsets_valid) {
-	// Now every cell has an entry, update the aggregates
-	auto &aggregates = layout_ptr->GetAggregates();
-
-	// addresses[] stays in input order. ClusteredAggr is an optional hint for clustered-aware
-	// kernels; everyone else keeps using the regular scatter path.
+bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                          bool ht_offsets_valid) {
+	if (skip_lookups || !ht_offsets_valid || capacity > InitialCapacity()) {
+		return false;
+	}
 	ClusteredAggr clustered;
-	bool use_clustered = false;
-	if (any_clustered && !skip_lookups && ht_offsets_valid && capacity <= InitialCapacity()) {
-		if (!clustered_arena) {
-			clustered_arena =
-			    make_unsafe_uniq_array_uninitialized<uint16_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
-			clustered_left_cursor = make_unsafe_uniq_array<uint16_t *>(InitialCapacity());
-			clustered_right_cursor = make_unsafe_uniq_array<uint16_t *>(InitialCapacity());
-		}
-		auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
-		if (clustered.TryClustered(ht_offsets, payload.size(), clustered_arena.get(), clustered_left_cursor.get(),
-		                           clustered_right_cursor.get())) {
-			use_clustered = true;
-			const auto aggr_offset = layout_ptr->GetAggrOffset();
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto slot = static_cast<idx_t>(clustered.group_id_per_run[r]);
-				clustered.group_runs[r].state = entries[slot].GetPointer() + aggr_offset;
-			}
-		}
+	if (!clustered_state.TryBuild(clustered, FlatVector::GetData<uint64_t>(state.ht_offsets), payload.size())) {
+		return false;
+	}
+	const auto aggr_offset = layout_ptr->GetAggrOffset();
+	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+		auto slot = static_cast<idx_t>(clustered.group_id_per_run[r]);
+		clustered.group_runs[r].state = entries[slot].GetPointer() + aggr_offset;
 	}
 
-	const bool skip_addresses = use_clustered && all_clustered;
-
+	const bool skip_addresses = clustered_state.all_clustered;
+	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -582,9 +572,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			if (!skip_addresses) {
 				VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 			}
-			if (use_clustered) {
-				clustered.AdvanceStates(aggr.payload_size);
-			}
+			clustered.AdvanceStates(aggr.payload_size);
 			continue;
 		}
 		D_ASSERT(i == filter[filter_idx]);
@@ -594,16 +582,47 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			                                    payload, payload_idx);
 		} else {
 			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size(),
-			                            use_clustered ? &clustered : nullptr);
+			                            &clustered);
 		}
 
 		payload_idx += aggr.child_count;
 		if (!skip_addresses) {
 			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 		}
-		if (use_clustered) {
-			clustered.AdvanceStates(aggr.payload_size);
+		clustered.AdvanceStates(aggr.payload_size);
+		filter_idx++;
+	}
+	return true;
+}
+
+void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                 bool ht_offsets_valid) {
+	if (UpdateAggregatesClustered(payload, filter, ht_offsets_valid)) {
+		Verify();
+		return;
+	}
+
+	auto &aggregates = layout_ptr->GetAggregates();
+	idx_t filter_idx = 0;
+	idx_t payload_idx = 0;
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = aggregates[i];
+		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
+			payload_idx += aggr.child_count;
+			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
+			continue;
 		}
+		D_ASSERT(i == filter[filter_idx]);
+
+		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
+			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
+			                                    payload, payload_idx);
+		} else {
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
+		}
+
+		payload_idx += aggr.child_count;
+		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 		filter_idx++;
 	}
 

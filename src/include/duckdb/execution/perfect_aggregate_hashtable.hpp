@@ -62,16 +62,11 @@ protected:
 	//! Owning arena allocators that this HT has data from
 	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
-	//! Scratch buffers for ClusteredAggr::TryClustered.
-	unsafe_unique_array<uint16_t> clustered_arena;
-	unsafe_unique_array<uint16_t *> clustered_left_cursor;
-	unsafe_unique_array<uint16_t *> clustered_right_cursor;
-	//! True iff every aggregate in this layout is clustered-aware and unfiltered.
-	bool all_clustered = false;
-	//! True iff at least one aggregate benefits from clustering.
-	bool any_clustered = false;
+	ClusteredAggregateState clustered_state;
 
 private:
+	//! Try adding a chunk using the clustered aggregation path. Returns false if not applicable.
+	bool AddChunkClustered(uintptr_t *address_data, DataChunk &payload, idx_t count);
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
 	void Destroy();
 };

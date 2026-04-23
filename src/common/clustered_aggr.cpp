@@ -7,9 +7,16 @@ namespace duckdb {
 
 bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
                                  uint16_t **right_cursor) {
-	// Each group gets one arena slot. The left cursor writes the first half backwards,
-	// the right cursor writes the second half forwards, so every group's final range is
-	// contiguous and still in input order.
+	// Partition tuple indices 0..count-1 into contiguous, ascending runs per group.
+	//
+	// Each group gets an arena slot with two cursors starting at the center:
+	//   left_cursor  grows downward ← writes indices from the first half (in reverse)
+	//   right_cursor grows upward  → writes indices from the second half (forward)
+	//
+	// We scan the input from both ends toward the middle simultaneously, so the two
+	// cursor streams are independent and can execute with higher IPC. After the scan,
+	// left_cursor[gid]..right_cursor[gid] is a single contiguous, ascending sequence
+	// because the left half was visited in descending index order and pushed downward.
 	constexpr idx_t BUCKET_CAP = STANDARD_VECTOR_SIZE;
 	constexpr idx_t CENTER_OFFSET = STANDARD_VECTOR_SIZE / 2;
 
@@ -38,10 +45,11 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, uint16_
 		return false;
 	};
 
+	// Scan from both ends toward the middle.
 	const idx_t half = count / 2;
 	for (idx_t i = 0; i < half; i++) {
-		const idx_t j_left = half - 1 - i;
-		const idx_t j_right = half + i;
+		const idx_t j_left = half - 1 - i; // scans 0..half-1 in reverse
+		const idx_t j_right = half + i;    // scans half..count-1 forward
 		const auto gid_left = group_ids[j_left];
 		const auto gid_right = group_ids[j_right];
 		if (left_cursor[gid_left] == nullptr) {
@@ -54,9 +62,14 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, uint16_
 				return bail_out();
 			}
 		}
-		*(--left_cursor[gid_left]) = static_cast<uint16_t>(j_left);
-		*(right_cursor[gid_right]++) = static_cast<uint16_t>(j_right);
+		// The two cursor updates are independent (different groups or different
+		// directions within the same slot), giving the CPU two parallel store chains.
+		left_cursor[gid_left]--;
+		left_cursor[gid_left][0] = static_cast<uint16_t>(j_left);
+		right_cursor[gid_right][0] = static_cast<uint16_t>(j_right);
+		right_cursor[gid_right]++;
 	}
+	// Handle the odd element if count is odd.
 	for (idx_t j = 2 * half; j < count; j++) {
 		const auto gid = group_ids[j];
 		if (right_cursor[gid] == nullptr) {
@@ -64,7 +77,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, uint16_
 				return bail_out();
 			}
 		}
-		*(right_cursor[gid]++) = static_cast<uint16_t>(j);
+		right_cursor[gid][0] = static_cast<uint16_t>(j);
+		right_cursor[gid]++;
 	}
 
 	// Materialize run order into sel[] and reset the cursor tables for reuse.
@@ -120,6 +134,19 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 	default:
 		return nullptr;
 	}
+}
+
+void ClusteredAggregateState::Initialize(idx_t n_groups) {
+	arena = make_unsafe_uniq_array_uninitialized<uint16_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
+	left_cursor = make_unsafe_uniq_array<uint16_t *>(n_groups);
+	right_cursor = make_unsafe_uniq_array<uint16_t *>(n_groups);
+}
+
+bool ClusteredAggregateState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
+	if (!arena) {
+		return false;
+	}
+	return clustered.TryClustered(group_ids, count, arena.get(), left_cursor.get(), right_cursor.get());
 }
 
 } // namespace duckdb

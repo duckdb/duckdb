@@ -33,8 +33,9 @@ struct ClusteredAggr {
 	sel_t sel[STANDARD_VECTOR_SIZE];
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
-	//! Uses two cursors per group to keep each group's positions contiguous and ascending.
 	//! On success fills sel[], group_runs[].count, and group_id_per_run[].
+	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE uint16_t),
+	//! left_cursor and right_cursor (n_groups pointers each, pre-initialized to nullptr).
 	bool TryClustered(const uint64_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
 	                  uint16_t **right_cursor);
 
@@ -48,6 +49,18 @@ private:
 	//! Scratch for dictionary composition. Logical-const: ClusterIter updates it.
 	mutable sel_t composed_sel_data[STANDARD_VECTOR_SIZE];
 	mutable const sel_t *cached_dict_sel = nullptr;
+};
+
+//! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
+struct ClusteredAggregateState {
+	unsafe_unique_array<uint16_t> arena;
+	unsafe_unique_array<uint16_t *> left_cursor;
+	unsafe_unique_array<uint16_t *> right_cursor;
+	bool all_clustered = false;
+	bool any_clustered = false;
+
+	void Initialize(idx_t n_groups);
+	bool TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count);
 };
 
 } // namespace duckdb
