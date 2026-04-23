@@ -1,0 +1,31 @@
+# name: test/sql/prepared/test_prepare_issue_8812.test
+# description: Issue #8812 - prepared TIMESTAMPTZ arguments can compare against TIMESTAMP_NS columns
+# group: [prepared]
+
+statement ok
+CREATE OR REPLACE TABLE events_ns(
+	ts TIMESTAMP_NS,
+	category VARCHAR
+);
+
+statement ok
+INSERT INTO events_ns VALUES
+	(TIMESTAMP_NS '2024-04-05 00:00:00.000000001', 'A'),
+	(TIMESTAMP_NS '2024-04-05 01:00:00.000000001', 'A'),
+	(TIMESTAMP_NS '2024-04-05 02:00:00.000000001', 'A'),
+	(TIMESTAMP_NS '2024-04-06 00:00:00.000000001', 'A'),
+	(TIMESTAMP_NS '2024-04-06 01:00:00.000000001', 'A');
+
+statement ok
+PREPARE v1 AS
+SELECT COUNT(*)
+FROM events_ns
+WHERE ts >= ? AND ts < ?;
+
+query I
+EXECUTE v1(
+	TIMESTAMPTZ '2024-04-05 00:00:00+00',
+	TIMESTAMPTZ '2024-04-06 00:00:00+00'
+);
+----
+3
