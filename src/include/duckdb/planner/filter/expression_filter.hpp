@@ -47,11 +47,21 @@ public:
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, BaseStatistics &stats);
+	//! Check if an expression tree contains an internal function with the given name
+	static bool ContainsInternalFunction(const Expression &expr, const string &func_name);
+	//! Check if an expression tree is entirely optional filter semantics
+	static bool IsOptionalExpression(const Expression &expr);
+	//! Check if the root of an expression tree is an optional filter wrapper
+	static bool IsRootOptionalExpression(const Expression &expr);
+	//! Check if a table filter tree is entirely optional filter semantics
+	static bool IsOptionalFilter(const TableFilter &filter);
+	//! Check if the root of a table filter tree is an optional filter wrapper
+	static bool IsRootOptionalFilter(const TableFilter &filter);
 
-	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const override;
-	string ToString(const string &column_name) const override;
-	bool Equals(const TableFilter &other) const override;
-	unique_ptr<TableFilter> Copy() const override;
+	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const;
+	string ToString(const string &column_name) const;
+	bool Equals(const ExpressionFilter &other) const;
+	unique_ptr<ExpressionFilter> Copy() const;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
@@ -59,6 +69,8 @@ public:
 	                                       ExpressionType replace_type = ExpressionType::BOUND_REF);
 
 private:
+	//! Produce human-readable ToString for internal tablefilter functions
+	static string InternalFunctionToString(const BoundFunctionExpression &func_expr, const string &column_name);
 	//! Recursively convert expression to friendly string, handling internal functions
 	static string ExpressionToFriendlyString(const Expression &expression, const string &column_name);
 };
