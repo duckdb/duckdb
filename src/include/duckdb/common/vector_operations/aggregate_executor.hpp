@@ -175,7 +175,6 @@ private:
 	                                   const SelectionVector &__restrict sel_vector) {
 		AggregateUnaryInput input(aggr_input_data, mask);
 		if (OP::IgnoreNull() && mask.CanHaveNull()) {
-			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
 				input.input_idx = sel_vector.get_index(i);
 				if (mask.RowIsValid(input.input_idx)) {
@@ -183,9 +182,28 @@ private:
 				}
 			}
 		} else {
-			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
 				input.input_idx = sel_vector.get_index(i);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
+			}
+		}
+	}
+
+	template <class STATE_TYPE, class INPUT_TYPE, class OP>
+	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
+	                                   const sel_t *__restrict sel) {
+		AggregateUnaryInput input(aggr_input_data, mask);
+		if (OP::IgnoreNull() && mask.CanHaveNull()) {
+			for (idx_t i = 0; i < count; i++) {
+				input.input_idx = sel[i];
+				if (mask.RowIsValid(input.input_idx)) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
+				}
+			}
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				input.input_idx = sel[i];
 				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
 			}
 		}
@@ -306,9 +324,8 @@ public:
 			auto &state = *reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state);
 			auto run_count = cs.group_runs[r].count;
 			auto local_state = state;
-			SelectionVector run_sel(const_cast<sel_t *>(cluster_iter + pos)); // NOLINT: read-only use
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(vals, aggr_input_data, &local_state, run_count, idata.validity,
-			                                            run_sel);
+			                                            cluster_iter + pos);
 			state = local_state;
 			pos += run_count;
 		}
