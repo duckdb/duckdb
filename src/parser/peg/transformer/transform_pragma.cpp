@@ -56,7 +56,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformPragmaFunction(PEGTrans
 		auto parameters =
 		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(optional_parameters_pr.GetResult());
 		for (auto &parameter : parameters) {
-			if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
+			if (parameter->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
+				auto &comp = parameter->Cast<ComparisonExpression>();
+				if (comp.left->GetExpressionType() != ExpressionType::COLUMN_REF) {
+					throw ParserException("Named parameter requires a column reference on the LHS");
+				}
+				auto &columnref = comp.left->Cast<ColumnRefExpression>();
+				result->info->named_parameters.insert(make_pair(columnref.GetName(), std::move(comp.right)));
+			} else if (parameter->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = parameter->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(colref.GetColumnName())));
