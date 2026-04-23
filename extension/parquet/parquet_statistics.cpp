@@ -18,7 +18,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -671,31 +670,8 @@ static bool HasFilterConstants(const Expression &expr) {
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter =
-		    ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
-		return HasFilterConstants(*expr_filter.expr);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
+	return HasFilterConstants(*expr_filter.expr);
 }
 
 template <class T>
@@ -775,30 +751,8 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 }
 
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool any_children_true = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			any_children_true |= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return any_children_true;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool all_children_true = true;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return all_children_true;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
-		return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
+	return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
 }
 
 bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) {
