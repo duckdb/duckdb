@@ -2,6 +2,10 @@
 # description: Original issue: https://github.com/duckdb/duckdb/issues/18485
 # group: [extension]
 
+require notmingw
+
+require skip_reload
+
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
