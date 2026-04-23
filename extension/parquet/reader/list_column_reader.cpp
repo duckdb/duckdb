@@ -89,10 +89,13 @@ struct TemplatedListSkipper {
 };
 
 template <class OP>
-idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
-                                     optional_ptr<Vector> result_out) {
+idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vector> result_out) {
 	idx_t result_offset = 0;
 	auto data = OP::Initialize(result_out);
+
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
 
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
 	bool finished = false;
@@ -112,8 +115,8 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
 
-			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr, read_vector);
-			child_actual_num_values = child_column_reader->Read(child_input);
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr);
+			child_actual_num_values = child_column_reader->Read(child_input, read_vector);
 		} else {
 			// we do: use the overflow values
 			child_actual_num_values = overflow_child_count;
@@ -184,9 +187,9 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 	return result_offset;
 }
 
-idx_t ListColumnReader::Read(ColumnReaderInput input) {
+idx_t ListColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	ApplyPendingSkips(input.define_out, input.repeat_out);
-	return ReadInternal<TemplatedListReader>(input.num_values, input.define_out, input.repeat_out, input.result);
+	return ReadInternal<TemplatedListReader>(input, result);
 }
 
 ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
@@ -200,7 +203,8 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	ReadInternal<TemplatedListSkipper>(pending_skips, nullptr, nullptr, nullptr);
+	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr);
+	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);
 	pending_skips = 0;
 }
 

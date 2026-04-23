@@ -38,8 +38,9 @@ void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<C
 	}
 }
 
-void RowNumberColumnReader::Filter(ColumnReaderInput input, const TableFilter &filter, TableFilterState &filter_state,
-                                   SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) {
+void RowNumberColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                                   TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+                                   bool is_first_filter) {
 	// check the row id stats if this filter has any chance of passing
 	auto prune_result = RowGroup::CheckRowIdFilter(filter, row_group_offset, row_group_offset + input.num_values);
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
@@ -48,11 +49,11 @@ void RowNumberColumnReader::Filter(ColumnReaderInput input, const TableFilter &f
 		Skip(input.num_values);
 		return;
 	}
-	ColumnReader::Filter(input, filter, filter_state, sel, approved_tuple_count, is_first_filter);
+	ColumnReader::Filter(input, result, filter, filter_state, sel, approved_tuple_count, is_first_filter);
 }
 
-idx_t RowNumberColumnReader::Read(ColumnReaderInput input) {
-	auto data_ptr = FlatVector::Writer<int64_t>(input.result, input.num_values);
+idx_t RowNumberColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	auto data_ptr = FlatVector::Writer<int64_t>(result, input.num_values);
 	for (idx_t i = 0; i < input.num_values; i++) {
 		data_ptr.WriteValue(UnsafeNumericCast<int64_t>(row_group_offset++));
 	}

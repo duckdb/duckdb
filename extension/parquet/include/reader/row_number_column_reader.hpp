@@ -46,8 +46,8 @@ public:
 	RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 
 public:
-	idx_t Read(ColumnReaderInput input) override;
-	void Filter(ColumnReaderInput input, const TableFilter &filter, TableFilterState &filter_state,
+	idx_t Read(ColumnReaderInput &input, Vector &result) override;
+	void Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter, TableFilterState &filter_state,
 	            SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;

@@ -721,7 +721,7 @@ void ColumnReader::FinishRead(idx_t read_count) {
 	group_rows_available -= read_count;
 }
 
-idx_t ColumnReader::ReadInternal(ColumnReaderInput input) {
+idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 	idx_t result_offset = 0;
 	auto to_read = input.num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
@@ -729,7 +729,7 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput input) {
 	while (to_read > 0) {
 		auto read_now = ReadPageHeaders(to_read);
 
-		ReadData(read_now, input.define_out, input.repeat_out, input.result, result_offset);
+		ReadData(read_now, input.define_out, input.repeat_out, result, result_offset);
 
 		result_offset += read_now;
 		to_read -= read_now;
@@ -739,25 +739,26 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput input) {
 	return input.num_values;
 }
 
-idx_t ColumnReader::Read(ColumnReaderInput input) {
+idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	BeginRead(input.define_out, input.repeat_out);
-	return ReadInternal(input);
+	return ReadInternal(input, result);
 }
 
-void ColumnReader::Select(ColumnReaderInput input, const SelectionVector &sel, idx_t approved_tuple_count) {
+void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+                          idx_t approved_tuple_count) {
 	if (SupportsDirectSelect() && approved_tuple_count < input.num_values) {
-		DirectSelect(input, sel, approved_tuple_count);
+		DirectSelect(input, result, sel, approved_tuple_count);
 		return;
 	}
-	Read(input);
+	Read(input, result);
 }
 
-void ColumnReader::DirectSelect(ColumnReaderInput input, const SelectionVector &sel, idx_t approved_tuple_count) {
+void ColumnReader::DirectSelect(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+                                idx_t approved_tuple_count) {
 	auto to_read = input.num_values;
 
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &result = input.result;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
@@ -774,26 +775,26 @@ void ColumnReader::DirectSelect(ColumnReaderInput input, const SelectionVector &
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(input);
+	ReadInternal(input, result);
 }
 
-void ColumnReader::Filter(ColumnReaderInput input, const TableFilter &filter, TableFilterState &filter_state,
-                          SelectionVector &sel, idx_t &approved_tuple_count, bool is_first_filter) {
+void ColumnReader::Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                          TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+                          bool is_first_filter) {
 	if (SupportsDirectFilter() && is_first_filter) {
-		DirectFilter(input, filter, filter_state, sel, approved_tuple_count);
+		DirectFilter(input, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
-	Select(input, sel, approved_tuple_count);
-	ApplyFilter(input.result, filter, filter_state, input.num_values, sel, approved_tuple_count);
+	Select(input, result, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, input.num_values, sel, approved_tuple_count);
 }
 
-void ColumnReader::DirectFilter(ColumnReaderInput input, const TableFilter &filter, TableFilterState &filter_state,
-                                SelectionVector &sel, idx_t &approved_tuple_count) {
+void ColumnReader::DirectFilter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+                                TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto to_read = input.num_values;
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &result = input.result;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
@@ -816,7 +817,7 @@ void ColumnReader::DirectFilter(ColumnReaderInput input, const TableFilter &filt
 		return;
 	}
 	// fallback to regular read + filter
-	ReadInternal(input);
+	ReadInternal(input, result);
 	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 

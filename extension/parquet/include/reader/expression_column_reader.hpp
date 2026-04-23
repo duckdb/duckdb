@@ -58,7 +58,7 @@ public:
 public:
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
-	idx_t Read(ColumnReaderInput input) override;
+	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
