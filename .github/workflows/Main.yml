@@ -894,15 +894,238 @@ jobs:
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
- static-libraries:
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libraries') }}
-    uses: ./.github/workflows/BundleStaticLibs.yml
-    secrets: inherit
-    needs: prepare
-    with:
-      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
-      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
+ static-libs-linux:
+    name: Static Libs Linux (${{ matrix.config.arch }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-linux') && (github.ref_name == 'main' || matrix.config.run_on_pr) }}
+    needs:
+      - prepare
+      - linux-release
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - runner: ubuntu-latest
+            arch: amd64
+            image: quay.io/pypa/manylinux_2_28_x86_64
+            run_on_pr: true
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+            image: quay.io/pypa/manylinux_2_28_aarch64
+            run_on_pr: false
+    runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ matrix.config.image }}
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 3
+      EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      OVERRIDE_GIT_DESCRIBE: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-linux-${{ matrix.config.arch }}
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        shell: bash
+        run: |
+          source /opt/rh/gcc-toolset-12/enable
+          export CC='ccache gcc'
+          export CXX='ccache g++'
+          git config --global --add safe.directory "$PWD"
+          make gather-libs
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-linux-${{ matrix.config.arch }}
+          path: |
+            static-libs-linux-${{ matrix.config.arch }}.zip
+
+ static-libs-osx:
+    name: Static Libs OSX (${{ matrix.architecture }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-osx') }}
+    needs:
+      - prepare
+      - linux-release
+    strategy:
+      matrix:
+        include:
+          - xcode_target_flag: "x86_64"
+            architecture: "amd64"
+          - xcode_target_flag: "arm64"
+            architecture: "arm64"
+    runs-on: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
+      DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
+
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-osx-${{ matrix.architecture }}
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        shell: bash
+        run: python3 scripts/ci/retry.py -- make
+
+      - name: Bundle static library
+        shell: bash
+        run: make gather-libs
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-${{ matrix.architecture }}
+          path: |
+            static-libs-osx-${{ matrix.architecture }}.zip
+
+ static-libs-windows-mingw:
+    name: Static Libs Windows Mingw
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-windows-mingw') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
+    env:
+      GEN: ninja
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Dependencies
+        shell: bash
+        run: |
+          python scripts/ci/retry.py -- choco install \
+            ccache \
+            make \
+            --no-progress
+          python scripts/ci/retry.py -- choco install \
+            mingw --version 14.2.0 \
+            --no-progress
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-windows-mingw
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build Environment
+        shell: bash
+        run: |
+          {
+            # bash from Git
+            echo 'C:/Program Files/Git/bin'
+            # make, ninja and ccache from Chocolatey
+            echo 'C:/ProgramData/Chocolatey/bin'
+            # g++ from Chocolatey
+            echo 'C:/ProgramData/mingw64/mingw64/bin'
+          } >> "${GITHUB_PATH}"
+
+      - name: Build Environment Check
+        shell: cmd
+        run: |
+          where bash
+          bash --version
+          where make
+          make --version
+          where ninja
+          ninja --version
+          where ccache
+          ccache --version
+          where g++
+          g++ --version
+          echo %PATH%
+
+      - name: Bundle static library
+        shell: cmd
+        run: |
+          make gather-libs
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          tmp_zip_dir="$(mktemp -d)"
+          archive_path="$(pwd)/static-libs-windows-mingw.zip"
+          cp src/include/duckdb.h "${tmp_zip_dir}/"
+          find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
+          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
+          rm -rf "${tmp_zip_dir}"
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-windows-mingw
+          path: |
+            static-libs-windows-mingw.zip
 
  release-status:
     runs-on: ubuntu-slim
@@ -912,7 +1135,9 @@ jobs:
       - extensions
       - osx
       - windows
-      - static-libraries
+      - static-libs-linux
+      - static-libs-osx
+      - static-libs-windows-mingw
     outputs:
       success: ${{ steps.set-output.outputs.success }}
     steps:
@@ -922,7 +1147,9 @@ jobs:
           if [[ "${{ needs.extensions.result }}" == "success" && \
                 "${{ needs.osx.result }}" == "success" && \
                 "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.static-libraries.result }}" == "success" ]]; then
+                "${{ needs.static-libs-linux.result }}" == "success" && \
+                ( "${{ needs.static-libs-osx.result }}" == "success" || "${{ needs.static-libs-osx.result }}" == "skipped" ) && \
+                ( "${{ needs.static-libs-windows-mingw.result }}" == "success" || "${{ needs.static-libs-windows-mingw.result }}" == "skipped" ) ]]; then
             echo "success=true" >> "$GITHUB_OUTPUT"
           else
             echo "success=false" >> "$GITHUB_OUTPUT"
@@ -1307,7 +1534,9 @@ jobs:
       - swift
       - windows
       - osx
-      - static-libraries
+      - static-libs-linux
+      - static-libs-osx
+      - static-libs-windows-mingw
       - release-status
       - notify-external-repos
       - no-string-inline

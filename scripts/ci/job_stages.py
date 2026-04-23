@@ -26,12 +26,15 @@ PULL_REQUEST_JOBS = [
     "vector-sizes",
     "threadsan",
     "linux-configs",
+    "static-libs-linux",
 ]
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "check-clangd-tidy",
     "valgrind",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
 ]
 
 NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
@@ -46,7 +49,9 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "static-libraries",
+    "static-libs-linux",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
     "release-status",
     "notify-external-repos",
 ]
