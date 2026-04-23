@@ -1,8 +1,38 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
+
+unique_ptr<ExtraDropInfo> Transformer::TransformDropTrigger(duckdb_libpgquery::PGList &obj_list,
+                                                            string &trigger_name_out) {
+	// Grammar produces [catalog.][schema.]table, trigger_name as a flat list.
+	vector<string> parts;
+	for (auto *cell = obj_list.head; cell; cell = cell->next) {
+		parts.push_back(PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value)->val.str);
+	}
+	// parts: [table] | [schema, table] | [catalog, schema, table], then trigger_name last
+	if (parts.size() < 2 || parts.size() > 4) {
+		throw ParserException("Expected \"DROP TRIGGER name ON [catalog.][schema.]table\"");
+	}
+	trigger_name_out = parts.back();
+	if (trigger_name_out.empty()) {
+		throw ParserException("Trigger name cannot be empty");
+	}
+	auto base_table = make_uniq<BaseTableRef>();
+	base_table->table_name = parts[parts.size() - 2];
+	if (parts.size() >= 3) {
+		base_table->schema_name = parts[parts.size() - 3];
+	}
+	if (parts.size() == 4) {
+		base_table->catalog_name = parts[0];
+	}
+	auto extra_info = make_uniq<ExtraDropTriggerInfo>();
+	extra_info->base_table = std::move(base_table);
+	return unique_ptr<ExtraDropInfo>(std::move(extra_info));
+}
 
 unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStmt &stmt) {
 	auto result = make_uniq<DropStatement>();
@@ -35,6 +65,9 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 	case duckdb_libpgquery::PG_OBJECT_TYPE:
 		info.type = CatalogType::TYPE_ENTRY;
 		break;
+	case duckdb_libpgquery::PG_OBJECT_TRIGGER:
+		info.type = CatalogType::TRIGGER_ENTRY;
+		break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}
@@ -50,6 +83,11 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGDropStm
 		} else {
 			throw ParserException("Expected \"catalog.schema\" or \"schema\"");
 		}
+		break;
+	}
+	case duckdb_libpgquery::PG_OBJECT_TRIGGER: {
+		auto &obj_list = *PGPointerCast<duckdb_libpgquery::PGList>(stmt.objects->head->data.ptr_value);
+		info.extra_drop_info = TransformDropTrigger(obj_list, info.name);
 		break;
 	}
 	default: {

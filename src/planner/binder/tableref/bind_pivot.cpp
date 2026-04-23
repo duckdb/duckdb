@@ -424,6 +424,9 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 	result.bind_index = GenerateTableIndex();
 	result.child_binder = Binder::CreateBinder(context, this);
 	result.child = result.child_binder->Bind(*ref.source);
+	if (!result.child_binder->correlated_columns.empty()) {
+		throw BinderException("PIVOT is not supported in correlated subqueries yet");
+	}
 
 	auto &aggregates = result.bound_pivot.aggregates;
 	ExtractPivotAggregates(result.child, aggregates);

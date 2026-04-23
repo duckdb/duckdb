@@ -60,9 +60,9 @@ void DuckDBWhichSecretFunction(ClientContext &context, TableFunctionInput &data_
 	if (secret_match.HasMatch()) {
 		auto &secret_entry = *secret_match.secret_entry;
 		output.SetCardinality(1);
-		output.SetValue(0, 0, secret_entry.secret->GetName());
-		output.SetValue(1, 0, EnumUtil::ToString(secret_entry.persist_type));
-		output.SetValue(2, 0, secret_entry.storage_mode);
+		output.data[0].Append(Value(secret_entry.secret->GetName()));
+		output.data[1].Append(Value(EnumUtil::ToString(secret_entry.persist_type)));
+		output.data[2].Append(Value(secret_entry.storage_mode));
 	}
 	data.finished = true;
 }

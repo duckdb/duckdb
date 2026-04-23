@@ -58,7 +58,7 @@ static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, c
 
 void RepeatRowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction repeat_row("repeat_row", {}, RepeatRowFunction, RepeatRowBind, RepeatRowInit);
-	repeat_row.varargs = LogicalType::ANY;
+	repeat_row.SetVarArgs(LogicalType::ANY);
 	repeat_row.named_parameters["num_rows"] = LogicalType::BIGINT;
 	repeat_row.cardinality = RepeatRowCardinality;
 	set.AddFunction(repeat_row);

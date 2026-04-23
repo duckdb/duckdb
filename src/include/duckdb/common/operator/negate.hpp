@@ -17,7 +17,7 @@ struct NegateOperator {
 		if (!CanNegate<TA>(input)) {
 			throw OutOfRangeException("Overflow in negation of numeric value!");
 		}
-		return -(TR)input;
+		return static_cast<TR>(-static_cast<TR>(input));
 	}
 };
 

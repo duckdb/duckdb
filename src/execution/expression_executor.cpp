@@ -174,7 +174,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			return;
 		}
 
-		Vector intermediate(LogicalType::VARIANT(), true, false, count);
+		Vector intermediate(LogicalType::VARIANT(), count);
 
 		//! First cast to VARIANT
 		if (HasContext()) {
@@ -185,7 +185,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		intermediate.Verify(count);
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
-		Vector result(vector.GetType(), true, false, count);
+		Vector result(vector.GetType(), count);
 		//! Then cast back into the original type
 		if (HasContext()) {
 			VectorOperations::Cast(GetContext(), intermediate, result, count, true);
@@ -235,7 +235,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
-			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+			D_ASSERT(FlatVector::ValidityMutable(result).CheckAllValid(count));
 		}
 	}
 #endif
@@ -355,7 +355,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast(intermediate_bools));
+	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast(intermediate_bools), STANDARD_VECTOR_SIZE);
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;

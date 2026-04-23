@@ -7,8 +7,18 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 

@@ -94,7 +94,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTableInfo>();
 
-	if (stmt.inhRelations) {
+	if (stmt.inhRelations) { // typos:ignore
 		throw NotImplementedException("inherited relations not implemented");
 	}
 	D_ASSERT(stmt.relation);

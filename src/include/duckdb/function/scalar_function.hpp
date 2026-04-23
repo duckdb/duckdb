@@ -19,7 +19,6 @@
 #include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
-
 struct FunctionLocalState {
 	DUCKDB_API virtual ~FunctionLocalState();
 
@@ -113,21 +112,12 @@ struct FunctionBindExpressionInput {
 	vector<unique_ptr<Expression>> &children;
 };
 
-struct ScalarFunctionBindInput {
-	explicit ScalarFunctionBindInput(Binder &binder) : binder(binder) {
-	}
-
-	Binder &binder;
-};
+class BindScalarFunctionInput;
 
 //! The scalar function type
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
 //! The type to bind the scalar function and to create the function data
-typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &context, ScalarFunction &bound_function,
-                                                           vector<unique_ptr<Expression>> &arguments);
-typedef unique_ptr<FunctionData> (*bind_scalar_function_extended_t)(ScalarFunctionBindInput &bind_input,
-                                                                    ScalarFunction &bound_function,
-                                                                    vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(BindScalarFunctionInput &input);
 //! The type to initialize a thread local state for the scalar function
 typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &state,
                                                              const BoundFunctionExpression &expr,
@@ -159,7 +149,6 @@ class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
-	                          bind_scalar_function_extended_t bind_extended = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
@@ -167,9 +156,8 @@ public:
 	                          bind_lambda_function_t bind_lambda = nullptr);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bind_scalar_function_t bind = nullptr,
-	                          bind_scalar_function_extended_t bind_extended = nullptr,
-	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          bind_scalar_function_t bind = nullptr, function_statistics_t statistics = nullptr,
+	                          init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          FunctionStability stability = FunctionStability::CONSISTENT,
 	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
@@ -188,10 +176,9 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; };
 	bind_scalar_function_t GetBindCallback() const { return bind; };
 	void SetBindCallback(bind_scalar_function_t callback) { bind = callback; }
-
-	bool HasBindExtendedCallback() const { return bind_extended != nullptr; }
-	bind_scalar_function_extended_t GetBindExtendedCallback() const { return bind_extended; }
-	void SetBindExtendedCallback(bind_scalar_function_extended_t callback) { bind_extended = callback; }
+	unique_ptr<FunctionData> Bind(BindScalarFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
+	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments,
+		optional_ptr<Binder> binder = nullptr);
 
 	bool HasBindLambdaCallback() const { return bind_lambda != nullptr; }
 	bind_lambda_function_t GetBindLambdaCallback() const { return bind_lambda; }
@@ -239,15 +226,13 @@ public:
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 
-public:
+protected:
 	//! The main scalar function to execute
 	scalar_function_t function;
 	//! Direct selection callback (if any)
 	scalar_function_select_t select_function = nullptr;
 	//! The bind function (if any)
 	bind_scalar_function_t bind;
-	//! The bind function that receives extra input to perform more complex binding operations (if any)
-	bind_scalar_function_extended_t bind_extended = nullptr;
 	//! Init thread local state for the function (if any)
 	init_local_state_t init_local_state;
 	//! The statistics propagation function (if any)
@@ -388,5 +373,44 @@ public:
 		return function;
 	}
 };
+
+class BindScalarFunctionInput {
+public:
+	BindScalarFunctionInput(ClientContext &context_p, ScalarFunction &bound_function_p,
+	                        vector<unique_ptr<Expression>> &arguments_p, optional_ptr<Binder> binder_p = nullptr)
+	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), binder(binder_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	ScalarFunction &GetBoundFunction() const {
+		return bound_function;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+	bool HasBinder() const {
+		return binder != nullptr;
+	}
+	Binder &GetBinder() {
+		if (binder == nullptr) {
+			throw InternalException("Function '%s' has cannot be bound without a Binder!", bound_function.name);
+		}
+		return *binder;
+	}
+
+private:
+	ClientContext &context;
+	ScalarFunction &bound_function;
+	vector<unique_ptr<Expression>> &arguments;
+	optional_ptr<Binder> binder;
+};
+
+inline unique_ptr<FunctionData> ScalarFunction::Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments,
+                                                     optional_ptr<Binder> binder) {
+	BindScalarFunctionInput bind_input(context, *this, arguments, binder);
+	return Bind(bind_input);
+}
 
 } // namespace duckdb

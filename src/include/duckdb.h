@@ -138,6 +138,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 	// duckdb_time_ns (nanoseconds)
 	DUCKDB_TYPE_TIME_NS = 39,
+	// GEOMETRY type, WKB blob
+	DUCKDB_TYPE_GEOMETRY = 40,
 } duckdb_type;
 
 //! An enum over the returned state of different functions.
@@ -2921,7 +2923,7 @@ Creates a map value from a map type and two arrays, one for the keys and one for
 * @param map_type The map type
 * @param keys The keys of the map
 * @param values The values of the map
-* @param entry_count The number of entrys (key-value pairs) in the map
+* @param entry_count The number of entries (key-value pairs) in the map
 * @return The map value, or nullptr, if the parameters are invalid.
 */
 DUCKDB_C_API duckdb_value duckdb_create_map_value(duckdb_logical_type map_type, duckdb_value *keys,
@@ -6253,6 +6255,22 @@ Registers a custom log storage for the logger.
 * @return Whether the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_log_storage(duckdb_database database, duckdb_log_storage log_storage);
+
+//----------------------------------------------------------------------------------------------------------------------
+// Geometry Helpers
+//----------------------------------------------------------------------------------------------------------------------
+// DESCRIPTION:
+// Functions to operate on GEOMETRY types`.
+//----------------------------------------------------------------------------------------------------------------------
+
+/*!
+Gets the CRS (Coordinate Reference System) of a GEOMETRY type.
+Result must be freed with `duckdb_free`.
+
+* @param type The GEOMETRY type.
+* @return The CRS of the GEOMETRY type, or NULL if the type is not a GEOMETRY type.
+*/
+DUCKDB_C_API char *duckdb_geometry_type_get_crs(duckdb_logical_type type);
 
 #endif
 

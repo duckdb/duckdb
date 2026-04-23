@@ -759,7 +759,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
                                   idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 
-	auto &child_vector = ListVector::GetEntry(source);
+	auto &child_vector = ListVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
@@ -841,7 +841,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// copy the NULL values for the main array vector (the same as for a struct vector)
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
-	auto &child_vector = ArrayVector::GetEntry(source);
+	auto &child_vector = ArrayVector::GetChildMutable(source);
 	auto &child_type = child_vector.GetType();
 	auto array_size = ArrayType::GetSize(source.GetType());
 
@@ -1424,7 +1424,7 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer 
 
 	for (idx_t r = 0; r < values[0].size(); r++) {
 		for (idx_t c = 0; c < types.size(); c++) {
-			chunk.SetValue(c, chunk.size(), values[c][r]);
+			chunk.data[c].Append(values[c][r]);
 		}
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {

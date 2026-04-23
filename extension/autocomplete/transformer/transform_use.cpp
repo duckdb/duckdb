@@ -5,8 +5,8 @@ namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
-                                                                      optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto qn = transformer.Transform<QualifiedName>(list_pr, 1);
 
 	string value_str;
@@ -22,22 +22,21 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 }
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer,
-                                                        optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.result->type == ParseResultType::IDENTIFIER) {
+	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.name = choice_pr.result->Cast<IdentifierParseResult>().identifier;
+		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
-	return transformer.Transform<QualifiedName>(choice_pr.result);
+	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
 QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer,
-                                                                     optional_ptr<ParseResult> parse_result) {
-	auto &list_pr = parse_result->Cast<ListParseResult>();
+                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto schema = list_pr.Child<IdentifierParseResult>(2).identifier;
 	auto &extra_opt = list_pr.Child<OptionalParseResult>(3);

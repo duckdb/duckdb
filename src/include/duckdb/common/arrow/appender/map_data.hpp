@@ -44,7 +44,7 @@ public:
 		vector<sel_t> child_indices;
 		ArrowListData<BUFTYPE>::AppendOffsets(append_data, format, from, to, child_indices);
 
-		SelectionVector child_sel(child_indices.data());
+		SelectionVector child_sel(child_indices.data(), child_indices.size());
 		auto &key_vector = MapVector::GetKeys(input);
 		auto &value_vector = MapVector::GetValues(input);
 		auto list_size = child_indices.size();

@@ -1,8 +1,24 @@
+#include <stdint.h>
+#include <utility>
+
 #include "duckdb/common/vector/list_vector.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+struct ParquetColumnSchema;
 
 struct ListReaderData {
 	ListReaderData(list_entry_t *result_ptr, ValidityMask &result_mask)
@@ -20,7 +36,7 @@ struct TemplatedListReader {
 		D_ASSERT(ListVector::GetListSize(*result_out) == 0);
 
 		auto result_ptr = FlatVector::GetDataMutable<list_entry_t>(*result_out);
-		auto &result_mask = FlatVector::Validity(*result_out);
+		auto &result_mask = FlatVector::ValidityMutable(*result_out);
 		return ListReaderData(result_ptr, result_mask);
 	}
 
@@ -73,10 +89,13 @@ struct TemplatedListSkipper {
 };
 
 template <class OP>
-idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
-                                     optional_ptr<Vector> result_out) {
+idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vector> result_out) {
 	idx_t result_offset = 0;
 	auto data = OP::Initialize(result_out);
+
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
 
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
 	bool finished = false;
@@ -95,8 +114,9 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 			auto child_req_num_values =
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
-			child_actual_num_values =
-			    child_column_reader->Read(child_req_num_values, child_defines_ptr, child_repeats_ptr, read_vector);
+
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr);
+			child_actual_num_values = child_column_reader->Read(child_input, read_vector);
 		} else {
 			// we do: use the overflow values
 			child_actual_num_values = overflow_child_count;
@@ -167,9 +187,9 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 	return result_offset;
 }
 
-idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) {
-	ApplyPendingSkips(define_out, repeat_out);
-	return ReadInternal<TemplatedListReader>(num_values, define_out, repeat_out, result_out);
+idx_t ListColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	ApplyPendingSkips(input.define_out, input.repeat_out);
+	return ReadInternal<TemplatedListReader>(input, result);
 }
 
 ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
@@ -183,7 +203,8 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	ReadInternal<TemplatedListSkipper>(pending_skips, nullptr, nullptr, nullptr);
+	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr);
+	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);
 	pending_skips = 0;
 }
 

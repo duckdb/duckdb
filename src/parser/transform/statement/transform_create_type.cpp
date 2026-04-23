@@ -20,7 +20,6 @@ Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> colum
 	Vector result(LogicalType::VARCHAR, size);
 	auto result_data = FlatVector::Writer<string_t>(result, size);
 
-	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
 		auto &type_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(c->data.ptr_value);
 		auto &entry_value_node = type_val.val;
@@ -29,7 +28,7 @@ Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> colum
 		}
 
 		auto entry_value = string(entry_value_node.val.str);
-		result_data[size++] = entry_value;
+		result_data.WriteValue(string_t(entry_value));
 	}
 	return result;
 }

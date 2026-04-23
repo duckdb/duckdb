@@ -359,12 +359,12 @@ struct ArrowBool8 {
 	}
 	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
 		auto entries = source.Values<bool>(count);
-		auto &result_validity = FlatVector::Validity(result);
+		auto &result_validity = FlatVector::ValidityMutable(result);
 		auto result_ptr = FlatVector::GetDataMutable<int8_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			if (entry.IsValid()) {
-				result_ptr[i] = static_cast<int8_t>(entry.value);
+				result_ptr[i] = static_cast<int8_t>(entry.GetValue());
 			} else {
 				result_validity.SetInvalid(i);
 			}

@@ -31,7 +31,7 @@ IndexDataRemover::IndexDataRemover(DuckTransaction &transaction_p, QueryContext 
 }
 
 void IndexDataRemover::PushDelete(DeleteInfo &info) {
-	auto &version_table = *info.table;
+	auto &version_table = info.table->GetStorage();
 	if (!version_table.HasIndexes()) {
 		// this table has no indexes: no cleanup to be done
 		return;
@@ -74,7 +74,7 @@ void IndexDataRemover::Flush(DataTable &table, row_t *row_numbers, idx_t count) 
 #endif
 
 	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers), count);
 
 	auto active_checkpoint = transaction.GetTransactionManager().Cast<DuckTransactionManager>().GetActiveCheckpoint();
 	auto checkpoint_id = active_checkpoint == MAX_TRANSACTION_ID ? optional_idx() : active_checkpoint;
@@ -261,22 +261,24 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (!info->table->IsMainTable()) {
-			auto table_name = info->table->GetTableName();
-			auto table_modification = info->table->TableModification();
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+			auto &storage = info->table->GetStorage();
+			auto table_name = storage.GetTableName();
+			auto table_modification = storage.TableModification();
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
 		// mark the tuples as committed
-		info->table->CommitAppend(commit_id, info->start_row, info->count);
+		info->table->GetStorage().CommitAppend(commit_id, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (!info->table->IsMainTable()) {
-			auto table_name = info->table->GetTableName();
-			auto table_modification = info->table->TableModification();
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+			auto &storage = info->table->GetStorage();
+			auto table_name = storage.GetTableName();
+			auto table_modification = storage.TableModification();
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
@@ -286,9 +288,10 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::UPDATE_TUPLE: {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
-		if (!info->table->IsMainTable()) {
-			auto table_name = info->table->GetTableName();
-			auto table_modification = info->table->TableModification();
+		if (info->table->HasParent() && info->table->Parent().timestamp != transaction.transaction_id) {
+			auto &storage = info->table->GetStorage();
+			auto table_name = storage.GetTableName();
+			auto table_modification = storage.TableModification();
 			throw TransactionException("Attempting to modify table %s but another transaction has %s this table",
 			                           table_name, table_modification);
 		}
@@ -327,7 +330,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert this append
-		info->table->RevertAppend(transaction, info->start_row, info->count);
+		info->table->GetStorage().RevertAppend(transaction, info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {

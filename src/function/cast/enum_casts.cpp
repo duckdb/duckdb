@@ -85,13 +85,13 @@ static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParam
 	auto &cast_data = parameters.cast_data->Cast<EnumBoundCastData>();
 	auto result = make_uniq<EnumCastLocalState>();
 
-	if (cast_data.from_varchar_cast.init_local_state) {
-		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);
-		result->from_varchar_local = cast_data.from_varchar_cast.init_local_state(from_varchar_params);
+	if (cast_data.from_varchar_cast.HasInitLocalState()) {
+		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.GetCastData());
+		result->from_varchar_local = cast_data.from_varchar_cast.InitLocalState(from_varchar_params);
 	}
-	if (cast_data.to_varchar_cast.init_local_state) {
-		CastLocalStateParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data);
-		result->to_varchar_local = cast_data.to_varchar_cast.init_local_state(to_varchar_params);
+	if (cast_data.to_varchar_cast.HasInitLocalState()) {
+		CastLocalStateParameters to_varchar_params(parameters, cast_data.to_varchar_cast.GetCastData());
+		result->to_varchar_local = cast_data.to_varchar_cast.InitLocalState(to_varchar_params);
 	}
 	return std::move(result);
 }
@@ -103,12 +103,13 @@ static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	Vector varchar_cast(LogicalType::VARCHAR, count);
 
 	// cast to varchar
-	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data, lstate.to_varchar_local);
-	cast_data.to_varchar_cast.function(source, varchar_cast, count, to_varchar_params);
+	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.GetCastData(), lstate.to_varchar_local);
+	cast_data.to_varchar_cast.Cast(source, varchar_cast, count, to_varchar_params);
 
 	// cast from varchar to the target
-	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data, lstate.from_varchar_local);
-	cast_data.from_varchar_cast.function(varchar_cast, result, count, from_varchar_params);
+	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.GetCastData(),
+	                                   lstate.from_varchar_local);
+	cast_data.from_varchar_cast.Cast(varchar_cast, result, count, from_varchar_params);
 	return true;
 }
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -26,14 +27,14 @@ namespace duckdb {
 
 WALWriteState::WALWriteState(DuckTransaction &transaction_p, WriteAheadLog &log,
                              optional_ptr<StorageCommitState> commit_state)
-    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_info(nullptr) {
+    : transaction(transaction_p), log(log), commit_state(commit_state), current_table_entry(nullptr) {
 }
 
-void WALWriteState::SwitchTable(DataTableInfo &table_info, UndoFlags new_op) {
-	if (current_table_info != &table_info) {
+void WALWriteState::SwitchTable(DuckTableEntry &table_entry, UndoFlags new_op) {
+	if (current_table_entry.get() != &table_entry) {
 		// write the current table to the log
-		log.WriteSetTable(table_info.GetSchemaName(), table_info.GetTableName());
-		current_table_info = table_info;
+		log.WriteSetTable(table_entry.schema.name, table_entry.name);
+		current_table_entry = table_entry;
 	}
 }
 
@@ -182,7 +183,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 void WALWriteState::WriteDelete(DeleteInfo &info) {
 	// switch to the current table, if necessary
-	SwitchTable(*info.table->GetDataTableInfo(), UndoFlags::DELETE_TUPLE);
+	SwitchTable(*info.table, UndoFlags::DELETE_TUPLE);
 
 	if (!delete_chunk) {
 		delete_chunk = make_uniq<DataChunk>();
@@ -207,9 +208,8 @@ void WALWriteState::WriteDelete(DeleteInfo &info) {
 void WALWriteState::WriteUpdate(UpdateInfo &info) {
 	// switch to the current table, if necessary
 	auto &column_data = info.segment->column_data;
-	auto &table_info = column_data.GetTableInfo();
 
-	SwitchTable(table_info, UndoFlags::UPDATE_TUPLE);
+	SwitchTable(*info.table, UndoFlags::UPDATE_TUPLE);
 
 	// initialize the update chunk
 	vector<LogicalType> update_types;
@@ -242,7 +242,7 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 			booleans[idx] = false;
 		}
 	}
-	SelectionVector sel(tuples);
+	SelectionVector sel(tuples, info.N);
 	update_chunk->Slice(sel, info.N);
 
 	// construct the column index path
@@ -271,15 +271,15 @@ void WALWriteState::CommitEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::INSERT_TUPLE: {
 		// append:
 		auto info = reinterpret_cast<AppendInfo *>(data);
-		if (!info->table->IsTemporary()) {
-			info->table->WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
+		if (!info->table->GetStorage().IsTemporary()) {
+			info->table->GetStorage().WriteToLog(transaction, log, info->start_row, info->count, commit_state.get());
 		}
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		// deletion:
 		auto info = reinterpret_cast<DeleteInfo *>(data);
-		if (!info->table->IsTemporary()) {
+		if (!info->table->GetStorage().IsTemporary()) {
 			WriteDelete(*info);
 		}
 		break;

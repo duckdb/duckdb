@@ -44,12 +44,13 @@ static void GetTypeFunction(DataChunk &args, ExpressionState &state, Vector &res
 	result.Reference(v);
 }
 
-static unique_ptr<FunctionData> BindGetTypeFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
@@ -123,7 +124,7 @@ ScalarFunction MakeTypeFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

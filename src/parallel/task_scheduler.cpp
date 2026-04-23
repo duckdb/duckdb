@@ -438,7 +438,7 @@ void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	requested_thread_count = NumericCast<int32_t>(total_threads - external_threads);
 }
 
-void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
+void TaskScheduler::SetAllocatorFlushThreshold(idx_t threshold) {
 	allocator_flush_threshold = threshold;
 }
 

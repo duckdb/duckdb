@@ -3,30 +3,49 @@
 # group: [create_drop]
 
 statement ok
+SET index_scan_max_count = 1;
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok  
 CREATE TABLE long_strings (id BLOB);
 
 statement ok
-INSERT INTO long_strings SELECT repeat('hello', 16000000);
+INSERT INTO long_strings SELECT repeat('hello', 16_000_000);
 
 # Fill up the chunk.
 statement ok
-INSERT INTO long_strings SELECT range::VARCHAR::BLOB FROM range(100000);
+INSERT INTO long_strings SELECT range::VARCHAR::BLOB FROM range(100_000);
 
 # Create another identical long string.
 statement ok
-INSERT INTO long_strings SELECT repeat('hello', 16000000);
+INSERT INTO long_strings SELECT repeat('hello', 16_000_000);
 
 statement ok
-INSERT INTO long_strings SELECT range::VARCHAR::BLOB || 'other' FROM range(100000);
+INSERT INTO long_strings SELECT range::VARCHAR::BLOB || 'other' FROM range(100_000);
 
 statement ok
-INSERT INTO long_strings SELECT repeat('hello', 16000000);
+INSERT INTO long_strings SELECT repeat('hello', 16_000_000);
 
 statement ok
-INSERT INTO long_strings SELECT range::VARCHAR::BLOB || 'abc' FROM range(100000);
+INSERT INTO long_strings SELECT range::VARCHAR::BLOB || 'abc' FROM range(100_000);
 
 statement ok
-INSERT INTO long_strings SELECT repeat('hello', 16000000);
+INSERT INTO long_strings SELECT repeat('hello', 16_000_000);
 
 statement ok
 CREATE INDEX idx ON long_strings(id);
+
+query I
+SELECT octet_length(id) FROM long_strings WHERE id = repeat('hello', 16_000_000);
+----
+80_000_000
+80_000_000
+80_000_000
+80_000_000
+
+query II
+EXPLAIN ANALYZE SELECT octet_length(id) FROM long_strings WHERE id = repeat('hello', 16_000_000);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*

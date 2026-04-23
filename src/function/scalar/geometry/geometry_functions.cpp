@@ -90,26 +90,31 @@ static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionIn
 	return make_uniq<BoundConstantExpression>(GetCRSValue(return_type));
 }
 
-static unique_ptr<FunctionData> BindCRSFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindCRSFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (arguments[0]->return_type.id() != LogicalTypeId::GEOMETRY) {
 		return nullptr;
 	}
 
 	// Propagate the CRS from the input argument to the parameter type
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
 ScalarFunction StCrsFun::GetFunction() {
 	ScalarFunction geom_func({LogicalType::GEOMETRY()}, LogicalType::VARCHAR, CRSFunction, BindCRSFunction);
-	geom_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	geom_func.bind_expression = BindCRSFunctionExpression;
+	geom_func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	geom_func.SetBindExpressionCallback(BindCRSFunctionExpression);
 	return geom_func;
 }
 
-static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> SetCRSBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// Check if the CRS is set in the second argument
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -124,10 +129,10 @@ static unique_ptr<FunctionData> SetCRSBind(ClientContext &context, ScalarFunctio
 		// Try to convert to identify
 		const auto lookup = CoordinateReferenceSystem::TryIdentify(context, crs_str);
 		if (lookup) {
-			bound_function.return_type = LogicalType::GEOMETRY(lookup->GetDefinition());
+			bound_function.SetReturnType(LogicalType::GEOMETRY(lookup->GetDefinition()));
 		} else {
 			// Pass on the raw string (better than nothing)
-			bound_function.return_type = LogicalType::GEOMETRY(crs_str);
+			bound_function.SetReturnType(LogicalType::GEOMETRY(crs_str));
 		}
 	}
 

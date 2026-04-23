@@ -1,3 +1,5 @@
+Program <- Statement? (';'+ Statement)* ';'*
+
 Statement <-
 	CreateStatement /
 	SelectStatement /
@@ -34,6 +36,9 @@ Statement <-
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
+SemiList1(D) <- D (';' D)*
+SemiList(D) <- SemiList1(D) ';'?
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -140,7 +145,6 @@ ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / 'ARRAY'
-ArrayKeyword <- 'ARRAY'
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId

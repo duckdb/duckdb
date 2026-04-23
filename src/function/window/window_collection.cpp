@@ -85,7 +85,7 @@ void WindowCollection::Combine(const ColumnSet &validity_cols) {
 	while (cursor.Scan()) {
 		const auto count = cursor.chunk.size();
 		for (idx_t i = 0; i < invalid_cols.size(); ++i) {
-			auto &other = FlatVector::Validity(cursor.chunk.data[i]);
+			auto &other = FlatVector::ValidityMutable(cursor.chunk.data[i]);
 			const auto col_idx = invalid_cols[i];
 			validities[col_idx].SliceInPlace(other, target_offset, 0, count);
 		}
@@ -129,7 +129,6 @@ WindowCursor::WindowCursor(const WindowCollection &paged, vector<column_t> colum
 		state.current_row_index = 0;
 		state.next_row_index = paged.size();
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-		chunk.SetCapacity(state.next_row_index);
 		chunk.SetCardinality(state.next_row_index);
 		return;
 	} else if (chunk.data.empty()) {

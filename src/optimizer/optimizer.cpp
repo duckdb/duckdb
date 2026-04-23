@@ -117,6 +117,29 @@ void Optimizer::Verify(LogicalOperator &op) {
 	ColumnBindingResolver::Verify(op);
 }
 
+// Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)
+// inside a CTE body. When that is the case, several optimizations are unsafe because
+// they use table statistics captured at plan time, which do not reflect the table
+// state after the DML has executed.
+// Note: a top-level INSERT/UPDATE/DELETE (e.g. INSERT ... RETURNING) is NOT flagged —
+// only DML nested under a MATERIALIZED_CTE or RECURSIVE_CTE node.
+static bool CTEContainsDML(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE ||
+	    op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+		for (auto &child : op.children) {
+			if (child->HasSideEffects()) {
+				return true;
+			}
+		}
+	}
+	for (auto &child : op.children) {
+		if (CTEContainsDML(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void Optimizer::RunBuiltInOptimizers() {
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
@@ -266,10 +289,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// convert common subplans into materialized CTEs
-	RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
-		CommonSubplanOptimizer common_subplan_optimizer(*this);
-		plan = common_subplan_optimizer.Optimize(std::move(plan));
-	});
+	// Skip when the plan contains a DML CTE: table statistics are stale at plan
+	// time and could cause incorrect deduplication of scans across a DML boundary.
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::COMMON_SUBPLAN, [&]() {
+			CommonSubplanOptimizer common_subplan_optimizer(*this);
+			plan = common_subplan_optimizer.Optimize(std::move(plan));
+		});
+	}
 
 	// pushes LIMIT below PROJECTION
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
@@ -301,12 +328,18 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
+	// Skip when the plan contains a DML CTE: statistics are captured at plan time
+	// and do not reflect the table state after the DML executes.  Propagating them
+	// can cause filters or scans to be incorrectly eliminated (e.g. replaced with
+	// EMPTY_RESULT because an empty table has no statistics for a given predicate).
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-		StatisticsPropagator propagator(*this, *plan);
-		propagator.PropagateStatistics(plan);
-		statistics_map = propagator.GetStatisticsMap();
-	});
+	if (!CTEContainsDML(*plan)) {
+		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+			StatisticsPropagator propagator(*this, *plan);
+			propagator.PropagateStatistics(plan);
+			statistics_map = propagator.GetStatisticsMap();
+		});
+	}
 
 	// rewrite row_number window function + filter on row_number to aggregate
 	RunOptimizer(OptimizerType::TOP_N_WINDOW_ELIMINATION, [&]() {
@@ -386,6 +419,15 @@ unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(c1));
 	children.push_back(std::move(c2));
+	return BindScalarFunction(name, std::move(children));
+}
+
+unique_ptr<Expression> Optimizer::BindScalarFunction(const string &name, unique_ptr<Expression> c1,
+                                                     unique_ptr<Expression> c2, unique_ptr<Expression> c3) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(c1));
+	children.push_back(std::move(c2));
+	children.push_back(std::move(c3));
 	return BindScalarFunction(name, std::move(children));
 }
 

@@ -156,8 +156,10 @@ duckdb_function_info ToCScalarFunctionInfo(duckdb::CScalarFunctionInternalFuncti
 // Scalar Function Callbacks
 //===--------------------------------------------------------------------===//
 
-unique_ptr<FunctionData> CScalarFunctionBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CScalarFunctionBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &info = bound_function.GetExtraFunctionInfo().Cast<CScalarFunctionInfo>();
 	D_ASSERT(info.function);
 
@@ -222,7 +224,7 @@ using duckdb::GetCScalarFunctionSet;
 duckdb_scalar_function duckdb_create_scalar_function() {
 	auto function = new duckdb::ScalarFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIScalarFunction,
 	                                           duckdb::CScalarFunctionBind);
-	function->init_local_state = duckdb::CScalarFunctionInit;
+	function->SetInitStateCallback(duckdb::CScalarFunctionInit);
 	function->SetExtraFunctionInfo<duckdb::CScalarFunctionInfo>();
 	return reinterpret_cast<duckdb_scalar_function>(function);
 }
@@ -249,7 +251,7 @@ void duckdb_scalar_function_set_varargs(duckdb_scalar_function function, duckdb_
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.varargs = *logical_type;
+	scalar_function.SetVarArgs(*logical_type);
 }
 
 void duckdb_scalar_function_set_special_handling(duckdb_scalar_function function) {
@@ -274,7 +276,7 @@ void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.arguments.push_back(*logical_type);
+	scalar_function.GetArguments().push_back(*logical_type);
 }
 
 void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duckdb_logical_type type) {
@@ -514,7 +516,7 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		    duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
-		for (const auto &argument : scalar_function.arguments) {
+		for (const auto &argument : scalar_function.GetArguments()) {
 			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
 				return DuckDBError;
 			}

@@ -52,6 +52,29 @@ struct WindowPartitionInput {
 	InterruptState &interrupt_state;
 };
 
+class BindAggregateFunctionInput {
+public:
+	BindAggregateFunctionInput(ClientContext &context_p, AggregateFunction &bound_function_p,
+	                           vector<unique_ptr<Expression>> &arguments_p)
+	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
+	}
+
+	ClientContext &GetClientContext() const {
+		return context;
+	}
+	AggregateFunction &GetBoundFunction() const {
+		return bound_function;
+	}
+	vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
+
+private:
+	ClientContext &context;
+	AggregateFunction &bound_function;
+	vector<unique_ptr<Expression>> &arguments;
+};
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(const AggregateFunction &function);
 //! The type used for initializing hashed aggregate function states
@@ -68,8 +91,7 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_inp
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
-typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
-                                                              vector<unique_ptr<Expression>> &arguments);
+typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(BindAggregateFunctionInput &input);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
 typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_input_data, idx_t count);
 
@@ -81,6 +103,17 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
 typedef void (*aggregate_window_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
                                    const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes,
                                    Vector &result, idx_t rid);
+
+//! Batched variant of aggregate_window_t — called once per Evaluate() with frame
+//! bounds for all `count` output rows pre-computed. `subframes_per_row` points
+//! to `count` SubFrames entries (each 1-3 FrameBounds depending on EXCLUDE
+//! clause). When set, the window executor prefers this over the per-row
+//! callback, letting implementations issue a single batched call (e.g., one
+//! RPC for the whole Evaluate chunk instead of count separate calls).
+typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+                                         const_data_ptr_t g_state, data_ptr_t l_state,
+                                         const SubFrames *subframes_per_row, idx_t count, Vector &result,
+                                         idx_t row_idx);
 
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
@@ -188,6 +221,11 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
+	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+		BindAggregateFunctionInput bind_input(context, *this, arguments);
+		return Bind(bind_input);
+	}
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
@@ -225,6 +263,12 @@ public:
 	aggregate_wininit_t GetWindowInitCallback() const { return window_init; }
 	bool HasWindowInitCallback() const { return window_init != nullptr; }
 
+	//! Batched window callback — takes precedence over the per-row window
+	//! callback when set. See aggregate_window_batch_t for semantics.
+	bool HasWindowBatchCallback() const { return window_batch != nullptr; }
+	aggregate_window_batch_t GetWindowBatchCallback() const { return window_batch; }
+	void SetWindowBatchCallback(aggregate_window_batch_t callback) { window_batch = callback; }
+
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
 	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
@@ -238,7 +282,7 @@ public:
 	void SetClusteredOptimized(bool value) { clustered_optimized = value; }
 	// clang-format on
 
-public:
+protected:
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
 	//! The hashed aggregate state initialization function
@@ -255,6 +299,8 @@ public:
 	aggregate_window_t window;
 	//! The windowed aggregate custom initialization function (may be null)
 	aggregate_wininit_t window_init = nullptr;
+	//! Batched windowed aggregate function (may be null; preferred when set)
+	aggregate_window_batch_t window_batch = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;
@@ -275,6 +321,28 @@ public:
 	bool clustered_optimized = false;
 	aggregate_get_state_type_t get_state_type = nullptr;
 
+	//! Additional function info, passed to the bind
+	shared_ptr<AggregateFunctionInfo> function_info;
+
+public:
+	bool HasExtraFunctionInfo() const {
+		return function_info != nullptr;
+	}
+
+	AggregateFunctionInfo &GetExtraFunctionInfo() const {
+		D_ASSERT(function_info.get());
+		return *function_info;
+	}
+
+	void SetExtraFunctionInfo(shared_ptr<AggregateFunctionInfo> info) {
+		function_info = std::move(info);
+	}
+
+	template <class T, class... ARGS>
+	void SetExtraFunctionInfo(ARGS &&... args) {
+		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
+	}
+
 	AggregateOrderDependent GetOrderDependent() const {
 		return order_dependent;
 	}
@@ -291,6 +359,9 @@ public:
 	bool HasGetStateTypeCallback() const {
 		return get_state_type != nullptr;
 	}
+	aggregate_get_state_type_t GetStateTypeCallback() const {
+		return get_state_type;
+	}
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
 		get_state_type = get_state_type_callback;
@@ -304,9 +375,6 @@ public:
 		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
 		return result;
 	}
-
-	//! Additional function info, passed to the bind
-	shared_ptr<AggregateFunctionInfo> function_info;
 
 public:
 	bool operator==(const AggregateFunction &rhs) const {

@@ -205,35 +205,33 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			break;
 		}
 	}
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args_size);
 	uint64_t total_size = 0;
+	vector<uint64_t> list_lengths(args_size, 0);
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
-			result_validity.SetInvalid(i);
-			list_data[i].offset = total_size;
-			list_data[i].length = 0;
+			result_data.WriteNull(list_entry_t(total_size, 0));
 		} else {
-			list_data[i].offset = total_size;
-			list_data[i].length = info.ListLength(i);
-			total_size += list_data[i].length;
+			const auto length = info.ListLength(i);
+			list_lengths[i] = length;
+			result_data.WriteValue(list_entry_t(total_size, length));
+			total_size += length;
 		}
 	}
 
 	// now construct the child vector of the list
 	ListVector::Reserve(result, total_size);
-	auto range_data = FlatVector::GetDataMutable<typename OP::TYPE>(ListVector::GetEntry(result));
-	idx_t total_idx = 0;
+	auto range_data = FlatVector::Writer<typename OP::TYPE>(ListVector::GetChildMutable(result), total_size);
 	for (idx_t i = 0; i < args_size; i++) {
 		typename OP::TYPE start_value = info.StartListValue(i);
 		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);
 
 		typename OP::TYPE range_value = start_value;
-		for (idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
+		for (idx_t range_idx = 0; range_idx < list_lengths[i]; range_idx++) {
 			if (range_idx > 0) {
 				OP::Increment(range_value, increment);
 			}
-			range_data[total_idx++] = range_value;
+			range_data.WriteValue(range_value);
 		}
 	}
 

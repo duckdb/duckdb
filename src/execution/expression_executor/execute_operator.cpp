@@ -49,7 +49,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				intermediate.Reference(comp_res);
 			} else {
 				// otherwise OR together
-				Vector new_result(LogicalType::BOOLEAN, true, false);
+				Vector new_result(LogicalType::BOOLEAN);
 				VectorOperations::Or(intermediate, comp_res, new_result, count);
 				intermediate.Reference(new_result);
 			}
@@ -117,11 +117,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				result.Reference(try_result);
 				return;
 			}
-			if (sel) {
-				VectorOperations::Copy(try_result, result, *sel, count, 0, 0, count);
-			} else {
-				VectorOperations::Copy(try_result, result, count, 0, 0);
-			}
+			VectorOperations::Copy(try_result, result, count, 0, 0);
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

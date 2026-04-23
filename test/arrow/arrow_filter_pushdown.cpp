@@ -1,5 +1,3 @@
-#include <regex>
-
 #include "catch.hpp"
 
 #include "arrow/arrow_test_helper.hpp"
@@ -34,40 +32,27 @@ static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, co
 	return mat.GetValue(1, 0).ToString();
 }
 
-// Helper: regexp search for a filter node
+// Helper: check for a standalone FILTER operator node in the explain output
 static bool StandaloneFilter(const std::string &explain_str) {
-	// This is meant to match e.g.:
-	//
-	// ┌─────────────┴─────────────┐
-	// │           FILTER          │
-	// │    ────────────────────   │
-	// │  ((a > 25) AND (b > 25))  │
-	// │                           │
-	// │          ~20 rows         │
-	// └─────────────┬─────────────┘
-	//
-	const std::regex re_filter(R"(│ +FILTER +│)");
-	return std::regex_search(explain_str, re_filter);
+	// Look for FILTER as a standalone operator node name (not "Filters:" which is a scan attribute)
+	std::string::size_type pos = 0;
+	while ((pos = explain_str.find("FILTER", pos)) != std::string::npos) {
+		// Check this is the standalone node name, not part of "Filters:"
+		if (pos + 6 >= explain_str.size() || explain_str[pos + 6] != 's') {
+			return true;
+		}
+		pos += 6;
+	}
+	return false;
 }
 
-// Helper: regexp search for a scan node with filter
+// Helper: check for a scan node with filter pushdown in the explain output
 static bool FilterInScan(const std::string &explain_str) {
-	// This is meant to match e.g.:
-	//
-	// ┌─────────────┴─────────────┐
-	// │         ARROW_SCAN        │
-	// │    ────────────────────   │
-	// │    Function: ARROW_SCAN   │
-	// │                           │
-	// │          Filters:         │
-	// │            a>25           │
-	// │            b>25           │
-	// │                           │
-	// │           ~1 row          │
-	// └───────────────────────────┘
-	//
-	const std::regex re_block(R"(│[ \t]*Function:[ \t]*ARROW_SCAN[ \t]*│[\s\S]*?│[ \t]*Filters:[ \t]*([^│]*?)[ \t]*│)");
-	return std::regex_search(explain_str, re_block);
+	auto arrow_pos = explain_str.find("ARROW_SCAN");
+	if (arrow_pos == std::string::npos) {
+		return false;
+	}
+	return explain_str.find("Filters:", arrow_pos) != std::string::npos;
 }
 
 TEST_CASE("Arrow filter pushdown - view types disable pushdown", "[arrow]") {

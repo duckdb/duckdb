@@ -76,8 +76,10 @@ static unique_ptr<BaseStatistics> VariantExtractPropagateStats(ClientContext &co
 	return VariantStats::WrapExtractedFieldAsVariant(variant_stats, *found_stats);
 }
 
-static unique_ptr<FunctionData> VariantExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
 	if (arguments.size() != 2) {
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
@@ -122,7 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
-		result.Shred(shredded_vector);
+		result.Shred(shredded_vector, count);
 		return true;
 	}
 	auto &component = components[path_index];
@@ -232,29 +234,29 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto values_list_size = ListVector::GetListSize(raw_values);
 
 	//! Create a new Variant that references the existing data of the input Variant
-	result.Initialize(false, count);
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	VariantVector::GetKeys(result).Reference(VariantVector::GetKeys(variant_vec));
 	VariantVector::GetChildren(result).Reference(VariantVector::GetChildren(variant_vec));
 	VariantVector::GetData(result).Reference(VariantVector::GetData(variant_vec));
 
 	//! Copy the existing 'values' list entry data
 	auto &result_values = VariantVector::GetValues(result);
-	result_values.Initialize(false, count);
+	result_values.Initialize(VectorDataInitialization::UNINITIALIZED, count);
 	ListVector::Reserve(result_values, values_list_size);
 	ListVector::SetListSize(result_values, values_list_size);
-	auto result_data = FlatVector::Writer<list_entry_t>(result_values);
+	auto result_data = FlatVector::Writer<list_entry_t>(result_values, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[i] = values_data[values.sel->get_index(i)];
+		result_data.WriteValue(values_data[values.sel->get_index(i)]);
 	}
 
 	auto &result_indices = components.size() % 2 == 0 ? value_index_sel : new_value_index_sel;
 
 	//! Prepare the selection vector to remap index 0 of each row
-	SelectionVector new_sel(0, values_list_size);
+	auto new_sel = SelectionVector::Incremental(values_list_size);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			continue;
@@ -266,9 +268,8 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
 	auto &result_byte_offset = VariantVector::GetValuesByteOffset(result);
 
-	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant_vec), values_list_size, new_sel, values_list_size);
-	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
-	                              values_list_size);
+	result_type_id.Slice(VariantVector::GetValuesTypeId(variant_vec), new_sel, values_list_size);
+	result_byte_offset.Slice(VariantVector::GetValuesByteOffset(variant_vec), new_sel, values_list_size);
 
 	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data
@@ -308,12 +309,12 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 
 	ScalarFunctionSet fun_set;
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
-	                               nullptr, VariantExtractPropagateStats);
+	                               VariantExtractPropagateStats);
 
-	variant_extract.arguments = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetArguments() = {variant_type, LogicalType::VARCHAR};
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.arguments = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetArguments() = {variant_type, LogicalType::UINTEGER};
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

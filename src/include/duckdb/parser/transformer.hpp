@@ -38,6 +38,7 @@ class MacroFunction;
 struct ParserOptions;
 struct PivotColumn;
 struct PivotColumnEntry;
+struct ExtraDropInfo;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -81,12 +82,9 @@ private:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 	//! Whether or not we are currently binding a window definition
 	bool in_window_definition = false;
-	//! Whether or not we are currently binding a macro definition
-	bool in_macro_definition = false;
 
 	void Clear();
 	bool InWindowDefinition();
-	bool InMacroDefinition();
 
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
@@ -143,6 +141,8 @@ private:
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGAlterSeqStmt &stmt);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDrop(duckdb_libpgquery::PGDropStmt &stmt);
+	static unique_ptr<ExtraDropInfo> TransformDropTrigger(duckdb_libpgquery::PGList &obj_list,
+	                                                      string &trigger_name_out);
 	//! Transform a Postgres duckdb_libpgquery::T_PGInsertStmt node into a InsertStatement
 	unique_ptr<InsertStatement> TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt);
 	InsertColumnOrder TransformColumnOrder(duckdb_libpgquery::PGInsertColumnOrder insert_column_order);

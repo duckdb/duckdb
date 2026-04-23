@@ -119,31 +119,28 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	ListVector::SetListSize(result, 0);
 
-	auto list_struct_data = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 
 	// count all the splits and set up the list entries
-	auto &child_entry = ListVector::GetEntry(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_entry = input_entries[i];
 		auto delim_entry = delim_entries[i];
 		if (!input_entry.IsValid()) {
-			result_mask.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 		StringSplitInput split_input(result, child_entry, total_splits);
 		if (!delim_entry.IsValid()) {
 			// delim is NULL: copy the complete entry
-			split_input.AddSplit(input_entry.value.GetData(), input_entry.value.GetSize(), 0);
-			list_struct_data[i].length = 1;
-			list_struct_data[i].offset = total_splits;
+			split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
+			result_data.WriteValue(list_entry_t(total_splits, 1));
 			total_splits++;
 			continue;
 		}
-		auto list_length = StringSplitter::Split<OP>(input_entry.value, delim_entry.value, split_input, data);
-		list_struct_data[i].length = list_length;
-		list_struct_data[i].offset = total_splits;
+		auto list_length = StringSplitter::Split<OP>(input_entry.GetValue(), delim_entry.GetValue(), split_input, data);
+		result_data.WriteValue(list_entry_t(total_splits, list_length));
 		total_splits += list_length;
 	}
 	ListVector::SetListSize(result, total_splits);
@@ -183,11 +180,11 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
 	ScalarFunction regex_fun({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction,
-	                         RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	                         RegexpMatchesBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
 	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
-	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);
+	regex_fun.GetArguments().emplace_back(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	return regexp_split;
 }

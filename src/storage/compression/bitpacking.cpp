@@ -125,7 +125,7 @@ public:
 
 	void CalculateDeltaStats() {
 		// TODO: currently we dont support delta compression of values above NumericLimits<T_S>::Maximum(),
-		// 		 we could support this with some clever substract trickery?
+		// 		 we could support this with some clever subtract trickery?
 		if (maximum > static_cast<T>(NumericLimits<T_S>::Maximum())) {
 			return;
 		}
@@ -270,7 +270,8 @@ public:
 	}
 
 	template <class OP = EmptyBitpackingWriter>
-	bool Update(T value, bool is_valid) {
+	bool Update(typename VectorIterator<T>::ValueEntry val) {
+		auto is_valid = val.IsValid();
 		compression_buffer_validity[compression_buffer_idx] = is_valid;
 		has_valid = has_valid || is_valid;
 		has_invalid = has_invalid || !is_valid;
@@ -278,6 +279,7 @@ public:
 		all_invalid = all_invalid && !is_valid;
 
 		if (is_valid) {
+			auto value = val.GetValue();
 			compression_buffer[compression_buffer_idx] = value;
 			minimum = MinValue<T>(minimum, value);
 			maximum = MaxValue<T>(maximum, value);
@@ -324,7 +326,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
 	for (auto entry : input.Values<T>(count)) {
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry.value, entry.is_valid)) {
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry)) {
 			return false;
 		}
 	}
@@ -486,13 +488,9 @@ public:
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
 	}
 
-	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-
-		for (idx_t i = 0; i < count; i++) {
-			idx_t idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressionState<T, WRITE_STATISTICS, T_S>::BitpackingWriter>(
-			    data[idx], vdata.validity.RowIsValid(idx));
+	void Append(Vector &input, idx_t count) {
+		for (auto entry : input.Values<T>(count)) {
+			state.template Update<BitpackingWriter>(entry);
 		}
 	}
 
@@ -547,9 +545,7 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = state_p.Cast<BitpackingCompressionState<T, WRITE_STATISTICS>>();
-	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
-	state.Append(vdata, count);
+	state.Append(scan_vector, count);
 }
 
 template <class T, bool WRITE_STATISTICS>

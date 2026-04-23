@@ -102,6 +102,10 @@ bool ValidityMask::IsAligned(idx_t count) {
 	return count % BITS_PER_VALUE == 0;
 }
 
+void ValidityMask::CopyRange(const ValidityMask &other, idx_t count) {
+	CopySel(other, *FlatVector::IncrementalSelectionVector(), 0, 0, count);
+}
+
 void ValidityMask::CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
                            idx_t target_offset, idx_t copy_count) {
 	if (!other.IsMaskSet() && !IsMaskSet()) {
