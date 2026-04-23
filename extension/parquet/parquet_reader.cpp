@@ -1488,7 +1488,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			bool filters_look_unselective = false;
 			if (filters) {
 				auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
-				if (adaptive_filter.GetFilterCallsObserved() >=
+				if (adaptive_filter.GetTotalFilterCalls() >=
 				        ParquetReaderPrefetchConfig::MIN_FILTER_CALLS_OBSERVED_FOR_PREFETCH &&
 				    adaptive_filter.GetFilterMatchRatio() >
 				        ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO) {
