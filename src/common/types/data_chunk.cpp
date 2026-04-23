@@ -126,7 +126,7 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
-	for(auto &vec : data) {
+	for (auto &vec : data) {
 		vec.CheckCapacity(count);
 	}
 }

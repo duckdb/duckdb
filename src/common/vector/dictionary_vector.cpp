@@ -97,16 +97,22 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
+	auto count = end - offset;
 	auto &sel_data = GetSelVector().sel_data();
 	if (!sel_data) {
-		throw InternalException("Dictionary buffer without selection vector");
+		// non-owning sel, we need to create a new selection vector to slice
+		SelectionVector new_sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			new_sel.set_index(i, sel_vector.get_index(offset + i));
+		}
+		return make_uniq<DictionaryBuffer>(new_sel, count, entry);
 	}
 	if (offset == 0) {
 		// for offset = 0 all we have to do is update the count - so just create a new buffer
 		return make_uniq<DictionaryBuffer>(sel_data, end, entry);
 	}
-	SelectionVector sliced_sel(sel_vector.data() + offset, end - offset);
-	auto result = make_uniq<DictionaryBuffer>(sliced_sel, end, entry);
+	SelectionVector sliced_sel(sel_vector.data() + offset, count);
+	auto result = make_uniq<DictionaryBuffer>(sliced_sel, count, entry);
 	result->AddAuxiliaryData(make_uniq<SelectionDataHolder>(sel_data));
 	return result;
 }
