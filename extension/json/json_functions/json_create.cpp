@@ -123,10 +123,10 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 				throw BinderException("json_object() keys must be VARCHAR, add an explicit cast to argument \"%s\"",
 				                      arguments[i]->GetName());
 			}
-			bound_function.arguments.push_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
 		} else {
 			// Value, cast to types that we can put in JSON
-			bound_function.arguments.push_back(GetJSONType(const_struct_names, type));
+			bound_function.GetArguments().push_back(GetJSONType(const_struct_names, type));
 		}
 	}
 	return make_uniq<JSONCreateFunctionData>(std::move(const_struct_names));
@@ -733,7 +733,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
@@ -741,7 +741,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
@@ -749,21 +749,21 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 

@@ -52,7 +52,7 @@ T *ArrowBufferData(ArrowArray &array, idx_t buffer_idx) {
 
 static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_offset, idx_t size,
                             int64_t parent_offset, int64_t nested_offset = -1, bool add_null = false) {
-	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
+	// In certain we don't need to or cannot copy arrow's validity mask to duckdb.
 	//
 	// The conditions where we do want to copy arrow's mask to duckdb are:
 	// 1. nulls exist
@@ -930,7 +930,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 					continue;
 				}
 				auto bptr = cdata + offset;
-				result[row_idx] = string_t(bptr, blob_len);
+				result[row_idx] = string_t(bptr, UnsafeNumericCast<uint32_t>(blob_len));
 				offset += blob_len;
 			}
 		}

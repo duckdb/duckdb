@@ -574,11 +574,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				idx_t byte_data_length = 0;
 
 				// write all the lengths
-				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				auto lengths_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
 					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
+					lengths_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
 					byte_data_length += this_length;
 				}
 

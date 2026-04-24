@@ -1503,6 +1503,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	VacuumState vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
+	if (vacuum_state.row_ids_changed) {
+		writer.SetRowIdsChanged();
+	}
 
 	try {
 		// schedule tasks
@@ -1515,6 +1518,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				// vacuum tasks were scheduled - don't schedule a checkpoint task yet
 				total_vacuum_tasks++;
 				vacuum_state.row_ids_changed = true;
+				writer.SetRowIdsChanged();
 				continue;
 			}
 			if (checkpoint_state.SegmentIsDropped(segment_idx)) {
@@ -1604,16 +1608,18 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			D_ASSERT(checkpoint_state.SegmentIsDropped(segment_idx));
 			continue;
 		}
-		auto &row_group = entry->GetNode();
+		auto &existing_row_group = entry->GetNode();
 		auto &row_group_writer = checkpoint_state.writers[segment_idx];
 		if (!row_group_writer) {
 			// row group was not checkpointed - this can happen if compressing is disabled for in-memory tables
 			new_row_groups->AppendSegment(l, entry->ReferenceNode());
-			new_total_rows += row_group.count;
+			new_total_rows += existing_row_group.count;
 
 			auto lock = global_stats.GetLock();
-			for (idx_t column_idx = 0; column_idx < row_group.GetColumnCount(); column_idx++) {
-				global_stats.GetStats(*lock, column_idx).Statistics().Merge(*row_group.GetStatistics(column_idx));
+			for (idx_t column_idx = 0; column_idx < existing_row_group.GetColumnCount(); column_idx++) {
+				global_stats.GetStats(*lock, column_idx)
+				    .Statistics()
+				    .Merge(*existing_row_group.GetStatistics(column_idx));
 			}
 			continue;
 		}
@@ -1625,6 +1631,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			// row group was unchanged - emit previous row group
 			new_row_group = entry->ReferenceNode();
 		}
+		auto &row_group = *new_row_group;
 		RowGroupPointer pointer_copy;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
@@ -1643,15 +1650,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
-		new_row_groups->AppendSegment(l, std::move(new_row_group));
 		new_total_rows += row_group.count;
+		new_row_groups->AppendSegment(l, std::move(new_row_group));
 
 		if (debug_verify_blocks) {
 			if (!pointer_copy.has_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
 			if (metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
-				throw InternalException("Colum start pointers changed during metadata reuse");
+				throw InternalException("Column start pointers changed during metadata reuse");
 			}
 
 			// Capture blocks that have been written
@@ -1705,17 +1712,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (all_written_block_ids != all_quick_read_block_ids ||
 			    all_quick_read_block_ids != all_full_read_block_ids) {
 				std::stringstream oss;
-				oss << "Written: ";
+				oss << "\nWritten: ";
 				for (auto &block : all_written_blocks) {
 					oss << block << ", ";
 				}
-				oss << "\n";
-				oss << "Quick read: ";
+				oss << "\nQuick read: ";
 				for (auto &block : all_quick_read_blocks) {
 					oss << block << ", ";
 				}
-				oss << "\n";
-				oss << "Full read: ";
+				oss << "\nFull read: ";
 				for (auto &block : all_full_read_blocks) {
 					oss << block << ", ";
 				}

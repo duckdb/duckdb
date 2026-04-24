@@ -133,7 +133,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		// Prepared statement
-		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+		bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 		return nullptr;
 	}
@@ -147,7 +147,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 		auto &map = arg->return_type;
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
-			bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+			bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 			bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 			return nullptr;
 		}
@@ -186,7 +186,7 @@ ScalarFunction MapConcatFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

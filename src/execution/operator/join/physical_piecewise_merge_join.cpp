@@ -166,7 +166,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 
 	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.table->IntializeMatches();
+		gstate.table->InitializeMatches();
 	}
 
 	if (gstate.table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {

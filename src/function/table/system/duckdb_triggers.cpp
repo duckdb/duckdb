@@ -97,30 +97,46 @@ void DuckDBTriggersFunction(ClientContext &context, TableFunctionInput &data_p, 
 	}
 
 	idx_t count = 0;
+
+	auto &database_name = output.data[0];
+	auto &database_oid = output.data[1];
+	auto &schema_name = output.data[2];
+	auto &schema_oid = output.data[3];
+	auto &trigger_name = output.data[4];
+	auto &trigger_oid = output.data[5];
+	auto &table_name = output.data[6];
+	auto &action_timing = output.data[7];
+	auto &event_manipulation = output.data[8];
+	auto &columns = output.data[9];
+	auto &for_each = output.data[10];
+	auto &comment = output.data[11];
+	auto &tags = output.data[12];
+	auto &temporary = output.data[13];
+	auto &sql = output.data[14];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &trigger = data.entries[data.offset++].get();
 
-		idx_t col = 0;
-		output.SetValue(col++, count, Value(trigger.catalog.GetName()));
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(trigger.catalog.GetOid())));
-		output.SetValue(col++, count, Value(trigger.schema.name));
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(trigger.schema.oid)));
-		output.SetValue(col++, count, Value(trigger.name));
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(trigger.oid)));
-		output.SetValue(col++, count, Value(trigger.base_table->table_name));
-		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.timing)));
-		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.event_type)));
+		database_name.Append(Value(trigger.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.catalog.GetOid())));
+		schema_name.Append(Value(trigger.schema.name));
+		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.schema.oid)));
+		trigger_name.Append(Value(trigger.name));
+		trigger_oid.Append(Value::BIGINT(NumericCast<int64_t>(trigger.oid)));
+		table_name.Append(Value(trigger.base_table->table_name));
+		action_timing.Append(Value(EnumUtil::ToString(trigger.timing)));
+		event_manipulation.Append(Value(EnumUtil::ToString(trigger.event_type)));
 		vector<Value> col_vals;
 		col_vals.reserve(trigger.columns.size());
 		for (auto &col_name : trigger.columns) {
 			col_vals.emplace_back(col_name);
 		}
-		output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, std::move(col_vals)));
-		output.SetValue(col++, count, Value(EnumUtil::ToString(trigger.for_each)));
-		output.SetValue(col++, count, Value(trigger.comment));
-		output.SetValue(col++, count, Value::MAP(trigger.tags));
-		output.SetValue(col++, count, Value::BOOLEAN(trigger.temporary));
-		output.SetValue(col++, count, Value(trigger.ToSQL()));
+		columns.Append(Value::LIST(LogicalType::VARCHAR, std::move(col_vals)));
+		for_each.Append(Value(EnumUtil::ToString(trigger.for_each)));
+		comment.Append(Value(trigger.comment));
+		tags.Append(Value::MAP(trigger.tags));
+		temporary.Append(Value::BOOLEAN(trigger.temporary));
+		sql.Append(Value(trigger.ToSQL()));
 
 		count++;
 	}

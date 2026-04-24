@@ -17,9 +17,9 @@ struct capacity_t {
 	explicit capacity_t(idx_t val) : val(val) {
 	}
 
-	operator idx_t() const {
+	operator idx_t() const { // NOLINT: allow implicit conversion
 		return val;
-	} // NOLINT: allow implicit conversion
+	}
 
 private:
 	idx_t val;
@@ -30,9 +30,9 @@ struct count_t {
 	explicit count_t(idx_t val) : val(val) {
 	}
 
-	operator idx_t() const {
+	operator idx_t() const { // NOLINT: allow implicit conversion
 		return val;
-	} // NOLINT: allow implicit conversion
+	}
 
 private:
 	idx_t val;

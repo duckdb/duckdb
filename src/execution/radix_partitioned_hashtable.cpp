@@ -684,7 +684,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
-	// Mininum of the two
+	// Minimum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 
@@ -934,7 +934,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	D_ASSERT(radix_ht.op.grouping_functions.size() == radix_ht.grouping_values.size());
 	for (idx_t i = 0; i < radix_ht.op.grouping_functions.size(); i++) {
 		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i],
-		                                                                                    count_t(scan_chunk.size()));
+		                                                                                   count_t(scan_chunk.size()));
 	}
 	chunk.SetCardinality(scan_chunk);
 	D_ASSERT(chunk.size() != 0);

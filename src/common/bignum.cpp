@@ -226,7 +226,7 @@ void BignumAddition(data_ptr_t result, int64_t result_end, bool is_target_absolu
 		}
 		uint8_t result_byte = static_cast<uint8_t>(sum & 0xFF);
 		// If the result is not positive, we must flip the bits again
-		result[i_result] = is_result_negative ? ~result_byte : result_byte;
+		result[i_result] = is_result_negative ? static_cast<uint8_t>(~result_byte) : result_byte;
 		i_target--;
 		i_source--;
 		i_result--;
@@ -269,7 +269,7 @@ void BignumIntermediate::NegateInPlace() {
 	}
 	is_negative = !is_negative;
 	for (size_t i = 0; i < size; i++) {
-		data[i] = ~data[i]; // flip each byte of the pointer
+		data[i] = static_cast<data_t>(~data[i]); // flip each byte of the pointer
 	}
 }
 

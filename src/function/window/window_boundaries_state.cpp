@@ -426,7 +426,7 @@ WindowBoundariesState::WindowBoundariesState(ExecutionContext &context, const Wi
 	if (gstate.executor.wexpr.window) {
 		const auto &wfunc = *gstate.executor.wexpr.window;
 		if (wfunc.HasBoundsCallback()) {
-			wfunc.GetBoundsCallback()(required, gstate.executor.wexpr);
+			wfunc.GetBounds(required, gstate.executor.wexpr);
 			AddImpliedBounds(required, gstate.executor.wexpr);
 		}
 	} else {

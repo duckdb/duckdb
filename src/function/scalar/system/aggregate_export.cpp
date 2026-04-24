@@ -630,7 +630,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
                                                                vector<unique_ptr<Expression>> &arguments,
                                                                bool allow_legacy) {
 	auto &arg_return_type = arguments[0]->return_type;
-	for (auto &arg_type : function.arguments) {
+	for (auto &arg_type : function.GetArguments()) {
 		arg_type = arg_return_type;
 	}
 
@@ -678,7 +678,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	}
 
 	if (bound_aggr.GetReturnType() != state_type.return_type ||
-	    bound_aggr.arguments != state_type.bound_argument_types) {
+	    bound_aggr.GetArguments() != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}
 
@@ -707,7 +707,7 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 		// When the second argument is a STRUCT (e.g. from a parquet round-trip), prevent casting to AGGREGATE_STATE by
 		// matching the declared parameter type to the actual argument type.
 		if (arguments.size() == 2 && arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
-			bound_function.arguments[1] = arguments[1]->return_type;
+			bound_function.GetArguments()[1] = arguments[1]->return_type;
 		}
 	}
 
@@ -743,7 +743,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	auto blob_ptr = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptrs[row_idx];
-		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), state_size));
+		blob_ptr.WriteValue(string_t(const_char_ptr_cast(data_ptr), UnsafeNumericCast<uint32_t>(state_size)));
 	}
 }
 
@@ -773,9 +773,9 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
 
 	// Copy underlying aggregate's callbacks into this function (same pattern as `ExportAggregateFunction::Bind`)
-	function.state_size = bind_data->aggr.GetStateSizeCallback();
-	function.initialize = bind_data->aggr.GetStateInitCallback();
-	function.combine = bind_data->aggr.GetStateCombineCallback();
+	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
+	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
+	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
 
 	function.SetReturnType(arguments[0]->return_type);
 
@@ -869,13 +869,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 
 	D_ASSERT(child_aggregate->function.GetReturnType().id() != LogicalTypeId::INVALID);
 #ifdef DEBUG
-	for (auto &arg_type : child_aggregate->function.arguments) {
+	for (auto &arg_type : child_aggregate->function.GetArguments()) {
 		D_ASSERT(arg_type.id() != LogicalTypeId::INVALID);
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
 	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
-	                             child_aggregate->function.arguments);
+	                             child_aggregate->function.GetArguments());
 
 	LogicalType return_type;
 	if (bound_function.HasGetStateTypeCallback()) {
@@ -887,7 +887,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 
 	auto export_function =
-	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.arguments, return_type,
+	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.GetArguments(), return_type,
 	                      bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
 	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
 	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),

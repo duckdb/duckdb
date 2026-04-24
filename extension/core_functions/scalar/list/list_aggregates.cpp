@@ -31,7 +31,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
 unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
-	bound_function.arguments[0] = LogicalType::SQLNULL;
+	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
 }
@@ -298,8 +298,8 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	} else {
 		// finalize manually to use the map
-		D_ASSERT(aggr.function.arguments.size() == 1);
-		auto key_type = aggr.function.arguments[0];
+		D_ASSERT(aggr.function.GetArguments().size() == 1);
+		auto key_type = aggr.function.GetArguments()[0];
 
 		switch (key_type.InternalType()) {
 #ifndef DUCKDB_SMALLER_BINARY
@@ -395,7 +395,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 
 	FunctionBinder function_binder(context);
 	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, std::move(children));
-	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
+	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->function.GetArguments()[0]);
 
 	if (IS_AGGR) {
 		bound_function.SetReturnType(bound_aggr_function->function.GetReturnType());
@@ -449,7 +449,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
@@ -477,7 +477,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// create the unordered map histogram function
-	D_ASSERT(best_function.arguments.size() == 1);
+	D_ASSERT(best_function.GetArguments().size() == 1);
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
@@ -486,7 +486,7 @@ unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.arguments.size() >= 2);
+	D_ASSERT(bound_function.GetArguments().size() >= 2);
 	D_ASSERT(arguments.size() >= 2);
 
 	return ListAggregatesBind<true>(input);
@@ -499,7 +499,7 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.varargs = LogicalType::ANY;
+	result.SetVarArgs(LogicalType::ANY);
 	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
 	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;

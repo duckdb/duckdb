@@ -44,12 +44,12 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
 		for (auto &func : functions) {
-			if (arguments.size() >= func.arguments.size()) {
+			if (arguments.size() >= func.GetArguments().size()) {
 				continue;
 			}
 			bool is_prefix = true;
 			for (idx_t k = 0; k < arguments.size(); k++) {
-				if (arguments[k].id() != func.arguments[k].id()) {
+				if (arguments[k].id() != func.GetArguments()[k].id()) {
 					is_prefix = false;
 					break;
 				}

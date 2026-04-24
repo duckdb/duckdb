@@ -296,7 +296,7 @@ struct VectorMinMaxBase {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return nullptr;
 	}
@@ -370,7 +370,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
-		function.arguments[0] = arguments[0]->return_type;
+		function.GetArguments()[0] = arguments[0]->return_type;
 		function.SetReturnType(arguments[0]->return_type);
 		return make_uniq<ArgMinMaxFunctionData>();
 	}
@@ -381,7 +381,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	}
 	auto name = std::move(function.name);
 
-	auto state_export_type = function.get_state_type;
+	auto state_export_type = function.GetStateTypeCallback();
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.SetStructStateExport(state_export_type);
 	function.name = std::move(name);
@@ -548,7 +548,7 @@ AggregateFunction GetMinMaxNFunction() {
 
 LogicalType GetExportStateType(const AggregateFunction &function) {
 	auto struct_children_types = child_list_t<LogicalType> {};
-	struct_children_types.emplace_back("value", function.return_type);
+	struct_children_types.emplace_back("value", function.GetReturnType());
 	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);
 	return LogicalType::STRUCT(std::move(struct_children_types));
 }

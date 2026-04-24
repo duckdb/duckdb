@@ -243,24 +243,24 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		// found a matching function! bind it as a window
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-		if (window.distinct && !bound_function.can_distinct) {
+		if (window.distinct && !bound_function.CanDistinct()) {
 			throw BinderException(error_context, "DISTINCT is not implemented for the window function \"%s\"",
 			                      window.function_name);
 		}
-		if (window.filter_expr && !bound_function.can_filter) {
+		if (window.filter_expr && !bound_function.CanFilter()) {
 			throw BinderException(error_context, "FILTER is not implemented for the window function \"%s\"",
 			                      window.function_name);
 		}
-		if (!window.arg_orders.empty() && !bound_function.can_order_by) {
+		if (!window.arg_orders.empty() && !bound_function.CanOrderBy()) {
 			throw BinderException(error_context, "ORDER BY is not supported for the window function \"%s\"",
 			                      window.function_name);
 		}
 		if (window.exclude_clause != WindowExcludeMode::NO_OTHER && !window.arg_orders.empty() &&
-		    !bound_function.can_exclude) {
+		    !bound_function.CanExclude()) {
 			throw BinderException(error_context, "EXCLUDE is not supported for the window function \"%s\"",
 			                      bound_function.name);
 		}
-		if (window.has_ignore_nulls && !bound_function.can_ignore_nulls) {
+		if (window.has_ignore_nulls && !bound_function.CanIgnoreNulls()) {
 			throw BinderException(error_context, "RESPECT/IGNORE NULLS is not supported for the window function \"%s\"",
 			                      bound_function.name);
 		}
@@ -290,7 +290,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	result->distinct = window.distinct;
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
-	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
+	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
 	// not the natural ordering of the type. This means that the offset arithmetic must be reversed
 	// for ORDER BY DESC.
 	auto &config = DBConfig::GetConfig(context);

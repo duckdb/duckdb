@@ -171,6 +171,7 @@ public:
 	idx_t GetCommittedRowCount();
 	//! Returns the number of rows visible to the given transaction
 	idx_t GetVisibleRowCount(TransactionData transaction);
+	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);

@@ -96,8 +96,8 @@ LogicalType GetSumStateType(const AggregateFunction &function) {
 
 	LogicalType value_type = GetValueLogicalType<T>();
 	// Use the return type when its physical representation matches the state type
-	if (function.return_type.InternalType() == value_type.InternalType()) {
-		value_type = function.return_type;
+	if (function.GetReturnType().InternalType() == value_type.InternalType()) {
+		value_type = function.GetReturnType();
 	}
 	child_types.emplace_back("value", value_type);
 
@@ -237,7 +237,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
-	function.arguments[0] = decimal_type;
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;

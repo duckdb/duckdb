@@ -178,7 +178,7 @@ static unique_ptr<FunctionData> ListIntersectBind(BindScalarFunctionInput &input
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 	return nullptr;
@@ -188,7 +188,7 @@ ScalarFunction ListIntersectFun::GetFunction() {
 	auto fun =
 	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListIntersectFunction, ListIntersectBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

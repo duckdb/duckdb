@@ -28,6 +28,9 @@ string CreateViewInfo::ToString() const {
 		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
 		result += ")";
 	}
+	if (binding_mode == CreateViewBindingMode::SKIP_BINDING) {
+		result += " WITH (DEFER_BINDING)";
+	}
 	result += " AS ";
 	result += query->ToString();
 	result += ";";

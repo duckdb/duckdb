@@ -166,13 +166,13 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                              idx_t argument_index) {
-	if (bound_function.original_arguments.empty()) {
-		bound_function.original_arguments = bound_function.arguments;
+	if (bound_function.GetOriginalArguments().empty()) {
+		bound_function.GetOriginalArguments() = bound_function.GetArguments();
 	}
-	D_ASSERT(arguments.size() == bound_function.arguments.size());
+	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
 	D_ASSERT(argument_index < arguments.size());
 	arguments.erase_at(argument_index);
-	bound_function.arguments.erase_at(argument_index);
+	bound_function.GetArguments().erase_at(argument_index);
 }
 
 } // namespace duckdb
