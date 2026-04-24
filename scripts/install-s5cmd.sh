@@ -5,7 +5,7 @@ set -euo pipefail
 existing_s5cmd_path="$(which s5cmd 2>/dev/null || true)"
 if [[ -n "${existing_s5cmd_path}" ]]; then
   set -x
-  s5cmd --version
+  s5cmd version
   exit 0
 fi
 
@@ -130,4 +130,4 @@ if [[ -n "${GITHUB_PATH:-}" ]]; then
 fi
 
 set -x
-"${INSTALL_DIR}/s5cmd" --version
+"${INSTALL_DIR}/s5cmd" version
