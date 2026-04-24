@@ -350,26 +350,28 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		fetch_next_left = true;
+		fetch_next_right = false;
+		left_condition.Reset();
+		condition_scan_state = ColumnDataScanState();
+		payload_scan_state = ColumnDataScanState();
+		right_condition.Reset();
+		right_payload.Reset();
+		left_tuple = 0;
+		right_tuple = 0;
+		left_outer.Reset();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<PhysicalNestedLoopJoinState>(context.client, *this, conditions);
-}
-
-bool PhysicalNestedLoopJoin::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<PhysicalNestedLoopJoinState>();
-	state.ResetCachingState();
-	state.fetch_next_left = true;
-	state.fetch_next_right = false;
-	state.left_condition.Reset();
-	state.condition_scan_state = ColumnDataScanState();
-	state.payload_scan_state = ColumnDataScanState();
-	state.right_condition.Reset();
-	state.right_payload.Reset();
-	state.left_tuple = 0;
-	state.right_tuple = 0;
-	state.left_outer.Reset();
-	return true;
 }
 
 OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input,

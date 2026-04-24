@@ -34,16 +34,18 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<FilterState>(context, *expression);
-}
-
-bool PhysicalFilter::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<FilterState>();
-	state.ResetCachingState();
-	return true;
 }
 
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

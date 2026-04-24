@@ -15,17 +15,19 @@ public:
 	idx_t expression_index;
 	//! Temporary chunk for evaluating expressions
 	DataChunk temp_chunk;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		expression_index = 0;
+		temp_chunk.Reset();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<ExpressionScanState>(Allocator::Get(context.client), *this);
-}
-
-bool PhysicalExpressionScan::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<ExpressionScanState>();
-	state.expression_index = 0;
-	state.temp_chunk.Reset();
-	return true;
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

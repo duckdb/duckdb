@@ -1505,10 +1505,11 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class HashJoinOperatorState : public CachingOperatorState {
 public:
-	explicit HashJoinOperatorState(ClientContext &context, HashJoinGlobalSinkState &sink)
-	    : probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
+	HashJoinOperatorState(ClientContext &context, const PhysicalHashJoin &op_p, HashJoinGlobalSinkState &sink)
+	    : op(op_p), probe_executor(context), scan_structure(*sink.hash_table, join_key_state) {
 	}
 
+	const PhysicalHashJoin &op;
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
 	DataChunk lhs_probe_data;
@@ -1526,12 +1527,33 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
+		ResetCachingState();
+		lhs_join_keys.Reset();
+		lhs_probe_data.Reset();
+		scan_structure.Reset();
+		perfect_hash_join_state.reset();
+		spill_state = JoinHashTable::ProbeSpillLocalAppendState();
+		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
+		if (spill_chunk.ColumnCount() == 0) {
+			spill_chunk.Initialize(BufferAllocator::Get(sink.context), sink.probe_types);
+		} else {
+			spill_chunk.Reset();
+		}
+		// perfect_hash_join_state will be lazily initialized on first Execute when we have a real ExecutionContext
+	}
 };
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto state = make_uniq<HashJoinOperatorState>(context.client, sink);
+	auto state = make_uniq<HashJoinOperatorState>(context.client, *this, sink);
 	state->lhs_join_keys.Initialize(allocator, condition_types);
 
 	// initialize probe data with ALL probe columns (output + predicate)
@@ -1556,28 +1578,6 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	return std::move(state);
 }
 
-bool PhysicalHashJoin::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<HashJoinOperatorState>();
-	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto &allocator = BufferAllocator::Get(context.client);
-	state.ResetCachingState();
-	state.lhs_join_keys.Reset();
-	state.lhs_probe_data.Reset();
-	state.scan_structure.Reset();
-	state.perfect_hash_join_state.reset();
-	state.spill_state = JoinHashTable::ProbeSpillLocalAppendState();
-	TupleDataCollection::InitializeChunkState(state.join_key_state, condition_types);
-	if (state.spill_chunk.ColumnCount() == 0) {
-		state.spill_chunk.Initialize(allocator, sink.probe_types);
-	} else {
-		state.spill_chunk.Reset();
-	}
-	if (sink.perfect_join_executor) {
-		state.perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
-	}
-	return true;
-}
-
 OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                      GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<HashJoinOperatorState>();
@@ -1597,6 +1597,10 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	if (sink.perfect_join_executor) {
 		D_ASSERT(!sink.external);
+		// Lazily initialize perfect_hash_join_state on first use if needed
+		if (!state.perfect_hash_join_state) {
+			state.perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
+		}
 		// for perfect hash join, when predicate is NULL, only output columns are needed
 		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_probe_data, chunk,

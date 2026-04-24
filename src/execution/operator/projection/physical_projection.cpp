@@ -17,6 +17,10 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
+
+	bool SupportsReuse() const override {
+		return true;
+	}
 };
 
 PhysicalProjection::PhysicalProjection(PhysicalPlan &physical_plan, vector<LogicalType> types,
@@ -34,10 +38,6 @@ OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataCh
 
 unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ExecutionContext &context) const {
 	return make_uniq<ProjectionState>(context, select_list);
-}
-
-bool PhysicalProjection::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	return true;
 }
 
 InsertionOrderPreservingMap<string> PhysicalProjection::ParamsToString() const {

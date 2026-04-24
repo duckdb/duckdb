@@ -28,7 +28,6 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;

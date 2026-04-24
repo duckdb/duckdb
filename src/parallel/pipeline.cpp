@@ -239,9 +239,7 @@ void Pipeline::ResetSinkForReschedule() {
 	auto &client = GetClientContext();
 	auto allow_reuse = client.config.enable_caching_operators;
 	if (allow_reuse && sink->sink_state && sink->ResetGlobalSinkState(client, *sink->sink_state)) {
-		annotated_lock_guard<annotated_mutex> state_guard(sink->sink_state->lock);
-		sink->sink_state->ResetBlocking();
-		sink->sink_state->state = SinkFinalizeType::READY;
+		sink->sink_state->Reset();
 		return;
 	}
 	sink->sink_state = sink->GetGlobalSinkState(client);
@@ -295,8 +293,7 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	if (!allow_reuse || !source_state || !source->ResetGlobalSourceState(client, *source_state)) {
 		source_state = source->GetGlobalSourceState(client);
 	} else {
-		annotated_lock_guard<annotated_mutex> guard(source_state->lock);
-		source_state->ResetBlocking();
+		source_state->Reset();
 	}
 	initialized = true;
 }

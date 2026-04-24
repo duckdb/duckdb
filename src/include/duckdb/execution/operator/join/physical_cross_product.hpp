@@ -25,7 +25,6 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
-	bool ResetOperatorState(ExecutionContext &context, OperatorState &state) const override;
 
 	OrderPreservationType OperatorOrder() const override {
 		return OrderPreservationType::NO_ORDER;

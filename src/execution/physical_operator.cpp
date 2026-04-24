@@ -96,10 +96,6 @@ unique_ptr<GlobalOperatorState> PhysicalOperator::GetGlobalOperatorState(ClientC
 	return make_uniq<GlobalOperatorState>();
 }
 
-bool PhysicalOperator::ResetOperatorState(ExecutionContext &context, OperatorState &state) const {
-	return false;
-}
-
 bool PhysicalOperator::ResetGlobalOperatorState(ClientContext &context, GlobalOperatorState &state) const {
 	return false;
 }

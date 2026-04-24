@@ -94,9 +94,10 @@ void PipelineExecutor::Reset() {
 	// Keep intermediate_chunks — reuse their allocated memory
 	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
 		auto &current_operator = pipeline.operators[i].get();
-		if (!allow_reuse || !intermediate_states[i] ||
-		    !current_operator.ResetOperatorState(context, *intermediate_states[i])) {
+		if (!allow_reuse || !intermediate_states[i] || !intermediate_states[i]->SupportsReuse()) {
 			intermediate_states[i] = current_operator.GetOperatorState(context);
+		} else {
+			intermediate_states[i]->Reset();
 		}
 
 		if (current_operator.IsSink() && current_operator.sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {

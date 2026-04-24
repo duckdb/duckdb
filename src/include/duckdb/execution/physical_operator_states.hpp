@@ -36,6 +36,13 @@ public:
 	virtual void Finalize(const PhysicalOperator &op, ExecutionContext &context) {
 	}
 
+	virtual bool SupportsReuse() const {
+		return false;
+	}
+
+	virtual void Reset() {
+	}
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -77,6 +84,12 @@ public:
 	}
 
 	SinkFinalizeType state;
+
+	virtual void Reset() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		ResetBlocking();
+		state = SinkFinalizeType::READY;
+	}
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -121,6 +134,11 @@ public:
 
 	virtual idx_t MaxThreads() {
 		return 1;
+	}
+
+	virtual void Reset() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		ResetBlocking();
 	}
 
 	template <class TARGET>

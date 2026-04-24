@@ -142,18 +142,20 @@ public:
 	}
 
 	CrossProductExecutor executor;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset() override {
+		ResetCachingState();
+		executor.Reset();
+	}
 };
 
 unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ExecutionContext &context) const {
 	auto &sink = sink_state->Cast<CrossProductGlobalState>();
 	return make_uniq<CrossProductOperatorState>(sink.rhs_materialized);
-}
-
-bool PhysicalCrossProduct::ResetOperatorState(ExecutionContext &context, OperatorState &state_p) const {
-	auto &state = state_p.Cast<CrossProductOperatorState>();
-	state.ResetCachingState();
-	state.executor.Reset();
-	return true;
 }
 
 OperatorResultType PhysicalCrossProduct::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
