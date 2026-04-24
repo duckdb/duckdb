@@ -157,6 +157,16 @@ public:
 
 	static void PruneReaders(MultiFileBindData &data, MultiFileList &file_list);
 
+	//! Returns true iff the file can be skipped based on filters on columns whose values are known without
+	//! opening the file (filename, file_index, hive partitioning columns). A false return means either some
+	//! applicable filter matches OR no applicable filter is present - in both cases, the caller should proceed
+	//! with opening the file so remaining filters (e.g. column-level filters with statistics) can be evaluated.
+	DUCKDB_API static bool CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
+	                                              const MultiFileOptions &file_options,
+	                                              const MultiFileReaderBindData &reader_bind,
+	                                              const vector<ColumnIndex> &global_column_ids,
+	                                              optional_ptr<TableFilterSet> filters);
+
 	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                                           BaseUnionData &union_data,
 	                                                           const MultiFileBindData &bind_data);

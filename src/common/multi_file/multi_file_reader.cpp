@@ -606,6 +606,70 @@ shared_ptr<BaseFileReader> MultiFileReader::CreateReader(ClientContext &context,
 	return interface.CreateReader(context, file, options, file_options);
 }
 
+bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
+                                             const MultiFileOptions &file_options,
+                                             const MultiFileReaderBindData &reader_bind,
+                                             const vector<ColumnIndex> &global_column_ids,
+                                             optional_ptr<TableFilterSet> filters) {
+	if (!filters) {
+		return false;
+	}
+
+	// Parse hive partitions lazily - only if we encounter a filter on a hive-partitioning column
+	std::map<string, string> partitions;
+	bool partitions_parsed = false;
+
+	for (auto &it : *filters) {
+		auto global_column_position = it.GetIndex().GetIndex();
+		if (global_column_position >= global_column_ids.size()) {
+			continue;
+		}
+		auto column_id = global_column_ids[global_column_position].GetPrimaryIndex();
+
+		Value constant;
+		bool have_constant = false;
+
+		// Virtual column: filename
+		if ((reader_bind.filename_idx.IsValid() && column_id == reader_bind.filename_idx.GetIndex()) ||
+		    column_id == COLUMN_IDENTIFIER_FILENAME) {
+			constant = Value(file.path);
+			have_constant = true;
+		} else if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
+			// Virtual column: file_index (position in the file list)
+			constant = Value::UBIGINT(file_list_idx);
+			have_constant = true;
+		} else if (!reader_bind.hive_partitioning_indexes.empty()) {
+			// Hive partition column: value is determined by the file path
+			for (auto &hp_entry : reader_bind.hive_partitioning_indexes) {
+				if (column_id != hp_entry.index) {
+					continue;
+				}
+				if (!partitions_parsed) {
+					partitions = HivePartitioning::Parse(file.path);
+					partitions_parsed = true;
+				}
+				auto part_it = partitions.find(hp_entry.value);
+				if (part_it == partitions.end()) {
+					// filename doesn't encode this partition - can't determine, skip this filter
+					break;
+				}
+				constant = file_options.GetHivePartitionValue(part_it->second, hp_entry.value, context);
+				have_constant = true;
+				break;
+			}
+		}
+
+		if (!have_constant) {
+			// filter is on a column we can't pre-evaluate - defer to post-open path
+			continue;
+		}
+		if (!EvaluateTableFilterAgainstConstant(context, it.Filter(), constant)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void MultiFileReader::PruneReaders(MultiFileBindData &data, MultiFileList &file_list) {
 	unordered_set<string> file_set;
 
