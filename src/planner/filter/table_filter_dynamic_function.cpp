@@ -14,6 +14,60 @@
 
 namespace duckdb {
 
+DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value constant_p)
+    : comparison_type(comparison_type_p), constant(std::move(constant_p)) {
+}
+
+unique_ptr<Expression> DynamicFilterData::ToExpression(const Expression &column) const {
+	return make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(),
+	                                            make_uniq<BoundConstantExpression>(constant));
+}
+
+bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return ValueOperations::Equals(value, constant);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return ValueOperations::NotEquals(value, constant);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return ValueOperations::GreaterThan(value, constant);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return ValueOperations::GreaterThanEquals(value, constant);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return ValueOperations::LessThan(value, constant);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return ValueOperations::LessThanEquals(value, constant);
+	default:
+		throw InternalException("Unknown comparison type for DynamicFilter: " + EnumUtil::ToString(comparison_type));
+	}
+}
+
+FilterPropagateResult DynamicFilterData::CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+                                                         const Value &constant) {
+	switch (constant.type().InternalType()) {
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::UINT128:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+		return NumericStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(constant));
+	case PhysicalType::VARCHAR:
+		if (stats.GetStatsType() == StatisticsType::STRING_STATS) {
+			return StringStats::CheckZonemap(stats, comparison_type, array_ptr<const Value>(constant));
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	default:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+}
+
 DynamicFilterFunctionData::DynamicFilterFunctionData(shared_ptr<DynamicFilterData> filter_data_p)
     : filter_data(std::move(filter_data_p)) {
 }

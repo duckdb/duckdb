@@ -17,25 +17,7 @@
 
 namespace duckdb {
 class Expression;
-
-//! Runtime dynamic-filter state shared by internal tablefilter functions.
-struct DynamicFilterData {
-public:
-	DynamicFilterData(ExpressionType comparison_type, Value constant);
-
-	mutex lock;
-	ExpressionType comparison_type;
-	Value constant;
-	atomic<bool> initialized = {false};
-
-	unique_ptr<Expression> ToExpression(const Expression &column) const;
-
-	void SetValue(Value val);
-	void Reset();
-	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
-	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
-	                                             const Value &constant);
-};
+class DynamicFilterData;
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class LegacyDynamicFilter : public TableFilter {

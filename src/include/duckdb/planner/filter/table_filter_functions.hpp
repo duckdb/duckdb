@@ -92,6 +92,25 @@ struct PrefixRangeFunctionData : public FunctionData {
 	bool Equals(const FunctionData &other) const override;
 };
 
+//! Runtime dynamic-filter state shared by internal tablefilter functions.
+struct DynamicFilterData {
+public:
+	DynamicFilterData(ExpressionType comparison_type, Value constant);
+
+	mutex lock;
+	ExpressionType comparison_type;
+	Value constant;
+	atomic<bool> initialized = {false};
+
+	unique_ptr<Expression> ToExpression(const Expression &column) const;
+
+	void SetValue(Value val);
+	void Reset();
+	static bool CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value);
+	static FilterPropagateResult CheckStatistics(BaseStatistics &stats, ExpressionType comparison_type,
+	                                             const Value &constant);
+};
+
 //! FunctionData for dynamic filter internal function
 struct DynamicFilterFunctionData : public FunctionData {
 	explicit DynamicFilterFunctionData(shared_ptr<DynamicFilterData> filter_data_p);
