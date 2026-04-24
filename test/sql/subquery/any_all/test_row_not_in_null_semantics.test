@@ -25,6 +25,17 @@ SELECT (0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))
 ----
 NULL
 
+query I
+SELECT COALESCE((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5))), FALSE)
+----
+false
+
+query I
+SELECT count(*) FROM (VALUES (1, 7), (0, 7), (NULL, 7)) t(a, b)
+WHERE COALESCE((a, b) =ANY ((VALUES (0, NULL), (NULL, 5))), FALSE)
+----
+0
+
 statement ok
 CREATE TABLE outer_tab (f1 int4, f2 int4);
 

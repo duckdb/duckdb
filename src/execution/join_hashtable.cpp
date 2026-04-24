@@ -18,7 +18,7 @@ using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
-using MarkJoinNullPatternTable = JoinHashTable::MarkJoinNullPatternTable;
+using MarkJoinNullRemainder = JoinHashTable::MarkJoinNullRemainder;
 
 JoinHashTable::SharedState::SharedState()
     : salt_v(LogicalType::UBIGINT), keys_to_compare_sel(STANDARD_VECTOR_SIZE), keys_no_match_sel(STANDARD_VECTOR_SIZE) {
@@ -40,11 +40,12 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<JoinCondition> &conditions_p, vector<LogicalType> btypes, JoinType type_p,
                              const idx_t initial_radix_bits, const vector<idx_t> &output_columns_p,
                              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr,
-                             const vector<idx_t> &output_in_probe)
+                             const vector<idx_t> &output_in_probe, bool mark_nulls_are_false_p)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
-      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p),
+      mark_nulls_are_false(mark_nulls_are_false_p), finalized(false), has_null(false),
+      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -76,7 +77,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	}
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
-	mark_join_null_info.enabled = UseMarkJoinNullPatterns();
+	mark_join_null_info.enabled = UseMarkJoinNullRemainder();
 
 	// Types for the layout
 	auto layout = make_shared_ptr<TupleDataLayout>();
@@ -135,11 +136,11 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 JoinHashTable::~JoinHashTable() {
 }
 
-bool JoinHashTable::UseMarkJoinNullPatterns() const {
+bool JoinHashTable::UseMarkJoinNullRemainder() const {
 	if (join_type != JoinType::MARK || !correlated_mark_join_info.correlated_types.empty()) {
 		return false;
 	}
-	if (conditions.size() <= 1 || equality_predicates.size() != conditions.size()) {
+	if (mark_nulls_are_false || conditions.size() <= 1 || equality_predicates.size() != conditions.size()) {
 		return false;
 	}
 	for (auto predicate : equality_predicates) {
@@ -150,87 +151,188 @@ bool JoinHashTable::UseMarkJoinNullPatterns() const {
 	return true;
 }
 
-static MarkJoinNullPatternTable &GetOrCreateMarkJoinNullPatternTable(vector<MarkJoinNullPatternTable> &tables,
-                                                                     const string &mask,
-                                                                     const vector<idx_t> &key_columns) {
-	for (auto &table : tables) {
-		if (table.mask == mask) {
-			return table;
+bool JoinHashTable::CanTreatMarkNullAsFalse() const {
+	if (join_type != JoinType::MARK || !correlated_mark_join_info.correlated_types.empty()) {
+		return false;
+	}
+	if (!mark_nulls_are_false || equality_predicates.size() != conditions.size()) {
+		return false;
+	}
+	for (auto predicate : equality_predicates) {
+		if (predicate != ExpressionType::COMPARE_EQUAL) {
+			return false;
 		}
 	}
-	tables.push_back({mask, key_columns, {}});
-	return tables.back();
+	return true;
+}
+
+static void InitializeMarkJoinNullRemainder(MarkJoinNullRemainder &remainder, BufferManager &buffer_manager,
+                                            const vector<LogicalType> &key_types) {
+	if (remainder.data) {
+		return;
+	}
+	remainder.key_types = key_types;
+	remainder.layout = make_shared_ptr<TupleDataLayout>();
+	remainder.layout->Initialize(remainder.key_types, TupleDataValidityType::CAN_HAVE_NULL_VALUES);
+	remainder.data = make_uniq<TupleDataCollection>(buffer_manager, remainder.layout, MemoryTag::HASH_TABLE);
+	remainder.data->InitializeAppend(remainder.append_state);
+}
+
+static void AppendMarkJoinNullRows(MarkJoinNullRemainder &remainder, DataChunk &keys, const SelectionVector &sel,
+                                   idx_t sel_count) {
+	if (sel_count == 0) {
+		return;
+	}
+	DataChunk key_chunk;
+	key_chunk.InitializeEmpty(remainder.key_types);
+	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		key_chunk.data[col_idx].Reference(keys.data[col_idx]);
+	}
+	key_chunk.SetCardinality(keys);
+	remainder.data->Append(remainder.append_state, key_chunk, sel, sel_count);
 }
 
 void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
-	if (!UseMarkJoinNullPatterns()) {
+	if (!UseMarkJoinNullRemainder()) {
 		return;
 	}
 	auto &null_info = mark_join_null_info;
 	null_info.enabled = true;
+	InitializeMarkJoinNullRemainder(null_info.remainder, buffer_manager, condition_types);
+	SelectionVector null_sel(STANDARD_VECTOR_SIZE);
+	idx_t null_count = 0;
 	for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
-		string mask;
-		mask.reserve(keys.ColumnCount());
-		vector<idx_t> key_columns;
-		vector<Value> key_values;
 		bool has_null_row = false;
+		bool has_non_null_row = false;
 		for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-			auto value = keys.data[col_idx].GetValue(row_idx);
-			if (value.IsNull()) {
+			if (keys.data[col_idx].GetValue(row_idx).IsNull()) {
 				has_null_row = true;
-				mask.push_back('1');
 			} else {
-				mask.push_back('0');
-				key_columns.push_back(col_idx);
-				key_values.push_back(std::move(value));
+				has_non_null_row = true;
 			}
 		}
 		if (!has_null_row) {
 			continue;
 		}
-		has_null = true;
-		if (key_columns.empty()) {
+		null_info.has_null_rows = true;
+		if (!has_non_null_row) {
 			null_info.has_all_null = true;
-			continue;
 		}
-		auto &table = GetOrCreateMarkJoinNullPatternTable(null_info.tables, mask, key_columns);
-		table.key_values.insert(std::move(key_values));
+		null_sel.set_index(null_count++, NumericCast<sel_t>(row_idx));
 	}
+	AppendMarkJoinNullRows(null_info.remainder, keys, null_sel, null_count);
 }
 
 void JoinHashTable::MergeMarkJoinNullRows(JoinHashTable &other) {
-	if (!UseMarkJoinNullPatterns() || !other.mark_join_null_info.enabled) {
+	if (!UseMarkJoinNullRemainder() || !other.mark_join_null_info.enabled) {
 		return;
 	}
 	lock_guard<mutex> guard(mark_join_null_info.lock);
 	has_null = has_null || other.has_null;
+	mark_join_null_info.has_null_rows = mark_join_null_info.has_null_rows || other.mark_join_null_info.has_null_rows;
 	mark_join_null_info.has_all_null = mark_join_null_info.has_all_null || other.mark_join_null_info.has_all_null;
-	for (auto &other_table : other.mark_join_null_info.tables) {
-		auto &table =
-		    GetOrCreateMarkJoinNullPatternTable(mark_join_null_info.tables, other_table.mask, other_table.key_columns);
-		for (auto &entry : other_table.key_values) {
-			table.key_values.insert(entry);
-		}
+	if (!other.mark_join_null_info.remainder.data) {
+		return;
 	}
+	InitializeMarkJoinNullRemainder(mark_join_null_info.remainder, buffer_manager, condition_types);
+	mark_join_null_info.remainder.data->Combine(*other.mark_join_null_info.remainder.data);
 }
 
-bool JoinHashTable::ProbeMarkJoinNullRows(DataChunk &join_keys, idx_t row_idx) const {
-	D_ASSERT(UseMarkJoinNullPatterns());
+void JoinHashTable::ProbeMarkJoinNullRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match) {
+	D_ASSERT(UseMarkJoinNullRemainder());
 	auto &null_info = mark_join_null_info;
+	if (!null_info.has_null_rows) {
+		return;
+	}
+	SelectionVector unresolved_sel(STANDARD_VECTOR_SIZE);
+	idx_t unresolved_count = 0;
+	for (idx_t row_idx = 0; row_idx < join_keys.size(); row_idx++) {
+		if (!found_match[row_idx] && mask.RowIsValid(row_idx)) {
+			unresolved_sel.set_index(unresolved_count++, NumericCast<sel_t>(row_idx));
+		}
+	}
+	if (unresolved_count == 0) {
+		return;
+	}
 	if (null_info.has_all_null) {
-		return true;
-	}
-	for (auto &table : null_info.tables) {
-		vector<Value> key_values;
-		key_values.reserve(table.key_columns.size());
-		for (auto col_idx : table.key_columns) {
-			key_values.push_back(join_keys.data[col_idx].GetValue(row_idx));
+		for (idx_t i = 0; i < unresolved_count; i++) {
+			mask.SetInvalid(unresolved_sel.get_index(i));
 		}
-		if (table.key_values.find(key_values) != table.key_values.end()) {
-			return true;
-		}
+		return;
 	}
-	return false;
+	if (!null_info.remainder.data) {
+		return;
+	}
+
+	bool null_match[STANDARD_VECTOR_SIZE];
+	memset(null_match, 0, sizeof(null_match));
+
+	TupleDataScanState scan_state;
+	null_info.remainder.data->InitializeScan(scan_state);
+	DataChunk scan_chunk;
+	null_info.remainder.data->InitializeScanChunk(scan_state, scan_chunk);
+
+	SelectionVector equal_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector candidate_sel_a(STANDARD_VECTOR_SIZE);
+	SelectionVector candidate_sel_b(STANDARD_VECTOR_SIZE);
+
+	while (unresolved_count > 0 && null_info.remainder.data->Scan(scan_state, scan_chunk)) {
+		vector<UnifiedVectorFormat> scan_formats(scan_chunk.ColumnCount());
+		for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
+			scan_chunk.data[col_idx].ToUnifiedFormat(scan_chunk.size(), scan_formats[col_idx]);
+		}
+		for (idx_t scan_row = 0; scan_row < scan_chunk.size() && unresolved_count > 0; scan_row++) {
+			const SelectionVector *candidate_sel = &unresolved_sel;
+			idx_t candidate_count = unresolved_count;
+			bool use_a = true;
+			for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
+				auto scan_idx = scan_formats[col_idx].sel->get_index(scan_row);
+				if (!scan_formats[col_idx].validity.RowIsValid(scan_idx)) {
+					continue;
+				}
+				Vector constant_value(scan_chunk.data[col_idx].GetType());
+				ConstantVector::Reference(constant_value, scan_chunk.data[col_idx], scan_row, candidate_count);
+				ValidityMask null_mask(join_keys.size());
+				null_mask.SetAllValid(join_keys.size());
+				idx_t equal_count = VectorOperations::Equals(join_keys.data[col_idx], constant_value, candidate_sel,
+				                                             candidate_count, &equal_sel, &false_sel, &null_mask);
+				auto &next_candidate_sel = use_a ? candidate_sel_a : candidate_sel_b;
+				idx_t next_candidate_count = 0;
+				for (idx_t i = 0; i < equal_count; i++) {
+					next_candidate_sel.set_index(next_candidate_count++, equal_sel.get_index(i));
+				}
+				for (idx_t i = 0; i < candidate_count - equal_count; i++) {
+					auto candidate_idx = false_sel.get_index(i);
+					if (!null_mask.RowIsValid(candidate_idx)) {
+						next_candidate_sel.set_index(next_candidate_count++, candidate_idx);
+					}
+				}
+				candidate_sel = &next_candidate_sel;
+				candidate_count = next_candidate_count;
+				use_a = !use_a;
+				if (candidate_count == 0) {
+					break;
+				}
+			}
+			for (idx_t i = 0; i < candidate_count; i++) {
+				null_match[candidate_sel->get_index(i)] = true;
+			}
+		}
+		idx_t next_unresolved_count = 0;
+		for (idx_t i = 0; i < unresolved_count; i++) {
+			auto row_idx = unresolved_sel.get_index(i);
+			if (null_match[row_idx]) {
+				mask.SetInvalid(row_idx);
+			} else {
+				candidate_sel_a.set_index(next_unresolved_count++, row_idx);
+			}
+		}
+		for (idx_t i = 0; i < next_unresolved_count; i++) {
+			unresolved_sel.set_index(i, candidate_sel_a.get_index(i));
+		}
+		unresolved_count = next_unresolved_count;
+	}
 }
 
 void JoinHashTable::Merge(JoinHashTable &other) {
@@ -969,7 +1071,7 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 	}
 }
 
-void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) const {
+void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk &probe_data, DataChunk &result) {
 	D_ASSERT(join_type == JoinType::MARK);
 	D_ASSERT(result.ColumnCount() == probe_data.ColumnCount() + 1);
 
@@ -986,32 +1088,27 @@ void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk
 		bool_result[i] = false;
 	}
 
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		if (null_values_are_equal[col_idx]) {
-			continue;
-		}
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (jdata.validity.CanHaveNull()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
-					mask.SetInvalid(i);
+	if (!CanTreatMarkNullAsFalse()) {
+		for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+			if (null_values_are_equal[col_idx]) {
+				continue;
+			}
+			UnifiedVectorFormat jdata;
+			join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+			if (jdata.validity.CanHaveNull()) {
+				for (idx_t i = 0; i < join_keys.size(); i++) {
+					auto jidx = jdata.sel->get_index(i);
+					if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+						mask.SetInvalid(i);
+					}
 				}
 			}
 		}
 	}
 
-	if (UseMarkJoinNullPatterns()) {
-		for (idx_t i = 0; i < probe_data.size(); i++) {
-			if (!mask.RowIsValid(i)) {
-				continue;
-			}
-			if (ProbeMarkJoinNullRows(join_keys, i)) {
-				mask.SetInvalid(i);
-			}
-		}
-	} else if (has_null) {
+	if (UseMarkJoinNullRemainder()) {
+		ProbeMarkJoinNullRows(join_keys, mask, bool_result);
+	} else if (has_null && !CanTreatMarkNullAsFalse()) {
 		mask.SetAllInvalid(probe_data.size());
 	}
 }
@@ -1509,17 +1606,19 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	// if there is any NULL in the keys, the result is NULL
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
 	auto &mask = FlatVector::ValidityMutable(mark_vector);
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		if (ht.null_values_are_equal[col_idx]) {
-			continue;
-		}
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(jdata);
-		if (jdata.validity.CanHaveNull()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
-					mask.SetInvalid(i);
+	if (!ht.CanTreatMarkNullAsFalse()) {
+		for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
+			if (ht.null_values_are_equal[col_idx]) {
+				continue;
+			}
+			UnifiedVectorFormat jdata;
+			join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+			if (jdata.validity.CanHaveNull()) {
+				for (idx_t i = 0; i < join_keys.size(); i++) {
+					auto jidx = jdata.sel->get_index(i);
+					if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+						mask.SetInvalid(i);
+					}
 				}
 			}
 		}
@@ -1532,16 +1631,9 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 	}
 
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
-	if (ht.UseMarkJoinNullPatterns()) {
-		for (idx_t i = 0; i < probe_data.size(); i++) {
-			if (bool_result[i] || !mask.RowIsValid(i)) {
-				continue;
-			}
-			if (ht.ProbeMarkJoinNullRows(join_keys, i)) {
-				mask.SetInvalid(i);
-			}
-		}
-	} else if (ht.has_null) {
+	if (ht.UseMarkJoinNullRemainder()) {
+		ht.ProbeMarkJoinNullRows(join_keys, mask, bool_result);
+	} else if (ht.has_null && !ht.CanTreatMarkNullAsFalse()) {
 		for (idx_t i = 0; i < probe_data.size(); i++) {
 			if (!bool_result[i]) {
 				mask.SetInvalid(i);

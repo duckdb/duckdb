@@ -64,6 +64,8 @@ public:
 
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
+	//! Whether this MARK join can treat UNKNOWN as FALSE
+	bool mark_nulls_are_false = false;
 
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! For probe phase (includes predicate columns)

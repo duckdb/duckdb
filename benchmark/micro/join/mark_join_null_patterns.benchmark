@@ -1,0 +1,25 @@
+# name: benchmark/micro/join/mark_join_null_patterns.benchmark
+# description: Benchmark multi-column =ANY with null-bearing RHS rows to exercise MARK join null-pattern matching
+# group: [join]
+
+name Mark Join Null Patterns
+group micro
+subgroup join
+
+load
+PRAGMA threads=1;
+CREATE TABLE lhs AS
+SELECT (i % 8192)::INTEGER AS a, ((i / 8192) % 8192)::INTEGER AS b
+FROM range(5000000) tbl(i);
+CREATE TABLE rhs AS
+SELECT (i % 8192)::INTEGER AS a, NULL::INTEGER AS b
+FROM range(8192) tbl(i)
+UNION ALL
+SELECT NULL::INTEGER AS a, (i % 8192)::INTEGER AS b
+FROM range(8192) tbl(i);
+
+run
+SELECT count(*) FROM lhs WHERE COALESCE((a, b) = ANY (SELECT a, b FROM rhs), false);
+
+result I
+0
