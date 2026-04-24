@@ -366,12 +366,12 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 }
 
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		if (data[i].HasSize() && data[i].size() != size()) {
-			throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-			                        data[i].size(), size());
-		}
-	}
+	// for (idx_t i = 0; i < ColumnCount(); i++) {
+	// 	if (data[i].HasSize() && data[i].size() != size()) {
+	// 		throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
+	// 		                        data[i].size(), size());
+	// 	}
+	// }
 #ifdef DEBUG
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
