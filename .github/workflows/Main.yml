@@ -976,6 +976,10 @@ jobs:
           path: |
             static-libs-linux-${{ matrix.config.arch }}.zip
 
+      - name: Trim ccache
+        if: ${{ always() }}
+        uses: ./.github/actions/trim-ccache
+
  static-libs-osx:
     name: Static Libs OSX (${{ matrix.architecture }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-osx') }}
