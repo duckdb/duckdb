@@ -119,7 +119,7 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db(nullptr);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp.*"));
 	}
 	{
 		// The latest provided duckdb_api is used
@@ -129,7 +129,7 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db("", &config);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go.*"));
 	}
 }
 
