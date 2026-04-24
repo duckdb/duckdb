@@ -1,0 +1,136 @@
+# name: test/sql/storage/metadata/partial_column_metadata_reuse.test
+# description: Test partial column metadata reuse for UPDATE, INSERT, and ALTER operations
+# group: [metadata]
+
+load {TEST_DIR}/partial_column_metadata_reuse.test.db readwrite v2.0.0
+
+# create a wide table with many columns
+statement ok
+CREATE TABLE wide_tbl AS SELECT
+    i AS c0, i AS c1, i AS c2, i AS c3, i AS c4,
+    i AS c5, i AS c6, i AS c7, i AS c8, i AS c9,
+    i AS c10, i AS c11, i AS c12, i AS c13, i AS c14,
+    i AS c15, i AS c16, i AS c17, i AS c18, i AS c19
+FROM range(200000) t(i);
+
+# first checkpoint
+restart
+
+# verify no columns are loaded after restart (all lazy)
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', only_loaded_segments=true)
+----
+0
+
+# --- ADD COLUMN: should only load the new column ---
+statement ok
+ALTER TABLE wide_tbl ADD COLUMN c20 INTEGER DEFAULT 42
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', only_loaded_segments=true)
+----
+c20
+
+# verify data
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900000	8400000
+
+restart
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900000	8400000
+
+# --- ADD another COLUMN ---
+statement ok
+ALTER TABLE wide_tbl ADD COLUMN c21 INTEGER DEFAULT 100
+
+restart
+
+# --- DROP COLUMN: should not load any columns ---
+statement ok
+ALTER TABLE wide_tbl DROP COLUMN c10
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', only_loaded_segments=true)
+----
+0
+
+query IIII
+SELECT COUNT(*), SUM(c0), SUM(c20), SUM(c21) FROM wide_tbl
+----
+200000	19999900000	8400000	20000000
+
+restart
+
+# --- UPDATE single column: should only load that column ---
+statement ok
+UPDATE wide_tbl SET c0 = c0 + 1 WHERE c0 < 100
+
+query I
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', only_loaded_segments=true)
+----
+c0
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c21) FROM wide_tbl
+----
+200000	19999900100	20000000
+
+# verify data survives multiple restart cycles
+loop i 1 3
+
+restart
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c21) FROM wide_tbl
+----
+200000	19999900100	20000000
+
+endloop
+
+# --- UPDATE another column ---
+statement ok
+UPDATE wide_tbl SET c5 = c5 + 100 WHERE c5 < 1000
+
+restart
+
+query II
+SELECT COUNT(*), SUM(c5) FROM wide_tbl
+----
+200000	20000000000
+
+# --- ALTER TYPE: should only load the altered column ---
+restart
+
+statement ok
+ALTER TABLE wide_tbl ALTER c1 TYPE BIGINT
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', only_loaded_segments=true)
+----
+c1
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c1) FROM wide_tbl
+----
+200000	19999900100	19999900000
+
+restart
+
+query II
+SELECT COUNT(*), SUM(c1) FROM wide_tbl
+----
+200000	19999900000

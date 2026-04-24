@@ -79,6 +79,10 @@ struct RowGroupPointer {
 	//! Metadata blocks of the columns that are not mentioned in "data_pointers"
 	//! This is often empty - but can be set for wide columns with a lot of metadata
 	vector<idx_t> extra_metadata_blocks;
+	//! Per-column metadata blocks beyond the start block (one list per column, parallel to data_pointers)
+	//! Each list contains the additional block IDs that the column's metadata spans (excluding the start block)
+	//! The last entry in each list is the column's end block; an empty list means the column fits in one block
+	vector<vector<idx_t>> per_column_metadata_blocks;
 };
 
 } // namespace duckdb

@@ -247,7 +247,7 @@ public:
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context, bool only_loaded_segments = false);
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result);

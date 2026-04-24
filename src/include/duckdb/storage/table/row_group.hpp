@@ -80,9 +80,13 @@ struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	vector<bool> keep_column_loaded;
-	bool reuse_existing_metadata_blocks = false;
+	bool fully_reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
+	vector<vector<idx_t>> existing_per_column_metadata_blocks;
 	optional_idx write_count;
+	//! Per-column reuse flags for partial column checkpoint
+	//! When non-empty, states[i] is nullptr for columns where reuse_column[i] is true
+	vector<bool> reuse_column;
 };
 
 class RowGroup : public SegmentBase<RowGroup> {
@@ -112,6 +116,9 @@ public:
 	}
 	//! Returns the list of meta block pointers used by the columns
 	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
+	//! Compute per-column metadata blocks by reading column metadata from disk
+	//! If contiguous_layout is true, uses linked-list shortcut for non-last columns
+	vector<vector<idx_t>> ComputePerColumnMetadataBlocks(bool contiguous_layout) const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
@@ -200,7 +207,8 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx) const;
 	unique_ptr<BaseStatistics> GetStatistics(const StorageIndex &column_idx) const;
 
-	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result);
+	void GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index, vector<ColumnSegmentInfo> &result,
+	                          bool only_loaded_segments = false);
 	static PartitionStatistics GetPartitionStats(SegmentNode<RowGroup> &row_group);
 
 	idx_t GetAllocationSize() const {
@@ -241,6 +249,9 @@ private:
 	void SetCount(idx_t count);
 	bool ColumnIsLoaded(storage_t c) const;
 	void UnloadColumn(storage_t c);
+	bool HasUnchangedColumns() const;
+	static shared_ptr<ColumnData> CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
+	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
 
@@ -252,6 +263,7 @@ private:
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
+	vector<vector<idx_t>> per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! The row id column data (mutable because `const` can lazy load)

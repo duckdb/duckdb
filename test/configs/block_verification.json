@@ -3,5 +3,13 @@
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__block_verification.db",
   "on_init": "SET debug_verify_blocks = true;",
   "skip_compiled": "true",
-  "inherit_skip_tests": "test/configs/force_storage.json"
+  "inherit_skip_tests": "test/configs/force_storage.json",
+  "skip_tests": [
+    {
+      "reason": "Block verification loads all columns, which conflicts with only_loaded_segments checks",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test"
+      ]
+    }
+  ]
 }

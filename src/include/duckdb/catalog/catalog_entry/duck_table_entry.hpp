@@ -53,7 +53,8 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
-	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context) override;
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo(const QueryContext &context,
+	                                               bool only_loaded_segments = false) override;
 
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 

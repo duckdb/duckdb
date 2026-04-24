@@ -23,6 +23,7 @@ struct PragmaStorageFunctionData : public TableFunctionData {
 	}
 
 	TableCatalogEntry &table_entry;
+	bool only_loaded_segments = false;
 	vector<ColumnSegmentInfo> column_segments_info;
 };
 
@@ -89,7 +90,14 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, qname.catalog, qname.schema, qname.name);
 	auto result = make_uniq<PragmaStorageFunctionData>(table_entry);
-	result->column_segments_info = table_entry.GetColumnSegmentInfo(context);
+
+	bool only_loaded_segments = false;
+	auto only_loaded_segments_entry = input.named_parameters.find("only_loaded_segments");
+	if (only_loaded_segments_entry != input.named_parameters.end()) {
+		only_loaded_segments = only_loaded_segments_entry->second.GetValue<bool>();
+	}
+	result->only_loaded_segments = only_loaded_segments;
+	result->column_segments_info = table_entry.GetColumnSegmentInfo(context, only_loaded_segments);
 	return std::move(result);
 }
 
@@ -180,8 +188,10 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                              PragmaStorageInfoBind, PragmaStorageInfoInit));
+	TableFunction func("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction, PragmaStorageInfoBind,
+	                   PragmaStorageInfoInit);
+	func.named_parameters["only_loaded_segments"] = LogicalType::BOOLEAN;
+	set.AddFunction(func);
 }
 
 } // namespace duckdb

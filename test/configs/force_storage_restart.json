@@ -62,6 +62,12 @@
       "paths": [
         "test/sql/transactions/concurrent_drop_table.test"
       ]
+    },
+    {
+      "reason": "Test checks which columns are loaded",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test"
+      ]
     }
   ]
 }
