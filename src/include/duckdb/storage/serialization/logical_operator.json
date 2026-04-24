@@ -467,6 +467,12 @@
       },
       {
         "id": 208,
+        "name": "mark_nulls_are_false",
+        "type": "bool",
+        "default": "false"
+      },
+      {
+        "id": 209,
         "name": "predicate",
         "type": "Expression*",
         "status": "deleted"

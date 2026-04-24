@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -196,26 +197,36 @@ void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
 	if (!UseMarkJoinNullRemainder()) {
 		return;
 	}
+	vector<VectorValidityIterator> validities;
+	validities.reserve(keys.ColumnCount());
+	bool can_have_null = false;
+	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		validities.emplace_back(keys.data[col_idx], keys.size());
+		can_have_null = can_have_null || validities.back().CanHaveNull();
+	}
+	if (!can_have_null) {
+		return;
+	}
 	auto &null_info = mark_join_null_info;
 	null_info.enabled = true;
 	InitializeMarkJoinNullRemainder(null_info.remainder, buffer_manager, condition_types);
 	SelectionVector null_sel(STANDARD_VECTOR_SIZE);
 	idx_t null_count = 0;
 	for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
-		bool has_null_row = false;
-		bool has_non_null_row = false;
-		for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-			if (keys.data[col_idx].GetValue(row_idx).IsNull()) {
-				has_null_row = true;
+		bool has_any_null = false;
+		bool has_any_non_null = false;
+		for (auto &validity : validities) {
+			if (validity.IsValid(row_idx)) {
+				has_any_non_null = true;
 			} else {
-				has_non_null_row = true;
+				has_any_null = true;
 			}
 		}
-		if (!has_null_row) {
+		if (!has_any_null) {
 			continue;
 		}
 		null_info.has_null_rows = true;
-		if (!has_non_null_row) {
+		if (!has_any_non_null) {
 			null_info.has_all_null = true;
 		}
 		null_sel.set_index(null_count++, NumericCast<sel_t>(row_idx));
