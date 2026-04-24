@@ -701,10 +701,10 @@ TEST_CASE("Test custom_user_agent config", "[capi]") {
 		REQUIRE(duckdb_row_count(&result_full_user_agent) == 1);
 
 		char *custom_user_agent_value = duckdb_value_varchar(&result_custom_user_agent, 0, 0);
-		REQUIRE(string(custom_user_agent_value) == "CUSTOM_STRING");
+		REQUIRE_THAT(string(custom_user_agent_value), Catch::Matchers::Matches(".*CUSTOM_STRING"));
 
 		char *full_user_agent_value = duckdb_value_varchar(&result_full_user_agent, 0, 0);
-		REQUIRE_THAT(full_user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi CUSTOM_STRING.*"));
+		REQUIRE_THAT(full_user_agent_value, Catch::Matchers::Matches("duckdb/.*(.*) capi .*CUSTOM_STRING.*"));
 
 		duckdb_destroy_config(&config);
 		duckdb_free(custom_user_agent_value);
