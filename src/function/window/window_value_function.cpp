@@ -1126,7 +1126,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		// One-based comparison.
 		if (nth_count == nth_index) {
 			auto v = arg.GetValue(i);
-			vec.Reference(v);
+			vec.Reference(v, count_t(count));
 			s = 1;
 			split.SetValue(s, v);
 		}
