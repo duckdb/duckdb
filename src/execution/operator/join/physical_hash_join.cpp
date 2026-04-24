@@ -47,7 +47,10 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
 	filter_pushdown = std::move(pushdown_info_p);
-	mark_nulls_are_false = op.Cast<LogicalComparisonJoin>().mark_nulls_are_false;
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		mark_nulls_are_false = op.Cast<LogicalComparisonJoin>().mark_nulls_are_false;
+	}
 
 	children.push_back(left);
 	children.push_back(right);
