@@ -2,6 +2,13 @@
 
 set -euo pipefail
 
+existing_s5cmd_path="$(which s5cmd 2>/dev/null || true)"
+if [[ -n "${existing_s5cmd_path}" ]]; then
+  set -x
+  s5cmd --version
+  exit 0
+fi
+
 S5CMD_VERSION="${S5CMD_VERSION:-2.3.0}"
 S5CMD_TAG="v${S5CMD_VERSION}"
 S5CMD_BASE_URL="https://github.com/peak/s5cmd/releases/download/${S5CMD_TAG}"
@@ -122,4 +129,5 @@ if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
 fi
 
-"${INSTALL_DIR}/s5cmd" version
+set -x
+"${INSTALL_DIR}/s5cmd" --version
