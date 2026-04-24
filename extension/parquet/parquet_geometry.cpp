@@ -379,12 +379,12 @@ optional_ptr<const GeoParquetColumnMetadata> GeoParquetFileMetadata::GetColumnMe
 }
 
 unique_ptr<ColumnReader> GeometryColumnReader::Create(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                                      ClientContext &context) {
+                                                      ClientContext &context, const ColumnIndex &column_id) {
 	D_ASSERT(schema.type.id() == LogicalTypeId::GEOMETRY);
 	D_ASSERT(schema.children.size() == 1 && schema.children[0].type.id() == LogicalTypeId::BLOB);
 
 	// Make a string reader for the underlying WKB data
-	auto string_reader = make_uniq<StringColumnReader>(reader, schema.children[0]);
+	auto string_reader = make_uniq<StringColumnReader>(reader, schema.children[0], column_id);
 
 	// Wrap the string reader in a geometry reader
 	auto args = vector<unique_ptr<Expression>>();

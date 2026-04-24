@@ -129,8 +129,9 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtil
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p)
-    : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this),
+ColumnReader::ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p,
+                           const ColumnIndex &column_id)
+    : column_schema(schema_p), reader(reader), index(column_id), page_rows_available(0), dictionary_decoder(*this),
       delta_binary_packed_decoder(*this), rle_decoder(*this), delta_length_byte_array_decoder(*this),
       delta_byte_array_decoder(*this), byte_stream_split_decoder(*this), aad_crypto_metadata(reader.allocator) {
 }
@@ -900,210 +901,163 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
+static unique_ptr<ColumnReader> CreateDecimalReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
+                                                    const ColumnIndex &column_id) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
-		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(reader, schema, column_id);
 	case PhysicalType::INT32:
-		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(reader, schema, column_id);
 	case PhysicalType::INT64:
-		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(reader, schema, column_id);
 	case PhysicalType::INT128:
-		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<hugeint_t, TemplatedParquetValueConversion<T>>>(reader, schema,
+		                                                                                       column_id);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
+                                                    const ColumnIndex &column_id) {
 	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<BooleanColumnReader>(reader, schema);
+		return make_uniq<BooleanColumnReader>(reader, schema, column_id);
 	case LogicalTypeId::UTINYINT:
-		return make_uniq<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema,
+		                                                                                            column_id);
 	case LogicalTypeId::USMALLINT:
-		return make_uniq<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema,
+		                                                                                             column_id);
 	case LogicalTypeId::UINTEGER:
-		return make_uniq<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(reader, schema,
+		                                                                                             column_id);
 	case LogicalTypeId::UBIGINT:
-		return make_uniq<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(reader, schema,
+		                                                                                             column_id);
 	case LogicalTypeId::TINYINT:
-		return make_uniq<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema,
+		                                                                                          column_id);
 	case LogicalTypeId::SMALLINT:
-		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema,
+		                                                                                           column_id);
 	case LogicalTypeId::INTEGER:
-		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(reader, schema,
+		                                                                                           column_id);
 	case LogicalTypeId::BIGINT:
-		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(reader, schema,
+		                                                                                           column_id);
 	case LogicalTypeId::FLOAT:
 		if (schema.type_info == ParquetExtraTypeInfo::FLOAT16) {
-			return make_uniq<CallbackColumnReader<uint16_t, float, Float16ToFloat32>>(reader, schema);
+			return make_uniq<CallbackColumnReader<uint16_t, float, Float16ToFloat32>>(reader, schema, column_id);
 		}
-		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema,
+		                                                                                       column_id);
 	case LogicalTypeId::DOUBLE:
 		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
-			return ParquetDecimalUtils::CreateReader(reader, schema);
+			return ParquetDecimalUtils::CreateReader(reader, schema, column_id);
 		}
-		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(reader, schema);
+		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(reader, schema,
+		                                                                                         column_id);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
-			return make_uniq<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(reader, schema);
+			return make_uniq<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(reader, schema,
+			                                                                                       column_id);
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(reader, schema,
+			                                                                                            column_id);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(reader,
-			                                                                                                schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+			    reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(reader, schema,
+			                                                                                            column_id);
 		default:
 			throw InternalException("TIMESTAMP requires type info");
 		}
 	case LogicalTypeId::TIMESTAMP_NS:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
-			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(reader, schema);
+			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(reader, schema,
+			                                                                                            column_id);
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(reader,
-			                                                                                                 schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
+			    reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(reader,
-			                                                                                                 schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
+			    reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(reader,
-			                                                                                                 schema);
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(
+			    reader, schema, column_id);
 		default:
 			throw InternalException("TIMESTAMP_NS requires type info");
 		}
 	case LogicalTypeId::DATE:
-		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, schema);
+		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, schema, column_id);
 	case LogicalTypeId::TIME:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetMsIntToTime>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetMsIntToTime>>(reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetNsIntToTime>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetNsIntToTime>>(reader, schema, column_id);
 		default:
 			throw InternalException("TIME requires type info");
 		}
 	case LogicalTypeId::TIME_NS:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_ns_t, ParquetMsIntToTimeNs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int32_t, dtime_ns_t, ParquetMsIntToTimeNs>>(reader, schema,
+			                                                                                  column_id);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetUsIntToTimeNs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetUsIntToTimeNs>>(reader, schema,
+			                                                                                  column_id);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetIntToTimeNs>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_ns_t, ParquetIntToTimeNs>>(reader, schema, column_id);
 		default:
 			throw InternalException("TIME requires type info");
 		}
 	case LogicalTypeId::TIME_TZ:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
-			return make_uniq<CallbackColumnReader<int32_t, dtime_tz_t, ParquetIntToTimeMsTZ>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int32_t, dtime_tz_t, ParquetIntToTimeMsTZ>>(reader, schema,
+			                                                                                  column_id);
 		case ParquetExtraTypeInfo::UNIT_MICROS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(reader, schema, column_id);
 		case ParquetExtraTypeInfo::UNIT_NS:
-			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeNsTZ>>(reader, schema);
+			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeNsTZ>>(reader, schema,
+			                                                                                  column_id);
 		default:
 			throw InternalException("TIME_TZ requires type info");
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_uniq<StringColumnReader>(reader, schema);
+		return make_uniq<StringColumnReader>(reader, schema, column_id);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::DECIMAL_INT32:
-			return CreateDecimalReader<int32_t>(reader, schema);
+			return CreateDecimalReader<int32_t>(reader, schema, column_id);
 		case ParquetExtraTypeInfo::DECIMAL_INT64:
-			return CreateDecimalReader<int64_t>(reader, schema);
+			return CreateDecimalReader<int64_t>(reader, schema, column_id);
 		case ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY:
-			return ParquetDecimalUtils::CreateReader(reader, schema);
+			return ParquetDecimalUtils::CreateReader(reader, schema, column_id);
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
 	case LogicalTypeId::UUID:
-		return make_uniq<UUIDColumnReader>(reader, schema);
+		return make_uniq<UUIDColumnReader>(reader, schema, column_id);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<IntervalColumnReader>(reader, schema);
+		return make_uniq<IntervalColumnReader>(reader, schema, column_id);
 	case LogicalTypeId::SQLNULL:
-		return make_uniq<NullColumnReader>(reader, schema);
+		return make_uniq<NullColumnReader>(reader, schema, column_id);
 	default:
 		break;
 	}
 	throw NotImplementedException(schema.type.ToString());
-}
-
-ParquetColumnScanState::ParquetColumnScanState(ClientContext &context) : context(context) {
-}
-
-void ParquetColumnScanState::Initialize(const LogicalType &type) {
-	ColumnIndex column_id(0);
-	Initialize(type, column_id);
-}
-
-void ParquetColumnScanState::Initialize(const LogicalType &type, const ColumnIndex &column_id) {
-	auto &children = column_id.GetChildIndexes();
-
-	index = column_id;
-
-	D_ASSERT(type.id() != LogicalTypeId::INVALID);
-	D_ASSERT(type.id() != LogicalTypeId::VALIDITY);
-
-	if (type.id() == LogicalTypeId::VARIANT) {
-		if (column_id.IsPushdownExtract()) {
-			throw NotImplementedException("Parquet VARIANT extract pushdown");
-		}
-		child_states.reserve(3);
-		for (idx_t i = 0; i < 3; i++) {
-			child_states.emplace_back(context);
-		}
-		//! FIXME: how do we initialize this???
-		return;
-	}
-
-	D_ASSERT(child_states.empty());
-	if (type.InternalType() == PhysicalType::STRUCT) {
-		// struct children
-		auto &struct_children = StructType::GetChildTypes(type);
-		child_states.reserve(struct_children.size());
-		if (children.empty()) {
-			// scan all struct children
-			for (idx_t i = 0; i < struct_children.size(); i++) {
-				child_states.emplace_back(context);
-				child_states[i].Initialize(struct_children[i].second);
-			}
-		} else {
-			if (column_id.IsPushdownExtract()) {
-				D_ASSERT(children.size() == 1);
-				auto &child = children[0];
-				auto child_index = child.GetPrimaryIndex();
-				child_states.emplace_back(context);
-				child_states[0].Initialize(struct_children[child_index].second, child);
-			} else {
-				for (idx_t i = 0; i < children.size(); i++) {
-					child_states.emplace_back(context);
-				}
-				for (idx_t i = 0; i < children.size(); i++) {
-					auto &child = children[i];
-					auto index = child.GetPrimaryIndex();
-					child_states[index].Initialize(struct_children[index].second, child);
-				}
-			}
-		}
-	} else if (type.InternalType() == PhysicalType::LIST) {
-		// list child
-		child_states.emplace_back(context);
-		child_states[0].Initialize(ListType::GetChildType(type));
-	} else if (type.InternalType() == PhysicalType::ARRAY) {
-		// array child
-		child_states.emplace_back(context);
-		child_states[0].Initialize(ArrayType::GetChildType(type));
-	}
 }
 
 } // namespace duckdb

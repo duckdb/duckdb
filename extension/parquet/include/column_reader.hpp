@@ -84,33 +84,16 @@ enum class ColumnEncoding {
 	PLAIN
 };
 
-struct ParquetColumnScanState {
-public:
-	explicit ParquetColumnScanState(ClientContext &context);
-
-public:
-	void Initialize(const LogicalType &type, const ColumnIndex &index);
-	void Initialize(const LogicalType &type);
-
-public:
-	ClientContext &context;
-	unsafe_vector<ParquetColumnScanState> child_states;
-	//! index of the current column that's being scanned
-	ColumnIndex index;
-};
-
 struct ColumnReaderInput {
 public:
-	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
-	                  ParquetColumnScanState &scan_state)
-	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out), scan_state(scan_state) {
+	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out)
+	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out) {
 	}
 
 public:
 	uint64_t num_values;
 	data_ptr_t define_out;
 	data_ptr_t repeat_out;
-	ParquetColumnScanState &scan_state;
 };
 
 class ColumnReader {
@@ -122,11 +105,12 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p);
+	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p, const ColumnIndex &column_id);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
+	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                             const ColumnIndex &column_id);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
 	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
@@ -148,6 +132,9 @@ public:
 
 	inline idx_t ColumnSchemaIndex() const {
 		return column_schema.column_index;
+	}
+	const ColumnIndex &ColumnId() const {
+		return index;
 	}
 	inline idx_t MaxDefine() const {
 		return column_schema.max_define;
@@ -362,8 +349,8 @@ protected:
 
 protected:
 	const ParquetColumnSchema &column_schema;
-
 	const ParquetReader &reader;
+	ColumnIndex index;
 
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;

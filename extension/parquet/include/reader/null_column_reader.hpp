@@ -18,7 +18,8 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	NullColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema) : ColumnReader(reader, schema) {};
+	NullColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema, const ColumnIndex &column_id)
+	    : ColumnReader(reader, schema, column_id) {};
 
 	shared_ptr<ResizeableBuffer> dict;
 

@@ -96,7 +96,6 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &scan_state = input.scan_state;
 
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
 	bool finished = false;
@@ -116,8 +115,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
 
-			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr,
-			                              scan_state.child_states[0]);
+			ColumnReaderInput child_input(child_req_num_values, child_defines_ptr, child_repeats_ptr);
 			child_actual_num_values = child_column_reader->Read(child_input, read_vector);
 		} else {
 			// we do: use the overflow values
@@ -195,8 +193,8 @@ idx_t ListColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 }
 
 ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                   unique_ptr<ColumnReader> child_column_reader_p)
-    : ColumnReader(reader, schema), child_column_reader(std::move(child_column_reader_p)),
+                                   unique_ptr<ColumnReader> child_column_reader_p, const ColumnIndex &column_id)
+    : ColumnReader(reader, schema, column_id), child_column_reader(std::move(child_column_reader_p)),
       read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -205,8 +203,7 @@ ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetCol
 }
 
 void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
-	ParquetColumnScanState empty_scan_state(Reader().context);
-	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr, empty_scan_state);
+	ColumnReaderInput empty_input(pending_skips, nullptr, nullptr);
 	ReadInternal<TemplatedListSkipper>(empty_input, nullptr);
 	pending_skips = 0;
 }

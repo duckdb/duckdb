@@ -42,8 +42,8 @@ class ThriftFileTransport;
 //===--------------------------------------------------------------------===//
 VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
-                                         vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
+                                         vector<unique_ptr<ColumnReader>> child_readers_p, const ColumnIndex &column_id)
+    : ColumnReader(reader, schema, column_id), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
@@ -93,7 +93,6 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &scan_state = input.scan_state;
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
@@ -106,11 +105,10 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
-	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out,
-	                                        scan_state.child_states[metadata_reader_idx]);
+	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out);
 	auto metadata_values = child_readers[metadata_reader_idx]->Read(metadata_reader_input, metadata_intermediate);
 
-	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out, scan_state.child_states[value_reader_idx]);
+	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out);
 	auto value_values = child_readers[value_reader_idx]->Read(value_reader_input, value_intermediate);
 
 	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
@@ -123,7 +121,7 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		ColumnReaderInput child_input(num_values, define_out, repeat_out, scan_state.child_states[2]);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(

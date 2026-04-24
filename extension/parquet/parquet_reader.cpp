@@ -455,14 +455,14 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
-		return make_uniq<RowNumberColumnReader>(*this, schema);
+		return make_uniq<RowNumberColumnReader>(*this, schema, column_id);
 	case ParquetColumnSchemaType::GEOMETRY: {
-		return GeometryColumnReader::Create(*this, schema, context);
+		return GeometryColumnReader::Create(*this, schema, context, column_id);
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
-			return ColumnReader::CreateReader(*this, schema);
+			return ColumnReader::CreateReader(*this, schema, column_id);
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
@@ -502,9 +502,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
-			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
+			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), column_id);
 		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children), column_id);
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -518,7 +518,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 			children[child_index] = CreateReaderRecursive(context, column_id, schema.children[child_index]);
 		}
-		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
+		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
@@ -1375,7 +1375,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 
 	state.column_readers.resize(column_indexes.size());
-	state.scan_states.reserve(column_indexes.size());
 	for (idx_t i = 0; i < column_indexes.size(); i++) {
 		auto &index = column_indexes[i];
 		auto column_id = index.GetPrimaryIndex();
@@ -1392,9 +1391,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		} else {
 			state.column_readers[i] = std::move(column_reader);
 		}
-		auto &column_reader_ref = *state.column_readers[i];
-		state.scan_states.emplace_back(context);
-		state.scan_states[i].Initialize(column_reader_ref.Type(), index);
 	}
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -1618,7 +1614,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = state.GetColumnReader(local_idx);
-				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, state.scan_states[local_idx]);
+				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
@@ -1643,7 +1639,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr, state.scan_states[col_idx]);
+			ColumnReaderInput reader_input(result.size(), define_ptr, repeat_ptr);
 			child_reader.Select(reader_input, result_vector, state.sel, filter_count);
 		}
 		if (scan_count != filter_count) {
@@ -1659,7 +1655,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				child_reader.InitializeCryptoMetadata(metadata->crypto_metadata->encryption_algorithm,
 				                                      GetGroup(state).ordinal);
 			}
-			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr, state.scan_states[col_idx]);
+			ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 			auto rows_read = child_reader.Read(reader_input, result_vector);
 			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

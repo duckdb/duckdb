@@ -39,8 +39,8 @@ struct ParquetColumnSchema;
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
 StructColumnReader::StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                       vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
+                                       vector<unique_ptr<ColumnReader>> child_readers_p, const ColumnIndex &column_id)
+    : ColumnReader(reader, schema, column_id), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 }
 
@@ -68,11 +68,10 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-	auto &scan_state = input.scan_state;
 
-	if (scan_state.index.IsPushdownExtract()) {
+	if (index.IsPushdownExtract()) {
 		auto &child_reader = child_readers[0];
-		ColumnReaderInput child_input(num_values, define_out, repeat_out, scan_state.child_states[0]);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		return child_reader->Read(child_input, result);
 	}
 
@@ -92,7 +91,7 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			ConstantVector::SetNull(target_vector);
 			continue;
 		}
-		ColumnReaderInput child_input(num_values, define_out, repeat_out, scan_state.child_states[i]);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
 		auto child_num_values = child->Read(child_input, target_vector);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;
