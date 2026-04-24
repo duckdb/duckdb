@@ -69,11 +69,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 		auto &optional_filter = filter.Cast<OptionalFilter>();
 		return optional_filter.InitializeState(context);
 	}
-
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		return Initialize(context, *struct_filter.child_filter);
-	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conj_filter = filter.Cast<ConjunctionOrFilter>();
 		auto result = make_uniq<ConjunctionOrFilterState>();
@@ -94,10 +89,6 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(ClientContext &context
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		return make_uniq<ExpressionFilterState>(context, *expr_filter.expr);
 	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		// root nodes - create an empty filter state
-		return make_uniq<TableFilterState>();
 	default:
 		throw InternalException("Unsupported filter type for TableFilterState::Initialize");
 	}

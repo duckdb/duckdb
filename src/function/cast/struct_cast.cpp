@@ -152,16 +152,16 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	auto &children = StructVector::GetEntries(varchar_struct);
 	auto &validity = FlatVector::ValidityMutable(varchar_struct);
-	auto result_data = FlatVector::Writer<string_t>(result, count);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	auto key_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(children.size());
 	auto value_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(children.size());
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -191,7 +191,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 		}
 
-		auto &result_str = result_data[i].EmptyString(string_length);
+		auto &result_str = result_data.WriteEmptyString(string_length);
 		auto dataptr = result_str.GetDataWriteable();
 
 		//! Serialize the struct to the string
@@ -298,13 +298,12 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
 	Vector varchar_keys(LogicalType::VARCHAR, total_count);
-	auto key_data = FlatVector::Writer<string_t>(varchar_keys, count * field_count);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
+	auto key_data = FlatVector::Writer<string_t>(varchar_keys, total_count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
-			auto global_idx = row_idx * field_count + field_idx;
 			auto &field_name = field_types[field_idx].first;
-			key_data[global_idx] = field_name;
+			key_data.WriteValue(field_name);
 		}
 	}
 

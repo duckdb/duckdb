@@ -56,9 +56,10 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
+		buffer = make_buffer<VectorStringBuffer>(dataptr, count_t(count));
 	} else {
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count);
+		auto type_size = GetTypeIdSize(type.InternalType());
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count_t(count), type_size);
 	}
 }
 
@@ -83,6 +84,20 @@ Vector::Vector(const Value &value) : type(value.type()) {
 }
 
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
+}
+
+bool Vector::HasSize() const {
+	if (!buffer) {
+		return true;
+	}
+	return buffer->HasSize();
+}
+
+idx_t Vector::size() const {
+	if (!buffer) {
+		return 0;
+	}
+	return buffer->Size();
 }
 
 void Vector::CheckCapacity(idx_t capacity) const {
@@ -145,11 +160,6 @@ void Vector::Reinterpret(const Vector &other) {
 		auto &old_dict = buffer->Cast<DictionaryBuffer>();
 		auto new_entry = make_shared_ptr<DictionaryEntry>(std::move(new_vector));
 		buffer = make_buffer<DictionaryBuffer>(old_dict.GetSelVector(), old_dict.Capacity(), std::move(new_entry));
-		auto dict_size = old_dict.GetDictionarySize();
-		if (dict_size.IsValid()) {
-			buffer->Cast<DictionaryBuffer>().SetDictionarySize(dict_size.GetIndex());
-		}
-		buffer->Cast<DictionaryBuffer>().SetDictionaryId(old_dict.GetDictionaryId());
 	}
 }
 
@@ -194,13 +204,16 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	Slice(sel, count);
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		buffer->Cast<DictionaryBuffer>().SetDictionarySize(dictionary_size);
+	if (!HasSize() || dictionary_size != size()) {
+		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
+	Slice(sel, count);
 }
 
 void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
+	if (!dict.HasSize() || dict.size() != dictionary_size) {
+		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
+	}
 	Reference(dict);
 	Dictionary(dictionary_size, sel, count);
 }
@@ -213,9 +226,9 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
-void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
-	auto &type = GetType();
+void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity_p) {
 	auto internal_type = type.InternalType();
+	auto capacity = capacity_t(capacity_p);
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
@@ -264,11 +277,42 @@ void Vector::Resize(idx_t current_size, idx_t new_size) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
 	} else {
 		// resize the buffer
-		auto new_buffer = buffer->Resize(GetType(), current_size, new_size);
-		if (new_buffer) {
-			buffer = std::move(new_buffer);
-		}
+		buffer->Resize(current_size, new_size);
 	}
+}
+
+void Vector::Reserve(idx_t to_reserve) {
+	if (!HasSize()) {
+		throw InternalException("Vector::Reserve can only be called on vectors with a size");
+	}
+	if (!buffer) {
+		Initialize(VectorDataInitialization::UNINITIALIZED, VectorBuffer::GetReserveSize(to_reserve));
+		return;
+	}
+	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
+	auto capacity = buffer->Capacity();
+	if (to_reserve <= capacity) {
+		return;
+	}
+	buffer->Resize(capacity, to_reserve);
+}
+
+void Vector::Append(const Value &value) {
+	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, idx_t count) {
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
+	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+                  idx_t target_offset, idx_t copy_count) {
+	D_ASSERT(source.GetType() == GetType());
+	buffer->Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
 }
 
 void Vector::SetValue(idx_t index, const Value &val) {
@@ -356,11 +400,14 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	Flatten(*FlatVector::IncrementalSelectionVector(), count);
+	auto new_buffer = Buffer().Flatten(GetType(), count);
+	if (new_buffer) {
+		buffer = std::move(new_buffer);
+	}
 }
 
 void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), sel, count);
+	auto new_buffer = Buffer().FlattenSlice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -536,11 +583,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 				idx_t byte_data_length = 0;
 
 				// write all the lengths
-				auto lenghs_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
+				auto lengths_write_ptr = reinterpret_cast<uint32_t *>(length_data.get());
 				for (idx_t i = 0; i < count; i++) {
 					auto idx = vdata.sel->get_index(i);
 					auto this_length = vdata.validity.RowIsValid(idx) ? strings[idx].GetSize() : 0;
-					lenghs_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
+					lengths_write_ptr[i] = UnsafeNumericCast<uint32_t>(this_length);
 					byte_data_length += this_length;
 				}
 

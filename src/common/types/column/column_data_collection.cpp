@@ -1424,7 +1424,7 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer 
 
 	for (idx_t r = 0; r < values[0].size(); r++) {
 		for (idx_t c = 0; c < types.size(); c++) {
-			chunk.SetValue(c, chunk.size(), values[c][r]);
+			chunk.data[c].Append(values[c][r]);
 		}
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {

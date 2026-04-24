@@ -36,7 +36,7 @@ select * from backup.tbl;
 query I
 select currval('backup.main.seq');
 ----
-3
+2
 
 statement ok
 drop sequence backup.main.seq cascade;

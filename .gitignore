@@ -317,7 +317,6 @@ benchmark/taxi/data/
 benchmark_results/
 duckdb_unittest_tempdir/
 grammar.y.tmp
-src/amalgamation/
 # single file compile
 amalgamation.cache
 dependencies.d

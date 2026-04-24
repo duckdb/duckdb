@@ -566,7 +566,8 @@ void CheckpointReader::ReadTrigger(CatalogTransaction transaction, Deserializer 
 // Sequences
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
-	serializer.WriteProperty(100, "sequence", &seq);
+	auto info = seq.GetInfo();
+	serializer.WriteProperty(100, "sequence", info.get());
 }
 
 void CheckpointReader::ReadSequence(CatalogTransaction transaction, Deserializer &deserializer) {

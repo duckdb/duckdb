@@ -92,7 +92,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 ScalarFunction StructInsertFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

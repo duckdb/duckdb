@@ -57,7 +57,7 @@ unique_ptr<FunctionData> UnionValueBind(BindScalarFunctionInput &input) {
 
 ScalarFunction UnionValueFun::GetFunction() {
 	ScalarFunction fun("union_value", {}, LogicalTypeId::UNION, UnionValueFunction, UnionValueBind, nullptr, nullptr);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

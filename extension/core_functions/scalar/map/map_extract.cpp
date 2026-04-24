@@ -68,11 +68,9 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	Vector pos_vec(LogicalType::INTEGER, count);
 	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
-	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
 
-	val_vec.ToUnifiedFormat(ListVector::GetListSize(map_vec), val_format);
 	pos_vec.ToUnifiedFormat(count, pos_format);
 	map_vec.ToUnifiedFormat(count, lst_format);
 
@@ -81,35 +79,30 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	auto out_list_data = FlatVector::Writer<list_entry_t>(result, count);
 
 	idx_t offset = 0;
+	vector<sel_t> val_idx_data;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		const auto lst_idx = lst_format.sel->get_index(row_idx);
 		if (!lst_format.validity.RowIsValid(lst_idx)) {
-			out_list_data.SetInvalid(row_idx);
+			out_list_data.WriteNull();
 			continue;
 		}
 
 		const auto pos_idx = pos_format.sel->get_index(row_idx);
 		if (!pos_format.validity.RowIsValid(pos_idx)) {
 			// We didnt find the key in the map, so return empty list
-			out_list_data[row_idx].offset = offset;
-			out_list_data[row_idx].length = 0;
+			out_list_data.WriteValue(list_entry_t(offset, 0));
 			continue;
 		}
 
 		auto &inc_list = inc_list_data[lst_idx];
 		// Compute the actual position of the value in the map value vector
 		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list_data[row_idx].offset = offset;
-		out_list_data[row_idx].length = 1;
-		ListVector::Append(result, val_vec, pos + 1, pos);
+		out_list_data.WriteValue(list_entry_t(offset, 1));
+		val_idx_data.emplace_back(pos);
 		offset++;
 	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(count);
+	SelectionVector val_sel(val_idx_data.data(), val_idx_data.size());
+	ListVector::Append(result, val_vec, val_sel, val_idx_data.size());
 }
 
 ScalarFunction MapExtractValueFun::GetFunction() {

@@ -28,44 +28,44 @@ unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->return_type.id()) {
 		case LogicalTypeId::BOOLEAN:
-			bound_function.arguments.emplace_back(LogicalType::BOOLEAN);
+			bound_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
 			break;
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
-			bound_function.arguments.emplace_back(LogicalType::BIGINT);
+			bound_function.GetArguments().emplace_back(LogicalType::BIGINT);
 			break;
 		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
-			bound_function.arguments.emplace_back(LogicalType::UBIGINT);
+			bound_function.GetArguments().emplace_back(LogicalType::UBIGINT);
 			break;
 		case LogicalTypeId::HUGEINT:
-			bound_function.arguments.emplace_back(LogicalType::HUGEINT);
+			bound_function.GetArguments().emplace_back(LogicalType::HUGEINT);
 			break;
 		case LogicalTypeId::UHUGEINT:
-			bound_function.arguments.emplace_back(LogicalType::UHUGEINT);
+			bound_function.GetArguments().emplace_back(LogicalType::UHUGEINT);
 			break;
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
-			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
 			break;
 		case LogicalTypeId::VARCHAR:
-			bound_function.arguments.push_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
-			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
 			break;
 		case LogicalTypeId::UNKNOWN:
 			// parameter: accept any input and rebind later
-			bound_function.arguments.emplace_back(LogicalType::ANY);
+			bound_function.GetArguments().emplace_back(LogicalType::ANY);
 			break;
 		default:
 			// all other types: add cast to string
-			bound_function.arguments.emplace_back(LogicalType::VARCHAR);
+			bound_function.GetArguments().emplace_back(LogicalType::VARCHAR);
 			break;
 		}
 	}
@@ -88,16 +88,21 @@ struct StringConstructArgument {
 };
 
 template <class T, class OP = StandardConstructArgument, class CTX>
-void ConvertArguments(const Vector &input, idx_t count, VectorWriter<string_t> &writer,
+void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
                       vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
 	auto result = input.Values<T>(count);
 	for (idx_t i = 0; i < count; i++) {
-		auto entry = result[i];
-		if (!entry.IsValid()) {
-			writer.SetInvalid(i);
+		auto &args = result_args[i];
+		if (args.size() != arg_idx - 1) {
+			// this entry has a NULL as one of the parameters
 			continue;
 		}
-		OP::ConstructArgument(entry.GetValue(), result_args[i]);
+		auto entry = result[i];
+		if (!entry.IsValid()) {
+			args.clear();
+			continue;
+		}
+		OP::ConstructArgument(entry.GetValue(), args);
 	}
 }
 
@@ -110,43 +115,42 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	format_args.resize(count);
 
 	auto format_data = args.data[0].Values<string_t>(count);
-	auto result_data = FlatVector::Writer<string_t>(result, count);
 
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		auto &col = args.data[i];
 		switch (col.GetType().id()) {
 		case LogicalTypeId::BOOLEAN:
-			ConvertArguments<bool>(col, count, result_data, format_args);
+			ConvertArguments<bool>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::TINYINT:
-			ConvertArguments<int8_t>(col, count, result_data, format_args);
+			ConvertArguments<int8_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::SMALLINT:
-			ConvertArguments<int16_t>(col, count, result_data, format_args);
+			ConvertArguments<int16_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::INTEGER:
-			ConvertArguments<int32_t>(col, count, result_data, format_args);
+			ConvertArguments<int32_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::BIGINT:
-			ConvertArguments<int64_t>(col, count, result_data, format_args);
+			ConvertArguments<int64_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::UBIGINT:
-			ConvertArguments<uint64_t>(col, count, result_data, format_args);
+			ConvertArguments<uint64_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::FLOAT:
-			ConvertArguments<float>(col, count, result_data, format_args);
+			ConvertArguments<float>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::HUGEINT:
-			ConvertArguments<hugeint_t>(col, count, result_data, format_args);
+			ConvertArguments<hugeint_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::UHUGEINT:
-			ConvertArguments<uhugeint_t>(col, count, result_data, format_args);
+			ConvertArguments<uhugeint_t>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::DOUBLE:
-			ConvertArguments<double>(col, count, result_data, format_args);
+			ConvertArguments<double>(col, count, i, format_args);
 			break;
 		case LogicalTypeId::VARCHAR:
-			ConvertArguments<string_t, StringConstructArgument>(col, count, result_data, format_args);
+			ConvertArguments<string_t, StringConstructArgument>(col, count, i, format_args);
 			break;
 		default:
 			throw InternalException("Unexpected type for printf format");
@@ -154,24 +158,21 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	}
 
 	// now perform the actual formatting
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t idx = 0; idx < count; idx++) {
 		auto entry = format_data[idx];
-		if (!entry.IsValid()) {
-			result_validity.SetInvalid(idx);
-			continue;
-		}
-		if (!result_validity.RowIsValid(idx)) {
-			// this entry is NULL: skip it
+		auto &current_args = format_args[idx];
+		if (!entry.IsValid() || current_args.size() != args.ColumnCount() - 1) {
+			// either format string or one of the input arguments is NULL
+			result_data.WriteNull();
 			continue;
 		}
 
 		auto format_string = entry.GetValue().GetString();
-		auto &current_args = format_args[idx];
 
 		// finally actually perform the format
 		string dynamic_result = FORMAT_FUN::template OP<CTX>(format_string.c_str(), current_args);
-		result_data[idx] = dynamic_result;
+		result_data.WriteValue(dynamic_result);
 	}
 }
 
@@ -179,7 +180,7 @@ ScalarFunction PrintfFun::GetFunction() {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
-	printf_fun.varargs = LogicalType::ANY;
+	printf_fun.SetVarArgs(LogicalType::ANY);
 	printf_fun.SetFallible();
 	return printf_fun;
 }
@@ -188,7 +189,7 @@ ScalarFunction FormatFun::GetFunction() {
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                          PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
-	format_fun.varargs = LogicalType::ANY;
+	format_fun.SetVarArgs(LogicalType::ANY);
 	format_fun.SetFallible();
 	return format_fun;
 }

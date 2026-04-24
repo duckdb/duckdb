@@ -1,3 +1,5 @@
+Program <- Statement? (';'+ Statement)* ';'*
+
 Statement <-
 	CreateStatement /
 	SelectStatement /
@@ -34,6 +36,9 @@ Statement <-
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
+SemiList1(D) <- D (';' D)*
+SemiList(D) <- SemiList1(D) ';'?
 
 CatalogName <- Identifier
 SchemaName <- Identifier

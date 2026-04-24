@@ -242,7 +242,7 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 LogicalType GetAvgStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::UBIGINT);
-	children.emplace_back("value", function.arguments[0]);
+	children.emplace_back("value", function.GetArguments()[0]);
 	return LogicalType::STRUCT(std::move(children));
 }
 
@@ -292,7 +292,7 @@ unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetAverageAggregate(decimal_type.InternalType());
 	function.name = "avg";
-	function.arguments[0] = decimal_type;
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DOUBLE);
 	return make_uniq<AverageDecimalBindData>(
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));

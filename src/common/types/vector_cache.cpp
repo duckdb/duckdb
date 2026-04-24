@@ -54,6 +54,7 @@ public:
 		buffer->ClearAuxiliaryData();
 		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
 		result.BufferMutable().ResetCapacity(capacity);
+		result.BufferMutable().SetVectorSize(0ULL);
 		// use SetVectorTypeOnly to avoid propagating to children
 		// for nested types (struct/array/list) children may have stale incompatible buffers
 		// from a previous execution - they will be reset individually below
@@ -64,10 +65,10 @@ public:
 			// propagate through child
 			auto &child_cache = *child_caches[0];
 			auto &list_buffer = result.BufferMutable().Cast<VectorListBuffer>();
-			list_buffer.SetSize(0);
 
 			auto &list_child = list_buffer.GetChild();
 			child_cache.ResetFromCache(list_child);
+			list_buffer.SetChildSize(0);
 			break;
 		}
 		case PhysicalType::ARRAY: {
@@ -105,7 +106,7 @@ private:
 	//! Buffer data for the vector (if any)
 	buffer_ptr<VectorBuffer> buffer;
 	//! Capacity of the vector
-	idx_t capacity;
+	capacity_t capacity;
 };
 
 VectorCache::VectorCache() {

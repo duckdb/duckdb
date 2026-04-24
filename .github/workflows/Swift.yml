@@ -2,9 +2,14 @@ name: Swift
 on:
   workflow_call:
     inputs:
+      git_ref:
+        type: string
       runner_macos_arm64:
         type: string
   workflow_dispatch:
+    inputs:
+      git_ref:
+        type: string
   repository_dispatch:
 
 concurrency:
@@ -37,6 +42,7 @@ jobs:
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
+          ref: ${{ inputs.git_ref != '' && inputs.git_ref || github.sha }}
 
       - name: Configure Xcode Caching
         if: ${{ startsWith(inputs.runner_macos_arm64 || 'macos-14', 'namespace-profile-') }}

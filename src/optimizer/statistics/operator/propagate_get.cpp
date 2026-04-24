@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -146,7 +145,7 @@ static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
 
 static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
-		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
+		throw InternalException("CanReplaceConstantOrNull() called on unexpected Table Filter");
 	}
 	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
@@ -222,7 +221,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 				break;
 			}
 			// filter is true or null; we can replace this with a not null filter
-			get.table_filters.SetFilterByColumnIndex(table_filter_column, make_uniq<IsNotNullFilter>());
+			auto not_null = ExpressionFilter::CreateNullCheckExpression(
+			    make_uniq<BoundReferenceExpression>(stats.GetType(), 0ULL), ExpressionType::OPERATOR_IS_NOT_NULL);
+			get.table_filters.SetFilterByColumnIndex(table_filter_column,
+			                                         make_uniq<ExpressionFilter>(std::move(not_null)));
 			break;
 		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:
