@@ -126,9 +126,6 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
-	// for(auto &vec : data) {
-	// 	vec.CheckCapacity(count);
-	// }
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
@@ -312,6 +309,16 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	}
 }
 
+void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
+	if (end < offset) {
+		throw InternalException("end is smaller than offset");
+	}
+	for (idx_t c = 0; c < other.ColumnCount(); c++) {
+		data[c].Slice(other.data[c], offset, end);
+	}
+	SetCardinality(end - offset);
+}
+
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
@@ -329,6 +336,9 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 	D_ASSERT(offset + slice_count <= size());
+	if (offset == 0 && slice_count == size()) {
+		return;
+	}
 	SelectionVector sel(slice_count);
 	for (idx_t i = 0; i < slice_count; i++) {
 		sel.set_index(i, offset + i);

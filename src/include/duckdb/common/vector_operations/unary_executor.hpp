@@ -190,6 +190,7 @@ private:
 						    FlatVector::ValidityMutable(result), data, adds_nulls);
 						// slice the result with the original offsets
 						auto &offsets = DictionaryVector::SelVector(input);
+						FlatVector::SetSize(result, dict_size.GetIndex());
 						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
 						break;
 					}

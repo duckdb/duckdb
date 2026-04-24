@@ -104,6 +104,17 @@ typedef void (*aggregate_window_t)(AggregateInputData &aggr_input_data, const Wi
                                    const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &subframes,
                                    Vector &result, idx_t rid);
 
+//! Batched variant of aggregate_window_t — called once per Evaluate() with frame
+//! bounds for all `count` output rows pre-computed. `subframes_per_row` points
+//! to `count` SubFrames entries (each 1-3 FrameBounds depending on EXCLUDE
+//! clause). When set, the window executor prefers this over the per-row
+//! callback, letting implementations issue a single batched call (e.g., one
+//! RPC for the whole Evaluate chunk instead of count separate calls).
+typedef void (*aggregate_window_batch_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+                                         const_data_ptr_t g_state, data_ptr_t l_state,
+                                         const SubFrames *subframes_per_row, idx_t count, Vector &result,
+                                         idx_t row_idx);
+
 //! The type used for initializing shared complex/custom windowed aggregate state (optional)
 typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
                                     data_ptr_t g_state);
@@ -254,6 +265,12 @@ public:
 	aggregate_wininit_t GetWindowInitCallback() const { return window_init; }
 	bool HasWindowInitCallback() const { return window_init != nullptr; }
 
+	//! Batched window callback — takes precedence over the per-row window
+	//! callback when set. See aggregate_window_batch_t for semantics.
+	bool HasWindowBatchCallback() const { return window_batch != nullptr; }
+	aggregate_window_batch_t GetWindowBatchCallback() const { return window_batch; }
+	void SetWindowBatchCallback(aggregate_window_batch_t callback) { window_batch = callback; }
+
 	bool HasStatisticsCallback() const { return statistics != nullptr; }
 	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
 	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
@@ -282,6 +299,8 @@ protected:
 	aggregate_window_t window;
 	//! The windowed aggregate custom initialization function (may be null)
 	aggregate_wininit_t window_init = nullptr;
+	//! Batched windowed aggregate function (may be null; preferred when set)
+	aggregate_window_batch_t window_batch = nullptr;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;

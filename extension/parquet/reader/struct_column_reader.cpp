@@ -61,13 +61,16 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
 	}
 }
 
-idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	if (pending_skips > 0) {
 		throw InternalException("StructColumnReader cannot have pending skips");
 	}
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
@@ -82,7 +85,8 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 			ConstantVector::SetNull(target_vector);
 			continue;
 		}
-		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
+		auto child_num_values = child->Read(child_input, target_vector);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;
 		} else if (read_count.GetIndex() != child_num_values) {

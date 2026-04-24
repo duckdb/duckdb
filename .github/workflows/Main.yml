@@ -62,6 +62,7 @@ jobs:
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
     runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
     outputs:
+      git_sha: ${{ steps.resolve_git_sha.outputs.git_sha }}
       runner_linux_small: ${{ steps.config.outputs.runner_linux_small }}
       runner_linux_x64: ${{ steps.config.outputs.runner_linux_x64 }}
       runner_linux_22_x64: ${{ steps.config.outputs.runner_linux_22_x64 }}
@@ -72,6 +73,7 @@ jobs:
       runners: ${{ steps.config.outputs.runners }}
       linux_cli_matrix: ${{ steps.config.outputs.linux_cli_matrix }}
       linux_musl_cli_matrix: ${{ steps.config.outputs.linux_musl_cli_matrix }}
+      static_libs_linux_matrix: ${{ steps.config.outputs.static_libs_linux_matrix }}
       extensions_changed: ${{ steps.changed.outputs.extensions_any_changed }}
       changed_tests_files: ${{ steps.changed.outputs.tests_all_changed_files }}
       changed_slow_tests_files: ${{ steps.changed.outputs.tests_slow_all_changed_files }}
@@ -84,11 +86,24 @@ jobs:
     env:
       GEN: ninja
     steps:
+      - name: Resolve git sha
+        id: resolve_git_sha
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.git_ref }}" ]]; then
+            resolved_sha="$(gh api -X GET "/repos/${{ github.repository }}/commits" -f sha="${{ inputs.git_ref }}" -f per_page=1 --jq '.[0].sha')"
+          else
+            resolved_sha="${{ github.sha }}"
+          fi
+          echo "git_sha=$resolved_sha" >> "$GITHUB_OUTPUT"
+          echo "Using git_sha=$resolved_sha"
+
       - name: "Checkout"
         uses: duckdb/duckdb-ci/.github/actions/checkout@main
         with:
           runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
           fetch_depth: 0
+          ref: ${{ steps.resolve_git_sha.outputs.git_sha }}
 
       - name: Detect changes
         id: changed
@@ -201,6 +216,11 @@ jobs:
               '[{runner: $runner, arch: "arm64"}]'
           )
 
+          static_libs_linux_matrix=$(
+            jq -nc --arg runner "$runner_linux_x64" \
+              '[{runner: $runner, arch: "amd64", image: "quay.io/pypa/manylinux_2_28_x86_64"}]'
+          )
+
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
             linux_cli_matrix=$(
               jq -c --arg runner "$runner_linux_arm64" \
@@ -213,6 +233,13 @@ jobs:
             )
           fi
 
+          if [[ "${{ github.ref_name }}" == "main" ]]; then
+            static_libs_linux_matrix=$(
+              jq -c --arg runner "$runner_linux_arm64" \
+                '. += [{runner: $runner, arch: "arm64", image: "quay.io/pypa/manylinux_2_28_aarch64"}]' <<<"$static_libs_linux_matrix"
+            )
+          fi
+
           python3 scripts/ci/job_stages.py \
             --event "${{ github.event_name }}" \
             --ref_name "${{ github.ref_name }}" \
@@ -221,8 +248,11 @@ jobs:
             --changed-keys "${{ steps.changed.outputs.changed_keys }}"
 
           grep -E '^(extra_exclude_archs|runner_)' "$GITHUB_OUTPUT"
-          echo "linux_cli_matrix=$linux_cli_matrix" >> "$GITHUB_OUTPUT"
-          echo "linux_musl_cli_matrix=$linux_musl_cli_matrix" >> "$GITHUB_OUTPUT"
+          {
+            echo "linux_cli_matrix=$linux_cli_matrix"
+            echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
+            echo "static_libs_linux_matrix=$static_libs_linux_matrix"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -262,6 +292,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -300,6 +331,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
@@ -333,6 +366,7 @@ jobs:
       - linux-debug
       - linux-release
     with:
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       build_current_release: false
       run_slow_tests: ${{ needs.prepare.outputs.run_slow_tests == 'true' }}
       runner_linux_x64: ${{ needs.prepare.outputs.runner_linux_x64 }}
@@ -353,6 +387,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       run: |
@@ -393,6 +428,7 @@ jobs:
        with:
          runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
          fetch_depth: 0
+         ref: ${{ needs.prepare.outputs.git_sha }}
 
      - name: Install
        run: |
@@ -421,7 +457,7 @@ jobs:
       - linux-release
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -441,6 +477,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: mymindstorm/setup-emsdk@v16
       with:
@@ -470,6 +508,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -523,6 +562,7 @@ jobs:
       with:
         runner_provider: ${{ needs.prepare.outputs.runner_provider }}
         fetch_depth: 0
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -555,6 +595,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -652,6 +694,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -764,7 +808,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.sha }}
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: julia-actions/setup-julia@v2
       with:
@@ -818,7 +862,7 @@ jobs:
     - uses: actions/checkout@v6
       with:
         fetch-depth: 0
-        ref: ${{ github.sha }}
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Deploy
       shell: bash
@@ -838,6 +882,7 @@ jobs:
       - prepare
       - linux-debug
     with:
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
 
  windows:
@@ -849,7 +894,7 @@ jobs:
       - linux-debug
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_windows_2022_x64: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
@@ -861,58 +906,233 @@ jobs:
     needs: prepare
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
+      git_ref: ${{ needs.prepare.outputs.git_sha }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
- static-libraries:
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libraries') }}
-    uses: ./.github/workflows/BundleStaticLibs.yml
-    secrets: inherit
-    needs: prepare
-    with:
-      override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ github.event_name == 'workflow_dispatch' && inputs.git_ref || github.sha }}
-      skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
-
- release-status:
-    runs-on: ubuntu-slim
-    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'release-status') }}
+ static-libs-linux:
+    name: Static Libs Linux (${{ matrix.config.arch }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-linux') }}
     needs:
       - prepare
-      - extensions
-      - osx
-      - windows
-      - static-libraries
-    outputs:
-      success: ${{ steps.set-output.outputs.success }}
+      - linux-release
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.prepare.outputs.static_libs_linux_matrix) }}
+    runs-on: ${{ matrix.config.runner }}
+    container:
+      image: ${{ matrix.config.image }}
+    env:
+      EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      OVERRIDE_GIT_DESCRIBE: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      GEN: ninja
+
     steps:
-      - id: set-output
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - name: Install dependencies
         shell: bash
         run: |
-          if [[ "${{ needs.extensions.result }}" == "success" && \
-                "${{ needs.osx.result }}" == "success" && \
-                "${{ needs.windows.result }}" == "success" && \
-                "${{ needs.static-libraries.result }}" == "success" ]]; then
-            echo "success=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "success=false" >> "$GITHUB_OUTPUT"
-          fi
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
 
- notify-external-repos:
-    if: ${{ always() && contains(fromJson(needs.prepare.outputs.enabled_jobs), 'notify-external-repos') }}
-    uses: ./.github/workflows/NotifyExternalRepositories.yml
-    secrets: inherit
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-linux-${{ matrix.config.arch }}
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        shell: bash
+        run: |
+          source /opt/rh/gcc-toolset-12/enable
+          export CC='ccache gcc'
+          export CXX='ccache g++'
+          git config --global --add safe.directory "$PWD"
+          make gather-libs
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          zip -r -j static-libs-linux-${{ matrix.config.arch }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-linux-${{ matrix.config.arch }}.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-linux-${{ matrix.config.arch }}
+          path: |
+            static-libs-linux-${{ matrix.config.arch }}.zip
+
+ static-libs-osx:
+    name: Static Libs OSX (${{ matrix.architecture }})
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-osx') }}
     needs:
       - prepare
-      - release-status
-    with:
-      is-success: ${{ fromJSON(needs.release-status.outputs.success) }}
-      target-branch: ${{ (github.event_name != 'workflow_dispatch') && github.ref || (inputs.git_ref == '' && github.ref || inputs.git_ref) }}
-      duckdb-sha: ${{ github.sha }}
-      triggering-event: ${{ github.event_name }}
-      should-publish: true
-      override-git-describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+      - linux-release
+    strategy:
+      matrix:
+        include:
+          - xcode_target_flag: "x86_64"
+            architecture: "amd64"
+          - xcode_target_flag: "arm64"
+            architecture: "arm64"
+    runs-on: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
+    env:
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+      GEN: ninja
+      OSX_BUILD_ARCH: ${{ matrix.xcode_target_flag }}
+      DUCKDB_PLATFORM: osx_${{ matrix.architecture }}
+
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-osx-${{ matrix.architecture }}
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build
+        shell: bash
+        run: python3 scripts/ci/retry.py -- make
+
+      - name: Bundle static library
+        shell: bash
+        run: make gather-libs
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          zip -r -j static-libs-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libs/
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-osx-${{ matrix.architecture }}.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-osx-${{ matrix.architecture }}
+          path: |
+            static-libs-osx-${{ matrix.architecture }}.zip
+
+ static-libs-windows-mingw:
+    name: Static Libs Windows Mingw
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-windows-mingw') }}
+    needs:
+      - prepare
+      - linux-release
+    runs-on: ${{ needs.prepare.outputs.runner_windows_2022_x64 }}
+    env:
+      GEN: ninja
+      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
+    steps:
+      - name: "Checkout"
+        uses: duckdb/duckdb-ci/.github/actions/checkout@main
+        with:
+          runner_provider: ${{ needs.prepare.outputs.runner_provider }}
+          fetch_depth: 0
+          ref: ${{ needs.prepare.outputs.git_sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Dependencies
+        shell: bash
+        run: |
+          python scripts/ci/retry.py -- choco install \
+            ccache \
+            make \
+            --no-progress
+          python scripts/ci/retry.py -- choco install \
+            mingw --version 14.2.0 \
+            --no-progress
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: static-libs-windows-mingw
+          save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+      - name: Build Environment
+        shell: bash
+        run: |
+          {
+            # bash from Git
+            echo 'C:/Program Files/Git/bin'
+            # make, ninja and ccache from Chocolatey
+            echo 'C:/ProgramData/Chocolatey/bin'
+            # g++ from Chocolatey
+            echo 'C:/ProgramData/mingw64/mingw64/bin'
+          } >> "${GITHUB_PATH}"
+
+      - name: Build Environment Check
+        shell: cmd
+        run: |
+          where bash
+          bash --version
+          where make
+          make --version
+          where ninja
+          ninja --version
+          where ccache
+          ccache --version
+          where g++
+          g++ --version
+          echo %PATH%
+
+      - name: Bundle static library
+        shell: cmd
+        run: |
+          make gather-libs
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          tmp_zip_dir="$(mktemp -d)"
+          archive_path="$(pwd)/static-libs-windows-mingw.zip"
+          cp src/include/duckdb.h "${tmp_zip_dir}/"
+          find build/release/libs -type f -exec cp {} "${tmp_zip_dir}/" \;
+          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${archive_path}" ./*)
+          rm -rf "${tmp_zip_dir}"
+          ./scripts/upload-assets-to-staging.sh github_release static-libs-windows-mingw.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: duckdb-static-libs-windows-mingw
+          path: |
+            static-libs-windows-mingw.zip
 
  no-string-inline:
     name: No String Inline / Destroy Unpinned Blocks
@@ -934,6 +1154,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -964,6 +1186,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
         run: python3 scripts/ci/retry.py -- make toolsci
@@ -996,6 +1220,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       shell: bash
@@ -1038,6 +1264,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
       run: python3 scripts/ci/retry.py -- make toolsci
@@ -1069,6 +1297,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ needs.prepare.outputs.git_sha }}
 
     - uses: actions/setup-python@v6
       with:
@@ -1268,15 +1498,144 @@ jobs:
       - swift
       - windows
       - osx
-      - static-libraries
-      - release-status
-      - notify-external-repos
+      - static-libs-linux
+      - static-libs-osx
+      - static-libs-windows-mingw
       - no-string-inline
       - vector-sizes
       - valgrind
       - threadsan
       - linux-configs
     steps:
+      - id: release-status
+        name: Compute release status
+        if: ${{ always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') }}
+        shell: bash
+        run: |
+          if [[ "${{ needs.extensions.result }}" == "success" && \
+                "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.static-libs-linux.result }}" == "success" && \
+                ( "${{ needs.static-libs-osx.result }}" == "success" || "${{ needs.static-libs-osx.result }}" == "skipped" ) && \
+                ( "${{ needs.static-libs-windows-mingw.result }}" == "success" || "${{ needs.static-libs-windows-mingw.result }}" == "skipped" ) ]]; then
+            echo "success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: summary-context
+        name: Compute summary dispatch context
+        if: ${{ always() }}
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          GIT_REF: ${{ github.ref }}
+          INPUT_GIT_REF: ${{ inputs.git_ref }}
+          OVERRIDE_GIT_DESCRIBE: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
+          RELEASE_STATUS_SUCCESS: ${{ steps.release-status.outputs.success || 'false' }}
+        run: |
+          is_release_event=false
+          if [[ "$EVENT_NAME" == "workflow_dispatch" || "$EVENT_NAME" == "repository_dispatch" ]]; then
+            is_release_event=true
+          fi
+
+          is_duckdb_repo=false
+          if [[ "$REPOSITORY" == "duckdb/duckdb" ]]; then
+            is_duckdb_repo=true
+          fi
+
+          target_branch="$GIT_REF"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_GIT_REF" ]]; then
+            target_branch="$INPUT_GIT_REF"
+          fi
+
+          has_no_override=false
+          if [[ "$EVENT_NAME" != "workflow_dispatch" || -z "$OVERRIDE_GIT_DESCRIBE" ]]; then
+            has_no_override=true
+          fi
+
+          run_vendor=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$RELEASE_STATUS_SUCCESS" == "true" && "$has_no_override" == "true" ]]; then
+            run_vendor=true
+          fi
+
+          run_nightly=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" ]]; then
+            run_nightly=true
+          fi
+
+          run_python=false
+          if [[ "$is_release_event" == "true" && "$is_duckdb_repo" == "true" && "$has_no_override" == "true" ]]; then
+            run_python=true
+          fi
+
+          echo "summary dispatch context:"
+          echo "  event_name=$EVENT_NAME"
+          echo "  repository=$REPOSITORY"
+          echo "  git_ref=$GIT_REF"
+          echo "  input_git_ref=$INPUT_GIT_REF"
+          echo "  target_branch=$target_branch"
+          echo "  override_git_describe=$OVERRIDE_GIT_DESCRIBE"
+          echo "  release_status_success=$RELEASE_STATUS_SUCCESS"
+          echo "  is_release_event=$is_release_event"
+          echo "  is_duckdb_repo=$is_duckdb_repo"
+          echo "  has_no_override=$has_no_override"
+          echo "  run_vendor=$run_vendor"
+          echo "  run_nightly=$run_nightly"
+          echo "  run_python=$run_python"
+
+          {
+            echo "target_branch=$target_branch"
+            echo "run_vendor=$run_vendor"
+            echo "run_nightly=$run_nightly"
+            echo "run_python=$run_python"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run ODBC Vendor
+        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
+        shell: bash
+        env:
+          PAT_USER: ${{ secrets.PAT_USERNAME }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
+          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+
+      - name: Run JDBC Vendor
+        if: ${{ always() && steps.summary-context.outputs.run_vendor == 'true' }}
+        shell: bash
+        env:
+          PAT_USER: ${{ secrets.PAT_USERNAME }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-java/actions/workflows/Vendor.yml/dispatches
+          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}"}}'
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+
+      - name: Run Nightly build status
+        if: ${{ always() && steps.summary-context.outputs.run_nightly == 'true' }}
+        shell: bash
+        env:
+          PAT_USER: ${{ secrets.PAT_USERNAME }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
+          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"event": "${{ github.event_name }}", "should_publish": "true"}}'
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+
+      - name: Call /dispatch
+        if: ${{ always() && steps.summary-context.outputs.run_python == 'true' }}
+        shell: bash
+        env:
+          PAT_USER: ${{ secrets.PAT_USERNAME }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-python/actions/workflows/release.yml/dispatches
+          export DATA='{"ref": "${{ steps.summary-context.outputs.target_branch }}", "inputs": {"duckdb-sha": "${{ needs.prepare.outputs.git_sha }}", "pypi-index": "prod" }}'
+          curl -v --fail-with-body --retry 5 --retry-all-errors -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" "$URL" --data "$DATA"
+
       - name: Check CI status
         shell: bash
         run: |
