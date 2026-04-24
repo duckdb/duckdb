@@ -53,7 +53,7 @@ public:
 	void SetRebuildIndexes() {
 		rebuild_indexes = true;
 	}
-	void AddCheckpointTableEvent(CheckpointTableEvent event) {
+	void AddCheckpointTableEvent(const CheckpointTableEvent &event) {
 		checkpoint_table_events.push_back(event);
 	}
 	const vector<CheckpointTableEvent> &GetCheckpointTableEvents() const {
