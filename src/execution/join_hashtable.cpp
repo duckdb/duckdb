@@ -207,30 +207,36 @@ void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
 	if (!can_have_null) {
 		return;
 	}
+	ValidityMask has_any_null(keys.size());
+	has_any_null.SetAllInvalid(keys.size());
+	ValidityMask has_all_null(keys.size());
+	has_all_null.Initialize();
+
+	for (auto &validity : validities) {
+		if (!validity.CanHaveNull()) {
+			has_all_null.SetAllInvalid(keys.size());
+			continue;
+		}
+		for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
+			if (validity.IsValid(row_idx)) {
+				has_all_null.SetInvalidUnsafe(row_idx);
+			} else {
+				has_any_null.SetValidUnsafe(row_idx);
+			}
+		}
+	}
 	auto &null_info = mark_join_null_info;
 	null_info.enabled = true;
 	InitializeMarkJoinNullRemainder(null_info.remainder, buffer_manager, condition_types);
 	SelectionVector null_sel(STANDARD_VECTOR_SIZE);
+
 	idx_t null_count = 0;
 	for (idx_t row_idx = 0; row_idx < keys.size(); row_idx++) {
-		bool has_any_null = false;
-		bool has_any_non_null = false;
-		for (auto &validity : validities) {
-			if (validity.IsValid(row_idx)) {
-				has_any_non_null = true;
-			} else {
-				has_any_null = true;
-			}
-		}
-		if (!has_any_null) {
-			continue;
-		}
-		null_info.has_null_rows = true;
-		if (!has_any_non_null) {
-			null_info.has_all_null = true;
-		}
-		null_sel.set_index(null_count++, NumericCast<sel_t>(row_idx));
+		null_sel.set_index(null_count, NumericCast<sel_t>(row_idx));
+		null_count += has_any_null.RowIsValid(row_idx);
 	}
+	null_info.has_null_rows |= null_count > 0;
+	null_info.has_all_null |= has_all_null.CountValid(keys.size()) > 0;
 	AppendMarkJoinNullRows(null_info.remainder, keys, null_sel, null_count);
 }
 
