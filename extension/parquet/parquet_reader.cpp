@@ -1360,6 +1360,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
 	}
+	state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
@@ -1525,19 +1526,34 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 				}
 
-				// Prefetch column-wise
 				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+				vector<bool> already_registered(column_ids.size(), false);
+
+				if (filters && !state.scan_filters.empty()) {
+					auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+					const auto &permutation = adaptive_filter.GetPermutation();
+					bool first_group = false;
+					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+						if (state.filter_eliminated_all_rows[permutation[i - 1]] && !first_group) {
+							trans.FinalizeRegistration();
+							first_group = true;
+						}
+						auto &scan_filter = state.scan_filters[permutation[i]];
+						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+						auto file_col_idx = column_ids[local_idx];
+						root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, true);
+						already_registered[local_idx.GetIndex()] = true;
+					}
+					trans.FinalizeRegistration();
+				}
+
 				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (already_registered[i]) {
+						continue;
+					}
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
-					bool has_filter = false;
-					if (filters) {
-						auto filter = filters->TryGetFilterByColumnIndex(col_idx);
-						if (filter && filter->filter_type != TableFilterType::OPTIONAL_FILTER) {
-							has_filter = true;
-						}
-					}
-					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !has_filter);
+					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, true);
 				}
 
 				trans.FinalizeRegistration();
@@ -1618,6 +1634,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				                    state.sel, filter_count, is_first_filter);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
+				if (filter_count == 0) {
+					state.filter_eliminated_all_rows[permutation[i]] = true;
+				}
 			}
 			adaptive_filter.EndFilter(filter_state);
 			state.current_group_filter_ran = true;

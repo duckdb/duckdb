@@ -144,6 +144,8 @@ struct ParquetReaderScanState {
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
+	//! We set it true if the filter was the last filter to eliminate all rows
+	vector<bool> filter_eliminated_all_rows;
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;
