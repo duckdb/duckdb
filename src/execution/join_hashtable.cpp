@@ -1094,7 +1094,7 @@ void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk
 	auto &result_vector = result.data.back();
 	result_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
-	auto &mask = FlatVector::Validity(result_vector);
+	auto &mask = FlatVector::ValidityMutable(result_vector);
 	for (idx_t i = 0; i < probe_data.size(); i++) {
 		bool_result[i] = false;
 	}
