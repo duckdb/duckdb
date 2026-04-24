@@ -28,8 +28,6 @@ public:
 	vector<unique_ptr<Expression>> distinct_targets;
 	//! The order by modifier (optional, only for distinct on)
 	unique_ptr<BoundOrderModifier> order_by;
-	//! Optional soft limit for early termination
-	optional_idx limit;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

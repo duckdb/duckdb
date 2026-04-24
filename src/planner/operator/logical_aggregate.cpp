@@ -78,9 +78,6 @@ InsertionOrderPreservingMap<string> LogicalAggregate::ParamsToString() const {
 		expressions_info += expressions[i]->GetName();
 	}
 	result["Expressions"] = expressions_info;
-	if (limit.IsValid()) {
-		result["Limit"] = to_string(limit.GetIndex());
-	}
 	SetParamsEstimatedCardinality(result);
 	return result;
 }

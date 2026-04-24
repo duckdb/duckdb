@@ -18,9 +18,6 @@ InsertionOrderPreservingMap<string> LogicalDistinct::ParamsToString() const {
 		    StringUtil::Join(distinct_targets, distinct_targets.size(), "\n",
 		                     [](const unique_ptr<Expression> &child) { return child->GetName(); });
 	}
-	if (limit.IsValid()) {
-		result["Limit"] = to_string(limit.GetIndex());
-	}
 	SetParamsEstimatedCardinality(result);
 	return result;
 }

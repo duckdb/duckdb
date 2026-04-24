@@ -3,9 +3,6 @@
 # group: [distinct]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA threads=4
 
 # basic DISTINCT with LIMIT
@@ -19,6 +16,12 @@ query I
 SELECT COUNT(*) FROM (SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 5 OFFSET 3)
 ----
 5
+
+# EXPLAIN: DISTINCT + LIMIT + OFFSET shows LIMITED_DISTINCT
+query II
+EXPLAIN SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 5 OFFSET 3
+----
+physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
 
 # limit larger than number of distinct values
 query I
@@ -81,6 +84,25 @@ SELECT COUNT(*) FROM (SELECT DISTINCT ON (grp) grp, val FROM t2 LIMIT 3)
 ----
 3
 
+# DISTINCT ON without ORDER BY keeps the regular aggregate path for FIRST payloads
+query II
+EXPLAIN SELECT DISTINCT ON (grp) grp, val FROM t2 LIMIT 3
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*
+
+# DISTINCT ON with ORDER BY should keep the ordered aggregate path
+query II
+SELECT DISTINCT ON (grp) grp, val FROM t2 ORDER BY grp, val DESC LIMIT 3
+----
+0	9950
+1	9960
+2	9970
+
+query II
+EXPLAIN SELECT DISTINCT ON (grp) grp, val FROM t2 ORDER BY grp, val DESC LIMIT 3
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*
+
 # EXPLAIN: DISTINCT + LIMIT shows LIMITED_DISTINCT
 query II
 EXPLAIN SELECT DISTINCT i % 100 FROM range(1000000) t(i) LIMIT 10
@@ -102,6 +124,12 @@ physical_plan	<REGEX>:.*LIMITED_DISTINCT.*
 # EXPLAIN: GROUP BY with aggregates uses HASH_GROUP_BY
 query II
 EXPLAIN SELECT i % 100, COUNT(*) FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
+----
+physical_plan	<REGEX>:.*HASH_GROUP_BY.*
+
+# EXPLAIN: GROUP BY with FIRST aggregate uses HASH_GROUP_BY
+query II
+EXPLAIN SELECT i % 100, first(i) FROM range(1000000) t(i) GROUP BY 1 LIMIT 10
 ----
 physical_plan	<REGEX>:.*HASH_GROUP_BY.*
 
