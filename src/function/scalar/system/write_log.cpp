@@ -153,7 +153,7 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (info.output_col != DConstants::INVALID_INDEX) {
 		result.Reference(args.data[info.output_col]);
 	} else {
-		result.Reference(Value(LogicalType::VARCHAR));
+		ConstantVector::SetNull(result);
 	}
 }
 

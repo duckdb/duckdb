@@ -77,7 +77,7 @@ static Value GetCRSValue(const LogicalType &logical_type) {
 
 static void CRSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &type = args.data[0].GetType();
-	result.Reference(GetCRSValue(type));
+	result.Reference(GetCRSValue(type), count_t(args.size()));
 }
 
 static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionInput &input) {

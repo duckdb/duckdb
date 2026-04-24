@@ -79,8 +79,8 @@ Vector::Vector(const Vector &other, idx_t offset, idx_t end) : type(other.type) 
 	Slice(other, offset, end);
 }
 
-Vector::Vector(const Value &value) : type(value.type()) {
-	Reference(value);
+Vector::Vector(const Value &value, count_t count) : type(value.type()) {
+	Reference(value, count);
 }
 
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
@@ -120,8 +120,8 @@ Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
 
-void Vector::Reference(const Value &value) {
-	ConstantVector::Reference(*this, value);
+void Vector::Reference(const Value &value, count_t count) {
+	ConstantVector::Reference(*this, value, count);
 }
 
 void Vector::Reference(const Vector &other) {
