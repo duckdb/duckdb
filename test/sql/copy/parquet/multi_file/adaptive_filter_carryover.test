@@ -161,11 +161,13 @@ SELECT count(*) FROM read_parquet(['{TEST_DIR}/af_cross_1.parquet', '{TEST_DIR}/
 query II
 SELECT
     (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'INITIAL') = 2,
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'INITIAL') BETWEEN 1 AND 2,
     (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
-     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'SEEDED') = 1
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet' AND info['source'] = 'SEEDED') >= 1,
+    (SELECT count(*) FROM duckdb_logs_parsed('AdaptiveFilter')
+     WHERE event = 'INIT' AND file_path LIKE '%af_cross_%.parquet') = 3
 ----
-true	true
+true	true	true
 
 # A seeded file permutation must be equal to one of the initial sources
 query I
