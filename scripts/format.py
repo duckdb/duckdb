@@ -163,6 +163,14 @@ def get_typos_targets():
     return sorted(set([f.full_path for f in files if os.path.exists(f.full_path)]))
 
 
+def get_typos_toml_file():
+    files = ['scripts/typos.toml', 'duckdb/scripts/typos.toml']
+    for file in files:
+        if os.path.isfile(file):
+            return file
+    return files[0]
+
+
 def run_typos_check():
     typos_targets = get_typos_targets()
     if not typos_targets:
@@ -170,7 +178,8 @@ def run_typos_check():
     typos_command = ['typos', '--force-exclude']
     if not check_only:
         typos_command.append('-w')
-    typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
+
+    typos_command += ['-c', get_typos_toml_file()] + typos_targets
     try:
         return subprocess.call(typos_command)
     except FileNotFoundError:
