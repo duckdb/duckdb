@@ -729,7 +729,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 					auto &col_data = GetColumn(col_idx);
 					col_data.Skip(state.column_scans[i]);
 				}
-				filter_info.EndFilter(filter_state, 0);
+				filter_info.EndFilter(filter_state);
 				state.vector_index++;
 				continue;
 			}
@@ -745,7 +745,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				col_data.Select(transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
 				                approved_tuple_count);
 			}
-			filter_info.EndFilter(filter_state, approved_tuple_count);
+			filter_info.EndFilter(filter_state);
 
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;

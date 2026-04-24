@@ -85,9 +85,6 @@ vector<pair<string, string>> AdaptiveFilter::BuildInitInfo(AdaptiveFilterSource 
 		                   "]";
 		info.emplace_back("columns", std::move(columns_str));
 	}
-	info.emplace_back("total_filter_calls", to_string(total_filter_calls));
-	info.emplace_back("filter_calls_with_matches", to_string(filter_calls_with_matches));
-	info.emplace_back("filter_match_ratio", StringUtil::Format("%.3f", GetFilterMatchRatio()));
 	return info;
 }
 
@@ -100,11 +97,7 @@ AdaptiveFilterState AdaptiveFilter::BeginFilter() const {
 	return state;
 }
 
-void AdaptiveFilter::EndFilter(AdaptiveFilterState state, idx_t survivor_count) {
-	total_filter_calls++;
-	if (survivor_count > 0) {
-		filter_calls_with_matches++;
-	}
+void AdaptiveFilter::EndFilter(AdaptiveFilterState state) {
 	if (permutation.size() <= 1 || disable_permutations) {
 		// nothing to permute
 		return;
