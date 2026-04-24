@@ -68,19 +68,18 @@ private:
 
 class CheckpointWriter {
 public:
-	CheckpointWriter(AttachedDatabase &db, CheckpointOptions options) : db(db) {
-		checkpoint_info.options = options;
+	explicit CheckpointWriter(AttachedDatabase &db) : db(db) {
 	}
 	virtual ~CheckpointWriter() {
 	}
 
 	//! The database
 	AttachedDatabase &db;
-	const CheckpointEventInfo &GetCheckpointEventInfo() const {
-		return checkpoint_info;
+	const vector<CheckpointTableEvent> &GetCheckpointTableEvents() const {
+		return checkpoint_table_events;
 	}
 	void AddCheckpointTableEvents(const vector<CheckpointTableEvent> &table_events) {
-		checkpoint_info.tables.insert(checkpoint_info.tables.end(), table_events.begin(), table_events.end());
+		checkpoint_table_events.insert(checkpoint_table_events.end(), table_events.begin(), table_events.end());
 	}
 
 	virtual void CreateCheckpoint() = 0;
@@ -101,7 +100,7 @@ protected:
 	virtual void WriteTrigger(TriggerCatalogEntry &trigger, Serializer &serializer);
 
 private:
-	CheckpointEventInfo checkpoint_info;
+	vector<CheckpointTableEvent> checkpoint_table_events;
 };
 
 class CheckpointReader {

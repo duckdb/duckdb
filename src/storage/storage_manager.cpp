@@ -699,7 +699,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
 	auto &database = db.GetDatabase();
-	for (auto &callback : ExtensionCallback::Iterate(database)) {
+	for (auto &callback : CheckpointCallback::Iterate(database)) {
 		callback->OnCheckpointStart(database, options);
 	}
 
@@ -720,7 +720,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 			// Write the checkpoint.
 			auto checkpointer = CreateCheckpointWriter(context, options);
 			checkpointer->CreateCheckpoint();
-			checkpoint_info = checkpointer->GetCheckpointEventInfo();
+			checkpoint_info.tables = checkpointer->GetCheckpointTableEvents();
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -731,7 +731,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointEnd(db, options);
 	}
-	for (auto &callback : ExtensionCallback::Iterate(database)) {
+	for (auto &callback : CheckpointCallback::Iterate(database)) {
 		callback->OnCheckpointEnd(database, checkpoint_info);
 	}
 }

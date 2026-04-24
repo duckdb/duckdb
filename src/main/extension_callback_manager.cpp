@@ -21,6 +21,8 @@ struct ExtensionCallbackRegistry {
 	case_insensitive_map_t<shared_ptr<StorageExtension>> storage_extensions;
 	//! Set of callbacks that can be installed by extensions
 	vector<shared_ptr<ExtensionCallback>> extension_callbacks;
+	//! Set of checkpoint callbacks that can be installed by extensions
+	vector<shared_ptr<CheckpointCallback>> checkpoint_callbacks;
 };
 
 ExtensionCallbackManager &ExtensionCallbackManager::Get(ClientContext &context) {
@@ -82,6 +84,13 @@ void ExtensionCallbackManager::Register(shared_ptr<ExtensionCallback> extension)
 	callback_registry.atomic_store(new_registry);
 }
 
+void ExtensionCallbackManager::Register(shared_ptr<CheckpointCallback> extension) {
+	lock_guard<mutex> guard(registry_lock);
+	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
+	new_registry->checkpoint_callbacks.push_back(std::move(extension));
+	callback_registry.atomic_store(new_registry);
+}
+
 template <class T>
 ExtensionCallbackIteratorHelper<T>::ExtensionCallbackIteratorHelper(
     const vector<T> &vec, shared_ptr<ExtensionCallbackRegistry> callback_registry)
@@ -122,6 +131,12 @@ ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> ExtensionCallback
 	return ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>(extension_callbacks, std::move(registry));
 }
 
+ExtensionCallbackIteratorHelper<shared_ptr<CheckpointCallback>> ExtensionCallbackManager::CheckpointCallbacks() const {
+	auto registry = callback_registry.atomic_load();
+	auto &checkpoint_callbacks = registry->checkpoint_callbacks;
+	return ExtensionCallbackIteratorHelper<shared_ptr<CheckpointCallback>>(checkpoint_callbacks, std::move(registry));
+}
+
 optional_ptr<StorageExtension> ExtensionCallbackManager::FindStorageExtension(const string &name) const {
 	auto registry = callback_registry.atomic_load();
 	auto entry = registry->storage_extensions.find(name);
@@ -160,12 +175,17 @@ void ExtensionCallback::Register(DBConfig &config, shared_ptr<ExtensionCallback>
 	config.GetCallbackManager().Register(std::move(extension));
 }
 
+void CheckpointCallback::Register(DBConfig &config, shared_ptr<CheckpointCallback> extension) {
+	config.GetCallbackManager().Register(std::move(extension));
+}
+
 void StorageExtension::Register(DBConfig &config, const string &extension_name,
                                 shared_ptr<StorageExtension> extension) {
 	config.GetCallbackManager().Register(extension_name, std::move(extension));
 }
 
 template class ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>>;
+template class ExtensionCallbackIteratorHelper<shared_ptr<CheckpointCallback>>;
 template class ExtensionCallbackIteratorHelper<shared_ptr<OperatorExtension>>;
 template class ExtensionCallbackIteratorHelper<OptimizerExtension>;
 template class ExtensionCallbackIteratorHelper<ParserExtension>;

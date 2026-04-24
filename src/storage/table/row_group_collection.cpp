@@ -1420,7 +1420,7 @@ private:
 
 void RowGroupCollection::InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
                                                optional_idx checkpoint_row_group_count) {
-	auto callbacks = ExtensionCallback::Iterate(checkpoint_state.writer.GetDatabase());
+	auto callbacks = CheckpointCallback::Iterate(checkpoint_state.writer.GetDatabase());
 	state.collect_checkpoint_events = callbacks.begin() != callbacks.end();
 	state.old_row_group_count = checkpoint_state.SegmentCount();
 	auto options = checkpoint_state.writer.GetCheckpointOptions();

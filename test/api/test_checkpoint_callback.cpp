@@ -12,7 +12,7 @@ using namespace duckdb;
 
 namespace {
 
-struct CheckpointChangeRecorder : public ExtensionCallback {
+struct CheckpointChangeRecorder : public CheckpointCallback {
 	idx_t start_calls = 0;
 	vector<CheckpointEventInfo> end_calls;
 
@@ -38,7 +38,7 @@ idx_t GetTableOID(ClientContext &context, const string &table_name) {
 TEST_CASE("Checkpoint callbacks report table events", "[api]") {
 	DBConfig config;
 	auto recorder = make_shared_ptr<CheckpointChangeRecorder>();
-	ExtensionCallback::Register(config, recorder);
+	CheckpointCallback::Register(config, recorder);
 
 	auto path = TestCreatePath("checkpoint_row_id_callback.db");
 	DeleteDatabase(path);

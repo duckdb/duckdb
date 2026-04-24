@@ -62,12 +62,6 @@ public:
 	//! Called after an extension fails to load loading
 	virtual void OnExtensionLoadFail(DatabaseInstance &db, const string &name, const ErrorData &error) {
 	}
-	//! Called before a checkpoint starts
-	virtual void OnCheckpointStart(DatabaseInstance &db, const CheckpointOptions &options) {
-	}
-	//! Called after a checkpoint ends
-	virtual void OnCheckpointEnd(DatabaseInstance &db, const CheckpointEventInfo &info) {
-	}
 
 	static void Register(DBConfig &config, shared_ptr<ExtensionCallback> extension);
 	static ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> Iterate(ClientContext &context) {
@@ -75,6 +69,24 @@ public:
 	}
 	static ExtensionCallbackIteratorHelper<shared_ptr<ExtensionCallback>> Iterate(DatabaseInstance &db) {
 		return ExtensionCallbackManager::Get(db).ExtensionCallbacks();
+	}
+};
+
+class CheckpointCallback {
+public:
+	virtual ~CheckpointCallback() {
+	}
+
+	//! Called before a checkpoint starts
+	virtual void OnCheckpointStart(DatabaseInstance &db, const CheckpointOptions &options) {
+	}
+	//! Called after a checkpoint ends
+	virtual void OnCheckpointEnd(DatabaseInstance &db, const CheckpointEventInfo &info) {
+	}
+
+	static void Register(DBConfig &config, shared_ptr<CheckpointCallback> extension);
+	static ExtensionCallbackIteratorHelper<shared_ptr<CheckpointCallback>> Iterate(DatabaseInstance &db) {
+		return ExtensionCallbackManager::Get(db).CheckpointCallbacks();
 	}
 };
 
