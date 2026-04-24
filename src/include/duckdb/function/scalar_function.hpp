@@ -148,24 +148,24 @@ typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpress
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
-	scalar_function_t function;
+	scalar_function_t function = nullptr;
 	//! Direct selection callback (if any)
 	scalar_function_select_t select_function = nullptr;
 	//! The bind function (if any)
-	bind_scalar_function_t bind;
+	bind_scalar_function_t bind = nullptr;
 	//! Init thread local state for the function (if any)
-	init_local_state_t init_local_state;
+	init_local_state_t init_local_state = nullptr;
 	//! The statistics propagation function (if any)
-	function_statistics_t statistics;
+	function_statistics_t statistics = nullptr;
 	//! The lambda bind function (if any)
-	bind_lambda_function_t bind_lambda;
+	bind_lambda_function_t bind_lambda = nullptr;
 	//! Function to bind the result function expression directly (if any)
-	function_bind_expression_t bind_expression;
+	function_bind_expression_t bind_expression = nullptr;
 	//! Gets the modified databases (if any)
-	get_modified_databases_t get_modified_databases;
+	get_modified_databases_t get_modified_databases = nullptr;
 
-	function_serialize_t serialize;
-	function_deserialize_t deserialize;
+	function_serialize_t serialize = nullptr;
+	function_deserialize_t deserialize = nullptr;
 
 	//! The filter prune function (if any)
 	propagate_filter_t filter_prune = nullptr;
