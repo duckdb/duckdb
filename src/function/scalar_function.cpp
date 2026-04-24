@@ -24,12 +24,12 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type)) {
+    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), std::move(varargs)) {
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
 	callbacks.function = std::move(function);
-	callbacks.bind = std::move(bind);
+	callbacks.bind = bind;
 	callbacks.init_local_state = init_local_state;
 	callbacks.statistics = statistics;
 	callbacks.bind_lambda = bind_lambda;
@@ -45,7 +45,7 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
 	return name == rhs.name && arguments == rhs.GetArguments() && return_type == rhs.return_type &&
-	       varargs == rhs.GetVarArgs() && callbacks == rhs.callbacks;
+	       varargs == rhs.GetVarArgs() && callbacks == rhs.callbacks && properties == rhs.properties;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
