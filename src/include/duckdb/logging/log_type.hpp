@@ -172,4 +172,17 @@ public:
 	                                  const vector<pair<string, string>> &info);
 };
 
+class ParquetPrefetchLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ParquetPrefetch";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+
+	ParquetPrefetchLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &file_path, idx_t row_group_id, const char *strategy,
+	                                  const vector<pair<string, string>> &info);
+};
+
 } // namespace duckdb

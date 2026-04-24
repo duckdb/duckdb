@@ -20,6 +20,7 @@ constexpr LogLevel PhysicalOperatorLogType::LEVEL;
 constexpr LogLevel MetricsLogType::LEVEL;
 constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
+constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -279,6 +280,33 @@ string AdaptiveFilterLogType::ConstructLogMessage(const char *event, const strin
 	    {"event", Value(event)},
 	    {"file_path", Value(file_path)},
 	    {"permutation", Value(std::move(permutation_str))},
+	    {"info", StringPairIterableToMap(info)},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ParquetPrefetchLogType
+//===--------------------------------------------------------------------===//
+ParquetPrefetchLogType::ParquetPrefetchLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ParquetPrefetchLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"file_path", LogicalType::VARCHAR},
+	    {"row_group_id", LogicalType::BIGINT},
+	    {"strategy", LogicalType::VARCHAR},
+	    {"info", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, const char *strategy,
+                                                   const vector<pair<string, string>> &info) {
+	child_list_t<Value> child_list = {
+	    {"file_path", Value(file_path)},
+	    {"row_group_id", Value::BIGINT(static_cast<int64_t>(row_group_id))},
+	    {"strategy", Value(strategy)},
 	    {"info", StringPairIterableToMap(info)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();

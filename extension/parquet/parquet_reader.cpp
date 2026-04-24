@@ -1446,6 +1446,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
+		state.FinalizeRowGroupSelectivity();
+
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
 			return SourceResultType::FINISHED;
@@ -1486,16 +1488,15 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 
 			bool filters_look_unselective = false;
-			if (filters) {
-				auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
-				if (adaptive_filter.GetTotalFilterCalls() >=
-				        ParquetReaderPrefetchConfig::MIN_FILTER_CALLS_OBSERVED_FOR_PREFETCH &&
-				    adaptive_filter.GetFilterMatchRatio() >
-				        ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO) {
+			if (filters && state.row_groups_executed > 0) {
+				if (static_cast<double>(state.row_groups_with_matches) /
+				        static_cast<double>(state.row_groups_executed) >
+				    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO) {
 					filters_look_unselective = true;
 				}
 			}
 
+			const char *strategy;
 			if ((!filters || filters_look_unselective) &&
 			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
@@ -1506,6 +1507,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 					state.current_group_prefetched = true;
 				}
+				strategy = "whole_group";
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
@@ -1543,6 +1545,16 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (!lazy_fetch) {
 					trans.PrefetchRegistered();
 				}
+				strategy = lazy_fetch ? "column_wise_lazy" : "column_wise_eager";
+			}
+
+			{
+				vector<pair<string, string>> info;
+				info.emplace_back("row_groups_executed", to_string(state.row_groups_executed));
+				info.emplace_back("row_groups_with_matches", to_string(state.row_groups_with_matches));
+				info.emplace_back("scan_percentage", StringUtil::Format("%.3f", scan_percentage));
+				DUCKDB_LOG(context, ParquetPrefetchLogType, file.path,
+				           state.group_idx_list[state.current_group], strategy, info);
 			}
 		}
 		result.Reset();
@@ -1607,7 +1619,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 			}
-			adaptive_filter.EndFilter(filter_state, filter_count);
+			adaptive_filter.EndFilter(filter_state);
+			state.current_group_filter_ran = true;
+			if (filter_count > 0) {
+				state.current_group_had_match = true;
+			}
 		}
 
 		// we still may have to read some cols

@@ -90,8 +90,6 @@ struct TableFilterState;
 struct ParquetReaderPrefetchConfig {
 	//! Percentage of data in a row group span that should be scanned for enabling whole group prefetch
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
-	//! Minimum number of adaptive-filter runs before using the match ration
-	static constexpr idx_t MIN_FILTER_CALLS_OBSERVED_FOR_PREFETCH = 2;
 	//! How many row groups need to produce at least one surviving row (from filtering)
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO = 0.9;
 };
@@ -123,6 +121,24 @@ struct ParquetReaderScanState {
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+
+
+	bool current_group_filter_ran = false;
+	bool current_group_had_match = false;
+
+	idx_t row_groups_executed = 0;
+	idx_t row_groups_with_matches = 0;
+
+	void FinalizeRowGroupSelectivity() {
+		if (current_group_filter_ran) {
+			row_groups_executed++;
+			if (current_group_had_match) {
+				row_groups_with_matches++;
+			}
+		}
+		current_group_filter_ran = false;
+		current_group_had_match = false;
+	}
 
 	//! Per-thread adaptive filter cache
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
