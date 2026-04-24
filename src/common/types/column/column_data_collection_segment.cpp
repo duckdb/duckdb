@@ -17,6 +17,8 @@ ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAl
 
 void ColumnDataCollectionSegment::Reset() {
 	count = 0;
+	total_allocated = 0;
+	last_chunk_total_allocated = 0;
 	chunk_data.clear();
 	vector_data.clear();
 	child_indices.clear();

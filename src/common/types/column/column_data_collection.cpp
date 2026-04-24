@@ -1324,16 +1324,20 @@ void ColumnDataCollection::Reset() {
 
 void ColumnDataCollection::ResetForReuse() {
 	count = 0;
-	// Reset the first segment in-place to avoid destructor/constructor overhead on its metadata vectors and StringHeap.
-	// Any extra segments (created for large iterations) are dropped.
-	if (!segments.empty()) {
-		segments.front()->Reset();
-		if (segments.size() > 1) {
-			segments.resize(1);
-		}
-	}
 	finished_append = false;
-	allocator->Reset();
+	if (segments.empty()) {
+		allocator->Reset();
+		return;
+	}
+
+	for (auto &segment : segments) {
+		segment->Reset();
+	}
+
+	if (segments.size() > 1) {
+		segments.resize(1);
+	}
+	allocator->ResetPreserveLastBlock();
 }
 
 struct ValueResultEquals {
