@@ -56,6 +56,15 @@ SELECT COUNT(*) FROM (SELECT i % 100, COUNT(*) FROM range(1000000) t(i) GROUP BY
 ----
 10
 
+# LIMIT pushdown must not replace ROLLUP with LIMITED_DISTINCT
+statement ok
+CREATE TABLE rollup_limit_t AS SELECT i % 3 AS a FROM range(6) t(i)
+
+query I
+SELECT COUNT(*) FROM (SELECT grouping(a), a FROM rollup_limit_t GROUP BY ROLLUP (a) LIMIT 10)
+----
+4
+
 # DISTINCT with ORDER BY uses TOP_N, not PhysicalLimitedDistinct
 query I
 SELECT DISTINCT i % 10 AS v FROM range(1000000) t(i) ORDER BY v LIMIT 5
