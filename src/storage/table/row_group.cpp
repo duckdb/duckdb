@@ -85,7 +85,7 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p) {
 	has_changes = true;
 	this->collection = collection_p;
 	for (idx_t c = 0; c < columns.size(); c++) {
-		if (is_loaded && !is_loaded[c]) {
+		if (!ColumnIsLoaded(c)) {
 			// we only need to set the column start position if it is already loaded
 			// if it is not loaded - we will set the correct start position upon loading
 			continue;
@@ -95,6 +95,13 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection_p) {
 }
 
 RowGroup::~RowGroup() {
+}
+
+bool RowGroup::ColumnIsLoaded(storage_t c) const {
+	if (!is_loaded) {
+		return true;
+	}
+	return is_loaded[c];
 }
 
 vector<shared_ptr<ColumnData>> &RowGroup::GetColumns() {
@@ -195,6 +202,25 @@ void RowGroup::LoadColumn(storage_t c) const {
 		                        "not match count of row group %llu",
 		                        c, this->columns[c]->count.load(), this->count.load());
 	}
+}
+
+void RowGroup::UnloadColumn(storage_t c) {
+	if (column_pointers.size() != columns.size()) {
+		throw InternalException("Trying to unload a column but column pointers were not set");
+	}
+	if (!ColumnIsLoaded(c)) {
+		throw InternalException("Trying to unload a column that is not loaded");
+	}
+	lock_guard<mutex> l(row_group_lock);
+	if (!is_loaded) {
+		// is_loaded is not set - all columns must be loaded
+		this->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
+		for (idx_t c = 0; c < columns.size(); c++) {
+			this->is_loaded[c] = true;
+		}
+	}
+	this->is_loaded[c] = false;
+	columns[c].reset();
 }
 
 BlockManager &RowGroup::GetBlockManager() const {
@@ -469,9 +495,21 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
-	row_group->columns = GetColumns();
-	// now add the new column
+	row_group->columns = columns;
+	if (is_loaded) {
+		// preserve lazy loading
+		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size() + 1]);
+		for (idx_t i = 0; i < columns.size(); i++) {
+			row_group->is_loaded[i].store(is_loaded[i]);
+		}
+		// new column is always loaded
+		row_group->is_loaded[columns.size()] = true;
+		row_group->column_pointers = column_pointers;
+		row_group->column_pointers.emplace_back();
+	}
+	// add the new column
 	row_group->columns.push_back(std::move(added_column));
+	row_group->has_changes = true;
 
 	row_group->Verify();
 	return row_group;
@@ -484,13 +522,30 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
+
 	// copy over all columns except for the removed one
-	auto &cols = GetColumns();
-	for (idx_t i = 0; i < cols.size(); i++) {
-		if (i != removed_column) {
-			row_group->columns.push_back(cols[i]);
+	if (is_loaded) {
+		// preserve lazy loading
+		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size() - 1]);
+		idx_t new_idx = 0;
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (i == removed_column) {
+				continue;
+			}
+			row_group->is_loaded[new_idx].store(is_loaded[i]);
+			row_group->column_pointers.emplace_back(column_pointers[i]);
+			row_group->columns.emplace_back(columns[i]);
+			new_idx++;
+		}
+	} else {
+		for (idx_t i = 0; i < columns.size(); i++) {
+			if (i == removed_column) {
+				continue;
+			}
+			row_group->columns.emplace_back(columns[i]);
 		}
 	}
+	row_group->has_changes = true;
 
 	row_group->Verify();
 	return row_group;
@@ -1098,6 +1153,9 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		for (idx_t row_group_idx = 0; row_group_idx < row_groups.size(); row_group_idx++) {
 			auto &row_group = row_groups[row_group_idx].get();
 			auto &row_group_write_data = result[row_group_idx];
+			// if we are loading a column just to checkpoint we unload it post-checkpoint
+			auto keep_column_loaded = row_group.ColumnIsLoaded(column_idx);
+
 			auto &column = row_group.GetColumn(column_idx);
 			ColumnCheckpointInfo checkpoint_info(info, column_idx);
 			auto checkpoint_state = column.Checkpoint(row_group, checkpoint_info);
@@ -1108,9 +1166,10 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 			auto stats = checkpoint_state->GetStatistics();
 			result_col->MergeStatistics(*stats);
 
-			result_columns[row_group_idx].push_back(std::move(result_col));
+			result_columns[row_group_idx].emplace_back(std::move(result_col));
 			row_group_write_data.statistics.push_back(stats->Copy());
 			row_group_write_data.states.push_back(std::move(checkpoint_state));
+			row_group_write_data.keep_column_loaded.emplace_back(keep_column_loaded);
 		}
 	}
 
@@ -1239,6 +1298,10 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		throw InternalException("RowGroup::WriteToDisk - mismatch in column count vs compression types");
 	}
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+		if (!ColumnIsLoaded(column_idx)) {
+			// don't load a column just for verification
+			continue;
+		}
 		auto &column = GetColumn(column_idx);
 		if (column.count != this->count) {
 			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
@@ -1291,8 +1354,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		// merge row group stats into the global stats
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-			if (is_loaded && !is_loaded[column_idx] &&
-			    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
+			if (!ColumnIsLoaded(column_idx) && collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
 				// column is not loaded from disk - don't load just to update stats
 				writer.SetHasUnloadedColumn(column_idx);
 				continue;
@@ -1357,6 +1419,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	column_pointers = row_group_pointer.data_pointers;
 	has_metadata_blocks = true;
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+	for (idx_t c = 0; c < columns.size(); c++) {
+		if (!write_data.keep_column_loaded[c]) {
+			UnloadColumn(c);
+		}
+	}
 	Verify();
 	return row_group_pointer;
 }
@@ -1373,7 +1440,7 @@ bool RowGroup::HasChanges() const {
 	// check if any of the columns have changes
 	// avoid loading unloaded columns - unloaded columns can never have changes
 	for (idx_t c = 0; c < columns.size(); c++) {
-		if (is_loaded && !is_loaded[c]) {
+		if (!ColumnIsLoaded(c)) {
 			continue;
 		}
 		if (columns[c]->HasAnyChanges()) {
