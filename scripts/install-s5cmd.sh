@@ -117,4 +117,4 @@ if [[ -n "${GITHUB_PATH:-}" ]]; then
   echo "${INSTALL_DIR}" >> "${GITHUB_PATH}"
 fi
 
-"${INSTALL_DIR}/s5cmd" --version
+"${INSTALL_DIR}/s5cmd" version
