@@ -15,11 +15,7 @@ struct ResultColumnMapping;
 struct ColumnMapper;
 
 //! Evaluates a TableFilter against a concrete constant Value. Returns true iff the filter matches.
-//! Exposed as a free function so the filter can be evaluated for columns whose values are known
-//! without opening a file (e.g. filename, file_index, hive partition columns) from the multi-file
-//! scan driver, which does not have a MultiFileColumnMapper instance pre-open.
-DUCKDB_API bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter,
-                                                   const Value &constant);
+bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant);
 
 class MultiFileColumnMapper {
 public:

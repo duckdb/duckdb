@@ -284,10 +284,7 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
-				// Try to skip the file without opening it, based on filters on columns whose values are
-				// known from the file path / list position (filename, file_index, hive partitioning).
-				// This avoids the open+footer-read cost for files the filter rules out anyway, which
-				// matters a lot when dynamic filters from hash-join pushdown select few out of many files.
+				// skip the file if pre-open-knowable filters already rule it out
 				if (!current_reader_data.union_data &&
 				    MultiFileReader::CanSkipFileFromFilters(
 				        context, current_reader_data.file_to_be_opened, current_file_index, bind_data.file_options,

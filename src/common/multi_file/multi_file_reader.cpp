@@ -291,6 +291,36 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
+// Resolves `column_id` to a Value from info known without opening the file: filename, file_index,
+// or hive partitioning columns. `hive_partitions` is a caller-owned lazy cache.
+static bool TryResolvePreOpenConstant(column_t column_id, const string &file_path, idx_t file_list_idx,
+                                      const MultiFileReaderBindData &reader_bind, const MultiFileOptions &file_options,
+                                      ClientContext &context, std::map<string, string> &hive_partitions,
+                                      bool &hive_partitions_parsed, Value &out_constant) {
+	if ((reader_bind.filename_idx.IsValid() && column_id == reader_bind.filename_idx.GetIndex()) ||
+	    column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+		out_constant = Value(file_path);
+		return true;
+	}
+	if (column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_INDEX) {
+		out_constant = Value::UBIGINT(file_list_idx);
+		return true;
+	}
+	auto &hive = reader_bind.hive_partitioning_indexes;
+	auto hp = std::find_if(hive.begin(), hive.end(),
+	                       [column_id](const HivePartitioningIndex &e) { return e.index == column_id; });
+	if (hp == hive.end()) {
+		return false;
+	}
+	if (!hive_partitions_parsed) {
+		hive_partitions = HivePartitioning::Parse(file_path);
+		hive_partitions_parsed = true;
+	}
+	D_ASSERT(hive_partitions.size() == hive.size());
+	out_constant = file_options.GetHivePartitionValue(hive_partitions[hp->value], hp->value, context);
+	return true;
+}
+
 void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
                                    const MultiFileReaderBindData &options,
                                    const vector<MultiFileColumnDefinition> &global_columns,
@@ -306,40 +336,21 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 			name_map[column.name] = col_idx;
 		}
 	}
+	std::map<string, string> hive_partitions;
+	bool hive_partitions_parsed = false;
+	Value pre_open_constant;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
-		    column_id == COLUMN_IDENTIFIER_FILENAME) {
-			// filename
-			reader_data.constant_map.Add(global_idx, Value(filename));
-			continue;
-		}
-		if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
-			// filename
-			reader_data.constant_map.Add(global_idx, Value::UBIGINT(reader_data.reader->file_list_idx.GetIndex()));
+		if (TryResolvePreOpenConstant(column_id, filename, reader_data.reader->file_list_idx.GetIndex(), options,
+		                              file_options, context, hive_partitions, hive_partitions_parsed,
+		                              pre_open_constant)) {
+			reader_data.constant_map.Add(global_idx, pre_open_constant);
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
 			continue;
-		}
-		if (!options.hive_partitioning_indexes.empty()) {
-			// hive partition constants
-			auto partitions = HivePartitioning::Parse(filename);
-			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
-			bool found_partition = false;
-			for (auto &entry : options.hive_partitioning_indexes) {
-				if (column_id == entry.index) {
-					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					reader_data.constant_map.Add(global_idx, value);
-					found_partition = true;
-					break;
-				}
-			}
-			if (found_partition) {
-				continue;
-			}
 		}
 		if (file_options.union_by_name) {
 			auto &column = global_columns[column_id];
@@ -615,52 +626,14 @@ bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenF
 		return false;
 	}
 
-	// Parse hive partitions lazily - only if we encounter a filter on a hive-partitioning column
-	std::map<string, string> partitions;
-	bool partitions_parsed = false;
+	std::map<string, string> hive_partitions;
+	bool hive_partitions_parsed = false;
+	Value constant;
 
 	for (auto &it : *filters) {
-		auto global_column_position = it.GetIndex().GetIndex();
-		if (global_column_position >= global_column_ids.size()) {
-			continue;
-		}
-		auto column_id = global_column_ids[global_column_position].GetPrimaryIndex();
-
-		Value constant;
-		bool have_constant = false;
-
-		// Virtual column: filename
-		if ((reader_bind.filename_idx.IsValid() && column_id == reader_bind.filename_idx.GetIndex()) ||
-		    column_id == COLUMN_IDENTIFIER_FILENAME) {
-			constant = Value(file.path);
-			have_constant = true;
-		} else if (column_id == COLUMN_IDENTIFIER_FILE_INDEX) {
-			// Virtual column: file_index (position in the file list)
-			constant = Value::UBIGINT(file_list_idx);
-			have_constant = true;
-		} else if (!reader_bind.hive_partitioning_indexes.empty()) {
-			// Hive partition column: value is determined by the file path
-			for (auto &hp_entry : reader_bind.hive_partitioning_indexes) {
-				if (column_id != hp_entry.index) {
-					continue;
-				}
-				if (!partitions_parsed) {
-					partitions = HivePartitioning::Parse(file.path);
-					partitions_parsed = true;
-				}
-				auto part_it = partitions.find(hp_entry.value);
-				if (part_it == partitions.end()) {
-					// filename doesn't encode this partition - can't determine, skip this filter
-					break;
-				}
-				constant = file_options.GetHivePartitionValue(part_it->second, hp_entry.value, context);
-				have_constant = true;
-				break;
-			}
-		}
-
-		if (!have_constant) {
-			// filter is on a column we can't pre-evaluate - defer to post-open path
+		auto column_id = global_column_ids[it.GetIndex().GetIndex()].GetPrimaryIndex();
+		if (!TryResolvePreOpenConstant(column_id, file.path, file_list_idx, reader_bind, file_options, context,
+		                               hive_partitions, hive_partitions_parsed, constant)) {
 			continue;
 		}
 		if (!EvaluateTableFilterAgainstConstant(context, it.Filter(), constant)) {
