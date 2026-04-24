@@ -48,6 +48,7 @@ struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
+class CommitDropState;
 class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
@@ -124,8 +125,12 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
+	//! Accumulates this row group's on-disk blocks into the drop state.
+	void CommitDrop(CommitDropState &drop_state);
+	//! Accumulates the given column's on-disk blocks into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Drops every column's on-disk blocks and marks them as modified immediately.
 	void CommitDrop();
-	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;

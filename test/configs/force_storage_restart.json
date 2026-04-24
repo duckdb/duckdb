@@ -56,6 +56,12 @@
         "test/sql/catalog/dependencies/test_drop_column_sequence_dependency.test",
         "test/sql/catalog/dependencies/test_set_default_sequence_dependency.test"
       ]
+    },
+    {
+      "reason": "In-memory ART assertions incompatible with force_restart.",
+      "paths": [
+        "test/sql/transactions/concurrent_drop_table.test"
+      ]
     }
   ]
 }
