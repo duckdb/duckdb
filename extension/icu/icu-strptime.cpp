@@ -18,9 +18,9 @@
 
 namespace duckdb {
 
-TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, icu::Calendar *calendar) {
+TimestampComponents ICUHelpers::GetComponents(timestamp_t ts, icu::Calendar *calendar) {
 	// Get the parts in the given time zone
-	uint64_t micros = ICUDateFunc::SetTime(calendar, timestamp_t(ts.value));
+	uint64_t micros = ICUDateFunc::SetTime(calendar, ts);
 
 	TimestampComponents ts_data;
 	ts_data.year = ICUDateFunc::ExtractField(calendar, UCAL_EXTENDED_YEAR);
@@ -32,6 +32,14 @@ TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, icu::Calendar *
 	ts_data.second = ICUDateFunc::ExtractField(calendar, UCAL_SECOND);
 	ts_data.microsecond = UnsafeNumericCast<int32_t>(
 	    ICUDateFunc::ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
+	ts_data.nanosecond = 0;
+	return ts_data;
+}
+
+TimestampComponents ICUHelpers::GetComponents(timestamp_ns_t tsns, icu::Calendar *calendar) {
+	// Get the parts in the given time zone
+	auto ts_data = GetComponents(timestamp_t(tsns.value / Interval::NANOS_PER_MICRO), calendar);
+	ts_data.nanosecond = tsns.value % Interval::NANOS_PER_MICRO;
 	return ts_data;
 }
 
@@ -101,6 +109,73 @@ struct ICUStrptime : public ICUDateFunc {
 		return micros;
 	}
 
+	static uint64_t ToNanos(icu::Calendar *calendar, const ParseResult &parsed, const StrpTimeFormat &format) {
+		// Get the parts in the current time zone
+		uint64_t nanos = parsed.data[6];
+		calendar->set(UCAL_EXTENDED_YEAR, parsed.data[0]); // strptime doesn't understand eras
+		calendar->set(UCAL_MONTH, parsed.data[1] - 1);
+		calendar->set(UCAL_DATE, parsed.data[2]);
+		calendar->set(UCAL_HOUR_OF_DAY, parsed.data[3]);
+		calendar->set(UCAL_MINUTE, parsed.data[4]);
+		calendar->set(UCAL_SECOND, parsed.data[5]);
+		calendar->set(UCAL_MILLISECOND, UnsafeNumericCast<int32_t>(nanos / Interval::NANOS_PER_MSEC));
+		nanos %= Interval::NANOS_PER_MSEC;
+
+		// This overrides the TZ setting, so only use it if an offset was parsed.
+		// Note that we don't bother/worry about the DST setting because the two just combine.
+		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+			calendar->set(UCAL_ZONE_OFFSET, UnsafeNumericCast<int32_t>(parsed.data[7] * Interval::MSECS_PER_SEC));
+		}
+
+		return nanos;
+	}
+
+	static inline void ParseOne(icu::Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
+	                            timestamp_t &result) {
+		ParseResult parsed;
+		for (auto &format : formats) {
+			if (format.Parse(input, parsed)) {
+				if (parsed.is_special) {
+					result = parsed.ToTimestamp();
+					return;
+				} else {
+					// Set TZ first, if any.
+					if (!parsed.tz.empty()) {
+						SetTimeZone(calendar, parsed.tz);
+					}
+
+					result = GetTime(calendar, ToMicros(calendar, parsed, format));
+					return;
+				}
+			}
+		}
+
+		throw InvalidInputException(parsed.FormatError(input, formats[0].format_specifier));
+	}
+
+	static inline void ParseOne(icu::Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
+	                            timestamp_ns_t &result) {
+		ParseResult parsed;
+		for (auto &format : formats) {
+			if (format.Parse(input, parsed)) {
+				if (parsed.is_special) {
+					result = timestamp_ns_t(parsed.ToTimestamp().value);
+					return;
+				} else {
+					// Set TZ first, if any.
+					if (!parsed.tz.empty()) {
+						SetTimeZone(calendar, parsed.tz);
+					}
+					result = GetTimeNS(calendar, ToNanos(calendar, parsed, format));
+					return;
+				}
+			}
+		}
+
+		throw InvalidInputException(parsed.FormatError(input, formats[0].format_specifier));
+	}
+
+	template <typename T>
 	static void Parse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &str_arg = args.data[0];
@@ -112,27 +187,52 @@ struct ICUStrptime : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
-		UnaryExecutor::Execute<string_t, timestamp_t>(str_arg, result, args.size(), [&](string_t input) {
-			ParseResult parsed;
-			for (auto &format : info.formats) {
-				if (format.Parse(input, parsed)) {
-					if (parsed.is_special) {
-						return parsed.ToTimestamp();
-					} else {
-						// Set TZ first, if any.
-						if (!parsed.tz.empty()) {
-							SetTimeZone(calendar, parsed.tz);
-						}
-
-						return GetTime(calendar, ToMicros(calendar, parsed, format));
-					}
-				}
-			}
-
-			throw InvalidInputException(parsed.FormatError(input, info.formats[0].format_specifier));
+		UnaryExecutor::Execute<string_t, T>(str_arg, result, args.size(), [&](string_t input) {
+			T parsed;
+			ParseOne(calendar, input, info.formats, parsed);
+			return parsed;
 		});
 	}
 
+	static inline bool TryParseOne(icu::Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
+	                               timestamp_t &result) {
+		ParseResult parsed;
+		for (auto &format : formats) {
+			if (format.Parse(input, parsed)) {
+				if (parsed.is_special) {
+					result = timestamp_ns_t(parsed.ToTimestamp().value);
+					return true;
+				} else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+					if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	static inline bool TryParseOne(icu::Calendar *calendar, string_t input, vector<StrpTimeFormat> &formats,
+	                               timestamp_ns_t &result) {
+		ParseResult parsed;
+		for (auto &format : formats) {
+			if (format.Parse(input, parsed)) {
+				if (parsed.is_special) {
+					result = timestamp_ns_t(parsed.ToTimestamp().value);
+					return true;
+				} else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
+					if (TryGetTimeNS(calendar, ToNanos(calendar, parsed, format), result)) {
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	template <typename T>
 	static void TryParse(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &str_arg = args.data[0];
@@ -148,25 +248,15 @@ struct ICUStrptime : public ICUDateFunc {
 		if (ConstantVector::IsNull(fmt_arg)) {
 			ConstantVector::SetNull(result);
 		} else {
-			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
-			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-				    ParseResult parsed;
-				    for (auto &format : info.formats) {
-					    if (format.Parse(input, parsed)) {
-						    if (parsed.is_special) {
-							    return parsed.ToTimestamp();
-						    } else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
-							    timestamp_t result;
-							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
-								    return result;
-							    }
-						    }
-					    }
-				    }
-
-				    mask.SetInvalid(idx);
-				    return timestamp_t();
-			    });
+			UnaryExecutor::ExecuteWithNulls<string_t, T>(str_arg, result, args.size(),
+			                                             [&](string_t input, ValidityMask &mask, idx_t idx) {
+				                                             T result;
+				                                             if (TryParseOne(calendar, input, info.formats, result)) {
+					                                             return result;
+				                                             }
+				                                             mask.SetInvalid(idx);
+				                                             return result;
+			                                             });
 		}
 	}
 
@@ -183,10 +273,13 @@ struct ICUStrptime : public ICUDateFunc {
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}
-		scalar_function_t function = (bound_function.name == "try_strptime") ? TryParse : Parse;
+		const bool is_try = (bound_function.name == "try_strptime");
+		scalar_function_t function = is_try ? TryParse<timestamp_t> : Parse<timestamp_t>;
 		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		string format_string;
 		StrpTimeFormat format;
+		bool has_tz = false;
+		bool has_ns = false;
 		if (format_value.IsNull()) {
 			;
 		} else if (format_value.type().id() == LogicalTypeId::VARCHAR) {
@@ -198,9 +291,14 @@ struct ICUStrptime : public ICUDateFunc {
 			}
 
 			// If we have a time zone, we should use ICU for parsing and return a TSTZ instead.
-			if (format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME)) {
+			has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME);
+			has_ns = has_ns || format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED);
+			if (has_tz) {
+				if (has_ns) {
+					function = is_try ? TryParse<timestamp_ns_t> : Parse<timestamp_ns_t>;
+				}
 				bound_function.SetFunctionCallback(function);
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
+				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
 		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -209,7 +307,6 @@ struct ICUStrptime : public ICUDateFunc {
 				throw InvalidInputException("strptime format list must not be empty");
 			}
 			vector<StrpTimeFormat> formats;
-			bool has_tz = false;
 			for (const auto &child : children) {
 				format_string = child.ToString();
 				format.format_specifier = format_string;
@@ -220,11 +317,15 @@ struct ICUStrptime : public ICUDateFunc {
 				// If any format has UTC offsets or names, then we have to produce TSTZ
 				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME);
 				has_tz = has_tz || format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET);
+				has_ns = has_ns || format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED);
 				formats.emplace_back(format);
 			}
 			if (has_tz) {
+				if (has_ns) {
+					function = is_try ? TryParse<timestamp_ns_t> : Parse<timestamp_ns_t>;
+				}
 				bound_function.SetFunctionCallback(function);
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
+				bound_function.SetReturnType(has_ns ? LogicalType::TIMESTAMP_TZ_NS : LogicalType::TIMESTAMP_TZ);
 				return make_uniq<ICUStrptimeBindData>(context, formats);
 			}
 		}
@@ -262,6 +363,44 @@ struct ICUStrptime : public ICUDateFunc {
 		TailPatch(name, loader, types);
 	}
 
+	static timestamp_tz_t VarcharToTimestampTZUS(CalendarPtr &cal, string_t input, ValidityMask &mask, idx_t idx,
+	                                             CastParameters &parameters, optional_ptr<int32_t> nanos = nullptr) {
+		timestamp_tz_t result;
+		const auto str = input.GetData();
+		const auto len = input.GetSize();
+		string_t tz(nullptr, 0);
+		bool has_offset = false;
+		auto success = Timestamp::TryConvertTimestampTZ(str, len, result, true, has_offset, tz, nanos);
+		if (success != TimestampCastResult::SUCCESS) {
+			string msg;
+			if (success == TimestampCastResult::ERROR_RANGE) {
+				msg = Timestamp::RangeError(string(str, len));
+			} else {
+				msg = Timestamp::FormatError(string(str, len));
+			}
+			HandleCastError::AssignError(msg, parameters);
+			mask.SetInvalid(idx);
+		} else if (!has_offset) {
+			// Convert parts to a TZ (default or parsed) if no offset was provided
+			auto calendar = cal.get();
+
+			// Change TZ if one was provided.
+			if (tz.GetSize()) {
+				string error_msg;
+				SetTimeZone(calendar, tz, &error_msg);
+				if (!error_msg.empty()) {
+					HandleCastError::AssignError(error_msg, parameters);
+					mask.SetInvalid(idx);
+				}
+			}
+
+			// Now get the parts in the given time zone
+			result = timestamp_tz_t(FromNaive(calendar, result));
+		}
+
+		return result;
+	}
+
 	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
@@ -269,37 +408,25 @@ struct ICUStrptime : public ICUDateFunc {
 
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_tz_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-			    timestamp_tz_t result;
-			    const auto str = input.GetData();
-			    const auto len = input.GetSize();
-			    string_t tz(nullptr, 0);
-			    bool has_offset = false;
-			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, true, has_offset, tz);
-			    if (success != TimestampCastResult::SUCCESS) {
-				    string msg;
-				    if (success == TimestampCastResult::ERROR_RANGE) {
-					    msg = Timestamp::RangeError(string(str, len));
-				    } else {
-					    msg = Timestamp::FormatError(string(str, len));
-				    }
-				    HandleCastError::AssignError(msg, parameters);
+			    return VarcharToTimestampTZUS(cal, input, mask, idx, parameters);
+		    });
+		return true;
+	}
+
+	static bool VarcharToTimestampTZNS(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr cal(info.calendar->clone());
+
+		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_tz_ns_t>(
+		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+			    int32_t nanos = 0;
+			    auto ts_us = VarcharToTimestampTZUS(cal, input, mask, idx, parameters, &nanos);
+
+			    timestamp_tz_ns_t result;
+			    if (!Timestamp::TryFromTimestampNanos(ts_us, nanos, result)) {
+				    HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
 				    mask.SetInvalid(idx);
-			    } else if (!has_offset) {
-				    // Convert parts to a TZ (default or parsed) if no offset was provided
-				    auto calendar = cal.get();
-
-				    // Change TZ if one was provided.
-				    if (tz.GetSize()) {
-					    string error_msg;
-					    SetTimeZone(calendar, tz, &error_msg);
-					    if (!error_msg.empty()) {
-						    HandleCastError::AssignError(error_msg, parameters);
-						    mask.SetInvalid(idx);
-					    }
-				    }
-
-				    // Now get the parts in the given time zone
-				    result = timestamp_tz_t(FromNaive(calendar, result));
 			    }
 
 			    return result;
@@ -352,6 +479,8 @@ struct ICUStrptime : public ICUDateFunc {
 		switch (target.id()) {
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return BoundCastInfo(VarcharToTimestampTZ, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return BoundCastInfo(VarcharToTimestampTZNS, std::move(cast_data));
 		case LogicalTypeId::TIME_TZ:
 			return BoundCastInfo(VarcharToTimeTZ, std::move(cast_data));
 		default:
@@ -361,6 +490,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static void AddCasts(ExtensionLoader &loader) {
 		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ, BindCastFromVarchar);
+		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ_NS, BindCastFromVarchar);
 		loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::TIME_TZ, BindCastFromVarchar);
 	}
 };
@@ -378,11 +508,6 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static string_t Operation(icu::Calendar *calendar, timestamp_t input, const char *tz_name, StrfTimeFormat &format,
 	                          Vector &result) {
-		// Infinity is always formatted the same way
-		if (!Timestamp::IsFinite(input)) {
-			return StringVector::AddString(result, Timestamp::ToString(input));
-		}
-
 		// Get the parts in the given time zone
 		uint64_t micros = SetTime(calendar, input);
 
@@ -410,6 +535,35 @@ struct ICUStrftime : public ICUDateFunc {
 		return target;
 	}
 
+	static string_t Operation(icu::Calendar *calendar, timestamp_ns_t input, const char *tz_name,
+	                          StrfTimeFormat &format, Vector &result) {
+		// Get the parts in the given time zone
+		uint64_t nanos = SetTimeNS(calendar, input);
+
+		int32_t data[8];
+		data[0] = ExtractField(calendar, UCAL_EXTENDED_YEAR); // strftime doesn't understand eras.
+		data[1] = ExtractField(calendar, UCAL_MONTH) + 1;
+		data[2] = ExtractField(calendar, UCAL_DATE);
+		data[3] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
+		data[4] = ExtractField(calendar, UCAL_MINUTE);
+		data[5] = ExtractField(calendar, UCAL_SECOND);
+		data[6] =
+		    UnsafeNumericCast<int32_t>(ExtractField(calendar, UCAL_MILLISECOND) * Interval::NANOS_PER_MSEC + nanos);
+
+		data[7] = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
+		data[7] /= Interval::MSECS_PER_SEC;
+
+		const auto date = Date::FromDate(data[0], data[1], data[2]);
+
+		const auto len = format.GetLength(date, data, tz_name);
+		string_t target = StringVector::EmptyString(result, len);
+		format.FormatStringNS(date, data, tz_name, target.GetDataWriteable());
+		target.Finalize();
+
+		return target;
+	}
+
+	template <typename T>
 	static void ICUStrftimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &src_arg = args.data[0];
@@ -428,8 +582,8 @@ struct ICUStrftime : public ICUDateFunc {
 			StrfTimeFormat format;
 			ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-			UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
-			    src_arg, result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+			UnaryExecutor::ExecuteWithNulls<T, string_t>(
+			    src_arg, result, args.size(), [&](T input, ValidityMask &mask, idx_t idx) {
 				    if (Timestamp::IsFinite(input)) {
 					    return Operation(calendar.get(), input, tz_name, format, result);
 				    } else {
@@ -437,9 +591,9 @@ struct ICUStrftime : public ICUDateFunc {
 				    }
 			    });
 		} else {
-			BinaryExecutor::ExecuteWithNulls<timestamp_t, string_t, string_t>(
+			BinaryExecutor::ExecuteWithNulls<T, string_t, string_t>(
 			    src_arg, fmt_arg, result, args.size(),
-			    [&](timestamp_t input, string_t format_specifier, ValidityMask &mask, idx_t idx) {
+			    [&](T input, string_t format_specifier, ValidityMask &mask, idx_t idx) {
 				    if (Timestamp::IsFinite(input)) {
 					    StrfTimeFormat format;
 					    ParseFormatSpecifier(format_specifier, format);
@@ -455,25 +609,28 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction, Bind));
+		                               ICUStrftimeFunction<timestamp_t>, Bind));
+		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+		                               ICUStrftimeFunction<timestamp_ns_t>, Bind));
 		loader.RegisterFunction(set);
 	}
 
-	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {
+	template <typename T>
+	static string_t CastOperation(icu::Calendar *calendar, T input, Vector &result) {
 		// Infinity is always formatted the same way
 		if (!Timestamp::IsFinite(input)) {
 			return StringVector::AddString(result, Timestamp::ToString(input));
 		}
 
 		// decompose the timestamp
-		auto ts_data = ICUHelpers::GetComponents(timestamp_tz_t(input.value), calendar);
+		auto ts_data = ICUHelpers::GetComponents(input, calendar);
 
 		idx_t year_length;
 		bool add_bc;
 		const auto date_len = DateToStringCast::YearLength(ts_data.year, year_length, add_bc);
 
-		char micro_buffer[6];
-		const auto time_len = TimeToStringCast::MicrosLength(ts_data.microsecond, micro_buffer);
+		char micro_buffer[9];
+		const auto time_len = TimeToStringCast::MicrosLength(ts_data.microsecond, micro_buffer, ts_data.nanosecond);
 
 		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;
@@ -491,8 +648,7 @@ struct ICUStrftime : public ICUDateFunc {
 		buffer += date_len;
 		*buffer++ = ' ';
 
-		TimeToStringCast::Format(buffer, time_len, ts_data.hour, ts_data.minute, ts_data.second, ts_data.microsecond,
-		                         micro_buffer);
+		TimeToStringCast::Format(buffer, time_len, ts_data.hour, ts_data.minute, ts_data.second, 0, micro_buffer);
 		buffer += time_len;
 
 		memcpy(buffer, offset_str.c_str(), offset_len);
@@ -503,15 +659,15 @@ struct ICUStrftime : public ICUDateFunc {
 		return target;
 	}
 
+	template <typename T>
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(source, result, count,
-		                                                       [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-			                                                       return CastOperation(calendar.get(), input, result);
-		                                                       });
+		UnaryExecutor::ExecuteWithNulls<T, string_t>(
+		    source, result, count,
+		    [&](T input, ValidityMask &mask, idx_t idx) { return CastOperation<T>(calendar.get(), input, result); });
 		return true;
 	}
 
@@ -522,11 +678,19 @@ struct ICUStrftime : public ICUDateFunc {
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
-		return BoundCastInfo(CastToVarchar, std::move(cast_data));
+		switch (source.id()) {
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return BoundCastInfo(CastToVarchar<timestamp_t>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return BoundCastInfo(CastToVarchar<timestamp_ns_t>, std::move(cast_data));
+		default:
+			throw InternalException("Unexpected TIMESTAMPTZ type to VARCHAR cast.");
+		}
 	}
 
 	static void AddCasts(ExtensionLoader &loader) {
 		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR, BindCastToVarchar);
+		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR, BindCastToVarchar);
 	}
 };
 

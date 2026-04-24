@@ -259,6 +259,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw NotImplementedException("Unimplemented TIMESTAMP encoding - missing UNIT");
 			}
 			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
+				if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+					return LogicalType::TIMESTAMP_TZ_NS;
+				}
 				return LogicalType::TIMESTAMP_TZ;
 			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
 				return LogicalType::TIMESTAMP_NS;

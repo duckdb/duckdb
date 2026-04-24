@@ -90,6 +90,8 @@ typedef struct {
 	                                      duckdb_timestamp val);
 	duckdb_state (*duckdb_bind_timestamp_tz)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
 	                                         duckdb_timestamp val);
+	duckdb_state (*duckdb_bind_timestamp_tz_ns)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+	                                            duckdb_timestamp_ns val);
 	duckdb_state (*duckdb_bind_interval)(duckdb_prepared_statement prepared_statement, idx_t param_idx,
 	                                     duckdb_interval val);
 	duckdb_state (*duckdb_bind_varchar)(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val);
@@ -376,6 +378,7 @@ typedef struct {
 	duckdb_value (*duckdb_create_timestamp_ms)(duckdb_timestamp_ms input);
 	duckdb_value (*duckdb_create_timestamp_ns)(duckdb_timestamp_ns input);
 	duckdb_timestamp (*duckdb_get_timestamp_tz)(duckdb_value val);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 	duckdb_timestamp_s (*duckdb_get_timestamp_s)(duckdb_value val);
 	duckdb_timestamp_ms (*duckdb_get_timestamp_ms)(duckdb_value val);
 	duckdb_timestamp_ns (*duckdb_get_timestamp_ns)(duckdb_value val);

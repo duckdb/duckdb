@@ -2220,6 +2220,8 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
 	return operator_set;
 }
 
@@ -2268,12 +2270,12 @@ ScalarFunctionSet NanosecondsFun::GetFunctions() {
 	auto ns_func = DatePart::UnaryFunction<timestamp_ns_t, TR, OP>;
 	auto ns_stats = OP::template PropagateStatistics<timestamp_ns_t>;
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS}, result_type, ns_func, nullptr, ns_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS}, result_type, ns_func, nullptr, ns_stats));
 
 	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
 	auto tstz_func = DatePart::UnaryFunction<timestamp_t, TR, OP>;
 	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, result_type, tstz_func, nullptr, tstz_stats));
 
 	return operator_set;
 }

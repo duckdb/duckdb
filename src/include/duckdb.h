@@ -126,6 +126,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
+	// duckdb_timestamp (nanoseconds)
+	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 41,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_bignum

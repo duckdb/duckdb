@@ -357,6 +357,17 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 	                                         (timestamp.value < 0)));
 }
 
+date_t Timestamp::GetDateNS(timestamp_ns_t timestamp) {
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::infinity())) {
+		return date_t::infinity();
+	}
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
+		return date_t::ninfinity();
+	}
+	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::NANOS_PER_DAY -
+	                                         (timestamp.value < 0)));
+}
+
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	if (!IsFinite(timestamp)) {
 		throw ConversionException("Can't get TIME of infinite TIMESTAMP");
@@ -561,6 +572,7 @@ TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
 	TimestampComponents result;
 	Date::Convert(date, result.year, result.month, result.day);
 	Time::Convert(time, result.hour, result.minute, result.second, result.microsecond);
+	result.nanosecond = 0;
 	return result;
 }
 

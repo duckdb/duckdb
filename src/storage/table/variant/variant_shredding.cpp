@@ -62,6 +62,8 @@ struct VariantStatsVisitor {
 	}
 	static void VisitTimestampTZ(timestamp_tz_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
 	static void WriteStringInternal(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
 	static void VisitString(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {

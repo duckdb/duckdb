@@ -152,6 +152,7 @@ static bool ConstructShreddedType(const VariantAnalyzeData &state, LogicalType &
 	CheckPrimitive<VariantLogicalType::TIMESTAMP_MICROS, LogicalTypeId::TIMESTAMP>(state, result);
 	CheckPrimitive<VariantLogicalType::TIMESTAMP_NANOS, LogicalTypeId::TIMESTAMP_NS>(state, result);
 	CheckPrimitive<VariantLogicalType::TIMESTAMP_MICROS_TZ, LogicalTypeId::TIMESTAMP_TZ>(state, result);
+	CheckPrimitive<VariantLogicalType::TIMESTAMP_NANOS_TZ, LogicalTypeId::TIMESTAMP_TZ_NS>(state, result);
 	CheckPrimitive<VariantLogicalType::BLOB, LogicalTypeId::BLOB>(state, result);
 	CheckPrimitive<VariantLogicalType::VARCHAR, LogicalTypeId::VARCHAR>(state, result);
 	CheckPrimitive<VariantLogicalType::UUID, LogicalTypeId::UUID>(state, result);

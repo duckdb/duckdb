@@ -332,4 +332,47 @@ string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap) {
 	return result;
 }
 
+template <>
+string_t StringCastTZ::Operation(timestamp_ns_t input, StringHeap &heap) {
+	if (input == timestamp_t::infinity()) {
+		return heap.AddString(Date::PINF.str);
+	}
+	if (input == timestamp_t::ninfinity()) {
+		return heap.AddString(Date::NINF.str);
+	}
+
+	date_t date_entry;
+	dtime_t time_entry;
+	int32_t nanos;
+	Timestamp::Convert(input, date_entry, time_entry, nanos);
+
+	int32_t date[3], time[4];
+	Date::Convert(date_entry, date[0], date[1], date[2]);
+	Time::Convert(time_entry, time[0], time[1], time[2], time[3]);
+
+	// format for timestamptzns is DATE TIME+00 (separated by space)
+	idx_t year_length;
+	bool add_bc;
+	char nano_buffer[9] = {};
+	const idx_t date_length = DateToStringCast::Length(date, year_length, add_bc);
+	const idx_t time_length = TimeToStringCast::Length(time, nano_buffer, nanos);
+	const idx_t length = date_length + 1 + time_length + 3;
+
+	string_t result = heap.EmptyString(length);
+	auto data = result.GetDataWriteable();
+
+	idx_t pos = 0;
+	DateToStringCast::Format(data + pos, date, year_length, add_bc);
+	pos += date_length;
+	data[pos++] = ' ';
+	TimeToStringCast::Format(data + pos, time_length, time, nano_buffer);
+	pos += time_length;
+	data[pos++] = '+';
+	data[pos++] = '0';
+	data[pos++] = '0';
+
+	result.Finalize();
+	return result;
+}
+
 } // namespace duckdb

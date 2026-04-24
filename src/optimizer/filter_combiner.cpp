@@ -669,6 +669,7 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return -1;
 		}
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -707,6 +708,7 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		case LogicalTypeId::TIMESTAMP_NS:
 			return 0;
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return 1;
 		default:
 			return -1;
@@ -723,6 +725,8 @@ static Value MakeTemporalValue(LogicalTypeId type_id, int64_t result) {
 		return Value::TIMESTAMP(timestamp_t(result));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(result));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(result));
 	case LogicalTypeId::TIMESTAMP_MS:
 		return Value::TIMESTAMPMS(timestamp_ms_t(result));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -750,6 +754,9 @@ static bool AdjustTemporalValue(Value &val, int64_t margin) {
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		raw = val.GetValueUnsafe<timestamp_tz_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		raw = val.GetValueUnsafe<timestamp_tz_ns_t>().value;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		raw = val.GetValueUnsafe<timestamp_ms_t>().value;

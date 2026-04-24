@@ -114,6 +114,16 @@ struct timestamp_tz_t : public timestamp_t { // NOLINT
 	}
 };
 
+//! Type used to represent TIMESTAMPTZ_NS. timestamp_tz_ns_t holds the nanooseconds since 1970-01-01 (UTC).
+//! It is physically the same as timestamp_ns_t, both hold nanoseconds since epoch.
+struct timestamp_tz_ns_t : public timestamp_ns_t { // NOLINT
+	timestamp_tz_ns_t() = default;
+	explicit inline constexpr timestamp_tz_ns_t(int64_t nanos) : timestamp_ns_t(nanos) {
+	}
+	explicit inline constexpr timestamp_tz_ns_t(timestamp_ns_t ts) : timestamp_ns_t(ts) {
+	}
+};
+
 enum class TimestampCastResult : uint8_t {
 	SUCCESS,
 	ERROR_INCORRECT_FORMAT,
@@ -131,6 +141,7 @@ struct TimestampComponents {
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
+	int16_t nanosecond;
 };
 
 //! The static Timestamp class holds helper functions for the timestamp types.
@@ -162,6 +173,7 @@ public:
 	DUCKDB_API static string ToString(timestamp_t timestamp);
 
 	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
+	DUCKDB_API static date_t GetDateNS(timestamp_ns_t timestamp);
 
 	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
 	DUCKDB_API static dtime_ns_t GetTimeNs(timestamp_ns_t timestamp);
@@ -277,4 +289,12 @@ struct hash<duckdb::timestamp_tz_t> {
 		return hash<int64_t>()((int64_t)k);
 	}
 };
+template <>
+struct hash<duckdb::timestamp_tz_ns_t> {
+	std::size_t operator()(const duckdb::timestamp_tz_ns_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+
 } // namespace std

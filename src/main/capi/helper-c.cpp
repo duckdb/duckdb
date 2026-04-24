@@ -73,6 +73,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::TIME_TZ;
 	case DUCKDB_TYPE_TIMESTAMP_TZ:
 		return LogicalTypeId::TIMESTAMP_TZ;
+	case DUCKDB_TYPE_TIMESTAMP_TZ_NS:
+		return LogicalTypeId::TIMESTAMP_TZ_NS;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
 	case DUCKDB_TYPE_BIGNUM:
@@ -129,6 +131,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_TIMESTAMP;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return DUCKDB_TYPE_TIMESTAMP_TZ;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return DUCKDB_TYPE_TIMESTAMP_TZ_NS;
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
