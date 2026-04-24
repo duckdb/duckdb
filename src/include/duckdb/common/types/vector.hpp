@@ -143,16 +143,17 @@ public:
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
 
-	DUCKDB_API void Append(const Value &value);
-	DUCKDB_API void Append(const Vector &source, idx_t count);
-	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Append(const Value &value, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const Vector &source, idx_t count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 	DUCKDB_API void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
 	                     idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
-	//! Resizes the vector.
-	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
+	DUCKDB_API void Resize(idx_t size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);

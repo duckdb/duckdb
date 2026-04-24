@@ -1177,7 +1177,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		// Skip to the range containing the match
 		if (match_pos >= rhs_scanner->Scanned()) {
 			if (rhs_match_count) {
-				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+				rhs_input.Append(rhs_payload, rhs_match_sel, rhs_match_count);
 				rhs_match_count = 0;
 			}
 			rhs_payload.Reset();
@@ -1188,7 +1188,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		const auto source_offset = match_pos - rhs_scanner->Base();
 		rhs_match_sel.set_index(rhs_match_count++, source_offset);
 	}
-	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+	rhs_input.Append(rhs_payload, rhs_match_sel, rhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
