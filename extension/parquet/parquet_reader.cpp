@@ -449,6 +449,38 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
+static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) const {
+	D_ASSERT(IsShredded());
+	auto &shredded = *sub_columns[1];
+	auto &variant_stats = GetStatisticsRef();
+
+	if (!VariantStats::IsShredded(variant_stats)) {
+		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
+		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
+		return false;
+	}
+
+	//! shredded.typed_value
+	ColumnIndex column_index(0);
+
+	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
+	LogicalType root_type;
+	if (!FindShreddedColumnInternal(shredded, shredded_stats, variant_extract, column_index, root_type)) {
+		return false;
+	}
+	if (shredded_stats.get().GetType().IsNested()) {
+		//! Can't push down an extract if the leaf we're extracting is not a primitive
+		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
+		return false;
+	}
+	if (root_type.id() != LogicalTypeId::INVALID) {
+		column_index.SetPushdownExtractType(shredded.type, root_type);
+	}
+
+	out_struct_extract = StorageIndex::FromColumnIndex(column_index);
+	return true;
+}
+
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &column_id,
                                                               const ParquetColumnSchema &schema) const {
 	auto &indexes = column_id.GetChildIndexes();
@@ -515,9 +547,21 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-			children[child_index] =
-			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+		for (idx_t child_index = 0; child_index < 2; child_index++) {
+			children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+		}
+		if (schema.children.size() == 3) {
+			//! VARIANT is shredded, has a 'typed_value' column
+			auto &typed_value_schema = schema.children[2];
+			D_ASSERT(typed_value_schema.name == "typed_value");
+			if (column_id.IsPushdownExtract()) {
+				auto &child = indexes[0];
+				throw NotImplementedException("VARIANT PushdownExtract!");
+				children[2] = CreateReaderRecursive(context, ColumnIndex(0), typed_value_schema);
+			} else {
+				//! Not a pushdown extract, just create a regular column index
+				children[2] = CreateReaderRecursive(context, ColumnIndex(2), typed_value_schema);
+			}
 		}
 		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 	}
