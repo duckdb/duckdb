@@ -127,8 +127,6 @@ UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed)
 {
 	double dRange;
 	DSS_HUGE nTemp;
-	int32_t nLow32 = (int32_t)nLow, nHigh32 = (int32_t)nHigh;
-
 	if ((nHigh == MAX_LONG) && (nLow == 0)) {
 		// The reference DBGEN does dRange = DOUBLE_CAST (nHigh32 - nLow32 + 1);
 		// This results in integer overflow
