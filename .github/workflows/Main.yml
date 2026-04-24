@@ -283,6 +283,7 @@ jobs:
       CRASH_ON_ASSERT: 1
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
       EXTENSIONS_STATIC_BUILD: 0
 
@@ -974,6 +975,10 @@ jobs:
           name: duckdb-static-libs-linux-${{ matrix.config.arch }}
           path: |
             static-libs-linux-${{ matrix.config.arch }}.zip
+
+      - name: Trim ccache
+        if: ${{ always() }}
+        uses: ./.github/actions/trim-ccache
 
  static-libs-osx:
     name: Static Libs OSX (${{ matrix.architecture }})
