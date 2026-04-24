@@ -240,7 +240,6 @@ private:
 	void LoadRowNumberColumnData() const;
 	void SetCount(idx_t count);
 	bool ColumnIsLoaded(storage_t c) const;
-	void UnloadColumn(storage_t c);
 
 	bool HasUnloadedDeletes() const;
 

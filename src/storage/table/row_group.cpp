@@ -205,25 +205,6 @@ void RowGroup::LoadColumn(storage_t c) const {
 	}
 }
 
-void RowGroup::UnloadColumn(storage_t c) {
-	if (column_pointers.size() != columns.size()) {
-		throw InternalException("Trying to unload a column but column pointers were not set");
-	}
-	if (!ColumnIsLoaded(c)) {
-		throw InternalException("Trying to unload a column that is not loaded");
-	}
-	lock_guard<mutex> l(row_group_lock);
-	if (!is_loaded) {
-		// is_loaded is not set - all columns must be loaded
-		this->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
-		for (idx_t c = 0; c < columns.size(); c++) {
-			this->is_loaded[c] = true;
-		}
-	}
-	this->is_loaded[c] = false;
-	columns[c].reset();
-}
-
 BlockManager &RowGroup::GetBlockManager() const {
 	return GetCollection().GetBlockManager();
 }
@@ -1185,7 +1166,26 @@ vector<RowGroupWriteData> RowGroup::WriteToDisk(RowGroupWriteInfo &info,
 		auto &row_group_write_data = result[row_group_idx];
 		auto &row_group = row_groups[row_group_idx].get();
 		auto result_row_group = make_shared_ptr<RowGroup>(row_group.GetCollection(), row_group.count);
-		result_row_group->columns = std::move(result_columns[row_group_idx]);
+		auto &row_group_columns = result_columns[row_group_idx];
+
+		// add the columns - immediately unloading any columns that were not loaded pre-checkpoint
+		for (idx_t c = 0; c < row_group_columns.size(); c++) {
+			auto current_col = std::move(row_group_columns[c]);
+			if (row_group_write_data.keep_column_loaded[c]) {
+				// keep column loaded - add to list of columns
+				result_row_group->columns.emplace_back(std::move(current_col));
+				continue;
+			}
+			// free up the column again - unload it
+			if (!result_row_group->is_loaded) {
+				// is_loaded is not set - instantiate with all columns set to loaded
+				result_row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[row_group_columns.size()]);
+				for (idx_t load_idx = 0; load_idx < row_group_columns.size(); load_idx++) {
+					result_row_group->is_loaded[load_idx] = true;
+				}
+			}
+			result_row_group->is_loaded[c] = false;
+		}
 		result_row_group->version_info = row_group.version_info.load();
 		result_row_group->owned_version_info = row_group.owned_version_info;
 
@@ -1426,11 +1426,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	column_pointers = row_group_pointer.data_pointers;
 	has_metadata_blocks = true;
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
-	for (idx_t c = 0; c < columns.size(); c++) {
-		if (!write_data.keep_column_loaded[c]) {
-			UnloadColumn(c);
-		}
-	}
 	Verify();
 	return row_group_pointer;
 }
