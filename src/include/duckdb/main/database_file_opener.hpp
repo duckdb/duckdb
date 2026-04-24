@@ -71,18 +71,16 @@ private:
 
 class LocalDatabaseFileSystem : public OpenerFileSystem {
 public:
-	LocalDatabaseFileSystem(DatabaseInstance &db_p, FileSystem &local_fs_p)
-	    : local_fs(local_fs_p), database_opener(db_p) {
-	}
+	explicit LocalDatabaseFileSystem(DatabaseInstance &db_p);
 
-	FileSystem &GetFileSystem() const override {
-		return local_fs;
-	}
+	FileSystem &GetFileSystem() const override;
 	optional_ptr<FileOpener> GetOpener() const override {
 		return &database_opener;
 	}
 
 private:
+	DatabaseInstance &db;
+	unique_ptr<FileSystem> owned_file_system;
 	FileSystem &local_fs;
 	mutable DatabaseFileOpener database_opener;
 };

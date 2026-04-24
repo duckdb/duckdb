@@ -130,6 +130,10 @@ FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
 }
 
+FileSystem &FileSystem::GetLocal(DatabaseInstance &db) {
+	return db.GetLocalFileSystem();
+}
+
 FileSystem &FileSystem::Get(AttachedDatabase &db) {
 	return FileSystem::GetFileSystem(db.GetDatabase());
 }
@@ -280,7 +284,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	create_api_v1 = CreateAPIv1Wrapper;
 
 	db_file_system = make_uniq<DatabaseFileSystem>(*this);
-	owned_unsafe_local_fs = make_uniq<LocalFileSystem>();
+	local_db_file_system = make_uniq<LocalDatabaseFileSystem>(*this);
 	db_manager = make_uniq<DatabaseManager>(*this);
 	if (config.buffer_manager) {
 		buffer_manager = config.buffer_manager;
@@ -386,13 +390,30 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
 }
 
-LocalDatabaseFileSystem DatabaseInstance::GetLocalFileSystem() {
-	auto &vfs = static_cast<VirtualFileSystem &>(*config.file_system);
+FileSystem &DatabaseInstance::GetLocalFileSystem() {
+	return *local_db_file_system;
+}
+
+static FileSystem &ResolveLocalFileSystem(DatabaseInstance &db, unique_ptr<FileSystem> &owned) {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
 	auto &default_fs = vfs.GetDefaultFileSystem();
 	if (default_fs.IsLocalFileSystem()) {
-		return LocalDatabaseFileSystem(*this, default_fs);
+		return default_fs;
 	}
-	return LocalDatabaseFileSystem(*this, *owned_unsafe_local_fs);
+	owned = make_uniq<LocalFileSystem>();
+	return *owned;
+}
+
+LocalDatabaseFileSystem::LocalDatabaseFileSystem(DatabaseInstance &db_p)
+    : db(db_p), local_fs(ResolveLocalFileSystem(db_p, owned_file_system)), database_opener(db_p) {
+}
+
+FileSystem &LocalDatabaseFileSystem::GetFileSystem() const {
+	auto &vfs = static_cast<VirtualFileSystem &>(*db.config.file_system);
+	if (vfs.SubSystemIsDisabled(local_fs.GetName())) {
+		throw PermissionException("File system %s has been disabled by configuration", local_fs.GetName());
+	}
+	return local_fs;
 }
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {

@@ -412,7 +412,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
                                                            optional_ptr<ClientContext> context) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
-		auto fs = db.GetLocalFileSystem();
+		auto &fs = FileSystem::GetLocal(db);
 		if (fs.FileExists(local_extension_path + ".info")) {
 			try {
 				install_info =
@@ -489,7 +489,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	}
 
 	QueryContext query_context(context);
-	auto fs = db.GetLocalFileSystem();
+	auto &fs = FileSystem::GetLocal(db);
 	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), info, db.config);
 
@@ -590,14 +590,14 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
-		auto local_fs = db.GetLocalFileSystem();
+		auto &local_fs = FileSystem::GetLocal(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (options.repository && !IsHTTP(options.repository->path)) {
-		auto local_fs = db.GetLocalFileSystem();
+		auto &local_fs = FileSystem::GetLocal(db);
 		return InstallFromRepository(db, local_fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);
 	}
