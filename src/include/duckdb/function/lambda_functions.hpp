@@ -101,7 +101,7 @@ public:
 			result_validity = &FlatVector::ValidityMutable(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(row_count));
 				result_is_null = true;
 				return;
 			}

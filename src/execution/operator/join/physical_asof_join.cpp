@@ -1623,7 +1623,7 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 		const auto &op = gsource.op;
 		const idx_t left_column_count = op.children[0].get().GetTypes().size();
 		for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-			ConstantVector::SetNull(chunk.data[col_idx]);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(result_count));
 		}
 		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 			const auto rhs_idx = op.right_projection_map[col_idx];

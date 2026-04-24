@@ -23,7 +23,7 @@ static void CurrentTimeFunction(DataChunk &input, ExpressionState &state, Vector
 	dtime_tz_t result_time(dtime_t(0), 0);
 	ICUToTimeTZ::ToTimeTZ(data.calendar.get(), instant, result_time);
 	auto val = Value::TIMETZ(result_time);
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -31,7 +31,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 	auto instant = GetTransactionTimestamp(state);
 
 	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), instant));
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 ScalarFunction GetCurrentTimeFun() {

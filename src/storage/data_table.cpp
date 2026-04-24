@@ -1735,7 +1735,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
 
 	// now perform the actual update
-	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID));
+	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
 	updates_slice.InitializeEmpty(updates.GetTypes());
