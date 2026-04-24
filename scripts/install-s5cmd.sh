@@ -5,7 +5,12 @@ set -euo pipefail
 S5CMD_VERSION="${S5CMD_VERSION:-2.3.0}"
 S5CMD_TAG="v${S5CMD_VERSION}"
 S5CMD_BASE_URL="https://github.com/peak/s5cmd/releases/download/${S5CMD_TAG}"
-INSTALL_DIR="${S5CMD_INSTALL_DIR:-$HOME/.local/bin}"
+
+if [ -n "${CI:-}" ]; then
+  INSTALL_DIR="${S5CMD_INSTALL_DIR:-/usr/bin}"
+else
+  INSTALL_DIR="${S5CMD_INSTALL_DIR:-$HOME/.local/bin}"
+fi
 
 uname_s="$(uname -s)"
 uname_m="$(uname -m)"
