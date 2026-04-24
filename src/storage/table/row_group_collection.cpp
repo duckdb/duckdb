@@ -983,7 +983,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
 			continue;
 		}
-		result_chunk.data[j].Reference(Value(types[j]));
+		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
 	result_chunk.SetCardinality(fetch_chunk);
 

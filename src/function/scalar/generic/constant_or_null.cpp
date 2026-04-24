@@ -48,7 +48,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 				auto &result_mask = ConstantVector::Validity(result);
 				auto &input_mask = ConstantVector::Validity(args.data[idx]);
 				result_mask.Initialize(input_mask);
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(args.size()));
 				return;
 			}
 			break;

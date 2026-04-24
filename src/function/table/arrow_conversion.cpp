@@ -840,7 +840,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
-		ConstantVector::SetNull(vector);
+		ConstantVector::SetNull(vector, count_t(size));
 		break;
 	case LogicalTypeId::BOOLEAN: {
 		//! Arrow bit-packs boolean values

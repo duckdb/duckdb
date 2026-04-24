@@ -14,7 +14,7 @@ namespace duckdb {
 
 static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	Value v(args.data[0].GetType().ToString());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
@@ -41,7 +41,7 @@ ScalarFunction TypeOfFun::GetFunction() {
 
 static void GetTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto v = Value::TYPE(args.data[0].GetType());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &input) {

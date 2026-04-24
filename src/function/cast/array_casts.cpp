@@ -53,7 +53,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		HandleCastError::AssignError(msg, parameters);
 		if (!parameters.strict) {
 			// if this was a TRY_CAST, we know every row will fail, so just return null
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 	}
@@ -63,7 +63,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 
 		auto &source_cc = ArrayVector::GetChildMutable(source);

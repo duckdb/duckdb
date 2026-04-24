@@ -34,7 +34,7 @@ void ConstantVector::Reference(Vector &vector, const Value &value, count_t count
 	vector.SetBuffer(CreateConstantBuffer(value, count));
 }
 
-void ConstantVector::SetNull(Vector &vector) {
+void ConstantVector::SetNull(Vector &vector, count_t count) {
 	// try to re-use the buffer if possible
 	auto &buffer_ref = vector.GetBufferRef();
 	bool needs_new_buffer = !buffer_ref;
@@ -47,10 +47,11 @@ void ConstantVector::SetNull(Vector &vector) {
 	}
 	if (needs_new_buffer) {
 		// we cannot re-use the buffer - refer a null-value which has code necessary to create a new buffer
-		Reference(vector, Value(vector.GetType()), count_t(1ULL));
+		Reference(vector, Value(vector.GetType()), count);
 		return;
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(vector, count);
 	SetNull(vector, true);
 }
 

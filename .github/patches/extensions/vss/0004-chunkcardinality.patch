@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index b85f470..4d16e3d 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -399,7 +399,7 @@ idx_t HNSWIndex::ExecuteMultiScan(IndexScanState &state_p, float *query_vector,
+ 
+ const Vector &HNSWIndex::GetMultiScanResult(IndexScanState &state) {
+ 	auto &scan_state = state.Cast<MultiScanState>();
+-	FlatVector::SetData(scan_state.vec, (data_ptr_t)scan_state.row_ids.data(), scan_state.row_ids.size());
++	FlatVector::SetData(scan_state.vec, (data_ptr_t)scan_state.row_ids.data(), count_t(scan_state.row_ids.size()));
+ 	return scan_state.vec;
+ }
+ 

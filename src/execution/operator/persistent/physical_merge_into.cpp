@@ -502,7 +502,7 @@ SourceResultType PhysicalMergeInto::GetDataInternal(ExecutionContext &context, D
 				throw InternalException("Unsupported merge action for RETURNING");
 			}
 			Value merge_action(merge_action_name);
-			chunk.data.back().Reference(merge_action);
+			chunk.data.back().Reference(merge_action, count_t(lstate.scan_chunk.size()));
 			chunk.SetCardinality(lstate.scan_chunk.size());
 		}
 

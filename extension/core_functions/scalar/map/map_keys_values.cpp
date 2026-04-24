@@ -15,7 +15,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 	auto count = args.size();

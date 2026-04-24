@@ -439,9 +439,9 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
 					Vector old_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)));
+					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)), count_t(next));
 					Vector new_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)));
+					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)), count_t(next));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part.base_heap_ptr = new_base_heap_ptr;

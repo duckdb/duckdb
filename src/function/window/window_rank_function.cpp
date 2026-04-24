@@ -105,7 +105,7 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 //===--------------------------------------------------------------------===//
 class WindowPeerStreamingState : public WindowExecutorStreamingState {
 public:
-	explicit WindowPeerStreamingState(const Value &val) : vec(val) {
+	explicit WindowPeerStreamingState(const Value &val) : vec(val, count_t(STANDARD_VECTOR_SIZE)) {
 	}
 
 	void Evaluate(Vector &result) {

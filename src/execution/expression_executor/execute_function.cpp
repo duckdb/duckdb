@@ -231,7 +231,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 				all_constant = false;
 			} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
 				// constant NULL input: result is NULL
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 				return;
 			}
 		}

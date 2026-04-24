@@ -825,7 +825,7 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				ConstantVector::SetNull(result.data[col_idx]);
+				ConstantVector::SetNull(result.data[col_idx], count_t(result_count));
 			}
 			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {

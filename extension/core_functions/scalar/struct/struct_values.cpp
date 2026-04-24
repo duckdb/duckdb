@@ -30,7 +30,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 	} else {
 		// set only the struct buffer's type - do not propagate to children
