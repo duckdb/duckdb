@@ -205,29 +205,25 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 	SetCardinality(other.size());
 }
 
-void DataChunk::Append(const DataChunk &other, bool resize, optional_ptr<SelectionVector> sel, idx_t sel_count) {
-	idx_t new_size = sel ? size() + sel_count : size() + other.size();
-	if (other.size() == 0) {
+void DataChunk::Append(const DataChunk &other, VectorAppendMode append_mode) {
+	Append(other, *FlatVector::IncrementalSelectionVector(), other.size(), append_mode);
+}
+
+void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t sel_count,
+                       VectorAppendMode append_mode) {
+	if (sel_count == 0) {
 		return;
 	}
+	idx_t new_size = size() + sel_count;
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-		auto capacity = FlatVector::GetCapacity(data[i]);
-		if (new_size > capacity) {
-			if (resize) {
-				auto new_capacity = NextPowerOfTwo(new_size);
-				data[i].Resize(size(), new_capacity);
-			} else {
-				throw InternalException("Can't append chunk to other chunk without resizing");
-			}
-		}
-		if (sel) {
-			VectorOperations::Copy(other.data[i], data[i], *sel, sel_count, 0, size());
+		FlatVector::SetSize(data[i], size());
+		if (sel.IsSet()) {
+			data[i].Append(other.data[i], sel, sel_count, append_mode);
 		} else {
-			VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
+			data[i].Append(other.data[i], other.size(), append_mode);
 		}
 	}
 	SetCardinality(new_size);

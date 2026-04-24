@@ -173,7 +173,7 @@ void PartitionedColumnData::AppendInternal(PartitionedColumnDataAppendState &sta
 			partition.Append(partition_append_state, state.slice_chunk);
 		} else {
 			// Append the input chunk to the partition buffer using the selection vector
-			partition_buffer.Append(input, false, &partition_sel, partition_length);
+			partition_buffer.Append(input, partition_sel, partition_length);
 
 			if (partition_buffer.size() >= HalfBufferSize()) {
 				// Next batch won't fit in the buffer, flush it to the partition

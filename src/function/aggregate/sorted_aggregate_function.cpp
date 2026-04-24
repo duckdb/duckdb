@@ -302,7 +302,7 @@ struct SortedAggregateState {
 			FlushChunks(order_bind);
 		} else if (input_chunk) {
 			//	Still using data chunks
-			input_chunk->Append(input, true, &sel, nsel);
+			input_chunk->Append(input, sel, nsel, VectorAppendMode::ALLOW_RESIZE);
 		} else {
 			//	Still using linked lists
 			LinkedAppend(order_bind.buffered_funcs, aggr_input_data.allocator, input, input_linked, sel, nsel);

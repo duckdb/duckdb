@@ -97,8 +97,9 @@ public:
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk and resize is not allowed.
-	DUCKDB_API void Append(const DataChunk &other, bool resize = false, optional_ptr<SelectionVector> sel = nullptr,
-	                       idx_t count = 0);
+	DUCKDB_API void Append(const DataChunk &other, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t sel_count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
