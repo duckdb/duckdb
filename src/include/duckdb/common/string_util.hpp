@@ -122,8 +122,8 @@ public:
 	//! Returns the position of needle string within the haystack
 	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
 
-	//! Returns true if the target string starts with the given prefix
-	DUCKDB_API static bool StartsWith(string str, string prefix);
+	//! Returns true if the target string <b>starts</b> with the given prefix
+	DUCKDB_API static bool StartsWith(const string &str, const string &prefix);
 
 	//! Returns true if the target string <b>ends</b> with the given suffix.
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
