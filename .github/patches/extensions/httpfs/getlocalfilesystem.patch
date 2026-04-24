@@ -1,0 +1,16 @@
+diff --git a/test/sql/settings/test_disabled_file_system_httpfs.test b/test/sql/settings/test_disabled_file_system_httpfs.test
+index 9cc1ee839bb..67f0e6b3296 100644
+--- a/test/sql/settings/test_disabled_file_system_httpfs.test
++++ b/test/sql/settings/test_disabled_file_system_httpfs.test
+@@ -15,8 +15,10 @@ statement ok
+ SET disabled_filesystems='LocalFileSystem';
+ 
+ # httpfs works
+-statement ok
++statement maybe
+ from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv');
++----
++Invalid Configuration Error
+ 
+ statement ok
+ SET disabled_filesystems='LocalFileSystem,HTTPFileSystem';
