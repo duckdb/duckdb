@@ -69,9 +69,10 @@ void PipelineExecutor::Reset() {
 
 	// Recreate local sink state (destroyed by PushFinalize)
 	if (pipeline.sink) {
-		if (!allow_reuse || !local_sink_state ||
-		    !pipeline.sink->ResetLocalSinkState(context, *pipeline.sink->sink_state, *local_sink_state)) {
+		if (!allow_reuse || !local_sink_state || !local_sink_state->SupportsReuse()) {
 			local_sink_state = pipeline.sink->GetLocalSinkState(context);
+		} else {
+			local_sink_state->Reset(context, *pipeline.sink->sink_state);
 		}
 		required_partition_info = pipeline.sink->RequiredPartitionInfo();
 		local_sink_state->partition_info = SourcePartitionInfo();
@@ -85,9 +86,10 @@ void PipelineExecutor::Reset() {
 	}
 
 	// Recreate local source state (source data changed)
-	if (!allow_reuse || !local_source_state ||
-	    !pipeline.source->ResetLocalSourceState(context, *pipeline.source_state, *local_source_state)) {
+	if (!allow_reuse || !local_source_state || !local_source_state->SupportsReuse()) {
 		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	} else {
+		local_source_state->Reset(context, *pipeline.source_state);
 	}
 
 	// Recreate intermediate operator states (finalized in previous execution)

@@ -40,8 +40,7 @@ protected:
 public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
-	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	bool IsSink() const override {

@@ -85,7 +85,11 @@ public:
 
 	SinkFinalizeType state;
 
-	virtual void Reset() {
+	virtual bool SupportsReuse() const {
+		return false;
+	}
+
+	virtual void Reset(ClientContext &context) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		ResetBlocking();
 		state = SinkFinalizeType::READY;
@@ -115,6 +119,13 @@ public:
 	//! Source partition info
 	SourcePartitionInfo partition_info;
 
+	virtual bool SupportsReuse() const {
+		return false;
+	}
+
+	virtual void Reset(ExecutionContext &context, GlobalSinkState &gstate) {
+	}
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -136,7 +147,11 @@ public:
 		return 1;
 	}
 
-	virtual void Reset() {
+	virtual bool SupportsReuse() const {
+		return false;
+	}
+
+	virtual void Reset(ClientContext &context) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		ResetBlocking();
 	}
@@ -156,6 +171,13 @@ public:
 class LocalSourceState {
 public:
 	virtual ~LocalSourceState() {
+	}
+
+	virtual bool SupportsReuse() const {
+		return false;
+	}
+
+	virtual void Reset(ExecutionContext &context, GlobalSourceState &gstate) {
 	}
 
 	template <class TARGET>

@@ -22,11 +22,23 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 class CTEGlobalState : public GlobalSinkState {
 public:
-	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op) : working_table_ref(op.working_table.get()) {
+	explicit CTEGlobalState(ClientContext &context, const PhysicalCTE &op)
+	    : op(op), working_table_ref(op.working_table.get()) {
 	}
+	const PhysicalCTE &op;
 	optional_ptr<ColumnDataCollection> working_table_ref;
 
 	mutex lhs_lock;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		op.working_table->Reset();
+		working_table_ref = op.working_table.get();
+		GlobalSinkState::Reset(context);
+	}
 
 	void MergeIT(ColumnDataCollection &input) {
 		lock_guard<mutex> guard(lhs_lock);
@@ -58,13 +70,6 @@ unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &conte
 unique_ptr<LocalSinkState> PhysicalCTE::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<CTELocalState>(context.client, *this);
 	return std::move(state);
-}
-
-bool PhysicalCTE::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	auto &state = state_p.Cast<CTEGlobalState>();
-	working_table->Reset();
-	state.working_table_ref = working_table.get();
-	return true;
 }
 
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

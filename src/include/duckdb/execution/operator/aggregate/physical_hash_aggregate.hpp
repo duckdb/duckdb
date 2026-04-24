@@ -95,9 +95,6 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	bool ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state) const override;
-	bool ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
-	                           LocalSourceState &state) const override;
 	SourceResultType GetDataInternal(ExecutionContext &context, DataChunk &chunk,
 	                                 OperatorSourceInput &input) const override;
 
@@ -125,8 +122,6 @@ public:
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
-	bool ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &state) const override;
 
 	bool IsSink() const override {
 		return true;

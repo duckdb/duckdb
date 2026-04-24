@@ -328,6 +328,40 @@ public:
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
 	void InitializeProbeSpill();
 
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		// Use single-partition mode on subsequent iterations to avoid 16-partition overhead for small joins.
+		hash_table->ResetForNewIterationSinglePartition();
+		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
+		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
+		finalized = false;
+		active_local_states = 0;
+		external = ClientConfig::GetConfig(context).force_external;
+		total_size = 0;
+		max_partition_size = 0;
+		max_partition_count = 0;
+		probe_side_requirement = 0;
+		local_hash_tables.clear();
+		owned_local_hash_tables.clear();
+		probe_spill.reset();
+		scanned_data = false;
+		preserve_build_for_recursive_reuse = false;
+		skip_filter_pushdown = false;
+		global_filter_state.reset();
+		temporary_memory_state->SetZero();
+		keep_local_hash_tables = true;
+		if (op.filter_pushdown) {
+			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
+				skip_filter_pushdown = true;
+			}
+			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
+		}
+		GlobalSinkState::Reset(context);
+	}
+
 public:
 	ClientContext &context;
 	const PhysicalHashJoin &op;
@@ -382,7 +416,7 @@ unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilte
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
 	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context, HashJoinGlobalSinkState &gstate)
-	    : join_key_executor(context) {
+	    : op(op), join_key_executor(context) {
 		auto &allocator = BufferAllocator::Get(context);
 
 		for (auto &cond : op.conditions) {
@@ -406,6 +440,7 @@ public:
 	}
 
 public:
+	const PhysicalHashJoin &op;
 	PartitionedTupleDataAppendState append_state;
 
 	ExpressionExecutor join_key_executor;
@@ -418,6 +453,29 @@ public:
 	bool keep_hash_table = false;
 
 	unique_ptr<JoinFilterLocalState> local_filter_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
+		auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
+		join_keys.Reset();
+		payload_chunk.Reset();
+		if (hash_table) {
+			hash_table->ResetForNewIterationSinglePartition();
+		} else {
+			hash_table = op.InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
+		}
+		hash_table->GetSinkCollection().ResetAppendState(append_state);
+		keep_hash_table = gstate.keep_local_hash_tables;
+		gstate.active_local_states++;
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		} else {
+			local_filter_state.reset();
+		}
+	}
 };
 
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context,
@@ -484,37 +542,6 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return make_uniq<HashJoinLocalSinkState>(*this, context.client, gstate);
 }
 
-bool PhysicalHashJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	auto &state = state_p.Cast<HashJoinGlobalSinkState>();
-	// Use single-partition mode on subsequent iterations to avoid 16-partition overhead for small joins.
-	state.hash_table->ResetForNewIterationSinglePartition();
-	state.perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(*this, *state.hash_table);
-	auto use_perfect_hash = CanUsePerfectHashJoin(*this, *state.perfect_join_executor);
-	state.finalized = false;
-	state.active_local_states = 0;
-	state.external = Settings::Get<DebugForceExternalSetting>(context);
-	state.total_size = 0;
-	state.max_partition_size = 0;
-	state.max_partition_count = 0;
-	state.probe_side_requirement = 0;
-	state.local_hash_tables.clear();
-	state.owned_local_hash_tables.clear();
-	state.probe_spill.reset();
-	state.scanned_data = false;
-	state.preserve_build_for_recursive_reuse = false;
-	state.skip_filter_pushdown = false;
-	state.global_filter_state.reset();
-	state.temporary_memory_state->SetZero();
-	state.keep_local_hash_tables = true;
-	if (filter_pushdown) {
-		if (filter_pushdown->probe_info.empty() && use_perfect_hash) {
-			state.skip_filter_pushdown = true;
-		}
-		state.global_filter_state = filter_pushdown->GetGlobalState(context, *this);
-	}
-	return true;
-}
-
 void PhysicalHashJoin::SetPreserveBuildForRecursiveReuse(bool preserve) const {
 	if (!sink_state) {
 		return;
@@ -532,28 +559,6 @@ bool PhysicalHashJoin::CanPreserveBuildForRecursiveReuse() const {
 	}
 	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
 	return state.preserve_build_for_recursive_reuse && !state.external;
-}
-
-bool PhysicalHashJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                           LocalSinkState &state_p) const {
-	auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
-	auto &state = state_p.Cast<HashJoinLocalSinkState>();
-	state.join_keys.Reset();
-	state.payload_chunk.Reset();
-	if (state.hash_table) {
-		state.hash_table->ResetForNewIterationSinglePartition();
-	} else {
-		state.hash_table = InitializeHashTable(context.client, gstate.hash_table->GetRadixBits());
-	}
-	state.hash_table->GetSinkCollection().ResetAppendState(state.append_state);
-	state.keep_hash_table = gstate.keep_local_hash_tables;
-	gstate.active_local_states++;
-	if (filter_pushdown) {
-		state.local_filter_state = filter_pushdown->GetLocalState(*gstate.global_filter_state);
-	} else {
-		state.local_filter_state.reset();
-	}
-	return true;
 }
 
 void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
@@ -1679,6 +1684,28 @@ public:
 		return count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		global_stage = HashJoinSourceStage::INIT;
+		build_chunk_idx = DConstants::INVALID_INDEX;
+		build_chunk_count = 0;
+		build_chunk_done = 0;
+		build_chunks_per_thread = DConstants::INVALID_INDEX;
+		probe_chunk_count = 0;
+		probe_chunk_done = 0;
+		probe_count = op.children[0].get().estimated_cardinality;
+		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
+		full_outer_chunk_idx = DConstants::INVALID_INDEX;
+		full_outer_chunk_count = 0;
+		full_outer_chunk_done = 0;
+		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
+		blocked_tasks.clear();
+		GlobalSourceState::Reset(context);
+	}
+
 public:
 	const PhysicalHashJoin &op;
 
@@ -1722,6 +1749,7 @@ public:
 	void ExternalScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
 
 public:
+	const PhysicalHashJoin &op;
 	//! The stage that this thread was assigned work for
 	HashJoinSourceStage local_stage;
 	//! Vector with pointers here so we don't have to re-initialize
@@ -1749,6 +1777,29 @@ public:
 	idx_t full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 	idx_t full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 	unique_ptr<JoinHTScanState> full_outer_scan_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
+		local_stage = HashJoinSourceStage::INIT;
+		build_chunk_idx_from = DConstants::INVALID_INDEX;
+		build_chunk_idx_to = DConstants::INVALID_INDEX;
+		probe_local_scan.allocator = nullptr;
+		probe_local_scan.current_chunk_state.handles.clear();
+		probe_local_scan.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
+		probe_local_scan.chunk_index = DConstants::INVALID_INDEX;
+		lhs_probe_chunk.Reset();
+		lhs_join_keys.Reset();
+		lhs_probe_data.Reset();
+		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
+		scan_structure.Reset();
+		empty_ht_probe_in_progress = false;
+		full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
+		full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
+		full_outer_scan_state.reset();
+	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -1759,47 +1810,6 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
                                                                    GlobalSourceState &gstate) const {
 	return make_uniq<HashJoinLocalSourceState>(*this, sink_state->Cast<HashJoinGlobalSinkState>(),
 	                                           BufferAllocator::Get(context.client));
-}
-
-bool PhysicalHashJoin::ResetGlobalSourceState(ClientContext &context, GlobalSourceState &state_p) const {
-	auto &state = state_p.Cast<HashJoinGlobalSourceState>();
-	state.global_stage = HashJoinSourceStage::INIT;
-	state.build_chunk_idx = DConstants::INVALID_INDEX;
-	state.build_chunk_count = 0;
-	state.build_chunk_done = 0;
-	state.build_chunks_per_thread = DConstants::INVALID_INDEX;
-	state.probe_chunk_count = 0;
-	state.probe_chunk_done = 0;
-	state.probe_count = children[0].get().estimated_cardinality;
-	state.parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
-	state.full_outer_chunk_idx = DConstants::INVALID_INDEX;
-	state.full_outer_chunk_count = 0;
-	state.full_outer_chunk_done = 0;
-	state.full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
-	state.blocked_tasks.clear();
-	return true;
-}
-
-bool PhysicalHashJoin::ResetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate_p,
-                                             LocalSourceState &state_p) const {
-	auto &state = state_p.Cast<HashJoinLocalSourceState>();
-	state.local_stage = HashJoinSourceStage::INIT;
-	state.build_chunk_idx_from = DConstants::INVALID_INDEX;
-	state.build_chunk_idx_to = DConstants::INVALID_INDEX;
-	state.probe_local_scan.allocator = nullptr;
-	state.probe_local_scan.current_chunk_state.handles.clear();
-	state.probe_local_scan.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-	state.probe_local_scan.chunk_index = DConstants::INVALID_INDEX;
-	state.lhs_probe_chunk.Reset();
-	state.lhs_join_keys.Reset();
-	state.lhs_probe_data.Reset();
-	TupleDataCollection::InitializeChunkState(state.join_key_state, condition_types);
-	state.scan_structure.Reset();
-	state.empty_ht_probe_in_progress = false;
-	state.full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
-	state.full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
-	state.full_outer_scan_state.reset();
-	return true;
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
@@ -1971,8 +1981,8 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 
 HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
                                                    Allocator &allocator)
-    : local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
-      scan_structure(*sink.hash_table, join_key_state) {
+    : op(op), local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER),
+      lhs_join_key_executor(sink.context), scan_structure(*sink.hash_table, join_key_state) {
 	auto &chunk_state = probe_local_scan.current_chunk_state;
 	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
 

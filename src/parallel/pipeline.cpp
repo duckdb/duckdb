@@ -238,8 +238,8 @@ void Pipeline::ResetSinkForReschedule() {
 	lock_guard<mutex> guard(sink->lock);
 	auto &client = GetClientContext();
 	auto allow_reuse = client.config.enable_caching_operators;
-	if (allow_reuse && sink->sink_state && sink->ResetGlobalSinkState(client, *sink->sink_state)) {
-		sink->sink_state->Reset();
+	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
+		sink->sink_state->Reset(client);
 		return;
 	}
 	sink->sink_state = sink->GetGlobalSinkState(client);
@@ -290,10 +290,10 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
-	if (!allow_reuse || !source_state || !source->ResetGlobalSourceState(client, *source_state)) {
+	if (!allow_reuse || !source_state || !source_state->SupportsReuse()) {
 		source_state = source->GetGlobalSourceState(client);
 	} else {
-		source_state->Reset();
+		source_state->Reset(client);
 	}
 	initialized = true;
 }

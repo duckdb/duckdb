@@ -38,7 +38,6 @@ public:
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	bool ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const override;
 
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 

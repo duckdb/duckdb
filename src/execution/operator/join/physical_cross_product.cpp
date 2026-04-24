@@ -24,25 +24,34 @@ public:
 		rhs_materialized.InitializeAppend(append_state);
 	}
 
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		rhs_materialized.ResetForReuse();
+		rhs_materialized.InitializeAppend(append_state);
+		GlobalSinkState::Reset(context);
+	}
+
 	ColumnDataCollection rhs_materialized;
 	ColumnDataAppendState append_state;
 	mutex rhs_lock;
+};
+
+class CrossProductLocalSinkState : public LocalSinkState {
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalCrossProduct::GetGlobalSinkState(ClientContext &context) const {
 	return make_uniq<CrossProductGlobalState>(context, *this);
 }
 
-bool PhysicalCrossProduct::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state) const {
-	auto &gstate = state.Cast<CrossProductGlobalState>();
-	gstate.rhs_materialized.ResetForReuse();
-	gstate.rhs_materialized.InitializeAppend(gstate.append_state);
-	return true;
-}
-
-bool PhysicalCrossProduct::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate,
-                                               LocalSinkState &state) const {
-	return true;
+unique_ptr<LocalSinkState> PhysicalCrossProduct::GetLocalSinkState(ExecutionContext &context) const {
+	return make_uniq<CrossProductLocalSinkState>();
 }
 
 SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

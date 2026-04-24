@@ -14,9 +14,9 @@ static void LeftDelimBindScanCollection(const PhysicalLeftDelimJoin &delim_join,
 	cast_cached_scan.collection = &collection;
 }
 
-static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context,
-                                    unique_ptr<GlobalSinkState> &state) {
-	if (state && op.ResetGlobalSinkState(context, *state)) {
+static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context, unique_ptr<GlobalSinkState> &state) {
+	if (state && state->SupportsReuse()) {
+		state->Reset(context);
 		return;
 	}
 	state = op.GetGlobalSinkState(context);
@@ -24,7 +24,8 @@ static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &c
 
 static void LeftDelimResetLocalSinkState(const PhysicalOperator &op, ExecutionContext &context, GlobalSinkState &gstate,
                                          unique_ptr<LocalSinkState> &state) {
-	if (state && op.ResetLocalSinkState(context, gstate, *state)) {
+	if (state && state->SupportsReuse()) {
+		state->Reset(context, gstate);
 		return;
 	}
 	state = op.GetLocalSinkState(context);
@@ -68,6 +69,20 @@ public:
 	ColumnDataCollection lhs_data;
 	mutex lhs_lock;
 
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &context) override {
+		lhs_data.ResetForReuse();
+		LeftDelimBindScanCollection(delim_join, lhs_data);
+		LeftDelimResetSinkState(delim_join.distinct, context, delim_join.distinct.sink_state);
+		if (delim_join.delim_scans.size() > 1) {
+			PhysicalHashAggregate::SetMultiScan(*delim_join.distinct.sink_state);
+		}
+		GlobalSinkState::Reset(context);
+	}
+
 	void Merge(ColumnDataCollection &input) {
 		if (input.Count() == 0) {
 			return;
@@ -85,13 +100,25 @@ public:
 class LeftDelimJoinLocalState : public LocalSinkState {
 public:
 	explicit LeftDelimJoinLocalState(ClientContext &context, const PhysicalLeftDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
+	    : delim_join(delim_join), lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
+
+	const PhysicalLeftDelimJoin &delim_join;
 
 	unique_ptr<LocalSinkState> distinct_state;
 	ColumnDataCollection lhs_data;
 	ColumnDataAppendState append_state;
+
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSinkState &gstate) override {
+		lhs_data.ResetForReuse();
+		lhs_data.InitializeAppend(append_state);
+		LeftDelimResetLocalSinkState(delim_join.distinct, context, *delim_join.distinct.sink_state, distinct_state);
+	}
 
 	void Append(DataChunk &input) {
 		lhs_data.Append(input);
@@ -111,26 +138,6 @@ unique_ptr<LocalSinkState> PhysicalLeftDelimJoin::GetLocalSinkState(ExecutionCon
 	auto state = make_uniq<LeftDelimJoinLocalState>(context.client, *this);
 	state->distinct_state = distinct.GetLocalSinkState(context);
 	return std::move(state);
-}
-
-bool PhysicalLeftDelimJoin::ResetGlobalSinkState(ClientContext &context, GlobalSinkState &state_p) const {
-	auto &state = state_p.Cast<LeftDelimJoinGlobalState>();
-	state.lhs_data.ResetForReuse();
-	LeftDelimBindScanCollection(*this, state.lhs_data);
-	LeftDelimResetSinkState(distinct, context, distinct.sink_state);
-	if (delim_scans.size() > 1) {
-		PhysicalHashAggregate::SetMultiScan(*distinct.sink_state);
-	}
-	return true;
-}
-
-bool PhysicalLeftDelimJoin::ResetLocalSinkState(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                                LocalSinkState &state_p) const {
-	auto &state = state_p.Cast<LeftDelimJoinLocalState>();
-	state.lhs_data.ResetForReuse();
-	state.lhs_data.InitializeAppend(state.append_state);
-	LeftDelimResetLocalSinkState(distinct, context, *distinct.sink_state, state.distinct_state);
-	return true;
 }
 
 SinkResultType PhysicalLeftDelimJoin::Sink(ExecutionContext &context, DataChunk &chunk,
