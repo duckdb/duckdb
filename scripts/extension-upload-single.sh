@@ -76,8 +76,12 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     exit 0
 fi
 
+if ! command -v s5cmd >/dev/null 2>&1; then
+    "$script_dir/install-s5cmd.sh"
+fi
+
 # Set dry run unless guard var is set
-DRY_RUN_PARAM="--dryrun"
+DRY_RUN_PARAM="--dry-run"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   DRY_RUN_PARAM=""
 fi
@@ -91,18 +95,18 @@ if [[ $7 = 'true' ]]; then
   fi
 
   if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
+    s5cmd $DRY_RUN_PARAM cp --acl public-read --content-encoding br --content-type "application/wasm" "$ext.compressed" "s3://$5/$1/$2/$3/$4/$1.duckdb_extension.wasm"
   else
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
+    s5cmd $DRY_RUN_PARAM cp --acl public-read "$ext.compressed" "s3://$5/$1/$2/$3/$4/$1.duckdb_extension.gz"
   fi
 fi
 
 # upload to latest version
 if [[ $6 = 'true' ]]; then
   if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
+    s5cmd $DRY_RUN_PARAM cp --acl public-read --content-encoding br --content-type "application/wasm" "$ext.compressed" "s3://$5/$3/$4/$1.duckdb_extension.wasm"
   else
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
+    s5cmd $DRY_RUN_PARAM cp --acl public-read "$ext.compressed" "s3://$5/$3/$4/$1.duckdb_extension.gz"
   fi
 fi
 

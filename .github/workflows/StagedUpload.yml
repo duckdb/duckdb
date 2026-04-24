@@ -24,27 +24,27 @@ jobs:
 
      - name: Install
        shell: bash
-       run: python3 scripts/ci/retry.py -- pip install awscli
+       run: python3 scripts/ci/retry.py -- bash scripts/install-s5cmd.sh
 
      - name: Download from staging bucket
        shell: bash
        env:
-         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+         S3_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
           TARGET=$(git log -1 --format=%h)
           mkdir to_be_uploaded
-          aws s3 cp --recursive "s3://duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release" to_be_uploaded
+          s5cmd cp "s3://duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release/*" to_be_uploaded/
 
      - name: Deploy
        if: ${{ inputs.target_git_describe != '' }}
        shell: bash
        env:
-         AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_INSTALL_S3_ENDPOINT }}
+         S3_ENDPOINT_URL: ${{ secrets.DUCKDB_INSTALL_S3_ENDPOINT }}
          AWS_ACCESS_KEY_ID: ${{ secrets.DUCKDB_INSTALL_S3_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.DUCKDB_INSTALL_S3_SECRET }}
          GH_TOKEN: ${{ secrets.GH_TOKEN }}
        run: |
          python3 scripts/asset-upload-gha.py to_be_uploaded/*
-         aws s3 sync --content-type application/octet-stream to_be_uploaded "s3://duckdb-install/${{ inputs.target_git_describe }}"
+         s5cmd cp --content-type application/octet-stream to_be_uploaded/ "s3://duckdb-install/${{ inputs.target_git_describe }}/"

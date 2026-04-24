@@ -175,11 +175,11 @@ jobs:
       - name: Deploy extensions
         shell: bash
         env:
-          AWS_ENDPOINT_URL: ${{ secrets.DUCKDB_CORE_EXTENSION_S3_ENDPOINT }}
+          S3_ENDPOINT_URL: ${{ secrets.DUCKDB_CORE_EXTENSION_S3_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{secrets.DUCKDB_CORE_EXTENSION_S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.DUCKDB_CORE_EXTENSION_S3_SECRET}}
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          python3 scripts/ci/retry.py -- pip install awscli
+          python3 scripts/ci/retry.py -- bash scripts/install-s5cmd.sh
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging

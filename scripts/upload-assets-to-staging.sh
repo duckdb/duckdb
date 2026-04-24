@@ -25,12 +25,12 @@ DRY_RUN_PARAM=""
 # dryrun if repo is not duckdb/duckdb
 if [ "$GITHUB_REPOSITORY" != "duckdb/duckdb" ]; then
   echo "Repository is $GITHUB_REPOSITORY (not duckdb/duckdb)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--dry-run"
 fi
 # dryrun if we are not in main
 if [ "$GITHUB_REF" != "refs/heads/main" ]; then
   echo "git ref is $GITHUB_REF (not refs/heads/main)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--dry-run"
 fi
 
 if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
@@ -41,7 +41,7 @@ fi
 # dryrun if AWS key is not set
 if [ -z "$AWS_ACCESS_KEY_ID" ]; then
   echo "No access key available"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--dry-run"
 fi
 
 
@@ -56,13 +56,11 @@ if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
-if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
-  python3 -m pip install --break-system-packages awscli
-else
-  python3 -m pip install awscli
+if ! command -v s5cmd >/dev/null 2>&1; then
+  "$(dirname "$0")/install-s5cmd.sh"
 fi
 
 for var in "${@: 2}"
 do
-    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/ $DRY_RUN_PARAM
+    s5cmd $DRY_RUN_PARAM cp "$var" "s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
 done
