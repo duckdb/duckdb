@@ -178,6 +178,20 @@ public:
 	window_deserialize_t deserialize = nullptr;
 };
 
+class WindowFunctionProperties : public FunctionProperties {
+public:
+	//! Does the window function support DISTINCT?
+	bool can_distinct = false;
+	//! Does the window function support FILTER?
+	bool can_filter = false;
+	//! Does the window function support ORDER BY arguments?
+	bool can_order_by = true;
+	//! Does the window function support EXCLUDE?
+	bool can_exclude = false;
+	//! Does the window function support RESPECT/IGNORE NULLS?
+	bool can_ignore_nulls = true;
+};
+
 class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -186,9 +200,7 @@ public:
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
 	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr,
 	               window_evaluate_function_t evaluate = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID), FunctionNullHandling::DEFAULT_NULL_HANDLING),
-	      window_enum(window_enum) {
+	    : BaseScalarFunction(name, arguments, return_type), window_enum(window_enum) {
 		callbacks.bind = bind;
 		callbacks.bounds = bounds;
 		callbacks.sharing = sharing;
@@ -317,54 +329,59 @@ public:
 
 public:
 	bool CanDistinct() const {
-		return can_distinct;
+		return properties.can_distinct;
 	}
 	bool CanFilter() const {
-		return can_filter;
+		return properties.can_filter;
 	}
 	bool CanOrderBy() const {
-		return can_order_by;
+		return properties.can_order_by;
 	}
 	bool CanExclude() const {
-		return can_exclude;
+		return properties.can_exclude;
 	}
 	bool CanIgnoreNulls() const {
-		return can_ignore_nulls;
+		return properties.can_ignore_nulls;
 	}
-
 	void SetCanDistinct(bool value) {
-		can_distinct = value;
+		properties.can_distinct = value;
 	}
 	void SetCanFilter(bool value) {
-		can_filter = value;
+		properties.can_filter = value;
 	}
 	void SetCanOrderBy(bool value) {
-		can_order_by = value;
+		properties.can_order_by = value;
 	}
 	void SetCanExclude(bool value) {
-		can_exclude = value;
+		properties.can_exclude = value;
 	}
 	void SetCanIgnoreNulls(bool value) {
-		can_ignore_nulls = value;
+		properties.can_ignore_nulls = value;
 	}
 
 protected:
-	//! Does the window function support DISTINCT?
-	bool can_distinct = false;
-	//! Does the window function support FILTER?
-	bool can_filter = false;
-	//! Does the window function support ORDER BY arguments?
-	bool can_order_by = true;
-	//! Does the window function support EXCLUDE?
-	bool can_exclude = false;
-	//! Does the window function support RESPECT/IGNORE NULLS?
-	bool can_ignore_nulls = true;
-
+	WindowFunctionProperties properties;
 	WindowFunctionCallbacks callbacks;
 
 	//! Additional function info, passed to the bind
 	shared_ptr<WindowFunctionInfo> function_info;
 
+public:
+	// clang-format off
+	FunctionStability GetStability() const { return properties.stability; }
+	void SetStability(FunctionStability stability_p) { properties.stability = stability_p; }
+	FunctionNullHandling GetNullHandling() const { return properties.null_handling; }
+	void SetNullHandling(FunctionNullHandling null_handling_p) { properties.null_handling = null_handling_p; }
+	FunctionErrors GetErrorMode() const { return properties.errors; }
+	void SetErrorMode(FunctionErrors errors_p) { properties.errors = errors_p; }
+	FunctionCollationHandling GetCollationHandling() const { return properties.collation_handling; }
+	void SetCollationHandling(FunctionCollationHandling collation_handling_p) { properties.collation_handling = collation_handling_p; }
+
+	//! Set this functions error-mode as fallible (can throw runtime errors)
+	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	//! Set this functions stability as volatile (can not be cached per row)
+	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
+	// clang-format on
 public:
 	bool HasExtraFunctionInfo() const {
 		return function_info != nullptr;

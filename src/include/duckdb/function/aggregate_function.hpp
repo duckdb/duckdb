@@ -187,6 +187,17 @@ public:
 	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
 };
 
+class AggregateFunctionProperties : public FunctionProperties {
+public:
+	//! Whether or not the aggregate is order dependent
+	AggregateOrderDependent order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
+	//! Whether or not the aggregate is affect by distinct modifiers
+	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+
+	bool operator==(const AggregateFunctionProperties &rhs) const;
+	bool operator!=(const AggregateFunctionProperties &rhs) const;
+};
+
 class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -197,10 +208,9 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID), null_handling),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : BaseScalarFunction(name, arguments, return_type) {
+		properties.null_handling = null_handling;
+
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
 		callbacks.update = update;
@@ -222,10 +232,7 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID)),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : BaseScalarFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
 		callbacks.update = update;
@@ -270,10 +277,7 @@ public:
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                  aggregate_statistics_t statistics = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID)),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : BaseScalarFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
 		callbacks.window = window;
@@ -350,14 +354,27 @@ public:
 
 protected:
 	AggregateFunctionCallbacks callbacks;
-
-	//! Whether or not the aggregate is order dependent
-	AggregateOrderDependent order_dependent;
-	//! Whether or not the aggregate is affect by distinct modifiers
-	AggregateDistinctDependent distinct_dependent;
+	AggregateFunctionProperties properties;
 
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
+
+public:
+	// clang-format off
+	FunctionStability GetStability() const { return properties.stability; }
+	void SetStability(FunctionStability stability_p) { properties.stability = stability_p; }
+	FunctionNullHandling GetNullHandling() const { return properties.null_handling; }
+	void SetNullHandling(FunctionNullHandling null_handling_p) { properties.null_handling = null_handling_p; }
+	FunctionErrors GetErrorMode() const { return properties.errors; }
+	void SetErrorMode(FunctionErrors errors_p) { properties.errors = errors_p; }
+	FunctionCollationHandling GetCollationHandling() const { return properties.collation_handling; }
+	void SetCollationHandling(FunctionCollationHandling collation_handling_p) { properties.collation_handling = collation_handling_p; }
+
+	//! Set this functions error-mode as fallible (can throw runtime errors)
+	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	//! Set this functions stability as volatile (can not be cached per row)
+	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
+	// clang-format on
 
 public:
 	bool HasExtraFunctionInfo() const {
@@ -379,16 +396,16 @@ public:
 	}
 
 	AggregateOrderDependent GetOrderDependent() const {
-		return order_dependent;
+		return properties.order_dependent;
 	}
 	void SetOrderDependent(AggregateOrderDependent value) {
-		order_dependent = value;
+		properties.order_dependent = value;
 	}
 	AggregateDistinctDependent GetDistinctDependent() const {
-		return distinct_dependent;
+		return properties.distinct_dependent;
 	}
 	void SetDistinctDependent(AggregateDistinctDependent value) {
-		distinct_dependent = value;
+		properties.distinct_dependent = value;
 	}
 
 	bool HasGetStateTypeCallback() const {

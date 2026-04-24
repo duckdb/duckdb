@@ -8,6 +8,11 @@
 
 namespace duckdb {
 
+bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
+	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
+	       collation_handling == rhs.collation_handling;
+}
+
 FunctionData::~FunctionData() {
 }
 
@@ -73,11 +78,9 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionStability stability, LogicalType varargs_p,
-                                       FunctionNullHandling null_handling, FunctionErrors errors)
+                                       LogicalType varargs_p)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling), errors(errors),
-      collation_handling(FunctionCollationHandling::PROPAGATE_COLLATIONS) {
+      return_type(std::move(return_type_p)) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {

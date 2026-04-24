@@ -24,8 +24,10 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), side_effects,
-                         std::move(varargs), null_handling) {
+    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type)) {
+	properties.stability = side_effects;
+	properties.null_handling = null_handling;
+
 	callbacks.function = std::move(function);
 	callbacks.bind = std::move(bind);
 	callbacks.init_local_state = init_local_state;
