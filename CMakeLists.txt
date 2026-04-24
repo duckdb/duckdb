@@ -328,7 +328,7 @@ endif()
 
 option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
 if(${EXPORT_DYNAMIC_SYMBOLS})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
