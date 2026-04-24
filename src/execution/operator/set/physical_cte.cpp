@@ -1,9 +1,6 @@
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -95,7 +92,24 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
+	// If the CTE body is a DML statement (INSERT/UPDATE/DELETE/MERGE INTO), all MetaPipelines
+	// created while building children[1] (the query side) must run after the DML completes.
+	// We follow the same pattern as PhysicalJoin::BuildJoinPipelines: capture the DML pipelines
+	// and the current last child before building children[1], then call AddRecursiveDependencies
+	// with force=true so that ordering is always enforced (not just when pipelines exceed the
+	// thread count, as is the case for join build dependencies).
+	vector<shared_ptr<Pipeline>> dml_pipelines;
+	optional_ptr<MetaPipeline> last_child_ptr;
+	if (cte_body_is_dml) {
+		child_meta_pipeline.GetPipelines(dml_pipelines, false);
+		last_child_ptr = meta_pipeline.GetLastChild();
+	}
+
 	children[1].get().BuildPipelines(current, meta_pipeline);
+
+	if (last_child_ptr) {
+		meta_pipeline.AddRecursiveDependencies(dml_pipelines, *last_child_ptr, true);
+	}
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {

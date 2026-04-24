@@ -106,6 +106,7 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
@@ -293,6 +294,24 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value) {
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	return static_cast<AccessMode>(StringUtil::StringToEnum(GetAccessModeValues(), 4, "AccessMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAdaptiveFilterSourceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AdaptiveFilterSource::INITIAL), "INITIAL" },
+		{ static_cast<uint32_t>(AdaptiveFilterSource::SEEDED), "SEEDED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value) {
+	return StringUtil::EnumToString(GetAdaptiveFilterSourceValues(), 2, "AdaptiveFilterSource", static_cast<uint32_t>(value));
+}
+
+template<>
+AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value) {
+	return static_cast<AdaptiveFilterSource>(StringUtil::StringToEnum(GetAdaptiveFilterSourceValues(), 2, "AdaptiveFilterSource", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
@@ -1369,7 +1388,7 @@ const StringUtil::EnumStringLiteral *GetCopyFunctionFlushBatchReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE), "BATCH_SIZE" },
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES), "BATCH_SIZE_BYTES" },
-		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::LAST_BATCH), "LAST_BATCH" }
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::FORCED_FLUSH), "FORCED_FLUSH" }
 	};
 	return values;
 }

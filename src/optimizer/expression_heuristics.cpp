@@ -156,7 +156,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, Expres
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multiplier) {
-	// TODO: ajust values according to benchmark results
+	// TODO: adjust values according to benchmark results
 	switch (return_type) {
 	case PhysicalType::VARCHAR:
 		return 5 * multiplier;
@@ -247,13 +247,6 @@ idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
 			cost += Cost(*child_filter);
 		}
 		return cost;
-	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		return 5;
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		return Cost(*struct_filter.child_filter);
 	}
 	default:
 		return 1000;

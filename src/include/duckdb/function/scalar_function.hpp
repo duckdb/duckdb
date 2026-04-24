@@ -226,7 +226,7 @@ public:
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 
-public:
+protected:
 	//! The main scalar function to execute
 	scalar_function_t function;
 	//! Direct selection callback (if any)

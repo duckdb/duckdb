@@ -102,14 +102,14 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	// ENUMs.
 	Vector small_enum(LogicalType::VARCHAR, 2);
 	auto small_enum_ptr = FlatVector::Writer<string_t>(small_enum, 2);
-	small_enum_ptr[0] = "DUCK_DUCK_ENUM";
-	small_enum_ptr[1] = "GOOSE";
+	small_enum_ptr.WriteValue(string_t("DUCK_DUCK_ENUM"));
+	small_enum_ptr.WriteValue(string_t("GOOSE"));
 	result.emplace_back(LogicalType::ENUM(small_enum, 2), "small_enum");
 
 	Vector medium_enum(LogicalType::VARCHAR, 300);
 	auto medium_enum_ptr = FlatVector::Writer<string_t>(medium_enum, 300);
 	for (idx_t i = 0; i < 300; i++) {
-		medium_enum_ptr[i] = string("enum_") + to_string(i);
+		medium_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 	}
 	result.emplace_back(LogicalType::ENUM(medium_enum, 300), "medium_enum");
 
@@ -118,14 +118,14 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 		Vector large_enum(LogicalType::VARCHAR, 70000);
 		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 70000);
 		for (idx_t i = 0; i < 70000; i++) {
-			large_enum_ptr[i] = string("enum_") + to_string(i);
+			large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 		}
 		result.emplace_back(LogicalType::ENUM(large_enum, 70000), "large_enum");
 	} else {
 		Vector large_enum(LogicalType::VARCHAR, 2);
 		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 2);
-		large_enum_ptr[0] = string("enum_") + to_string(0);
-		large_enum_ptr[1] = string("enum_") + to_string(69999);
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(0)));
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(69999)));
 		result.emplace_back(LogicalType::ENUM(large_enum, 2), "large_enum");
 	}
 
@@ -423,7 +423,7 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &vals = data.entries[data.offset++];
 		for (idx_t col_idx = 0; col_idx < vals.size(); col_idx++) {
-			output.SetValue(col_idx, count, vals[col_idx]);
+			output.data[col_idx].Append(vals[col_idx]);
 		}
 		count++;
 	}

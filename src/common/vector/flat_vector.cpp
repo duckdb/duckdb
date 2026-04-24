@@ -6,34 +6,43 @@
 #include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
-StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity_p, idx_t type_size)
+StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr),
-      capacity(capacity_p) {
+      type_size(type_size_p), capacity(capacity_p) {
 	if (capacity > 0) {
+		if (type_size == 0) {
+			throw InternalException("StandardVectorBuffer: empty type size");
+		}
 		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
 		// resize the validity
 		validity.Resize(capacity);
 	}
+	v_size = 0ULL;
 }
-StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size)
-    : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size) {
+StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
+    : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
-StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity_p)
+StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p),
-      capacity(capacity_p) {
+      type_size(type_size_p), capacity(count) {
+	SetVectorSize(count);
 }
-StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity_p)
+StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
     : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
-      capacity(capacity_p), allocated_data(std::move(data_p)) {
+      type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
+	if (count > capacity) {
+		throw InternalException("Count is out of range for capacity");
+	}
+	SetVectorSize(count);
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
-void StandardVectorBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
+void StandardVectorBuffer::ResetCapacity(idx_t capacity_p) {
+	capacity = capacity_p;
 	validity.Reset(capacity);
 }
 
@@ -61,10 +70,11 @@ void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	D_ASSERT(end <= capacity);
-	auto type_size = GetTypeIdSize(type.InternalType());
+	auto count = count_t(end - offset);
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
+	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, count, type_size);
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->SetVectorSize(count);
 	return result;
 }
 
@@ -75,17 +85,12 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t new_capacity) const {
-	return make_buffer<StandardVectorBuffer>(std::move(new_data), new_capacity);
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
+	return make_buffer<StandardVectorBuffer>(std::move(new_data), count, type_size);
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateResizeBuffer(AllocatedData &&new_data, idx_t new_capacity) {
-	return CreateBuffer(std::move(new_data), new_capacity);
-}
-
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, idx_t current_size, idx_t new_size) {
+void StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
 	D_ASSERT(current_size <= capacity);
-	auto type_size = GetTypeIdSize(type.InternalType());
 	auto old_byte_count = current_size * type_size;
 	auto target_byte_count = new_size * type_size;
 
@@ -101,15 +106,12 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Resize(const LogicalType &type, i
 	auto new_data = allocator.Allocate(target_byte_count);
 	memcpy(new_data.get(), data_ptr, old_byte_count);
 
-	// create the new buffer
-	auto result = CreateResizeBuffer(std::move(new_data), new_size);
-	// copy over the validity mask
-	auto &new_validity = result->GetValidityMask();
-	new_validity.Resize(new_size);
-	if (current_size > 0) {
-		new_validity.CopyRange(validity, current_size);
-	}
-	return result;
+	// update the buffer structure in-place
+	allocated_data = std::move(new_data);
+	data_ptr = allocated_data.get();
+	capacity = new_size;
+	// resize the validity mask
+	validity.Resize(new_size);
 }
 
 template <idx_t TYPE_SIZE>
@@ -148,22 +150,16 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                       idx_t count) const {
-	if (!input_sel.IsSet() && vector_type == VectorType::FLAT_VECTOR) {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	SelectionVector owned_sel;
-	const_reference<SelectionVector> sel_ref(input_sel);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// for constant vectors we just use the selection vector [0, 0, 0, 0, 0, 0, ...]
-		sel_ref = *ConstantVector::ZeroSelectionVector(count, owned_sel);
-	}
-	auto &sel = sel_ref.get();
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+}
 
-	auto type_size = GetTypeIdSize(type.InternalType());
-
+buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                                    idx_t count) const {
 	// allocate the new buffer
 	auto allocated_count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count);
 	auto target_byte_count = allocated_count * type_size;
@@ -173,7 +169,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, 
 	// copy data using sel
 	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
 
-	auto result = CreateBuffer(std::move(new_data), count);
+	auto result = CreateBuffer(std::move(new_data), count_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.Resize(allocated_count);
@@ -189,6 +185,60 @@ void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &for
 	}
 	format.data = data_ptr;
 	format.validity = validity;
+}
+
+template <idx_t TYPE_SIZE>
+void FixedSizeCopy(data_ptr_t target_data, const_data_ptr_t source_data, const SelectionVector &sel,
+                   idx_t base_source_offset, idx_t base_target_offset, idx_t copy_count) {
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel.get_index(base_source_offset + i);
+		auto target_offset = (base_target_offset + i) * TYPE_SIZE;
+		auto source_offset = source_idx * TYPE_SIZE;
+		memcpy(target_data + target_offset, source_data + source_offset, TYPE_SIZE);
+	}
+}
+
+void CopyVectorBuffer(data_ptr_t target_data, const_data_ptr_t source_data, const SelectionVector &sel,
+                      idx_t base_source_offset, idx_t base_target_offset, idx_t copy_count, idx_t type_size) {
+	switch (type_size) {
+	case 1:
+		FixedSizeCopy<1>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 2:
+		FixedSizeCopy<2>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 4:
+		FixedSizeCopy<4>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 8:
+		FixedSizeCopy<8>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	case 16:
+		FixedSizeCopy<16>(target_data, source_data, sel, base_source_offset, base_target_offset, copy_count);
+		break;
+	default:
+		// fallback: use non-fixed-width copy
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel.get_index(base_source_offset + i);
+			auto target_offset = (base_target_offset + i) * type_size;
+			auto source_offset = source_idx * type_size;
+			memcpy(target_data + target_offset, source_data + source_offset, type_size);
+		}
+		break;
+	}
+}
+
+void StandardVectorBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+                                        idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	// now copy over the data
+	const_data_ptr_t source_data;
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		source_data = ConstantVector::GetData(source);
+	} else {
+		source_data = FlatVector::GetData(source);
+	}
+
+	CopyVectorBuffer(data_ptr, source_data, source_sel, source_offset, target_offset, copy_count, type_size);
 }
 
 void StandardVectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {
@@ -377,7 +427,7 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	}
 }
 
-void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
+void FlatVector::SetData(Vector &vector, data_ptr_t data, count_t count) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {
 		throw InternalException("SetData not supported for array");
@@ -390,14 +440,16 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	auto old_validity = std::move(vector.BufferMutable().GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
-		vector.SetBuffer(
-		    make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild(), current_buffer.GetSize()));
+		vector.SetBuffer(make_buffer<VectorListBuffer>(data, count, current_buffer.GetChild()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity));
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, count));
 	} else {
-		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, capacity));
+		auto type_size = GetTypeIdSize(vector.GetType().InternalType());
+		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, count, type_size));
 	}
 	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
+	// set the size of the new buffer so child->size() works for list parents using GetChildSize()
+	vector.BufferMutable().SetVectorSize(count);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {

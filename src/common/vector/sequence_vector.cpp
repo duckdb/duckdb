@@ -5,7 +5,8 @@ namespace duckdb {
 
 SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, idx_t count_p)
     : VectorBuffer(VectorType::SEQUENCE_VECTOR, VectorBufferType::SEQUENCE_BUFFER), start(start_p),
-      increment(increment_p), seq_count(count_p) {
+      increment(increment_p) {
+	this->v_size = count_p;
 }
 
 idx_t SequenceBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -40,15 +41,13 @@ Value SequenceBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return Value::Numeric(type, start + static_cast<int64_t>(static_cast<uint64_t>(increment) * index));
 }
 
-buffer_ptr<VectorBuffer> SequenceBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                 idx_t count) const {
-	if (!sel.IsSet()) {
-		// FIXME: work-around for Flatten being called multiple times on the same vector with different counts...
-		count = MaxValue<idx_t>(seq_count, count);
-	}
+buffer_ptr<VectorBuffer> SequenceBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+                                                              idx_t count) const {
 	Vector flattened_vector(type, count);
 	VectorOperations::GenerateSequence(flattened_vector, count, sel, start, increment);
-	return flattened_vector.GetBufferRef();
+	auto result = flattened_vector.GetBufferRef();
+	result->SetVectorSize(count);
+	return result;
 }
 
 void SequenceVector::GetSequence(const Vector &vector, int64_t &start, int64_t &increment) {

@@ -1131,7 +1131,11 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformValuesClause(PEGTran
 		const auto expected_size = values_list[0].size();
 		for (idx_t i = 1; i < values_list.size(); i++) {
 			if (values_list[i].size() != expected_size) {
-				throw ParserException("VALUES lists must all be the same length");
+				throw ParserException(
+				    *values_list[i][0],
+				    "VALUES lists must all be the same length, expected %d %s but found a list with %d %s",
+				    expected_size, expected_size == 1 ? "entry" : "entries", values_list[i].size(),
+				    values_list[i].size() == 1 ? "entry" : "entries");
 			}
 		}
 	}

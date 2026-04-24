@@ -126,9 +126,6 @@ bool DataChunk::AllConstant() const {
 
 void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
-	// for(auto &vec : data) {
-	// 	vec.CheckCapacity(count);
-	// }
 }
 
 void DataChunk::Reference(DataChunk &chunk) {
@@ -208,29 +205,25 @@ void DataChunk::ReferenceColumns(DataChunk &other, const vector<column_t> &colum
 	SetCardinality(other.size());
 }
 
-void DataChunk::Append(const DataChunk &other, bool resize, optional_ptr<SelectionVector> sel, idx_t sel_count) {
-	idx_t new_size = sel ? size() + sel_count : size() + other.size();
-	if (other.size() == 0) {
+void DataChunk::Append(const DataChunk &other, VectorAppendMode append_mode) {
+	Append(other, *FlatVector::IncrementalSelectionVector(), other.size(), append_mode);
+}
+
+void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t sel_count,
+                       VectorAppendMode append_mode) {
+	if (sel_count == 0) {
 		return;
 	}
+	idx_t new_size = size() + sel_count;
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-		auto capacity = FlatVector::GetCapacity(data[i]);
-		if (new_size > capacity) {
-			if (resize) {
-				auto new_capacity = NextPowerOfTwo(new_size);
-				data[i].Resize(size(), new_capacity);
-			} else {
-				throw InternalException("Can't append chunk to other chunk without resizing");
-			}
-		}
-		if (sel) {
-			VectorOperations::Copy(other.data[i], data[i], *sel, sel_count, 0, size());
+		FlatVector::SetSize(data[i], size());
+		if (sel.IsSet()) {
+			data[i].Append(other.data[i], sel, sel_count, append_mode);
 		} else {
-			VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
+			data[i].Append(other.data[i], other.size(), append_mode);
 		}
 	}
 	SetCardinality(new_size);
@@ -312,6 +305,16 @@ void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
 	}
 }
 
+void DataChunk::Slice(const DataChunk &other, idx_t offset, idx_t end) {
+	if (end < offset) {
+		throw InternalException("end is smaller than offset");
+	}
+	for (idx_t c = 0; c < other.ColumnCount(); c++) {
+		data[c].Slice(other.data[c], offset, end);
+	}
+	SetCardinality(end - offset);
+}
+
 void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
 	this->count = count_p;
@@ -329,6 +332,9 @@ void DataChunk::Slice(const DataChunk &other, const SelectionVector &sel, idx_t 
 
 void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 	D_ASSERT(offset + slice_count <= size());
+	if (offset == 0 && slice_count == size()) {
+		return;
+	}
 	SelectionVector sel(slice_count);
 	for (idx_t i = 0; i < slice_count; i++) {
 		sel.set_index(i, offset + i);

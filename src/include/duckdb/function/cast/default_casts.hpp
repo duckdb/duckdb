@@ -113,7 +113,9 @@ struct BoundCastInfo {
 	    init_cast_local_state_t init_local_state = nullptr);
 
 	bool Cast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) const {
-		return function(source, result, count, parameters);
+		auto all_ok = function(source, result, count, parameters);
+		FlatVector::SetSize(result, count);
+		return all_ok;
 	}
 
 public:

@@ -9,6 +9,11 @@ add_subdirectory(settings)
 add_subdirectory(buffered_data)
 add_subdirectory(chunk_scan_state)
 
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
+
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
 endif()

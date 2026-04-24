@@ -237,9 +237,9 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 		uint8_t width, scale;
 		argument_type.GetDecimalProperties(width, scale);
 		if (scale == DecimalType::GetScale(result_type) && argument_type.InternalType() == result_type.InternalType()) {
-			bound_function.arguments[i] = argument_type;
+			bound_function.GetArguments()[i] = argument_type;
 		} else {
-			bound_function.arguments[i] = result_type;
+			bound_function.GetArguments()[i] = result_type;
 		}
 	}
 	bound_function.SetReturnType(result_type);
@@ -276,7 +276,7 @@ void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<Funct
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
-	serializer.WriteProperty(102, "arguments", function.arguments);
+	serializer.WriteProperty(102, "arguments", function.GetArguments());
 }
 
 // TODO this is partially duplicated from the bind
@@ -293,7 +293,7 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
-	bound_function.arguments = arguments;
+	bound_function.GetArguments() = arguments;
 
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 	bind_data->check_overflow = check_overflow;
@@ -305,7 +305,7 @@ unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
 	bound_function.SetReturnType(arguments[0]->return_type);
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
@@ -584,7 +584,7 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT));
 	}
 	decimal_type.Verify();
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -601,7 +601,7 @@ static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input
 	if (const_expr.value.IsNull()) {
 		return nullptr;
 	}
-	auto &type = bound_function.arguments[0];
+	auto &type = bound_function.GetArguments()[0];
 	// only need to promote if the constant exactly equals the type's minimum value
 	if (const_expr.value != Value::MinimumValue(type)) {
 		return nullptr;
@@ -623,7 +623,7 @@ static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input
 	default:
 		return nullptr;
 	}
-	bound_function.arguments[0] = promoted_type;
+	bound_function.GetArguments()[0] = promoted_type;
 	bound_function.SetReturnType(promoted_type);
 	bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<NegateOperator>(promoted_type));
 	return nullptr;
@@ -923,14 +923,14 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &argument_type = arguments[i]->return_type;
 		if (argument_type.InternalType() == result_type.InternalType()) {
-			bound_function.arguments[i] = argument_type;
+			bound_function.GetArguments()[i] = argument_type;
 		} else {
 			uint8_t width, scale;
 			if (!argument_type.GetDecimalProperties(width, scale)) {
 				scale = 0;
 			}
 
-			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
+			bound_function.GetArguments()[i] = LogicalType::DECIMAL(result_width, scale);
 		}
 	}
 	result_type.Verify();
@@ -1168,7 +1168,7 @@ static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
 		// fallback to DOUBLE if the decimal type is not guaranteed to fit within the max decimal width
-		for (auto &arg : bound_function.arguments) {
+		for (auto &arg : bound_function.GetArguments()) {
 			arg = LogicalType::DOUBLE;
 		}
 		bound_function.SetReturnType(LogicalType::DOUBLE);

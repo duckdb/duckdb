@@ -86,7 +86,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	ValidityMask result_entry_validity_mask(max_result_length);
 	idx_t offset = 0;
 
-	auto result_data = FlatVector::Writer<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, row_count);
 	for (idx_t i = 0; i < row_count; i++) {
 		const auto l_idx = l_format.sel->get_index(i);
 		const auto r_idx = r_format.sel->get_index(i);
@@ -94,15 +94,16 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		const bool l_valid = l_format.validity.RowIsValid(l_idx);
 		const bool r_valid = r_format.validity.RowIsValid(r_idx);
 
-		result_data[i].offset = offset;
+		list_entry_t entry;
+		entry.offset = offset;
 
 		if (!l_valid) {
-			result_data.SetInvalid(i);
-			result_data[i].length = 0;
+			result_data.WriteNull();
 			continue;
 		}
 		if (!r_valid) {
-			result_data[i].length = 0;
+			entry.length = 0;
+			result_data.WriteValue(entry);
 			continue;
 		}
 
@@ -110,7 +111,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		const auto &r_list = r_entries[r_idx];
 
 		if (l_list.length == 0 || r_list.length == 0) {
-			result_data[i].length = 0;
+			entry.length = 0;
+			result_data.WriteValue(entry);
 			continue;
 		}
 
@@ -161,8 +163,9 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 			row_result_length++;
 		}
 
-		result_data[i].length = row_result_length;
+		entry.length = row_result_length;
 		offset += row_result_length;
+		result_data.WriteValue(entry);
 	}
 
 	ListVector::SetListSize(result, offset);
@@ -175,7 +178,7 @@ static unique_ptr<FunctionData> ListIntersectBind(BindScalarFunctionInput &input
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 	return nullptr;
@@ -185,7 +188,7 @@ ScalarFunction ListIntersectFun::GetFunction() {
 	auto fun =
 	    ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T")), LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                   LogicalType::LIST(LogicalType::TEMPLATE("T")), ListIntersectFunction, ListIntersectBind);
-	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

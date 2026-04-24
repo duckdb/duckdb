@@ -52,7 +52,7 @@ T *ArrowBufferData(ArrowArray &array, idx_t buffer_idx) {
 
 static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_offset, idx_t size,
                             int64_t parent_offset, int64_t nested_offset = -1, bool add_null = false) {
-	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
+	// In certain we don't need to or cannot copy arrow's validity mask to duckdb.
 	//
 	// The conditions where we do want to copy arrow's mask to duckdb are:
 	// 1. nulls exist
@@ -385,7 +385,7 @@ static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) +
 	    internal_type * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	FlatVector::SetData(vector, data_ptr, size);
+	FlatVector::SetData(vector, data_ptr, count_t(size));
 }
 
 template <class T>
@@ -563,7 +563,7 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 
 	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
 	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
-	auto result_data = FlatVector::Writer<VALUE_TYPE>(result, count);
+	auto result_data = FlatVector::ScatterWriter<VALUE_TYPE>(result);
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid
@@ -765,7 +765,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -783,7 +783,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -801,7 +801,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 			auto data = ArrowBufferData<data_t>(array, 1) +
 			            GetTypeIdSize(vector.GetType().InternalType()) *
 			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			FlatVector::SetData(vector, data, size);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
 			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -923,14 +923,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			               fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
-			auto result = FlatVector::Writer<string_t>(vector, size);
+			auto result = FlatVector::ScatterWriter<string_t>(vector);
 			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 				if (FlatVector::IsNull(vector, row_idx)) {
 					offset += blob_len;
 					continue;
 				}
 				auto bptr = cdata + offset;
-				result[row_idx] = string_t(bptr, blob_len);
+				result[row_idx] = string_t(bptr, UnsafeNumericCast<uint32_t>(blob_len));
 				offset += blob_len;
 			}
 		}

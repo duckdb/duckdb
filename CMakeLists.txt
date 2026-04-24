@@ -337,7 +337,6 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
-# - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
