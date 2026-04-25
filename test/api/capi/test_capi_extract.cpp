@@ -101,7 +101,7 @@ TEST_CASE("Test extract statements for `ALTER TABLE ... ADD COLUMN ... DEFAULT` 
 
 	REQUIRE(wrapper->statements[0]->query == "BEGIN;");
 	REQUIRE(wrapper->statements[1]->query ==
-	        "ALTER TABLE my_table ADD COLUMN my_column \"TIMESTAMP WITH TIME ZONE\" DEFAULT NULL;");
+	        "ALTER TABLE my_table ADD COLUMN my_column TIMESTAMP WITH TIME ZONE DEFAULT NULL;");
 	REQUIRE(wrapper->statements[2]->query == "UPDATE my_table SET my_column = non_existent_function();");
 	REQUIRE(wrapper->statements[3]->query ==
 	        "ALTER TABLE my_table ALTER COLUMN my_column SET DEFAULT non_existent_function();");

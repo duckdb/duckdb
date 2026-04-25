@@ -47,14 +47,14 @@ loop i 0 10
 
 # 1. create novelty_deletes
 statement ok
-CREATE OR REPLACE TABLE novelty_deletes AS SELECT pk FROM generate_series(1, 4096 + ${i} * 2 * ${novelty_multiplier}) t(pk) ORDER BY random() LIMIT 8 * ${novelty_multiplier};
+CREATE OR REPLACE TABLE novelty_deletes AS SELECT pk FROM generate_series(1, 4096 + {i} * 2 * {novelty_multiplier}) t(pk) ORDER BY random() LIMIT 8 * {novelty_multiplier};
 
 # 2. create novelty_inserts
 statement ok
 CREATE OR REPLACE TABLE novelty_inserts AS SELECT pk, uuid()::VARCHAR as val1, uuid()::VARCHAR as val2 FROM novelty_deletes;
 
 statement ok
-INSERT INTO novelty_inserts SELECT pk, uuid()::VARCHAR, uuid()::VARCHAR FROM generate_series(4096 + ${i} * 2 * ${novelty_multiplier} + 1, 4096 + ${i} * 2 * ${novelty_multiplier} + 2 * ${novelty_multiplier}) t(pk)
+INSERT INTO novelty_inserts SELECT pk, uuid()::VARCHAR, uuid()::VARCHAR FROM generate_series(4096 + {i} * 2 * {novelty_multiplier} + 1, 4096 + {i} * 2 * {novelty_multiplier} + 2 * {novelty_multiplier}) t(pk)
 
 # 3. attach snapshot
 statement ok
@@ -83,7 +83,7 @@ statement ok
 ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap;
 
 query I
-SELECT COUNT(DISTINCT row_group_id) <= CEIL((4096 + 100 * ${novelty_multiplier}) / 2048) FROM pragma_storage_info('snap.snapshot');
+SELECT COUNT(DISTINCT row_group_id) <= CEIL((4096 + 100 * {novelty_multiplier}) / 2048) FROM pragma_storage_info('snap.snapshot');
 ----
 1
 
