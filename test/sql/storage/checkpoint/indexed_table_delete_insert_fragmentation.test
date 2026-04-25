@@ -15,7 +15,7 @@ foreach novelty_multiplier 10 1024
 
 # Setup: create a snapshot with exactly 2 row groups (row group size = 2048, amount of rows = 4096)
 statement ok
-ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
 
 statement ok
 CREATE OR REPLACE TABLE snap.snapshot(pk BIGINT PRIMARY KEY, val1 VARCHAR, val2 VARCHAR);
@@ -58,7 +58,7 @@ INSERT INTO novelty_inserts SELECT pk, uuid()::VARCHAR, uuid()::VARCHAR FROM gen
 
 # 3. attach snapshot
 statement ok
-ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, RECOVERY_MODE NO_WAL_WRITES, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
+ATTACH '{TEST_DIR}/test_rowgroup_append_mode_on_fragmented_tables.db' as snap (READ_WRITE, RECOVERY_MODE NO_WAL_WRITES, STORAGE_VERSION 'v1.5.0', ROW_GROUP_SIZE 2048);
 
 # 4. process novelty_deletes
 statement ok
@@ -80,7 +80,7 @@ endloop # loop i 0 10
 
 # Now we verify that the amount of row groups created is what we expect
 statement ok
-ATTACH '__TEST_DIR__/test_rowgroup_append_mode_on_fragmented_tables.db' as snap;
+ATTACH '{TEST_DIR}/test_rowgroup_append_mode_on_fragmented_tables.db' as snap;
 
 query I
 SELECT COUNT(DISTINCT row_group_id) <= CEIL((4096 + 100 * {novelty_multiplier}) / 2048) FROM pragma_storage_info('snap.snapshot');

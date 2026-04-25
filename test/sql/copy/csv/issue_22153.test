@@ -6,9 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-COPY (SELECT 'hello "world"' AS a, 42 AS b) TO '__TEST_DIR__/test_escape_default.csv' (HEADER false);
+COPY (SELECT 'hello "world"' AS a, 42 AS b) TO '{TEST_DIR}/test_escape_default.csv' (HEADER false);
 
 query IT
-SELECT * FROM read_csv('__TEST_DIR__/test_escape_default.csv', auto_detect=false, columns={'a':'VARCHAR','b':'INTEGER'})
+SELECT * FROM read_csv('{TEST_DIR}/test_escape_default.csv', auto_detect=false, columns={'a':'VARCHAR','b':'INTEGER'})
 ----
 hello "world"	42
