@@ -584,6 +584,8 @@ public:
 
 	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalScanState>();
+		// The source only scans unmatched RHS rows for RIGHT/FULL OUTER joins. The materialized RHS payload and
+		// match bitmap live in the sink state, so a reused local source state must rebind its scan to that data.
 		auto &sink = op.sink_state->Cast<NestedLoopJoinGlobalState>();
 		sink.right_outer.InitializeScan(gstate.scan_state, scan_state);
 	}
