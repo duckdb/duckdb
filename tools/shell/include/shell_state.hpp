@@ -205,6 +205,8 @@ public:
 	string initFile;
 	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
+	//! Is previous result (_) available via SQL
+	bool queryable_underscore = false;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Table name when rendering a DESCRIBE statement
@@ -428,6 +430,7 @@ public:
 	static MetadataResult SetSeparator(ShellState &state, const vector<string> &args);
 	static MetadataResult EnableSafeMode(ShellState &state, const vector<string> &args);
 	static MetadataResult ToggleTimer(ShellState &state, const vector<string> &args);
+	static MetadataResult ToggleQueryableUnderscore(ShellState &state, const vector<string> &args);
 	SuccessState ChangeDirectory(const string &path);
 	SuccessState ShowDatabases();
 	void CloseOutputFile(FILE *file);

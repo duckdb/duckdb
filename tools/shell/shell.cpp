@@ -1014,6 +1014,12 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
+			if (!queryable_underscore) {
+				// Release the previous result before next statement to avoid memory doubling.
+				// `_` SQL reference is therefore unavailable in default mode; opt in via
+				// `.queryable_underscore on`. `.last` still works between prompts.
+				last_result.reset();
+			}
 			auto rc = ExecuteStatement(std::move(statement));
 			if (rc != SuccessState::SUCCESS) {
 				return rc;
@@ -2387,6 +2393,11 @@ MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &
 		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");
 		enableTimer = false;
 	}
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult ShellState::ToggleQueryableUnderscore(ShellState &state, const vector<string> &args) {
+	state.queryable_underscore = state.StringToBool(args[1]);
 	return MetadataResult::SUCCESS;
 }
 

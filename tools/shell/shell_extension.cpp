@@ -42,6 +42,10 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	}
 	auto &state = duckdb_shell::ShellState::Get();
 	if (!state.last_result) {
+		if (!state.queryable_underscore) {
+			throw BinderException("`_` is not available: queryable underscore is disabled by default.\n"
+			                      "Run `.queryable_underscore on`, then re-run your query, to make `_` available.");
+		}
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
 	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
