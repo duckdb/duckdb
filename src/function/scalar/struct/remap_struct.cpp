@@ -101,7 +101,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 		auto list_data = ConstantVector::GetData<list_entry_t>(input);
@@ -150,7 +150,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 		auto list_data = ConstantVector::GetData<list_entry_t>(input);
@@ -194,7 +194,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 	} else {

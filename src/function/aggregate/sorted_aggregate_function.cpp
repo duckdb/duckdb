@@ -531,7 +531,7 @@ struct SortedAggregateFunction {
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
 		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
-		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1));
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
@@ -568,7 +568,7 @@ struct SortedAggregateFunction {
 			if (unsorted_count < order_bind.threshold) {
 				auto state = sdata[finalized].GetValueUnsafe();
 				prefixed.Reset();
-				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
+				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)), count_t(1));
 				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 				state->Finalize(order_bind, prefixed, context, sink);
 				unsorted_count += state_unprocessed[finalized];

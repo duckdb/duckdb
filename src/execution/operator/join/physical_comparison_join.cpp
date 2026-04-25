@@ -150,7 +150,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 		// for the RHS
 		for (idx_t k = input.ColumnCount(); k < result.ColumnCount(); k++) {
-			ConstantVector::SetNull(result.data[k]);
+			ConstantVector::SetNull(result.data[k], count_t(input.size()));
 		}
 	}
 }

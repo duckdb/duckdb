@@ -37,6 +37,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class CommitDropState;
 class DataTable;
 class DuckTableEntry;
 class RowGroupIterationHelper;
@@ -123,7 +124,13 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
+	//! Accumulates block drops for every row group's copy of the column into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Accumulates block drops for every row group into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Drops every row group's copy of the column and immediately marks the blocks as modified.
 	void CommitDropColumn(const idx_t column_index);
+	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;

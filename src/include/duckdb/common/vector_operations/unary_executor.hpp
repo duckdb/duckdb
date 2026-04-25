@@ -147,11 +147,12 @@ private:
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(

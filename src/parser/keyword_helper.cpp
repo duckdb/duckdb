@@ -29,7 +29,7 @@ KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
 	return GetPEGKeywordCategory(text);
 }
 
-bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps, KeywordCategory category) {
+bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {
 	for (size_t i = 0; i < text.size(); i++) {
 		if (i > 0 && (text[i] >= '0' && text[i] <= '9')) {
 			continue;
@@ -47,7 +47,7 @@ bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps, KeywordC
 		}
 		return true;
 	}
-	return IsKeyword(text, category);
+	return IsKeyword(text);
 }
 
 string KeywordHelper::EscapeQuotes(const string &text, char quote) {
@@ -60,8 +60,8 @@ string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	return string(1, quote) + EscapeQuotes(text, quote) + string(1, quote);
 }
 
-string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps, KeywordCategory category) {
-	if (!RequiresQuotes(text, allow_caps, category)) {
+string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {
+	if (!RequiresQuotes(text, allow_caps)) {
 		return text;
 	}
 	return WriteQuoted(text, quote);

@@ -1,5 +1,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -374,7 +375,7 @@ void DataTable::RebuildIndexes() {
 			throw InternalException("RebuildIndexes expects all indexes to be bound during checkpoint");
 		}
 		auto &bound_index = index.Cast<BoundIndex>();
-		bound_index.CommitDrop();
+		bound_index.ResetStorage();
 
 		auto &col_ids = bound_index.GetColumnIds();
 
@@ -1487,7 +1488,8 @@ void DataTable::RevertIndexAppend(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(const QueryContext &context, Vector &row_identifiers, idx_t count,
                                   IndexRemovalType removal_type, optional_idx active_checkpoint) {
-	D_ASSERT(IsMainTable());
+	D_ASSERT(IsMainTable() || removal_type == IndexRemovalType::REVERT_MAIN_INDEX ||
+	         removal_type == IndexRemovalType::REVERT_MAIN_INDEX_ONLY);
 	row_groups->RemoveFromIndexes(context, info->indexes, row_identifiers, count, removal_type, active_checkpoint);
 }
 
@@ -1733,7 +1735,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 	VerifyUpdateConstraints(*state.constraint_state, context, updates, column_ids);
 
 	// now perform the actual update
-	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID));
+	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID), count_t(count));
 	Vector row_ids_slice(LogicalType::BIGINT);
 	DataChunk updates_slice;
 	updates_slice.InitializeEmpty(updates.GetTypes());
@@ -1834,8 +1836,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->SetStats(global_stats);
 }
 
-void DataTable::CommitDropColumn(const idx_t column_index) {
-	row_groups->CommitDropColumn(column_index);
+void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
+	row_groups->CommitDropColumn(column_index, drop_state);
 }
 
 void DataTable::Destroy() {
@@ -1850,15 +1852,8 @@ idx_t DataTable::GetTotalRows() const {
 	return row_groups->GetTotalRows();
 }
 
-void DataTable::CommitDropTable() {
-	// commit a drop of this table: mark all blocks as modified, so they can be reclaimed later on
-	row_groups->CommitDropTable();
-
-	// propagate dropping this table to its indexes: frees all index memory
-	for (auto &index : info->indexes.Indexes()) {
-		D_ASSERT(index.IsBound());
-		index.Cast<BoundIndex>().CommitDrop();
-	}
+void DataTable::CommitDropTable(CommitDropState &drop_state) {
+	row_groups->CommitDropTable(drop_state);
 }
 
 //===--------------------------------------------------------------------===//

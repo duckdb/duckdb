@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -983,7 +984,7 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 			result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
 			continue;
 		}
-		result_chunk.data[j].Reference(Value(types[j]));
+		result_chunk.data[j].Reference(Value(types[j]), count_t(fetch_chunk.size()));
 	}
 	result_chunk.SetCardinality(fetch_chunk);
 
@@ -1828,18 +1829,30 @@ void RowGroupCollection::Destroy() {
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(column_index);
+		row_group.CommitDropColumn(column_index, drop_state);
 	}
 }
 
-void RowGroupCollection::CommitDropTable() {
+void RowGroupCollection::CommitDropTable(CommitDropState &drop_state) {
 	auto row_groups = GetRowGroups();
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDrop();
+		row_group.CommitDrop(drop_state);
 	}
+}
+
+void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
+	CommitDropState drop_state(&GetBlockManager());
+	CommitDropColumn(column_index, drop_state);
+	drop_state.FinalizeCommit();
+}
+
+void RowGroupCollection::CommitDropTable() {
+	CommitDropState drop_state(&GetBlockManager());
+	CommitDropTable(drop_state);
+	drop_state.FinalizeCommit();
 }
 
 //===--------------------------------------------------------------------===//

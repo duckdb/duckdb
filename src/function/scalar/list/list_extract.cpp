@@ -113,7 +113,7 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 		ExecuteStringExtract(result, base, subscript, count);
 		break;
 	case LogicalTypeId::SQLNULL:
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");

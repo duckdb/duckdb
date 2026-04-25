@@ -159,7 +159,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return true;
 		}
 
@@ -169,7 +169,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u", ldata.length,
 			                              array_size);
 			HandleCastError::AssignError(msg, parameters);
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 
