@@ -61,6 +61,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
+#include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
@@ -4446,6 +4447,25 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	return static_cast<ResultModifierType>(StringUtil::StringToEnum(GetResultModifierTypeValues(), 4, "ResultModifierType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RowGroupAppendMode::APPEND_TO_EXISTING), "APPEND_TO_EXISTING" },
+		{ static_cast<uint32_t>(RowGroupAppendMode::SUGGEST_NEW), "SUGGEST_NEW" },
+		{ static_cast<uint32_t>(RowGroupAppendMode::REQUIRE_NEW), "REQUIRE_NEW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value) {
+	return StringUtil::EnumToString(GetRowGroupAppendModeValues(), 3, "RowGroupAppendMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value) {
+	return static_cast<RowGroupAppendMode>(StringUtil::StringToEnum(GetRowGroupAppendModeValues(), 3, "RowGroupAppendMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {

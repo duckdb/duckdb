@@ -278,12 +278,10 @@ struct BignumOperation {
 			return;
 		}
 		if (!target.is_set) {
-			target.value = source.value;
+			target.value.Initialize(input.allocator);
 			target.is_set = true;
-			return;
 		}
 		target.value.AddInPlace(input.allocator, source.value);
-		target.is_set = true;
 	}
 
 	template <class TARGET_TYPE, class STATE>

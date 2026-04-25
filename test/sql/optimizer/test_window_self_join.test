@@ -203,3 +203,52 @@ ORDER BY grp, seq;
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 endloop
+
+statement ok
+CREATE
+OR REPLACE TABLE foo (
+  emp_name VARCHAR,
+  dept_name VARCHAR,
+  base_salary FLOAT
+);
+
+statement ok
+INSERT INTO
+  foo
+VALUES
+  ('a', 'x', 1.0),
+  ('b', 'x', 2.0),
+  ('c', 'x', 3.0),
+  ('d', 'y', 4.0),
+  ('e', 'y', 5.0),
+  ('f', 'y', 6.0);
+
+query I
+select
+  avg(avg(base_salary)) over (
+    partition by
+      dept_name
+  )
+from
+  foo
+group by
+  dept_name
+order by all;
+----
+2.0
+5.0
+
+query II
+explain
+select
+  avg(avg(base_salary)) over (
+    partition by
+      dept_name
+  )
+from
+  foo
+group by
+  dept_name
+order by all;
+----
+physical_plan	<REGEX>:.*Join Type: INNER.*
