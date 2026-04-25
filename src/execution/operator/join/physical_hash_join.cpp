@@ -348,7 +348,7 @@ public:
 		owned_local_hash_tables.clear();
 		probe_spill.reset();
 		scanned_data = false;
-		preserve_build_for_recursive_reuse = false;
+		preserve_build_for_reuse = false;
 		skip_filter_pushdown = false;
 		global_filter_state.reset();
 		temporary_memory_state->SetZero();
@@ -400,7 +400,7 @@ public:
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
 	//! Preserve the finalized build-side state across recursive CTE iterations
-	bool preserve_build_for_recursive_reuse = false;
+	bool preserve_build_for_reuse = false;
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
@@ -547,7 +547,7 @@ void PhysicalHashJoin::SetPreserveBuildForRecursiveReuse(bool preserve) const {
 		return;
 	}
 	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
-	state.preserve_build_for_recursive_reuse = preserve;
+	state.preserve_build_for_reuse = preserve;
 	if (preserve) {
 		state.scanned_data = false;
 	}
@@ -558,7 +558,7 @@ bool PhysicalHashJoin::CanPreserveBuildForRecursiveReuse() const {
 		return false;
 	}
 	auto &state = sink_state->Cast<HashJoinGlobalSinkState>();
-	return state.preserve_build_for_recursive_reuse && !state.external;
+	return state.preserve_build_for_reuse && !state.external;
 }
 
 void JoinFilterPushdownInfo::Sink(DataChunk &chunk, JoinFilterLocalState &lstate) const {
@@ -1416,7 +1416,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		// Recursive preserved-build reuse only applies to the in-memory finalized HT. External hash join
 		// runs through repeated build/probe rounds with partition/probe-spill state, so it cannot be
 		// treated as a stable materialized build that later recursive iterations may skip entirely.
-		sink.preserve_build_for_recursive_reuse = false;
+		sink.preserve_build_for_reuse = false;
 		sink.perfect_join_executor.reset();
 
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
@@ -2114,7 +2114,7 @@ SourceResultType PhysicalHashJoin::GetDataInternal(ExecutionContext &context, Da
 		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
 		if (gstate.global_stage != HashJoinSourceStage::DONE) {
 			gstate.global_stage = HashJoinSourceStage::DONE;
-			if (sink.preserve_build_for_recursive_reuse) {
+			if (sink.preserve_build_for_reuse) {
 				sink.scanned_data = false;
 			} else {
 				sink.hash_table->Reset();
