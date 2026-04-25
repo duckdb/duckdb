@@ -102,6 +102,8 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 	                      bool global_replace);
 
 	bool global_replace;
+	bool short_extract_candidate = false;
+	string short_pattern_string;
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
@@ -186,6 +188,30 @@ struct RegexLocalState : public FunctionLocalState {
 	RE2 constant_pattern;
 	//! Used by regexp_extract_all to pre-allocate the args
 	RegexStringPieceArgs group_buffer;
+};
+
+// Compiles either the trimmed short-extract pattern or, on fall-through, the full pattern.
+struct RegexReplaceLocalState : public FunctionLocalState {
+	explicit RegexReplaceLocalState(RegexpReplaceBindData &info) : fast_path(false) {
+		if (info.short_extract_candidate) {
+			pattern = make_uniq<RE2>(
+			    duckdb_re2::StringPiece(info.short_pattern_string.c_str(), info.short_pattern_string.size()),
+			    info.options);
+			if (pattern->ok() && pattern->NumberOfCapturingGroups() == 1) {
+				fast_path = true;
+				return;
+			}
+			pattern.reset();
+		}
+		pattern = make_uniq<RE2>(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
+		                         info.options);
+		if (!pattern->ok()) {
+			throw InvalidInputException(pattern->error());
+		}
+	}
+
+	unique_ptr<RE2> pattern;
+	bool fast_path;
 };
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,

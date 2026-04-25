@@ -15,6 +15,8 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc_wrapper.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 using regexp_util::CreateStringPiece;
@@ -148,12 +150,36 @@ RegexpReplaceBindData::RegexpReplaceBindData(duckdb_re2::RE2::Options options, s
 
 unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 	auto copy = make_uniq<RegexpReplaceBindData>(options, constant_string, constant_pattern, global_replace);
+	copy->short_extract_candidate = short_extract_candidate;
+	copy->short_pattern_string = short_pattern_string;
 	return std::move(copy);
 }
 
 bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpReplaceBindData>();
-	return RegexpBaseBindData::Equals(other) && global_replace == other.global_replace;
+	return RegexpBaseBindData::Equals(other) && global_replace == other.global_replace &&
+	       short_extract_candidate == other.short_extract_candidate &&
+	       short_pattern_string == other.short_pattern_string;
+}
+
+// Bind-time gate for the short-extract fast path; capture-count is checked at local-state init.
+static bool TryDetectShortExtractShape(ClientContext &context, Expression &replace_expr, const string &pattern,
+                                       const RE2::Options &options, string &out_short_pattern) {
+	if (pattern.size() < 4 || pattern.front() != '^' || pattern.compare(pattern.size() - 3, 3, ".*$") != 0) {
+		return false;
+	}
+	if (options.dot_nl() || options.literal()) {
+		return false;
+	}
+	string constant_replace;
+	if (!TryParseConstantPattern(context, replace_expr, constant_replace)) {
+		return false;
+	}
+	if (constant_replace.size() != 2 || constant_replace[0] != '\\' || constant_replace[1] != '1') {
+		return false;
+	}
+	out_short_pattern = pattern.substr(0, pattern.size() - 3);
+	return true;
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input) {
@@ -166,7 +192,24 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 		ParseRegexOptions(context, *arguments[3], data->options, &data->global_replace);
 	}
 	data->options.set_log_errors(false);
+
+	if (data->constant_pattern && !data->global_replace) {
+		string short_pat;
+		if (TryDetectShortExtractShape(context, *arguments[2], data->constant_string, data->options, short_pat)) {
+			data->short_extract_candidate = true;
+			data->short_pattern_string = std::move(short_pat);
+		}
+	}
 	return std::move(data);
+}
+
+static unique_ptr<FunctionLocalState>
+RegexReplaceInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
+	auto &info = bind_data->Cast<RegexpReplaceBindData>();
+	if (info.constant_pattern) {
+		return make_uniq<RegexReplaceLocalState>(info);
+	}
+	return nullptr;
 }
 
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -179,14 +222,34 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &heap = StringVector::GetStringHeap(result);
 	if (info.constant_pattern) {
-		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexReplaceLocalState>();
+		if (lstate.fast_path) {
+			// Slice capture group 1 directly out of the input vector via the trimmed pattern.
+			StringVector::AddHeapReference(result, strings);
+			const auto &re = *lstate.pattern;
+			UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
+				duckdb_re2::StringPiece in_piece(input.GetData(), input.GetSize());
+				duckdb_re2::StringPiece submatch[2];
+				bool matched = re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::ANCHOR_START, submatch, 2);
+				if (matched) {
+					const char *match_end = submatch[0].data() + submatch[0].size();
+					const char *input_end = in_piece.data() + in_piece.size();
+					auto remainder = static_cast<size_t>(input_end - match_end);
+					if (std::memchr(match_end, '\n', remainder) == nullptr) {
+						return string_t(submatch[1].data(), UnsafeNumericCast<uint32_t>(submatch[1].size()));
+					}
+				}
+				return input;
+			});
+			return;
+		}
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, args.size(), [&](string_t input, string_t replace) {
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, *lstate.pattern, CreateStringPiece(replace));
 			    } else {
-				    RE2::Replace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, *lstate.pattern, CreateStringPiece(replace));
 			    }
 			    return heap.AddString(sstring);
 		    });
@@ -409,10 +472,10 @@ ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr,
-	                                          RegexInitLocalState));
-	regexp_replace.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                   LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr, RegexInitLocalState));
+	                                          RegexReplaceInitLocalState));
+	regexp_replace.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	    RegexReplaceFunction, RegexReplaceBind, nullptr, RegexReplaceInitLocalState));
 	return (regexp_replace);
 }
 
