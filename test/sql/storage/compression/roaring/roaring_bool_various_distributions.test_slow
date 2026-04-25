@@ -15,9 +15,8 @@ statement ok
 CREATE OR REPLACE TABLE uncompressed_booleans(id BIGINT, b BOOL);
 
 statement ok
-SELECT setseed(0.4);
 WITH cte AS (
-   SELECT id, random() r FROM range(10_000_000) t(id)
+   SELECT id, hash_to_unit(id) r FROM range(10_000_000) t(id)
 )
 INSERT INTO uncompressed_booleans
 SELECT id, case when r < {null_ratio} then null else r <= {ratio} end
