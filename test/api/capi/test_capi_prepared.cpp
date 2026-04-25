@@ -336,7 +336,7 @@ TEST_CASE("Test duckdb_prepared_statement return value APIs", "[capi]") {
 	auto column_name = duckdb_prepared_statement_column_name(stmt, 0);
 	std::string col_name_str = column_name;
 	duckdb_free((void *)column_name);
-	REQUIRE(col_name_str == "CAST($1 AS VARCHAR)");
+	REQUIRE(col_name_str == "CAST($1 AS TEXT)");
 
 	duckdb_destroy_prepare(&stmt);
 

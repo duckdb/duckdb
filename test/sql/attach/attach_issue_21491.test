@@ -2,8 +2,6 @@
 # description: Issue #21491 - ATTACH expression support (PEG parser)
 # group: [attach]
 
-require autocomplete
-
 statement error
 ATTACH unknown_scalar('test.db') AS db;
 ----
@@ -14,9 +12,6 @@ ATTACH ':memory:' AS memdb
 
 statement ok
 DETACH memdb
-
-statement ok
-call enable_peg_parser();
 
 statement error
 ATTACH unknown_scalar('test.db') AS db;
