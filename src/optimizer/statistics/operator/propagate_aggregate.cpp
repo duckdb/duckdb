@@ -99,6 +99,19 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 	return true;
 }
 
+bool GroupingSetCanIntroduceNull(const LogicalAggregate &aggr, idx_t group_idx) {
+	if (aggr.grouping_sets.empty()) {
+		return false;
+	}
+	const auto projection_idx = ProjectionIndex(group_idx);
+	for (const auto &grouping_set : aggr.grouping_sets) {
+		if (grouping_set.find(projection_idx) == grouping_set.end()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace
 
 void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_ptr<LogicalOperator> &node_ptr) {
@@ -310,14 +323,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	aggr.group_stats.resize(aggr.groups.size());
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
 		auto stats = PropagateExpression(aggr.groups[group_idx]);
+		if (stats && GroupingSetCanIntroduceNull(aggr, group_idx)) {
+			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
 		aggr.group_stats[group_idx] = stats ? stats->ToUnique() : nullptr;
 		if (!stats) {
-			continue;
-		}
-		if (aggr.grouping_sets.size() > 1) {
-			// aggregates with multiple grouping sets can introduce NULL values to certain groups
-			// FIXME: actually figure out WHICH groups can have null values introduced
-			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			continue;
 		}
 		ColumnBinding group_binding(aggr.group_index, ProjectionIndex(group_idx));
