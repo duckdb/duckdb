@@ -117,13 +117,14 @@ else
   fi
 fi
 
+chmod +x "${workdir}/extract/s5cmd"
+
 mkdir -p "${INSTALL_DIR}"
 if [[ "${uname_s}" == "Linux" && -n "${CI:-}" ]]; then
   sudo cp "${workdir}/extract/s5cmd" "${INSTALL_DIR}/s5cmd"
 else
   cp "${workdir}/extract/s5cmd" "${INSTALL_DIR}/s5cmd"
 fi
-chmod +x "${INSTALL_DIR}/s5cmd"
 
 if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
   export PATH="${INSTALL_DIR}:$PATH"
