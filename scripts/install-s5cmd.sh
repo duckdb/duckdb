@@ -120,7 +120,7 @@ fi
 chmod +x "${workdir}/extract/s5cmd"
 
 mkdir -p "${INSTALL_DIR}"
-if [[ "${uname_s}" == "Linux" && -n "${CI:-}" ]]; then
+if [[ "${uname_s}" == "Linux" && -n "${CI:-}" ]] && command -v sudo >/dev/null 2>&1; then
   sudo cp "${workdir}/extract/s5cmd" "${INSTALL_DIR}/s5cmd"
 else
   cp "${workdir}/extract/s5cmd" "${INSTALL_DIR}/s5cmd"
