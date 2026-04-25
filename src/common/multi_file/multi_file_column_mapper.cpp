@@ -578,10 +578,12 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
                                               bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx.GetIndex());
-	if (!global_column.type.IsNested() ||
-	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
-	    is_trivially_mappable) {
-		// not a struct - potentially add a cast
+	bool can_use_remap_struct =
+	    global_column.type.IsNested() &&
+	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
+	    !is_trivially_mappable && local_column.type.IsNested();
+	if (!can_use_remap_struct) {
+		// use the cast path unless we actually need struct remapping and both source/target sides are nested
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}

@@ -21,6 +21,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -70,7 +71,15 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
       types(std::move(types_p)), owned_row_groups(make_shared_ptr<RowGroupSegmentTree>(*this, row_start)),
-      allocation_size(0), requires_new_row_group(false) {
+      allocation_size(0), row_group_append_mode(RowGroupAppendMode::APPEND_TO_EXISTING) {
+	// If the table contains shredded types (variant / geometry) then we can't append to an existing row group
+	for (auto &type : types) {
+		if (TypeVisitor::Contains(type, LogicalTypeId::VARIANT) ||
+		    TypeVisitor::Contains(type, LogicalTypeId::GEOMETRY)) {
+			row_group_append_mode = RowGroupAppendMode::REQUIRE_NEW;
+			break;
+		}
+	}
 }
 
 idx_t RowGroupCollection::GetTotalRows() const {
@@ -138,8 +147,11 @@ void RowGroupCollection::Initialize(PersistentCollectionData &data) {
 	}
 }
 
-void RowGroupCollection::SetAppendRequiresNewRowGroup() {
-	requires_new_row_group = true;
+void RowGroupCollection::SetRowGroupAppendMode(RowGroupAppendMode mode) {
+	if (mode > row_group_append_mode) {
+		// We never downgrade the mode, i.e. if REQUIRE_NEW was already set then we do not set it back to SUGGEST_NEW
+		row_group_append_mode = mode;
+	}
 }
 
 void RowGroupCollection::InitializeEmpty() {
@@ -160,7 +172,7 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 	auto new_row_group = make_uniq<RowGroup>(*this, 0U);
 	new_row_group->InitializeEmpty(types, GetColumnDataType(start_row));
 	owned_row_groups->AppendSegment(l, std::move(new_row_group), start_row);
-	requires_new_row_group = false;
+	row_group_append_mode = RowGroupAppendMode::APPEND_TO_EXISTING;
 }
 
 optional_ptr<RowGroup> RowGroupCollection::GetRowGroup(int64_t index) {
@@ -483,8 +495,20 @@ void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppe
 	// start writing to the row_groups
 	state.row_groups = GetRowGroups();
 	auto l = state.row_groups->Lock();
-	if (state.row_groups->IsEmpty(l) || requires_new_row_group) {
-		// empty row group collection: empty first row group
+	// We need a new row group if there are none yet or the append mode forces us to create a new row group
+	bool needs_new_row_group = state.row_groups->IsEmpty(l) || row_group_append_mode == RowGroupAppendMode::REQUIRE_NEW;
+	// Otherwise we evaluate the row_group_append_mode
+	if (!needs_new_row_group) {
+		if (info->GetIndexes().Empty()) {
+			// We honor SUGGEST_NEW unless the table has indexes because there is no vacuuming for indexed tables...
+			needs_new_row_group = row_group_append_mode == RowGroupAppendMode::SUGGEST_NEW;
+		} else {
+			// ... and if it has indexes we will ignore row_group_append_mode and try to append, unless the last row
+			// group is full already.
+			needs_new_row_group = row_group_size < state.row_groups->GetLastSegment(l)->GetNode().count;
+		}
+	}
+	if (needs_new_row_group) {
 		AppendRowGroup(l, state.row_groups->GetBaseRowId() + total_rows);
 	}
 	state.start_row_group = state.row_groups->GetLastSegment(l);
@@ -731,7 +755,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
 	if (is_persistent) {
-		SetAppendRequiresNewRowGroup();
+		SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	}
 }
 
@@ -1725,7 +1749,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				for (auto &block : all_full_read_blocks) {
 					oss << block << ", ";
 				}
-				oss << "\n";
 
 				throw InternalException("Reloading blocks just written does not yield same blocks: " + oss.str());
 			}

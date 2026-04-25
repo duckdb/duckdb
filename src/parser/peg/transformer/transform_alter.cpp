@@ -169,6 +169,7 @@ void PEGTransformerFactory::AddToMultiStatement(const unique_ptr<MultiStatement>
                                                 unique_ptr<AlterInfo> alter_info) {
 	auto alter_statement = make_uniq<AlterStatement>();
 	alter_statement->info = std::move(alter_info);
+	alter_statement->query = alter_statement->ToString();
 	multi_statement->statements.push_back(std::move(alter_statement));
 }
 
@@ -190,6 +191,7 @@ void PEGTransformerFactory::AddUpdateToMultiStatement(const unique_ptr<MultiStat
 	set_info->expressions.push_back(original_expression->Copy());
 	node.set_info = std::move(set_info);
 
+	update_statement->query = update_statement->ToString() + ";";
 	multi_statement->statements.push_back(std::move(update_statement));
 }
 
