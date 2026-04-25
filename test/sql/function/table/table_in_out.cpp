@@ -119,9 +119,9 @@ struct LateralStructEcho {
 		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 			auto struct_value = input.data[0].GetValue(row_idx);
 			auto &children = StructValue::GetChildren(struct_value);
-			output.SetValue(0, row_idx, children[0]);
-			output.SetValue(1, row_idx, children[1]);
-			output.SetValue(2, row_idx, children[2]);
+			output.data[0].Append(children[0]);
+			output.data[1].Append(children[1]);
+			output.data[2].Append(children[2]);
 		}
 		output.SetCardinality(input.size());
 		return OperatorResultType::NEED_MORE_INPUT;
