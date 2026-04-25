@@ -17,8 +17,6 @@
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -31,7 +29,6 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -354,36 +351,22 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
 
-	// Determine non-nullable columns from table constraints (if copying from a table)
-	auto &copy_info = input.info;
-	if (!copy_info.table.empty()) {
-		auto entry =
-		    Catalog::GetEntry(context, copy_info.catalog, copy_info.schema,
-		                      EntryLookupInfo(CatalogType::TABLE_ENTRY, copy_info.table), OnEntryNotFound::RETURN_NULL);
-		if (entry && entry->type == CatalogType::TABLE_ENTRY) {
-			auto &table = entry->Cast<TableCatalogEntry>();
-			auto &columns = table.GetColumns();
-			auto &constraints = table.GetConstraints();
-			unordered_set<string> not_null_col_names;
-			for (auto &constraint : constraints) {
-				if (constraint->type == ConstraintType::NOT_NULL) {
-					auto &not_null = constraint->Cast<NotNullConstraint>();
-					auto &col = columns.GetColumn(not_null.index);
-					not_null_col_names.insert(col.GetName());
-				}
-			}
-			if (!not_null_col_names.empty()) {
-				bind_data->not_null_columns.resize(names.size(), false);
-				for (idx_t i = 0; i < names.size(); i++) {
-					if (not_null_col_names.count(names[i])) {
-						bind_data->not_null_columns[i] = true;
-					}
-				}
-			}
+	return std::move(bind_data);
+}
+
+static void ParquetCopyToPropagateStatistics(ClientContext &, FunctionData &bind_data,
+                                             const vector<BaseStatistics *> &column_stats) {
+	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
+	auto count = parquet_bind.sql_types.size();
+	if (column_stats.size() != count) {
+		return;
+	}
+	parquet_bind.not_null_columns.assign(count, false);
+	for (idx_t i = 0; i < count; i++) {
+		if (column_stats[i] && !column_stats[i]->CanHaveNull()) {
+			parquet_bind.not_null_columns[i] = true;
 		}
 	}
-
-	return std::move(bind_data);
 }
 
 static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -946,6 +929,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;
 	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;

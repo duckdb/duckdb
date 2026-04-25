@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -43,6 +44,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = PropagateStatistics(node.Cast<LogicalAggregate>(), node_ptr);
+		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		result = PropagateStatistics(node.Cast<LogicalCopyToFile>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = PropagateStatistics(node.Cast<LogicalCrossProduct>(), node_ptr);
@@ -92,6 +96,24 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr) {
 	return PropagateStatistics(*node_ptr, node_ptr);
+}
+
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopyToFile &op,
+                                                                     unique_ptr<LogicalOperator> &node_ptr) {
+	auto stats = PropagateChildren(op, node_ptr);
+	if (!op.function.copy_to_propagate_statistics || !op.bind_data || op.children.empty()) {
+		return stats;
+	}
+	auto bindings = op.children[0]->GetColumnBindings();
+	vector<BaseStatistics *> column_stats(bindings.size(), nullptr);
+	for (idx_t i = 0; i < bindings.size(); i++) {
+		auto entry = statistics_map.find(bindings[i]);
+		if (entry != statistics_map.end()) {
+			column_stats[i] = entry->second.get();
+		}
+	}
+	op.function.copy_to_propagate_statistics(context, *op.bind_data, column_stats);
+	return stats;
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression &expr,

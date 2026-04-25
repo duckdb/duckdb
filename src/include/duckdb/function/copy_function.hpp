@@ -18,6 +18,7 @@ namespace duckdb {
 
 struct BoundStatement;
 struct CopyFunctionFileStatistics;
+class BaseStatistics;
 class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
@@ -167,6 +168,9 @@ typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &in
 
 typedef void (*copy_to_initialize_operator_t)(GlobalFunctionData &gstate, const PhysicalOperator &op);
 
+typedef void (*copy_to_propagate_statistics_t)(ClientContext &context, FunctionData &bind_data,
+                                               const vector<BaseStatistics *> &column_stats);
+
 enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS = 0,
 	CHANGED_ROWS_AND_FILE_LIST = 1,
@@ -237,6 +241,7 @@ public:
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
 	copy_to_initialize_operator_t initialize_operator;
+	copy_to_propagate_statistics_t copy_to_propagate_statistics = nullptr;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
