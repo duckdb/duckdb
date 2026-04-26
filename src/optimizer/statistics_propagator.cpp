@@ -105,14 +105,15 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCopy
 		return stats;
 	}
 	auto bindings = op.children[0]->GetColumnBindings();
-	vector<BaseStatistics *> column_stats(bindings.size(), nullptr);
+	vector<optional_ptr<BaseStatistics>> column_stats(bindings.size());
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		auto entry = statistics_map.find(bindings[i]);
 		if (entry != statistics_map.end()) {
 			column_stats[i] = entry->second.get();
 		}
 	}
-	op.function.copy_to_propagate_statistics(context, *op.bind_data, column_stats);
+	CopyToPropagateStatsInput input {context, *op.bind_data, column_stats};
+	op.function.copy_to_propagate_statistics(input);
 	return stats;
 }
 

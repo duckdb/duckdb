@@ -354,16 +354,15 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 	return std::move(bind_data);
 }
 
-static void ParquetCopyToPropagateStatistics(ClientContext &, FunctionData &bind_data,
-                                             const vector<BaseStatistics *> &column_stats) {
-	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
+static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
+	auto &parquet_bind = input.bind_data.Cast<ParquetWriteBindData>();
 	auto count = parquet_bind.sql_types.size();
-	if (column_stats.size() != count) {
+	if (input.column_stats.size() != count) {
 		return;
 	}
 	parquet_bind.not_null_columns.assign(count, false);
 	for (idx_t i = 0; i < count; i++) {
-		if (column_stats[i] && !column_stats[i]->CanHaveNull()) {
+		if (input.column_stats[i] && !input.column_stats[i]->CanHaveNull()) {
 			parquet_bind.not_null_columns[i] = true;
 		}
 	}
