@@ -619,12 +619,14 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
 	base_cte->query_node = node.Copy();
 	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
 
 	// Unreferenced DML CTE
 	auto &trigger = triggers[0].get();
 	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 	trig_cte->query_node = trigger.trigger_action->Copy();
 	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	trig_cte->is_trigger_generated = true;
 
 	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
 	auto outer = make_uniq<SelectNode>();
