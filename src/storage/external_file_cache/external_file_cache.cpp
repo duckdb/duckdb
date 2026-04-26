@@ -125,8 +125,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(Cached
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 
-	if (cached_file.cached_block_size.IsValid() &&
-	    cached_file.cached_block_size.GetIndex() != current_block_size) {
+	if (cached_file.cached_block_size.IsValid() && cached_file.cached_block_size.GetIndex() != current_block_size) {
 		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
 		if (file_size > 0) {
 			ReindexCachedFileCore(cached_file, file_size, old_block_size, current_block_size);

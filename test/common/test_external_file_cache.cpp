@@ -175,7 +175,7 @@ TEST_CASE("Lazy reindex with holes in cached content", "[external_file_cache]") 
 	REQUIRE(CountCachedBlocks(cache) == 6);
 
 	// Read the second half, which triggers lazy reindex of all blocks in this file.
-	// Reindex: blocks 4-7 merge into 1 new 16KiB block. Blocks 0-1 can't form a complete 16KiB block so they are dropped.
+	// Reindex: blocks 4-7 merge into 1 new 16KiB block. Blocks 0-1 can't form a complete 16KiB block thus dropped.
 	REQUIRE(ReadFull(*handle, NEW_BLOCK_SIZE, NEW_BLOCK_SIZE) == content.substr(NEW_BLOCK_SIZE, NEW_BLOCK_SIZE));
 
 	REQUIRE(CountCachedBlocks(cache) == 1);
