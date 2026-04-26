@@ -412,7 +412,7 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartiti
 void RadixHTLocalSinkState::Reset(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate) {
 	group_chunk.Reset();
 	if (radix_ht.grouping_set.empty()) {
-		group_chunk.data[0].Reference(Value::TINYINT(42));
+		group_chunk.data[0].Reference(Value::TINYINT(42), count_t(STANDARD_VECTOR_SIZE));
 	}
 	registered = false;
 	abandoned_data.reset();
