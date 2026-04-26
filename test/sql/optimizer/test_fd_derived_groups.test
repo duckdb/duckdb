@@ -1,0 +1,101 @@
+# name: test/sql/optimizer/test_fd_derived_groups.test
+# description: GROUP BY collapses derived FD groups into a post-aggregate projection
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t(x INTEGER);
+
+statement ok
+INSERT INTO t SELECT range FROM range(0, 100);
+
+statement ok
+CREATE TABLE f(x DOUBLE);
+
+statement ok
+INSERT INTO f VALUES (1.5), (1.7), (2.3);
+
+# Result queries: enable_verification re-runs each query unoptimized and checks the result
+# matches, replacing manual `disabled_optimizers='duplicate_groups'` toggling.
+statement ok
+PRAGMA enable_verification;
+
+query III
+SELECT x, (x-1)*2, count(*) FROM t WHERE x < 4 GROUP BY x, (x-1)*2 ORDER BY x;
+----
+0	-2	1
+1	0	1
+2	2	1
+3	4	1
+
+# x=1.5, 1.7 both have floor=1 → one group with count=2. Verification confirms the un-collapsed
+# plan produces the same answer.
+query III
+SELECT floor(x), floor(x)+1, count(*) FROM f GROUP BY floor(x), floor(x)+1 ORDER BY floor(x);
+----
+1.0	2.0	2
+2.0	3.0	1
+
+# Plan-shape assertions: EXPLAIN output differs between optimized and unoptimized, so verification
+# must be off here.
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+# ----- Collapses (the AGGREGATE must end up with the single base group `x`) ----
+
+query II
+EXPLAIN (FORMAT JSON) SELECT x, x-1, count(*) FROM t GROUP BY x, x-1;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"x".*
+
+query II
+EXPLAIN (FORMAT JSON) SELECT x, x-1, x+2, x*3, count(*) FROM t GROUP BY x, x-1, x+2, x*3;
+----
+logical_opt	<REGEX>:.*"Groups":\s*"x".*
+
+# Nested expressions over a single base (cast over function, multi-ref).
+query II
+EXPLAIN (FORMAT JSON) SELECT x, (x-1)*2, CAST((x+5)*7 AS BIGINT), count(*)
+                       FROM t GROUP BY x, (x-1)*2, CAST((x+5)*7 AS BIGINT);
+----
+logical_opt	<REGEX>:.*"Groups":\s*"x".*
+
+# ----- Negatives (Groups array must keep two entries) ---------------------
+
+statement ok
+CREATE TABLE u(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO u VALUES (1, 10), (2, 20), (3, 30);
+
+# Multi-input expression (a+b uses two columns).
+query II
+EXPLAIN (FORMAT JSON) SELECT a, a+b, count(*) FROM u GROUP BY a, a+b;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
+
+# Volatile (random() at any depth must reject via IsConsistent).
+query II
+EXPLAIN (FORMAT JSON) SELECT x, (x - random()) * 2, count(*) FROM t GROUP BY x, (x - random()) * 2;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
+
+# ROLLUP: positional groups must not collapse.
+query II
+EXPLAIN (FORMAT JSON) SELECT x, x-1, count(*) FROM t GROUP BY ROLLUP(x, x-1);
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
+
+# No raw-column base: synthesising one would need an injectivity proof per derived.
+query II
+EXPLAIN (FORMAT JSON) SELECT x+1, x+2, count(*) FROM t GROUP BY x+1, x+2;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
+
+# Many-to-one base (floor): collapsing to GROUP BY x would split partitions.
+query II
+EXPLAIN (FORMAT JSON) SELECT floor(x), floor(x)+1, count(*) FROM f GROUP BY floor(x), floor(x)+1;
+----
+logical_opt	<REGEX>:.*"Groups":\s*\[\s*"[^"]*"\s*,\s*".*
