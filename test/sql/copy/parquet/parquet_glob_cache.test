@@ -7,18 +7,19 @@ require parquet
 statement ok
 SET parquet_metadata_cache=true;
 
-# first read reads the parquet files
+# Multi-file COUNT(*) folds via the partition-stats prefetch on the FIRST query (the optimizer
+# parallel-fetches each file's footer); both runs now skip PARQUET_SCAN.
 query II
 EXPLAIN select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
 ----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*
+physical_plan	<!REGEX>:.*PARQUET_SCAN.*
 
 query I
 select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
 ----
 2
 
-# second read uses the metadata cache
+# second read also folds (now hitting the metadata cache populated above)
 query II
 EXPLAIN select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
 ----

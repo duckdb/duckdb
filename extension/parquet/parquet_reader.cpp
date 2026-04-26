@@ -881,7 +881,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
-                             shared_ptr<ParquetFileMetadataCache> metadata_p)
+                             shared_ptr<ParquetFileMetadataCache> metadata_p, bool initialize_schema)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
@@ -927,13 +927,21 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 			encryption_util = context_p.db->GetEncryptionUtil(true);
 		}
 	}
-	InitializeSchema(context_p);
+	if (initialize_schema) {
+		InitializeSchema(context_p);
+	}
 }
 
 bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
 	Value metadata_cache = false;
 	context.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
 	return metadata_cache.GetValue<bool>();
+}
+
+bool ParquetReader::PartitionStatsPrefetchDisabled(ClientContext &context) {
+	Value v = false;
+	context.TryGetCurrentSetting("disable_parquet_partition_stats_prefetch", v);
+	return v.GetValue<bool>();
 }
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
@@ -1382,33 +1390,61 @@ void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
 struct ParquetPartitionRowGroup : public PartitionRowGroup {
 	ParquetPartitionRowGroup(const duckdb_parquet::FileMetaData &metadata_p,
 	                         optional_ptr<ParquetColumnSchema> root_schema_p,
-	                         optional_ptr<ParquetOptions> parquet_options_p, const idx_t row_group_idx_p)
+	                         optional_ptr<ParquetOptions> parquet_options_p, const idx_t row_group_idx_p,
+	                         shared_ptr<vector<idx_t>> column_remap_p = nullptr)
 	    : metadata(metadata_p), root_schema(root_schema_p), parquet_options(parquet_options_p),
-	      row_group_idx(row_group_idx_p) {
+	      row_group_idx(row_group_idx_p), column_remap(std::move(column_remap_p)) {
 	}
 
 	const duckdb_parquet::FileMetaData &metadata;
 	const optional_ptr<ParquetColumnSchema> root_schema;
 	const optional_ptr<ParquetOptions> parquet_options;
 	const idx_t row_group_idx;
+	// Optional global -> per-file column index map. nullptr = identity. INVALID_INDEX = missing in
+	// this file (GetColumnStatistics returns null, optimizer bails for that aggregate).
+	const shared_ptr<vector<idx_t>> column_remap;
+
+	idx_t MapIndex(idx_t global_idx) const {
+		if (!column_remap) {
+			return global_idx;
+		}
+		if (global_idx >= column_remap->size()) {
+			return DConstants::INVALID_INDEX;
+		}
+		return (*column_remap)[global_idx];
+	}
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
-		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		const idx_t mapped = MapIndex(storage_index.GetPrimaryIndex());
+		if (mapped == DConstants::INVALID_INDEX) {
+			// Column missing in this file (heterogeneous schema, e.g. union_by_name).
+			return nullptr;
+		}
+		// Under union_by_name the unified column index can exceed this file's native column count.
+		if (!root_schema || mapped >= root_schema->children.size()) {
+			return nullptr;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_schema = root_schema->children[primary_index];
+		const auto &column_schema = root_schema->children[mapped];
 		return column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
 	}
 
 	bool MinMaxIsExact(const BaseStatistics &, const StorageIndex &storage_index) override {
-		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		const idx_t mapped = MapIndex(storage_index.GetPrimaryIndex());
+		if (mapped == DConstants::INVALID_INDEX) {
+			return false;
+		}
+		if (!root_schema || mapped >= root_schema->children.size()) {
+			return false;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
+		const auto &column_schema = root_schema->children[mapped];
 		const auto &row_group = metadata.row_groups[row_group_idx];
-		const auto &column_chunk = row_group.columns[primary_index];
+		D_ASSERT(column_schema.column_index < row_group.columns.size());
+		const auto &column_chunk = row_group.columns[column_schema.column_index];
 
 		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
 		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
@@ -1422,7 +1458,8 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
                                       optional_ptr<ParquetColumnSchema> root_schema,
-                                      optional_ptr<ParquetOptions> parquet_options) {
+                                      optional_ptr<ParquetOptions> parquet_options,
+                                      shared_ptr<vector<idx_t>> column_remap) {
 	idx_t offset = 0;
 	for (idx_t i = 0; i < metadata.row_groups.size(); i++) {
 		auto &row_group = metadata.row_groups[i];
@@ -1432,7 +1469,7 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 		partition_stats.count_type = CountType::COUNT_EXACT;
 		if (root_schema && parquet_options) {
 			partition_stats.partition_row_group =
-			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i);
+			    make_shared_ptr<ParquetPartitionRowGroup>(metadata, root_schema, parquet_options, i, column_remap);
 		}
 		offset += row_group.num_rows;
 		result.push_back(partition_stats);

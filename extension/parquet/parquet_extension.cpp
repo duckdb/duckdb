@@ -948,6 +948,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.AddExtensionOption("parquet_metadata_cache",
 	                          "Cache Parquet metadata - useful when reading the same files multiple times",
 	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("disable_parquet_partition_stats_prefetch",
+	                          "Disable the optimizer's per-file metadata prefetch used to fold MIN/MAX/COUNT(*) "
+	                          "from row-group stats. Falls back to the regular scan path. Useful when the prefetch "
+	                          "is wasted work (e.g. MIN/MAX on string columns whose stats writers have truncated).",
+	                          LogicalType::BOOLEAN, Value(false));
 	config.AddExtensionOption(
 	    "enable_geoparquet_conversion",
 	    "Attempt to decode/encode geometry data in/as GeoParquet files if the spatial extension is present.",

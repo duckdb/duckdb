@@ -25,6 +25,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "parquet_column_schema.hpp"
@@ -57,6 +58,18 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_data_size = 0;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
+
+	// Per-file artifacts kept alive for the bind: PartitionRowGroup holds the FileMetaData and the
+	// parsed root_schema by raw pointer, so both must outlive the bind. Homogeneous files share
+	// initial_reader.root_schema and leave divergent_root_schema null. CreateReader reuses metadata
+	// to skip a footer re-read when the fold bails -- file_path lets us defend against any
+	// unexpected reorder between the optimizer pass and scan-time file_idx lookups.
+	struct PrefetchedFile {
+		string file_path;
+		shared_ptr<ParquetFileMetadataCache> metadata;
+		unique_ptr<ParquetColumnSchema> divergent_root_schema;
+	};
+	vector<PrefetchedFile> partition_stats_files;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -363,37 +376,228 @@ const vector<ParquetMetadataCacheEntry> &ParquetReadBindData::TryLoadCaches(cons
 	return caches;
 }
 
+// When two thrift schemas match element-wise the parsed root_schema is reusable across files.
+static bool ThriftSchemaElementsEqual(const duckdb_parquet::SchemaElement &a, const duckdb_parquet::SchemaElement &b) {
+	if (a.name != b.name) {
+		return false;
+	}
+	if (a.__isset.type != b.__isset.type || (a.__isset.type && a.type != b.type)) {
+		return false;
+	}
+	if (a.__isset.repetition_type != b.__isset.repetition_type ||
+	    (a.__isset.repetition_type && a.repetition_type != b.repetition_type)) {
+		return false;
+	}
+	if (a.__isset.num_children != b.__isset.num_children ||
+	    (a.__isset.num_children && a.num_children != b.num_children)) {
+		return false;
+	}
+	if (a.__isset.converted_type != b.__isset.converted_type ||
+	    (a.__isset.converted_type && a.converted_type != b.converted_type)) {
+		return false;
+	}
+	if (a.__isset.type_length != b.__isset.type_length || (a.__isset.type_length && a.type_length != b.type_length)) {
+		return false;
+	}
+	if (a.__isset.scale != b.__isset.scale || (a.__isset.scale && a.scale != b.scale)) {
+		return false;
+	}
+	if (a.__isset.precision != b.__isset.precision || (a.__isset.precision && a.precision != b.precision)) {
+		return false;
+	}
+	return true;
+}
+
+static bool ThriftSchemasIdentical(const vector<duckdb_parquet::SchemaElement> &a,
+                                   const vector<duckdb_parquet::SchemaElement> &b) {
+	if (a.size() != b.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < a.size(); i++) {
+		if (!ThriftSchemaElementsEqual(a[i], b[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// INVALID_INDEX entries mark columns missing or type-incompatible in this file.
+static shared_ptr<vector<idx_t>> BuildColumnRemap(const vector<MultiFileColumnDefinition> &initial_columns,
+                                                  const vector<MultiFileColumnDefinition> &per_file_columns) {
+	case_insensitive_map_t<idx_t> name_to_idx;
+	name_to_idx.reserve(per_file_columns.size());
+	for (idx_t j = 0; j < per_file_columns.size(); j++) {
+		name_to_idx.emplace(per_file_columns[j].name, j);
+	}
+	vector<idx_t> remap_vec(initial_columns.size(), DConstants::INVALID_INDEX);
+	for (idx_t i = 0; i < initial_columns.size(); i++) {
+		auto entry = name_to_idx.find(initial_columns[i].name);
+		if (entry != name_to_idx.end() && per_file_columns[entry->second].type == initial_columns[i].type) {
+			remap_vec[i] = entry->second;
+		}
+	}
+	return make_shared_ptr<vector<idx_t>>(std::move(remap_vec));
+}
+
+struct ParquetPerFilePartitionStats {
+	vector<PartitionStatistics> stats;
+	shared_ptr<ParquetFileMetadataCache> metadata;
+	// Owned per-file parsed schema for divergent files. ParquetPartitionRowGroup holds it by raw
+	// pointer, so we move it into bind_data alongside metadata after extraction.
+	unique_ptr<ParquetColumnSchema> divergent_root_schema;
+};
+
+// Extracts stats for one file and drops the reader; only the metadata pointer + (for divergent
+// files) the parsed root schema survive.
+static void RunPartitionStatsExtraction(ClientContext &context, const OpenFileInfo &file,
+                                        const ParquetOptions &parquet_options,
+                                        shared_ptr<ParquetFileMetadataCache> seed_metadata,
+                                        ParquetReader &initial_reader, ParquetPerFilePartitionStats &out) {
+	auto reader = make_shared_ptr<ParquetReader>(context, file, parquet_options, std::move(seed_metadata),
+	                                             /*initialize_schema=*/false);
+	const auto &per_file_thrift_schema = reader->metadata->metadata->schema;
+	const auto &initial_thrift_schema = initial_reader.metadata->metadata->schema;
+	// Use initial_reader.parquet_options (lives through the bind) rather than reader->parquet_options
+	// (dies with the reader): ParquetPartitionRowGroup holds it by raw pointer.
+	if (ThriftSchemasIdentical(initial_thrift_schema, per_file_thrift_schema)) {
+		ParquetReader::GetPartitionStats(*reader->metadata->metadata, out.stats, initial_reader.root_schema.get(),
+		                                 &initial_reader.parquet_options, /*column_remap=*/nullptr);
+	} else {
+		reader->InitializeSchema(context);
+		auto remap = BuildColumnRemap(initial_reader.GetColumns(), reader->GetColumns());
+		ParquetReader::GetPartitionStats(*reader->metadata->metadata, out.stats, reader->root_schema.get(),
+		                                 &initial_reader.parquet_options, remap);
+		out.divergent_root_schema = std::move(reader->root_schema);
+	}
+	out.metadata = std::move(reader->metadata);
+}
+
+class ParquetPartitionStatsTask : public BaseExecutorTask {
+public:
+	ParquetPartitionStatsTask(TaskExecutor &executor, ClientContext &context, OpenFileInfo file,
+	                          ParquetOptions parquet_options, ParquetReader &initial_reader,
+	                          ParquetPerFilePartitionStats &out)
+	    : BaseExecutorTask(executor), context(context), file(std::move(file)),
+	      parquet_options(std::move(parquet_options)), initial_reader(initial_reader), out(out) {
+	}
+
+	void ExecuteTask() override {
+		RunPartitionStatsExtraction(context, file, parquet_options, /*seed_metadata=*/nullptr, initial_reader, out);
+	}
+
+	string TaskType() const override {
+		return "ParquetPartitionStatsTask";
+	}
+
+private:
+	ClientContext &context;
+	OpenFileInfo file;
+	ParquetOptions parquet_options;
+	ParquetReader &initial_reader;
+	ParquetPerFilePartitionStats &out;
+};
+
+// All-or-nothing bail: returns false on the file-count cap or any has_deletes file. The fold
+// requires stats from every partition (otherwise we can't bound MIN/MAX), and DuckLake/Iceberg/
+// Delta has_deletes signals that the parquet stats describe the pre-delete view -- so even one
+// affected file makes the fold unsafe.
+static bool CollectPartitionStatsFiles(const MultiFileBindData &bind_data, vector<OpenFileInfo> &out) {
+	static constexpr idx_t MAX_PREFETCH_FILES = 10000;
+	for (auto &file : bind_data.file_list->Files()) {
+		if (out.size() >= MAX_PREFETCH_FILES) {
+			return false;
+		}
+		if (file.extended_info) {
+			auto entry = file.extended_info->options.find("has_deletes");
+			if (entry != file.extended_info->options.end() && BooleanValue::Get(entry->second)) {
+				return false;
+			}
+		}
+		out.emplace_back(file);
+	}
+	return true;
+}
+
+// Cache hits run inline (gated on parquet_metadata_cache); misses fan out to parallel workers.
+static void RunPartitionStatsPrefetch(ClientContext &context, const vector<OpenFileInfo> &files,
+                                      const ParquetOptions &parquet_options, ParquetReader &initial_reader,
+                                      vector<ParquetPerFilePartitionStats> &outputs) {
+	const bool cache_enabled = ParquetReader::MetadataCacheEnabled(context);
+	auto &task_scheduler = TaskScheduler::GetScheduler(context);
+	TaskExecutor executor(task_scheduler);
+	idx_t scheduled = 0;
+	for (idx_t i = 0; i < files.size(); i++) {
+		const auto &file = files[i];
+		shared_ptr<ParquetFileMetadataCache> cache_entry;
+		if (cache_enabled) {
+			cache_entry = ParquetReader::GetMetadataCacheEntry(context, file);
+			if (cache_entry && cache_entry->IsValid(file, context) != ParquetCacheValidity::VALID) {
+				cache_entry = nullptr;
+			}
+		}
+		if (cache_entry) {
+			RunPartitionStatsExtraction(context, file, parquet_options, std::move(cache_entry), initial_reader,
+			                            outputs[i]);
+			continue;
+		}
+		auto task =
+		    make_uniq<ParquetPartitionStatsTask>(executor, context, file, parquet_options, initial_reader, outputs[i]);
+		executor.ScheduleTask(std::move(task));
+		scheduled++;
+	}
+	if (scheduled > 0) {
+		executor.WorkOnTasks();
+	}
+}
+
 static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &context, GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	vector<PartitionStatistics> result;
+
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE && bind_data.initial_reader) {
-		// we have read the metadata - get the partitions for this reader
 		auto &reader = bind_data.initial_reader->Cast<ParquetReader>();
 		reader.GetPartitionStats(result);
 		return result;
 	}
-	auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
-	auto &cached_metadata = parquet_data.TryLoadCaches(bind_data, context);
-	if (cached_metadata.empty()) {
-		// no cached metadata - bail
-		return result;
+	if (!bind_data.initial_reader) {
+		return {};
 	}
-	// first check if all caches are valid and there are no deletes
-	for (auto &cache : cached_metadata) {
-		if (cache.has_deletes) {
-			// we have deletes - don't return any partition stats
-			// FIXME: we could return with count approximate
-			return result;
-		}
-		if (cache.validity != ParquetCacheValidity::VALID) {
-			// we don't know for sure if this cache entry is valid - we can't use these stats
-			return result;
-		}
+	// Field-id mapping needs per-file resolution different from the name+type remap below.
+	if (!bind_data.bind_data->Cast<ParquetReadBindData>().GetParquetOptions().schema.empty()) {
+		return {};
+	}
+	if (ParquetReader::PartitionStatsPrefetchDisabled(context)) {
+		return {};
+	}
+	auto &initial_reader = bind_data.initial_reader->Cast<ParquetReader>();
+	auto &parquet_bind_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+	auto &per_file = parquet_bind_data.partition_stats_files;
+
+	vector<OpenFileInfo> files;
+	if (!CollectPartitionStatsFiles(bind_data, files)) {
+		return {};
 	}
 
-	// all caches are valid! we can return the partition stats
-	for (auto &cache : cached_metadata) {
-		ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
+	vector<ParquetPerFilePartitionStats> outputs(files.size());
+	RunPartitionStatsPrefetch(context, files, initial_reader.parquet_options, initial_reader, outputs);
+
+	per_file.clear();
+	per_file.resize(files.size());
+	idx_t total_groups = 0;
+	for (auto &out : outputs) {
+		total_groups += out.stats.size();
+	}
+	result.reserve(total_groups);
+	for (idx_t i = 0; i < outputs.size(); i++) {
+		if (!outputs[i].metadata) {
+			return {};
+		}
+		for (auto &stat : outputs[i].stats) {
+			result.push_back(std::move(stat));
+		}
+		per_file[i].file_path = files[i].path;
+		per_file[i].metadata = std::move(outputs[i].metadata);
+		per_file[i].divergent_root_schema = std::move(outputs[i].divergent_root_schema);
 	}
 	return result;
 }
@@ -669,7 +873,15 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions());
+	// Reuse metadata from the partition-stats prefetch so the scan path doesn't re-read footers
+	// when the fold bailed (e.g. MinMaxIsExact false on a truncated VARCHAR). Path equality guards
+	// against any reorder between the optimizer pass and scan-time file_idx lookups.
+	shared_ptr<ParquetFileMetadataCache> prefetched_metadata;
+	if (file_idx < bind_data.partition_stats_files.size() &&
+	    bind_data.partition_stats_files[file_idx].file_path == file.path) {
+		prefetched_metadata = bind_data.partition_stats_files[file_idx].metadata;
+	}
+	return make_shared_ptr<ParquetReader>(context, file, bind_data.GetParquetOptions(), prefetched_metadata);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,

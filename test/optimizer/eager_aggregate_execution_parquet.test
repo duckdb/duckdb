@@ -32,3 +32,247 @@ SELECT max(i), count(i), min(i) FROM '{TEST_DIR}/eager_agg.parquet'
 ----
 8191	8192	0
 
+# multi-file glob: per-file metadata is fetched in parallel during the optimizer pass
+statement ok
+COPY (FROM range (4096) t(i)) TO '{TEST_DIR}/eager_agg_a.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+statement ok
+COPY (SELECT i + 4096 AS i FROM range(4096) t(i)) TO '{TEST_DIR}/eager_agg_b.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM read_parquet(['{TEST_DIR}/eager_agg_a.parquet','{TEST_DIR}/eager_agg_b.parquet'])
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM read_parquet(['{TEST_DIR}/eager_agg_a.parquet','{TEST_DIR}/eager_agg_b.parquet'])
+----
+8192	0	8191
+
+# reordered columns: per-file column remap (by name+type) handles it; still folds
+statement ok
+COPY (SELECT 1 AS a, 'x' AS b UNION ALL SELECT 2, 'y') TO '{TEST_DIR}/reorder_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'x' AS b, 1 AS a UNION ALL SELECT 'y', 2) TO '{TEST_DIR}/reorder_b.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT min(a), max(a) FROM read_parquet(['{TEST_DIR}/reorder_a.parquet','{TEST_DIR}/reorder_b.parquet'])
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+SELECT min(a), max(a) FROM read_parquet(['{TEST_DIR}/reorder_a.parquet','{TEST_DIR}/reorder_b.parquet'])
+----
+1	2
+
+# union_by_name=true with homogeneous schemas: column remap is identity, folds
+query II
+EXPLAIN SELECT min(i) FROM read_parquet(['{TEST_DIR}/eager_agg_a.parquet','{TEST_DIR}/eager_agg_b.parquet'], union_by_name=true)
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query I
+SELECT min(i) FROM read_parquet(['{TEST_DIR}/eager_agg_a.parquet','{TEST_DIR}/eager_agg_b.parquet'], union_by_name=true)
+----
+0
+
+# union_by_name=true with a column missing in one file: bail, full-scan still produces correct answer
+statement ok
+COPY (SELECT 5 AS x, 'foo' AS y) TO '{TEST_DIR}/has_x.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'bar' AS y) TO '{TEST_DIR}/no_x.parquet' (FORMAT PARQUET)
+
+query I
+SELECT min(x) FROM read_parquet(['{TEST_DIR}/has_x.parquet','{TEST_DIR}/no_x.parquet'], union_by_name=true)
+----
+5
+
+# disable_parquet_partition_stats_prefetch setting: bails the prefetch entirely, falls back to scan
+statement ok
+COPY (FROM range(2048) t(i) SELECT i AS id) TO '{TEST_DIR}/dis_a.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 512)
+
+statement ok
+COPY (FROM range(2048, 4096) t(i) SELECT i AS id) TO '{TEST_DIR}/dis_b.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 512)
+
+# default: folds
+query II
+EXPLAIN SELECT min(id), max(id) FROM read_parquet(['{TEST_DIR}/dis_a.parquet','{TEST_DIR}/dis_b.parquet'])
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+statement ok
+SET disable_parquet_partition_stats_prefetch=true
+
+# disabled: reverts to scan
+query II
+EXPLAIN SELECT min(id), max(id) FROM read_parquet(['{TEST_DIR}/dis_a.parquet','{TEST_DIR}/dis_b.parquet'])
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+# correctness with the prefetch disabled
+query II
+SELECT min(id), max(id) FROM read_parquet(['{TEST_DIR}/dis_a.parquet','{TEST_DIR}/dis_b.parquet'])
+----
+0	4095
+
+statement ok
+RESET disable_parquet_partition_stats_prefetch
+
+# heterogeneous types: same column name, incompatible types -> BuildColumnRemap marks INVALID_INDEX,
+# the optimizer bails on the affected aggregate but the scan path still returns the right answer.
+statement ok
+COPY (SELECT 1 AS k) TO '{TEST_DIR}/ht_int.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'a' AS k) TO '{TEST_DIR}/ht_str.parquet' (FORMAT PARQUET)
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/ht_int.parquet','{TEST_DIR}/ht_str.parquet'], union_by_name=true)
+----
+2
+
+# WHERE filter prunes a whole partition: file A is 0..1023, file B is 1024..2047. WHERE i >= 1024
+# eliminates A entirely via stats; the optimizer should fold using only B's surviving partition.
+statement ok
+COPY (FROM range(1024) t(i)) TO '{TEST_DIR}/range_a.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+statement ok
+COPY (SELECT i + 1024 AS i FROM range(1024) t(i)) TO '{TEST_DIR}/range_b.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+query II
+EXPLAIN SELECT min(i), max(i), count(*) FROM read_parquet(['{TEST_DIR}/range_a.parquet','{TEST_DIR}/range_b.parquet']) WHERE i >= 1024
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query III
+SELECT min(i), max(i), count(*) FROM read_parquet(['{TEST_DIR}/range_a.parquet','{TEST_DIR}/range_b.parquet']) WHERE i >= 1024
+----
+1024	2047	1024
+
+# union_by_name + reordered columns: divergent thrift schemas trigger late-init and remap by name.
+statement ok
+COPY (SELECT 10 AS a, 'x' AS b UNION ALL SELECT 20, 'y') TO '{TEST_DIR}/ubn_ra.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 'p' AS b, 30 AS a UNION ALL SELECT 'q', 40) TO '{TEST_DIR}/ubn_rb.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT min(a), max(a) FROM read_parquet(['{TEST_DIR}/ubn_ra.parquet','{TEST_DIR}/ubn_rb.parquet'], union_by_name=true)
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+SELECT min(a), max(a) FROM read_parquet(['{TEST_DIR}/ubn_ra.parquet','{TEST_DIR}/ubn_rb.parquet'], union_by_name=true)
+----
+10	40
+
+# union_by_name + extra column in one file: MIN on the column shared by both folds; MIN on the
+# B-only column bails (missing in A) but still returns the right answer via scan.
+statement ok
+COPY (SELECT 1 AS x UNION ALL SELECT 2) TO '{TEST_DIR}/ubn_ea.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 3 AS x, 100 AS y UNION ALL SELECT 4, 200) TO '{TEST_DIR}/ubn_eb.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT min(x), max(x) FROM read_parquet(['{TEST_DIR}/ubn_ea.parquet','{TEST_DIR}/ubn_eb.parquet'], union_by_name=true)
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+SELECT min(x), max(x) FROM read_parquet(['{TEST_DIR}/ubn_ea.parquet','{TEST_DIR}/ubn_eb.parquet'], union_by_name=true)
+----
+1	4
+
+query II
+SELECT min(y), max(y) FROM read_parquet(['{TEST_DIR}/ubn_ea.parquet','{TEST_DIR}/ubn_eb.parquet'], union_by_name=true)
+----
+100	200
+
+# multi-file × multi-row-group: 2 files × 4 row groups each; the partition-stats path emits 8
+# row-group entries and the count fold sums them.
+statement ok
+COPY (FROM range(4096) t(i)) TO '{TEST_DIR}/mrg_a.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+statement ok
+COPY (SELECT i + 4096 AS i FROM range(4096) t(i)) TO '{TEST_DIR}/mrg_b.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 1024)
+
+query II
+EXPLAIN SELECT min(i), max(i), count(*) FROM read_parquet(['{TEST_DIR}/mrg_a.parquet','{TEST_DIR}/mrg_b.parquet'])
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query III
+SELECT min(i), max(i), count(*) FROM read_parquet(['{TEST_DIR}/mrg_a.parquet','{TEST_DIR}/mrg_b.parquet'])
+----
+0	8191	8192
+
+# union_by_name where file 0 has fewer columns than later files: the unified column index for
+# the extras exceeds initial_reader's native column count. count(*) folds; MIN on the extras
+# bails to scan (initial_reader's root_schema doesn't see those columns).
+statement ok
+COPY (SELECT 1 AS x) TO '{TEST_DIR}/ext_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 2 AS x, 10 AS y, 100 AS z) TO '{TEST_DIR}/ext_b.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 3 AS x, 20 AS y, 200 AS z) TO '{TEST_DIR}/ext_c.parquet' (FORMAT PARQUET)
+
+query I
+SELECT count(*) FROM read_parquet(['{TEST_DIR}/ext_a.parquet','{TEST_DIR}/ext_b.parquet','{TEST_DIR}/ext_c.parquet'], union_by_name=true)
+----
+3
+
+query I
+SELECT min(x) FROM read_parquet(['{TEST_DIR}/ext_a.parquet','{TEST_DIR}/ext_b.parquet','{TEST_DIR}/ext_c.parquet'], union_by_name=true)
+----
+1
+
+# MIN on a column missing from file 0: must bail to scan -- the runtime guard in
+# GetColumnStatistics/MinMaxIsExact has to keep the optimizer from reading past file 0's
+# native column count. If this assertion regresses, the fold has incorrectly succeeded.
+query II
+EXPLAIN SELECT min(y), max(z) FROM read_parquet(['{TEST_DIR}/ext_a.parquet','{TEST_DIR}/ext_b.parquet','{TEST_DIR}/ext_c.parquet'], union_by_name=true)
+----
+physical_plan	<REGEX>:.*AGGREGATE.*
+
+query II
+SELECT min(y), max(z) FROM read_parquet(['{TEST_DIR}/ext_a.parquet','{TEST_DIR}/ext_b.parquet','{TEST_DIR}/ext_c.parquet'], union_by_name=true)
+----
+10	200
+
+# Mixed homogeneous + heterogeneous in a glob: files 0/1 share a thrift schema (homogeneous fast
+# path), file 2 diverges (late-init + remap). Exercises both per-file paths in one query.
+statement ok
+COPY (SELECT 1 AS k) TO '{TEST_DIR}/mh_a.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 2 AS k) TO '{TEST_DIR}/mh_b.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT 3 AS k, 'extra' AS m) TO '{TEST_DIR}/mh_c.parquet' (FORMAT PARQUET)
+
+query II
+EXPLAIN SELECT min(k), max(k) FROM read_parquet(['{TEST_DIR}/mh_a.parquet','{TEST_DIR}/mh_b.parquet','{TEST_DIR}/mh_c.parquet'], union_by_name=true)
+----
+physical_plan	<!REGEX>:.*AGGREGATE.*
+
+query II
+SELECT min(k), max(k) FROM read_parquet(['{TEST_DIR}/mh_a.parquet','{TEST_DIR}/mh_b.parquet','{TEST_DIR}/mh_c.parquet'], union_by_name=true)
+----
+1	3
+
+# Oracle cross-check: the fold path agrees with the scan path on the union_by_name case above.
+statement ok
+SET disabled_optimizers='statistics_propagation'
+
+query II
+SELECT min(y), max(z) FROM read_parquet(['{TEST_DIR}/ext_a.parquet','{TEST_DIR}/ext_b.parquet','{TEST_DIR}/ext_c.parquet'], union_by_name=true)
+----
+10	200
+
+statement ok
+RESET disabled_optimizers

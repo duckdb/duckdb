@@ -195,7 +195,7 @@ struct ParquetUnionData : public BaseUnionData {
 class ParquetReader : public BaseFileReader {
 public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
+	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr, bool initialize_schema = true);
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -263,16 +263,19 @@ public:
 	void GetPartitionStats(vector<PartitionStatistics> &result);
 	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result,
 	                              optional_ptr<ParquetColumnSchema> root_schema = nullptr,
-	                              optional_ptr<ParquetOptions> parquet_options = nullptr);
+	                              optional_ptr<ParquetOptions> parquet_options = nullptr,
+	                              shared_ptr<vector<idx_t>> column_remap = nullptr);
 	static bool MetadataCacheEnabled(ClientContext &context);
+	static bool PartitionStatsPrefetchDisabled(ClientContext &context);
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
+
+	//! Build root_schema + columns from the metadata. Run by the ctor unless initialize_schema=false.
+	void InitializeSchema(ClientContext &context);
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata);
-
-	void InitializeSchema(ClientContext &context);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
