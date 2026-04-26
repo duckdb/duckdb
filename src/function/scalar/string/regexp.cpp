@@ -162,26 +162,6 @@ bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
 	       short_pattern_string == other.short_pattern_string;
 }
 
-// Bind-time gate for the short-extract fast path; capture-count is checked at local-state init.
-static bool TryDetectShortExtractShape(ClientContext &context, Expression &replace_expr, const string &pattern,
-                                       const RE2::Options &options, string &out_short_pattern) {
-	if (pattern.size() < 4 || pattern.front() != '^' || pattern.compare(pattern.size() - 3, 3, ".*$") != 0) {
-		return false;
-	}
-	if (options.dot_nl() || options.literal()) {
-		return false;
-	}
-	string constant_replace;
-	if (!TryParseConstantPattern(context, replace_expr, constant_replace)) {
-		return false;
-	}
-	if (constant_replace.size() != 2 || constant_replace[0] != '\\' || constant_replace[1] != '1') {
-		return false;
-	}
-	out_short_pattern = pattern.substr(0, pattern.size() - 3);
-	return true;
-}
-
 static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
@@ -192,14 +172,6 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 		ParseRegexOptions(context, *arguments[3], data->options, &data->global_replace);
 	}
 	data->options.set_log_errors(false);
-
-	if (data->constant_pattern && !data->global_replace) {
-		string short_pat;
-		if (TryDetectShortExtractShape(context, *arguments[2], data->constant_string, data->options, short_pat)) {
-			data->short_extract_candidate = true;
-			data->short_pattern_string = std::move(short_pat);
-		}
-	}
 	return std::move(data);
 }
 

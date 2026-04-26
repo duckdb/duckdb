@@ -24,4 +24,12 @@ public:
 	                                 bool is_not_like);
 };
 
+class RegexpReplaceShortExtractRule : public Rule {
+public:
+	explicit RegexpReplaceShortExtractRule(ExpressionRewriter &rewriter);
+
+	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
+	                             bool is_root) override;
+};
+
 } // namespace duckdb

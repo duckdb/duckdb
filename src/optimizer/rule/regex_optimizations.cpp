@@ -220,4 +220,50 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	return std::move(like_expression);
 }
 
+RegexpReplaceShortExtractRule::RegexpReplaceShortExtractRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->function = make_uniq<SpecificFunctionMatcher>("regexp_replace");
+	func->policy = SetMatcher::Policy::SOME_ORDERED;
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	root = std::move(func);
+}
+
+// Decorates the bind_info to enable a fast path inside regexp_replace; returns nullptr because the
+// expression itself is unchanged. Capture-count is checked at local-state init.
+unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
+                                                            vector<reference<Expression>> &bindings, bool &changes_made,
+                                                            bool is_root) {
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	if (!root.bind_info) {
+		return nullptr;
+	}
+	auto &bind_data = root.bind_info->Cast<RegexpReplaceBindData>();
+	if (bind_data.short_extract_candidate || !bind_data.constant_pattern || bind_data.global_replace) {
+		return nullptr;
+	}
+	if (bind_data.options.dot_nl() || bind_data.options.literal()) {
+		return nullptr;
+	}
+
+	const auto &replace_const = bindings[3].get().Cast<BoundConstantExpression>();
+	if (replace_const.value.IsNull() || replace_const.value.type().id() != LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
+	const auto &replace_str = StringValue::Get(replace_const.value);
+	if (replace_str.size() != 2 || replace_str[0] != '\\' || replace_str[1] != '1') {
+		return nullptr;
+	}
+
+	const auto &pattern = bind_data.constant_string;
+	if (pattern.size() < 4 || pattern.front() != '^' || pattern.compare(pattern.size() - 3, 3, ".*$") != 0) {
+		return nullptr;
+	}
+
+	bind_data.short_extract_candidate = true;
+	bind_data.short_pattern_string = pattern.substr(0, pattern.size() - 3);
+	return nullptr;
+}
+
 } // namespace duckdb
