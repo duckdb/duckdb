@@ -12,11 +12,11 @@ set prefetch_all_parquet_files=true;
 
 # Create a test parquet file
 statement ok
-copy (select range i, range % 100 j from range(10000)) to '${TEST_DIR}/test_block_size.parquet';
+copy (select range i, range % 100 j from range(10000)) to '{TEST_DIR}/test_block_size.parquet';
 
 # Read the file to populate cache at default 16KiB block size
 statement ok
-select * from '${TEST_DIR}/test_block_size.parquet';
+select * from '{TEST_DIR}/test_block_size.parquet';
 
 # Verify cache is populated
 query I
@@ -32,7 +32,7 @@ create temp table cached_bytes_before as select sum(nr_bytes) as total from duck
 statement ok
 set external_file_cache_local_block_size=4096;
 
-# Cache should still have data (lazy reindex has not happened yet)
+# Cache should still have data
 query I
 select count(*) > 0 from duckdb_external_file_cache();
 ----
@@ -46,7 +46,7 @@ true
 
 # Reading triggers lazy re-index and returns correct data
 query II
-select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
+select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
@@ -69,7 +69,7 @@ true
 
 # Verify reads are still correct
 query II
-select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
+select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
@@ -105,7 +105,7 @@ true
 
 # Verify reads are still correct after reset
 query II
-select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
+select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
@@ -139,7 +139,7 @@ select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total 
 true
 
 query II
-select count(*), sum(i) from '${TEST_DIR}/test_block_size.parquet';
+select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 ----
 10000	49995000
 
