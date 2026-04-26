@@ -27,8 +27,9 @@ static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector
 	D_ASSERT(offset == result_cols.size());
 }
 
-static unique_ptr<FunctionData> StructConcatBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {
 		throw InvalidInputException("struct_concat: At least one argument is required");
@@ -100,9 +101,9 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 }
 
 ScalarFunction StructConcatFun::GetFunction() {
-	ScalarFunction fun("struct_concat", {}, LogicalTypeId::STRUCT, StructConcatFunction, StructConcatBind, nullptr,
+	ScalarFunction fun("struct_concat", {}, LogicalTypeId::STRUCT, StructConcatFunction, StructConcatBind,
 	                   StructConcatStats);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

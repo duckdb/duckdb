@@ -45,11 +45,11 @@ void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		random_engine.SetSeed(norm_seed);
 	}
 
-	ConstantVector::SetNull(result);
+	ConstantVector::SetNull(result, count_t(args.size()));
 }
 
-unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> SetSeedBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	return make_uniq<SetseedBindData>(context);
 }
 

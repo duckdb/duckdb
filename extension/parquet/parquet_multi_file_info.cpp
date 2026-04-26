@@ -1,12 +1,44 @@
 #include "parquet_multi_file_info.hpp"
+
+#include <stdint.h>
+#include <atomic>
+#include <unordered_map>
+#include <vector>
+
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "parquet_crypto.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_states.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/parallel/async_result.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class BaseStatistics;
+class ClientContext;
+class DataChunk;
+class ExecutionContext;
+class Expression;
+class LogicalGet;
+class PhysicalOperator;
 
 struct ParquetMetadataCacheEntry {
 	ParquetMetadataCacheEntry(shared_ptr<ParquetFileMetadataCache> metadata, ParquetCacheValidity validity,

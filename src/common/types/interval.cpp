@@ -11,9 +11,6 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {
@@ -275,6 +272,10 @@ interval_parse_ago:
 		}
 	}
 	// invert all the values
+	if (result.months == NumericLimits<int32_t>::Minimum() || result.days == NumericLimits<int32_t>::Minimum()) {
+		throw OutOfRangeException("AGO interval value is out of range");
+	}
+
 	result.months = -result.months;
 	result.days = -result.days;
 	result.micros = -result.micros;

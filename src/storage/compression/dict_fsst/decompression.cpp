@@ -103,8 +103,8 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.type, dict_count);
 	auto &dict_data = dictionary->data;
-	auto dict_child_data = FlatVector::GetData<string_t>(dict_data);
-	auto &validity = FlatVector::Validity(dict_data);
+	auto dict_child_data = FlatVector::GetDataMutable<string_t>(dict_data);
+	auto &validity = FlatVector::ValidityMutable(dict_data);
 	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
@@ -151,15 +151,13 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 }
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &validity = FlatVector::Validity(result);
-
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	auto &selvec = GetSelVec(start, scan_count);
 
 	//! (index 0 is reserved for NULL, which we don't have in this mode)
 	const idx_t start_offset = mode == DictFSSTMode::FSST_ONLY ? start + 1 : 0;
 
+	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
 	if (dictionary) {
 		// We have prepared the full dictionary, we can reference these strings directly
 		auto dictionary_values = FlatVector::GetData<string_t>(dictionary->data);
@@ -167,16 +165,18 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(i + start_offset);
 			if (string_number == 0) {
-				validity.SetInvalid(result_offset + i);
+				result_data.WriteNull();
+				continue;
 			}
-			result_data[result_offset + i] = dictionary_values[string_number];
+			result_data.WriteStringRef(dictionary_values[string_number]);
 		}
 	} else {
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
 			auto string_number = selvec.get_index(start_offset + i);
 			if (string_number == 0) {
-				validity.SetInvalid(result_offset);
+				result_data.WriteNull();
+				continue;
 			}
 			if (decompress_position > string_number) {
 				throw InternalException("DICT_FSST: not performing a sequential scan?");
@@ -184,7 +184,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			for (; decompress_position < string_number; decompress_position++) {
 				decompress_offset += string_lengths[decompress_position];
 			}
-			result_data[result_offset + i] = FetchStringFromDict(result, decompress_offset, string_number);
+			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 		}
 	}
 	result.Verify(result_offset + scan_count);
@@ -194,7 +194,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 	D_ASSERT(!dictionary);
 	D_ASSERT(mode == DictFSSTMode::FSST_ONLY);
 	idx_t start_offset = start + 1;
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, sel_count);
 	for (idx_t i = 0; i < sel_count; i++) {
 		// Lookup dict offset in index buffer
 		auto string_number = start_offset + sel.get_index(i);
@@ -204,7 +204,7 @@ void CompressedStringScanState::Select(Vector &result, idx_t start, const Select
 		for (; decompress_position < string_number; decompress_position++) {
 			decompress_offset += string_lengths[decompress_position];
 		}
-		result_data[i] = FetchStringFromDict(result, decompress_offset, string_number);
+		result_data.WriteValue(FetchStringFromDict(result, decompress_offset, string_number));
 	}
 }
 
@@ -227,7 +227,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(result_offset == 0);
 
 	auto &selvec = GetSelVec(start, scan_count);
-	result.Dictionary(dictionary, selvec);
+	result.Dictionary(dictionary, selvec, scan_count);
 	result.Verify(result_offset + scan_count);
 }
 

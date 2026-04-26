@@ -1,0 +1,550 @@
+diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
+index 5317c43..4a21b5b 100644
+--- a/src/avro_reader.cpp
++++ b/src/avro_reader.cpp
+@@ -1,6 +1,11 @@
++#include "duckdb/common/vector/flat_vector.hpp"
++#include "duckdb/common/vector/list_vector.hpp"
++#include "duckdb/common/vector/map_vector.hpp"
++#include "duckdb/common/vector/struct_vector.hpp"
++#include "duckdb/common/vector/string_vector.hpp"
++#include "duckdb/common/vector/union_vector.hpp"
+ #include "avro_reader.hpp"
+ #include "utf8proc_wrapper.hpp"
+-#include "duckdb/storage/caching_file_system.hpp"
+ #include "duckdb/common/file_system.hpp"
+ #include "duckdb/common/multi_file/multi_file_data.hpp"
+ 
+@@ -71,7 +76,7 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ 	case AVRO_ENUM: {
+ 		auto size = avro_schema_enum_number_of_symbols(avro_schema);
+ 		Vector levels(LogicalType::VARCHAR, size);
+-		auto levels_data = FlatVector::GetData<string_t>(levels);
++		auto levels_data = FlatVector::GetDataMutable<string_t>(levels);
+ 		for (idx_t enum_idx = 0; enum_idx < static_cast<idx_t>(size); enum_idx++) {
+ 			levels_data[enum_idx] = StringVector::AddString(levels, avro_schema_enum_get(avro_schema, enum_idx));
+ 		}
+@@ -119,18 +124,15 @@ static AvroType TransformSchema(avro_schema_t &avro_schema, unordered_set<string
+ }
+ 
+ AvroReader::AvroReader(ClientContext &context, OpenFileInfo file) : BaseFileReader(file) {
+-	auto caching_file_system = CachingFileSystem::Get(context);
++	auto &fs = FileSystem::GetFileSystem(context);
++	FileOpenFlags flags = FileFlags::FILE_FLAGS_READ;
++	flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
++	auto file_handle = fs.OpenFile(this->file.path, flags);
++	auto total_size = fs.GetFileSize(*file_handle);
+ 
+-	auto caching_file_handle = caching_file_system.OpenFile(this->file, FileOpenFlags::FILE_FLAGS_READ);
+-	auto total_size = caching_file_handle->GetFileSize();
+-	data_ptr_t data = nullptr;
+-
+-	buf_handle = caching_file_handle->Read(data, total_size);
+-	auto buffer_data = buf_handle.Ptr();
+-
+-	D_ASSERT(buf_handle.IsValid());
+-	D_ASSERT(buffer_data == data);
+-	auto avro_reader = avro_reader_memory(const_char_ptr_cast(buffer_data), total_size);
++	buf_data = Allocator::DefaultAllocator().Allocate(total_size);
++	fs.Read(*file_handle, buf_data.get(), total_size, 0);
++	auto avro_reader = avro_reader_memory(const_char_ptr_cast(buf_data.get()), total_size);
+ 
+ 	if (avro_reader_reader(avro_reader, &reader)) {
+ 		throw InvalidInputException(avro_strerror());
+@@ -171,29 +173,29 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 		if (avro_value_get_boolean(avro_val, &bool_val)) {
+ 			throw InvalidInputException(avro_strerror());
+ 		}
+-		FlatVector::GetData<uint8_t>(target)[out_idx] = bool_val != 0;
++		FlatVector::GetDataMutable<uint8_t>(target)[out_idx] = bool_val != 0;
+ 		break;
+ 	}
+ 	case LogicalTypeId::INTEGER: {
+-		if (avro_value_get_int(avro_val, &FlatVector::GetData<int32_t>(target)[out_idx])) {
++		if (avro_value_get_int(avro_val, &FlatVector::GetDataMutable<int32_t>(target)[out_idx])) {
+ 			throw InvalidInputException(avro_strerror());
+ 		}
+ 		break;
+ 	}
+ 	case LogicalTypeId::BIGINT: {
+-		if (avro_value_get_long(avro_val, &FlatVector::GetData<int64_t>(target)[out_idx])) {
++		if (avro_value_get_long(avro_val, &FlatVector::GetDataMutable<int64_t>(target)[out_idx])) {
+ 			throw InvalidInputException(avro_strerror());
+ 		}
+ 		break;
+ 	}
+ 	case LogicalTypeId::FLOAT: {
+-		if (avro_value_get_float(avro_val, &FlatVector::GetData<float>(target)[out_idx])) {
++		if (avro_value_get_float(avro_val, &FlatVector::GetDataMutable<float>(target)[out_idx])) {
+ 			throw InvalidInputException(avro_strerror());
+ 		}
+ 		break;
+ 	}
+ 	case LogicalTypeId::DOUBLE: {
+-		if (avro_value_get_double(avro_val, &FlatVector::GetData<double>(target)[out_idx])) {
++		if (avro_value_get_double(avro_val, &FlatVector::GetDataMutable<double>(target)[out_idx])) {
+ 			throw InvalidInputException(avro_strerror());
+ 		}
+ 		break;
+@@ -206,7 +208,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 			if (avro_value_get_fixed(avro_val, &fixed_data, &fixed_size)) {
+ 				throw InvalidInputException(avro_strerror());
+ 			}
+-			FlatVector::GetData<string_t>(target)[out_idx] =
++			FlatVector::GetDataMutable<string_t>(target)[out_idx] =
+ 			    StringVector::AddStringOrBlob(target, const_char_ptr_cast(fixed_data), fixed_size);
+ 			break;
+ 		}
+@@ -215,7 +217,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 			if (avro_value_grab_bytes(avro_val, &blob_buf)) {
+ 				throw InvalidInputException(avro_strerror());
+ 			}
+-			FlatVector::GetData<string_t>(target)[out_idx] =
++			FlatVector::GetDataMutable<string_t>(target)[out_idx] =
+ 			    StringVector::AddStringOrBlob(target, const_char_ptr_cast(blob_buf.buf), blob_buf.size);
+ 			blob_buf.free(&blob_buf);
+ 			break;
+@@ -235,7 +237,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 		if (Utf8Proc::Analyze(const_char_ptr_cast(str_buf.buf), str_buf.size - 1) == UnicodeType::INVALID) {
+ 			throw InvalidInputException("Avro file contains invalid unicode string");
+ 		}
+-		FlatVector::GetData<string_t>(target)[out_idx] =
++		FlatVector::GetDataMutable<string_t>(target)[out_idx] =
+ 		    StringVector::AddString(target, const_char_ptr_cast(str_buf.buf), str_buf.size - 1);
+ 		str_buf.free(&str_buf);
+ 		break;
+@@ -254,7 +256,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 				throw InvalidInputException(avro_strerror());
+ 			}
+ 			TransformValue(&child_value, avro_type.children[child_idx].second,
+-			               *StructVector::GetEntries(target)[child_idx], out_idx);
++			               StructVector::GetEntries(target)[child_idx], out_idx);
+ 		}
+ 		break;
+ 	}
+@@ -278,13 +280,13 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 		if (target.GetType().id() == LogicalTypeId::UNION) {
+ 			auto duckdb_child_index = avro_type.union_child_map.at(discriminant).GetIndex();
+ 			auto &tags = UnionVector::GetTags(target);
+-			FlatVector::GetData<union_tag_t>(tags)[out_idx] = duckdb_child_index;
++			FlatVector::GetDataMutable<union_tag_t>(tags)[out_idx] = duckdb_child_index;
+ 			auto &union_vector = UnionVector::GetMember(target, duckdb_child_index);
+ 
+ 			// orrrrrrrrrrrrr
+ 			for (idx_t child_idx = 1; child_idx < StructVector::GetEntries(target).size(); child_idx++) {
+ 				if (child_idx != duckdb_child_index + 1) { // duckdb child index is bigger because of the tag
+-					FlatVector::SetNull(*StructVector::GetEntries(target)[child_idx], out_idx, true);
++					FlatVector::SetNull(StructVector::GetEntries(target)[child_idx], out_idx, true);
+ 				}
+ 			}
+ 
+@@ -308,13 +310,13 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 
+ 		switch (enum_type) {
+ 		case PhysicalType::UINT8:
+-			FlatVector::GetData<uint8_t>(target)[out_idx] = enum_val;
++			FlatVector::GetDataMutable<uint8_t>(target)[out_idx] = enum_val;
+ 			break;
+ 		case PhysicalType::UINT16:
+-			FlatVector::GetData<uint16_t>(target)[out_idx] = enum_val;
++			FlatVector::GetDataMutable<uint16_t>(target)[out_idx] = enum_val;
+ 			break;
+ 		case PhysicalType::UINT32:
+-			FlatVector::GetData<uint32_t>(target)[out_idx] = enum_val;
++			FlatVector::GetDataMutable<uint32_t>(target)[out_idx] = enum_val;
+ 			break;
+ 		default:
+ 			throw InternalException("Unsupported Enum Internal Type");
+@@ -351,7 +353,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 			(void)key_type;
+ 			auto &value_type = avro_type.children[1].second;
+ 			D_ASSERT(key_vector.GetType().id() == LogicalTypeId::VARCHAR);
+-			auto string_ptr = FlatVector::GetData<string_t>(key_vector);
++			auto string_ptr = FlatVector::GetDataMutable<string_t>(key_vector);
+ 			for (idx_t entry_idx = 0; entry_idx < list_len; entry_idx++) {
+ 				avro_value child_value;
+ 				const char *map_key;
+@@ -363,7 +365,7 @@ static void TransformValue(avro_value *avro_val, const AvroType &avro_type, Vect
+ 				TransformValue(&child_value, value_type, value_vector, child_offset + entry_idx);
+ 			}
+ 		}
+-		auto list_vector_data = ListVector::GetData(target);
++		auto list_vector_data = FlatVector::GetDataMutable<list_entry_t>(target);
+ 		list_vector_data[out_idx].length = list_len;
+ 		list_vector_data[out_idx].offset = child_offset;
+ 		ListVector::SetListSize(target, child_offset + list_len);
+@@ -391,7 +393,7 @@ void AvroReader::Read(DataChunk &output) {
+ 				continue; // to be filled in later
+ 			}
+ 			output.data[col_idx].Reference(
+-			    *StructVector::GetEntries(*read_vec)[column_indexes[col_idx].GetPrimaryIndex()]);
++			    StructVector::GetEntries(*read_vec)[column_indexes[col_idx].GetPrimaryIndex()]);
+ 		}
+ 	} else {
+ 		output.data[column_indexes[0].GetPrimaryIndex()].Reference(*read_vec);
+diff --git a/src/include/avro_reader.hpp b/src/include/avro_reader.hpp
+index ebb941a..436fd81 100644
+--- a/src/include/avro_reader.hpp
++++ b/src/include/avro_reader.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "duckdb/common/allocator.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "avro_type.hpp"
+ #include "duckdb/common/multi_file/base_file_reader.hpp"
+@@ -32,7 +33,7 @@ public:
+ 	avro_value_t value;
+ 	unique_ptr<Vector> read_vec;
+ 
+-	BufferHandle buf_handle;
++	AllocatedData buf_data;
+ 	AvroType avro_type;
+ 	LogicalType duckdb_type;
+ };
+diff --git a/test/sql/copy/all_types.test b/test/sql/copy/all_types.test
+index 4261f1a..28796f2 100644
+--- a/test/sql/copy/all_types.test
++++ b/test/sql/copy/all_types.test
+@@ -29,14 +29,14 @@ create view vw as select
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/all_types.avro';
++) TO '{TEST_DIR}/all_types.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/all_types.avro')
++select * from read_avro('{TEST_DIR}/all_types.avro')
+ ----
+ 
+ statement ok
+@@ -45,13 +45,13 @@ CREATE TYPE my_enum AS ENUM ('a', 'abc', 'decently long enum value');
+ statement error
+ COPY (
+ 	select 'decently long enum value'::my_enum a
+-) TO '__TEST_DIR__/enum_type.avro';
++) TO '{TEST_DIR}/enum_type.avro';
+ ----
+ Not implemented Error: Can't convert logical type 'ENUM('a', 'abc', 'decently long enum value')' to Avro type
+ 
+ statement error
+ COPY (
+ 	select union_value(b := 'abc')::UNION(a INTEGER, b VARCHAR, c FLOAT) a
+-) TO '__TEST_DIR__/union_type.avro';
++) TO '{TEST_DIR}/union_type.avro';
+ ----
+ Not implemented Error: Can't convert logical type 'UNION(a INTEGER, b VARCHAR, c FLOAT)' to Avro type
+diff --git a/test/sql/copy/duplicate_name.test b/test/sql/copy/duplicate_name.test
+index 31e65a5..9c57b47 100644
+--- a/test/sql/copy/duplicate_name.test
++++ b/test/sql/copy/duplicate_name.test
+@@ -10,10 +10,10 @@ COPY (
+ 			'child': true
+ 		}
+ 	} my_struct
+-) TO '__TEST_DIR__/tmp.avro';
++) TO '{TEST_DIR}/tmp.avro';
+ 
+ query I
+-select * from read_avro('__TEST_DIR__/tmp.avro');
++select * from read_avro('{TEST_DIR}/tmp.avro');
+ ----
+ {'a': {'child': 21}, 'b': {'child': true}}
+ 
+@@ -24,7 +24,7 @@ COPY (
+ 			'field': true
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp2.avro' ( ROOT_NAME 'a');
++) TO '{TEST_DIR}/tmp2.avro' ( ROOT_NAME 'a');
+ ----
+ Invalid Input Error: Cannot save record schema
+ 
+@@ -35,10 +35,10 @@ COPY (
+ 			'field': true
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp2.avro' ( ROOT_NAME 'root_a');
++) TO '{TEST_DIR}/tmp2.avro' ( ROOT_NAME 'root_a');
+ 
+ query I
+-select * from read_avro('__TEST_DIR__/tmp2.avro');
++select * from read_avro('{TEST_DIR}/tmp2.avro');
+ ----
+ {'a': {'field': true}}
+ 
+@@ -56,6 +56,6 @@ COPY (
+ 			}
+ 		}
+ 	} structure
+-) TO '__TEST_DIR__/tmp3.avro';
++) TO '{TEST_DIR}/tmp3.avro';
+ ----
+ Binder Error: Avro schema by the name of 'a' already exists, names of 'record', 'enum' and 'fixed' types have to be distinct
+diff --git a/test/sql/copy/empty_struct.test b/test/sql/copy/empty_struct.test
+index fe83c31..fd71afd 100644
+--- a/test/sql/copy/empty_struct.test
++++ b/test/sql/copy/empty_struct.test
+@@ -8,7 +8,7 @@ COPY (
+ 	select {
+ 		'__duckdb_empty_struct_marker': NULL
+ 	} empty_partition
+-) TO '__TEST_DIR__/empty_struct.avro' (
++) TO '{TEST_DIR}/empty_struct.avro' (
+ 	FIELD_IDS {
+ 		'empty_partition': {
+ 			'__duckdb_field_id': 102
+@@ -18,6 +18,6 @@ COPY (
+ );
+ 
+ query I
+-from read_avro('__TEST_DIR__/empty_struct.avro')
++from read_avro('{TEST_DIR}/empty_struct.avro')
+ ----
+ NULL
+diff --git a/test/sql/copy/field_ids.test b/test/sql/copy/field_ids.test
+index 1f561e6..c6c51d4 100644
+--- a/test/sql/copy/field_ids.test
++++ b/test/sql/copy/field_ids.test
+@@ -7,7 +7,7 @@ COPY (
+ 		'b': NULL,
+ 		'c': 'test'
+ 	} field1
+-) TO '__TEST_DIR__/field_ids.avro' (
++) TO '{TEST_DIR}/field_ids.avro' (
+ 	FIELD_IDS {
+ 		'field1': {
+ 			'a': 100,
+@@ -29,7 +29,7 @@ COPY (
+ 			'upper_bound': 'blob blob blob'
+ 		}
+ 	] partitions
+-) TO '__TEST_DIR__/partitions.avro' (
++) TO '{TEST_DIR}/partitions.avro' (
+ 	FIELD_IDS {
+ 		'partitions': {
+ 			'list': {
+diff --git a/test/sql/copy/invalid_name.test b/test/sql/copy/invalid_name.test
+index bac01bd..cbca58b 100644
+--- a/test/sql/copy/invalid_name.test
++++ b/test/sql/copy/invalid_name.test
+@@ -1,6 +1,6 @@
+ require avro
+ 
+ statement error
+-COPY (select range(10000)) TO '__TEST_DIR__/tmp.avro';
++COPY (select range(10000)) TO '{TEST_DIR}/tmp.avro';
+ ----
+ is not a valid Avro identifier
+diff --git a/test/sql/copy/invalid_option.test b/test/sql/copy/invalid_option.test
+index 2d1da31..14daccb 100644
+--- a/test/sql/copy/invalid_option.test
++++ b/test/sql/copy/invalid_option.test
+@@ -3,7 +3,7 @@ require avro
+ statement error
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test2.avro' (
++) TO '{TEST_DIR}/test2.avro' (
+ 	NOT_RECOGNIZED,
+ 	ROOT_NAME 'test'
+ );
+@@ -13,7 +13,7 @@ Invalid Configuration Error: The following option(s) are not recognized: key: 'N
+ statement error
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test3.avro' (
++) TO '{TEST_DIR}/test3.avro' (
+ 	NOT_RECOGNIZED 'with_value',
+ 	ROOT_NAME 'test'
+ );
+diff --git a/test/sql/copy/large_list.test_slow b/test/sql/copy/large_list.test_slow
+index c786118..213f91b 100644
+--- a/test/sql/copy/large_list.test_slow
++++ b/test/sql/copy/large_list.test_slow
+@@ -7,13 +7,13 @@ create view vw as
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/large_list_basic.avro';
++) TO '{TEST_DIR}/large_list_basic.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/large_list_basic.avro')
++select * from read_avro('{TEST_DIR}/large_list_basic.avro')
+ ----
+ 
+diff --git a/test/sql/copy/large_list_struct_coverage.test_slow b/test/sql/copy/large_list_struct_coverage.test_slow
+index 39619d2..eac87bf 100644
+--- a/test/sql/copy/large_list_struct_coverage.test_slow
++++ b/test/sql/copy/large_list_struct_coverage.test_slow
+@@ -23,13 +23,13 @@ create view vw as
+ statement ok
+ COPY (
+ 	select * from vw
+-) TO '__TEST_DIR__/large_list_struct_coverage.avro';
++) TO '{TEST_DIR}/large_list_struct_coverage.avro';
+ 
+ query I nosort basic
+ select * from vw;
+ ----
+ 
+ query I nosort basic
+-select * from read_avro('__TEST_DIR__/large_list_struct_coverage.avro')
++select * from read_avro('{TEST_DIR}/large_list_struct_coverage.avro')
+ ----
+ 
+diff --git a/test/sql/copy/nullable.test b/test/sql/copy/nullable.test
+index 7030837..16f5292 100644
+--- a/test/sql/copy/nullable.test
++++ b/test/sql/copy/nullable.test
+@@ -7,7 +7,7 @@ require avro
+ statement ok
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_1.avro' (
++) TO '{TEST_DIR}/field_ids_1.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301},
+ 	},
+@@ -18,7 +18,7 @@ COPY (
+ statement ok
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_1_nullable.avro' (
++) TO '{TEST_DIR}/field_ids_1_nullable.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': true},
+ 	},
+@@ -29,7 +29,7 @@ COPY (
+ statement error
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_error.avro' (
++) TO '{TEST_DIR}/field_ids_error.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': false},
+ 	},
+@@ -40,15 +40,15 @@ COPY (
+ 
+ # as the copy failed, the file shouldn't exist
+ statement error
+-select * from read_avro('__TEST_DIR__/field_ids_error.avro');
++select * from read_avro('{TEST_DIR}/field_ids_error.avro');
+ ----
+-IO Error: No files found that match the pattern "__TEST_DIR__/field_ids_error.avro"
++IO Error: No files found that match the pattern "{TEST_DIR}/field_ids_error.avro"
+ 
+ # cannot cast foo to BOOL
+ statement error
+ COPY (
+ 	select NULL field1
+-) TO '__TEST_DIR__/field_ids_error.avro' (
++) TO '{TEST_DIR}/field_ids_error.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': 'foo'},
+ 	},
+@@ -63,7 +63,7 @@ COPY (
+ statement ok
+ COPY (
+ 	select 1 field1, 2 field2, 3 field3
+-) TO '__TEST_DIR__/field_ids_2.avro' (
++) TO '{TEST_DIR}/field_ids_2.avro' (
+ 	FIELD_IDS {
+ 		'field1': {'__duckdb_field_id': 301, '__duckdb_nullable': false},
+ 		'field2': 303,
+@@ -73,7 +73,7 @@ COPY (
+ 
+ # read
+ query III
+-select * from read_avro('__TEST_DIR__/field_ids_2.avro');
++select * from read_avro('{TEST_DIR}/field_ids_2.avro');
+ ----
+ 1	2	3
+ 
+@@ -86,7 +86,7 @@ COPY (
+           {
+           	'content': 1,
+           } data_file_not_nullable,
+-) TO '__TEST_DIR__/field_ids_3.avro' (
++) TO '{TEST_DIR}/field_ids_3.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': 0,
+ 		'data_file_not_nullable': {
+@@ -112,7 +112,7 @@ create table t1 as select
+ } data_file_nullable;
+ 
+ statement ok
+-COPY t1 TO '__TEST_DIR__/field_ids_4.avro' (
++COPY t1 TO '{TEST_DIR}/field_ids_4.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': {
+ 			'__duckdb_field_id': 0
+@@ -131,7 +131,7 @@ COPY t1 TO '__TEST_DIR__/field_ids_4.avro' (
+ );
+ 
+ query III
+-select * from read_avro('__TEST_DIR__/field_ids_4.avro');
++select * from read_avro('{TEST_DIR}/field_ids_4.avro');
+ ----
+ 1	{'content': 1}	{'content': 2}
+ 
+@@ -145,7 +145,7 @@ COPY (select
+       {
+       	'content': NULL,
+       } data_file_nullable
+-) TO '__TEST_DIR__/field_ids_5.avro' (
++) TO '{TEST_DIR}/field_ids_5.avro' (
+ 	FIELD_IDS {
+ 		'manifest_entry': {
+ 			'__duckdb_field_id': 0
+@@ -188,7 +188,7 @@ COPY (select
+       		'b': True,
+       		'c': 1.234::FLOAT
+       	} "field_struct"
+-) TO '__TEST_DIR__/nested_field_types.avro' (
++) TO '{TEST_DIR}/nested_field_types.avro' (
+ 	FIELD_IDS {
+ 		'field_map': {
+ 		    'key': 0,
+diff --git a/test/sql/copy/write_metadata.test b/test/sql/copy/write_metadata.test
+index c370295..b48178e 100644
+--- a/test/sql/copy/write_metadata.test
++++ b/test/sql/copy/write_metadata.test
+@@ -3,7 +3,7 @@ require avro
+ statement ok
+ COPY (
+ 	select 42 a
+-) TO '__TEST_DIR__/test3.avro' (
++) TO '{TEST_DIR}/test3.avro' (
+ 	METADATA {
+ 		'key': 'value',
+ 		'key2': 42
+diff --git a/test/sql/external_file_cache.test b/test/sql/external_file_cache.test
+index 1d4a43a..440574a 100644
+--- a/test/sql/external_file_cache.test
++++ b/test/sql/external_file_cache.test
+@@ -31,8 +31,8 @@ FROM read_avro('test/bigdata.avro') ORDER BY c1 LIMIT 10
+ statement ok
+ from read_avro('test/userdata1.avro');
+ 
+-query IIII
+-from duckdb_external_file_cache() order by path;
++query II
++select path, sum(nr_bytes) from duckdb_external_file_cache() group by path order by path;
+ ----
+-test/bigdata.avro	17647257	0	true
+-test/userdata1.avro	93561	0	true
+\ No newline at end of file
++test/bigdata.avro	17647257
++test/userdata1.avro	93561
+\ No newline at end of file

@@ -52,7 +52,8 @@ bool RowGroupPruner::TryOptimize(LogicalOperator &op) const {
 			return false;
 		}
 		if (op_type == LogicalOperatorType::LOGICAL_FILTER ||
-		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		    op_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
+		    op_type == LogicalOperatorType::LOGICAL_DISTINCT) {
 			row_limit.SetInvalid();
 			row_offset.SetInvalid();
 		}
@@ -131,7 +132,9 @@ optional_ptr<LogicalGet> RowGroupPruner::FindLogicalGet(const LogicalOrder &logi
 	const auto &primary_order = logical_order.orders[0];
 	auto &colref = primary_order.expression->Cast<BoundColumnRefExpression>();
 
-	vector<JoinFilterPushdownColumn> columns {JoinFilterPushdownColumn {colref.binding}};
+	JoinFilterPushdownColumn column;
+	column.probe_column_index = colref.binding;
+	vector<JoinFilterPushdownColumn> columns {std::move(column)};
 	vector<PushdownFilterTarget> pushdown_targets;
 	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(*logical_order.children[0], std::move(columns),
 	                                                      pushdown_targets);

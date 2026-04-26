@@ -166,7 +166,7 @@ SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event 
 
 	if (PropagatesBuildSide(join_type)) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
-		gstate.table->IntializeMatches();
+		gstate.table->InitializeMatches();
 	}
 
 	if (gstate.table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -428,7 +428,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 		// Since the payload is sorted, we can just set the tail end of the validity masks to invalid.
 		for (auto &key : lhs_keys.data) {
 			key.Flatten(lhs_keys.size());
-			auto &mask = FlatVector::Validity(key);
+			auto &mask = FlatVector::ValidityMutable(key);
 			if (mask.CannotHaveNull()) {
 				continue;
 			}
@@ -825,7 +825,7 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				ConstantVector::SetNull(result.data[col_idx]);
+				ConstantVector::SetNull(result.data[col_idx], count_t(result_count));
 			}
 			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {

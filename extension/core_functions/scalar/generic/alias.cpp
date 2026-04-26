@@ -6,7 +6,7 @@ namespace duckdb {
 static void AliasFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	Value v(state.expr.GetAlias().empty() ? func_expr.children[0]->GetName() : state.expr.GetAlias());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 ScalarFunction AliasFun::GetFunction() {

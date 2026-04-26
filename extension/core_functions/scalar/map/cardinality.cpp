@@ -10,23 +10,21 @@ namespace duckdb {
 static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &map = args.data[0];
 	auto entries = map.Values<list_entry_t>(args.size());
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<uint64_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
 
+	auto result_data = FlatVector::Writer<uint64_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
 		auto entry = entries[row];
-		result_data[row] = entries.GetValueUnsafe(row).length;
-		result_validity.Set(row, entry.IsValid());
-	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		if (!entry.IsValid()) {
+			result_data.WriteNull();
+			continue;
+		}
+		result_data.WriteValue(entries.GetValueUnsafe(row).length);
 	}
 }
 
-static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() != 1) {
 		throw BinderException("Cardinality must have exactly one arguments");
 	}
@@ -41,7 +39,7 @@ static unique_ptr<FunctionData> CardinalityBind(ClientContext &context, ScalarFu
 
 ScalarFunction CardinalityFun::GetFunction() {
 	ScalarFunction fun({LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, CardinalityBind);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return fun;
 }

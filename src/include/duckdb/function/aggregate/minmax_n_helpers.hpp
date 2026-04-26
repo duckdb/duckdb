@@ -311,7 +311,7 @@ struct MinMaxFixedValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<T>(vector)[idx] = value;
+		FlatVector::GetDataMutable<T>(vector)[idx] = value;
 	}
 
 	// Nothing to do here
@@ -334,7 +334,7 @@ struct MinMaxStringValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
+		FlatVector::GetDataMutable<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
 	// Nothing to do here
@@ -408,8 +408,8 @@ struct MinMaxFixedValueOrNull {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::Validity(vector).Set(idx, value.is_valid);
-		FlatVector::GetData<T>(vector)[idx] = value.value;
+		FlatVector::ValidityMutable(vector).Set(idx, value.is_valid);
+		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
 	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
@@ -459,7 +459,6 @@ struct MinMaxNOperation {
 		state_vector.ToUnifiedFormat(count, state_format);
 
 		const auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
-		auto &mask = FlatVector::Validity(result);
 
 		const auto old_len = ListVector::GetListSize(result);
 
@@ -474,24 +473,24 @@ struct MinMaxNOperation {
 		// Resize the list vector to fit the new entries
 		ListVector::Reserve(result, old_len + new_entries);
 
-		const auto list_entries = FlatVector::GetData<list_entry_t>(result);
-		auto &child_data = ListVector::GetEntry(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
+		auto &child_data = ListVector::GetChildMutable(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
-			const auto rid = i + offset;
 			const auto state_idx = state_format.sel->get_index(i);
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				mask.SetInvalid(rid);
+				result_data.WriteNull();
 				continue;
 			}
 
 			// Add the entries to the list vector
-			auto &list_entry = list_entries[rid];
+			list_entry_t list_entry;
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
+			result_data.WriteValue(list_entry);
 
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto heap = state.heap.SortAndGetHeap();

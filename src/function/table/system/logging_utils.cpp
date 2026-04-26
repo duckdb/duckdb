@@ -25,7 +25,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 
 	DUCKDB_LOG_WARNING(context, "The logging settings have been changed so you may lose warnings printed in the CLI.\n"
 	                            "To continue printing warnings to the console, set storage='shell_log_storage'.\n"
-	                            "For more info see https://duckdb.org/docs/stable/operations_manual/logging/overview.")
+	                            "For more info see https://duckdb.org/docs/current/operations_manual/logging/overview.")
 
 	auto &log_manager = context.db->GetLogManager();
 
@@ -145,7 +145,7 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	enable_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
 	enable_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
 
-	enable_fun.varargs = LogicalType::ANY;
+	enable_fun.SetVarArgs(LogicalType::ANY);
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_logging", {}, DisableLogging, BindDisableLogging, nullptr, nullptr);

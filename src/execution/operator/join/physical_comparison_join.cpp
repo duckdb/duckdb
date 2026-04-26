@@ -134,12 +134,12 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 		// has NULL for every input entry
 		if (!has_null) {
-			auto bool_result = FlatVector::GetData<bool>(result_vector);
+			auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
 			for (idx_t i = 0; i < result.size(); i++) {
 				bool_result[i] = false;
 			}
 		} else {
-			FlatVector::Validity(result_vector).SetAllInvalid(result.size());
+			FlatVector::ValidityMutable(result_vector).SetAllInvalid(result.size());
 		}
 	} else if (join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::SINGLE) {
 		// LEFT/FULL OUTER/SINGLE join and build side is empty
@@ -150,7 +150,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 		// for the RHS
 		for (idx_t k = input.ColumnCount(); k < result.ColumnCount(); k++) {
-			ConstantVector::SetNull(result.data[k]);
+			ConstantVector::SetNull(result.data[k], count_t(input.size()));
 		}
 	}
 }

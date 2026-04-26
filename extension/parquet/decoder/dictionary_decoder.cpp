@@ -1,10 +1,29 @@
 #include "decoder/dictionary_decoder.hpp"
+
+#include <algorithm>
+#include <stdexcept>
+#include <utility>
+
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/unified_vector_format.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/vector_size.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
 
@@ -24,7 +43,7 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	const auto duckdb_dictionary_size = dictionary_size + can_have_nulls;
 	dictionary = DictionaryVector::CreateReusableDictionary(reader.Type(), duckdb_dictionary_size);
 	auto &dictionary_data = dictionary->data;
-	auto &dict_validity = FlatVector::Validity(dictionary_data);
+	auto &dict_validity = FlatVector::ValidityMutable(dictionary_data);
 	dict_validity.Reset(duckdb_dictionary_size);
 	if (can_have_nulls) {
 		dict_validity.SetInvalid(dictionary_size);
@@ -116,7 +135,7 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 	dictionary_selection_vector.Verify(read_count, dictionary_size + can_have_nulls);
 #endif
 	if (result_offset == 0) {
-		result.Dictionary(dictionary, dictionary_selection_vector);
+		result.Dictionary(dictionary, dictionary_selection_vector, read_count);
 		D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -160,17 +179,14 @@ bool DictionaryDecoder::DictionarySupportsFilter(const TableFilter &filter, Tabl
 		}
 		return true;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
-	case TableFilterType::IS_NOT_NULL:
-		return true;
 	case TableFilterType::EXPRESSION_FILTER: {
 		// expression filters can only be pushed into the dictionary if they filter out NULL values
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(filter, "DictionaryDecoder::DictionarySupportsFilter");
 		auto &state = filter_state.Cast<ExpressionFilterState>();
-		auto emits_nulls = expr_filter.EvaluateWithConstant(state.executor, Value(reader.Type()));
+		auto emits_nulls = expr_filter.EvaluateWithConstant(*state.executor, Value(reader.Type()));
 		return !emits_nulls;
 	}
-	case TableFilterType::IS_NULL:
 	case TableFilterType::DYNAMIC_FILTER:
 	case TableFilterType::OPTIONAL_FILTER:
 	case TableFilterType::STRUCT_EXTRACT:

@@ -163,7 +163,7 @@ void CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr
 
 int64_t CachingFileSystemWrapper::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	const idx_t current_position = SeekPosition(handle);
-	const idx_t max_read = GetFileSize(handle) - current_position;
+	const idx_t max_read = NumericCast<idx_t>(GetFileSize(handle)) - current_position;
 	nr_bytes = MinValue<int64_t>(NumericCast<int64_t>(max_read), nr_bytes);
 	Read(handle, buffer, nr_bytes, current_position);
 	Seek(handle, current_position + NumericCast<idx_t>(nr_bytes));

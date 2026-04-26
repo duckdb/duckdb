@@ -94,6 +94,14 @@ public:
 		return value.inlined.inlined;
 	}
 
+	uint32_t GetPrefixIntegerComparable() const {
+#ifdef DUCKDB_DEBUG_NO_INLINE
+		return 0;
+#else
+		return BSwapIfLE(Load<uint32_t>(const_data_ptr_cast(GetPrefix())));
+#endif
+	}
+
 	idx_t GetSize() const {
 		return value.inlined.length;
 	}

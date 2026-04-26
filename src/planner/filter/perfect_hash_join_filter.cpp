@@ -29,7 +29,7 @@ static FilterPropagateResult TemplatedCheckStatistics(const PerfectHashJoinExecu
 	}
 
 	Vector range_vec(type, DEFAULT_STANDARD_VECTOR_SIZE);
-	auto range_data = FlatVector::GetData<T>(range_vec);
+	auto range_data = FlatVector::GetDataMutable<T>(range_vec);
 	T val = min;
 	for (; val < max; val += 1) {
 		*range_data++ = val;
@@ -141,7 +141,7 @@ bool PerfectHashJoinFilter::FilterValue(const Value &value) const {
 		return true;
 	}
 
-	Vector keys(cast_value);
+	Vector keys(cast_value, count_t(1));
 	SelectionVector sel;
 	const idx_t approved_before = 1;
 	idx_t approved_tuple_count = 0;

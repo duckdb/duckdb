@@ -6,13 +6,12 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
-#include "duckdb/function/cast_rules.hpp"
-#include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
 
@@ -24,13 +23,13 @@ FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(bi
 }
 
 optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
-	if (arguments.size() < func.arguments.size()) {
+	if (arguments.size() < func.GetArguments().size()) {
 		// not enough arguments to fulfill the non-vararg part of the function
 		return optional_idx();
 	}
 	idx_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		LogicalType arg_type = i < func.arguments.size() ? func.arguments[i] : func.varargs;
+		LogicalType arg_type = i < func.GetArguments().size() ? func.GetArguments()[i] : func.GetVarArgs();
 		if (arguments[i] == arg_type) {
 			// arguments match: do nothing
 			continue;
@@ -52,7 +51,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 		// special case varargs function
 		return BindVarArgsFunctionCost(func, arguments);
 	}
-	if (func.arguments.size() != arguments.size()) {
+	if (func.GetArguments().size() != arguments.size()) {
 		// invalid argument count: check the next function
 		return optional_idx();
 	}
@@ -63,7 +62,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			has_parameter = true;
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.arguments[i]);
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -187,6 +186,11 @@ optional_idx FunctionBinder::BindFunction(const string &name, TableFunctionSet &
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
+optional_idx FunctionBinder::BindFunction(const string &name, WindowFunctionSet &functions,
+                                          const vector<LogicalType> &arguments, ErrorData &error) {
+	return BindFunctionFromArguments(name, functions, arguments, error);
+}
+
 optional_idx FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
                                           ErrorData &error) {
 	vector<LogicalType> types;
@@ -200,8 +204,8 @@ optional_idx FunctionBinder::BindFunction(const string &name, PragmaFunctionSet 
 	auto candidate_function = functions.GetFunctionByOffset(entry.GetIndex());
 	// cast the input parameters
 	for (idx_t i = 0; i < parameters.size(); i++) {
-		auto target_type =
-		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+		auto target_type = i < candidate_function.GetArguments().size() ? candidate_function.GetArguments()[i]
+		                                                                : candidate_function.GetVarArgs();
 		parameters[i] = parameters[i].CastAs(context, target_type);
 	}
 	return entry;
@@ -280,13 +284,14 @@ static void PrepareTypeForCast(LogicalType &type) {
 }
 
 void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children) {
-	for (auto &arg : function.arguments) {
+	for (auto &arg : function.GetArguments()) {
 		PrepareTypeForCast(arg);
 	}
-	PrepareTypeForCast(function.varargs);
+
+	PrepareTypeForCast(function.GetVarArgs());
 
 	for (idx_t i = 0; i < children.size(); i++) {
-		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
+		auto target_type = i < function.GetArguments().size() ? function.GetArguments()[i] : function.GetVarArgs();
 		if (target_type.id() == LogicalTypeId::STRING_LITERAL || target_type.id() == LogicalTypeId::INTEGER_LITERAL) {
 			throw InternalException(
 			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
@@ -589,8 +594,8 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 	vector<reference<LogicalType>> to_substitute;
 
 	// First, we need to infer the template types from the children.
-	for (idx_t i = 0; i < bound_function.arguments.size(); i++) {
-		auto &param = bound_function.arguments[i];
+	for (idx_t i = 0; i < bound_function.GetArguments().size(); i++) {
+		auto &param = bound_function.GetArguments()[i];
 
 		// If the parameter is not templated, we can skip it.
 		if (param.IsTemplated()) {
@@ -602,16 +607,16 @@ void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
 	}
 
 	// If the function has a templated varargs, we need to infer its type too
-	if (bound_function.varargs.IsTemplated()) {
+	if (bound_function.GetVarArgs().IsTemplated()) {
 		// All remaining children are considered varargs.
-		for (idx_t i = bound_function.arguments.size(); i < children.size(); i++) {
+		for (idx_t i = bound_function.GetArguments().size(); i < children.size(); i++) {
 			auto actual = ExpressionBinder::GetExpressionReturnType(*children[i]);
-			InferTemplateType(context, bound_function.varargs, actual, bindings, *children[i], bound_function);
+			InferTemplateType(context, bound_function.GetVarArgs(), actual, bindings, *children[i], bound_function);
 		}
-		to_substitute.emplace_back(bound_function.varargs);
+		to_substitute.emplace_back(bound_function.GetVarArgs());
 	}
 
-	// If the return type is templated, we need to subsitute it as well
+	// If the return type is templated, we need to substitute it as well
 	if (bound_function.GetReturnType().IsTemplated()) {
 		to_substitute.emplace_back(bound_function.GetReturnType());
 	}
@@ -635,10 +640,10 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 
 // Verify that all template types are bound to concrete types.
 void FunctionBinder::CheckTemplateTypesResolved(const BaseScalarFunction &bound_function) {
-	for (const auto &arg : bound_function.arguments) {
+	for (const auto &arg : bound_function.GetArguments()) {
 		VerifyTemplateType(arg, bound_function.name);
 	}
-	VerifyTemplateType(bound_function.varargs, bound_function.name);
+	VerifyTemplateType(bound_function.GetVarArgs(), bound_function.name);
 	VerifyTemplateType(bound_function.GetReturnType(), bound_function.name);
 }
 
@@ -651,15 +656,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
-	} else if (bound_function.HasBindExtendedCallback()) {
-		if (!binder) {
-			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
-			                        "a reference to a Binder",
-			                        bound_function.name);
-		}
-		ScalarFunctionBindInput bind_input(*binder);
-		bind_info = bound_function.GetBindExtendedCallback()(bind_input, bound_function, children);
+		bind_info = bound_function.Bind(context, children, binder);
 	}
 
 	// After the "bind" callback, we verify that all template types are bound to concrete types.
@@ -699,9 +696,9 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.GetBindCallback()(context, bound_function, children);
+		bind_info = bound_function.Bind(context, children);
 		// we may have lost some arguments in the bind
-		children.resize(MinValue(bound_function.arguments.size(), children.size()));
+		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
 	}
 
 	CheckTemplateTypesResolved(bound_function);
@@ -711,6 +708,34 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);
+}
+
+unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunction bound_function,
+                                                                     vector<unique_ptr<Expression>> children,
+                                                                     vector<OrderByNode> &orders,
+                                                                     vector<OrderByNode> &arg_orders,
+                                                                     AggregateType aggr_type) {
+	ResolveTemplateTypes(bound_function, children);
+
+	unique_ptr<FunctionData> bind_info;
+	if (bound_function.HasBindCallback()) {
+		BindWindowFunctionInput bind_input(context, bound_function, children, &orders, &arg_orders);
+		bind_info = bound_function.Bind(bind_input);
+		// we may have lost some arguments in the bind
+		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
+	}
+
+	CheckTemplateTypesResolved(bound_function);
+
+	// check if we need to add casts to the children
+	CastToFunctionArguments(bound_function, children);
+
+	auto window = make_uniq<WindowFunction>(bound_function);
+	auto result = make_uniq<BoundWindowExpression>(bound_function.GetReturnType(), nullptr, std::move(window),
+	                                               std::move(bind_info));
+	result->children = std::move(children);
+
+	return result;
 }
 
 } // namespace duckdb
