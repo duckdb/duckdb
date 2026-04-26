@@ -814,7 +814,11 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 		}
 		result.SetCardinality(count);
 		for (idx_t i = 0; i < column_ids.size(); i++) {
-			FlatVector::SetSize(result.data[i], count_t(count));
+			auto &vec = result.data[i];
+			if (vec.HasSize() && vec.size() == count) {
+				continue;
+			}
+			FlatVector::SetSize(vec, count_t(count));
 		}
 		state.vector_index++;
 		break;

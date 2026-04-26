@@ -344,7 +344,11 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	}
 
 	execute_info.lambda_chunk.Reset();
-	ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	if (elem_cnt > 0) {
+		// only execute when there are remaining list elements; calling with elem_cnt = 0 would
+		// resize the (shared) source buffers down to size 0
+		ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	}
 	auto &lambda_vector = execute_info.lambda_chunk.data[0];
 
 	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info, execute_info);
@@ -352,6 +356,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	if (info.is_all_constant && !info.is_volatile) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(info.row_count));
 }
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,

@@ -148,11 +148,13 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
+	const idx_t target_count = size() - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
+		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(size() - offset);
+	other.SetCardinality(target_count);
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -160,11 +162,13 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	D_ASSERT(other.size() == 0);
 	D_ASSERT(source_count <= size());
 
+	const idx_t target_count = source_count - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(source_count - offset);
+	other.SetCardinality(target_count);
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
