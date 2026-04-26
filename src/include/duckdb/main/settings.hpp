@@ -266,6 +266,17 @@ struct ArrowLosslessConversionSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ArrowOutputFixedShapeTensorSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "arrow_output_fixed_shape_tensor";
+	static constexpr const char *Description =
+	    "Whether multi-dimensional ARRAY types should be exported as arrow.fixed_shape_tensor extension type";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ArrowOutputListViewSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "arrow_output_list_view";

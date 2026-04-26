@@ -6,6 +6,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 
 #include "yyjson.hpp"
@@ -547,6 +548,331 @@ struct ArrowGeometry {
 	}
 };
 
+struct ArrowFixedShapeTensor {
+	struct TensorMetadata {
+		vector<idx_t> shape;
+		vector<idx_t> permutation; // empty means row-major (identity)
+	};
+
+	static TensorMetadata ParseMetadata(const string &metadata_str) {
+		TensorMetadata meta;
+		if (metadata_str.empty()) {
+			throw InvalidInputException("arrow.fixed_shape_tensor: missing extension metadata");
+		}
+		unique_ptr<duckdb_yyjson::yyjson_doc, void (*)(duckdb_yyjson::yyjson_doc *)> doc(
+		    duckdb_yyjson::yyjson_read(metadata_str.data(), metadata_str.size(), duckdb_yyjson::YYJSON_READ_NOFLAG),
+		    duckdb_yyjson::yyjson_doc_free);
+		if (!doc) {
+			throw InvalidInputException("arrow.fixed_shape_tensor: invalid JSON metadata");
+		}
+		auto *root = duckdb_yyjson::yyjson_doc_get_root(doc.get());
+		if (!duckdb_yyjson::yyjson_is_obj(root)) {
+			throw InvalidInputException("arrow.fixed_shape_tensor: metadata must be a JSON object");
+		}
+		auto *shape_val = duckdb_yyjson::yyjson_obj_get(root, "shape");
+		if (!shape_val || !duckdb_yyjson::yyjson_is_arr(shape_val)) {
+			throw InvalidInputException("arrow.fixed_shape_tensor: metadata must contain a 'shape' array");
+		}
+		size_t idx, max;
+		duckdb_yyjson::yyjson_val *dim;
+		yyjson_arr_foreach(shape_val, idx, max, dim) {
+			if (!duckdb_yyjson::yyjson_is_int(dim) && !duckdb_yyjson::yyjson_is_uint(dim)) {
+				throw InvalidInputException("arrow.fixed_shape_tensor: shape dimensions must be integers");
+			}
+			meta.shape.push_back(NumericCast<idx_t>(duckdb_yyjson::yyjson_get_uint(dim)));
+		}
+		if (meta.shape.empty()) {
+			throw InvalidInputException("arrow.fixed_shape_tensor: shape must have at least one dimension");
+		}
+
+		// Parse optional permutation field
+		auto *perm_val = duckdb_yyjson::yyjson_obj_get(root, "permutation");
+		if (perm_val && duckdb_yyjson::yyjson_is_arr(perm_val)) {
+			duckdb_yyjson::yyjson_val *p;
+			yyjson_arr_foreach(perm_val, idx, max, p) {
+				if (!duckdb_yyjson::yyjson_is_int(p) && !duckdb_yyjson::yyjson_is_uint(p)) {
+					throw InvalidInputException("arrow.fixed_shape_tensor: permutation values must be integers");
+				}
+				meta.permutation.push_back(NumericCast<idx_t>(duckdb_yyjson::yyjson_get_uint(p)));
+			}
+			if (meta.permutation.size() != meta.shape.size()) {
+				throw InvalidInputException(
+				    "arrow.fixed_shape_tensor: permutation length (%llu) must match shape length (%llu)",
+				    meta.permutation.size(), meta.shape.size());
+			}
+			// Validate it's a valid permutation of [0..n-1]
+			vector<bool> seen(meta.shape.size(), false);
+			for (auto v : meta.permutation) {
+				if (v >= meta.shape.size() || seen[v]) {
+					throw InvalidInputException(
+					    "arrow.fixed_shape_tensor: permutation must be a valid permutation of [0..%llu]",
+					    meta.shape.size() - 1);
+				}
+				seen[v] = true;
+			}
+			// Check if permutation is identity — if so, clear it
+			bool is_identity = true;
+			for (idx_t i = 0; i < meta.permutation.size(); i++) {
+				if (meta.permutation[i] != i) {
+					is_identity = false;
+					break;
+				}
+			}
+			if (is_identity) {
+				meta.permutation.clear();
+			}
+		}
+
+		return meta;
+	}
+
+	static LogicalType BuildNestedArrayType(const LogicalType &element_type, const vector<idx_t> &shape) {
+		auto result = element_type;
+		for (int i = NumericCast<int>(shape.size()) - 1; i >= 0; i--) {
+			result = LogicalType::ARRAY(result, shape[i]);
+		}
+		return result;
+	}
+
+	//! Encode permutation as an alias string "perm:1,0,2" on the internal type,
+	//! so ArrowToDuck can read it from the source vector's type without needing
+	//! extra state passed through the function pointer callback.
+	static string EncodePermutation(const vector<idx_t> &permutation) {
+		string result = "perm:";
+		for (idx_t i = 0; i < permutation.size(); i++) {
+			if (i > 0) {
+				result += ",";
+			}
+			result += to_string(permutation[i]);
+		}
+		return result;
+	}
+
+	static vector<idx_t> DecodePermutation(const string &alias) {
+		vector<idx_t> perm;
+		// alias is "perm:1,0,2" etc.
+		auto values = alias.substr(5); // skip "perm:"
+		idx_t start = 0;
+		for (idx_t i = 0; i <= values.size(); i++) {
+			if (i == values.size() || values[i] == ',') {
+				perm.push_back(NumericCast<idx_t>(StringUtil::ToSigned(values.substr(start, i - start))));
+				start = i + 1;
+			}
+		}
+		return perm;
+	}
+
+	static unique_ptr<ArrowType> GetType(ClientContext &context, const ArrowSchema &schema,
+	                                     const ArrowSchemaMetadata &schema_metadata) {
+		auto metadata_str = schema_metadata.GetOption(ArrowSchemaMetadata::ARROW_METADATA_KEY);
+		auto meta = ParseMetadata(metadata_str);
+
+		// Parse the format to get the flat size: "+w:NN"
+		auto format = string(schema.format);
+		if (format.size() <= 3 || format[0] != '+' || format[1] != 'w' || format[2] != ':') {
+			throw InvalidInputException("arrow.fixed_shape_tensor: expected FixedSizeList format (+w:N), got '%s'",
+			                            format);
+		}
+		auto flat_size = NumericCast<idx_t>(StringUtil::ToSigned(format.substr(3)));
+
+		// Validate product(shape) == flat_size
+		idx_t product = 1;
+		for (auto d : meta.shape) {
+			product *= d;
+		}
+		if (product != flat_size) {
+			throw InvalidInputException(
+			    "arrow.fixed_shape_tensor: shape product (%llu) doesn't match FixedSizeList size (%llu)", product,
+			    flat_size);
+		}
+
+		// Get element type from child schema
+		auto child_arrow_type = ArrowType::GetArrowLogicalType(context, *schema.children[0]);
+		auto element_type = child_arrow_type->GetDuckType();
+
+		// Build the nested ARRAY type from shape
+		auto nested_type = BuildNestedArrayType(element_type, meta.shape);
+		// The flat internal type (what the arrow reader produces)
+		auto flat_type = LogicalType::ARRAY(element_type, flat_size);
+
+		// If permutation is non-identity, encode it in the internal type's alias
+		// so ArrowToDuck can access it through the source vector's type
+		if (!meta.permutation.empty()) {
+			flat_type.SetAlias(EncodePermutation(meta.permutation));
+		}
+
+		// Create per-column extension data with correct internal type and conversion callback
+		auto ext_data = make_shared_ptr<ArrowTypeExtensionData>(nested_type, flat_type, ArrowToDuck, DuckToArrow);
+
+		// Create the ArrowType for the flat FixedSizeList (used by the reader)
+		auto type_info = make_uniq<ArrowArrayInfo>(std::move(child_arrow_type), flat_size);
+		auto result = make_uniq<ArrowType>(nested_type, std::move(type_info));
+		result->extension_data = std::move(ext_data);
+		return result;
+	}
+
+	static void ArrowToDuck(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		// source: flat ARRAY(T, N) where N = product(shape)
+		// result: nested ARRAY(ARRAY(..., shape[-1]), shape[-2]) etc.
+		auto flat_size = ArrayType::GetSize(source.GetType());
+
+		// Check if permutation is encoded in the source type's alias
+		auto alias = source.GetType().GetAlias();
+		bool has_permutation = alias.size() >= 5 && alias.substr(0, 5) == "perm:";
+
+		if (!has_permutation) {
+			// Row-major (identity permutation): flat data is already in the right order.
+			// Nested DuckDB arrays are stored contiguously, so just copy leaf data.
+			Vector *dst = &result;
+			while (ArrayType::GetChildType(dst->GetType()).id() == LogicalTypeId::ARRAY) {
+				dst = &ArrayVector::GetChildMutable(*dst);
+			}
+			auto &dst_leaf = ArrayVector::GetChildMutable(*dst);
+			auto &src_leaf = ArrayVector::GetChildMutable(source);
+			VectorOperations::Copy(src_leaf, dst_leaf, count * flat_size, 0, 0);
+		} else {
+			// Non-identity permutation: reorder elements from physical to row-major order.
+			auto permutation = DecodePermutation(alias);
+			auto ndim = permutation.size();
+
+			// Extract logical shape from the result (nested ARRAY) type
+			vector<idx_t> shape;
+			auto current = result.GetType();
+			while (current.id() == LogicalTypeId::ARRAY) {
+				shape.push_back(ArrayType::GetSize(current));
+				current = ArrayType::GetChildType(current);
+			}
+
+			// Compute strides for the physical layout (permuted dimensions)
+			// Physical layout: dimension permutation[0] varies slowest, permutation[ndim-1] varies fastest
+			vector<idx_t> physical_strides(ndim);
+			physical_strides[ndim - 1] = 1;
+			for (int i = NumericCast<int>(ndim) - 2; i >= 0; i--) {
+				physical_strides[i] = physical_strides[i + 1] * shape[permutation[i + 1]];
+			}
+
+			// Compute strides for row-major (logical) layout
+			vector<idx_t> logical_strides(ndim);
+			logical_strides[ndim - 1] = 1;
+			for (int i = NumericCast<int>(ndim) - 2; i >= 0; i--) {
+				logical_strides[i] = logical_strides[i + 1] * shape[i + 1];
+			}
+
+			// Navigate to leaf data
+			Vector *dst = &result;
+			while (ArrayType::GetChildType(dst->GetType()).id() == LogicalTypeId::ARRAY) {
+				dst = &ArrayVector::GetChildMutable(*dst);
+			}
+			auto &dst_leaf = ArrayVector::GetChildMutable(*dst);
+			auto &src_leaf = ArrayVector::GetChildMutable(source);
+			// Source is ARRAY(T, N) — get the byte size of element type T
+			auto element_physical_type = ArrayType::GetChildType(source.GetType()).InternalType();
+			auto type_size = GetTypeIdSize(element_physical_type);
+
+			// For each tensor in the batch, reorder elements
+			src_leaf.Flatten(count * flat_size);
+			auto src_ptr = FlatVector::GetData(src_leaf);
+			auto dst_ptr = FlatVector::GetDataMutable(dst_leaf);
+
+			for (idx_t row = 0; row < count; row++) {
+				auto row_offset = row * flat_size;
+				// For each element, compute its logical index from physical position
+				for (idx_t phys_pos = 0; phys_pos < flat_size; phys_pos++) {
+					// Convert physical position to multi-index using permuted dimension order
+					idx_t remaining = phys_pos;
+					vector<idx_t> multi_idx(ndim);
+					for (idx_t d = 0; d < ndim; d++) {
+						auto dim = permutation[d];
+						multi_idx[dim] = remaining / physical_strides[d];
+						remaining %= physical_strides[d];
+					}
+					// Convert multi-index to row-major position
+					idx_t logical_pos = 0;
+					for (idx_t d = 0; d < ndim; d++) {
+						logical_pos += multi_idx[d] * logical_strides[d];
+					}
+					memcpy(dst_ptr + (row_offset + logical_pos) * type_size,
+					       src_ptr + (row_offset + phys_pos) * type_size, type_size);
+				}
+			}
+		}
+
+		// Copy validity from source to result
+		auto &src_validity = FlatVector::Validity(source);
+		auto &dst_validity = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!src_validity.RowIsValid(i)) {
+				dst_validity.SetInvalid(i);
+			}
+		}
+	}
+
+	static void DuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+		// source: nested ARRAY(ARRAY(...), ...)
+		// result: flat ARRAY(T, product(shape))
+		// Navigate to innermost source child
+		Vector *src = &source;
+		while (ArrayType::GetChildType(src->GetType()).id() == LogicalTypeId::ARRAY) {
+			src = &ArrayVector::GetChildMutable(*src);
+		}
+		auto &src_leaf = ArrayVector::GetChildMutable(*src);
+
+		auto &dst_leaf = ArrayVector::GetChildMutable(result);
+		auto flat_size = ArrayType::GetSize(result.GetType());
+
+		VectorOperations::Copy(src_leaf, dst_leaf, count * flat_size, 0, 0);
+
+		auto &src_validity = FlatVector::Validity(source);
+		auto &dst_validity = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < count; i++) {
+			if (!src_validity.RowIsValid(i)) {
+				dst_validity.SetInvalid(i);
+			}
+		}
+	}
+
+	static void PopulateSchema(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &schema, const LogicalType &type,
+	                           ClientContext &context, const ArrowTypeExtension &extension) {
+		// Extract shape from nested ARRAY type
+		vector<idx_t> shape;
+		idx_t total = 1;
+		auto current = type;
+		while (current.id() == LogicalTypeId::ARRAY) {
+			auto sz = ArrayType::GetSize(current);
+			shape.push_back(sz);
+			total *= sz;
+			current = ArrayType::GetChildType(current);
+		}
+
+		// Set format to flat FixedSizeList
+		auto format_str = "+w:" + to_string(total);
+		auto format = make_unsafe_uniq_array<char>(format_str.size() + 1);
+		for (idx_t i = 0; i < format_str.size(); i++) {
+			format[i] = format_str[i];
+		}
+		format[format_str.size()] = '\0';
+		root_holder.extension_format.emplace_back(std::move(format));
+		schema.format = root_holder.extension_format.back().get();
+
+		// Build shape JSON metadata
+		ArrowSchemaMetadata schema_metadata;
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.fixed_shape_tensor");
+
+		string shape_json = "{\"shape\": [";
+		for (idx_t i = 0; i < shape.size(); i++) {
+			if (i > 0) {
+				shape_json += ", ";
+			}
+			shape_json += to_string(shape[i]);
+		}
+		shape_json += "]}";
+		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, shape_json);
+
+		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+		schema.metadata = root_holder.metadata_info.back().get();
+	}
+};
+
 void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 	// Types that are 1:1
 	config.RegisterArrowExtension({"arrow.uuid", "w:16", make_shared_ptr<ArrowTypeExtensionData>(LogicalType::UUID)});
@@ -576,5 +902,11 @@ void ArrowTypeExtensionSet::Initialize(const DBConfig &config) {
 
 	config.RegisterArrowExtension({"DuckDB", "bignum", &ArrowBignum::PopulateSchema, &ArrowBignum::GetType,
 	                               make_shared_ptr<ArrowTypeExtensionData>(LogicalType::BIGNUM), nullptr, nullptr});
+
+	// FixedShapeTensor: reads flat FixedSizeList with shape metadata as nested ARRAY.
+	// Export of multi-dimensional arrays as FixedShapeTensor is handled directly in
+	// arrow_converter.cpp (schema) and arrow_duck_schema.cpp (data), gated by
+	// arrow_lossless_conversion. This registration only handles the import path.
+	config.RegisterArrowExtension({"arrow.fixed_shape_tensor", nullptr, &ArrowFixedShapeTensor::GetType, nullptr});
 }
 } // namespace duckdb

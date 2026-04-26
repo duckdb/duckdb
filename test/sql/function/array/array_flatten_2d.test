@@ -1,0 +1,87 @@
+# name: test/sql/function/array/array_flatten_2d.test
+# description: Test array_flatten function for nested arrays
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Basic 2x2 flatten
+query I
+SELECT array_flatten([[1,2],[3,4]]::INT[2,2]);
+----
+[1, 2, 3, 4]
+
+# Verify return type is fixed-size ARRAY
+query I
+SELECT typeof(array_flatten([[1,2],[3,4]]::INT[2,2]));
+----
+INTEGER[4]
+
+# 2x3 flatten
+query I
+SELECT array_flatten([[1,2,3],[4,5,6]]::INT[3,2]);
+----
+[1, 2, 3, 4, 5, 6]
+
+# FLOAT type
+query I
+SELECT array_flatten([[1.0,2.0],[3.0,4.0]]::FLOAT[2,2]);
+----
+[1.0, 2.0, 3.0, 4.0]
+
+# DOUBLE type
+query I
+SELECT array_flatten([[1.0,2.0],[3.0,4.0]]::DOUBLE[2,2]);
+----
+[1.0, 2.0, 3.0, 4.0]
+
+# 1D array (no-op, but should work)
+query I
+SELECT array_flatten(array_value(1, 2, 3));
+----
+[1, 2, 3]
+
+# NULL input
+query I
+SELECT array_flatten(NULL::INT[2,2]);
+----
+NULL
+
+# Storage round-trip with columnar inputs
+statement ok
+CREATE TABLE t_flat (m INT[3,2]);
+
+statement ok
+INSERT INTO t_flat VALUES
+    ([[1,2,3],[4,5,6]]::INT[3,2]),
+    ([[7,8,9],[10,11,12]]::INT[3,2]),
+    (NULL);
+
+query I
+SELECT array_flatten(m) FROM t_flat;
+----
+[1, 2, 3, 4, 5, 6]
+[7, 8, 9, 10, 11, 12]
+NULL
+
+# Verify return type from table
+query I
+SELECT typeof(array_flatten(m)) FROM t_flat LIMIT 1;
+----
+INTEGER[6]
+
+# Mid-level NULL element should fail
+statement error
+SELECT array_flatten(array_value(array_value(1,2), NULL::INT[2]));
+----
+nested array elements cannot be NULL
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_flat_large AS
+SELECT [[i, i+1, i+2],[i+3, i+4, i+5]]::INT[3,2] AS m FROM range(3000) tbl(i);
+
+query I
+SELECT count(*) FROM t_flat_large WHERE array_flatten(m)[1] != m[1][1];
+----
+0

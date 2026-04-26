@@ -97,4 +97,98 @@ struct ArrayNegativeDotProductFun {
 	static constexpr const char *Name = "array_negative_dot_product";
 };
 
+struct ArrayTensorShapeFun {
+	static constexpr const char *Name = "array_tensor_shape";
+	static constexpr const char *Parameters = "array";
+	static constexpr const char *Description = "Returns the dimensions of an array (possibly nested) as a list of integers.";
+	static constexpr const char *Example = "array_tensor_shape(array_value(array_value(1, 2, 3), array_value(4, 5, 6)))";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunction GetFunction();
+};
+
+struct TensorShapeFun {
+	using ALIAS = ArrayTensorShapeFun;
+
+	static constexpr const char *Name = "tensor_shape";
+};
+
+struct ArrayTransposeFun {
+	static constexpr const char *Name = "array_transpose";
+	static constexpr const char *Parameters = "array";
+	static constexpr const char *Description = "Transposes a 2D array (matrix). The array elements can not be `NULL`.";
+	static constexpr const char *Example = "array_transpose([[1,2,3],[4,5,6]]::INT[2][3])";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct TransposeFun {
+	using ALIAS = ArrayTransposeFun;
+
+	static constexpr const char *Name = "transpose";
+};
+
+struct ArrayFlattenFun {
+	static constexpr const char *Name = "array_flatten";
+	static constexpr const char *Parameters = "array";
+	static constexpr const char *Description = "Flattens a nested array to a 1D array.";
+	static constexpr const char *Example = "array_flatten([[1,2],[3,4]]::INT[2][2])";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ArrayReshapeFun {
+	static constexpr const char *Name = "array_reshape";
+	static constexpr const char *Parameters = "array,dimensions...";
+	static constexpr const char *Description = "Reshapes an array to the specified dimensions. The total number of elements must match. Dimension arguments must be constant integers.";
+	static constexpr const char *Example = "array_reshape(array_value(1,2,3,4,5,6), 2, 3)";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunction GetFunction();
+};
+
+struct ReshapeFun {
+	using ALIAS = ArrayReshapeFun;
+
+	static constexpr const char *Name = "reshape";
+};
+
+struct ArrayMatmulFun {
+	static constexpr const char *Name = "array_matmul";
+	static constexpr const char *Parameters = "matrix1,matrix2";
+	static constexpr const char *Description = "Computes the matrix multiplication of two 2D arrays. The inner dimensions must match (A[m][k] * B[k][n] = C[m][n]). The array elements can not be `NULL`.";
+	static constexpr const char *Example = "array_matmul([[1,2],[3,4]]::FLOAT[2][2], [[5,6],[7,8]]::FLOAT[2][2])";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct MatmulFun {
+	using ALIAS = ArrayMatmulFun;
+
+	static constexpr const char *Name = "matmul";
+};
+
+struct ArrayTraceFun {
+	static constexpr const char *Name = "array_trace";
+	static constexpr const char *Parameters = "matrix";
+	static constexpr const char *Description = "Computes the trace (sum of diagonal elements) of a square 2D array. The array elements can not be `NULL`.";
+	static constexpr const char *Example = "array_trace([[1,2],[3,4]]::FLOAT[2][2])";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayDeterminantFun {
+	static constexpr const char *Name = "array_determinant";
+	static constexpr const char *Parameters = "matrix";
+	static constexpr const char *Description = "Computes the determinant of a square 2D array. The array elements can not be `NULL`.";
+	static constexpr const char *Example = "array_determinant([[1,2],[3,4]]::FLOAT[2][2])";
+	static constexpr const char *Categories = "array";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

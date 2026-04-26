@@ -1,0 +1,105 @@
+# name: test/sql/function/array/array_determinant.test
+# description: Test array_determinant function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+foreach TYPE FLOAT DOUBLE
+
+# 1x1 determinant
+query I
+SELECT array_determinant([[5]]::{TYPE}[1,1]);
+----
+5.0
+
+# 2x2 determinant: ad - bc
+query I
+SELECT array_determinant([[1,2],[3,4]]::{TYPE}[2,2]);
+----
+-2.0
+
+# 2x2 identity
+query I
+SELECT array_determinant([[1,0],[0,1]]::{TYPE}[2,2]);
+----
+1.0
+
+# 3x3 determinant (singular matrix, det=0)
+query I
+SELECT array_determinant([[1,2,3],[4,5,6],[7,8,9]]::{TYPE}[3,3]);
+----
+0.0
+
+# 3x3 non-singular (diagonal)
+query I
+SELECT array_determinant([[1,0,0],[0,2,0],[0,0,3]]::{TYPE}[3,3]);
+----
+6.0
+
+# NULL input
+query I
+SELECT array_determinant(NULL::{TYPE}[2,2]);
+----
+NULL
+
+# Storage round-trip with columnar inputs
+statement ok
+CREATE OR REPLACE TABLE t_det (m {TYPE}[2,2]);
+
+statement ok
+INSERT INTO t_det VALUES
+    ([[1,2],[3,4]]::{TYPE}[2,2]),
+    ([[1,0],[0,1]]::{TYPE}[2,2]),
+    (NULL);
+
+query I
+SELECT array_determinant(m) FROM t_det;
+----
+-2.0
+1.0
+NULL
+
+# NULL element should fail
+statement error
+SELECT array_determinant([[1,NULL],[3,4]]::{TYPE}[2,2]);
+----
+matrix elements cannot be NULL
+
+endloop
+
+# Error: non-square
+statement error
+SELECT array_determinant([[1,2,3],[4,5,6]]::FLOAT[3,2]);
+----
+must be square
+
+# 4x4 determinant (exercises LU decomposition path)
+# det([[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]) = 0 (singular: rows are arithmetic progression)
+query I
+SELECT array_determinant([[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]::FLOAT[4,4]);
+----
+0.0
+
+# 4x4 identity matrix det = 1
+query I
+SELECT array_determinant([[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]::FLOAT[4,4]);
+----
+1.0
+
+# 4x4 diagonal matrix det = product of diagonal
+query I
+SELECT array_determinant([[2,0,0,0],[0,3,0,0],[0,0,4,0],[0,0,0,5]]::FLOAT[4,4]);
+----
+120.0
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_det_large AS
+SELECT [[i+1, 0],[0, i+2]]::FLOAT[2,2] AS m FROM range(3000) tbl(i);
+
+# det of diagonal matrix = product of diagonal elements
+query I
+SELECT count(*) FROM t_det_large WHERE abs(array_determinant(m) - (m[1][1] * m[2][2])) > 0.001;
+----
+0

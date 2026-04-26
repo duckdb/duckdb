@@ -4,9 +4,35 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
+
+//! Converts a nested DuckDB ARRAY vector to a flat ARRAY vector for Arrow export.
+//! Nested DuckDB arrays are stored contiguously in memory, so this just copies
+//! the leaf data and propagates validity.
+static void NestedArrayDuckToArrow(ClientContext &context, Vector &source, Vector &result, idx_t count) {
+	Vector *src = &source;
+	while (ArrayType::GetChildType(src->GetType()).id() == LogicalTypeId::ARRAY) {
+		src = &ArrayVector::GetChildMutable(*src);
+	}
+	auto &src_leaf = ArrayVector::GetChildMutable(*src);
+
+	auto &dst_leaf = ArrayVector::GetChildMutable(result);
+	auto flat_size = ArrayType::GetSize(result.GetType());
+
+	VectorOperations::Copy(src_leaf, dst_leaf, count * flat_size, 0, 0);
+
+	auto &src_validity = FlatVector::Validity(source);
+	auto &dst_validity = FlatVector::ValidityMutable(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (!src_validity.RowIsValid(i)) {
+			dst_validity.SetInvalid(i);
+		}
+	}
+}
 
 void ArrowTableSchema::AddColumn(idx_t index, shared_ptr<ArrowType> type, const string &name) {
 	D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
@@ -416,7 +442,12 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(ClientContext &context, Arrow
 		if (config.HasArrowExtension(extension_info)) {
 			auto extension = config.GetArrowExtension(extension_info);
 			arrow_type = extension.GetType(context, schema, schema_metadata);
-			arrow_type->extension_data = extension.GetTypeExtension();
+			// Only set extension_data from the registered extension if GetType
+			// didn't already set it (allows per-column extension data, needed for
+			// extensions like arrow.fixed_shape_tensor where internal_type varies)
+			if (!arrow_type->extension_data) {
+				arrow_type->extension_data = extension.GetTypeExtension();
+			}
 		}
 	}
 
@@ -434,6 +465,19 @@ ArrowTypeExtensionData::GetExtensionTypes(ClientContext &context, const vector<L
 	for (idx_t i = 0; i < duckdb_types.size(); i++) {
 		if (db_config.HasArrowExtension(duckdb_types[i])) {
 			extension_types.insert({i, db_config.GetArrowExtension(duckdb_types[i]).GetTypeExtension()});
+		} else if (context.GetClientProperties().arrow_output_fixed_shape_tensor &&
+		           duckdb_types[i].id() == LogicalTypeId::ARRAY &&
+		           ArrayType::GetChildType(duckdb_types[i]).id() == LogicalTypeId::ARRAY) {
+			// Multi-dimensional array: flatten to a 1D array for arrow.fixed_shape_tensor export
+			idx_t total = 1;
+			auto current = duckdb_types[i];
+			while (current.id() == LogicalTypeId::ARRAY) {
+				total *= ArrayType::GetSize(current);
+				current = ArrayType::GetChildType(current);
+			}
+			auto flat_type = LogicalType::ARRAY(current, total);
+			extension_types.insert({i, make_shared_ptr<ArrowTypeExtensionData>(duckdb_types[i], flat_type, nullptr,
+			                                                                   NestedArrayDuckToArrow)});
 		}
 	}
 	return extension_types;

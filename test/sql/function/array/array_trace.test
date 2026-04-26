@@ -1,0 +1,94 @@
+# name: test/sql/function/array/array_trace.test
+# description: Test array_trace function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+foreach TYPE FLOAT DOUBLE
+
+# 2x2 trace
+query I
+SELECT array_trace([[1,2],[3,4]]::{TYPE}[2,2]);
+----
+5.0
+
+# 3x3 trace (diagonal matrix)
+query I
+SELECT array_trace([[1,0,0],[0,2,0],[0,0,3]]::{TYPE}[3,3]);
+----
+6.0
+
+# 1x1 trace
+query I
+SELECT array_trace([[42]]::{TYPE}[1,1]);
+----
+42.0
+
+# NULL input
+query I
+SELECT array_trace(NULL::{TYPE}[2,2]);
+----
+NULL
+
+# Storage round-trip with columnar inputs
+statement ok
+CREATE OR REPLACE TABLE t_trace (m {TYPE}[2,2]);
+
+statement ok
+INSERT INTO t_trace VALUES
+    ([[1,2],[3,4]]::{TYPE}[2,2]),
+    ([[10,0],[0,20]]::{TYPE}[2,2]),
+    (NULL);
+
+query I
+SELECT array_trace(m) FROM t_trace;
+----
+5.0
+30.0
+NULL
+
+# NULL element should fail
+statement error
+SELECT array_trace([[1,NULL],[3,4]]::{TYPE}[2,2]);
+----
+matrix elements cannot be NULL
+
+endloop
+
+# Integer trace
+foreach TYPE INTEGER BIGINT
+
+query I
+SELECT array_trace([[1,2],[3,4]]::{TYPE}[2,2]);
+----
+5
+
+query I
+SELECT array_trace([[10,0,0],[0,20,0],[0,0,30]]::{TYPE}[3,3]);
+----
+60
+
+query I
+SELECT array_trace(NULL::{TYPE}[2,2]);
+----
+NULL
+
+endloop
+
+# Error: non-square
+statement error
+SELECT array_trace([[1,2,3],[4,5,6]]::FLOAT[3,2]);
+----
+must be square
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_trace_large AS
+SELECT [[i+1, 0],[0, i+2]]::FLOAT[2,2] AS m FROM range(3000) tbl(i);
+
+# trace of diagonal matrix = sum of diagonal elements
+query I
+SELECT count(*) FROM t_trace_large WHERE abs(array_trace(m) - (m[1][1] + m[2][2])) > 0.001;
+----
+0

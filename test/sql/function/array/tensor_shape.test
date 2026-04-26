@@ -1,0 +1,70 @@
+# name: test/sql/function/array/tensor_shape.test
+# description: Test array_tensor_shape function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# 1D array constant
+query I
+SELECT array_tensor_shape(array_value(1, 2, 3));
+----
+[3]
+
+# 2D array constant
+query I
+SELECT array_tensor_shape([[1,2,3],[4,5,6]]::INT[3,2]);
+----
+[2, 3]
+
+# 3D type
+query I
+SELECT array_tensor_shape(NULL::DOUBLE[2,3,4]);
+----
+NULL
+
+# Non-null 2D
+query I
+SELECT array_tensor_shape([[1.0,2.0],[3.0,4.0]]::FLOAT[2,2]);
+----
+[2, 2]
+
+# NULL input returns NULL
+query I
+SELECT array_tensor_shape(NULL::INT[3]);
+----
+NULL
+
+# Storage round-trip with columnar inputs
+statement ok
+CREATE TABLE t_shape (a INT[3]);
+
+statement ok
+INSERT INTO t_shape VALUES (array_value(1, 2, 3)), (array_value(4, 5, 6)), (NULL);
+
+query I
+SELECT array_tensor_shape(a) FROM t_shape;
+----
+[3]
+[3]
+NULL
+
+# 2D storage round-trip
+statement ok
+CREATE TABLE t_shape_2d (m FLOAT[3,2]);
+
+statement ok
+INSERT INTO t_shape_2d VALUES ([[1,2,3],[4,5,6]]::FLOAT[3,2]), ([[7,8,9],[10,11,12]]::FLOAT[3,2]), (NULL);
+
+query I
+SELECT array_tensor_shape(m) FROM t_shape_2d;
+----
+[2, 3]
+[2, 3]
+NULL
+
+# Error: non-array input
+statement error
+SELECT array_tensor_shape(42);
+----
+Argument must be an array type
