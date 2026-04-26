@@ -279,7 +279,8 @@ public:
 
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<HashAggregateGlobalSinkState>();
-		// Sink repopulates every aggregate-input column by reference before use, so we only need to clear cardinality here.
+		// Sink repopulates every aggregate-input column by reference before use, so we only need to clear cardinality
+		// here.
 		aggregate_input_chunk.SetCardinality(0);
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			auto &grouping = op.groupings[grouping_idx];

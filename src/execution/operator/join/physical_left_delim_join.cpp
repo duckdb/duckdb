@@ -14,7 +14,8 @@ static void LeftDelimBindScanCollection(const PhysicalLeftDelimJoin &delim_join,
 	cast_cached_scan.collection = &collection;
 }
 
-static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context, unique_ptr<GlobalSinkState> &state) {
+static void LeftDelimResetSinkState(const PhysicalOperator &op, ClientContext &context,
+                                    unique_ptr<GlobalSinkState> &state) {
 	if (state && state->SupportsReuse()) {
 		state->Reset(context);
 		return;
