@@ -110,6 +110,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 			}
 		}
 	}
+	FlatVector::SetSize(mark_vector, result.size());
 }
 
 bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions, JoinType join_type) {

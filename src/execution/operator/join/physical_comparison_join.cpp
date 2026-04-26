@@ -122,24 +122,25 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 	} else if (join_type == JoinType::MARK) {
 		// MARK join with empty hash table
 		D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
-		auto &result_vector = result.data.back();
-		D_ASSERT(result_vector.GetType() == LogicalType::BOOLEAN);
 		// for every data vector, we just reference the child chunk
 		result.SetCardinality(input);
 		for (idx_t i = 0; i < input.ColumnCount(); i++) {
 			result.data[i].Reference(input.data[i]);
 		}
+		auto &mark_vector = result.data.back();
+		D_ASSERT(mark_vector.GetType() == LogicalType::BOOLEAN);
 		// for the MARK vector:
 		// if the HT has no NULL values (i.e. empty result set), return a vector that has false for every input
 		// entry if the HT has NULL values (i.e. result set had values, but all were NULL), return a vector that
 		// has NULL for every input entry
 		if (!has_null) {
-			auto bool_result = FlatVector::GetDataMutable<bool>(result_vector);
+			auto mark_data = FlatVector::Writer<bool>(mark_vector, result.size());
 			for (idx_t i = 0; i < result.size(); i++) {
-				bool_result[i] = false;
+				mark_data.WriteValue(false);
 			}
 		} else {
-			FlatVector::ValidityMutable(result_vector).SetAllInvalid(result.size());
+			FlatVector::ValidityMutable(mark_vector).SetAllInvalid(result.size());
+			FlatVector::SetSize(mark_vector, result.size());
 		}
 	} else if (join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::SINGLE) {
 		// LEFT/FULL OUTER/SINGLE join and build side is empty
