@@ -264,7 +264,7 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 	    {0, FILE_SIZE},
 	}};
 
-	vector<thread> threads;
+	vector<std::thread> threads;
 	threads.reserve(READER_COUNT + SETTER_COUNT);
 
 	for (idx_t r = 0; r < READER_COUNT; r++) {
