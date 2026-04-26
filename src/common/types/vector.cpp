@@ -184,7 +184,11 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && HasSize() && count == size()) {
+		// no-op: no selection vector, and the requested count matches the current size
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->Slice(GetType(), sel, count);
@@ -195,7 +199,10 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && HasSize() && count == size()) {
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);

@@ -377,8 +377,9 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		if (data[i].HasSize() && data[i].size() != size()) {
-			throw InternalException("DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d",
-			                        i, data[i].GetType().ToString(), data[i].size(), size());
+			throw InternalException(
+			    "DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d", i,
+			    data[i].GetType().ToString(), data[i].size(), size());
 		}
 	}
 #ifdef DEBUG

@@ -29,6 +29,7 @@ public:
 	}
 	void SetCount(idx_t count) {
 		total_string_count = count;
+		v_size = count;
 	}
 	idx_t GetCount() const {
 		return total_string_count;

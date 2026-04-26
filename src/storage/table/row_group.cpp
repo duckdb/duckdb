@@ -732,7 +732,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 				const auto &column = column_ids[i];
 				auto &col_data = GetColumn(column);
 				state.column_scans[i].update_scan_type = options.update_type;
-				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
+				// pass max_count explicitly so we never read past the row count we captured at scan
+				// init time (concurrent inserts can grow the column past max_count)
+				col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i], max_count);
 			}
 		} else {
 			// partial scan: we have deletions or table filters
