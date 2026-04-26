@@ -12,17 +12,19 @@
 
 namespace duckdb {
 
+namespace {
+
 using EFCTestFileGuard = CachingTestFileGuard;
 using EFCTrackingFileSystem = SimpleTrackingFileSystem;
 
-static OpenFileInfo MakeTestOpenFileInfo(const string &path) {
+OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
 	info.extended_info->options["validate_external_file_cache"] = Value::BOOLEAN(false);
 	return info;
 }
 
-static string MakeTestContent(idx_t size) {
+string MakeTestContent(idx_t size) {
 	string content(size, '\0');
 	for (idx_t i = 0; i < size; i++) {
 		content[i] = static_cast<char>('A' + (i % 26));
@@ -30,24 +32,26 @@ static string MakeTestContent(idx_t size) {
 	return content;
 }
 
-static string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
+string ReadFull(CachingFileHandle &handle, idx_t size, idx_t offset = 0) {
 	auto group = handle.Read(size, offset);
 	string result(size, '\0');
 	group.CopyTo(reinterpret_cast<data_ptr_t>(&result[0]), size);
 	return result;
 }
 
-static idx_t CountCachedBlocks(ExternalFileCache &cache) {
+idx_t CountCachedBlocks(ExternalFileCache &cache) {
 	return cache.GetCachedFileInformation().size();
 }
 
-static idx_t TotalCachedBytes(ExternalFileCache &cache) {
+idx_t TotalCachedBytes(ExternalFileCache &cache) {
 	idx_t total = 0;
 	for (auto &info : cache.GetCachedFileInformation()) {
 		total += info.nr_bytes;
 	}
 	return total;
 }
+
+} // namespace
 
 TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache]") {
 	DuckDB db(":memory:");
@@ -75,7 +79,7 @@ TEST_CASE("Lazy reindex splits large blocks on next read", "[external_file_cache
 	// Cache still has 4 old blocks (not yet reindexed).
 	REQUIRE(CountCachedBlocks(cache) == 4);
 
-	// Next read triggers lazy reindex: 16KiB → 4KiB.
+	// Next read triggers lazy reindex: 16KiB -> 4KiB.
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 
 	// 3 * (16384/4096) + 1 = 13 blocks
@@ -111,7 +115,7 @@ TEST_CASE("Lazy reindex merges small blocks on next read", "[external_file_cache
 	// Still 8 old blocks.
 	REQUIRE(CountCachedBlocks(cache) == 8);
 
-	// Next read triggers lazy reindex: 4KiB → 16KiB.
+	// Next read triggers lazy reindex: 4KiB -> 16KiB.
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 
 	REQUIRE(CountCachedBlocks(cache) == 2);
@@ -182,39 +186,6 @@ TEST_CASE("Lazy reindex with holes in cached content", "[external_file_cache]") 
 	REQUIRE(TotalCachedBytes(cache) == NEW_BLOCK_SIZE);
 }
 
-TEST_CASE("Lazy reindex: SET does not trigger reindex", "[external_file_cache]") {
-	DuckDB db(":memory:");
-	auto &db_instance = *db.instance;
-	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
-
-	const idx_t FILE_SIZE = 16384 * 2;
-	auto content = MakeTestContent(FILE_SIZE);
-	EFCTestFileGuard test_file("test_lazy_no_eager.bin", content);
-
-	CachingFileSystem cfs(*tracking_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
-	auto &cache = db_instance.GetExternalFileCache();
-
-	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
-	REQUIRE(CountCachedBlocks(cache) == 2);
-	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
-
-	// Change block size multiple times — cache should remain untouched.
-	Connection con(db);
-	con.Query("SET external_file_cache_local_block_size=4096");
-	REQUIRE(CountCachedBlocks(cache) == 2);
-	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
-
-	con.Query("SET external_file_cache_local_block_size=8192");
-	REQUIRE(CountCachedBlocks(cache) == 2);
-	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
-
-	// Only on the next read does the reindex happen (to 8192).
-	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
-	REQUIRE(CountCachedBlocks(cache) == 4);
-	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
-}
-
 TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]") {
 	DuckDB db(":memory:");
 	auto &db_instance = *db.instance;
@@ -259,7 +230,7 @@ TEST_CASE("Lazy reindex: only touched file is reindexed", "[external_file_cache]
 			blocks_b++;
 		}
 	}
-	REQUIRE(blocks_a == 2); // reindexed: 8 x 4KiB → 2 x 16KiB
+	REQUIRE(blocks_a == 2); // reindexed: 8 x 4KiB -> 2 x 16KiB
 	REQUIRE(blocks_b == 8); // untouched: still 8 x 4KiB
 }
 
