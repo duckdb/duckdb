@@ -205,6 +205,7 @@ public:
 	string initFile;
 	bool run_init = true;
 	unique_ptr<duckdb::MaterializedQueryResult> last_result;
+	bool last_result_referenced;
 	//! If the following flag is set, then command execution stops at an error
 	BailOnError bail = BailOnError::AUTOMATIC;
 	//! Table name when rendering a DESCRIBE statement
