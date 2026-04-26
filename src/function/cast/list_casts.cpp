@@ -60,14 +60,14 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
 		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
+			tdata.WriteValue(ldata[i]);
 		}
 	}
-	auto &source_cc = ListVector::GetEntry(source);
+	auto &source_cc = ListVector::GetChildMutable(source);
 	auto source_size = ListVector::GetListSize(source);
 
 	ListVector::Reserve(result, source_size);
-	auto &append_vector = ListVector::GetEntry(result);
+	auto &append_vector = ListVector::GetChildMutable(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
@@ -81,7 +81,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
-	auto &child_vec = ListVector::GetEntry(source);
+	auto &child_vec = ListVector::GetChild(source);
 	auto child_is_nested = child_vec.GetType().IsNested();
 	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
 	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
@@ -90,7 +90,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
-	auto &child = ListVector::GetEntry(varchar_list);
+	auto &child = ListVector::GetChildMutable(varchar_list);
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
 	auto &validity = FlatVector::ValidityMutable(varchar_list);
 
@@ -106,7 +106,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 		auto list = list_data[i];
@@ -128,7 +128,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				list_length += NULL_LENGTH;
 			}
 		}
-		auto &result_str = result_data[i].EmptyString(list_length);
+		auto &result_str = result_data.WriteEmptyString(list_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
@@ -159,7 +159,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(source.GetVectorType());
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return true;
 		}
 
@@ -169,12 +169,12 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 			auto msg = StringUtil::Format("Cannot cast list with length %llu to array with length %u", ldata.length,
 			                              array_size);
 			HandleCastError::AssignError(msg, parameters);
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 
@@ -198,8 +198,8 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		auto child_type = ArrayType::GetChildType(result.GetType());
-		auto &source_cc = ListVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ListVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 		auto ldata = FlatVector::GetData<list_entry_t>(source);
 
 		auto child_count = array_size * count;

@@ -23,7 +23,7 @@ SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b>3) OR (a=1 AND c<5)
 ----
-physical_plan	<REGEX>:.*Filters: a=1.*
+physical_plan	<REGEX>:.*Filters:.*a = 1.*
 
 # Predicate factoring on a different common column: b=5
 query III rowsort
@@ -36,7 +36,7 @@ SELECT * FROM t WHERE (a=1 AND b=5) OR (a=2 AND b=5)
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5) OR (a=2 AND b=5)
 ----
-physical_plan	<REGEX>:.*Filters:.*b=5.*
+physical_plan	<REGEX>:.*Filters:.*b = 5.*
 
 # Two common predicates: both a=1 and b=5 should be factored out
 query III rowsort
@@ -48,7 +48,7 @@ SELECT * FROM t WHERE (a=1 AND b=5 AND c>2) OR (a=1 AND b=5 AND c<6)
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5 AND c>2) OR (a=1 AND b=5 AND c<6)
 ----
-physical_plan	<REGEX>:.*Filters:.*a=1.*b=5.*
+physical_plan	<REGEX>:.*Filters:.*a = 1.*b = 5.*
 
 # Three-way disjunction: a=1 is common to all three disjuncts
 query III rowsort
@@ -61,7 +61,7 @@ SELECT * FROM t WHERE (a=1 AND b=5) OR (a=1 AND c>2) OR (a=1 AND b=2)
 query II
 EXPLAIN SELECT * FROM t WHERE (a=1 AND b=5) OR (a=1 AND c>2) OR (a=1 AND b=2)
 ----
-physical_plan	<REGEX>:.*Filters: a=1.*
+physical_plan	<REGEX>:.*Filters:.*a = 1.*
 
 # No common predicates: no factoring should occur
 query III rowsort
@@ -117,4 +117,4 @@ SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t
 query II
 EXPLAIN SELECT t.a, t.b, t.c, s.x, s.y FROM t, s WHERE (t.a=1 AND s.x=1 AND t.b>3) OR (t.a=1 AND s.x=1 AND s.y<20)
 ----
-physical_plan	<REGEX>:.*Filters: x=1.*Filters: a=1.*
+physical_plan	<REGEX>:.*Filters:.*x = 1.*Filters:.*a = 1.*

@@ -53,7 +53,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		HandleCastError::AssignError(msg, parameters);
 		if (!parameters.strict) {
 			// if this was a TRY_CAST, we know every row will fail, so just return null
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return false;
 		}
 	}
@@ -63,11 +63,11 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 
-		auto &source_cc = ArrayVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		auto &source_cc = ArrayVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		// If the array vector is constant, the child vector must be flat (or constant if array size is 1)
 		D_ASSERT(source_cc.GetVectorType() == VectorType::FLAT_VECTOR || source_array_size == 1);
@@ -80,9 +80,9 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		source.Flatten(count);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
-		auto &source_cc = ArrayVector::GetEntry(source);
-		auto &result_cc = ArrayVector::GetEntry(result);
+		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		auto &source_cc = ArrayVector::GetChildMutable(source);
+		auto &result_cc = ArrayVector::GetChildMutable(result);
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, count * source_array_size, child_parameters);
@@ -101,19 +101,19 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
-	auto &validity = FlatVector::ValidityMutable(varchar_list);
-	auto &child = ArrayVector::GetEntry(varchar_list);
-	auto &child_validity = FlatVector::ValidityMutable(child);
+	auto &validity = FlatVector::Validity(varchar_list);
+	auto &child = ArrayVector::GetChild(varchar_list);
+	auto &child_validity = FlatVector::Validity(child);
 
 	auto in_data = FlatVector::GetData<string_t>(child);
-	auto result_data = FlatVector::Writer<string_t>(result, count);
 
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -128,7 +128,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			array_varchar_length += child_validity.RowIsValid(elem_idx) ? elem.GetSize() : NULL_LENGTH;
 		}
 
-		auto &out_str = result_data[i].EmptyString(array_varchar_length);
+		auto &out_str = result_data.WriteEmptyString(array_varchar_length);
 		auto dataptr = out_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
@@ -150,7 +150,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 				offset += NULL_LENGTH;
 			}
 		}
-		dataptr[offset++] = ']';
+		dataptr[offset] = ']';
 		out_str.Finalize();
 	}
 
@@ -174,23 +174,23 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	auto child_count = count * array_size;
 
 	ListVector::Reserve(result, child_count);
-	ListVector::SetListSize(result, child_count);
 
-	auto &source_child = ArrayVector::GetEntry(source);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &source_child = ArrayVector::GetChildMutable(source);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.Cast(source_child, result_child, child_count, child_parameters);
+	// set the list size after the child cast, since the cast may have replaced the child buffer
+	ListVector::SetListSize(result, child_count);
 
 	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (FlatVector::IsNull(source, i)) {
-			list_data.SetInvalid(i);
+			list_data.WriteNull();
 			continue;
 		}
 
-		list_data[i].offset = i * array_size;
-		list_data[i].length = array_size;
+		list_data.WriteValue(list_entry_t(i * array_size, array_size));
 	}
 	return all_ok;
 }

@@ -14,7 +14,7 @@ namespace duckdb {
 
 static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	Value v(args.data[0].GetType().ToString());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
@@ -41,7 +41,7 @@ ScalarFunction TypeOfFun::GetFunction() {
 
 static void GetTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto v = Value::TYPE(args.data[0].GetType());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &input) {
@@ -50,7 +50,7 @@ static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &inp
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
@@ -124,7 +124,7 @@ ScalarFunction MakeTypeFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

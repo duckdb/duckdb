@@ -75,7 +75,7 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (!func_expr.bind_info) {
 		// no bind info - return null
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<NextValLocalState>();
@@ -86,7 +86,7 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		// get the next value from the sequence
-		result_data[i] = OP::Operation(lstate.transaction, lstate.sequence);
+		result_data.WriteValue(OP::Operation(lstate.transaction, lstate.sequence));
 	}
 }
 

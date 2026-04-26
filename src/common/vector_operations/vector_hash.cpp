@@ -132,7 +132,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(idata);
 
 	// Hash the children into a temporary
-	auto &child = ListVector::GetEntry(input);
+	auto &child = ListVector::GetChildMutable(input);
 	const auto child_count = ListVector::GetListSize(input);
 
 	Vector child_hashes(LogicalType::HASH, child_count);
@@ -221,7 +221,7 @@ void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, i
 	input.ToUnifiedFormat(count, idata);
 
 	// Hash the children into a temporary
-	auto &child = ArrayVector::GetEntry(input);
+	auto &child = ArrayVector::GetChildMutable(input);
 	auto array_size = ArrayType::GetSize(input.GetType());
 
 	auto is_flat = input.GetVectorType() == VectorType::FLAT_VECTOR;

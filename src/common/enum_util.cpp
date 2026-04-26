@@ -61,6 +61,7 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/enums/quantile_enum.hpp"
 #include "duckdb/common/enums/relation_type.hpp"
+#include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/common/enums/set_type.hpp"
@@ -106,6 +107,7 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
@@ -170,6 +172,10 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
+#include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/simplified_token.hpp"
@@ -292,6 +298,24 @@ const char* EnumUtil::ToChars<AccessMode>(AccessMode value) {
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value) {
 	return static_cast<AccessMode>(StringUtil::StringToEnum(GetAccessModeValues(), 4, "AccessMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetAdaptiveFilterSourceValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AdaptiveFilterSource::INITIAL), "INITIAL" },
+		{ static_cast<uint32_t>(AdaptiveFilterSource::SEEDED), "SEEDED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AdaptiveFilterSource>(AdaptiveFilterSource value) {
+	return StringUtil::EnumToString(GetAdaptiveFilterSourceValues(), 2, "AdaptiveFilterSource", static_cast<uint32_t>(value));
+}
+
+template<>
+AdaptiveFilterSource EnumUtil::FromString<AdaptiveFilterSource>(const char *value) {
+	return static_cast<AdaptiveFilterSource>(StringUtil::StringToEnum(GetAdaptiveFilterSourceValues(), 2, "AdaptiveFilterSource", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAggregateCombineTypeValues() {
@@ -1349,7 +1373,7 @@ const StringUtil::EnumStringLiteral *GetCopyFunctionFlushBatchReasonValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE), "BATCH_SIZE" },
 		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES), "BATCH_SIZE_BYTES" },
-		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::LAST_BATCH), "LAST_BATCH" }
+		{ static_cast<uint32_t>(CopyFunctionFlushBatchReason::FORCED_FLUSH), "FORCED_FLUSH" }
 	};
 	return values;
 }
@@ -2712,6 +2736,25 @@ JoinType EnumUtil::FromString<JoinType>(const char *value) {
 	return static_cast<JoinType>(StringUtil::StringToEnum(GetJoinTypeValues(), 11, "JoinType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetKeywordCaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(KeywordCase::UPPER), "UPPER" },
+		{ static_cast<uint32_t>(KeywordCase::LOWER), "LOWER" },
+		{ static_cast<uint32_t>(KeywordCase::PRESERVE), "PRESERVE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<KeywordCase>(KeywordCase value) {
+	return StringUtil::EnumToString(GetKeywordCaseValues(), 3, "KeywordCase", static_cast<uint32_t>(value));
+}
+
+template<>
+KeywordCase EnumUtil::FromString<KeywordCase>(const char *value) {
+	return static_cast<KeywordCase>(StringUtil::StringToEnum(GetKeywordCaseValues(), 3, "KeywordCase", value));
+}
+
 const StringUtil::EnumStringLiteral *GetKeywordCategoryValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(KeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
@@ -3709,6 +3752,27 @@ OutputStream EnumUtil::FromString<OutputStream>(const char *value) {
 	return static_cast<OutputStream>(StringUtil::StringToEnum(GetOutputStreamValues(), 2, "OutputStream", value));
 }
 
+const StringUtil::EnumStringLiteral *GetPEGKeywordCategoryValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_NONE), "KEYWORD_NONE" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value) {
+	return StringUtil::EnumToString(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", static_cast<uint32_t>(value));
+}
+
+template<>
+PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value) {
+	return static_cast<PEGKeywordCategory>(StringUtil::StringToEnum(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", value));
+}
+
 const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ParseInfoType::ALTER_INFO), "ALTER_INFO" },
@@ -3740,6 +3804,35 @@ const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value) {
 template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value) {
 	return static_cast<ParseInfoType>(StringUtil::StringToEnum(GetParseInfoTypeValues(), 17, "ParseInfoType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetParseResultTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ParseResultType::LIST), "LIST" },
+		{ static_cast<uint32_t>(ParseResultType::OPTIONAL), "OPTIONAL" },
+		{ static_cast<uint32_t>(ParseResultType::REPEAT), "REPEAT" },
+		{ static_cast<uint32_t>(ParseResultType::CHOICE), "CHOICE" },
+		{ static_cast<uint32_t>(ParseResultType::EXPRESSION), "EXPRESSION" },
+		{ static_cast<uint32_t>(ParseResultType::IDENTIFIER), "IDENTIFIER" },
+		{ static_cast<uint32_t>(ParseResultType::KEYWORD), "KEYWORD" },
+		{ static_cast<uint32_t>(ParseResultType::OPERATOR), "OPERATOR" },
+		{ static_cast<uint32_t>(ParseResultType::STATEMENT), "STATEMENT" },
+		{ static_cast<uint32_t>(ParseResultType::EXTENSION), "EXTENSION" },
+		{ static_cast<uint32_t>(ParseResultType::NUMBER), "NUMBER" },
+		{ static_cast<uint32_t>(ParseResultType::STRING), "STRING" },
+		{ static_cast<uint32_t>(ParseResultType::INVALID), "INVALID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value) {
+	return StringUtil::EnumToString(GetParseResultTypeValues(), 13, "ParseResultType", static_cast<uint32_t>(value));
+}
+
+template<>
+ParseResultType EnumUtil::FromString<ParseResultType>(const char *value) {
+	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 13, "ParseResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {
@@ -4354,6 +4447,25 @@ const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value) {
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value) {
 	return static_cast<ResultModifierType>(StringUtil::StringToEnum(GetResultModifierTypeValues(), 4, "ResultModifierType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetRowGroupAppendModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RowGroupAppendMode::APPEND_TO_EXISTING), "APPEND_TO_EXISTING" },
+		{ static_cast<uint32_t>(RowGroupAppendMode::SUGGEST_NEW), "SUGGEST_NEW" },
+		{ static_cast<uint32_t>(RowGroupAppendMode::REQUIRE_NEW), "REQUIRE_NEW" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value) {
+	return StringUtil::EnumToString(GetRowGroupAppendModeValues(), 3, "RowGroupAppendMode", static_cast<uint32_t>(value));
+}
+
+template<>
+RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value) {
+	return static_cast<RowGroupAppendMode>(StringUtil::StringToEnum(GetRowGroupAppendModeValues(), 3, "RowGroupAppendMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSampleMethodValues() {
@@ -5036,6 +5148,36 @@ const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value) {
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value) {
 	return static_cast<SubqueryType>(StringUtil::StringToEnum(GetSubqueryTypeValues(), 5, "SubqueryType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSuggestionStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_KEYWORD), "SUGGEST_KEYWORD" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_CATALOG_NAME), "SUGGEST_CATALOG_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_SCHEMA_NAME), "SUGGEST_SCHEMA_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_TABLE_NAME), "SUGGEST_TABLE_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_TYPE_NAME), "SUGGEST_TYPE_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_COLUMN_NAME), "SUGGEST_COLUMN_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_FILE_NAME), "SUGGEST_FILE_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_DIRECTORY), "SUGGEST_DIRECTORY" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_VARIABLE), "SUGGEST_VARIABLE" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME), "SUGGEST_SCALAR_FUNCTION_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_TABLE_FUNCTION_NAME), "SUGGEST_TABLE_FUNCTION_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_PRAGMA_NAME), "SUGGEST_PRAGMA_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_SETTING_NAME), "SUGGEST_SETTING_NAME" },
+		{ static_cast<uint32_t>(SuggestionState::SUGGEST_RESERVED_VARIABLE), "SUGGEST_RESERVED_VARIABLE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value) {
+	return StringUtil::EnumToString(GetSuggestionStateValues(), 14, "SuggestionState", static_cast<uint32_t>(value));
+}
+
+template<>
+SuggestionState EnumUtil::FromString<SuggestionState>(const char *value) {
+	return static_cast<SuggestionState>(StringUtil::StringToEnum(GetSuggestionStateValues(), 14, "SuggestionState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTableColumnTypeValues() {

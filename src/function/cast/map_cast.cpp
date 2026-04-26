@@ -41,9 +41,9 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
 	auto val_data = FlatVector::GetData<string_t>(val_str);
-	auto &key_validity = FlatVector::ValidityMutable(key_str);
-	auto &val_validity = FlatVector::ValidityMutable(val_str);
-	auto &struct_validity = FlatVector::ValidityMutable(ListVector::GetEntry(varchar_map));
+	auto &key_validity = FlatVector::Validity(key_str);
+	auto &val_validity = FlatVector::Validity(val_str);
+	auto &struct_validity = FlatVector::Validity(ListVector::GetChild(varchar_map));
 
 	//! {key=value[, ]}
 	static constexpr const idx_t SEP_LENGTH = 2;
@@ -66,13 +66,13 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto value_write_func =
 	    value_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
 	unsafe_unique_array<bool> key_needs_quotes;
 	unsafe_unique_array<bool> value_needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -108,7 +108,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += NULL_LENGTH;
 			}
 		}
-		auto &result_str = result_data[i].EmptyString(string_length);
+		auto &result_str = result_data.WriteEmptyString(string_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 
@@ -172,7 +172,7 @@ static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParame
 			auto list_data = ConstantVector::GetData<list_entry_t>(result);
 			for (idx_t j = 0; j < list_data->length; j++) {
 				if (!key_validity.IsValid(list_data->offset + j)) {
-					ConstantVector::SetNull(result);
+					ConstantVector::SetNull(result, count_t(count));
 					break;
 				}
 			}

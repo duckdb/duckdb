@@ -185,7 +185,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -213,11 +213,11 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 		sel_length += length;
 
 		if (!clamp_result) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 		} else if (!step_vector) {
-			result_data[i] = OP::SliceValue(result, sliced, begin, end);
+			result_data.WriteValue(OP::SliceValue(result, sliced, begin, end));
 		} else {
-			result_data[i] = OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx);
+			result_data.WriteValue(OP::SliceValueWithSteps(result, sel, sliced, begin, end, step, sel_idx));
 		}
 	}
 	if (step_vector) {
@@ -236,7 +236,7 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
                   optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
-		result_child_vector = &ListVector::GetEntry(result);
+		result_child_vector = &ListVector::GetChildMutable(result);
 	}
 
 	SelectionVector sel;
@@ -258,7 +258,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
 
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 
@@ -316,7 +316,7 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
-	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
+	D_ASSERT(bound_function.GetArguments().size() == 3 || bound_function.GetArguments().size() == 4);
 
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::ARRAY: {
@@ -333,27 +333,27 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		// string slice returns a string
-		if (bound_function.arguments.size() == 4) {
+		if (bound_function.GetArguments().size() == 4) {
 			throw NotImplementedException(
 			    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
 			    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
 		}
 		if (arguments[0]->return_type.IsJSONType()) {
 			// This is needed to avoid producing invalid JSON
-			bound_function.arguments[0] = LogicalType::VARCHAR;
+			bound_function.GetArguments()[0] = LogicalType::VARCHAR;
 			bound_function.SetReturnType(LogicalType::VARCHAR);
 		} else {
 			bound_function.SetReturnType(arguments[0]->return_type);
 		}
 		for (idx_t i = 1; i < 3; i++) {
 			if (arguments[i]->return_type.id() != LogicalTypeId::LIST) {
-				bound_function.arguments[i] = LogicalType::BIGINT;
+				bound_function.GetArguments()[i] = LogicalType::BIGINT;
 			}
 		}
 		break;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		break;
 	default:
@@ -362,11 +362,11 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 
 	bool begin_is_empty = CheckIfParamIsEmpty(arguments[1]);
 	if (!begin_is_empty) {
-		bound_function.arguments[1] = LogicalType::BIGINT;
+		bound_function.GetArguments()[1] = LogicalType::BIGINT;
 	}
 	bool end_is_empty = CheckIfParamIsEmpty(arguments[2]);
 	if (!end_is_empty) {
-		bound_function.arguments[2] = LogicalType::BIGINT;
+		bound_function.GetArguments()[2] = LogicalType::BIGINT;
 	}
 
 	return make_uniq<ListSliceBindData>(bound_function.GetReturnType(), begin_is_empty, end_is_empty);
@@ -381,7 +381,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	fun.SetFallible();
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.arguments.push_back(LogicalType::BIGINT);
+	fun.GetArguments().push_back(LogicalType::BIGINT);
 	set.AddFunction(fun);
 	return set;
 }

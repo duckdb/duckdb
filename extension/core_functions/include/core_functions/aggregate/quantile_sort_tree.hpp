@@ -363,7 +363,7 @@ struct QuantileSortTree {
 		//	Thread safe and idempotent.
 		index_tree->Build();
 
-		//	Find the interpolated indicies within the frame
+		//	Find the interpolated indices within the frame
 		QuantileInterpolator<DISCRETE> interp(q, n, false);
 		const auto lo_data = SelectNth(frames, interp.FRN);
 		auto hi_data = lo_data;
@@ -393,7 +393,7 @@ struct QuantileSortTree {
 
 		ListVector::Reserve(list, lentry.offset + lentry.length);
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
-		auto &result = ListVector::GetEntry(list);
+		auto &result = ListVector::GetChildMutable(list);
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
 
 		using ID = QuantileIndirect<INPUT_TYPE>;

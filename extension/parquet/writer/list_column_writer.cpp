@@ -39,7 +39,7 @@ bool ListColumnWriter::HasAnalyze() {
 }
 void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
-	auto &list_child = ListVector::GetEntry(vector);
+	auto &list_child = ListVector::GetChildMutable(vector);
 	auto list_count = ListVector::GetListSize(vector);
 	GetChildWriter().Analyze(*state.child_state, &state_p, list_child, list_count);
 }
@@ -135,7 +135,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 	}
 	state.parent_index += vcount;
 
-	auto &list_child = ListVector::GetEntry(vector);
+	auto &list_child = ListVector::GetChildMutable(vector);
 	Vector child_list(Vector::Ref(list_child));
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	// The elements of a single list should not span multiple Parquet pages
@@ -151,7 +151,7 @@ void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 
-	auto &list_child = ListVector::GetEntry(vector);
+	auto &list_child = ListVector::GetChildMutable(vector);
 	Vector child_list(Vector::Ref(list_child));
 	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
 	GetChildWriter().Write(*state.child_state, child_list, child_length);

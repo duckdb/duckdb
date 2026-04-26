@@ -191,7 +191,7 @@ duckdb_vector duckdb_list_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ListVector::GetChildMutable(*v));
 }
 
 idx_t duckdb_list_vector_get_size(duckdb_vector vector) {
@@ -233,7 +233,7 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 		return nullptr;
 	}
 	auto v = reinterpret_cast<duckdb::Vector *>(vector);
-	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
+	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetChildMutable(*v));
 }
 
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
@@ -300,7 +300,7 @@ void duckdb_vector_copy_sel(duckdb_vector src, duckdb_vector dst, duckdb_selecti
 void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
 	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
 	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
-	dvector->Reference(*dvalue);
+	dvector->Reference(*dvalue, duckdb::count_t(STANDARD_VECTOR_SIZE));
 }
 
 void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector) {

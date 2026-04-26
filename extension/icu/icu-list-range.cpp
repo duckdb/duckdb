@@ -146,32 +146,31 @@ struct ICUListRange : public ICUDateFunc {
 		}
 		auto result_data = FlatVector::Writer<list_entry_t>(result, args_size);
 		int64_t total_size = 0;
+		vector<int64_t> list_lengths(args_size, 0);
 		for (idx_t i = 0; i < args_size; i++) {
 			if (!info.RowIsValid(i)) {
-				result_data.SetInvalid(i);
-				result_data[i].offset = total_size;
-				result_data[i].length = 0;
+				result_data.WriteNull(list_entry_t(NumericCast<uint64_t>(total_size), 0));
 			} else {
-				result_data[i].offset = total_size;
-				result_data[i].length = info.ListLength(i, calendar);
-				total_size += result_data[i].length;
+				const auto length = info.ListLength(i, calendar);
+				list_lengths[i] = length;
+				result_data.WriteValue(list_entry_t(NumericCast<uint64_t>(total_size), NumericCast<uint64_t>(length)));
+				total_size += length;
 			}
 		}
 
 		// now construct the child vector of the list
 		ListVector::Reserve(result, total_size);
-		auto range_data = FlatVector::Writer<timestamp_t>(ListVector::GetEntry(result), total_size);
-		idx_t total_idx = 0;
+		auto range_data = FlatVector::Writer<timestamp_t>(ListVector::GetChildMutable(result), total_size);
 		for (idx_t i = 0; i < args_size; i++) {
 			timestamp_t start_value = info.StartListValue(i);
 			interval_t increment = info.ListIncrementValue(i);
 
 			timestamp_t range_value = start_value;
-			for (idx_t range_idx = 0; range_idx < result_data[i].length; range_idx++) {
+			for (idx_t range_idx = 0; range_idx < NumericCast<idx_t>(list_lengths[i]); range_idx++) {
 				if (range_idx > 0) {
 					info.Increment(range_value, increment, calendar);
 				}
-				range_data[total_idx++] = range_value;
+				range_data.WriteValue(range_value);
 			}
 		}
 

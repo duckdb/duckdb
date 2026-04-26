@@ -2,12 +2,7 @@
 # description: Test AFTER DELETE trigger firing via DML CTE expansion
 # group: [trigger]
 
-require autocomplete
-
 require noforcestorage
-
-statement ok
-CALL enable_peg_parser();
 
 # Basic: FOR EACH STATEMENT trigger fires once after DELETE
 statement ok

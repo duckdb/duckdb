@@ -82,12 +82,12 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	UnifiedVectorFormat selection_lists;
 	selection_list.ToUnifiedFormat(count, selection_lists);
 	auto selection_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(selection_lists);
-	auto &selection_entry = ListVector::GetEntry(selection_list);
+	auto &selection_entry = ListVector::GetChild(selection_list);
 
 	UnifiedVectorFormat input_list;
 	list.ToUnifiedFormat(count, input_list);
 	auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(input_list);
-	auto &input_entry = ListVector::GetEntry(list);
+	auto &input_entry = ListVector::GetChild(list);
 	auto &input_validity = FlatVector::Validity(input_entry);
 
 	idx_t result_length = 0;
@@ -104,7 +104,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 	ValidityMask entry_validity_mask = ValidityMask(result_length);
 
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
-	auto &result_entry = ListVector::GetEntry(result);
+	auto &result_entry = ListVector::GetChildMutable(result);
 
 	idx_t offset = 0;
 	for (idx_t j = 0; j < count; j++) {
@@ -116,7 +116,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 			selection_len = selection_lists_data[selection_list_idx].length;
 			selection_offset = selection_lists_data[selection_list_idx].offset;
 		} else {
-			result_data.SetInvalid(j);
+			result_data.WriteNull();
 			continue;
 		}
 		// Get length and offset of input list for current output row
@@ -127,10 +127,10 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 			input_length = input_lists_data[input_list_idx].length;
 			input_offset = input_lists_data[input_list_idx].offset;
 		} else {
-			result_data.SetInvalid(j);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[j].offset = offset;
+		const idx_t entry_offset = offset;
 		// Set all selected values in the result
 		for (idx_t child_idx = 0; child_idx < selection_len; child_idx++) {
 			if (selection_entry.GetValue(selection_offset + child_idx).IsNull()) {
@@ -139,7 +139,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 			OP::SetSelectionVector(result_selection_vec, entry_validity_mask, input_validity, selection_entry,
 			                       child_idx, offset, selection_offset, input_offset, input_length);
 		}
-		result_data[j].length = offset - result_data[j].offset;
+		result_data.WriteValue(list_entry_t(entry_offset, offset - entry_offset));
 	}
 	ListVector::SetListSize(result, offset);
 

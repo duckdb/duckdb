@@ -36,7 +36,7 @@ unique_ptr<FunctionData> CurrentQueryIdBind(BindScalarFunctionInput &input) {
 void CurrentQueryIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<CurrentQueryIdData>();
-	result.Reference(info.query_id);
+	result.Reference(info.query_id, count_t(args.size()));
 }
 
 } // namespace

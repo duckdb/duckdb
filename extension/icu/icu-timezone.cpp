@@ -56,6 +56,16 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContex
 static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUTimeZoneData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+	// abbrev, VARCHAR
+	auto &abbrev = output.data[1];
+	// utc_offset, INTERVAL
+	auto &utc_offset = output.data[2];
+	// is_dst, BOOLEAN
+	auto &is_dst = output.data[3];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		UErrorCode status = U_ZERO_ERROR;
 		auto long_id = data.tzs->snext(status);
@@ -66,7 +76,6 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		//	The LONG name is the one we looked up
 		std::string utf8;
 		long_id->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
 
 		//	We don't have the zone tree for determining abbreviated names,
 		//	so the SHORT name is the shortest, lexicographically first equivalent TZ without a slash.
@@ -78,13 +87,12 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			if (eid.indexOf(char16_t('/')) >= 0) {
 				continue;
 			}
-			utf8.clear();
-			eid.toUTF8String(utf8);
-			if (utf8.size() < short_id.size() || (utf8.size() == short_id.size() && utf8 < short_id)) {
-				short_id = utf8;
+			std::string eid_utf8;
+			eid.toUTF8String(eid_utf8);
+			if (eid_utf8.size() < short_id.size() || (eid_utf8.size() == short_id.size() && eid_utf8 < short_id)) {
+				short_id = eid_utf8;
 			}
 		}
-		output.SetValue(1, index, Value(short_id));
 
 		duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
@@ -94,11 +102,13 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 			break;
 		}
 
+		name_col.Append(Value(utf8));
+		abbrev.Append(Value(short_id));
 		//	What PG reports is the total offset for today,
 		//	which is the ICU total offset (i.e., "raw") plus the DST offset.
 		raw_offset_ms += dst_offset_ms;
-		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
-		output.SetValue(3, index, Value(dst_offset_ms != 0));
+		utc_offset.Append(Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
+		is_dst.Append(Value::BOOLEAN(dst_offset_ms != 0));
 		++index;
 	}
 	output.SetCardinality(index);
@@ -237,32 +247,66 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 		return naive;
 	}
 
+	struct CastTimestampUsToUs {
+		template <class SRC, class DST>
+		static inline DST Operation(SRC input) {
+			// no-op
+			return input;
+		}
+	};
+
+	template <class OP, class TO = timestamp_t>
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, timestamp_t>(
-		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
+		UnaryExecutor::Execute<timestamp_t, TO>(source, result, count, [&](timestamp_t input) {
+			return OP::template Operation<timestamp_t, TO>(Operation(calendar.get(), input));
+		});
 		return true;
 	}
 
 	static BoundCastInfo BindCastToNaive(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 		if (!input.context) {
-			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
+			throw InternalException("Missing context for TIMESTAMPTZ to %s cast.", LogicalTypeIdToString(target.id()));
 		}
 		if (Settings::Get<DisableTimestamptzCastsSetting>(*input.context)) {
-			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to TIMESTAMP without an explicit time zone "
-			                      "has been disabled  - use \"AT TIME ZONE ...\"");
+			throw BinderException("Casting from TIMESTAMP WITH TIME ZONE to %s without an explicit time zone "
+			                      "has been disabled  - use \"AT TIME ZONE ...\"",
+			                      LogicalTypeIdToString(target.id()));
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+		switch (target.id()) {
+		case LogicalTypeId::TIMESTAMP:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToUs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_MS:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToMs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_NS:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToNs>, std::move(cast_data));
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return BoundCastInfo(CastToNaive<CastTimestampUsToSec>, std::move(cast_data));
+		case LogicalTypeId::DATE:
+			return BoundCastInfo(CastToNaive<Cast, date_t>, std::move(cast_data));
+		default:
+			throw InternalException("Type %s not handled in BindCastToNaive", LogicalTypeIdToString(source.id()));
+		}
+	}
 
-		return BoundCastInfo(CastToNaive, std::move(cast_data));
+	static void AddCast(CastFunctionSet &casts, const LogicalType &source, const LogicalType &target) {
+		const auto implicit_cost = CastRules::ImplicitCast(source, target);
+		casts.RegisterCastFunction(source, target, BindCastToNaive, implicit_cost);
 	}
 
 	static void AddCasts(ExtensionLoader &loader) {
-		loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, BindCastToNaive);
+		auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+		auto &casts = config.GetCastFunctions();
+
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_MS);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_NS);
+		AddCast(casts, LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_S);
 	}
 };
 

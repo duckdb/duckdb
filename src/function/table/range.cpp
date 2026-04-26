@@ -355,7 +355,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		idx_t size = 0;
-		auto result_data = FlatVector::Writer<timestamp_t>(output.data[0], STANDARD_VECTOR_SIZE);
+		auto result_data = FlatVector::ScatterWriter<timestamp_t>(output.data[0]);
 		while (true) {
 			if (state.Finished(state.current_state)) {
 				break;
@@ -363,7 +363,8 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			if (size >= STANDARD_VECTOR_SIZE) {
 				break;
 			}
-			result_data[size++] = state.current_state;
+			result_data[size] = state.current_state;
+			size++;
 			state.current_state =
 			    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, state.increment);
 		}
@@ -389,10 +390,10 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);
 	// two arguments range: (start, end) - implicit increment = 1
-	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
 	range.AddFunction(range_function);
 	// three arguments range: (start, end, increment)
-	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	range.AddFunction(range_function);
 	TableFunction range_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL}, nullptr,
 	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
@@ -404,11 +405,11 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet generate_series("generate_series");
 	range_function.bind = RangeFunctionBind<true>;
 	range_function.in_out_function = RangeFunction<true>;
-	range_function.arguments = {LogicalType::BIGINT};
+	range_function.GetArguments() = {LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
-	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
-	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
+	range_function.GetArguments() = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);

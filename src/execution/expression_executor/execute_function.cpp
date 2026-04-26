@@ -218,7 +218,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto &arguments = state->intermediate_chunk;
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
-	if (expr.function.stability == FunctionStability::VOLATILE) {
+	if (expr.function.GetStability() == FunctionStability::VOLATILE) {
 		// we cannot optimize away constant vectors for volatile functions
 		all_constant = false;
 	}
@@ -231,7 +231,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 				all_constant = false;
 			} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
 				// constant NULL input: result is NULL
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 				return;
 			}
 		}

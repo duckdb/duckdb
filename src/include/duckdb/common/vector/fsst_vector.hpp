@@ -14,7 +14,7 @@ namespace duckdb {
 
 class VectorFSSTStringBuffer : public VectorStringBuffer {
 public:
-	explicit VectorFSSTStringBuffer(idx_t capacity);
+	explicit VectorFSSTStringBuffer(capacity_t capacity);
 
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
@@ -37,8 +37,11 @@ public:
 
 public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+
+protected:
+	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                              idx_t count) const override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;

@@ -6,12 +6,12 @@
 namespace duckdb {
 
 Vector &MapVector::GetKeys(Vector &vector) {
-	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
+	auto &entries = StructVector::GetEntries(ListVector::GetChildMutable(vector));
 	D_ASSERT(entries.size() == 2);
 	return entries[0];
 }
 Vector &MapVector::GetValues(Vector &vector) {
-	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
+	auto &entries = StructVector::GetEntries(ListVector::GetChildMutable(vector));
 	D_ASSERT(entries.size() == 2);
 	return entries[1];
 }

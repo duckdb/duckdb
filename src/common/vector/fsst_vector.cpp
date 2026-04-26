@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-VectorFSSTStringBuffer::VectorFSSTStringBuffer(idx_t capacity) : VectorStringBuffer(capacity) {
+VectorFSSTStringBuffer::VectorFSSTStringBuffer(capacity_t capacity) : VectorStringBuffer(capacity) {
 	buffer_type = VectorBufferType::FSST_BUFFER;
 	vector_type = VectorType::FSST_VECTOR;
 }
@@ -25,7 +25,6 @@ Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) con
 	}
 	auto str_compressed = reinterpret_cast<const string_t *>(data_ptr)[index];
 	auto decoder = GetDecoder();
-	auto &decompress_buffer = GetDecompressBuffer();
 	auto string_val =
 	    FSSTPrimitives::DecompressValue(decoder, str_compressed.GetData(), str_compressed.GetSize(), decompress_buffer);
 	switch (type.id()) {
@@ -38,9 +37,9 @@ Value VectorFSSTStringBuffer::GetValue(const LogicalType &type, idx_t index) con
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type, const SelectionVector &sel,
-                                                         idx_t count) const {
-	auto result = make_buffer<VectorStringBuffer>(count);
+buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::FlattenSliceInternal(const LogicalType &type,
+                                                                      const SelectionVector &sel, idx_t count) const {
+	auto result = make_buffer<VectorStringBuffer>(capacity_t(count));
 
 	auto fsst_data = reinterpret_cast<const string_t *>(data_ptr);
 	auto result_data = reinterpret_cast<string_t *>(result->GetData());
@@ -64,6 +63,7 @@ buffer_ptr<VectorBuffer> VectorFSSTStringBuffer::Flatten(const LogicalType &type
 			result_data[target_idx] = string_t(nullptr, 0);
 		}
 	}
+	result->SetVectorSize(count);
 	return result;
 }
 
@@ -105,7 +105,7 @@ vector<unsigned char> &FSSTVector::GetDecompressBuffer(const Vector &vector) {
 
 void FSSTVector::Create(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder, const idx_t string_block_limit,
                         idx_t capacity) {
-	vector.SetBuffer(make_buffer<VectorFSSTStringBuffer>(capacity));
+	vector.SetBuffer(make_buffer<VectorFSSTStringBuffer>(capacity_t(capacity)));
 	auto &fsst_string_buffer = vector.BufferMutable().Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder, string_block_limit);
 }

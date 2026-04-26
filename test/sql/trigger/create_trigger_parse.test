@@ -2,12 +2,8 @@
 # description: Test parsing of CREATE TRIGGER statements
 # group: [trigger]
 
-require autocomplete
-
 require noforcestorage
 
-statement ok
-call enable_peg_parser();
 
 # Parsing succeeds - bind fails because tables do not exist
 

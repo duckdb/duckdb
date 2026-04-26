@@ -23,6 +23,7 @@
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -102,12 +103,16 @@ struct ParquetScanFilter {
 };
 
 struct ParquetReaderScanState {
+public:
+	ColumnReader &GetColumnReader(idx_t i);
+
+public:
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
 	idx_t offset_in_group;
 	idx_t group_offset;
 	unique_ptr<CachingFileHandle> file_handle;
-	unique_ptr<ColumnReader> root_reader;
+	vector<unique_ptr<ColumnReader>> column_readers;
 	duckdb_base_std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
 	bool finished;
@@ -119,8 +124,8 @@ struct ParquetReaderScanState {
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
-	//! Adaptive filter
-	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Per-thread adaptive filter cache
+	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
 
@@ -273,8 +278,7 @@ private:
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
 	                                         idx_t &next_file_idx, ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReader(ClientContext &context) const;
-	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
+	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const ColumnIndex &index,
 	                                               const ParquetColumnSchema &schema) const;
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);

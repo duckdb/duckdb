@@ -1,13 +1,17 @@
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
+#include "duckdb/function/scalar/struct_utils.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/perfect_hash_join_filter.hpp"
@@ -261,7 +265,7 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(0);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			global_child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -327,7 +331,7 @@ MapColumnMapComponent(ClientContext &context,
 	if (!selected_children.empty()) {
 		auto entry = selected_children.find(component_idx);
 		if (entry != selected_children.end()) {
-			// the column is relevent - set the child index
+			// the column is relevant - set the child index
 			child_index = entry->second;
 		} else {
 			// not relevant - ignore the column
@@ -459,7 +463,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		if (!selected_children.empty()) {
 			auto entry = selected_children.find(i);
 			if (entry != selected_children.end()) {
-				// the column is relevent - set the child index
+				// the column is relevant - set the child index
 				global_child_index = entry->second;
 			} else {
 				// not relevant - ignore the column
@@ -574,10 +578,12 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
                                               bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx.GetIndex());
-	if (!global_column.type.IsNested() ||
-	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
-	    is_trivially_mappable) {
-		// not a struct - potentially add a cast
+	bool can_use_remap_struct =
+	    global_column.type.IsNested() &&
+	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
+	    !is_trivially_mappable && local_column.type.IsNested();
+	if (!can_use_remap_struct) {
+		// use the cast path unless we actually need struct remapping and both source/target sides are nested
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}
@@ -596,7 +602,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 	auto remap_fun = RemapStructFun::GetFunction();
 	auto bind_data = remap_fun.Bind(context, children);
 	;
-	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.arguments[0]);
+	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.GetArguments()[0]);
 	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
 	                                          std::move(bind_data));
 }
@@ -772,32 +778,15 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 	}
 }
 
-bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, const Value &constant) {
+bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
+	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter =
+		    ExpressionFilter::GetExpressionFilter(filter, "MultiFileColumnMapper::EvaluateFilterAgainstConstant");
+		return expr_filter.EvaluateWithConstant(context, constant);
+	}
 	const auto type = filter.filter_type;
 
 	switch (type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		if (constant.IsNull()) {
-			return false;
-		}
-		return constant_filter.Compare(constant);
-	}
-	case TableFilterType::IS_NULL: {
-		return constant.IsNull();
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return !constant.IsNull();
-	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		for (auto &val : in_filter.values) {
-			if (!constant.IsNull() && val == constant) {
-				return true;
-			}
-		}
-		return false;
-	}
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
 		for (auto &it : or_filter.child_filters) {
@@ -817,33 +806,6 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 		}
 		return true;
 	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		auto &child_filter = struct_filter.child_filter;
-
-		if (constant.IsNull()) {
-			// NULL struct - filter cannot match (NULL propagation)
-			return false;
-		}
-		if (constant.type().id() != LogicalTypeId::STRUCT) {
-			throw InternalException(
-			    "Constant for this column is not of type struct, but used in a STRUCT_EXTRACT TableFilter");
-		}
-		auto &struct_fields = StructValue::GetChildren(constant);
-		auto field_index = struct_filter.child_idx;
-		if (field_index >= struct_fields.size()) {
-			throw InternalException("STRUCT_EXTRACT looks for child_idx %d, but constant only has %d children",
-			                        field_index, struct_fields.size());
-		}
-		auto &field_name = StructType::GetChildName(constant.type(), field_index);
-		if (!StringUtil::CIEquals(field_name, struct_filter.child_name)) {
-			throw InternalException("STRUCT_EXTRACT looks for a child with name '%s' at index %d, but constant has a "
-			                        "field with '%s' as the name for that index",
-			                        struct_filter.child_name, field_index, field_name);
-		}
-		auto &child_constant = struct_fields[field_index];
-		return EvaluateFilterAgainstConstant(*child_filter, child_constant);
-	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = filter.Cast<OptionalFilter>();
 		if (optional_filter.child_filter) {
@@ -862,15 +824,12 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(TableFilter &filter, c
 			//! Not initialized
 			return true;
 		}
-		if (!dynamic_filter.filter_data->filter) {
-			//! No filter present
-			return true;
+		if (constant.IsNull()) {
+			return false;
 		}
-		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return expr_filter.EvaluateWithConstant(context, constant);
+		auto column = make_uniq<BoundReferenceExpression>(constant.type(), 0ULL);
+		auto expression = dynamic_filter.filter_data->ToExpression(*column);
+		return ExpressionFilter(std::move(expression)).EvaluateWithConstant(context, constant);
 	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bloom_filter = filter.Cast<BFTableFilter>();
@@ -934,8 +893,160 @@ MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
 	return ReaderInitializeType::INITIALIZED;
 }
 
+static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type) {
+	return make_uniq<BoundReferenceExpression>(type, 0ULL);
+}
+
+static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr,
+                                                            const LogicalType &source_type, idx_t child_idx) {
+	auto &child_type = StructType::GetChildType(source_type, child_idx);
+	vector<unique_ptr<Expression>> arguments;
+	arguments.push_back(std::move(source_expr));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(static_cast<int64_t>(child_idx + 1))));
+	return make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
+	                                          StructExtractAtFun::GetBindData(child_idx));
+}
+
+static bool TryCastConstant(Value &constant, const LogicalType &target_type) {
+	if (!StatisticsPropagator::CanPropagateCast(constant.type(), target_type)) {
+		return false;
+	}
+	return constant.DefaultTryCastAs(target_type);
+}
+
+struct RewrittenMappedExpression {
+	unique_ptr<Expression> expr;
+	const MultiFileIndexMapping *mapping = nullptr;
+	const LogicalType *type = nullptr;
+};
+
+static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &expr,
+                                                              const MultiFileIndexMapping &mapping,
+                                                              const LogicalType &target_type) {
+	RewrittenMappedExpression result;
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_REF:
+		result.expr = CreateReferenceExpression(target_type);
+		result.mapping = &mapping;
+		result.type = &target_type;
+		return result;
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		idx_t child_idx;
+		if (!TryGetStructExtractChildIndex(func, child_idx)) {
+			return result;
+		}
+		auto child_result = RewriteMappedValueExpression(*func.children[0], mapping, target_type);
+		if (!child_result.expr || !child_result.mapping || !child_result.type ||
+		    child_result.type->id() != LogicalTypeId::STRUCT) {
+			return result;
+		}
+		auto entry = child_result.mapping->child_mapping.find(MultiFileGlobalIndex(child_idx));
+		if (entry == child_result.mapping->child_mapping.end()) {
+			return result;
+		}
+		auto &local_mapping = *entry->second;
+		auto local_child_idx = local_mapping.index.GetIndex();
+		result.expr = CreateStructExtractExpression(std::move(child_result.expr), *child_result.type, local_child_idx);
+		result.mapping = &local_mapping;
+		result.type = &StructType::GetChildType(*child_result.type, local_child_idx);
+		return result;
+	}
+	default:
+		return result;
+	}
+}
+
+static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, const MultiFileIndexMapping &mapping,
+                                                      const LogicalType &target_type) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COMPARISON: {
+		auto &comparison = expr.Cast<BoundComparisonExpression>();
+		if (comparison.right->type != ExpressionType::VALUE_CONSTANT) {
+			return nullptr;
+		}
+		auto lhs = RewriteMappedValueExpression(*comparison.left, mapping, target_type);
+		if (!lhs.expr || !lhs.type) {
+			return nullptr;
+		}
+		auto constant = comparison.right->Cast<BoundConstantExpression>().value;
+		if (!TryCastConstant(constant, *lhs.type)) {
+			return nullptr;
+		}
+		return make_uniq<BoundComparisonExpression>(comparison.type, std::move(lhs.expr),
+		                                            make_uniq<BoundConstantExpression>(std::move(constant)));
+	}
+	case ExpressionClass::BOUND_CONJUNCTION: {
+		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
+		auto result = make_uniq<BoundConjunctionExpression>(conjunction.type);
+		for (auto &child : conjunction.children) {
+			auto rewritten_child = TryCastFilterExpression(*child, mapping, target_type);
+			if (!rewritten_child) {
+				return nullptr;
+			}
+			result->children.push_back(std::move(rewritten_child));
+		}
+		return std::move(result);
+	}
+	case ExpressionClass::BOUND_OPERATOR: {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		switch (op.type) {
+		case ExpressionType::OPERATOR_IS_NULL:
+		case ExpressionType::OPERATOR_IS_NOT_NULL: {
+			if (op.children.size() != 1) {
+				return nullptr;
+			}
+			auto child = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			if (!child.expr) {
+				return nullptr;
+			}
+			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
+			result->children.push_back(std::move(child.expr));
+			return std::move(result);
+		}
+		case ExpressionType::COMPARE_IN: {
+			if (op.children.empty()) {
+				return nullptr;
+			}
+			auto lhs = RewriteMappedValueExpression(*op.children[0], mapping, target_type);
+			if (!lhs.expr || !lhs.type) {
+				return nullptr;
+			}
+			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
+			result->children.push_back(std::move(lhs.expr));
+			for (idx_t i = 1; i < op.children.size(); i++) {
+				if (op.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+					return nullptr;
+				}
+				auto constant = op.children[i]->Cast<BoundConstantExpression>().value;
+				if (!TryCastConstant(constant, *lhs.type)) {
+					return nullptr;
+				}
+				result->children.push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
+			}
+			return std::move(result);
+		}
+		default:
+			return nullptr;
+		}
+	}
+	case ExpressionClass::BOUND_CONSTANT:
+		return expr.Copy();
+	default:
+		return nullptr;
+	}
+}
+
 static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filter, MultiFileIndexMapping &mapping,
                                                   const LogicalType &target_type) {
+	if (global_filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(global_filter, "TryCastTableFilter");
+		auto rewritten_expr = TryCastFilterExpression(*expr_filter.expr, mapping, target_type);
+		if (!rewritten_expr) {
+			return nullptr;
+		}
+		return make_uniq<ExpressionFilter>(std::move(rewritten_expr));
+	}
 	auto type = global_filter.filter_type;
 
 	switch (type) {
@@ -963,27 +1074,6 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		}
 		return std::move(res);
 	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = global_filter.Cast<StructFilter>();
-		auto &child_filter = struct_filter.child_filter;
-
-		// find the corresponding local entry
-		auto entry = mapping.child_mapping.find(MultiFileGlobalIndex(struct_filter.child_idx));
-		if (entry == mapping.child_mapping.end()) {
-			// this is constant for this file - abort
-			// FIXME: should be handled before
-			return nullptr;
-		}
-		auto &struct_mapping = *entry->second;
-		auto &struct_type = StructType::GetChildTypes(target_type);
-		auto &child_type = struct_type[struct_mapping.index].second;
-		auto new_child_filter = TryCastTableFilter(*child_filter, struct_mapping, child_type);
-		if (!new_child_filter) {
-			return nullptr;
-		}
-		auto child_name = struct_type[struct_mapping.index].first;
-		return make_uniq<StructFilter>(struct_mapping.index, std::move(child_name), std::move(new_child_filter));
-	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = global_filter.Cast<OptionalFilter>();
 		auto child_result = TryCastTableFilter(*optional_filter.child_filter, mapping, target_type);
@@ -1003,45 +1093,20 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		if (!dynamic_filter.filter_data->initialized) {
 			return nullptr;
 		}
-		if (!dynamic_filter.filter_data->filter) {
-			return nullptr;
-		}
 		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
-		return TryCastTableFilter(*dynamic_filter.filter_data->filter, mapping, target_type);
-	}
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-		// these filters can just be copied as they don't depend on type
-		return global_filter.Copy();
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = global_filter.Cast<ConstantFilter>();
-		auto new_constant = constant_filter.constant;
-		if (!StatisticsPropagator::CanPropagateCast(constant_filter.constant.type(), target_type)) {
+		auto new_constant = dynamic_filter.filter_data->constant;
+		if (!StatisticsPropagator::CanPropagateCast(new_constant.type(), target_type)) {
 			// type cannot be converted - abort
 			return nullptr;
 		}
 		if (!new_constant.DefaultTryCastAs(target_type)) {
 			return nullptr;
 		}
-		return make_uniq<ConstantFilter>(constant_filter.comparison_type, std::move(new_constant));
+		auto lhs = make_uniq<BoundReferenceExpression>(target_type, 0ULL);
+		auto rhs = make_uniq<BoundConstantExpression>(std::move(new_constant));
+		return make_uniq<ExpressionFilter>(make_uniq<BoundComparisonExpression>(
+		    dynamic_filter.filter_data->comparison_type, std::move(lhs), std::move(rhs)));
 	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = global_filter.Cast<InFilter>();
-		auto in_list = in_filter.values;
-		if (!in_list.empty() && !StatisticsPropagator::CanPropagateCast(in_list[0].type(), target_type)) {
-			// type cannot be converted - abort
-			return nullptr;
-		}
-		for (auto &val : in_list) {
-			if (!val.DefaultTryCastAs(target_type)) {
-				return nullptr;
-			}
-		}
-		return make_uniq<InFilter>(std::move(in_list));
-	}
-	case TableFilterType::EXPRESSION_FILTER:
-		// unsupported
-		return nullptr;
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
 		                              EnumUtil::ToString(type));
@@ -1084,6 +1149,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto &reader = *reader_data.reader;
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
+	map<idx_t, MultiFileGlobalIndex> local_to_global;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get();
@@ -1129,6 +1195,12 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
+		local_to_global.emplace(local_id, global_index);
+	}
+	reader.filter_global_indices.clear();
+	reader.filter_global_indices.reserve(local_to_global.size());
+	for (auto &p : local_to_global) {
+		reader.filter_global_indices.push_back(p.second);
 	}
 	return result;
 }

@@ -25,7 +25,7 @@ void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::Writer<T>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = ldata[i];
+		result_data.WriteValue(ldata[i]);
 	}
 }
 

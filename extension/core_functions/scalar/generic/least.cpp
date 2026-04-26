@@ -130,7 +130,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 	}
 
-	auto result_data = FlatVector::Writer<T>(result_vector, input.size());
+	auto result_data = FlatVector::ScatterWriter<T>(result_vector);
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -228,8 +228,8 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	bound_function.arguments[0] = child_type;
-	bound_function.varargs = child_type;
+	bound_function.GetArguments()[0] = child_type;
+	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(child_type);
 	return nullptr;
 }

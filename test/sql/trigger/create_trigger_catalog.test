@@ -2,12 +2,8 @@
 # description: Test CREATE TRIGGER stores in catalog and duckdb_triggers()
 # group: [trigger]
 
-require autocomplete
-
 require noforcestorage
 
-statement ok
-call enable_peg_parser();
 
 # Create table for trigger
 statement ok

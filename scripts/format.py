@@ -20,6 +20,11 @@ from python_helpers import open_utf8
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from format_test_benchmark import format_file_content
 
+# Ensure binaries installed into the current Python environment are discoverable.
+# This is required when invoking this script via an explicit venv python path.
+python_bin_dir = os.path.dirname(os.path.abspath(sys.executable))
+os.environ['PATH'] = python_bin_dir + os.pathsep + os.environ.get('PATH', '')
+
 try:
     ver = subprocess.check_output(('black', '--version'), text=True)
     if int(ver.split(' ')[1].split('.')[0]) < 24:
@@ -134,6 +139,7 @@ parser.add_argument('--check', action='store_true', help='Only print differences
 parser.add_argument('--fix', action='store_true', help='Fix the files')
 parser.add_argument('-a', '--all', action='store_true', help='Format all files')
 parser.add_argument('-d', '--directories', nargs='*', default=[], help='Format specified directories')
+parser.add_argument('-C', '--workdir', type=str, help='Change work directory')
 parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
 parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
 parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
@@ -143,6 +149,10 @@ revision = args.revision
 if args.check and args.fix:
     parser.print_usage()
     exit(1)
+
+if args.workdir:
+    os.chdir(args.workdir)
+
 check_only = not args.fix
 confirm = not args.noconfirm
 silent = args.silent
@@ -150,6 +160,30 @@ force = args.force
 format_all = args.all
 if args.directories:
     formatted_directories = args.directories
+
+
+def get_typos_targets():
+    if format_all:
+        return [path for path in formatted_directories if os.path.exists(path)]
+    return sorted(set([f.full_path for f in files if os.path.exists(f.full_path)]))
+
+
+def run_typos_check():
+    typos_targets = get_typos_targets()
+    if not typos_targets:
+        return 0
+    # Ignore typos check for non-duckdb code.
+    if not os.path.isfile('scripts/typos.toml'):
+        return 0
+    typos_command = ['typos', '--force-exclude']
+    if not check_only:
+        typos_command.append('-w')
+    typos_command += ['-c', 'scripts/typos.toml'] + typos_targets
+    try:
+        return subprocess.call(typos_command)
+    except FileNotFoundError:
+        print('typos not found. Install it with "brew install typos-cli"')
+        return 1
 
 
 def file_is_ignored(full_path):
@@ -214,7 +248,7 @@ elif os.path.isdir(revision):
     for fname in changed_files:
         print(fname)
 elif not format_all:
-    if revision == 'main':
+    if revision == 'main' and os.environ.get('DUCKDB_FORMAT_SKIP_FETCH') != '1':
         # fetch new changes when comparing to the master
         os.system("git fetch origin main:main")
     print(action + " since branch or revision: " + revision)
@@ -430,6 +464,8 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.shutdown(wait=True, cancel_futures=True)
         raise
 
+typos_status = run_typos_check()
+
 if check_only:
     if len(difference_files) > 0:
         print("")
@@ -440,6 +476,10 @@ if check_only:
             print("- " + fname)
         print('Run "make format-fix" to fix these differences automatically')
         exit(1)
+    if typos_status != 0:
+        exit(1)
     else:
         print("Passed format-check")
         exit(0)
+elif typos_status != 0:
+    exit(1)

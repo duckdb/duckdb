@@ -146,7 +146,7 @@ bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, LambdaFun
 	}
 
 	// create the index vector, where the index is that of the current node.
-	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)), count_t(reduced_row_idx));
 
 	// slice the left and right slice
 	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
@@ -334,7 +334,7 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.arguments.push_back(LogicalType::ANY);
+	fun.GetArguments().push_back(LogicalType::ANY);
 	set.AddFunction(fun);
 	return set;
 }

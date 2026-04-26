@@ -473,7 +473,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedObject(Vector &me
 vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &metadata, Vector &value,
                                                                      Vector &typed_value, idx_t offset, idx_t length,
                                                                      idx_t total_size) {
-	auto &child = ListVector::GetEntry(typed_value);
+	auto &child = ListVector::GetChildMutable(typed_value);
 	auto list_size = ListVector::GetListSize(typed_value);
 
 	//! 'value'
@@ -499,7 +499,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 		for (idx_t i = 0; i < length; i++) {
 			auto typed_index = list_format.sel->get_index(i + offset);
 			auto entry = list_data[typed_index];
-			Vector child_metadata(metadata.GetValue(i));
+			Vector child_metadata(metadata.GetValue(i), count_t(1));
 			ret[i] = VariantValue(VariantValueType::ARRAY);
 			ret[i].SetItems(Convert(child_metadata, child, entry.offset, entry.length, list_size));
 		}
@@ -509,7 +509,7 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedArray(Vector &met
 			auto value_index = value_format.sel->get_index(i + offset);
 			if (validity.RowIsValid(typed_index)) {
 				auto entry = list_data[typed_index];
-				Vector child_metadata(metadata.GetValue(i));
+				Vector child_metadata(metadata.GetValue(i), count_t(1));
 				ret[i] = VariantValue(VariantValueType::ARRAY);
 				ret[i].SetItems(Convert(child_metadata, child, entry.offset, entry.length, list_size));
 			} else {

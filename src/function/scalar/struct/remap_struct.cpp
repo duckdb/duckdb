@@ -101,7 +101,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 		auto list_data = ConstantVector::GetData<list_entry_t>(input);
@@ -140,8 +140,8 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 
 void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
                const vector<RemapColumnInfo> &remap_info) {
-	auto &input_vector = ListVector::GetEntry(input);
-	auto &result_vector = ListVector::GetEntry(result);
+	auto &input_vector = ListVector::GetChildMutable(input);
+	auto &result_vector = ListVector::GetChildMutable(result);
 	auto list_size = ListVector::GetListSize(input);
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
@@ -150,7 +150,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 		auto list_data = ConstantVector::GetData<list_entry_t>(input);
@@ -194,7 +194,7 @@ void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t re
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_size));
 			return;
 		}
 	} else {
@@ -609,10 +609,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	// push a cast for argument 0 to match up the source types to the target
 	auto new_type = RemapEntry::RemapCast(from_type, remap_map);
 
-	bound_function.arguments[0] = std::move(new_type);
-	bound_function.arguments[1] = arguments[1]->return_type;
-	bound_function.arguments[2] = arguments[2]->return_type;
-	bound_function.arguments[3] = arguments[3]->return_type;
+	bound_function.GetArguments()[0] = std::move(new_type);
+	bound_function.GetArguments()[1] = arguments[1]->return_type;
+	bound_function.GetArguments()[2] = arguments[2]->return_type;
+	bound_function.GetArguments()[3] = arguments[3]->return_type;
 	bound_function.SetReturnType(arguments[1]->return_type);
 
 	return make_uniq<RemapStructBindData>(std::move(remap));

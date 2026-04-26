@@ -2,12 +2,8 @@
 # description: Test that triggers survive WAL replay (database restart without checkpoint)
 # group: [trigger]
 
-require autocomplete
-
 require noforcestorage
 
-statement ok
-call enable_peg_parser();
 
 statement ok
 SET checkpoint_threshold = '10.0 GB';

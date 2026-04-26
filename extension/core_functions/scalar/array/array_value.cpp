@@ -26,7 +26,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 
-	auto &child = ArrayVector::GetEntry(result);
+	auto &child = ArrayVector::GetChildMutable(result);
 
 	if (num_columns > 1) {
 		// Ensure that the child has a validity mask of the correct size
@@ -64,7 +64,7 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 	}
 
 	// this is more for completeness reasons
-	bound_function.varargs = child_type;
+	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(LogicalType::ARRAY(child_type, arguments.size()));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
@@ -86,7 +86,7 @@ unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStati
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, ArrayValueStats);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

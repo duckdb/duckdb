@@ -52,7 +52,7 @@ struct HistogramBinState {
 		}
 		auto bin_list = bin_entry.GetValue();
 
-		auto &bin_child = ListVector::GetEntry(bin_vector);
+		auto &bin_child = ListVector::GetChildMutable(bin_vector);
 		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
 		auto extra_state = OP::CreateExtraState(bin_count);
@@ -258,11 +258,11 @@ Value OtherBucketValue(const LogicalType &type) {
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
-		result.Reference(Value::BOOLEAN(false));
+		result.Reference(Value::BOOLEAN(false), count_t(args.size()));
 		return;
 	}
 	auto v = OtherBucketValue(input_type);
-	Vector ref(v);
+	Vector ref(v, count_t(args.size()));
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
 
 	// Set NULL if input is NULL.

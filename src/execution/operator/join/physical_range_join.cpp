@@ -109,7 +109,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(ClientContext &client, Inter
 	global_source = sort->GetGlobalSourceState(client, *global_sink);
 }
 
-void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
+void PhysicalRangeJoin::GlobalSortedTable::InitializeMatches() {
 	found_match = make_unsafe_uniq_array_uninitialized<bool>(Count());
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
@@ -385,7 +385,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			}
 			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
-				ConstantVector::SetNull(primary);
+				ConstantVector::SetNull(primary, count_t(count));
 				return count;
 			}
 		}

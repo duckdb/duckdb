@@ -2,11 +2,6 @@
 # description: Test analyze and vacuum statements in peg parser
 # group: [peg_parser]
 
-require autocomplete
-
-statement ok 
-call enable_peg_parser();
-
 statement error
 SELECT (1 + (2 * 3);
 ----
