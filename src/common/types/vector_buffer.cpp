@@ -157,8 +157,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &t
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, end - offset);
 	}
 	auto result = SliceInternal(type, offset, end);
 	if (result) {
@@ -171,8 +171,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, count);
 	}
 	auto result = SliceInternal(type, sel, count);
 	if (result && v_size.IsValid()) {
@@ -181,6 +181,14 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 		}
 	}
 	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::ConstantSlice(const LogicalType &type, idx_t count) {
+	if (HasSize() && count == Size()) {
+		// if the size is already set correctly we don't need to do do anything
+		return nullptr;
+	}
+	return SliceInternal(type, 0, count);
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
