@@ -211,24 +211,12 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	}
 
 	const idx_t block_size = external_file_cache.GetCacheBlockSize(cached_file.path);
-	external_file_cache.MaybeReindexCachedFile(cached_file, block_size);
-
 	const idx_t first_block = location / block_size;
 	const idx_t last_block = (location + nr_bytes - 1) / block_size;
 	const idx_t num_blocks = last_block - first_block + 1;
 
-	vector<shared_ptr<CacheBlock>> blocks(num_blocks);
-	{
-		annotated_lock_guard<annotated_mutex> guard(cached_file.map_lock);
-		for (idx_t idx = 0; idx < num_blocks; idx++) {
-			const idx_t block_idx = first_block + idx;
-			auto &entry = cached_file.blocks[block_idx];
-			if (!entry) {
-				entry = make_shared_ptr<CacheBlock>();
-			}
-			blocks[idx] = entry;
-		}
-	}
+	// Atomically reindex (if needed) and acquire the block range.
+	auto blocks = external_file_cache.ReindexAndAcquireBlocks(cached_file, block_size, first_block, num_blocks);
 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);

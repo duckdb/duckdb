@@ -112,40 +112,38 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 	cached_file.blocks = std::move(new_blocks);
 }
 
-void ExternalFileCache::MaybeReindexCachedFile(CachedFile &cached_file, idx_t current_block_size) {
+vector<shared_ptr<CacheBlock>> ExternalFileCache::ReindexAndAcquireBlocks(CachedFile &cached_file,
+                                                                          idx_t current_block_size, idx_t first_block,
+                                                                          idx_t num_blocks) {
 	D_ASSERT(current_block_size > 0);
 
-	// Quick check under map_lock.
+	idx_t file_size = 0;
 	{
-		annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
-		if (!cached_file.cached_block_size.IsValid() ||
-		    cached_file.cached_block_size.GetIndex() == current_block_size) {
-			cached_file.cached_block_size = current_block_size;
-			return;
-		}
-	}
-
-	// Block size changed — need to reindex. Respect lock order: meta_lock before map_lock.
-	idx_t file_size;
-	{
-		annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
+		const annotated_lock_guard<annotated_mutex> meta_guard(cached_file.meta_lock);
 		file_size = cached_file.file_size;
 	}
 
-	{
-		annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
-		// Double-check: another thread may have already reindexed while we released map_lock.
-		if (!cached_file.cached_block_size.IsValid() ||
-		    cached_file.cached_block_size.GetIndex() == current_block_size) {
-			cached_file.cached_block_size = current_block_size;
-			return;
-		}
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+
+	if (cached_file.cached_block_size.IsValid() &&
+	    cached_file.cached_block_size.GetIndex() != current_block_size) {
 		const idx_t old_block_size = cached_file.cached_block_size.GetIndex();
 		if (file_size > 0) {
 			ReindexCachedFileCore(cached_file, file_size, old_block_size, current_block_size);
 		}
-		cached_file.cached_block_size = current_block_size;
 	}
+	cached_file.cached_block_size = current_block_size;
+
+	vector<shared_ptr<CacheBlock>> blocks(num_blocks);
+	for (idx_t idx = 0; idx < num_blocks; idx++) {
+		const idx_t block_idx = first_block + idx;
+		auto &entry = cached_file.blocks[block_idx];
+		if (!entry) {
+			entry = make_shared_ptr<CacheBlock>();
+		}
+		blocks[idx] = entry;
+	}
+	return blocks;
 }
 
 ExternalFileCache::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {

@@ -71,8 +71,10 @@ public:
 	void SetEnabled(bool enable);
 	vector<CachedFileInformation> GetCachedFileInformation() const;
 
-	//! Lazily re-index a single cached file if the block size has changed since it was last accessed.
-	void MaybeReindexCachedFile(CachedFile &cached_file, idx_t current_block_size);
+	//! Re-index to `current_block_size` if it differs from the cache block size.
+	//! Return the blocks cached for the given range.
+	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(CachedFile &cached_file, idx_t current_block_size,
+	                                                      idx_t first_block, idx_t num_blocks);
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
