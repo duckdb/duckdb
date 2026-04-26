@@ -68,6 +68,7 @@ void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_
 		}
 	}
 	key.SetCardinality(count);
+	FlatVector::SetSize(key.data[0], count_t(count));
 }
 
 template <class SORT_KEY>
@@ -146,6 +147,9 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 	}
 
 	chunk.SetCardinality(count);
+	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
+		FlatVector::SetSize(chunk.data[col_idx], count_t(count));
+	}
 }
 
 //===--------------------------------------------------------------------===//

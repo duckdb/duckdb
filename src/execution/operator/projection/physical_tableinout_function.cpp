@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_tableinout_function.hpp"
 
 namespace duckdb {
@@ -93,6 +94,9 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 			SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);
 			state.current_ordinality_idx += ordinality;
 		}
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			FlatVector::SetSize(chunk.data[i], count_t(chunk.size()));
+		}
 		return result;
 	}
 	// when project_input is set we execute the input function row-by-row
@@ -130,6 +134,9 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		const idx_t ordinality = chunk.size();
 		SetOrdinality(chunk, this->ordinality_idx, state.current_ordinality_idx, ordinality);
 		state.current_ordinality_idx += ordinality;
+	}
+	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+		FlatVector::SetSize(chunk.data[i], count_t(chunk.size()));
 	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;

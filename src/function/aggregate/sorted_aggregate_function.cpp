@@ -1,5 +1,6 @@
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/list_segment.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -196,6 +197,7 @@ struct SortedAggregateState {
 		for (column_t i = 0; i < linked.size(); ++i) {
 			funcs[i].BuildListVector(linked[i], chunk.data[i], total_count);
 			chunk.SetCardinality(linked[i].total_capacity);
+			FlatVector::SetSize(chunk.data[i], count_t(linked[i].total_capacity));
 		}
 	}
 
@@ -373,6 +375,8 @@ struct SortedAggregateState {
 			prefixed.data[col_idx + 1].Reference(input_chunk->data[col_idx]);
 		}
 		prefixed.SetCardinality(*input_chunk);
+		// data[0] was referenced as a constant with count=1 - resize to match
+		FlatVector::SetSize(prefixed.data[0], count_t(input_chunk->size()));
 	}
 
 	void Finalize(const SortedAggregateBindData &order_bind, DataChunk &prefixed, ExecutionContext &context,

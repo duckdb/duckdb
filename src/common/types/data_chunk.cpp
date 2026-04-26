@@ -225,6 +225,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 		} else {
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
+		FlatVector::SetSize(data[i], count_t(new_size));
 	}
 	SetCardinality(new_size);
 }
@@ -294,6 +295,7 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
+		FlatVector::SetSize(data[i], count_t(row_count));
 	});
 }
 
@@ -371,8 +373,8 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		if (data[i].HasSize() && data[i].size() != size()) {
-			throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-			                        data[i].size(), size());
+			throw InternalException("DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d",
+			                        i, data[i].GetType().ToString(), data[i].size(), size());
 		}
 	}
 #ifdef DEBUG

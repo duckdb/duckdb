@@ -47,6 +47,9 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors
 		chunk.Reference(input);
+	} else if (result_count == 0) {
+		// everything was filtered out
+		chunk.Reset();
 	} else {
 		chunk.Slice(input, state.sel, result_count);
 	}

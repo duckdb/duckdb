@@ -2,6 +2,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -203,6 +204,11 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 			slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
 			info.input_chunk.data[i + slice_offset].Reference(slices.back());
 		}
+	}
+
+	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
+	for (idx_t i = 0; i < info.input_chunk.ColumnCount(); i++) {
+		FlatVector::SetSize(info.input_chunk.data[i], count_t(elem_cnt));
 	}
 
 	// execute the lambda expression

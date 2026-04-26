@@ -5,6 +5,7 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -599,6 +600,9 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 			} else {
 				scan_count = valid - table_idx;
 				scanned.SetCardinality(scan_count);
+				for (idx_t i = 0; i < scanned.ColumnCount(); i++) {
+					FlatVector::SetSize(scanned.data[i], count_t(scan_count));
+				}
 			}
 		}
 		if (scan_count == 0) {

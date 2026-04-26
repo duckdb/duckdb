@@ -2,6 +2,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -452,6 +453,9 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		count++;
 	}
 	result.SetCardinality(count);
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
+		FlatVector::SetSize(result.data[i], count_t(count));
+	}
 }
 
 bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_id) {

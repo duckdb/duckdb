@@ -6,6 +6,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -1203,6 +1204,9 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		target.Reference(source);
 	}
 	chunk.SetCardinality(lhs_match_count);
+	for (idx_t i = 0; i < chunk.ColumnCount(); ++i) {
+		FlatVector::SetSize(chunk.data[i], count_t(lhs_match_count));
+	}
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();

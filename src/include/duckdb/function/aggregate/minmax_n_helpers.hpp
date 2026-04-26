@@ -502,6 +502,7 @@ struct MinMaxNOperation {
 
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
+		FlatVector::SetSize(result, count_t(offset + count));
 		result.Verify(count);
 	}
 

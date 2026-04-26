@@ -191,6 +191,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
@@ -201,6 +202,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {

@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -812,6 +813,9 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			count = approved_tuple_count;
 		}
 		result.SetCardinality(count);
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			FlatVector::SetSize(result.data[i], count_t(count));
+		}
 		state.vector_index++;
 		break;
 	}

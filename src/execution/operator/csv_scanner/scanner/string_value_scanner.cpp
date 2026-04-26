@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -1187,6 +1188,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			// Now we slice the result
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
+		}
+		for (idx_t i = 0; i < insert_chunk.ColumnCount(); i++) {
+			FlatVector::SetSize(insert_chunk.data[i], count_t(insert_chunk.size()));
 		}
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;

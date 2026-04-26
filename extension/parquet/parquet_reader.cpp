@@ -1638,6 +1638,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		}
 	}
 
+	for (idx_t i = 0; i < result.ColumnCount(); i++) {
+		FlatVector::SetSize(result.data[i], count_t(result.size()));
+	}
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
 	return SourceResultType::HAVE_MORE_OUTPUT;

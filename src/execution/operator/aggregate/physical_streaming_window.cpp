@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -319,6 +320,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		} else {
 			throw NotImplementedException("GetStreamingData for %s", ExpressionTypeToString(expr.GetExpressionType()));
 		}
+		FlatVector::SetSize(result, count_t(output.size()));
 	}
 }
 
