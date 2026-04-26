@@ -78,6 +78,13 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return result;
 }
 
+buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<StandardVectorBuffer>(data_ptr, count, type_size);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	return result;
+}
+
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                              idx_t count) {
 	Vector child_vector(type, shared_from_this());

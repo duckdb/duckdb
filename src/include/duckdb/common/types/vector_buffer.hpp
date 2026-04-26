@@ -183,12 +183,14 @@ public:
 	virtual void Resize(idx_t current_size, idx_t new_size);
 
 protected:
+	//! Slice a constant vector with a specific count
+	buffer_ptr<VectorBuffer> ConstantSlice(const LogicalType &type, count_t count);
+	//! Slice a constant vector with a specific count
+	virtual buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count);
 	//! Slice the buffer with a selection vector, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end);
-	//! Slice a constant vector with a specific count
-	buffer_ptr<VectorBuffer> ConstantSlice(const LogicalType &type, idx_t count);
 	//! Copy data from another vector into this vectors' buffer
 	virtual void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
 	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);

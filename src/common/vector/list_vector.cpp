@@ -150,6 +150,13 @@ void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = validity;
 }
 
+buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	return result;
+}
+
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
 	return make_buffer<VectorListBuffer>(std::move(new_data), count, *this);
 }

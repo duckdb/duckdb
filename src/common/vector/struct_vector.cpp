@@ -115,6 +115,18 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 	return make_buffer<VectorStructBuffer>(*this, sel, count);
 }
 
+buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	vector<Vector> result_children;
+	for (idx_t i = 0; i < children.size(); i++) {
+		result_children.emplace_back(Vector::Ref(children[i]));
+	}
+	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(1ULL));
+	result->SetVectorSize(count);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	return result;
+}
+
 void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
