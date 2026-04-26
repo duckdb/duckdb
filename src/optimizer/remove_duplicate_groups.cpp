@@ -31,44 +31,6 @@ bool CollectColumnRefBindings(const Expression &expr, column_binding_set_t &resu
 	return ok;
 }
 
-// Erase `removed_idx` from aggr (groups + grouping_sets) and shift `group_binding_map`. Caller
-// has already moved `aggr.groups[removed_idx]`'s expression out.
-void EraseGroupAndShift(LogicalAggregate &aggr, ProjectionIndex removed_idx, ProjectionIndex target_idx,
-                        column_binding_map_t<ColumnBinding> &group_binding_map) {
-	aggr.groups.erase_at(removed_idx);
-
-	// This optimizer should run before statistics propagation, so this should be empty
-	// If it runs after, then group_stats should be updated too
-	D_ASSERT(aggr.group_stats.empty());
-
-	// Remove from grouping sets too
-	for (auto &grouping_set : aggr.grouping_sets) {
-		GroupingSet new_set;
-		for (auto entry : grouping_set) {
-			// Replace removed group with duplicate remaining group
-			ProjectionIndex out = entry == removed_idx ? target_idx : entry;
-			// Indices shifted: Reinsert groups in the set with group_idx - 1
-			if (out > removed_idx) {
-				out = ProjectionIndex(out - 1);
-			}
-			new_set.insert(out);
-		}
-		grouping_set = std::move(new_set);
-	}
-
-	// Update mapping
-	auto it = group_binding_map.find(ColumnBinding(aggr.group_index, removed_idx));
-	D_ASSERT(it != group_binding_map.end());
-	it->second.column_index = target_idx;
-
-	for (auto &map_entry : group_binding_map) {
-		auto &new_binding = map_entry.second;
-		if (new_binding.column_index > removed_idx) {
-			new_binding.column_index = ProjectionIndex(new_binding.column_index - 1);
-		}
-	}
-}
-
 } // namespace
 
 void RemoveDuplicateGroups::VisitOperator(LogicalOperator &op) {
@@ -116,9 +78,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 	auto &groups = aggr.groups;
 
-	// Duplicates collapse in place; derived rewrites recompute in a projection above the aggregate.
-	// `derived_expr` discriminates: null → duplicate, non-null → derived. The base's source binding
-	// is recovered on demand from the (still-intact) base group via group_binding_map.
+	// `derived_expr` discriminates: null → duplicate, non-null → derived.
 	struct Removal {
 		ProjectionIndex removed_idx;
 		ProjectionIndex target_idx;
@@ -142,11 +102,9 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		}
 	}
 
-	// Derived: a non-column-ref group whose entire colref-set is a single binding that matches a
-	// surviving colref base. Walk each candidate's expression tree exactly once to collect its
-	// colref-set, then a single hash lookup picks the base. The base must be a bare column-ref
-	// (trivially injective in itself) — a non-colref base like floor(x) would need an injectivity
-	// proof on every derived to avoid splitting partitions for many-to-one inputs.
+	// Derived: a non-column-ref group whose colref-set is a singleton matching a surviving base.
+	// Base must be a bare column-ref — non-colref bases (e.g. floor(x)) need injectivity proof
+	// on every derived to avoid splitting partitions for many-to-one inputs.
 	for (auto group_idx : ProjectionIndex::GetIndexes(groups.size())) {
 		const auto &group = groups[group_idx];
 		if (group->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
@@ -178,16 +136,8 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 	// Now we want to remove the duplicates, but this alters the column bindings coming out of the aggregate,
 	// so we keep track of how they shift and do another round of column binding replacements
-	column_binding_map_t<ColumnBinding> group_binding_map;
-	for (auto group_idx : ProjectionIndex::GetIndexes(num_original_groups)) {
-		ColumnBinding b(original_group_index, group_idx);
-		group_binding_map.emplace(b, b);
-	}
 
-	// Sort duplicates by max duplicate group idx, because we want to remove groups from the back
-	sort(removals.begin(), removals.end(),
-	     [](const Removal &a, const Removal &b) { return a.removed_idx > b.removed_idx; });
-
+	vector<bool> removed_flag(num_original_groups, false);
 	for (auto &r : removals) {
 		// Store expression and remove it from groups
 		auto &expr = groups[r.removed_idx];
@@ -196,18 +146,56 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		} else {
 			stored_expressions.emplace_back(std::move(expr));
 		}
-		EraseGroupAndShift(aggr, r.removed_idx, r.target_idx, group_binding_map);
+		removed_flag[r.removed_idx.GetIndex()] = true;
+	}
+
+	// This optimizer should run before statistics propagation, so this should be empty
+	// If it runs after, then group_stats should be updated too
+	D_ASSERT(aggr.group_stats.empty());
+
+	// One pass: compact survivors in `groups` and record each survivor's post-shift index.
+	vector<idx_t> old_to_post(num_original_groups, 0);
+	idx_t write_pos = 0;
+	for (idx_t i = 0; i < num_original_groups; i++) {
+		if (!removed_flag[i]) {
+			old_to_post[i] = write_pos;
+			if (write_pos != i) {
+				groups[write_pos] = std::move(groups[i]);
+			}
+			write_pos++;
+		}
+	}
+	groups.resize(write_pos);
+	// Removed slots inherit their target's post-shift index, so old_to_post[i] now holds the
+	// final new index for every original slot — survivor or not.
+	for (auto &r : removals) {
+		old_to_post[r.removed_idx.GetIndex()] = old_to_post[r.target_idx.GetIndex()];
+	}
+
+	// Remove from grouping sets too
+	for (auto &grouping_set : aggr.grouping_sets) {
+		GroupingSet new_set;
+		for (auto entry : grouping_set) {
+			// Replace removed group with duplicate remaining group; indices shifted
+			new_set.insert(ProjectionIndex(old_to_post[entry.GetIndex()]));
+		}
+		grouping_set = std::move(new_set);
+	}
+
+	// Update mapping
+	column_binding_map_t<ColumnBinding> group_binding_map;
+	for (idx_t i = 0; i < num_original_groups; i++) {
+		ColumnBinding old_b(original_group_index, ProjectionIndex(i));
+		ColumnBinding new_b(original_group_index, ProjectionIndex(old_to_post[i]));
+		group_binding_map.emplace(old_b, new_b);
 	}
 
 	column_binding_map_t<ColumnBinding> derived_remap;
 	if (any_derived) {
-		// Build a projection mirroring the aggregate's pre-removal output layout. Its child slot
-		// is filled by VisitOperator post-recursion (we don't own the unique_ptr here).
+		// Projection mirrors the aggregate's pre-removal output layout. Its child slot is filled
+		// by VisitOperator post-recursion. Init every slot as a passthrough into the post-shift
+		// aggregate bindings; in the same loop populate derived_remap.
 		const auto new_proj_idx = optimizer.binder.GenerateTableIndex();
-
-		// Initialise every projection slot as a passthrough column-ref into the aggregate's
-		// post-shift bindings; in the same loop populate derived_remap so consumers route through
-		// the projection.
 		vector<unique_ptr<Expression>> select_list;
 		select_list.reserve(num_original_groups + num_aggregate_outputs);
 		for (auto orig : ProjectionIndex::GetIndexes(num_original_groups)) {
@@ -222,9 +210,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 			                      ColumnBinding(new_proj_idx, ProjectionIndex(num_original_groups + k.GetIndex())));
 		}
 
-		// Patch derived slots: replace the passthrough with the rewritten derived expression.
-		// `groups` is in post-shift state; the surviving base group at base_post.column_index is
-		// still a BoundColumnRefExpression carrying its source binding.
+		// Patch derived slots with the rewritten derived expression (replaces the passthrough).
 		ColumnBindingReplacer rebinder;
 		for (auto &r : removals) {
 			if (!r.derived_expr) {
