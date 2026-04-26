@@ -337,7 +337,7 @@ statement error
 CREATE TRIGGER trg_mutual_b AFTER INSERT ON t_mutual_b FOR EACH STATEMENT
     INSERT INTO t_mutual_a VALUES (1);
 ----
-Not implemented Error: Trigger body cannot write to the trigger's own table
+Not implemented Error: Recursive trigger chains are not yet supported (trigger cycle detected through trigger "trg_mutual_b" on table "t_mutual_b")
 
 # Recursive trigger (body writes to trigger table) is blocked at CREATE TRIGGER time
 statement ok
@@ -347,7 +347,7 @@ statement error
 CREATE TRIGGER trg_recursive AFTER INSERT ON t_recursive FOR EACH STATEMENT
     INSERT INTO t_recursive VALUES (1);
 ----
-Not implemented Error: Trigger body cannot write to the trigger's own table
+Not implemented Error: Recursive trigger chains are not yet supported (trigger cycle detected through trigger "trg_recursive" on table "t_recursive")
 
 
 # NOT NULL constraint from base INSERT is caught even with trigger expansion

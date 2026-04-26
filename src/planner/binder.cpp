@@ -590,7 +590,9 @@ unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
 	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
 	if (expanded_tables.find(table) != expanded_tables.end()) {
 		if (global_binder_state->trigger_creation_table == &table) {
-			throw NotImplementedException("Trigger body cannot write to the trigger's own table");
+			throw NotImplementedException(
+			    "Recursive trigger chains are not yet supported (trigger cycle detected through trigger \"%s\" on table \"%s\")",
+			    global_binder_state->trigger_creation_name, table.name);
 		}
 		return nullptr;
 	}
@@ -612,7 +614,6 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	D_ASSERT(triggers.size() == 1);
 
 	D_ASSERT(returning_list.empty());
-	;
 	returning_list.push_back(make_uniq<StarExpression>());
 
 	auto base_cte = make_uniq<CommonTableExpressionInfo>();
