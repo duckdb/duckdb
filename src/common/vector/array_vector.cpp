@@ -144,9 +144,9 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &typ
 buffer_ptr<VectorBuffer> VectorArrayBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
 	auto child_vector = make_uniq<Vector>(Vector::Ref(*child));
 	auto result = make_buffer<VectorArrayBuffer>(std::move(child_vector), array_size, capacity_t(1ULL));
-	result->SetVectorSize(count);
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	return result;
 }
 

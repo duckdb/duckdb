@@ -121,9 +121,9 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const Logical
 		result_children.emplace_back(Vector::Ref(children[i]));
 	}
 	auto result = make_buffer<VectorStructBuffer>(std::move(result_children), capacity_t(1ULL));
-	result->SetVectorSize(count);
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	return result;
 }
 

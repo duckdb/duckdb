@@ -71,6 +71,15 @@ private:
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
 
+class VectorBufferHolder : public AuxiliaryDataHolder {
+public:
+	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer_p) : buffer(std::move(buffer_p)) {
+	}
+
+private:
+	buffer_ptr<VectorBuffer> buffer;
+};
+
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
 public:

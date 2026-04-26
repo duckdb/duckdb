@@ -74,7 +74,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	auto offset_ptr = data_ptr + type_size * offset;
 	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, count, type_size);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 
@@ -82,6 +82,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const Logic
 	auto result = make_buffer<StandardVectorBuffer>(data_ptr, count, type_size);
 	result->GetValidityMask().Set(0, validity.RowIsValid(0));
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 

@@ -136,7 +136,15 @@ buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorListBuffer>(offset_ptr, count, *this);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 
@@ -148,13 +156,6 @@ void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	}
 	format.data = data_ptr;
 	format.validity = validity;
-}
-
-buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
-	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
-	result->GetValidityMask().Set(0, validity.RowIsValid(0));
-	result->SetVectorType(VectorType::CONSTANT_VECTOR);
-	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
