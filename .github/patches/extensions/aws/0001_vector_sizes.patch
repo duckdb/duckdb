@@ -1,0 +1,14 @@
+diff --git a/src/aws_extension.cpp b/src/aws_extension.cpp
+index 08c2e69..26cbf9d 100644
+--- a/src/aws_extension.cpp
++++ b/src/aws_extension.cpp
+@@ -112,6 +112,9 @@ static void LoadAWSCredentialsFun(ClientContext &context, TableFunctionInput &da
+ 	output.SetValue(3, 0, load_result.set_region.empty() ? Value(nullptr) : load_result.set_region);
+ 
+ 	output.SetCardinality(1);
++	for (idx_t i = 0; i < output.ColumnCount(); i++) {
++		FlatVector::SetSize(output.data[i], count_t(1));
++	}
+ 
+ 	data.finished = true;
+ }
