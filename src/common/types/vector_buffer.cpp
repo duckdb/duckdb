@@ -49,9 +49,8 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 		}
 		break;
 	default:
-		// non-flat/non-constant vector buffers manage their size internally (based on their underlying data)
-		// SetVectorSize is a no-op for these vector types
-		return;
+		throw InternalException("VectorBuffer::SetVectorSize can only be used for flat or constant vectors, other "
+		                        "vector types have their size set on creation");
 	}
 	v_size = new_size;
 }
