@@ -319,9 +319,7 @@ def build_package(
         ext_linked_default = 1 if ext in default_linked_extensions else 0
 
         ext_loader_defines += (
-            f"#ifndef {ext_linked_define}\n"
-            f"#define {ext_linked_define} {ext_linked_default}\n"
-            "#endif\n\n"
+            f"#ifndef {ext_linked_define}\n" f"#define {ext_linked_define} {ext_linked_default}\n" "#endif\n\n"
         )
 
         ext_headers += f'#if {ext_linked_define}\n#include "{ext}_extension.hpp"\n#endif\n'
@@ -339,11 +337,7 @@ def build_package(
             "#endif\n"
         )
 
-        ext_name_vector_initializer += (
-            f"\n#if {ext_linked_define}\n"
-            f"        \"{ext}\",\n"
-            "#endif"
-        )
+        ext_name_vector_initializer += f"\n#if {ext_linked_define}\n" f"        \"{ext}\",\n" "#endif"
 
     loader_code = open(os.path.join('extension', 'generated_extension_loader.cpp.in'), 'rb').read().decode('utf8')
     loader_code = (
