@@ -110,14 +110,15 @@ static void TensorShapeFunction(DataChunk &args, ExpressionState &state, Vector 
 	UnifiedVectorFormat input_format;
 	args.data[0].ToUnifiedFormat(count, input_format);
 
-	// Set up the list entries and child data
+	auto ndims = shape.size();
+
+	// Reserve before grabbing child pointers — Reserve may reallocate the child buffer.
+	ListVector::Reserve(result, count * ndims);
+	ListVector::SetListSize(result, count * ndims);
+
 	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto &child_vector = ListVector::GetChildMutable(result);
 	auto child_data = FlatVector::GetDataMutable<int32_t>(child_vector);
-	auto ndims = shape.size();
-
-	ListVector::Reserve(result, count * ndims);
-	ListVector::SetListSize(result, count * ndims);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_format.sel->get_index(i);
