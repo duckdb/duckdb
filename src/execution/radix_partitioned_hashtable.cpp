@@ -378,7 +378,7 @@ idx_t RadixHTConfig::SinkCapacity() const {
 class RadixHTLocalSinkState : public LocalSinkState {
 public:
 	RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
-	void Reset(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate);
+	void ResetForReuse(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate);
 
 public:
 	//! Thread-local HT that is re-used after abandoning
@@ -409,7 +409,7 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartiti
 	}
 }
 
-void RadixHTLocalSinkState::Reset(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate) {
+void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate) {
 	group_chunk.Reset();
 	if (radix_ht.grouping_set.empty()) {
 		group_chunk.data[0].Reference(Value::TINYINT(42), count_t(STANDARD_VECTOR_SIZE));
@@ -465,7 +465,7 @@ void RadixPartitionedHashTable::ResetLocalSinkState(ExecutionContext &context, G
                                                     LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalSinkState>();
-	lstate.Reset(*this, gstate);
+	lstate.ResetForReuse(*this, gstate);
 }
 
 void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const {
@@ -794,7 +794,7 @@ enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
 class RadixHTLocalSourceState : public LocalSourceState {
 public:
 	explicit RadixHTLocalSourceState(ExecutionContext &context, const RadixPartitionedHashTable &radix_ht);
-	void Reset();
+	void ResetForReuse();
 
 public:
 	//! Do the work this thread has been assigned
@@ -892,7 +892,7 @@ RadixHTLocalSourceState::RadixHTLocalSourceState(ExecutionContext &context, cons
 	scan_chunk.Initialize(allocator, scan_chunk_types);
 }
 
-void RadixHTLocalSourceState::Reset() {
+void RadixHTLocalSourceState::ResetForReuse() {
 	task = RadixHTSourceTaskType::NO_TASK;
 	task_idx = DConstants::INVALID_INDEX;
 	ht.reset();
@@ -905,7 +905,7 @@ void RadixHTLocalSourceState::Reset() {
 
 void RadixPartitionedHashTable::ResetLocalSourceState(ExecutionContext &context, LocalSourceState &lstate_p) const {
 	auto &lstate = lstate_p.Cast<RadixHTLocalSourceState>();
-	lstate.Reset();
+	lstate.ResetForReuse();
 }
 
 void RadixHTLocalSourceState::ExecuteTask(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate,
