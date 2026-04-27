@@ -7,6 +7,8 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/transaction/transaction_snapshot_registry.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -59,6 +61,17 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 			// is already durably committed.
 			client.SuppressInterrupts();
 		}
+		break;
+	}
+	case TransactionType::SET_SNAPSHOT: {
+		if (client.transaction.IsAutoCommit()) {
+			throw TransactionException(
+			    "SET TRANSACTION SNAPSHOT must be called inside a transaction (run BEGIN first)");
+		}
+		// AdoptSharedTransaction enforces the rest of the preconditions (no prior work, etc.).
+		auto &registry = client.db->GetTransactionSnapshotRegistry();
+		auto shared = registry.Import(info->snapshot_id);
+		client.transaction.AdoptSharedTransaction(std::move(shared));
 		break;
 	}
 	case TransactionType::ROLLBACK: {

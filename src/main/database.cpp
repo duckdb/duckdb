@@ -21,6 +21,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/result_set_manager.hpp"
+#include "duckdb/transaction/transaction_snapshot_registry.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -292,6 +293,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	bool enable_external_file_cache = Settings::Get<EnableExternalFileCacheSetting>(config);
 	external_file_cache = make_uniq<ExternalFileCache>(*this, enable_external_file_cache);
 	result_set_manager = make_uniq<ResultSetManager>(*this);
+	transaction_snapshot_registry = make_uniq<TransactionSnapshotRegistry>();
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>(*config.buffer_pool);
@@ -386,6 +388,10 @@ FileSystem &DatabaseInstance::GetFileSystem() {
 
 ExternalFileCache &DatabaseInstance::GetExternalFileCache() {
 	return *external_file_cache;
+}
+
+TransactionSnapshotRegistry &DatabaseInstance::GetTransactionSnapshotRegistry() {
+	return *transaction_snapshot_registry;
 }
 
 ResultSetManager &DatabaseInstance::GetResultSetManager() {

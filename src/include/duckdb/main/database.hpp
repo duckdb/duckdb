@@ -36,12 +36,16 @@ class LogManager;
 class ExternalFileCache;
 class ResultSetManager;
 
+class TransactionSnapshotRegistry;
+
 class DatabaseInstance : public enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
 
 public:
 	DUCKDB_API DatabaseInstance();
 	DUCKDB_API ~DatabaseInstance();
+
+	DUCKDB_API TransactionSnapshotRegistry &GetTransactionSnapshotRegistry();
 
 	DBConfig config;
 
@@ -97,6 +101,7 @@ private:
 	unique_ptr<LogManager> log_manager;
 	unique_ptr<ExternalFileCache> external_file_cache;
 	unique_ptr<ResultSetManager> result_set_manager;
+	unique_ptr<TransactionSnapshotRegistry> transaction_snapshot_registry;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

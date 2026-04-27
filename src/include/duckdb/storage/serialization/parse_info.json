@@ -703,6 +703,12 @@
         "id": 203,
         "name": "auto_rollback",
         "type": "bool"
+      },
+      {
+        "id": 204,
+        "name": "snapshot_id",
+        "type": "string",
+        "default" : "string()"
       }
     ]
   },

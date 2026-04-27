@@ -108,6 +108,13 @@ public:
 	//! Suppress all further interrupts for the current query (called after irreversible operations like COMMIT)
 	DUCKDB_API void SuppressInterrupts();
 	DUCKDB_API void CancelTransaction();
+	//! If this client context is currently executing a query against a shared
+	//! transaction, release the per-meta statement lock held by the active query.
+	//! Called by `TransactionContext::Commit` / `Rollback` before waiting for
+	//! participants to detach — the wait phase does not need the storage-protection
+	//! guarantee the lock provides, and holding it would deadlock against
+	//! participants trying to acquire the same lock at the start of their queries.
+	DUCKDB_API void ReleaseSharedStatementGuardForWait();
 
 	//! Check for interrupt or timeout, throws InterruptException if triggered
 	DUCKDB_API void InterruptCheck() const;

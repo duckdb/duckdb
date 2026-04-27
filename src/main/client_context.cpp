@@ -84,6 +84,13 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Held for the duration of a query that runs against a shared transaction.
+	//! Multiple connections (owner + participants) can be attached to the same
+	//! shared MetaTransaction; this lock serializes statement execution across
+	//! them, preserving the single-writer-per-Transaction invariant the storage
+	//! layer (LocalStorage, UndoBuffer, indexes) depends on. Released by the
+	//! ActiveQueryContext destructor when the query ends.
+	unique_lock<mutex> shared_statement_guard;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -256,7 +263,14 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		transaction.BeginTransaction();
 	}
 
-	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());
+	// `BeginQuery` acquires the per-meta statement lock (if the active transaction is
+	// shared) before writing the active-query number — the lock-then-set order is
+	// load-bearing because `MetaTransaction::SetActiveQuery` mutates per-database
+	// `Transaction::active_query` fields shared across owner + participants. The lock
+	// lives in `ActiveQueryContext` and is released automatically when `active_query`
+	// is destroyed in `EndQueryInternal`.
+	transaction.BeginQuery(active_query->shared_statement_guard, db->GetDatabaseManager().GetNewQueryNumber());
+
 	LogQueryInternal(lock, query);
 	active_query->query = query;
 
@@ -294,7 +308,14 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	}
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
-	active_query.reset();
+	// Defer the destruction of active_query (which releases the per-meta shared
+	// statement lock for shared transactions) until after the transaction-level
+	// teardown below. Otherwise another participant on the same shared meta could
+	// acquire the lock between us releasing it here and us calling
+	// `transaction.ResetActiveQuery()`, which would write `MAXIMUM_QUERY_ID` over
+	// the value the new participant just set — causing a downstream
+	// `optional_idx` invalid-index throw when the new participant reads it.
+	auto active_query_holder = std::move(active_query);
 	query_deadline.SetInvalid();
 	query_progress.Initialize();
 	ErrorData error;
@@ -307,6 +328,13 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 				} else {
 					transaction.Rollback(previous_error);
 				}
+			} else if (transaction.IsSharedParticipant() && transaction.ActiveTransaction().IsForceDetached()) {
+				// Owner rolled back this shared transaction. The user has now seen the
+				// "rolled back by owner" error once; auto-detach the participant so
+				// subsequent queries return to normal auto-commit behavior without
+				// requiring a manual ROLLBACK. The detach path increments the latch
+				// the owner is waiting on.
+				transaction.Rollback(previous_error);
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
 				ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
@@ -1234,6 +1262,12 @@ void ClientContext::ClearInterrupt() {
 
 void ClientContext::SuppressInterrupts() {
 	interrupt_state = ClientInterruptState::INTERRUPTS_SUPPRESSED;
+}
+
+void ClientContext::ReleaseSharedStatementGuardForWait() {
+	if (active_query && active_query->shared_statement_guard.owns_lock()) {
+		active_query->shared_statement_guard.unlock();
+	}
 }
 
 void ClientContext::InterruptCheck() const {

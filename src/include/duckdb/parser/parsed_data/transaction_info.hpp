@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
+enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK, SET_SNAPSHOT };
 
 enum class TransactionModifierType : uint8_t {
 	TRANSACTION_DEFAULT_MODIFIER,
@@ -40,6 +40,8 @@ public:
 	TransactionInvalidationPolicy invalidation_policy;
 	//! If transaction fails, automatically do a ROLLBACK;
 	bool auto_rollback;
+	//! Snapshot id (for SET TRANSACTION SNAPSHOT 'id')
+	string snapshot_id;
 
 public:
 	void Serialize(Serializer &serializer) const override;

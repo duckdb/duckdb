@@ -36,6 +36,13 @@
         "struct": "CurrentTransactionId"
     },
     {
+        "name": "duckdb_export_transaction",
+        "description": "Export the current transaction so other connections can attach to it via SET TRANSACTION SNAPSHOT. Returns an opaque snapshot id.",
+        "example": "duckdb_export_transaction()",
+        "type": "scalar_function",
+        "struct": "ExportTransactionSnapshot"
+    },
+    {
         "name": "current_query_id",
         "description": "Get the current query_id",
         "example": "current_query_id()",

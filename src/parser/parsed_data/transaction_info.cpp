@@ -24,6 +24,9 @@ string TransactionInfo::ToString() const {
 	case TransactionType::ROLLBACK:
 		result += "ROLLBACK";
 		break;
+	case TransactionType::SET_SNAPSHOT:
+		result += "SET TRANSACTION SNAPSHOT '" + snapshot_id + "'";
+		return result + ";";
 	default: {
 		throw InternalException("ToString for TransactionStatement with type: %s not implemented",
 		                        EnumUtil::ToString(type));
@@ -51,6 +54,7 @@ unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
 	result->modifier = modifier;
 	result->invalidation_policy = invalidation_policy;
 	result->auto_rollback = auto_rollback;
+	result->snapshot_id = snapshot_id;
 	return result;
 }
 

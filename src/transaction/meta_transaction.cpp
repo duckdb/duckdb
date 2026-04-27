@@ -12,7 +12,50 @@ MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_tim
                                  transaction_t transaction_id_p)
     : context(context_p), start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p),
       transaction_validity(*context_p.db), active_query(MAXIMUM_QUERY_ID), modified_database(nullptr),
-      is_read_only(false) {
+      is_read_only(false), owner_context(&context_p), is_shared(false), participant_count(1), force_detached(false) {
+}
+
+void MetaTransaction::MarkShared() {
+	is_shared.store(true);
+}
+
+void MetaTransaction::AttachParticipant() {
+	participant_count.fetch_add(1);
+	is_shared.store(true);
+}
+
+idx_t MetaTransaction::DetachParticipant() {
+	idx_t prev = participant_count.fetch_sub(1);
+	{ lock_guard<mutex> guard(detach_mutex); }
+	detach_cv.notify_all();
+	return prev - 1;
+}
+
+bool MetaTransaction::WaitForParticipantsToDetach(ClientContext &waiter) {
+	// Block until the only context attached is the owner. There is no timeout — the
+	// user is in control of when to give up via Connection::Interrupt() / Ctrl-C.
+	// `ClientContext::Interrupt()` only sets an atomic flag; it does not signal any
+	// condition variable. We therefore poll periodically, wait_for-style, the same
+	// pattern Executor uses for `task_reschedule` (see executor.cpp). The interval
+	// trades interrupt-response latency against background CPU cost while idle and
+	// is not user-visible — under normal use participants detach within milliseconds
+	// and the wait wakes via `notify_all` from `DetachParticipant` long before any
+	// poll fires.
+	static constexpr std::chrono::milliseconds INTERRUPT_POLL_INTERVAL {100};
+	unique_lock<mutex> guard(detach_mutex);
+	while (participant_count.load() > 1) {
+		if (waiter.IsInterrupted()) {
+			return false;
+		}
+		detach_cv.wait_for(guard, INTERRUPT_POLL_INTERVAL);
+	}
+	return true;
+}
+
+void MetaTransaction::ForceDetach() {
+	force_detached.store(true);
+	{ lock_guard<mutex> guard(detach_mutex); }
+	detach_cv.notify_all();
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
@@ -44,6 +87,13 @@ static void VerifyAllTransactionsUnique(AttachedDatabase &db, vector<reference<A
 #endif
 
 optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &db) {
+	// The owner has begun rolling back this shared transaction and is waiting for
+	// participants to detach. Signal participants by erroring on storage access; their
+	// ROLLBACK will decrement participant_count and unblock the owner.
+	if (force_detached.load()) {
+		throw TransactionException(
+		    "the shared transaction was rolled back by its owner; ROLLBACK on this connection to detach");
+	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
@@ -54,6 +104,13 @@ optional_ptr<Transaction> MetaTransaction::TryGetTransaction(AttachedDatabase &d
 }
 
 Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
+	// The owner has begun rolling back this shared transaction and is waiting for
+	// participants to detach. Signal participants by erroring on storage access; their
+	// ROLLBACK will decrement participant_count and unblock the owner.
+	if (force_detached.load()) {
+		throw TransactionException(
+		    "the shared transaction was rolled back by its owner; ROLLBACK on this connection to detach");
+	}
 	lock_guard<mutex> guard(lock);
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
@@ -225,10 +282,23 @@ AttachedDatabase &MetaTransaction::UseDatabase(shared_ptr<AttachedDatabase> &dat
 	if (entry == referenced_databases.end()) {
 		auto used_entry = used_databases.emplace(db_ref.GetName(), db_ref);
 		if (!used_entry.second) {
-			// return used_entry.first->second.get();
-			throw InternalException(
-			    "Database name %s was already used by a different database for this meta transaction",
-			    db_ref.GetName());
+			// A database with this name is already registered in this meta transaction
+			// under a different AttachedDatabase object. The only legitimate cause of
+			// this is shared transactions: each ClientContext owns its own per-connection
+			// "temp" / "system" catalog, and binding/catalog lookups on a participant
+			// trigger registration of those per-connection objects. For user-attached
+			// databases the name -> AttachedDatabase mapping is unique (managed by
+			// DatabaseManager), so a name clash there is a real invariant violation.
+			if (!db_ref.IsTemporary() && !db_ref.IsSystem()) {
+				throw InternalException(
+				    "Database name %s was already used by a different database for this meta transaction",
+				    db_ref.GetName());
+			}
+			// For temp/system: skip the name -> AttachedDatabase registration (we keep the
+			// owner's, since "temp" name lookups inside a shared transaction don't have a
+			// meaningful "correct" target across connections), but still record the new
+			// AttachedDatabase in `referenced_databases` so its per-database transaction
+			// stays alive and findable by reference.
 		}
 		referenced_databases.emplace(reference<AttachedDatabase>(db_ref), database);
 	}
