@@ -248,27 +248,48 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 			break;
 		}
 
-		string mapped = "Etc/GMT";
-		mapped += sign;
-		const auto base_len = mapped.size();
+		// Collect remaining characters (digits and colons)
+		string remainder;
 		for (; pos < tz_str.size(); ++pos) {
-			const auto digit = tz_str[pos];
-			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
-			if (digit == '0' || digit == ':') {
-				continue;
-			}
-			if (!StringUtil::CharacterIsDigit(digit)) {
+			const auto ch = tz_str[pos];
+			if (ch != ':' && !StringUtil::CharacterIsDigit(ch)) {
 				break;
 			}
-			mapped += digit;
+			remainder += ch;
 		}
 		if (pos < tz_str.size()) {
 			break;
 		}
-		// If we didn't add anything, then make it +0
-		if (mapped.size() == base_len) {
-			mapped.back() = '+';
-			mapped += '0';
+
+		// Step 1: Strip leading zeros
+		idx_t start = 0;
+		while (start < remainder.size() && remainder[start] == '0') {
+			++start;
+		}
+		remainder = remainder.substr(start);
+
+		// Step 2: Parse hours based on whether colon is present
+		string hours_str;
+		auto colon_idx = remainder.find(':');
+		if (colon_idx != string::npos) {
+			// Has colon: split by colon, part before colon is hours
+			hours_str = remainder.substr(0, colon_idx);
+		} else if (remainder.size() <= 2) {
+			// 1-2 digits: entire string is hours
+			hours_str = remainder;
+		} else {
+			// No colon, 3+ digits: HHMM format, last 2 are minutes, rest are hours
+			hours_str = remainder.substr(0, remainder.size() - 2);
+		}
+
+		// Build the mapped timezone string
+		string mapped = "Etc/GMT";
+		if (hours_str.empty()) {
+			// Zero offset
+			mapped += "+0";
+		} else {
+			mapped += sign;
+			mapped += hours_str;
 		}
 		// Final sanity check
 		if (tz = GetKnownTimeZone(mapped)) {
