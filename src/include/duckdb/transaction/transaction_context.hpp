@@ -78,6 +78,19 @@ public:
 	//! Centralizing both operations here means callers cannot get the order wrong.
 	void BeginQuery(unique_lock<mutex> &shared_statement_guard_out, transaction_t query_number);
 
+	//! For an owner of a shared transaction, run the wait-for-participants phase of an
+	//! explicit COMMIT/ROLLBACK *on the client thread* before the executor dispatches
+	//! the corresponding `PhysicalTransaction` operator on a TaskScheduler worker.
+	//!
+	//! The per-meta statement guard is a `unique_lock<std::mutex>` whose ownership is
+	//! tied to the thread that locked it (the client thread, in `BeginQuery`). Releasing
+	//! it from the operator running on a worker thread is wrong-thread mutex unlock —
+	//! UB and a TSAN failure. Doing the release + wait here, on the client thread, keeps
+	//! the lock thread-confined. The matching `Commit()`/`Rollback()` calls invoked from
+	//! the operator then see the lock already released and the participant count already
+	//! drained, so their wait phase is a no-op.
+	void PrepareSharedOwnerFinalization(TransactionType type);
+
 	void SetInvalidationPolicy(TransactionInvalidationPolicy new_invalidation_policy) {
 		invalidation_policy = new_invalidation_policy;
 	};

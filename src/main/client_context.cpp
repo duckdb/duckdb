@@ -1039,6 +1039,18 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 
 	bool invalidate_query = true;
 	try {
+		// Owner of a shared transaction running an explicit COMMIT/ROLLBACK: do the
+		// wait-for-participants phase here on the client thread. The matching wait
+		// inside `TransactionContext::Commit/Rollback` would otherwise run on a
+		// TaskScheduler worker (via `PhysicalTransaction`) and release a
+		// `unique_lock<std::mutex>` acquired on the client thread — wrong-thread
+		// unlock, UB, TSAN failure. After this prep step the operator-level wait is
+		// a no-op (the lock is already released; participant_count already drained).
+		if (statement && statement->type == StatementType::TRANSACTION_STATEMENT &&
+		    transaction.HasActiveTransaction() && transaction.IsSharedOwner()) {
+			auto &txn_stmt = statement->Cast<TransactionStatement>();
+			transaction.PrepareSharedOwnerFinalization(txn_stmt.info->type);
+		}
 		if (statement) {
 			pending = PendingStatementInternal(lock, query, std::move(statement), parameters);
 		} else {

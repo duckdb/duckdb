@@ -113,9 +113,12 @@ TEST_CASE("Shared transaction: owner ROLLBACK force-detaches participants", "[sh
 	// on a separate thread so we can observe the force-detach signal from the main
 	// thread and then drive the participant's clean detach.
 	std::atomic<bool> rollback_done {false};
+	std::string rollback_error;
 	std::thread rollback_thread([&]() {
 		auto r = owner.Query("ROLLBACK");
-		REQUIRE_NO_FAIL(*r);
+		if (r->HasError()) {
+			rollback_error = r->GetError();
+		}
 		rollback_done.store(true);
 	});
 
@@ -138,6 +141,7 @@ TEST_CASE("Shared transaction: owner ROLLBACK force-detaches participants", "[sh
 	// the side effect of the previous failed query unblocked the owner's ROLLBACK
 	// (proving the implicit detach happened during EndQueryInternal of the failed query).
 	rollback_thread.join();
+	REQUIRE(rollback_error.empty());
 	REQUIRE(rollback_done.load());
 	REQUIRE_NO_FAIL(participant.Query("SELECT 1"));
 }
@@ -215,12 +219,16 @@ TEST_CASE("Shared transaction: ATTACH and DETACH are rejected for participants",
 	}
 
 	// Participant detaches; owner ROLLBACK can complete.
+	std::string rollback_error;
 	std::thread rollback_thread([&]() {
 		auto r = owner.Query("ROLLBACK");
-		REQUIRE_NO_FAIL(*r);
+		if (r->HasError()) {
+			rollback_error = r->GetError();
+		}
 	});
 	REQUIRE_NO_FAIL(participant.Query("ROLLBACK"));
 	rollback_thread.join();
+	REQUIRE(rollback_error.empty());
 }
 
 TEST_CASE("Shared transaction: ATTACH and DETACH are also rejected for the owner while shared", "[shared_txn]") {
@@ -238,12 +246,16 @@ TEST_CASE("Shared transaction: ATTACH and DETACH are also rejected for the owner
 		REQUIRE(r->HasError());
 	}
 
+	std::string rollback_error;
 	std::thread rollback_thread([&]() {
 		auto r = owner.Query("ROLLBACK");
-		REQUIRE_NO_FAIL(*r);
+		if (r->HasError()) {
+			rollback_error = r->GetError();
+		}
 	});
 	REQUIRE_NO_FAIL(participant.Query("ROLLBACK"));
 	rollback_thread.join();
+	REQUIRE(rollback_error.empty());
 }
 
 TEST_CASE("Shared transaction: cross-database read by participant", "[shared_txn]") {
@@ -298,9 +310,12 @@ TEST_CASE("Shared transaction: late import during owner COMMIT is rejected", "[s
 	// the snapshot from a fresh connection must be rejected — otherwise an adversarial
 	// caller could keep re-attaching and starve the owner's wait indefinitely.
 	std::atomic<bool> commit_done {false};
+	std::string commit_error;
 	std::thread commit_thread([&]() {
 		auto r = owner.Query("COMMIT");
-		REQUIRE_NO_FAIL(*r);
+		if (r->HasError()) {
+			commit_error = r->GetError();
+		}
 		commit_done.store(true);
 	});
 
@@ -324,6 +339,7 @@ TEST_CASE("Shared transaction: late import during owner COMMIT is rejected", "[s
 	// p1 detaches; owner's COMMIT unblocks.
 	REQUIRE_NO_FAIL(p1.Query("COMMIT"));
 	commit_thread.join();
+	REQUIRE(commit_error.empty());
 	REQUIRE(commit_done.load());
 
 	Connection fresh(db);
@@ -350,16 +366,23 @@ TEST_CASE("Shared transaction: concurrent participant writes are serialized", "[
 	// this is the smell test that produces missing rows or crashes (the latter under
 	// sanitizer builds).
 	const idx_t kRowsPerWriter = 200;
-	auto writer = [&](Connection &con, int base) {
+	std::string p1_error;
+	std::string p2_error;
+	auto writer = [&](Connection &con, int base, std::string &error_out) {
 		for (idx_t i = 0; i < kRowsPerWriter; i++) {
 			auto r = con.Query("INSERT INTO t VALUES (" + std::to_string(base + (int)i) + ")");
-			REQUIRE_NO_FAIL(*r);
+			if (r->HasError()) {
+				error_out = r->GetError();
+				return;
+			}
 		}
 	};
-	std::thread t1(writer, std::ref(p1), 0);
-	std::thread t2(writer, std::ref(p2), 1000);
+	std::thread t1(writer, std::ref(p1), 0, std::ref(p1_error));
+	std::thread t2(writer, std::ref(p2), 1000, std::ref(p2_error));
 	t1.join();
 	t2.join();
+	REQUIRE(p1_error.empty());
+	REQUIRE(p2_error.empty());
 
 	// All rows are visible inside the shared transaction.
 	{
@@ -392,9 +415,12 @@ TEST_CASE("Shared transaction: owner COMMIT waits for participants", "[shared_tx
 	AttachToSnapshot(participant, snapshot_id);
 
 	std::atomic<bool> commit_done {false};
+	std::string commit_error;
 	std::thread commit_thread([&]() {
 		auto r = owner.Query("COMMIT");
-		REQUIRE_NO_FAIL(*r);
+		if (r->HasError()) {
+			commit_error = r->GetError();
+		}
 		commit_done.store(true);
 	});
 
@@ -406,6 +432,7 @@ TEST_CASE("Shared transaction: owner COMMIT waits for participants", "[shared_tx
 	REQUIRE_NO_FAIL(participant.Query("COMMIT"));
 
 	commit_thread.join();
+	REQUIRE(commit_error.empty());
 	REQUIRE(commit_done.load());
 
 	Connection fresh(db);

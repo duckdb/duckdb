@@ -232,6 +232,28 @@ void TransactionContext::SetActiveQuery(transaction_t query_number) {
 	current_transaction->SetActiveQuery(query_number);
 }
 
+void TransactionContext::PrepareSharedOwnerFinalization(TransactionType type) {
+	if (!current_transaction || !current_transaction->IsShared() || !current_transaction->IsOwner(context)) {
+		return;
+	}
+	if (type == TransactionType::ROLLBACK) {
+		current_transaction->ForceDetach();
+	} else if (type == TransactionType::COMMIT) {
+		current_transaction->MarkCommitting();
+	} else {
+		return;
+	}
+	// Release the per-meta statement guard from the client thread (the thread that
+	// acquired it in `BeginQuery`). The matching call inside `Commit()`/`Rollback()`
+	// runs on a TaskScheduler worker thread and would otherwise be a wrong-thread
+	// `std::mutex` unlock (UB; flagged by TSAN).
+	context.ReleaseSharedStatementGuardForWait();
+	if (!current_transaction->WaitForParticipantsToDetach(context)) {
+		throw TransactionException(
+		    "shared transaction was interrupted while waiting for participants to detach");
+	}
+}
+
 void TransactionContext::BeginQuery(unique_lock<mutex> &shared_statement_guard_out, transaction_t query_number) {
 	if (current_transaction && current_transaction->IsShared()) {
 		shared_statement_guard_out = current_transaction->LockSharedStatement();
