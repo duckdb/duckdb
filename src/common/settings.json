@@ -948,6 +948,13 @@
         "default_value": "false"
     },
     {
+        "name": "preserve_duplicate_column_names",
+        "description": "Preserve duplicate column names instead of disambiguating them with _1, _2, etc. suffixes",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "preserve_identifier_case",
         "description": "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers",
         "type": "BOOLEAN",

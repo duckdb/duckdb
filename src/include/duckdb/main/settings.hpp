@@ -1388,6 +1388,17 @@ struct PreferRangeJoinsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct PreserveDuplicateColumnNamesSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "preserve_duplicate_column_names";
+	static constexpr const char *Description =
+	    "Preserve duplicate column names instead of disambiguating them with _1, _2, etc. suffixes";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct PreserveIdentifierCaseSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "preserve_identifier_case";

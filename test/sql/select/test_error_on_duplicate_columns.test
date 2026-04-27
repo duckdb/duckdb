@@ -1,0 +1,100 @@
+# name: test/sql/select/test_error_on_duplicate_columns.test
+# group: [select]
+
+# default behavior: duplicate column names in subqueries are disambiguated
+query II
+SELECT * FROM (SELECT 42 a, 84 a) sub;
+----
+42	84
+
+query I
+SELECT a_1 FROM (SELECT 42 a, 84 a) sub;
+----
+84
+
+# enable preserve_duplicate_column_names: disambiguation is disabled
+statement ok
+SET preserve_duplicate_column_names = true;
+
+# duplicate column names in a top-level SELECT are always fine
+query II
+SELECT 42 a, 84 a;
+----
+42	84
+
+# subquery with duplicate column names now errors (no longer disambiguated)
+statement error
+SELECT * FROM (SELECT 42 a, 84 a) sub;
+----
+duplicate column name "a"
+
+# unique columns in subquery still work fine
+query II
+SELECT * FROM (SELECT 1 AS a, 2 AS b) sub;
+----
+1	2
+
+# explicit AS aliases inside the subquery are preserved
+query II
+SELECT foo, bar FROM (SELECT 1 AS foo, 2 AS bar) sub;
+----
+1	2
+
+# explicit AS aliases are preserved even when the underlying expressions would collide
+query II
+SELECT foo, bar FROM (SELECT 42 AS foo, 42 AS bar) sub;
+----
+42	42
+
+# cross join producing duplicates in subquery context
+statement error
+SELECT * FROM (SELECT * FROM (SELECT 1 AS x) a, (SELECT 2 AS x) b) sub;
+----
+duplicate column name "x"
+
+# but cross join at the top level is fine (different bindings)
+query II
+SELECT * FROM (SELECT 1 AS x) a, (SELECT 2 AS x) b;
+----
+1	2
+
+# CTE with duplicate column names errors
+statement error
+WITH cte AS (SELECT 42 a, 84 a) SELECT * FROM cte;
+----
+duplicate column name "a"
+
+# top-level UNION with duplicate column names is fine
+query II
+SELECT 42 a, 84 a UNION ALL SELECT 1, 2;
+----
+42	84
+1	2
+
+# UNION inside a subquery with duplicate column names errors
+statement error
+SELECT * FROM (SELECT 42 a, 84 a UNION ALL SELECT 1, 2) sub;
+----
+duplicate column name "a"
+
+# can be toggled off within session
+statement ok
+SET preserve_duplicate_column_names = false;
+
+# back to default: disambiguation happens
+query II
+SELECT * FROM (SELECT 42 a, 84 a) sub;
+----
+42	84
+
+# reset also works
+statement ok
+SET preserve_duplicate_column_names = true;
+
+statement ok
+RESET preserve_duplicate_column_names;
+
+query II
+SELECT * FROM (SELECT 42 a, 84 a) sub;
+----
+42	84

@@ -16,6 +16,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include <algorithm>
 
@@ -702,8 +703,12 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 }
 
 void BindContext::AddSubquery(TableIndex index, const string &alias, SubqueryRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
+	if (Settings::Get<PreserveDuplicateColumnNamesSetting>(binder.context)) {
+		AddGenericBinding(index, alias, subquery.names, subquery.types);
+	} else {
+		auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+		AddGenericBinding(index, alias, names, subquery.types);
+	}
 }
 
 void BindContext::AddEntryBinding(TableIndex index, const string &alias, const vector<string> &names,
