@@ -356,7 +356,7 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 	}
 	if (gstate.empty_column_idex.IsValid()) {
 		auto &empty_vector = output.data[gstate.empty_column_idex.GetIndex()];
-		ConstantVector::SetNull(empty_vector);
+		ConstantVector::SetNull(empty_vector, count_t(result.count));
 	}
 
 	if (output.size() == 0) {

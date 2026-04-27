@@ -14,7 +14,7 @@ static void MapEntriesFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto &map = args.data[0];
 	if (map.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 	MapUtil::ReinterpretMap(result, map, count);

@@ -2,11 +2,6 @@
 # description: Test parsing of CREATE TRIGGER statements
 # group: [trigger]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 # Parsing succeeds - bind fails because tables do not exist
 
 # Basic AFTER INSERT trigger - table does not exist

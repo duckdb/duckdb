@@ -82,7 +82,7 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 		auto &target_vector = struct_entries[i];
 		if (!child) {
 			// if we are not scanning this vector - set it to NULL
-			ConstantVector::SetNull(target_vector);
+			ConstantVector::SetNull(target_vector, count_t(num_values));
 			continue;
 		}
 		ColumnReaderInput child_input(num_values, define_out, repeat_out);

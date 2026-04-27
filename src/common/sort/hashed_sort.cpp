@@ -381,7 +381,7 @@ SinkResultType HashedSort::Sink(ExecutionContext &context, DataChunk &input_chun
 	if (force_payload) {
 		auto &vec = payload_chunk.data[input_chunk.ColumnCount() + sort_chunk.ColumnCount()];
 		D_ASSERT(vec.GetType().id() == LogicalTypeId::BOOLEAN);
-		ConstantVector::SetNull(vec);
+		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
 	payload_chunk.SetCardinality(input_chunk);

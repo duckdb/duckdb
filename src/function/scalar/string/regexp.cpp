@@ -284,7 +284,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		} else {
 			ConstantVector::SetNull(result, false);
 			auto idata = ConstantVector::GetData<string_t>(input);

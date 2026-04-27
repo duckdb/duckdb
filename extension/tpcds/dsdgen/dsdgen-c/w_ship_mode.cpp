@@ -86,12 +86,12 @@ int mk_w_ship_mode(void *info_arr, ds_key_t kIndex) {
 
 	void *info = append_info_get(info_arr, SHIP_MODE);
 	append_row_start(info);
-	append_key(info, r->sm_ship_mode_sk);
-	append_varchar(info, r->sm_ship_mode_id);
-	append_varchar(info, r->sm_type);
-	append_varchar(info, r->sm_code);
-	append_varchar(info, r->sm_carrier);
-	append_varchar(info, &r->sm_contract[0]);
+	append_key(info, r->sm_ship_mode_sk, SM_SHIP_MODE_SK);
+	append_varchar(info, r->sm_ship_mode_id, SM_SHIP_MODE_ID);
+	append_varchar(info, r->sm_type, SM_TYPE);
+	append_varchar(info, r->sm_code, SM_CODE);
+	append_varchar(info, r->sm_carrier, SM_CARRIER);
+	append_varchar(info, &r->sm_contract[0], SM_CONTRACT);
 	append_row_end(info);
 
 	return 0;

@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
+buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value, count_t count) {
 	auto &type = value.type();
 	auto internal_type = type.InternalType();
 	buffer_ptr<VectorBuffer> result;
@@ -25,15 +25,16 @@ buffer_ptr<VectorBuffer> CreateConstantBuffer(const Value &value) {
 	}
 	result->SetValue(type, 0, value);
 	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	return result;
 }
 
-void ConstantVector::Reference(Vector &vector, const Value &value) {
+void ConstantVector::Reference(Vector &vector, const Value &value, count_t count) {
 	D_ASSERT(vector.GetType() == value.type());
-	vector.SetBuffer(CreateConstantBuffer(value));
+	vector.SetBuffer(CreateConstantBuffer(value, count));
 }
 
-void ConstantVector::SetNull(Vector &vector) {
+void ConstantVector::SetNull(Vector &vector, count_t count) {
 	// try to re-use the buffer if possible
 	auto &buffer_ref = vector.GetBufferRef();
 	bool needs_new_buffer = !buffer_ref;
@@ -46,10 +47,11 @@ void ConstantVector::SetNull(Vector &vector) {
 	}
 	if (needs_new_buffer) {
 		// we cannot re-use the buffer - refer a null-value which has code necessary to create a new buffer
-		Reference(vector, Value(vector.GetType()));
+		Reference(vector, Value(vector.GetType()), count);
 		return;
 	}
 	vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(vector, count);
 	SetNull(vector, true);
 }
 
@@ -95,18 +97,18 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 	return &owned_sel;
 }
 
-void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t position, idx_t count) {
+void ConstantVector::Reference(Vector &vector, count_t count, const Vector &source, idx_t position,
+                               idx_t source_count) {
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		auto entries = source.Values<list_entry_t>(count);
+		auto entries = source.Values<list_entry_t>(source_count);
 		auto entry = entries[position];
 
 		if (!entry.IsValid()) {
 			// list is null: create null value
-			Value null_value(source_type);
-			vector.Reference(null_value);
+			SetNull(vector, count);
 			break;
 		}
 
@@ -123,16 +125,16 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 
 		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(vector, count);
 		break;
 	}
 	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(count, vdata);
+		source.ToUnifiedFormat(source_count, vdata);
 		auto source_idx = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
-			Value null_value(source_type);
-			vector.Reference(null_value);
+			SetNull(vector, count);
 			break;
 		}
 
@@ -153,17 +155,17 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Set(0, true);
+		FlatVector::SetSize(vector, count);
 		break;
 	}
 	case PhysicalType::STRUCT: {
 		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(count, vdata);
+		source.ToUnifiedFormat(source_count, vdata);
 
 		auto struct_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(struct_index)) {
 			// null struct: create null value
-			Value null_value(source_type);
-			vector.Reference(null_value);
+			SetNull(vector, count);
 			break;
 		}
 
@@ -171,18 +173,19 @@ void ConstantVector::Reference(Vector &vector, const Vector &source, idx_t posit
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(target_entries[i], source_entries[i], position, count);
+			ConstantVector::Reference(target_entries[i], count, source_entries[i], position, source_count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Set(0, true);
+		FlatVector::SetSize(vector, count);
 		break;
 	}
 	default:
 		// default behavior: get a value from the vector and reference it
 		// this is not that expensive for scalar types
 		auto value = source.GetValue(position);
-		vector.Reference(value);
+		vector.Reference(value, count);
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		break;
 	}

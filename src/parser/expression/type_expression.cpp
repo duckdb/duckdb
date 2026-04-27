@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -87,7 +88,13 @@ string TypeExpression::ToString() const {
 		return "INTERVAL";
 	}
 
-	result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true, KeywordCategory::KEYWORD_COL_NAME);
+	auto type_id = TransformStringToLogicalTypeId(type_name);
+	if (type_id != LogicalTypeId::UNBOUND && type_id != LogicalTypeId::SQLNULL) {
+		// Built-in type name
+		result += type_name;
+	} else {
+		result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true);
+	}
 
 	if (!params.empty()) {
 		result += "(";

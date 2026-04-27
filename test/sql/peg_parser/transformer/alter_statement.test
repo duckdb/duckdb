@@ -2,17 +2,12 @@
 # description: Test alter statements in peg parser
 # group: [transformer]
 
-require autocomplete
-
 require skip_reload
 
 require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
 
 statement ok
 PRAGMA enable_verification
-
-statement ok
-call enable_peg_parser();
 
 statement ok
 CREATE TABLE test3(s integer);

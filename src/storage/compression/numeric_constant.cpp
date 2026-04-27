@@ -66,7 +66,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 	if (stats.CanHaveNull()) {
 		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
 		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(scan_count));
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
