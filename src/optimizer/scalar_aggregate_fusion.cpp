@@ -90,6 +90,15 @@ static unique_ptr<Expression> MakeConjunction(ExpressionType type, vector<unique
 	return std::move(result);
 }
 
+static void PushUniqueExpression(vector<unique_ptr<Expression>> &expressions, unique_ptr<Expression> candidate) {
+	for (auto &expr : expressions) {
+		if (Expression::Equals(*expr, *candidate)) {
+			return;
+		}
+	}
+	expressions.push_back(std::move(candidate));
+}
+
 static bool FlattenCrossProduct(unique_ptr<LogicalOperator> &op,
                                 vector<reference<unique_ptr<LogicalOperator>>> &leaves) {
 	if (IsCrossProduct(*op)) {
@@ -434,10 +443,29 @@ static unique_ptr<LogicalOperator> CreateFusedAggregate(Optimizer &optimizer, ve
 		return nullptr;
 	}
 
+	vector<unique_ptr<Expression>> branch_or_terms;
 	vector<vector<unique_ptr<Expression>>> branch_predicates;
+	bool add_or_guard = true;
 	branch_predicates.reserve(branches.size());
 	for (auto &branch : branches) {
-		branch_predicates.push_back(GetBranchPredicates(branch));
+		auto predicates = GetBranchPredicates(branch);
+		if (predicates.empty()) {
+			// This branch has no branch-local predicate. A filtered aggregate would
+			// be unfiltered and an OR guard would be redundant.
+			add_or_guard = false;
+		}
+		if (add_or_guard) {
+			vector<unique_ptr<Expression>> or_term_children;
+			for (auto &predicate : predicates) {
+				or_term_children.push_back(predicate->Copy());
+			}
+			PushUniqueExpression(branch_or_terms,
+			                     MakeConjunction(ExpressionType::CONJUNCTION_AND, std::move(or_term_children)));
+		}
+		branch_predicates.push_back(std::move(predicates));
+	}
+	if (add_or_guard && !branch_or_terms.empty()) {
+		common_predicates.push_back(MakeConjunction(ExpressionType::CONJUNCTION_OR, std::move(branch_or_terms)));
 	}
 
 	vector<unique_ptr<Expression>> fused_aggregates;
