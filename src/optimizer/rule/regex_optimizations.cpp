@@ -213,8 +213,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	auto like_expression =
-	    make_uniq<BoundFunctionExpression>(root.GetReturnType(), LikeFun::GetFunction(), std::move(root.children), nullptr);
+	auto like_expression = make_uniq<BoundFunctionExpression>(root.GetReturnType(), LikeFun::GetFunction(),
+	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
 	return std::move(like_expression);

@@ -71,7 +71,8 @@ public:
 
 		// Replace AVG(x) with SUM(x)
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
-		const auto sum_fun = sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
+		const auto sum_fun =
+		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
 		auto count_arg = args.back()->Copy();
@@ -367,8 +368,8 @@ private:
 
 			auto &rewrite_info = rewrite_entry->second;
 			ColumnBinding count_binding(aggr.aggregate_index, ProjectionIndex(rewrite_info.count_idx));
-			auto count_ref = make_uniq<BoundColumnRefExpression>(aggr.expressions[rewrite_info.count_idx]->GetReturnType(),
-			                                                     count_binding);
+			auto count_ref = make_uniq<BoundColumnRefExpression>(
+			    aggr.expressions[rewrite_info.count_idx]->GetReturnType(), count_binding);
 
 			rewrite_info.additional_expressions.push_back(std::move(count_ref));
 			auto final_result = rule.CreateProjectionExpression(aggr_type, std::move(aggr_ref),

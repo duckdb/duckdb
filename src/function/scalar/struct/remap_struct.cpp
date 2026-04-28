@@ -549,7 +549,8 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 			continue;
 		}
 		if (!IsRemappable(arg->GetReturnType())) {
-			throw BinderException("Struct remap can only remap nested types, not '%s'", arg->GetReturnType().ToString());
+			throw BinderException("Struct remap can only remap nested types, not '%s'",
+			                      arg->GetReturnType().ToString());
 		} else if (arg->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->GetReturnType())) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
@@ -558,7 +559,8 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	auto &to_type = arguments[1]->GetReturnType();
 
 	auto &defaults = arguments[3];
-	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL && defaults->GetReturnType().id() != LogicalTypeId::STRUCT) {
+	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+	    defaults->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");
 	}
 	if (defaults->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->GetReturnType())) {

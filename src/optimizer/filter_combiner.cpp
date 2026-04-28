@@ -30,7 +30,8 @@ namespace duckdb {
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 
-static ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, ExpressionValueInformation &right);
+static ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left,
+                                                     ExpressionValueInformation &right);
 
 FilterCombiner::FilterCombiner(ClientContext &context) : context(context) {
 }

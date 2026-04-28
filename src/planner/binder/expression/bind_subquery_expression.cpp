@@ -43,7 +43,7 @@ static bool TypeIsUnnamedStruct(const LogicalType &type) {
 }
 
 static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result,
-                             const vector<LogicalType> &types, ExpressionType comparison_type) {
+                                    const vector<LogicalType> &types, ExpressionType comparison_type) {
 	// two scenarios
 	// Single Expression (standard):
 	// x IN (...)
