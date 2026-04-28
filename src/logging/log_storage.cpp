@@ -386,7 +386,7 @@ void FileLogStorage::SetPaths(const string &base_path) {
 		it.second.path.clear();
 	}
 
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetFileSystem(db);
 	if (normalize_contexts) {
 		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
 		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");

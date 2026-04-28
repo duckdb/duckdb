@@ -518,7 +518,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 }
 
 static bool IsHTTP(const string &path) {
-	return StringUtil::StartsWith(path, "http://") || !StringUtil::StartsWith(path, "https://");
+	return StringUtil::StartsWith(path, "http://") || StringUtil::StartsWith(path, "https://");
 }
 
 static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
