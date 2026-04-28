@@ -198,7 +198,7 @@ public:
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
 
-class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
+class AggregateFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
@@ -208,7 +208,7 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type) {
+	    : SimpleFunction(name, arguments, return_type) {
 		properties.null_handling = null_handling;
 
 		callbacks.state_size = state_size;
@@ -232,7 +232,7 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type) {
+	    : SimpleFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
 		callbacks.update = update;
@@ -277,7 +277,7 @@ public:
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                  aggregate_statistics_t statistics = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type) {
+	    : SimpleFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
 		callbacks.window = window;

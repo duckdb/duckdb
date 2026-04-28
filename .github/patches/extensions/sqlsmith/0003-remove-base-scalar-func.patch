@@ -1,0 +1,22 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index ae18964..a6361c0 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -1277,7 +1277,7 @@ bool StatementGenerator::FunctionArgumentsAlwaysNull(const string &name) {
+ 
+ 	return always_null_functions.find(name) != always_null_functions.end();
+ }
+-string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_function) {
++string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
+ 	auto select = make_uniq<SelectStatement>();
+ 	auto node = make_uniq<SelectNode>();
+ 
+@@ -1310,7 +1310,7 @@ string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_functio
+ 	return select->ToString();
+ }
+ 
+-string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_function) {
++string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function) {
+ 	auto select = make_uniq<SelectStatement>();
+ 	auto node = make_uniq<SelectNode>();
+ 
