@@ -195,15 +195,8 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	// (slice and) reference the other columns
 	vector<Vector> slices;
 	for (idx_t i = 0; i < column_infos.size(); i++) {
-		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			// only reference constant vectorsl
-			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
-
-		} else {
-			// slice inconstant vectors
-			slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
-			info.input_chunk.data[i + slice_offset].Reference(slices.back());
-		}
+		slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
+		info.input_chunk.data[i + slice_offset].Reference(slices.back());
 	}
 
 	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
