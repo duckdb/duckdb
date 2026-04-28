@@ -572,47 +572,6 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
 
-class PEGParserExtension : public ParserExtension {
-public:
-	PEGParserExtension() {
-		parser_override = PEGParser;
-	}
-
-	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
-		auto peg_factory = GetGlobalPEGMatcherCache().GetTransformerFactory();
-		auto &root_matcher = peg_matcher->Root();
-
-		vector<MatcherToken> root_tokens;
-
-		ParserTokenizer tokenizer(query, root_tokens);
-		tokenizer.TokenizeInput();
-
-		try {
-			vector<unique_ptr<SQLStatement>> result;
-			if (!root_tokens.empty()) {
-				result = peg_factory->Transform(root_tokens, options, root_matcher);
-			}
-			if (!result.empty()) {
-				auto &last_statement = result.back();
-				last_statement->stmt_length = query.size() - last_statement->stmt_location;
-			}
-			for (auto &statement : result) {
-				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-				statement->stmt_location = 0;
-				statement->stmt_length = statement->query.size();
-				if (statement->type == StatementType::CREATE_STATEMENT) {
-					auto &create = statement->Cast<CreateStatement>();
-					create.info->sql = statement->query;
-				}
-			}
-			return ParserOverrideResult(std::move(result));
-		} catch (std::exception &e) {
-			return ParserOverrideResult(e);
-		}
-	}
-};
-
 struct FormatSQLBindData : public FunctionData {
 	FormatterConfig config;
 
@@ -714,8 +673,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	format_sql_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, map_config_type}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
 	loader.RegisterFunction(format_sql_set);
-	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	ParserExtension::Register(config, PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
