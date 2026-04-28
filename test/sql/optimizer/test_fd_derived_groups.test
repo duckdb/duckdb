@@ -14,25 +14,6 @@ CREATE TABLE f(x DOUBLE);
 statement ok
 INSERT INTO f VALUES (1.5), (1.7), (2.3);
 
-# Insert -0e0 before enable_verification: it gets folded to 0e0 on insert under verification.
-statement ok
-CREATE TABLE z(x DOUBLE);
-
-statement ok
-INSERT INTO z VALUES (0e0), (-0e0);
-
-statement ok
-CREATE TABLE zf(x FLOAT);
-
-statement ok
-INSERT INTO zf VALUES (0e0::FLOAT), (-0e0::FLOAT);
-
-statement ok
-CREATE TABLE zs(s STRUCT(a INTEGER, b DOUBLE));
-
-statement ok
-INSERT INTO zs VALUES ({'a': 1, 'b': 0e0}), ({'a': 1, 'b': -0e0});
-
 # Result queries: enable_verification re-runs each query unoptimized and checks the result
 # matches, replacing manual `disabled_optimizers='duplicate_groups'` toggling.
 statement ok
@@ -55,21 +36,22 @@ SELECT floor(x), floor(x)+1, count(*) FROM f GROUP BY floor(x), floor(x)+1 ORDER
 2.0	3.0	1
 
 # Float base: 0e0 == -0e0 but signbit distinguishes them — must not collapse.
+# Inline VALUES so -0e0's sign bit survives storage/verification round-trips.
 query III
-SELECT x, signbit(x), count(*) FROM z GROUP BY x, signbit(x) ORDER BY signbit(x);
+SELECT x, signbit(x), count(*) FROM (VALUES (0e0::DOUBLE), (-0e0::DOUBLE)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
 ----
 0.0	false	1
 -0.0	true	1
 
 query III
-SELECT x, signbit(x), count(*) FROM zf GROUP BY x, signbit(x) ORDER BY signbit(x);
+SELECT x, signbit(x), count(*) FROM (VALUES (0e0::FLOAT), (-0e0::FLOAT)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
 ----
 0.0	false	1
 -0.0	true	1
 
 # Nested float (STRUCT containing DOUBLE) is also unsafe.
 query III
-SELECT s, signbit(s.b), count(*) FROM zs GROUP BY s, signbit(s.b) ORDER BY signbit(s.b);
+SELECT s, signbit(s.b), count(*) FROM (VALUES ({'a': 1::INTEGER, 'b': 0e0::DOUBLE}), ({'a': 1::INTEGER, 'b': -0e0::DOUBLE})) t(s) GROUP BY s, signbit(s.b) ORDER BY signbit(s.b);
 ----
 {'a': 1, 'b': 0.0}	false	1
 {'a': 1, 'b': -0.0}	true	1
