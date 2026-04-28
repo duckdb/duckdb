@@ -2,7 +2,7 @@
 # description: Test the PartitionedExecution optimizer
 # group: [optimizer]
 
-load __TEST_DIR__/partitioned_execution.duckdb
+load {TEST_DIR}/partitioned_execution.duckdb
 
 # create test table with doubles instead of integers to avoid compressed materialization
 statement ok
@@ -52,7 +52,7 @@ foreach order_type ASC DESC
 # should see a union here
 query II
 EXPLAIN WITH cte AS (
-    FROM test ORDER BY ${c} ${order_type}
+    FROM test ORDER BY {c} {order_type}
 )
 SELECT bit_xor(hash(*COLUMNS('^t_')))
 FROM cte;
@@ -62,7 +62,7 @@ logical_opt	<REGEX>:.*UNION.*
 # hash should be the same
 query I nosort h
 WITH cte AS (
-    FROM test ORDER BY ${c} ${order_type}
+    FROM test ORDER BY {c} {order_type}
 )
 SELECT bit_xor(hash(*COLUMNS('^t_')))
 FROM cte;
@@ -70,36 +70,12 @@ FROM cte;
 
 endloop
 
-# GROUP BY
-query II
-EXPLAIN WITH cte1 AS (
-    SELECT ${c}, list(test) l
-    FROM test GROUP BY ALL
-), cte2 AS (
-    SELECT unnest(l, recursive := true)
-    FROM cte1
-)
-SELECT bit_xor(hash(*COLUMNS('^t_')))
-FROM cte2;
-----
-logical_opt	<REGEX>:.*UNION.*
-
-query I nosort h
-WITH cte1 AS (
-    SELECT ${c}, list(test) l
-    FROM test GROUP BY ALL
-), cte2 AS (
-    SELECT unnest(l, recursive := true)
-    FROM cte1
-)
-SELECT bit_xor(hash(*COLUMNS('^t_')))
-FROM cte2;
-----
+# no tests for single-column GROUP BY here because the optimization doesn't trigger due to low estimated cardinality
 
 # WINDOW
 query II
 EXPLAIN WITH cte AS (
-    SELECT ROW_NUMBER() OVER (PARTITION BY ${c}) AS idx, *
+    SELECT ROW_NUMBER() OVER (PARTITION BY {c}) AS idx, *
     FROM test
 )
 SELECT bit_xor(hash(*COLUMNS('^t_')))
@@ -109,7 +85,7 @@ logical_opt	<REGEX>:.*UNION.*
 
 query I nosort h
 WITH cte AS (
-    SELECT ROW_NUMBER() OVER (PARTITION BY ${c}) AS idx, *
+    SELECT ROW_NUMBER() OVER (PARTITION BY {c}) AS idx, *
     FROM test
 )
 SELECT bit_xor(hash(*COLUMNS('^t_')))

@@ -24,7 +24,7 @@ struct PartitionedExecutionConfig {
 	//! Minimum number of row groups per thread per partition to split on
 	static constexpr idx_t MIN_ROW_GROUPS_PER_THREAD_PER_PARTITION = 16;
 	//! Maximum overlap (as fraction of partition size) that we allow for a split
-	static constexpr double MAX_OVERLAP_RATIO = 0.05;
+	static constexpr double MAX_OVERLAP_RATIO = 0.1;
 	//! Minimum result cardinality before we even consider splitting
 	static constexpr idx_t MINIMUM_RESULT_CARDINALITY = 4194304;
 };
@@ -287,16 +287,20 @@ PartitionedExecutionCollectStatsNodes(LogicalOperator &op, vector<PartitionedExe
 
 static void PartitionedExecutionGrowPartition(
     const vector<PartitionedExecutionStatsNode> &stats_nodes, idx_t &i, int64_t &current_overlap,
-    idx_t &partition_count, double &partition_overlap_ratio, const std::function<bool()> &stopping_criterium,
+    idx_t &partition_count, double &partition_overlap_ratio, const std::function<bool()> &stopping_criterion,
     const std::function<void()> &update_callback = [] {}) {
-	while (i < stats_nodes.size() && !stopping_criterium()) {
+	while (i < stats_nodes.size() && !stopping_criterion()) {
 		const auto &node = stats_nodes[i++];
 		current_overlap += node.count_delta; // Keep track of overall overlap at "i"
 		D_ASSERT(current_overlap >= 0);
 		if (node.count_delta > 0) {
 			partition_count += NumericCast<idx_t>(node.count_delta); // Only add if it's the start of a row group
 		}
-		partition_overlap_ratio = static_cast<double>(current_overlap) / static_cast<double>(partition_count);
+		if (partition_count == 0) {
+			partition_overlap_ratio = 1;
+		} else {
+			partition_overlap_ratio = static_cast<double>(current_overlap) / static_cast<double>(partition_count);
+		}
 		update_callback();
 	}
 }
@@ -335,7 +339,7 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 		for (idx_t i = 0; i < stats_nodes.size();) {
 			const auto partition_start_i = i;
 			idx_t partition_count = 0;
-			double partition_overlap_ratio = NumericLimits<double>::Maximum();
+			double partition_overlap_ratio = 1;
 
 			// Grow partition until "partition_count" is at least "min_partition_count"
 			PartitionedExecutionGrowPartition(
@@ -345,7 +349,7 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 			// Grow partition until "partition_overlap" is less than the allowed maximum
 			PartitionedExecutionGrowPartition(column_stats_nodes[0], i, current_overlap, partition_count,
 			                                  partition_overlap_ratio, [&partition_overlap_ratio] {
-				                                  return partition_overlap_ratio <
+				                                  return partition_overlap_ratio <=
 				                                         PartitionedExecutionConfig::MAX_OVERLAP_RATIO;
 			                                  });
 
@@ -423,8 +427,8 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 
 enum class PartitionedExecutionStatsType : uint8_t { MIN, MAX };
 
-ExpressionType ParititionedExecutionGetExpressionType(PartitionedExecutionStatsType stats_type,
-                                                      const bool is_last_column) {
+ExpressionType PartitionedExecutionGetExpressionType(PartitionedExecutionStatsType stats_type,
+                                                     const bool is_last_column) {
 	// We always have to be inclusive for either the min or the max, we choose to be inclusive for the max
 	// Furthermore, we have to be inclusive for any column that's not the last column
 	switch (stats_type) {
@@ -433,7 +437,7 @@ ExpressionType ParititionedExecutionGetExpressionType(PartitionedExecutionStatsT
 	case PartitionedExecutionStatsType::MAX:
 		return is_last_column ? ExpressionType::COMPARE_LESSTHAN : ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	default:
-		throw NotImplementedException("ParititionedExecutionGetExpressionType for PartitionedExecutionStatsType");
+		throw NotImplementedException("PartitionedExecutionGetExpressionType for PartitionedExecutionStatsType");
 	}
 }
 
