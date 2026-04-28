@@ -21,7 +21,12 @@ CREATE TABLE small_t AS SELECT range i FROM range(10);
 statement ok
 CREATE TABLE local_t(i BIGINT);
 
-# --- Full seq_scan: all 4 row groups scanned, total 4 ---
+# Four persistent row groups: row group 0 is low-valued, row groups 1-3 are high-valued.
+statement ok
+CREATE TABLE mixed_t AS
+SELECT CASE WHEN range < 122880 THEN range ELSE range + 10000000 END AS i FROM range(400000);
+
+# --- Full seq_scan: all 4 row groups scanned ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -38,13 +43,10 @@ SELECT count(*) FROM t;
 statement ok
 PRAGMA disable_profiling;
 
-# View that flattens the profiling tree and exposes the row-group metrics for every operator.
-# Avoids brittle positional indexing into children[]. Created after the first profiling output exists
-# (DuckDB validates view bodies at creation time, so the file must be readable).
 statement ok
 CREATE VIEW operator_metrics AS
 WITH RECURSIVE ops AS (
-    SELECT children[1] AS op FROM '__TEST_DIR__/profiling_output.json'
+    SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
     UNION ALL
     SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
 )
@@ -58,7 +60,7 @@ SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
 TABLE_SCAN	4	4
 
-# --- Filtered scan: zone-map pruning skips 3 of 4 row groups ---
+# --- Filtered scan: skips 3 of 4 row groups ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -281,10 +283,43 @@ WHERE operator_type = 'TABLE_SCAN';
 ----
 2	8
 
-# --- Transaction-local append: total includes uncommitted local row groups ---
+# --- Transaction-local append: pruning covers distinct persistent and local ranges ---
 
 statement ok
 PRAGMA threads=1;
+
+statement ok
+BEGIN TRANSACTION;
+
+# Two local row groups in a separate middle range. The filter below scans persistent row group 0
+# and local row group 0, while pruning persistent row groups 1-3 and local row group 1.
+statement ok
+INSERT INTO mixed_t SELECT range + 5000000 FROM range(200000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM mixed_t WHERE i < 5000100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	2	6
+
+statement ok
+ROLLBACK;
+
+# --- Transaction-local append: total includes uncommitted local row groups ---
 
 statement ok
 BEGIN TRANSACTION;

@@ -439,11 +439,11 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) returns the number of rows scanned
 	table_function_rows_scanned_t rows_scanned;
-	//! (Optional) returns the number of row groups sequentially scanned by this scan
+	//! (Optional) returns the number of row groups scanned by the current operator
 	table_function_row_groups_seq_scanned_t row_groups_seq_scanned;
-	//! (Optional) returns the total number of row groups in the scan target
+	//! (Optional) returns the row group count for the current operator's scan target
 	table_function_row_groups_total_t row_groups_total;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan

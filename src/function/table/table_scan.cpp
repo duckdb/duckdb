@@ -832,7 +832,7 @@ idx_t TableScanRowGroupsSeqScanned(GlobalTableFunctionState &gstate_p, LocalTabl
 idx_t TableScanRowGroupsTotal(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	auto &storage = bind_data.table.Cast<DuckTableEntry>().GetStorage();
-	return storage.GetRowGroupCount(context);
+	return storage.GetRowGroupCountWithLocalStorage(context);
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
