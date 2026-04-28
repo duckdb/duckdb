@@ -78,6 +78,64 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 	return cost;
 }
 
+optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
+                                                     const vector<LogicalType> &arguments) {
+	if (arguments.size() < func.GetArguments().size()) {
+		// not enough arguments to fulfill the non-vararg part of the function
+		return optional_idx();
+	}
+	idx_t cost = 0;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		LogicalType arg_type = i < func.GetArguments().size() ? func.GetArguments()[i] : func.GetVarArgs();
+		if (arguments[i] == arg_type) {
+			// arguments match: do nothing
+			continue;
+		}
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], arg_type);
+		if (cast_cost >= 0) {
+			// we can implicitly cast, add the cost to the total cost
+			cost += idx_t(cast_cost);
+		} else {
+			// we can't implicitly cast: throw an error
+			return optional_idx();
+		}
+	}
+	return cost;
+}
+
+optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction &func,
+                                              const vector<LogicalType> &arguments) {
+	if (func.HasVarArgs()) {
+		// special case varargs function
+		return BindVarArgsFunctionCost(func, arguments);
+	}
+	if (func.GetArguments().size() != arguments.size()) {
+		// invalid argument count: check the next function
+		return optional_idx();
+	}
+	idx_t cost = 0;
+	bool has_parameter = false;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
+			has_parameter = true;
+			continue;
+		}
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
+		if (cast_cost >= 0) {
+			// we can implicitly cast, add the cost to the total cost
+			cost += idx_t(cast_cost);
+		} else {
+			// we can't implicitly cast: throw an error
+			return optional_idx();
+		}
+	}
+	if (has_parameter) {
+		// all arguments are implicitly castable and there is a parameter - return 0 as cost
+		return 0;
+	}
+	return cost;
+}
+
 template <class T>
 vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
                                                          const vector<LogicalType> &arguments, ErrorData &error) {
@@ -441,7 +499,7 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
                               case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
-                              const BaseScalarFunction &function) {
+                              const SimpleFunction &function) {
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
 		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
@@ -588,7 +646,7 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 	});
 }
 
-void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
+void FunctionBinder::ResolveTemplateTypes(SimpleFunction &bound_function,
                                           const vector<unique_ptr<Expression>> &children) {
 	case_insensitive_map_t<vector<LogicalType>> bindings;
 	vector<reference<LogicalType>> to_substitute;
@@ -639,7 +697,7 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 }
 
 // Verify that all template types are bound to concrete types.
-void FunctionBinder::CheckTemplateTypesResolved(const BaseScalarFunction &bound_function) {
+void FunctionBinder::CheckTemplateTypesResolved(const SimpleFunction &bound_function) {
 	for (const auto &arg : bound_function.GetArguments()) {
 		VerifyTemplateType(arg, bound_function.name);
 	}
