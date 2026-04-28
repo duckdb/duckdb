@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -925,43 +926,17 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
-		statement = statement->Copy();
-	}
-#endif
-	if (statement && config.query_verification_enabled) {
-		// query verification is enabled
-		// create a copy of the statement, and use the copy
-		// this way we verify that the copy correctly copies all properties
-		auto copied_statement = statement->Copy();
-		switch (statement->type) {
-		case StatementType::SELECT_STATEMENT: {
-			// in case this is a select query, we verify the original statement
-			ErrorData error;
-			try {
-				error = VerifyQuery(lock, query, std::move(statement), parameters);
-			} catch (std::exception &ex) {
-				error = ErrorData(ex);
-			}
-			if (error.HasError()) {
-				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error), query);
-			}
-			statement = std::move(copied_statement);
+	if (statement) {
+		switch (Settings::Get<DebugVerifyStatementSetting>(*this)) {
+		case DebugStatementVerification::NONE:
 			break;
-		}
-		default: {
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
-			bool reparse_statement = true;
-#else
-			bool reparse_statement = false;
-#endif
-			statement = std::move(copied_statement);
-			if (statement->type == StatementType::RELATION_STATEMENT) {
-				reparse_statement = false;
+		case DebugStatementVerification::COPY_STATEMENT:
+			if (statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
+				statement = statement->Copy();
 			}
-			if (reparse_statement) {
+			break;
+		case DebugStatementVerification::REPARSE_STATEMENT:
+			if (statement->type != StatementType::RELATION_STATEMENT) {
 				try {
 					Parser parser(GetParserOptions());
 					ErrorData error;
@@ -987,7 +962,26 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				}
 			}
 			break;
+		default:
+			throw InternalException("Unsupported statement verification mode");
 		}
+		if (config.query_verification_enabled && statement->type == StatementType::SELECT_STATEMENT) {
+			// query verification is enabled
+			// create a copy of the statement, and use the copy
+			// this way we verify that the copy correctly copies all properties
+			auto copied_statement = statement->Copy();
+			// in case this is a select query, we verify the original statement
+			ErrorData error;
+			try {
+				error = VerifyQuery(lock, query, std::move(statement), parameters);
+			} catch (std::exception &ex) {
+				error = ErrorData(ex);
+			}
+			if (error.HasError()) {
+				// error in verifying query
+				return ErrorResult<PendingQueryResult>(std::move(error), query);
+			}
+			statement = std::move(copied_statement);
 		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);

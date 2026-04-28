@@ -1,0 +1,5 @@
+{
+  "description": "Run with debug_verify_statement set to reparse_statement - forcing all statements to be converted to a string and reparsed using the parser prior to being used",
+  "on_init": "SET debug_verify_statement='reparse_statement';",
+  "skip_compiled": "true"
+}
