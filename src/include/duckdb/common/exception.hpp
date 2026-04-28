@@ -135,7 +135,7 @@ public:
 	template <class T, typename... ARGS>
 	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values,
 	                                        const T &param, ARGS &&...params) {
-		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
+		values.push_back(ExceptionFormatValue::CreateFormatValue(param));
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
