@@ -86,13 +86,12 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 		// Get the remaining row ID.
 		remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
 		remainder |= UnsafeNumericCast<idx_t>(n7.key[0]);
-
-		// Free the prefix (nodes) and inline the remainder.
-		if (prefix.GetType() == NType::PREFIX) {
-			Node::FreeTree(art, prefix);
-			Leaf::New(prefix, UnsafeNumericCast<row_t>(remainder));
-			return;
-		}
+	}
+	// Free the prefix (nodes) and inline the remainder.
+	if (prefix.GetType() == NType::PREFIX) {
+		Node::FreeTree(art, prefix);
+		Leaf::New(prefix, UnsafeNumericCast<row_t>(remainder));
+		return;
 	}
 	// Free the Node7Leaf and inline the remainder.
 	Node::FreeNode(art, node);
