@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 
@@ -34,9 +34,8 @@ private:
 	Optimizer &optimizer;
 	//! Stored expressions (kept around so we don't have dangling pointers)
 	vector<unique_ptr<Expression>> stored_expressions;
-	//! Aggregates marked for projection wrapping by VisitAggregate; consumed in VisitOperator
-	//! post-recursion (where we own the unique_ptr<LogicalOperator> child slot to swap).
-	unordered_map<LogicalAggregate *, unique_ptr<LogicalProjection>> pending_projections;
+	//! Filled by VisitAggregate, consumed by VisitOperator post-recursion when we own the slot.
+	reference_map_t<LogicalAggregate, unique_ptr<LogicalProjection>> pending_projections;
 };
 
 } // namespace duckdb

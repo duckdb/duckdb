@@ -14,6 +14,25 @@ CREATE TABLE f(x DOUBLE);
 statement ok
 INSERT INTO f VALUES (1.5), (1.7), (2.3);
 
+# Insert -0e0 before enable_verification: it gets folded to 0e0 on insert under verification.
+statement ok
+CREATE TABLE z(x DOUBLE);
+
+statement ok
+INSERT INTO z VALUES (0e0), (-0e0);
+
+statement ok
+CREATE TABLE zf(x FLOAT);
+
+statement ok
+INSERT INTO zf VALUES (0e0::FLOAT), (-0e0::FLOAT);
+
+statement ok
+CREATE TABLE zs(s STRUCT(a INTEGER, b DOUBLE));
+
+statement ok
+INSERT INTO zs VALUES ({'a': 1, 'b': 0e0}), ({'a': 1, 'b': -0e0});
+
 # Result queries: enable_verification re-runs each query unoptimized and checks the result
 # matches, replacing manual `disabled_optimizers='duplicate_groups'` toggling.
 statement ok
@@ -34,6 +53,41 @@ SELECT floor(x), floor(x)+1, count(*) FROM f GROUP BY floor(x), floor(x)+1 ORDER
 ----
 1.0	2.0	2
 2.0	3.0	1
+
+# Float base: 0e0 == -0e0 but signbit distinguishes them — must not collapse.
+query III
+SELECT x, signbit(x), count(*) FROM z GROUP BY x, signbit(x) ORDER BY signbit(x);
+----
+0.0	false	1
+-0.0	true	1
+
+query III
+SELECT x, signbit(x), count(*) FROM zf GROUP BY x, signbit(x) ORDER BY signbit(x);
+----
+0.0	false	1
+-0.0	true	1
+
+# Nested float (STRUCT containing DOUBLE) is also unsafe.
+query III
+SELECT s, signbit(s.b), count(*) FROM zs GROUP BY s, signbit(s.b) ORDER BY signbit(s.b);
+----
+{'a': 1, 'b': 0.0}	false	1
+{'a': 1, 'b': -0.0}	true	1
+
+# INTERVAL: '1 day' == '24 hour' but datepart('day', ...) distinguishes them. The binder
+# currently wraps INTERVAL groups in normalized_interval(...) so a bare colref shouldn't
+# reach the optimizer, but BaseTypeAllowsCollapse rejects INTERVAL defensively.
+statement ok
+CREATE TABLE iv(i INTERVAL);
+
+statement ok
+INSERT INTO iv VALUES (INTERVAL '1' DAY), (INTERVAL '24' HOUR);
+
+query III
+SELECT i, datepart('day', i), count(*) FROM iv GROUP BY i, datepart('day', i) ORDER BY datepart('day', i);
+----
+24:00:00	0	1
+1 day	1	1
 
 # Plan-shape assertions: EXPLAIN output differs between optimized and unoptimized, so verification
 # must be off here.
