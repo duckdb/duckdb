@@ -73,7 +73,7 @@ FROM
 	 FROM q28_sales_view
 	 WHERE q BETWEEN 6 AND 10 AND (list_price BETWEEN 50 AND 60 OR wholesale BETWEEN 30 AND 40)) b2;
 ----
-logical_opt	<REGEX>:[\s\S]*AGGREGATE[\s\S]*count\(DISTINCT list_price\)[\s\S]*FILTER[\s\S]*READ_PARQUET.*
+logical_opt	<!REGEX>:[\s\S]*FILTER \(WHERE.*
 
 query RIRRIR
 SELECT *

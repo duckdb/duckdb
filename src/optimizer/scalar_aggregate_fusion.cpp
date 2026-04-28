@@ -264,7 +264,7 @@ static bool IsSupportedAggregate(const Expression &expr) {
 		return aggregate.children.empty() && !aggregate.IsDistinct();
 	}
 	if (name == "count") {
-		return aggregate.children.size() <= 1;
+		return aggregate.children.size() <= 1 && !aggregate.IsDistinct();
 	}
 	if (aggregate.IsDistinct()) {
 		return false;
