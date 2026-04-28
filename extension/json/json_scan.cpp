@@ -29,9 +29,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	}
 
 	if (auto_detect_p) {
-		// No TIMESTAMP formats: the default VARCHAR -> TIMESTAMP cast handles ISO-8601
-		// variants (Z, +00:00, fractional seconds, etc.) and avoids locking a single
-		// shared format that breaks columns with different timestamp representations.
+		// No TIMESTAMP formats: the default VARCHAR -> TIMESTAMP cast handles all ISO-8601 variants.
 		static const type_id_map_t<vector<const char *>> FORMAT_TEMPLATES = {
 		    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 		};
