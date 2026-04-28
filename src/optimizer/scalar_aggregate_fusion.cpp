@@ -192,6 +192,18 @@ static bool SupportsSourceFusion(const LogicalGet &get) {
 	       StringUtil::CIEquals(get.function.name, "parquet_scan");
 }
 
+static bool ContainsSupportedSource(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET && SupportsSourceFusion(op.Cast<LogicalGet>())) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsSupportedSource(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static bool GetSourceSignature(LogicalGet &get, string &signature) {
 	if (!SupportsSourceFusion(get)) {
 		return false;
@@ -586,6 +598,9 @@ ScalarAggregateFusion::ScalarAggregateFusion(Optimizer &optimizer_p) : optimizer
 }
 
 unique_ptr<LogicalOperator> ScalarAggregateFusion::Optimize(unique_ptr<LogicalOperator> op) {
+	if (!ContainsSupportedSource(*op)) {
+		return op;
+	}
 	return OptimizeRecursive(optimizer, std::move(op));
 }
 
