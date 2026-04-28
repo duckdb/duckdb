@@ -175,7 +175,7 @@ SELECT hash(list(cte))
 FROM cte;
 ----
 
-query II nosort desc_h
+query I nosort desc_h
 WITH cte AS (
     FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
 )
@@ -183,3 +183,119 @@ SELECT hash(list(cte))
 FROM cte;
 ----
 
+# make sure the order is correct for the order by stuff with lag
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring > t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered > t_high_cardinality_ordered);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring > t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered > t_high_cardinality_ordered);
+----
+0
+
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring < t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered < t_high_cardinality_ordered);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring < t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered < t_high_cardinality_ordered);
+----
+0
+
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+), cte2 AS (
+    SELECT
+        lag(t_const) OVER () prev_const,
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_low_cardinality_recurring) OVER () prev_low_recurring,
+        t_const,
+        t_high_cardinality_recurring,
+        t_low_cardinality_recurring
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_const > t_const
+   OR (prev_const = t_const AND prev_recurring > t_high_cardinality_recurring)
+   OR (prev_const = t_const AND prev_recurring = t_high_cardinality_recurring AND
+       prev_low_recurring > t_low_cardinality_recurring);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+), cte2 AS (
+    SELECT
+        lag(t_const) OVER () prev_const,
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_low_cardinality_recurring) OVER () prev_low_recurring,
+        t_const,
+        t_high_cardinality_recurring,
+        t_low_cardinality_recurring
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_const > t_const
+   OR (prev_const = t_const AND prev_recurring > t_high_cardinality_recurring)
+   OR (prev_const = t_const AND prev_recurring = t_high_cardinality_recurring AND
+       prev_low_recurring > t_low_cardinality_recurring);
+----
+0
