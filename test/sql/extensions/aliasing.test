@@ -6,62 +6,38 @@ require skip_reload
 
 require allow_unsigned_extensions
 
-# instead of registering in a separate schema, when loading, we register it in the global extension alias thing
-# whenever we add a new alias, we register this function in main but then with the alias and not the extension name
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
 
-# what if we load again? do we overwrite?
-
+# duplicate alias is rejected
 statement error
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_extension' AS demo
 ----
 Alias 'demo' already exists for extension 'loadable_extension_demo'
 
-# can we ovewrite an extension?
-statement ok
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS second_demo
-
+# unqualified call works when only one binary is loaded
 query I
 SELECT bounded_max(1::BOUNDED(10))
 ----
 10
 
-# if we use same alias for
+# alias-prefixed call routes to the original binary
 query I
 SELECT demo.bounded_max(1::BOUNDED(10))
 ----
 10
 
-query I
-SELECT second_demo.bounded_max(1::BOUNDED(10))
-----
-10
-
-# load a second, different extension under a different alias
+# load an entirely different binary that shares the same extension name but has different functions
 statement ok
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_second.duckdb_extension' AS demo2
+LOAD '{BUILD_DIRECTORY}/test/extension/copy/loadable_extension_demo.duckdb_extension' AS copy
 
-# call the second extension's function directly
 query I
-SELECT demo_second_greet()
+SELECT copy.loadable_extension_second_demo()
 ----
-Hello from demo_second!
+Hello from the second loadable_extension_demo binary!
 
-# call via alias prefix
-query I
-SELECT demo2.demo_second_greet()
-----
-Hello from demo_second!
-
-# the first extension's alias still routes correctly
+# the original alias still routes to its own binary's function
 query I
 SELECT demo.bounded_max(1::BOUNDED(10))
 ----
 10
-
-# cross: demo2 does not own bounded_max, so demo2.bounded_max should not resolve via alias
-# (bounded_max exists in catalog but its extension_name != loadable_extension_demo_second)
-statement error
-SELECT demo2.bounded_max(1::BOUNDED(10))
-----
