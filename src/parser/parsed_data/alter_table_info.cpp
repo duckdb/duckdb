@@ -36,7 +36,7 @@ string ChangeOwnershipInfo::ToString() const {
 	result += TypeToString(entry_catalog_type);
 	result += " ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += "IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " OWNED BY ";
@@ -120,7 +120,7 @@ string RenameColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
@@ -153,7 +153,7 @@ string RenameFieldInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
@@ -190,7 +190,7 @@ string RenameTableInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
@@ -220,9 +220,9 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 
 string AddColumnInfo::ToString() const {
 	string result = "";
-	result += "ALTER TABLE";
+	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += " " + QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
@@ -264,7 +264,7 @@ string AddFieldInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
@@ -301,7 +301,7 @@ string RemoveColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
@@ -337,7 +337,7 @@ string RemoveFieldInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
@@ -380,7 +380,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -426,7 +426,7 @@ string SetDefaultInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -461,7 +461,7 @@ string SetNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -491,7 +491,7 @@ string DropNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -563,7 +563,7 @@ string RenameViewInfo::ToString() const {
 	string result = "";
 	result += "ALTER VIEW ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
