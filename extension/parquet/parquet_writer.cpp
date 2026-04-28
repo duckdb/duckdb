@@ -439,8 +439,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
                              int64_t compression_level_p, ParquetVersion parquet_version,
                              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96_p,
-                             TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p,
-                             vector<bool> not_null_columns_p)
+                             TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p, vector<bool> not_null_columns_p)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
@@ -450,8 +449,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       write_timestamp_as_int96(write_timestamp_as_int96_p),
-      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p),
-      not_null_columns(std::move(not_null_columns_p)), total_written(0), num_row_groups(0) {
+      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), not_null_columns(std::move(not_null_columns_p)),
+      total_written(0), num_row_groups(0) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
