@@ -183,8 +183,8 @@ public:
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
-	idx_t FileSize() {
-		return total_written;
+	idx_t FileSize() const {
+		return writer->GetTotalWritten();
 	}
 	optional_idx DictionarySizeLimit() const {
 		return dictionary_size_limit;
@@ -201,8 +201,8 @@ public:
 	int64_t CompressionLevel() const {
 		return compression_level;
 	}
-	idx_t NumberOfRowGroups() {
-		return num_row_groups;
+	idx_t NumberOfRowGroups() const {
+		return file_meta_data.row_groups.size();
 	}
 	ParquetVersion GetParquetVersion() const {
 		return parquet_version;
@@ -261,9 +261,6 @@ private:
 	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
 
 	unique_ptr<BufferedFileWriter> writer;
-	//! Atomics to reduce contention when rotating writes to multiple Parquet files
-	atomic<idx_t> total_written;
-	atomic<idx_t> num_row_groups;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;

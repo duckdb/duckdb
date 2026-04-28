@@ -449,7 +449,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       write_timestamp_as_int96(write_timestamp_as_int96_p),
-      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), total_written(0), num_row_groups(0) {
+      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -726,23 +726,12 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file metadata
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
-
-	total_written = writer->GetTotalWritten();
-	++num_row_groups;
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (buffer.Count() == 0) {
 		return;
 	}
-
-	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
-	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
-	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
-	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
-	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
-	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
-	total_written += buffer.SizeInBytes() / 2;
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group, transform_data);
