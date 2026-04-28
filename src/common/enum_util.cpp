@@ -1550,19 +1550,20 @@ const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DebugStatementVerification::NONE), "NONE" },
 		{ static_cast<uint32_t>(DebugStatementVerification::COPY_STATEMENT), "COPY_STATEMENT" },
-		{ static_cast<uint32_t>(DebugStatementVerification::REPARSE_STATEMENT), "REPARSE_STATEMENT" }
+		{ static_cast<uint32_t>(DebugStatementVerification::REPARSE_STATEMENT), "REPARSE_STATEMENT" },
+		{ static_cast<uint32_t>(DebugStatementVerification::SERIALIZE_STATEMENT), "SERIALIZE_STATEMENT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value) {
-	return StringUtil::EnumToString(GetDebugStatementVerificationValues(), 3, "DebugStatementVerification", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugStatementVerificationValues(), 4, "DebugStatementVerification", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value) {
-	return static_cast<DebugStatementVerification>(StringUtil::StringToEnum(GetDebugStatementVerificationValues(), 3, "DebugStatementVerification", value));
+	return static_cast<DebugStatementVerification>(StringUtil::StringToEnum(GetDebugStatementVerificationValues(), 4, "DebugStatementVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugVectorVerificationValues() {
@@ -5798,9 +5799,6 @@ VectorType EnumUtil::FromString<VectorType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(VerificationType::ORIGINAL), "ORIGINAL" },
-		{ static_cast<uint32_t>(VerificationType::COPIED), "COPIED" },
-		{ static_cast<uint32_t>(VerificationType::DESERIALIZED), "DESERIALIZED" },
-		{ static_cast<uint32_t>(VerificationType::PARSED), "PARSED" },
 		{ static_cast<uint32_t>(VerificationType::UNOPTIMIZED), "UNOPTIMIZED" },
 		{ static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
 		{ static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
@@ -5814,12 +5812,12 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
-	return StringUtil::EnumToString(GetVerificationTypeValues(), 11, "VerificationType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVerificationTypeValues(), 8, "VerificationType", static_cast<uint32_t>(value));
 }
 
 template<>
 VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
-	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 11, "VerificationType", value));
+	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 8, "VerificationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {

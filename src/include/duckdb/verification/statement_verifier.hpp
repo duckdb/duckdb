@@ -16,9 +16,6 @@ namespace duckdb {
 
 enum class VerificationType : uint8_t {
 	ORIGINAL,
-	COPIED,
-	DESERIALIZED,
-	PARSED,
 	UNOPTIMIZED,
 	NO_OPERATOR_CACHING,
 	PREPARED,
