@@ -12,8 +12,6 @@
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window_function.hpp"
 
-#include <re2/re2.h>
-
 namespace duckdb {
 
 static vector<unique_ptr<Expression>> CreatePartitionedRowNumExpression(ClientContext &client,
