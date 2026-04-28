@@ -933,7 +933,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	if (statement) {
-		StatementVerification(statement);
+		StatementVerification(lock, query, statement, parameters);
 		if (config.query_verification_enabled && statement->type == StatementType::SELECT_STATEMENT) {
 			// query verification is enabled
 			// create a copy of the statement, and use the copy

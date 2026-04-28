@@ -258,7 +258,8 @@ private:
 	//! true.
 	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
 	                      PendingQueryParameters parameters);
-	void StatementVerification(unique_ptr<SQLStatement> &statement);
+	void StatementVerification(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> &statement,
+	                           PendingQueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.

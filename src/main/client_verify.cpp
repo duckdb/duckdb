@@ -16,6 +16,11 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
 
 namespace duckdb {
 
@@ -33,7 +38,54 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 	}
 }
 
-void ClientContext::StatementVerification(unique_ptr<SQLStatement> &statement) {
+struct PreparedStatementVerification {
+	PreparedStatementVerification() {
+	}
+
+	void ConvertConstants(QueryNode &node);
+	void ConvertConstants(unique_ptr<ParsedExpression> &child);
+
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> values;
+};
+
+void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+}
+
+void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		// constant: extract the constant value
+		auto alias = expr->GetAlias();
+		expr->ClearAlias();
+		// check if the value already exists
+		idx_t index = values.size();
+		auto identifier = std::to_string(index + 1);
+		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+			return pair.second->Equals(*expr.get());
+		};
+		auto result = std::find_if(values.begin(), values.end(), predicate);
+		if (result == values.end()) {
+			// If it doesn't exist yet, add it
+			values[identifier] = std::move(expr);
+		} else {
+			identifier = result->first;
+		}
+
+		// replace it with an expression
+		auto parameter = make_uniq<ParameterExpression>();
+		parameter->identifier = identifier;
+		parameter->SetAlias(alias);
+		expr = std::move(parameter);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr,
+	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+}
+
+void ClientContext::StatementVerification(ClientContextLock &lock, const string &query,
+                                          unique_ptr<SQLStatement> &statement,
+                                          PendingQueryParameters query_parameters) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -134,6 +186,66 @@ void ClientContext::StatementVerification(unique_ptr<SQLStatement> &statement) {
 		default:
 			throw InternalException("Unsupported type for serialization verification");
 		}
+	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
+		if (statement->type != StatementType::SELECT_STATEMENT) {
+			// only supported for SELECT (for now?)
+			return;
+		}
+		if (!statement->named_param_map.empty()) {
+			// not supported for statements that already take parameters
+			return;
+		}
+		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+			// not supported for statements that already have parameters
+			return;
+		}
+		auto &select_stmt = statement->Cast<SelectStatement>();
+		auto node = select_stmt.node->Copy();
+
+		// convert constants in the query node to parameters
+		// i.e. turn SELECT 'hello', 42 into SELECT ?, ?
+		PreparedStatementVerification prep_verifier;
+		prep_verifier.ConvertConstants(*node);
+
+		// create the prepared select
+		// i.e. PREPARE p AS SELECT ?, ?
+		auto prepare_base = make_uniq<SelectStatement>();
+		prepare_base->node = std::move(node);
+		for (auto &kv : prep_verifier.values) {
+			prepare_base->named_param_map[kv.first] = 0;
+		}
+
+		// create the PREPARE and EXECUTE statements
+		string name = "__duckdb_verification_prepared_statement_" + UUID::ToString(UUID::GenerateRandomUUID());
+		auto prepare = make_uniq<PrepareStatement>();
+		prepare->name = name;
+		prepare->statement = std::move(prepare_base);
+
+		// execute the PREPARE
+		ErrorData error;
+		try {
+			auto prepare_result = RunStatementInternal(lock, string(), std::move(prepare), query_parameters);
+			if (prepare_result->HasError()) {
+				error = prepare_result->GetErrorObject();
+			}
+		} catch (std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		if (error.HasError()) {
+			// FIXME: this is extremely lenient...
+			if (error.Type() == ExceptionType::INTERNAL) {
+				error.Throw("Failed prepare during verify: ");
+			}
+			return;
+		}
+
+		// create and return the EXECUTE statement
+		// i.e. EXECUTE p('hello', 42)
+		auto execute = make_uniq<ExecuteStatement>();
+		execute->name = name;
+		execute->named_values = std::move(prep_verifier.values);
+
+		statement = std::move(execute);
 	}
 }
 

@@ -1,0 +1,47 @@
+{
+  "description": "Run with debug_verify_statement set to prepared_statement - forcing statements through PREPARE and EXECUTE with parameters",
+  "on_init": "SET debug_verify_statement='prepared_statement';",
+  "skip_compiled": "true",
+  "skip_error_messages": [
+    "Parameter Not Allowed Error:",
+    "This type of statement can't be prepared!"
+  ],
+  "skip_tests": [
+    {
+      "reason": "Parameters don't work here",
+      "paths": [
+        "test/sql/collate/test_collate_orderby_column_number.test",
+        "test/sql/projection/select_star_like.test"
+      ]
+    },
+    {
+      "reason": "Different error message",
+      "paths": [
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/types/struct/unnest_struct_mix.test",
+        "test/sql/settings/allowed_directories.test",
+        "test/sql/function/string/regex_extract_all.test"
+      ]
+    },
+    {
+      "reason": "Extra queries mess up logs",
+      "paths": [
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test",
+        "test/sql/logging/test_logging_function.test",
+        "test/sql/logging/logging_buffer_size.test",
+        "test/sql/logging/logging_types.test",
+        "test/sql/logging/logging.test",
+        "test/sql/logging/logging_context_ids.test",
+        "test/sql/logging/logging_csv.test"
+      ]
+    },
+    {
+      "reason": "Extra prepared statements registered",
+      "paths": [
+        "test/sql/pg_catalog/pg_prepared_statements.test",
+        "test/sql/table_function/duckdb_prepared_statements.test"
+      ]
+    }
+  ]
+}
