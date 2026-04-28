@@ -102,6 +102,13 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Statement
+//===----------------------------------------------------------------------===//
+void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verify Vector
 //===----------------------------------------------------------------------===//
 void DebugVerifyVectorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

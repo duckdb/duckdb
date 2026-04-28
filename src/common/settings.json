@@ -325,6 +325,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_statement",
+        "description": "DEBUG SETTING: the type of statement verification to perform",
+        "type": "ENUM<DebugStatementVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
         "name": "debug_verify_vector",
         "description": "DEBUG SETTING: enable vector verification",
         "type": "ENUM<DebugVectorVerification>",
