@@ -914,7 +914,7 @@ void PEGTransformerFactory::RegisterTransaction() {
 	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
 	REGISTER_TRANSFORM(TransformCommitTransaction);
 	REGISTER_TRANSFORM(TransformRollbackTransaction);
-	REGISTER_TRANSFORM(TransformSetTransactionSnapshot);
+	REGISTER_TRANSFORM(TransformJoinTransaction);
 }
 
 void PEGTransformerFactory::RegisterUpdate() {

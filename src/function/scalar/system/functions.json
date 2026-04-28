@@ -36,11 +36,11 @@
         "struct": "CurrentTransactionId"
     },
     {
-        "name": "duckdb_export_transaction",
-        "description": "Export the current transaction so other connections can attach to it via SET TRANSACTION SNAPSHOT. Returns '<connection_id>/<database>' for the database currently being modified, or the search-path default database if none has been modified yet.",
-        "example": "duckdb_export_transaction()",
+        "name": "duckdb_share_transaction",
+        "description": "Returns an id for the current transaction so other connections can join it via JOIN TRANSACTION '<id>'. The id has the form '<connection_id>/<database>' and is pinned on the first call within a transaction; subsequent calls in the same transaction return the same id.",
+        "example": "duckdb_share_transaction()",
         "type": "scalar_function",
-        "struct": "ExportTransactionSnapshot"
+        "struct": "ShareTransactionFun"
     },
     {
         "name": "current_query_id",

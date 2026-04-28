@@ -4,13 +4,14 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
 bool TransactionReference::IsShared() const {
-	if (is_imported) {
+	if (is_joined) {
 		return true;
 	}
 	if (!transaction.IsDuckTransaction()) {
@@ -125,6 +126,8 @@ void MetaTransaction::ImportTransaction(AttachedDatabase &db, Transaction &trans
 		    "transaction open against that database",
 		    db.GetName());
 	}
+	// Caller must hold the foreign DuckTransaction's statement lock before calling this — that
+	// lock is what makes the active_query write race-free vs. the owner's running query.
 	transaction.active_query = active_query.load();
 #ifdef DEBUG
 	VerifyAllTransactionsUnique(db, all_transactions);
@@ -133,6 +136,33 @@ void MetaTransaction::ImportTransaction(AttachedDatabase &db, Transaction &trans
 	transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(transaction, true)));
 	auto shared_db = db.shared_from_this();
 	UseDatabase(shared_db);
+}
+
+ClaimParticipantResult MetaTransaction::TryClaimParticipant(const string &db_name) {
+	lock_guard<mutex> guard(lock);
+	for (auto &db_ref : all_transactions) {
+		auto &db = db_ref.get();
+		if (!StringUtil::CIEquals(db.GetName(), db_name)) {
+			continue;
+		}
+		auto entry = transactions.find(db);
+		if (entry == transactions.end()) {
+			return ClaimParticipantResult();
+		}
+		auto &txn = entry->second.transaction;
+		if (!txn.IsDuckTransaction()) {
+			return ClaimParticipantResult();
+		}
+		auto &duck = txn.Cast<DuckTransaction>();
+		if (!duck.TryAddParticipant()) {
+			return ClaimParticipantResult();
+		}
+		ClaimParticipantResult result;
+		result.database = &db;
+		result.transaction = &duck;
+		return result;
+	}
+	return ClaimParticipantResult();
 }
 
 bool MetaTransaction::IsParticipatingInSharedTransaction() {

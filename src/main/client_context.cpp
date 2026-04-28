@@ -2,6 +2,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
+#include <algorithm>
+
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -264,24 +266,30 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		transaction.BeginTransaction();
 	}
 
-	// If this MetaTransaction references any shared DuckTransactions, acquire each one's
-	// statement lock for the duration of the query. Preserves the single-writer-per-
-	// DuckTransaction invariant across the owner and any participants.
+	// Acquire the per-DuckTransaction statement lock for every opened transaction in the meta.
+	// We always lock (not just when shared) because a participant can attach via
+	// SET TRANSACTION SNAPSHOT mid-query, and a conditional acquire would let owner and
+	// participant mutate LocalStorage / UndoBuffer concurrently across the 1→2 transition.
 	//
-	// Lock ordering: MetaTransaction::lock is acquired and released inside TryGetTransaction
-	// before we attempt LockSharedStatement on the returned DuckTransaction. Do not invert.
+	// Locks are sorted by DuckTransaction pointer to give every connection the same acquisition
+	// order across multiple shared databases — this prevents AB/BA deadlock when two
+	// participants imported the same set of DBs in opposite orders.
 	{
 		auto &meta = transaction.ActiveTransaction();
+		vector<reference<DuckTransaction>> ducks;
 		for (auto &db_ref : meta.OpenedTransactions()) {
 			auto txn = meta.TryGetTransaction(db_ref.get());
 			if (!txn || !txn->IsDuckTransaction()) {
 				continue;
 			}
-			auto &duck = txn->Cast<DuckTransaction>();
-			auto guard = duck.LockSharedStatement();
-			if (guard.owns_lock()) {
-				active_query->shared_statement_guards.push_back(std::move(guard));
-			}
+			ducks.push_back(txn->Cast<DuckTransaction>());
+		}
+		std::sort(ducks.begin(), ducks.end(),
+		          [](const reference<DuckTransaction> &a, const reference<DuckTransaction> &b) {
+			          return std::less<const void *>()(&a.get(), &b.get());
+		          });
+		for (auto &duck : ducks) {
+			active_query->shared_statement_guards.push_back(duck.get().LockStatement());
 		}
 	}
 
@@ -413,6 +421,12 @@ const string &ClientContext::GetCurrentQuery() {
 
 connection_t ClientContext::GetConnectionId() const {
 	return connection_id;
+}
+
+void ClientContext::RegisterSharedStatementGuard(unique_lock<mutex> guard) {
+	D_ASSERT(active_query);
+	D_ASSERT(guard.owns_lock());
+	active_query->shared_statement_guards.push_back(std::move(guard));
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {

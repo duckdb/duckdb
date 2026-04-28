@@ -24,8 +24,8 @@ string TransactionInfo::ToString() const {
 	case TransactionType::ROLLBACK:
 		result += "ROLLBACK";
 		break;
-	case TransactionType::SET_SNAPSHOT:
-		result += "SET TRANSACTION SNAPSHOT '" + snapshot_id + "'";
+	case TransactionType::JOIN_TRANSACTION:
+		result += "JOIN TRANSACTION '" + transaction_id + "'";
 		return result + ";";
 	default: {
 		throw InternalException("ToString for TransactionStatement with type: %s not implemented",
@@ -54,7 +54,7 @@ unique_ptr<TransactionInfo> TransactionInfo::Copy() const {
 	result->modifier = modifier;
 	result->invalidation_policy = invalidation_policy;
 	result->auto_rollback = auto_rollback;
-	result->snapshot_id = snapshot_id;
+	result->transaction_id = transaction_id;
 	return result;
 }
 

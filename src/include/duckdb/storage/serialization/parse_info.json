@@ -706,7 +706,7 @@
       },
       {
         "id": 204,
-        "name": "snapshot_id",
+        "name": "transaction_id",
         "type": "string",
         "default" : "string()"
       }

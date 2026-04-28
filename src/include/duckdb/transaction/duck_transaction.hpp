@@ -146,12 +146,13 @@ public:
 	//! through the per-database TransactionManager.
 	SharedFinalizeResult FinalizeShared(ClientContext &context, TransactionManager &manager,
 	                                    bool caller_voted_rollback);
-	//! Acquire the shared-statement lock. Returns an empty unique_lock if the transaction is
-	//! not currently shared (participant_count == 1). Callers should treat an empty lock as a
-	//! no-op. A doomed-but-no-longer-shared transaction (rollback_requested set, count back at 1)
-	//! also returns an empty lock — only the sole remaining holder can mutate it, and it is
-	//! about to be rolled back regardless.
-	unique_lock<mutex> LockSharedStatement();
+	//! Acquire the per-DuckTransaction statement lock. Always returns a held lock — taking the
+	//! mutex unconditionally (rather than only when shared) is required for correctness: when
+	//! a participant joins via TryAddParticipant the owner may already be mid-query, and a
+	//! conditional acquire would let owner and participant mutate LocalStorage / UndoBuffer
+	//! concurrently across the 1→2 transition. Cost is one uncontended-mutex acquire per query
+	//! per opened DuckTransaction.
+	unique_lock<mutex> LockStatement();
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated

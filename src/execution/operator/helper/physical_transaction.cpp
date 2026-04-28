@@ -61,8 +61,8 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 		}
 		break;
 	}
-	case TransactionType::SET_SNAPSHOT: {
-		client.transaction.ImportSnapshot(info->snapshot_id);
+	case TransactionType::JOIN_TRANSACTION: {
+		client.transaction.JoinTransaction(info->transaction_id);
 		break;
 	}
 	case TransactionType::ROLLBACK: {

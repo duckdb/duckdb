@@ -103,10 +103,7 @@ SharedFinalizeResult DuckTransaction::FinalizeShared(ClientContext &context, Tra
 	return result;
 }
 
-unique_lock<mutex> DuckTransaction::LockSharedStatement() {
-	if (!IsShared()) {
-		return unique_lock<mutex>();
-	}
+unique_lock<mutex> DuckTransaction::LockStatement() {
 	return unique_lock<mutex>(statement_lock);
 }
 

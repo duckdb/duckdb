@@ -5446,7 +5446,7 @@ const StringUtil::EnumStringLiteral *GetTransactionTypeValues() {
 		{ static_cast<uint32_t>(TransactionType::BEGIN_TRANSACTION), "BEGIN_TRANSACTION" },
 		{ static_cast<uint32_t>(TransactionType::COMMIT), "COMMIT" },
 		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" },
-		{ static_cast<uint32_t>(TransactionType::SET_SNAPSHOT), "SET_SNAPSHOT" }
+		{ static_cast<uint32_t>(TransactionType::JOIN_TRANSACTION), "JOIN_TRANSACTION" }
 	};
 	return values;
 }

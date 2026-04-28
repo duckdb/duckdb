@@ -125,73 +125,88 @@ void TransactionContext::ResetActiveQuery() {
 	}
 }
 
-void TransactionContext::ImportSnapshot(const string &snapshot_id) {
+void TransactionContext::JoinTransaction(const string &transaction_id) {
 	if (auto_commit) {
 		throw TransactionException(
-		    "SET TRANSACTION SNAPSHOT can only be used inside an explicit transaction (use BEGIN first)");
+		    "JOIN TRANSACTION can only be used inside an explicit transaction (use BEGIN first)");
 	}
 	if (!current_transaction) {
-		throw TransactionException("SET TRANSACTION SNAPSHOT called without an active transaction");
+		throw TransactionException("JOIN TRANSACTION called without an active transaction");
 	}
-	auto slash = snapshot_id.find('/');
-	if (slash == string::npos || slash == 0 || slash == snapshot_id.size() - 1) {
-		throw TransactionException("Invalid transaction snapshot id '%s': expected '<connection_id>/<database_name>'",
-		                           snapshot_id);
+	// Defensive validation. The id is user input; reject pathological inputs early so we don't
+	// echo arbitrary data into error messages or hand it to downstream lookups.
+	constexpr idx_t MAX_TRANSACTION_ID_LEN = 1024;
+	if (transaction_id.empty()) {
+		throw TransactionException("JOIN TRANSACTION: transaction id must be non-empty");
 	}
-	auto conn_id_str = snapshot_id.substr(0, slash);
-	auto db_name = snapshot_id.substr(slash + 1);
+	if (transaction_id.size() > MAX_TRANSACTION_ID_LEN) {
+		throw TransactionException("JOIN TRANSACTION: transaction id exceeds maximum length of %llu bytes",
+		                           static_cast<uint64_t>(MAX_TRANSACTION_ID_LEN));
+	}
+	for (auto c : transaction_id) {
+		auto uc = static_cast<unsigned char>(c);
+		if (uc < 0x20 || uc == 0x7F) {
+			throw TransactionException(
+			    "JOIN TRANSACTION: transaction id contains an invalid control character (0x%02x)",
+			    static_cast<uint32_t>(uc));
+		}
+	}
+	// Split on the LAST '/' so database names containing slashes round-trip correctly.
+	auto slash = transaction_id.rfind('/');
+	if (slash == string::npos || slash == 0 || slash == transaction_id.size() - 1) {
+		throw TransactionException("Invalid transaction id '%s': expected '<connection_id>/<database_name>'",
+		                           transaction_id);
+	}
+	auto conn_id_str = transaction_id.substr(0, slash);
+	auto db_name = transaction_id.substr(slash + 1);
 	uint64_t conn_id_raw;
 	if (!TryCast::Operation<string_t, uint64_t>(string_t(conn_id_str), conn_id_raw)) {
-		throw TransactionException("Invalid transaction snapshot id '%s': connection id is not a number", snapshot_id);
+		throw TransactionException("Invalid transaction id '%s': connection id is not a number", transaction_id);
 	}
 	auto conn_id = static_cast<connection_t>(conn_id_raw);
 	if (conn_id == context.GetConnectionId()) {
-		throw TransactionException("Cannot import a transaction snapshot from the same connection");
+		throw TransactionException("Cannot join a transaction owned by the same connection");
 	}
 	auto &connection_manager = ConnectionManager::Get(context);
 	auto owner_context = connection_manager.FindByConnectionId(conn_id);
 	if (!owner_context) {
-		throw TransactionException("Invalid transaction snapshot id '%s': no live connection with id %llu", snapshot_id,
+		throw TransactionException("Invalid transaction id '%s': no live connection with id %llu", transaction_id,
 		                           static_cast<uint64_t>(conn_id));
 	}
 	if (!owner_context->transaction.HasActiveTransaction()) {
-		throw TransactionException(
-		    "Invalid transaction snapshot id '%s': owner connection is not currently in a transaction", snapshot_id);
+		throw TransactionException("Invalid transaction id '%s': owner connection is not currently in a transaction",
+		                           transaction_id);
 	}
 	auto &owner_meta = owner_context->transaction.ActiveTransaction();
-	optional_ptr<AttachedDatabase> matching_db;
-	for (auto &db_ref : owner_meta.OpenedTransactions()) {
-		auto &db = db_ref.get();
-		if (StringUtil::CIEquals(db.GetName(), db_name)) {
-			matching_db = &db;
-			break;
-		}
+	// Atomic lookup-and-bump under owner_meta.lock — protects against a concurrent
+	// RemoveTransaction() (e.g. owner-side DETACH) destroying the DuckTransaction between
+	// lookup and TryAddParticipant.
+	auto claim = owner_meta.TryClaimParticipant(db_name);
+	if (!claim.transaction) {
+		throw TransactionException("Invalid transaction id '%s': owner has no live transaction for database '%s' "
+		                           "(database not yet touched, finalized, or not a DuckDB database)",
+		                           transaction_id, db_name);
 	}
-	if (!matching_db) {
-		throw TransactionException(
-		    "Invalid transaction snapshot id '%s': owner has not yet started a transaction against database '%s'",
-		    snapshot_id, db_name);
-	}
-	auto owner_transaction = owner_meta.TryGetTransaction(*matching_db);
-	if (!owner_transaction) {
-		throw TransactionException("Invalid transaction snapshot id '%s': owner has no transaction for database '%s'",
-		                           snapshot_id, db_name);
-	}
-	if (!owner_transaction->IsDuckTransaction()) {
-		throw TransactionException("Database '%s' does not support shared transactions (not a DuckDB-managed database)",
-		                           db_name);
-	}
-	auto &duck_transaction = owner_transaction->Cast<DuckTransaction>();
-	if (!duck_transaction.TryAddParticipant()) {
-		throw TransactionException("Invalid transaction snapshot id '%s': transaction has already been finalized",
-		                           snapshot_id);
-	}
+	// Acquire the foreign DuckTransaction's statement lock BEFORE touching its state. This
+	// blocks until any owner query in flight on this transaction completes. With BeginQuery
+	// holding the same lock for the duration of every query, no other connection can be
+	// mutating the transaction's LocalStorage / UndoBuffer / active_query while we import.
+	unique_lock<mutex> foreign_guard;
 	try {
-		current_transaction->ImportTransaction(*matching_db, duck_transaction);
+		foreign_guard = claim.transaction->LockStatement();
 	} catch (...) {
-		duck_transaction.CancelParticipation();
+		claim.transaction->CancelParticipation();
 		throw;
 	}
+	try {
+		current_transaction->ImportTransaction(*claim.database, *claim.transaction);
+	} catch (...) {
+		claim.transaction->CancelParticipation();
+		throw;
+	}
+	// Stash the lock on the active query so it stays held for the rest of this statement and
+	// is released at end-of-query along with the BeginQuery-acquired guards.
+	context.RegisterSharedStatementGuard(std::move(foreign_guard));
 }
 
 void TransactionContext::SetActiveQuery(transaction_t query_number) {

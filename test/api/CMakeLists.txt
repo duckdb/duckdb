@@ -44,7 +44,7 @@ set(TEST_API_OBJECTS
     test_update_query_node.cpp
     test_delete_query_node.cpp
     test_insert_query_node.cpp
-    test_shared_transactions.cpp)
+    test_join_transaction.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

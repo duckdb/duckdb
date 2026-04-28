@@ -43,12 +43,12 @@ unique_ptr<TransactionStatement> PEGTransformerFactory::TransformRollbackTransac
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::ROLLBACK));
 }
 
-unique_ptr<TransactionStatement> PEGTransformerFactory::TransformSetTransactionSnapshot(PEGTransformer &transformer,
-                                                                                        ParseResult &parse_result) {
-	// SetTransactionSnapshot <- 'SET' Transaction 'SNAPSHOT' StringLiteral
+unique_ptr<TransactionStatement> PEGTransformerFactory::TransformJoinTransaction(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	// JoinTransaction <- 'JOIN' Transaction StringLiteral
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto info = make_uniq<TransactionInfo>(TransactionType::SET_SNAPSHOT);
-	info->snapshot_id = transformer.Transform<string>(list_pr.Child<StringLiteralParseResult>(3));
+	auto info = make_uniq<TransactionInfo>(TransactionType::JOIN_TRANSACTION);
+	info->transaction_id = transformer.Transform<string>(list_pr.Child<StringLiteralParseResult>(2));
 	return make_uniq<TransactionStatement>(std::move(info));
 }
 } // namespace duckdb

@@ -1201,8 +1201,8 @@ private:
 	static TransactionModifierType TransformReadOnlyOrReadWrite(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<TransactionStatement> TransformCommitTransaction(PEGTransformer &, ParseResult &parse_result);
 	static unique_ptr<TransactionStatement> TransformRollbackTransaction(PEGTransformer &, ParseResult &parse_result);
-	static unique_ptr<TransactionStatement> TransformSetTransactionSnapshot(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
+	static unique_ptr<TransactionStatement> TransformJoinTransaction(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
 
 	// update.gram
 	static unique_ptr<SQLStatement> TransformUpdateStatement(PEGTransformer &transformer, ParseResult &parse_result);

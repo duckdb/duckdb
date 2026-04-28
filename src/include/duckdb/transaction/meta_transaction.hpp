@@ -22,25 +22,35 @@ class AttachedDatabase;
 class ClientContext;
 struct DatabaseModificationType;
 class Transaction;
+class DuckTransaction;
+
+//! Result of MetaTransaction::TryClaimParticipant. The TryAddParticipant() bump on the
+//! returned DuckTransaction has already been performed; the caller is responsible for either
+//! a successful ImportTransaction (consumes the bump) or a CancelParticipation (releases it).
+//! Both fields are non-null on a successful claim.
+struct ClaimParticipantResult {
+	AttachedDatabase *database = nullptr;
+	DuckTransaction *transaction = nullptr;
+};
 
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
 
 struct TransactionReference {
-	explicit TransactionReference(Transaction &transaction_p, bool is_imported_p = false)
-	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p), is_imported(is_imported_p) {
+	explicit TransactionReference(Transaction &transaction_p, bool is_joined_p = false)
+	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p), is_joined(is_joined_p) {
 	}
 
 	TransactionState state;
 	Transaction &transaction;
-	//! True if this transaction was imported via SET TRANSACTION SNAPSHOT (the underlying
-	//! DuckTransaction is owned by another connection's MetaTransaction). Imported transactions
-	//! detach via DuckTransaction::FinalizeShared instead of going through
-	//! TransactionManager::Commit / Rollback for this MetaTransaction.
-	bool is_imported;
+	//! True if this transaction was joined via JOIN TRANSACTION (the underlying DuckTransaction
+	//! is owned by another connection's MetaTransaction). Joined transactions detach via
+	//! DuckTransaction::FinalizeShared instead of going through TransactionManager::Commit /
+	//! Rollback for this MetaTransaction.
+	bool is_joined;
 
 	//! Whether this reference's lifecycle is shared with other MetaTransactions and therefore
 	//! requires the FinalizeShared path. True when:
-	//!   - we imported it (foreign DuckTransaction we don't own), or
+	//!   - we joined it (foreign DuckTransaction we don't own), or
 	//!   - we own it but other participants are currently attached (IsShared), or
 	//!   - we own it but a previous detacher has already voted rollback (RollbackRequested),
 	//!     in which case we still need the doom-aware finalize even if no participants remain.
@@ -76,6 +86,27 @@ public:
 	//! Import an existing DuckTransaction belonging to another connection. The participant_count
 	//! on the DuckTransaction must already have been bumped by the caller (via TryAddParticipant).
 	void ImportTransaction(AttachedDatabase &db, Transaction &transaction);
+	//! Atomically look up a DuckTransaction by database name in this MetaTransaction's open
+	//! transactions and call TryAddParticipant() on it under the meta lock. Returns an empty
+	//! result if no matching transaction exists, the match is not a DuckTransaction, or the
+	//! transaction has already been finalized. The lookup-and-bump is atomic with respect to
+	//! RemoveTransaction(), so the returned DuckTransaction reference cannot be destroyed by
+	//! a concurrent DETACH between the lookup and the bump. The caller is responsible for
+	//! either ImportTransaction (consumes the bump) or CancelParticipation on the returned
+	//! DuckTransaction. Naming: this is called from the joiner's perspective — we are
+	//! claiming a participant slot in the *owner's* transaction.
+	ClaimParticipantResult TryClaimParticipant(const string &db_name);
+	//! Returns the previously-pinned shared-transaction id for this MetaTransaction (set via
+	//! SetSharedTransactionId on the first duckdb_share_transaction() call), or an empty string
+	//! if none has been pinned yet.
+	const string &GetSharedTransactionId() const {
+		return shared_transaction_id;
+	}
+	//! Pin a shared-transaction id on first call. Subsequent duckdb_share_transaction() calls in
+	//! the same MetaTransaction return the cached value rather than recomputing.
+	void SetSharedTransactionId(const string &id) {
+		shared_transaction_id = id;
+	}
 	//! Whether this MetaTransaction is part of a shared session (in either role): it has
 	//! imported a transaction from another connection, or another connection has imported a
 	//! transaction it owns. Used by ATTACH/DETACH guards.
@@ -120,6 +151,9 @@ private:
 	reference_map_t<AttachedDatabase, shared_ptr<AttachedDatabase>> referenced_databases;
 	//! Map of name -> database for databases that are in-use by this transaction.
 	case_insensitive_map_t<reference<AttachedDatabase>> used_databases;
+	//! Cached shared-transaction id (pinned on the first duckdb_share_transaction() call within
+	//! this MetaTransaction). Empty until pinned. Stable for the lifetime of this transaction.
+	string shared_transaction_id;
 };
 
 } // namespace duckdb

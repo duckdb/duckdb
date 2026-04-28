@@ -1,0 +1,51 @@
+# name: test/sql/transactions/shared/parse_join_transaction.test
+# description: Parser/binder coverage for JOIN TRANSACTION 'id'.
+# group: [shared]
+
+# malformed id: must error cleanly (does not crash)
+statement ok
+BEGIN;
+
+statement error
+JOIN TRANSACTION '999999/nonexistent';
+----
+<REGEX>:.*no live connection.*
+
+statement ok
+ROLLBACK;
+
+# without BEGIN, must error
+statement error
+JOIN TRANSACTION '999999/nonexistent';
+----
+<REGEX>:.*BEGIN.*
+
+# missing required argument is a parse error
+statement error
+JOIN TRANSACTION;
+----
+<REGEX>:.*Parser Error.*
+
+# duckdb_share_transaction outside an explicit transaction must error
+statement error
+SELECT duckdb_share_transaction();
+----
+<REGEX>:.*explicit transaction.*
+
+# inside a transaction it returns "<connection_id>/<db_name>"
+statement ok
+BEGIN;
+
+query I
+SELECT regexp_matches(duckdb_share_transaction(), '^[0-9]+/[A-Za-z0-9_]+$');
+----
+true
+
+# pinning: a second call returns the same id even after touching state
+query I
+SELECT duckdb_share_transaction() = duckdb_share_transaction();
+----
+true
+
+statement ok
+ROLLBACK;

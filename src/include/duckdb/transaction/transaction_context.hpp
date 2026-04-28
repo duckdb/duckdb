@@ -44,11 +44,11 @@ public:
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
-	//! Import a transaction snapshot of the form "<connection_id>/<database_name>" into the
-	//! current transaction. The current transaction must be explicit (not auto-commit) and must
-	//! not yet hold a transaction against the named database. Throws TransactionException on
-	//! any precondition or lookup failure.
-	void ImportSnapshot(const string &snapshot_id);
+	//! Join an existing transaction by id. The id has the form "<connection_id>/<database_name>"
+	//! as produced by duckdb_share_transaction(). The current transaction must be explicit (not
+	//! auto-commit) and must not yet hold a transaction against the named database. Throws
+	//! TransactionException on any precondition or lookup failure.
+	void JoinTransaction(const string &transaction_id);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {
