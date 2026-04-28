@@ -14,9 +14,6 @@ static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
                                                   {"uc_catalog", "unity_catalog"}, // old name for compatibility
                                                   {nullptr, nullptr}};
 
-
-static unordered_map<string, string> external_aliases;
-
 idx_t ExtensionHelper::ExtensionAliasCount() {
 	idx_t index;
 	for (index = 0; internal_aliases[index].alias != nullptr; index++) {
@@ -38,19 +35,6 @@ string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
 		}
 	}
 	return lname;
-}
-
-void ExtensionHelper::AddExternalExtensionAlias(const string &alias, const string &extension_name) {
-	external_aliases[alias] = extension_name;
-}
-
-string ExtensionHelper::GetExternalExtensionName(const string &alias) {
-	auto entry = external_aliases.find(alias);
-	if (entry == external_aliases.end()) {
-		// return an empty string if not found
-		return string();
-	}
-	return entry->second;
 }
 
 } // namespace duckdb

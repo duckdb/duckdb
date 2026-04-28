@@ -159,8 +159,6 @@ public:
 	//! Extension can have aliases
 	static idx_t ExtensionAliasCount();
 	static ExtensionAlias GetInternalExtensionAlias(idx_t index);
-	static string GetExternalExtensionName(const string &alias);
-	static void AddExternalExtensionAlias(const string &alias, const string &extension_name);
 
 	//! Get public signing keys for extension signing
 	static const vector<string> GetPublicKeys(bool allow_community_extension = false);

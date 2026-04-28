@@ -13,9 +13,14 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
 
+	if (!alias.empty()) {
+		ExtensionManager::Get(db).AddExternalExtensionAlias(alias, extension_name);
+	}
+
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnExtensionLoaded(db, extension_name);
 	}
+
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
@@ -64,6 +69,27 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 		return false;
 	}
 	return info->is_loaded;
+}
+
+void ExtensionManager::AddExternalExtensionAlias(const string &alias, const string &extension_name) {
+	lock_guard<mutex> guard(lock);
+
+	// check if alias already there
+	auto opt_extension_name = external_aliases.find(alias);
+	if (opt_extension_name != external_aliases.end()) {
+		throw InvalidInputException("Alias '%s' already exists for extension '%s' ", alias, opt_extension_name->second);
+	}
+
+	external_aliases[alias] = extension_name;
+}
+
+string ExtensionManager::GetExternalExtensionName(const string &alias) {
+	lock_guard<mutex> guard(lock);
+	auto entry = external_aliases.find(alias);
+	if (entry == external_aliases.end()) {
+		return string();
+	}
+	return entry->second;
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {

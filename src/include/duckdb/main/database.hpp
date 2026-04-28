@@ -120,7 +120,7 @@ public:
 	void LoadStaticExtension() {
 		T extension;
 		auto &manager = ExtensionManager::Get(*instance);
-		auto load_info = manager.BeginLoad(extension.Name());
+		auto load_info = manager.BeginLoad({extension.Name()});
 		if (!load_info) {
 			// already loaded - return
 			return;

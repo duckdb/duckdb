@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 #include <functional>
 
@@ -278,6 +279,17 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		}
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
+			// check if the schema is an extension alias
+			auto &extension_manager = ExtensionManager::Get(binder.context);
+			auto extension_name = extension_manager.GetExternalExtensionName(function.schema);
+			if (!extension_name.empty()) {
+				auto func = GetCatalogEntry(function.catalog, INVALID_SCHEMA, function_lookup,
+												OnEntryNotFound::RETURN_NULL);
+				if (func && func->extension_name == extension_name) {
+					function.schema = INVALID_SCHEMA;
+					return func;
+				}
+			}
 			// the schema is set - check if we can turn this the schema into a column ref
 			// does this function exist in the system catalog?
 			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);

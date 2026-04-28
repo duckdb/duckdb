@@ -54,6 +54,9 @@ public:
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const ExtensionLoadOptions &options);
 
+	DUCKDB_API void AddExternalExtensionAlias(const string &alias, const string &extension_name);
+	DUCKDB_API string GetExternalExtensionName(const string &alias);
+
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
 
@@ -61,6 +64,7 @@ private:
 	DatabaseInstance &db;
 	mutex lock;
 	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	unordered_map<string, string> external_aliases;
 };
 
 } // namespace duckdb

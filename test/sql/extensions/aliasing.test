@@ -16,13 +16,16 @@ call enable_peg_parser()
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
 
-# todo, add alias to AliasMap, if its already there, then we error out!
-# statement ok
-# LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
+# what if we load again? do we overwrite?
 
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_extension' AS demo
+----
+Alias 'demo' already exists for extension 'loadable_extension_demo'
 
+# can we ovewrite an extension?
 statement ok
-call disable_peg_parser()
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS second_demo
 
 query I
 SELECT bounded_max(1::BOUNDED(10))
@@ -30,3 +33,17 @@ SELECT bounded_max(1::BOUNDED(10))
 10
 
 # if we use same alias for
+query I
+SELECT demo.bounded_max(1::BOUNDED(10))
+----
+10
+
+query I
+SELECT second_demo.bounded_max(1::BOUNDED(10))
+----
+10
+
+# test also if we set the schema to demo, nothing will happen right?
+
+# what would not work
+# load same extension (name), but under different alias, if same functions, this will error out ?
