@@ -11,6 +11,8 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -150,16 +152,12 @@ RegexpReplaceBindData::RegexpReplaceBindData(duckdb_re2::RE2::Options options, s
 
 unique_ptr<FunctionData> RegexpReplaceBindData::Copy() const {
 	auto copy = make_uniq<RegexpReplaceBindData>(options, constant_string, constant_pattern, global_replace);
-	copy->short_extract_candidate = short_extract_candidate;
-	copy->short_pattern_string = short_pattern_string;
 	return std::move(copy);
 }
 
 bool RegexpReplaceBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpReplaceBindData>();
-	return RegexpBaseBindData::Equals(other) && global_replace == other.global_replace &&
-	       short_extract_candidate == other.short_extract_candidate &&
-	       short_pattern_string == other.short_pattern_string;
+	return RegexpBaseBindData::Equals(other) && global_replace == other.global_replace;
 }
 
 static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input) {
@@ -175,15 +173,6 @@ static unique_ptr<FunctionData> RegexReplaceBind(BindScalarFunctionInput &input)
 	return std::move(data);
 }
 
-static unique_ptr<FunctionLocalState>
-RegexReplaceInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr, FunctionData *bind_data) {
-	auto &info = bind_data->Cast<RegexpReplaceBindData>();
-	if (info.constant_pattern) {
-		return make_uniq<RegexReplaceLocalState>(info);
-	}
-	return nullptr;
-}
-
 static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<RegexpReplaceBindData>();
@@ -194,34 +183,14 @@ static void RegexReplaceFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &heap = StringVector::GetStringHeap(result);
 	if (info.constant_pattern) {
-		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexReplaceLocalState>();
-		if (lstate.fast_path) {
-			// Slice capture group 1 directly out of the input vector via the trimmed pattern.
-			StringVector::AddHeapReference(result, strings);
-			const auto &re = *lstate.pattern;
-			UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-				duckdb_re2::StringPiece in_piece(input.GetData(), input.GetSize());
-				duckdb_re2::StringPiece submatch[2];
-				bool matched = re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::ANCHOR_START, submatch, 2);
-				if (matched) {
-					const char *match_end = submatch[0].data() + submatch[0].size();
-					const char *input_end = in_piece.data() + in_piece.size();
-					auto remainder = static_cast<size_t>(input_end - match_end);
-					if (std::memchr(match_end, '\n', remainder) == nullptr) {
-						return string_t(submatch[1].data(), UnsafeNumericCast<uint32_t>(submatch[1].size()));
-					}
-				}
-				return input;
-			});
-			return;
-		}
+		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, replaces, result, args.size(), [&](string_t input, string_t replace) {
 			    std::string sstring = input.GetString();
 			    if (info.global_replace) {
-				    RE2::GlobalReplace(&sstring, *lstate.pattern, CreateStringPiece(replace));
+				    RE2::GlobalReplace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
 			    } else {
-				    RE2::Replace(&sstring, *lstate.pattern, CreateStringPiece(replace));
+				    RE2::Replace(&sstring, lstate.constant_pattern, CreateStringPiece(replace));
 			    }
 			    return heap.AddString(sstring);
 		    });
@@ -250,18 +219,31 @@ RegexpExtractBindData::RegexpExtractBindData() {
 }
 
 RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string_p,
-                                             bool constant_pattern, string group_string_p)
+                                             bool constant_pattern, string group_string_p, bool no_match_returns_input,
+                                             bool trim_dotstar_dollar)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern),
-      group_string(std::move(group_string_p)), rewrite(group_string) {
+      group_string(std::move(group_string_p)), rewrite(group_string), no_match_returns_input(no_match_returns_input),
+      trim_dotstar_dollar(trim_dotstar_dollar) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
-	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_string);
+	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_string,
+	                                        no_match_returns_input, trim_dotstar_dollar);
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpExtractBindData>();
-	return RegexpBaseBindData::Equals(other) && group_string == other.group_string;
+	return RegexpBaseBindData::Equals(other) && group_string == other.group_string &&
+	       no_match_returns_input == other.no_match_returns_input && trim_dotstar_dollar == other.trim_dotstar_dollar;
+}
+
+// Returns the index of the requested capture group when the rewrite is a single backreference
+// (e.g. `\1`), or -1 otherwise. Single-backref rewrites permit a zero-copy slice of the input.
+static int8_t GetSingleBackrefGroup(const string &group_string) {
+	if (group_string.size() != 2 || group_string[0] != '\\' || group_string[1] < '0' || group_string[1] > '9') {
+		return -1;
+	}
+	return static_cast<int8_t>(group_string[1] - '0');
 }
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -271,17 +253,45 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	auto &heap = StringVector::GetStringHeap(result);
+	const int8_t backref_group = GetSingleBackrefGroup(info.group_string);
+	const bool reference_input = backref_group >= 0 || info.no_match_returns_input;
+	if (reference_input) {
+		StringVector::AddHeapReference(result, strings);
+	}
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
+		const auto &re = lstate.constant_pattern;
+		if (backref_group >= 0 && backref_group <= re.NumberOfCapturingGroups()) {
+			const int nsubmatch = backref_group + 1;
+			const bool check_remainder_newline = info.trim_dotstar_dollar;
+			UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
+				duckdb_re2::StringPiece in_piece(input.GetData(), input.GetSize());
+				duckdb_re2::StringPiece submatch[10];
+				if (re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::UNANCHORED, submatch, nsubmatch)) {
+					if (check_remainder_newline) {
+						const char *match_end = submatch[0].data() + submatch[0].size();
+						const char *input_end = in_piece.data() + in_piece.size();
+						auto remainder = static_cast<size_t>(input_end - match_end);
+						if (std::memchr(match_end, '\n', remainder) != nullptr) {
+							return info.no_match_returns_input ? input : string_t(nullptr, 0);
+						}
+					}
+					return string_t(submatch[backref_group].data(),
+					                UnsafeNumericCast<uint32_t>(submatch[backref_group].size()));
+				}
+				return info.no_match_returns_input ? input : string_t(nullptr, 0);
+			});
+			return;
+		}
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return Extract(input, heap, lstate.constant_pattern, info.rewrite);
+			return Extract(input, heap, re, info.rewrite, info.no_match_returns_input);
 		});
 	} else {
-		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
-		                                                      [&](string_t input, string_t pattern) {
-			                                                      RE2 re(CreateStringPiece(pattern), info.options);
-			                                                      return Extract(input, heap, re, info.rewrite);
-		                                                      });
+		BinaryExecutor::Execute<string_t, string_t, string_t>(
+		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
+			    RE2 re(CreateStringPiece(pattern), info.options);
+			    return Extract(input, heap, re, info.rewrite, info.no_match_returns_input);
+		    });
 	}
 }
 
@@ -374,8 +384,9 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 
+	bool no_match_returns_input = false;
 	if (arguments.size() >= 4) {
-		ParseRegexOptions(context, *arguments[3], options);
+		ParseRegexOptions(context, *arguments[3], options, nullptr, &no_match_returns_input);
 	}
 
 	string group_string = "\\0";
@@ -399,7 +410,7 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			                                constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {
-			auto group_idx = group.GetValue<int32_t>();
+			int32_t group_idx = group.GetValue<int32_t>();
 			if (group_idx < 0 || group_idx > 9) {
 				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
@@ -407,8 +418,40 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		}
 	}
 
+	// trim_dotstar_dollar is set only by the regexp_replace -> regexp_extract optimizer rewrite.
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
-	                                        std::move(group_string));
+	                                        std::move(group_string), no_match_returns_input, false);
+}
+
+// Custom serialize/deserialize: the optimizer rewrite trims the pattern in the children and sets
+// trim_dotstar_dollar on the bind data. After the trim the bind callback can no longer detect the
+// pre-trim shape, so we round-trip the full bind data here instead of re-running the bind callback.
+static void RegexExtractSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                  const ScalarFunction &) {
+	auto &info = bind_data->Cast<RegexpExtractBindData>();
+	serializer.WriteProperty(100, "case_sensitive", info.options.case_sensitive());
+	serializer.WriteProperty(101, "dot_nl", info.options.dot_nl());
+	serializer.WriteProperty(102, "literal", info.options.literal());
+	serializer.WriteProperty(103, "constant_string", info.constant_string);
+	serializer.WriteProperty(104, "constant_pattern", info.constant_pattern);
+	serializer.WriteProperty(105, "group_string", info.group_string);
+	serializer.WriteProperty(106, "no_match_returns_input", info.no_match_returns_input);
+	serializer.WriteProperty(107, "trim_dotstar_dollar", info.trim_dotstar_dollar);
+}
+
+static unique_ptr<FunctionData> RegexExtractDeserialize(Deserializer &deserializer, ScalarFunction &) {
+	duckdb_re2::RE2::Options options;
+	options.set_case_sensitive(deserializer.ReadProperty<bool>(100, "case_sensitive"));
+	options.set_dot_nl(deserializer.ReadProperty<bool>(101, "dot_nl"));
+	options.set_literal(deserializer.ReadProperty<bool>(102, "literal"));
+	options.set_log_errors(false);
+	auto constant_string = deserializer.ReadProperty<string>(103, "constant_string");
+	auto constant_pattern = deserializer.ReadProperty<bool>(104, "constant_pattern");
+	auto group_string = deserializer.ReadProperty<string>(105, "group_string");
+	auto no_match_returns_input = deserializer.ReadProperty<bool>(106, "no_match_returns_input");
+	auto trim_dotstar_dollar = deserializer.ReadProperty<bool>(107, "trim_dotstar_dollar");
+	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
+	                                        std::move(group_string), no_match_returns_input, trim_dotstar_dollar);
 }
 
 ScalarFunctionSet RegexpFun::GetFunctions() {
@@ -444,28 +487,38 @@ ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr,
-	                                          RegexReplaceInitLocalState));
-	regexp_replace.AddFunction(ScalarFunction(
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	    RegexReplaceFunction, RegexReplaceBind, nullptr, RegexReplaceInitLocalState));
+	                                          RegexInitLocalState));
+	regexp_replace.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                   LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind, nullptr, RegexInitLocalState));
 	return (regexp_replace);
 }
 
 ScalarFunctionSet RegexpExtractFun::GetFunctions() {
 	ScalarFunctionSet regexp_extract("regexp_extract");
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                          RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
-	                                          LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                                          FunctionNullHandling::SPECIAL_HANDLING));
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
-	                                          LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr,
-	                                          RegexInitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                                          FunctionNullHandling::SPECIAL_HANDLING));
-	regexp_extract.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR},
-	                   LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
-	                   LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
+	// Scalar (non-struct) variants share a fixed VARCHAR return type, so it is safe to bypass the
+	// bind callback on deserialize. The custom serialize callbacks below round-trip the
+	// trim_dotstar_dollar flag set by the regexp_replace -> regexp_extract optimizer rewrite.
+	ScalarFunction extract_2({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexExtractFunction,
+	                         RegexExtractBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction extract_3({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR,
+	                         RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction extract_4({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR},
+	                         LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
+	                         LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                         FunctionNullHandling::SPECIAL_HANDLING);
+	for (auto *func : {&extract_2, &extract_3, &extract_4}) {
+		func->SetSerializeCallback(RegexExtractSerialize);
+		func->SetDeserializeCallback(RegexExtractDeserialize);
+	}
+	regexp_extract.AddFunction(std::move(extract_2));
+	regexp_extract.AddFunction(std::move(extract_3));
+	regexp_extract.AddFunction(std::move(extract_4));
 	// REGEXP_EXTRACT(<string>, <pattern>, [<group 1 name>[, <group n name>]...])
+	// Struct variants mutate the function return type at bind time (VARCHAR -> STRUCT(...)), so the
+	// bind callback must run on deserialize; these intentionally do NOT register custom callbacks.
 	regexp_extract.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)},
 	                   LogicalType::VARCHAR, RegexExtractStructFunction, RegexExtractBind, nullptr, RegexInitLocalState,

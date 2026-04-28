@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/rule/regex_optimizations.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -230,8 +232,12 @@ RegexpReplaceShortExtractRule::RegexpReplaceShortExtractRule(ExpressionRewriter 
 	root = std::move(func);
 }
 
-// Decorates the bind_info to enable a fast path inside regexp_replace; returns nullptr because the
-// expression itself is unchanged. Capture-count is checked at local-state init.
+// Rewrites regexp_replace(s, '^...(group)...$', '\1') into regexp_extract(s, '^...(group)...', 1, 'k'):
+//  - `k` (keep-input-on-no-match) preserves regexp_replace's pass-through semantics.
+//  - The trailing `.*$` is stripped from the pattern so RE2 stops once `\1` is captured; the runtime
+//    fast path rejects matches whose remainder contains `\n` to preserve end-of-text semantics under
+//    default options. That bind-data flag (trim_dotstar_dollar) is set here and round-trips via the
+//    regexp_extract custom serialize callbacks.
 unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
                                                             vector<reference<Expression>> &bindings, bool &changes_made,
                                                             bool is_root) {
@@ -240,10 +246,12 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 		return nullptr;
 	}
 	auto &bind_data = root.bind_info->Cast<RegexpReplaceBindData>();
-	if (bind_data.short_extract_candidate || !bind_data.constant_pattern || bind_data.global_replace) {
+	if (!bind_data.constant_pattern || bind_data.global_replace) {
 		return nullptr;
 	}
-	if (bind_data.options.dot_nl() || bind_data.options.literal()) {
+	// Trim+newline-check is only correct under default RE2 semantics: `.` excludes `\n` and `$` is
+	// end-of-text. Skip if either of those is altered.
+	if (bind_data.options.literal() || bind_data.options.dot_nl()) {
 		return nullptr;
 	}
 
@@ -261,9 +269,38 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 		return nullptr;
 	}
 
-	bind_data.short_extract_candidate = true;
-	bind_data.short_pattern_string = pattern.substr(0, pattern.size() - 3);
-	return nullptr;
+	// Only rewrite when the compiled pattern has at least one capturing group for `\1`.
+	duckdb_re2::RE2 compiled(duckdb_re2::StringPiece(pattern.c_str(), pattern.size()), bind_data.options);
+	if (!compiled.ok() || compiled.NumberOfCapturingGroups() < 1) {
+		return nullptr;
+	}
+
+	string trimmed_pattern = pattern.substr(0, pattern.size() - 3);
+
+	string options_str = "k";
+	if (root.children.size() == 4) {
+		auto &options_const = root.children[3]->Cast<BoundConstantExpression>();
+		if (options_const.value.IsNull() || options_const.value.type().id() != LogicalTypeId::VARCHAR) {
+			return nullptr;
+		}
+		options_str = StringValue::Get(options_const.value) + options_str;
+	}
+
+	vector<unique_ptr<Expression>> extract_children;
+	extract_children.emplace_back(std::move(root.children[0]));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(trimmed_pattern))));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(options_str))));
+
+	FunctionBinder binder(rewriter.context);
+	ErrorData error;
+	auto extract_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "regexp_extract", std::move(extract_children), error);
+	if (!extract_expr) {
+		return nullptr;
+	}
+	auto &bound_extract = extract_expr->Cast<BoundFunctionExpression>();
+	bound_extract.bind_info->Cast<RegexpExtractBindData>().trim_dotstar_dollar = true;
+	return extract_expr;
 }
 
 } // namespace duckdb

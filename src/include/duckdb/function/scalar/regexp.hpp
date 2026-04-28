@@ -18,8 +18,10 @@ namespace duckdb {
 namespace regexp_util {
 
 bool TryParseConstantPattern(ClientContext &context, Expression &expr, string &constant_string);
-void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr);
-void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr);
+void ParseRegexOptions(const string &options, duckdb_re2::RE2::Options &result, bool *global_replace = nullptr,
+                       bool *no_match_returns_input = nullptr);
+void ParseRegexOptions(ClientContext &context, Expression &expr, RE2::Options &target, bool *global_replace = nullptr,
+                       bool *no_match_returns_input = nullptr);
 void ParseGroupNameList(ClientContext &context, const string &function_name, Expression &group_expr,
                         const string &pattern_string, RE2::Options &options, bool require_constant_pattern,
                         vector<string> &out_names, child_list_t<LogicalType> &out_struct_children);
@@ -30,10 +32,12 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-inline string_t Extract(const string_t &input, StringHeap &heap, const RE2 &re,
-                        const duckdb_re2::StringPiece &rewrite) {
+inline string_t Extract(const string_t &input, StringHeap &heap, const RE2 &re, const duckdb_re2::StringPiece &rewrite,
+                        bool no_match_returns_input = false) {
 	string extracted;
-	RE2::Extract(input.GetString(), re, rewrite, &extracted);
+	if (!RE2::Extract(input.GetString(), re, rewrite, &extracted) && no_match_returns_input) {
+		return input;
+	}
 	return heap.AddString(extracted.c_str(), extracted.size());
 }
 
@@ -102,8 +106,6 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 	                      bool global_replace);
 
 	bool global_replace;
-	bool short_extract_candidate = false;
-	string short_pattern_string;
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
@@ -112,10 +114,18 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 struct RegexpExtractBindData : public RegexpBaseBindData {
 	RegexpExtractBindData();
 	RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                      string group_string);
+	                      string group_string, bool no_match_returns_input = false, bool trim_dotstar_dollar = false);
 
 	string group_string;
 	duckdb_re2::StringPiece rewrite;
+	// On no match, return the input instead of an empty string (set via the `k` option, also used by
+	// the regexp_replace -> regexp_extract optimizer rewrite).
+	bool no_match_returns_input = false;
+	// Set only by the regexp_replace -> regexp_extract optimizer rewrite when it strips a trailing
+	// `.*$` from the pattern. The runtime fast path then rejects matches whose remainder contains a
+	// newline to preserve the original pattern's end-of-text semantics under default options.
+	// Round-trips via the regexp_extract custom serialize callbacks.
+	bool trim_dotstar_dollar = false;
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
@@ -188,30 +198,6 @@ struct RegexLocalState : public FunctionLocalState {
 	RE2 constant_pattern;
 	//! Used by regexp_extract_all to pre-allocate the args
 	RegexStringPieceArgs group_buffer;
-};
-
-// Compiles either the trimmed short-extract pattern or, on fall-through, the full pattern.
-struct RegexReplaceLocalState : public FunctionLocalState {
-	explicit RegexReplaceLocalState(RegexpReplaceBindData &info) : fast_path(false) {
-		if (info.short_extract_candidate) {
-			pattern = make_uniq<RE2>(
-			    duckdb_re2::StringPiece(info.short_pattern_string.c_str(), info.short_pattern_string.size()),
-			    info.options);
-			if (pattern->ok() && pattern->NumberOfCapturingGroups() == 1) {
-				fast_path = true;
-				return;
-			}
-			pattern.reset();
-		}
-		pattern = make_uniq<RE2>(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
-		                         info.options);
-		if (!pattern->ok()) {
-			throw InvalidInputException(pattern->error());
-		}
-	}
-
-	unique_ptr<RE2> pattern;
-	bool fast_path;
 };
 
 unique_ptr<FunctionLocalState> RegexInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
