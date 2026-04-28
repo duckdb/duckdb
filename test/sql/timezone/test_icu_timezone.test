@@ -1079,3 +1079,13 @@ select
 	'2022-10-30 04:00:00+03'::timestamptz,
 ----
 2022-03-27 02:00:00+02	2022-03-27 04:00:00+03	2022-10-30 03:00:00+03	2022-10-30 03:00:00+02
+
+# 2026b
+# British Columbia moved to permanent -07 on 2026-03-09.
+statement ok
+set timezone='America/Vancouver';
+
+query I
+select '2026-11-10'::timestamptz
+----
+2026-11-10 00:00:00-07
