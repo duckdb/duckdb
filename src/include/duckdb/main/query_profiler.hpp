@@ -57,7 +57,7 @@ struct OperatorInformation {
 	void AddMetric(MetricType type, T metric) {
 		switch (type) {
 		case MetricType::OPERATOR_TIMING:
-			time += metric;
+			time += static_cast<double>(metric);
 			break;
 		case MetricType::OPERATOR_CARDINALITY:
 			elements_returned += LossyNumericCast<idx_t>(metric);
@@ -66,13 +66,13 @@ struct OperatorInformation {
 			result_set_size += LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::SYSTEM_PEAK_BUFFER_MEMORY: {
-			if (metric > system_peak_buffer_manager_memory) {
-				system_peak_buffer_manager_memory += LossyNumericCast<idx_t>(metric);
+			if (metric > static_cast<T>(system_peak_buffer_manager_memory)) {
+				system_peak_buffer_manager_memory = LossyNumericCast<idx_t>(metric);
 			}
 			break;
 		}
 		case MetricType::SYSTEM_PEAK_TEMP_DIR_SIZE: {
-			if (metric > system_peak_temp_directory_size) {
+			if (metric > static_cast<T>(system_peak_temp_directory_size)) {
 				system_peak_temp_directory_size = LossyNumericCast<idx_t>(metric);
 			}
 			break;

@@ -76,42 +76,35 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	D_ASSERT(input.GetType().id() == LogicalTypeId::LIST);
 	UnaryExecutor::Execute<list_entry_t, int64_t>(
 	    input, result, args.size(), [](list_entry_t input) { return UnsafeNumericCast<int64_t>(input.length); });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnifiedVectorFormat format;
-	args.data[0].ToUnifiedFormat(args.size(), format);
+	auto validity_entries = args.data[0].Validity(args.size());
 
 	// for arrays the length is constant
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
 
 	// but we do need to take null values into account
-	if (format.validity.AllValid()) {
+	if (!validity_entries.CanHaveNull()) {
 		// if there are no null values we can just return the constant
 		return;
 	}
 	// otherwise we flatten and inherit the null values of the parent
 	result.Flatten(args.size());
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t r = 0; r < args.size(); r++) {
-		auto idx = format.sel->get_index(r);
-		if (!format.validity.RowIsValid(idx)) {
+		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
 		}
 	}
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -125,7 +118,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, ScalarFun
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
@@ -143,9 +136,6 @@ void ListLengthBinaryFunction(DataChunk &args, ExpressionState &, Vector &result
 		    }
 		    return UnsafeNumericCast<int64_t>(input.length);
 	    });
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
 struct ArrayLengthBinaryFunctionData : public FunctionData {
@@ -179,20 +169,17 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 		return dimensions[UnsafeNumericCast<idx_t>(dimension - 1)];
 	});
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	auto type = arguments[0]->return_type;
 	if (type.id() == LogicalTypeId::ARRAY) {
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
 
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
@@ -211,7 +198,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &context, Sca
 
 	} else if (type.id() == LogicalTypeId::LIST) {
 		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		return nullptr;
 	} else {
 		// Unreachable
@@ -225,7 +212,7 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
-	                                  nullptr, LengthPropagateStats));
+	                                  LengthPropagateStats));
 	length.AddFunction(ScalarFunction({LogicalType::BIT}, LogicalType::BIGINT,
 	                                  ScalarFunction::UnaryFunction<string_t, int64_t, BitStringLenOperator>));
 	length.AddFunction(
@@ -237,7 +224,7 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 	ScalarFunctionSet length_grapheme("length_grapheme");
 	length_grapheme.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
 	                                           ScalarFunction::UnaryFunction<string_t, int64_t, GraphemeCountOperator>,
-	                                           nullptr, nullptr, LengthPropagateStats));
+	                                           nullptr, LengthPropagateStats));
 	return (length_grapheme);
 }
 

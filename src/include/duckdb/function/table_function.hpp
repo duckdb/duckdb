@@ -98,9 +98,11 @@ struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref)
+	                       TableFunction &table_function, const TableFunctionRef &ref,
+	                       optional_ptr<unique_ptr<LogicalOperator>> input_plan = nullptr)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
+	      input_plan(input_plan) {
 	}
 
 	vector<Value> &inputs;
@@ -111,6 +113,7 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 };
 
 struct TableFunctionInitInput {
@@ -437,7 +440,7 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) returns the number of rows that have been scanned
 	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan

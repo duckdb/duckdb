@@ -103,7 +103,7 @@ physical_plan	<REGEX>:.*IE_JOIN.*
 foreach prefer false true
 
 statement ok
-SET prefer_range_joins=${prefer}
+SET prefer_range_joins={prefer}
 
 query III
 SELECT l.id, l.start, l.stop
@@ -223,7 +223,7 @@ physical_plan	<REGEX>:.*IE_JOIN.*
 foreach prefer false true
 
 statement ok
-SET prefer_range_joins=${prefer}
+SET prefer_range_joins={prefer}
 
 query IIIII
 FROM wide_ranges l
@@ -269,9 +269,6 @@ ORDER BY id;
 2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
 3	2026-01-01 01:13:08	2026-01-01 01:37:31	D	193.3857142857143
 
-endloop
-
-# TODO: Move back inside the loop when #21273 is fixed.
 # Verify all predicates
 query IIIII
 FROM wide_ranges l
@@ -286,4 +283,4 @@ ORDER BY id;
 1	2026-01-01 00:24:22	2026-01-01 00:48:45	B	164.12857142857143
 2	2026-01-01 00:48:45	2026-01-01 01:13:08	C	178.75714285714287
 
-
+endloop

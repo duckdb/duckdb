@@ -19,7 +19,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 	auto groups_count = op.GroupCount();
 	for (auto group_idx : ProjectionIndex::GetIndexes(groups_count)) {
 		if (grouping_set.find(group_idx) == grouping_set.end()) {
-			null_groups.push_back(group_idx.index);
+			null_groups.push_back(group_idx);
 		}
 	}
 	if (grouping_set.empty()) {
@@ -27,7 +27,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 		group_types.emplace_back(LogicalType::TINYINT);
 	}
 	for (auto &entry : grouping_set) {
-		group_types.push_back(op.group_types[entry.index]);
+		group_types.push_back(op.group_types[entry]);
 	}
 	SetGroupingValues();
 
@@ -393,7 +393,7 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartiti
 	// If there are no groups we create a fake group so everything has the same group
 	group_chunk.InitializeEmpty(radix_ht.group_types);
 	if (radix_ht.grouping_set.empty()) {
-		group_chunk.data[0].Reference(Value::TINYINT(42));
+		group_chunk.data[0].Reference(Value::TINYINT(42), count_t(STANDARD_VECTOR_SIZE));
 	}
 }
 
@@ -410,7 +410,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	// Populate the group_chunk
 	for (auto &group_idx : grouping_set) {
 		// Retrieve the expression containing the index in the input chunk
-		auto &group = op.groups[group_idx.index];
+		auto &group = op.groups[group_idx];
 		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
@@ -684,7 +684,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);
 
-	// Mininum of the two
+	// Minimum of the two
 	return MinValue<idx_t>(partitions_fit, max_threads);
 }
 
@@ -921,11 +921,10 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	auto &radix_ht = sink.radix_ht;
 	idx_t chunk_index = 0;
 	for (auto &entry : radix_ht.grouping_set) {
-		chunk.data[entry.index].Reference(scan_chunk.data[chunk_index++]);
+		chunk.data[entry].Reference(scan_chunk.data[chunk_index++]);
 	}
 	for (auto null_group : radix_ht.null_groups) {
-		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(chunk.data[null_group], true);
+		ConstantVector::SetNull(chunk.data[null_group], count_t(scan_chunk.size()));
 	}
 	D_ASSERT(radix_ht.grouping_set.size() + radix_ht.null_groups.size() == radix_ht.op.GroupCount());
 	for (idx_t col_idx = 0; col_idx < radix_ht.op.aggregates.size(); col_idx++) {
@@ -934,7 +933,8 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	}
 	D_ASSERT(radix_ht.op.grouping_functions.size() == radix_ht.grouping_values.size());
 	for (idx_t i = 0; i < radix_ht.op.grouping_functions.size(); i++) {
-		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i]);
+		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i],
+		                                                                                   count_t(scan_chunk.size()));
 	}
 	chunk.SetCardinality(scan_chunk);
 	D_ASSERT(chunk.size() != 0);
@@ -973,8 +973,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// For each column in the aggregates, set to initial state
 			chunk.SetCardinality(1);
 			for (auto null_group : null_groups) {
-				chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(chunk.data[null_group], true);
+				ConstantVector::SetNull(chunk.data[null_group], count_t(1));
 			}
 			ArenaAllocator allocator(BufferAllocator::Get(context.client));
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
@@ -985,7 +984,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
 
 				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
-				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
+				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));
 				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
 				                                         chunk.data[null_groups.size() + i], 1, 0);
 				if (aggr.function.HasStateDestructorCallback()) {
@@ -995,7 +994,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)
 			// Behind the null groups + aggregates
 			for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
-				chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
+				chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i], count_t(1));
 			}
 		}
 		gstate.finished = true;

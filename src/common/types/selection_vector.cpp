@@ -73,4 +73,11 @@ void SelectionVector::Verify(idx_t count, idx_t vector_size) const {
 #endif
 }
 
+idx_t SelectionVector::GetAllocationSize() const {
+	if (!selection_data) {
+		return 0;
+	}
+	return selection_data->owned_data.GetSize();
+}
+
 } // namespace duckdb

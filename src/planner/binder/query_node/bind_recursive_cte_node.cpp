@@ -42,7 +42,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 		    "Please transition to using UNION ALL, before DuckDB's next release. \n"
 		    "Use SET deprecated_using_key_syntax='UNION_AS_UNION_ALL' to enable the deprecated behavior. \n"
 		    "For more information, see "
-		    "https://duckdb.org/docs/stable/sql/query_syntax/with#recursive-ctes-with-using-key.";
+		    "https://duckdb.org/docs/current/sql/query_syntax/with#recursive-ctes-with-using-key.";
 
 		if (warn_deprecated_syntax) {
 			DUCKDB_LOG_WARNING(context, msg);
@@ -183,17 +183,17 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' referenced multiple times in USING KEY clause.\n"
 				                      "Try using an alias for one of the aggregates.",
-				                      result.names[aggregate_idx.index]);
+				                      result.names[aggregate_idx]);
 			}
 
 			if (key_references.find(aggregate_idx) != key_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
 				                      "Column '%s' cannot be used as both key and aggregate in USING KEY clause.\n"
 				                      "Try using an alias for the aggregation.",
-				                      result.names[aggregate_idx.index]);
+				                      result.names[aggregate_idx]);
 			}
 
-			return_types[aggregate_idx.index] = aggregate->return_type;
+			return_types[aggregate_idx] = aggregate->return_type;
 			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
 			throw BinderException(

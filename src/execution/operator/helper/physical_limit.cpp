@@ -213,17 +213,10 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		idx_t chunk_count;
 		if (current_offset + input.size() >= max_element) {
 			// have to limit the count of the chunk
-			chunk_count = max_element - current_offset;
-		} else {
-			// we copy the entire chunk
-			chunk_count = input.size();
+			input.Slice(0, max_element - current_offset);
 		}
-		// instead of copying we just change the pointer in the current chunk
-		input.Reference(input);
-		input.SetCardinality(chunk_count);
 	}
 
 	current_offset += input_size;
@@ -257,6 +250,7 @@ InsertionOrderPreservingMap<string> PhysicalLimit::ParamsToString() const {
 			result["Offset"] = to_string(offset);
 		}
 	}
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

@@ -6,13 +6,13 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -68,8 +68,8 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
 	auto &type = op.orders[0].expression->return_type;
-	if (!TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
-		// only supported for integral types currently
+	if (!TypeIsNumeric(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
+		// only supported for numeric and varchar types
 		return;
 	}
 	if (op.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
@@ -105,9 +105,7 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		    op.orders.size() == 1 ? ExpressionType::COMPARE_GREATERTHAN : ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 	}
 	Value minimum_value = type.InternalType() == PhysicalType::VARCHAR ? Value("") : Value::MinimumValue(type);
-	auto base_filter = make_uniq<ConstantFilter>(comparison_type, std::move(minimum_value));
-	auto filter_data = make_shared_ptr<DynamicFilterData>();
-	filter_data->filter = std::move(base_filter);
+	auto filter_data = make_shared_ptr<DynamicFilterData>(comparison_type, std::move(minimum_value));
 
 	// put the filter into the Top-N clause
 	op.dynamic_filter = filter_data;
@@ -122,15 +120,16 @@ void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 		unique_ptr<TableFilter> pushed_filter = std::move(dynamic_filter);
 		if (nulls_first) {
 			auto or_filter = make_uniq<ConjunctionOrFilter>();
-			or_filter->child_filters.push_back(make_uniq<IsNullFilter>());
+			auto is_null = ExpressionFilter::CreateNullCheckExpression(
+			    make_uniq<BoundReferenceExpression>(type, idx_t(0)), ExpressionType::OPERATOR_IS_NULL);
+			or_filter->child_filters.push_back(make_uniq<ExpressionFilter>(std::move(is_null)));
 			or_filter->child_filters.push_back(std::move(pushed_filter));
 			pushed_filter = std::move(or_filter);
 		}
 		auto optional_filter = make_uniq<OptionalFilter>(std::move(pushed_filter));
 
 		// push the filter into the table scan
-		auto &column_index = get.GetColumnIndex(col_binding);
-		get.table_filters.PushFilter(column_index, std::move(optional_filter));
+		get.table_filters.PushFilter(col_binding.column_index, std::move(optional_filter));
 	}
 }
 

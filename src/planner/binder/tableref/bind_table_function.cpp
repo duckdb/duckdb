@@ -1,6 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
@@ -11,16 +10,14 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/table_function_binder.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -47,7 +44,7 @@ static TableFunctionBindType GetTableFunctionBindType(TableFunctionCatalogEntry 
 	bool has_table_parameter = false;
 	for (idx_t function_idx = 0; function_idx < table_function.functions.Size(); function_idx++) {
 		const auto &function = table_function.functions.GetFunctionReferenceByOffset(function_idx);
-		for (auto &arg : function.arguments) {
+		for (auto &arg : function.GetArguments()) {
 			if (arg.id() == LogicalTypeId::TABLE) {
 				has_table_parameter = true;
 			}
@@ -123,7 +120,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.arguments.empty()) {
+			if (table_function.functions.Size() != 1 || fun.GetArguments().empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.name);
@@ -183,7 +180,8 @@ static string GetAlias(const TableFunctionRef &ref) {
 BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_parameter_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
-                                                 vector<string> input_table_names) {
+                                                 vector<string> input_table_names,
+                                                 optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
 	auto function_name = GetAlias(ref);
 	auto &column_name_alias = ref.column_name_alias;
 	auto bind_index = GenerateTableIndex();
@@ -196,7 +194,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 	optional_idx ordinality_column_id;
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, table_function, ref);
+		                                  table_function.function_info.get(), this, table_function, ref, input_plan);
 		if (table_function.bind_operator) {
 			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
@@ -307,8 +305,9 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
+		auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 		auto row_number =
-		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
+		    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
@@ -350,7 +349,7 @@ BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> 
 	ref.alias = function.name;
 	D_ASSERT(!ref.alias.empty());
 	return BindTableFunctionInternal(function, ref, std::move(parameters), std::move(named_parameters),
-	                                 std::move(input_table_types), std::move(input_table_names));
+	                                 std::move(input_table_types), std::move(input_table_names), nullptr);
 }
 
 BoundStatement Binder::Bind(TableFunctionRef &ref) {
@@ -437,8 +436,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	if (!parameters.empty()) {
 		// cast the parameters to the type of the function
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type =
-			    i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+			auto target_type = i < table_function.GetArguments().size() ? table_function.GetArguments()[i]
+			                                                            : table_function.GetVarArgs();
 
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST && target_type != LogicalType::TABLE) {
@@ -447,8 +446,8 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		}
 	} else if (subquery.plan) {
 		for (idx_t i = 0; i < arguments.size(); i++) {
-			auto target_type =
-			    i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+			auto target_type = i < table_function.GetArguments().size() ? table_function.GetArguments()[i]
+			                                                            : table_function.GetVarArgs();
 
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST) {
@@ -460,7 +459,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	BoundStatement get;
 	try {
 		get = BindTableFunctionInternal(table_function, ref, std::move(parameters), std::move(named_parameters),
-		                                std::move(input_table_types), std::move(input_table_names));
+		                                std::move(input_table_types), std::move(input_table_names), &subquery.plan);
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
 		// if the error does not already contain a query location, add one

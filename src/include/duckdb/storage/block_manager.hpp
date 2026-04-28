@@ -55,7 +55,7 @@ public:
 	//! Returns whether or not a specified block is the root block
 	virtual bool IsRootBlock(MetaBlockPointer root) = 0;
 	//! Mark a block as included in the next checkpoint
-	virtual void MarkBlockACheckpointed(block_id_t block_id) = 0;
+	virtual void MarkBlockAsCheckpointed(block_id_t block_id) = 0;
 	//! Mark a block as "used"; either the block is removed from the free list, or the reference count is incremented
 	virtual void MarkBlockAsUsed(block_id_t block_id) = 0;
 	//! Mark a block as "modified"; modified blocks are added to the free list after a checkpoint (i.e. their data is

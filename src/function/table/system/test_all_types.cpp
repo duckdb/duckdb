@@ -101,31 +101,31 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	// ENUMs.
 	Vector small_enum(LogicalType::VARCHAR, 2);
-	auto small_enum_ptr = FlatVector::GetData<string_t>(small_enum);
-	small_enum_ptr[0] = StringVector::AddStringOrBlob(small_enum, "DUCK_DUCK_ENUM");
-	small_enum_ptr[1] = StringVector::AddStringOrBlob(small_enum, "GOOSE");
+	auto small_enum_ptr = FlatVector::Writer<string_t>(small_enum, 2);
+	small_enum_ptr.WriteValue(string_t("DUCK_DUCK_ENUM"));
+	small_enum_ptr.WriteValue(string_t("GOOSE"));
 	result.emplace_back(LogicalType::ENUM(small_enum, 2), "small_enum");
 
 	Vector medium_enum(LogicalType::VARCHAR, 300);
-	auto medium_enum_ptr = FlatVector::GetData<string_t>(medium_enum);
+	auto medium_enum_ptr = FlatVector::Writer<string_t>(medium_enum, 300);
 	for (idx_t i = 0; i < 300; i++) {
-		medium_enum_ptr[i] = StringVector::AddStringOrBlob(medium_enum, string("enum_") + to_string(i));
+		medium_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 	}
 	result.emplace_back(LogicalType::ENUM(medium_enum, 300), "medium_enum");
 
 	if (use_large_enum) {
 		// this is a big one... not sure if we should push this one here, but it's required for completeness
 		Vector large_enum(LogicalType::VARCHAR, 70000);
-		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
+		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 70000);
 		for (idx_t i = 0; i < 70000; i++) {
-			large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
+			large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(i)));
 		}
 		result.emplace_back(LogicalType::ENUM(large_enum, 70000), "large_enum");
 	} else {
 		Vector large_enum(LogicalType::VARCHAR, 2);
-		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
-		large_enum_ptr[0] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(0));
-		large_enum_ptr[1] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(69999));
+		auto large_enum_ptr = FlatVector::Writer<string_t>(large_enum, 2);
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(0)));
+		large_enum_ptr.WriteValue(string_t(string("enum_") + to_string(69999)));
 		result.emplace_back(LogicalType::ENUM(large_enum, 2), "large_enum");
 	}
 
@@ -320,6 +320,49 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 
 	result.emplace_back(LogicalType::TIME_NS, "time_ns");
 
+	// GEOMETRY
+	// - For min, use a regular empty point
+	// - For max, use some complicated nested geometry collection with a variety of empty and non-empty geometries,
+	// to cover as many code paths as possible
+
+	constexpr auto big_geom_wkt = R"WKT_LITERAL(
+		GEOMETRYCOLLECTION (
+			POINT (1 2),
+			POINT EMPTY,
+			LINESTRING (0 0, 1 1),
+			LINESTRING EMPTY,
+			POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0)),
+			POLYGON EMPTY,
+	        MULTIPOINT (
+				5 6,
+				EMPTY
+			),
+			MULTILINESTRING (
+				(0 0, 1 1),
+				EMPTY,
+				(2 2, 3 3),
+				EMPTY
+			),
+			MULTILINESTRING EMPTY,
+			MULTIPOLYGON (
+				((0 0, 0 1, 1 1, 1 0, 0 0)),
+				EMPTY,
+				((0 0, 0 2, 2 2, 2 0, 0 0)),
+				EMPTY
+			),
+			MULTIPOLYGON EMPTY,
+			GEOMETRYCOLLECTION (
+				POINT (5 6)
+			),
+			GEOMETRYCOLLECTION EMPTY
+		)
+	)WKT_LITERAL";
+
+	auto min_geometry = Value("POINT EMPTY").DefaultCastAs(LogicalType::GEOMETRY());
+	auto max_geometry = Value(big_geom_wkt).DefaultCastAs(LogicalType::GEOMETRY());
+
+	result.emplace_back(LogicalType::GEOMETRY(), "geometry", min_geometry, max_geometry);
+
 	return result;
 }
 
@@ -354,7 +397,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	return std::move(result);
 }
 
-unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
+static unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<TestAllTypesBindData>();
 	auto result = make_uniq<TestAllTypesData>();
 	// 3 rows: min, max and NULL
@@ -368,7 +411,7 @@ unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, Ta
 	return std::move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<TestAllTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
@@ -380,7 +423,7 @@ void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &vals = data.entries[data.offset++];
 		for (idx_t col_idx = 0; col_idx < vals.size(); col_idx++) {
-			output.SetValue(col_idx, count, vals[col_idx]);
+			output.data[col_idx].Append(vals[col_idx]);
 		}
 		count++;
 	}

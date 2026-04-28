@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/union_vector.hpp"
 #include "core_functions/scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -8,8 +9,9 @@ namespace duckdb {
 
 namespace {
 
-unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bound_function,
-                                      vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnionTagBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("Missing required arguments for union_tag function.");
 	}
@@ -32,13 +34,12 @@ unique_ptr<FunctionData> UnionTagBind(ClientContext &context, ScalarFunction &bo
 		throw InternalException("Can't get tags from an empty union");
 	}
 
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 
 	auto varchar_vector = Vector(LogicalType::VARCHAR, member_count);
+	auto result_data = FlatVector::Writer<string_t>(varchar_vector, member_count);
 	for (idx_t i = 0; i < member_count; i++) {
-		auto str = string_t(UnionType::GetMemberName(arguments[0]->return_type, i));
-		FlatVector::GetData<string_t>(varchar_vector)[i] =
-		    str.IsInlined() ? str : StringVector::AddString(varchar_vector, str);
+		result_data.WriteValue(string_t(UnionType::GetMemberName(arguments[0]->return_type, i)));
 	}
 	auto enum_type = LogicalType::ENUM(varchar_vector, member_count);
 	bound_function.SetReturnType(enum_type);

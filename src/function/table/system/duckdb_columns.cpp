@@ -79,6 +79,9 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	names.emplace_back("numeric_scale");
 	return_types.emplace_back(LogicalType::INTEGER);
 
+	names.emplace_back("tags");
+	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -103,13 +106,14 @@ public:
 
 	virtual StandardEntry &Entry() = 0;
 	virtual idx_t NumColumns() = 0;
-	virtual const string &ColumnName(idx_t col) = 0;
+	virtual Value ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
 	virtual const Value ColumnDefault(idx_t col) = 0;
 	virtual bool IsNullable(idx_t col) = 0;
 	virtual const Value ColumnComment(idx_t col) = 0;
+	virtual const Value ColumnTags(idx_t col) = 0;
 
-	void WriteColumns(idx_t index, idx_t start_col, idx_t end_col, DataChunk &output);
+	void WriteColumns(idx_t start_col, idx_t end_col, DataChunk &output);
 };
 
 class TableColumnHelper : public ColumnHelper {
@@ -129,8 +133,8 @@ public:
 	idx_t NumColumns() override {
 		return entry.GetColumns().LogicalColumnCount();
 	}
-	const string &ColumnName(idx_t col) override {
-		return entry.GetColumn(LogicalIndex(col)).Name();
+	Value ColumnName(idx_t col) override {
+		return Value(entry.GetColumn(LogicalIndex(col)).Name());
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return entry.GetColumn(LogicalIndex(col)).Type();
@@ -150,6 +154,9 @@ public:
 	const Value ColumnComment(idx_t col) override {
 		return entry.GetColumn(LogicalIndex(col)).Comment();
 	}
+	const Value ColumnTags(idx_t col) override {
+		return Value::MAP(entry.GetColumn(LogicalIndex(col)).Tags());
+	}
 
 private:
 	TableCatalogEntry &entry;
@@ -159,23 +166,37 @@ private:
 class ViewColumnHelper : public ColumnHelper {
 public:
 	explicit ViewColumnHelper(ClientContext &context, ViewCatalogEntry &entry) : entry(entry) {
-		entry.BindView(context);
-		view_columns = entry.GetColumnInfo();
-		column_names = view_columns->names;
-		QueryResult::DeduplicateColumns(column_names);
+		try {
+			// try to bind the view if it is not yet bound
+			entry.BindView(context);
+		} catch (std::exception &ex) {
+		}
+		auto view_columns = entry.GetColumnInfo();
+		if (view_columns) {
+			column_names = view_columns->names;
+			types = view_columns->types;
+			QueryResult::DeduplicateColumns(column_names);
+			bound_view = true;
+		} else {
+			// view is not bound - emit a single placeholder column
+			types.push_back(LogicalTypeId::INVALID);
+		}
 	}
 
 	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return view_columns->types.size();
+		return types.size();
 	}
-	const string &ColumnName(idx_t col) override {
-		return col < entry.aliases.size() ? entry.aliases[col] : column_names[col];
+	Value ColumnName(idx_t col) override {
+		if (types[0].id() == LogicalTypeId::INVALID) {
+			return Value();
+		}
+		return Value(col < entry.aliases.size() ? entry.aliases[col] : column_names[col]);
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return view_columns->types[col];
+		return types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -184,13 +205,18 @@ public:
 		return true;
 	}
 	const Value ColumnComment(idx_t col) override {
-		return entry.GetColumnComment(col);
+		return bound_view ? entry.GetColumnComment(col) : Value();
+	}
+	const Value ColumnTags(idx_t col) override {
+		InsertionOrderPreservingMap<string> empty;
+		return Value::MAP(empty);
 	}
 
 private:
 	ViewCatalogEntry &entry;
-	shared_ptr<ViewColumnInfo> view_columns;
 	vector<string> column_names;
+	vector<LogicalType> types;
+	bool bound_view = false;
 };
 
 unique_ptr<ColumnHelper> ColumnHelper::Create(ClientContext &context, CatalogEntry &entry) {
@@ -205,49 +231,66 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(ClientContext &context, CatalogEnt
 	}
 }
 
-void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_col, DataChunk &output) {
+void ColumnHelper::WriteColumns(idx_t start_col, idx_t end_col, DataChunk &output) {
+	// database_name, VARCHAR
+	auto &database_name = output.data[0];
+	// database_oid, BIGINT
+	auto &database_oid = output.data[1];
+	// schema_name, VARCHAR
+	auto &schema_name = output.data[2];
+	// schema_oid, BIGINT
+	auto &schema_oid = output.data[3];
+	// table_name, VARCHAR
+	auto &table_name = output.data[4];
+	// table_oid, BIGINT
+	auto &table_oid = output.data[5];
+	// column_name, VARCHAR
+	auto &column_name = output.data[6];
+	// column_index, INTEGER
+	auto &column_index = output.data[7];
+	// comment, VARCHAR
+	auto &comment = output.data[8];
+	// internal, BOOLEAN
+	auto &internal = output.data[9];
+	// column_default, VARCHAR
+	auto &column_default = output.data[10];
+	// is_nullable, BOOLEAN
+	auto &is_nullable = output.data[11];
+	// data_type, VARCHAR
+	auto &data_type = output.data[12];
+	// data_type_id, BIGINT
+	auto &data_type_id = output.data[13];
+	// character_maximum_length, INTEGER
+	auto &character_maximum_length = output.data[14];
+	// numeric_precision, INTEGER
+	auto &numeric_precision_col = output.data[15];
+	// numeric_precision_radix, INTEGER
+	auto &numeric_precision_radix_col = output.data[16];
+	// numeric_scale, INTEGER
+	auto &numeric_scale_col = output.data[17];
+	// tags, MAP(VARCHAR, VARCHAR)
+	auto &tags = output.data[18];
+
 	for (idx_t i = start_col; i < end_col; i++) {
-		auto index = start_index + (i - start_col);
 		auto &entry = Entry();
 
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, index, entry.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
-		// schema_name, VARCHAR
-		output.SetValue(col++, index, entry.schema.name);
-		// schema_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.schema.oid)));
-		// table_name, VARCHAR
-		output.SetValue(col++, index, entry.name);
-		// table_oid, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
-		// column_name, VARCHAR
-		output.SetValue(col++, index, Value(ColumnName(i)));
-		// column_index, INTEGER
-		output.SetValue(col++, index, Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));
-		// comment, VARCHAR
-		output.SetValue(col++, index, ColumnComment(i));
-		// internal, BOOLEAN
-		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
-		// column_default, VARCHAR
-		output.SetValue(col++, index, Value(ColumnDefault(i)));
-		// is_nullable, BOOLEAN
-		output.SetValue(col++, index, Value::BOOLEAN(IsNullable(i)));
-		// data_type, VARCHAR
+		database_name.Append(Value(entry.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
+		schema_name.Append(Value(entry.schema.name));
+		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.schema.oid)));
+		table_name.Append(Value(entry.name));
+		table_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.oid)));
+		column_name.Append(ColumnName(i));
+		column_index.Append(Value::INTEGER(UnsafeNumericCast<int32_t>(i + 1)));
+		comment.Append(ColumnComment(i));
+		internal.Append(Value::BOOLEAN(entry.internal));
+		column_default.Append(ColumnDefault(i));
+		is_nullable.Append(Value::BOOLEAN(IsNullable(i)));
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(col++, index, Value(type.ToString()));
-		// data_type_id, BIGINT
-		output.SetValue(col++, index, Value::BIGINT(int(type.id())));
-		if (type == LogicalType::VARCHAR) {
-			// FIXME: need check constraints in place to set this correctly
-			// character_maximum_length, INTEGER
-			output.SetValue(col++, index, Value());
-		} else {
-			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(col++, index, Value());
-		}
+		data_type.Append(type.id() == LogicalTypeId::INVALID ? Value() : Value(type.ToString()));
+		data_type_id.Append(type.id() == LogicalTypeId::INVALID ? Value() : Value::BIGINT(int(type.id())));
+		// FIXME: need check constraints in place to set this correctly for VARCHAR
+		character_maximum_length.Append(Value());
 
 		Value numeric_precision, numeric_scale, numeric_precision_radix;
 		switch (type.id()) {
@@ -298,12 +341,10 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 			break;
 		}
 
-		// numeric_precision, INTEGER
-		output.SetValue(col++, index, numeric_precision);
-		// numeric_precision_radix, INTEGER
-		output.SetValue(col++, index, numeric_precision_radix);
-		// numeric_scale, INTEGER
-		output.SetValue(col++, index, numeric_scale);
+		numeric_precision_col.Append(numeric_precision);
+		numeric_precision_radix_col.Append(numeric_precision_radix);
+		numeric_scale_col.Append(numeric_scale);
+		tags.Append(ColumnTags(i));
 	}
 }
 
@@ -329,7 +370,7 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 		if (index + (columns - column_offset) > STANDARD_VECTOR_SIZE) {
 			idx_t column_limit = column_offset + (STANDARD_VECTOR_SIZE - index);
 			output.SetCardinality(STANDARD_VECTOR_SIZE);
-			column_helper->WriteColumns(index, column_offset, column_limit, output);
+			column_helper->WriteColumns(column_offset, column_limit, output);
 
 			// Make the current column limit the column offset when we process the next chunk
 			column_offset = column_limit;
@@ -338,7 +379,7 @@ static void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &da
 			// Otherwise, write all of the columns from the current relation and
 			// then move on to the next one.
 			output.SetCardinality(index + (columns - column_offset));
-			column_helper->WriteColumns(index, column_offset, columns, output);
+			column_helper->WriteColumns(column_offset, columns, output);
 			index += columns - column_offset;
 			next++;
 			column_offset = 0;

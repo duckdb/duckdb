@@ -506,12 +506,10 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		// nothing to verify
 		return;
 	}
-	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	auto validity_entries = vector.Validity(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
-		auto index = vdata.sel->get_index(idx);
-		bool row_is_valid = vdata.validity.RowIsValid(index);
+		bool row_is_valid = validity_entries.IsValid(idx);
 		if (row_is_valid && !has_no_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",

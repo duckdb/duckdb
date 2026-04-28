@@ -47,7 +47,7 @@ struct SelectivityOptionalFilterState final : public TableFilterState {
 	}
 };
 
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ };
+enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
 
 class SelectivityOptionalFilter final : public OptionalFilter {
 public:
@@ -67,5 +67,9 @@ public:
 	unique_ptr<TableFilterState> InitializeState(ClientContext &context) const override;
 	idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
 	                      TableFilterState &filter_state, idx_t scan_count, idx_t &approved_tuple_count) const override;
+
+	bool IsOnlyForZoneMapFiltering() const override {
+		return false;
+	}
 };
 } // namespace duckdb

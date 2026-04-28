@@ -3,7 +3,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	CAPITester tester;
@@ -214,10 +213,11 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 			for (int i = 0; i < num_buffers; i++) {
 				auto data_chunk = &data_chunks[i];
 				data_chunk->Initialize(allocator, logical_types, STANDARD_VECTOR_SIZE);
-				data_chunk->SetCardinality(STANDARD_VECTOR_SIZE);
+				auto &col = data_chunk->data[0];
 				for (idx_t row = 0; row < STANDARD_VECTOR_SIZE; row++) {
-					data_chunk->SetValue(0, row, duckdb::Value(i));
+					col.Append(duckdb::Value(i));
 				}
+				data_chunk->SetCardinality(STANDARD_VECTOR_SIZE);
 				appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());
 			}
 

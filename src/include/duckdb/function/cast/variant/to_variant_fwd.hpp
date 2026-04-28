@@ -3,6 +3,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/owning_string_map.hpp"
@@ -19,16 +20,16 @@ void InitializeOffsets(DataChunk &offsets, idx_t count);
 struct OffsetData {
 public:
 	static uint32_t *GetKeys(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[0]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[0]);
 	}
 	static uint32_t *GetChildren(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[1]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[1]);
 	}
 	static uint32_t *GetValues(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[2]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[2]);
 	}
 	static uint32_t *GetBlob(DataChunk &offsets) {
-		return FlatVector::GetData<uint32_t>(offsets.data[3]);
+		return FlatVector::GetDataMutable<uint32_t>(offsets.data[3]);
 	}
 };
 
@@ -77,7 +78,9 @@ void WriteContainerData(VariantVectorData &result, idx_t result_index, uint32_t 
 struct ContainerSelectionVectors {
 public:
 	explicit ContainerSelectionVectors(idx_t max_size)
-	    : new_selection(0, max_size), non_null_selection(0, max_size), children_selection(0, max_size) {
+	    : new_selection(SelectionVector::Incremental(max_size)),
+	      non_null_selection(SelectionVector::Incremental(max_size)),
+	      children_selection(SelectionVector::Incremental(max_size)) {
 	}
 
 public:

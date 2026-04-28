@@ -30,8 +30,10 @@ struct ICUToTimeTZ : public ICUDateFunc {
 	static bool ToTimeTZ(icu::Calendar *calendar, timestamp_t instant, dtime_tz_t &result);
 
 	static bool CastToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	static bool CastFromTime(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 	static BoundCastInfo BindCastToTimeTZ(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo BindCastFromTime(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 
 	static void AddCasts(ExtensionLoader &loader);
 };

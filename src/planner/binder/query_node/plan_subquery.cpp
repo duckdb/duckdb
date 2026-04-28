@@ -392,6 +392,11 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	}
 }
 
+void RecursiveDependentJoinPlanner::Plan(Binder &binder, LogicalOperator &op) {
+	RecursiveDependentJoinPlanner planner(binder);
+	planner.VisitOperator(op);
+}
+
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,
                                                                    unique_ptr<Expression> *expr_ptr) {
 	return binder.PlanSubquery(expr, root);
@@ -417,8 +422,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	IncreaseDepth();
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (sub_binder->has_unplanned_dependent_joins) {
-		RecursiveDependentJoinPlanner plan(*this);
-		plan.VisitOperator(*root);
+		RecursiveDependentJoinPlanner::Plan(*this, *root);
 	}
 	return result_expression;
 }

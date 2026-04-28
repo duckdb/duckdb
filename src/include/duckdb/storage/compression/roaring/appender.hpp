@@ -50,7 +50,7 @@ public:
 		input.ToUnifiedFormat(input_size, unified);
 		auto &validity = unified.validity;
 
-		if (validity.AllValid()) {
+		if (validity.CannotHaveNull()) {
 			// All bits are set implicitly
 			idx_t appended = 0;
 			while (appended < input_size) {

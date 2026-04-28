@@ -217,6 +217,9 @@ struct PostRequestInfo : public BaseRequest {
 
 class HTTPClient {
 public:
+	HTTPClient() = default;
+	explicit HTTPClient(const string &proto_host_port) : base_url(proto_host_port) {
+	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
 
@@ -228,11 +231,23 @@ public:
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
+
+	const string &GetBaseUrl() const {
+		return base_url;
+	}
+
+private:
+	//! The base URL (scheme + host + port) this client was created for
+	const string base_url;
 };
 
 class HTTPUtil {
 public:
+	HTTPUtil();
 	virtual ~HTTPUtil() = default;
+	// disable copy constructors
+	HTTPUtil(const HTTPUtil &other) = delete;
+	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
@@ -245,6 +260,9 @@ public:
 	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
+
+	//! Close a client — implementations may cache it for reuse
+	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);

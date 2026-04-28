@@ -32,6 +32,7 @@ enum class TableFilterType : uint8_t {
 	EXPRESSION_FILTER = 9,         // an arbitrary expression
 	BLOOM_FILTER = 10,             // a probabilistic filter that can test whether a value is in a set of other value
 	PERFECT_HASH_JOIN_FILTER = 11, // perfect hash join probe pushed down
+	PREFIX_RANGE_FILTER = 12,      // probabilistic range-based filter
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
@@ -54,6 +55,10 @@ public:
 		return filter_type == other.filter_type;
 	}
 	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
+
+	virtual bool IsOnlyForZoneMapFiltering() const {
+		return false;
+	}
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);

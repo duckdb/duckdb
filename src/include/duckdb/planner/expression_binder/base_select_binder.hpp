@@ -54,7 +54,7 @@ protected:
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 
 	//! Binds a WINDOW expression and returns the result.
-	virtual BindResult BindWindow(WindowExpression &expr, idx_t depth);
+	virtual BindResult BindWindowExpression(WindowExpression &expr, idx_t depth);
 	virtual BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression);
 
 	ProjectionIndex TryBindGroup(ParsedExpression &expr);

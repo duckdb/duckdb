@@ -28,7 +28,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
+#include "duckdb/storage/external_file_cache/external_file_cache.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -109,19 +109,35 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 }
 
 //===----------------------------------------------------------------------===//
+// Delta Only Variant Legacy Encoding
+//===----------------------------------------------------------------------===//
+void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	throw InvalidInputException("This setting is not adjustable by a user");
+}
+
+Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.variant_legacy_encoding);
+}
+
+//===----------------------------------------------------------------------===//
 // Allocator Flush Threshold
 //===----------------------------------------------------------------------===//
 void AllocatorFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
 	}
 }
 
 void AllocatorFlushThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.allocator_flush_threshold = DBConfigOptions().allocator_flush_threshold;
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushThreshold(config.options.allocator_flush_threshold);
 	}
 }
 
@@ -181,6 +197,30 @@ void AllowUnsignedExtensionsSetting::OnSet(SettingCallbackInfo &info, Value &inp
 	if (info.db && input.GetValue<bool>()) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
+}
+
+//===----------------------------------------------------------------------===//
+// Allowed Configs
+//===----------------------------------------------------------------------===//
+void AllowedConfigsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allowed_configs.clear();
+	auto &list = ListValue::GetChildren(input);
+	for (auto &val : list) {
+		config.AddAllowedConfig(val.GetValue<string>());
+	}
+}
+
+void AllowedConfigsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allowed_configs = DBConfigOptions().allowed_configs;
+}
+
+Value AllowedConfigsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	vector<Value> configs;
+	for (auto &cfg : config.options.allowed_configs) {
+		configs.emplace_back(cfg);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(configs));
 }
 
 //===----------------------------------------------------------------------===//
@@ -689,6 +729,15 @@ void DuckDBAPISetting::OnSet(SettingCallbackInfo &info, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Vacuum Rebuild Indexes
+//===----------------------------------------------------------------------===//
+void VacuumRebuildIndexesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (info.db || info.context) {
+		throw InvalidInputException("Cannot change vacuum_rebuild_indexes setting while database is running");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Enable External Access
 //===----------------------------------------------------------------------===//
 void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input) {
@@ -1132,7 +1181,7 @@ void EnableHTTPLoggingSetting::SetLocal(ClientContext &context, const Value &inp
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_http_logging = input.GetValue<bool>();
 
-	// NOTE: this is a deprecated setting: we mimick the old behaviour by setting the log storage output to STDOUT and
+	// NOTE: this is a deprecated setting: we mimic the old behaviour by setting the log storage output to STDOUT and
 	// enabling logging for http only. Note that this behaviour is slightly wonky in that it sets all sorts of logging
 	// config
 	auto &log_manager = LogManager::Get(context);
@@ -1252,6 +1301,9 @@ void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.SetDefaultMaxMemory();
+	if (db) {
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+	}
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {
@@ -1663,4 +1715,12 @@ void WarningsAsErrorsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	}
 }
 
+void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (!info.context) {
+		throw InvalidInputException(
+		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+	}
+	info.context->transaction.SetInvalidationPolicy(
+	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
+}
 } // namespace duckdb

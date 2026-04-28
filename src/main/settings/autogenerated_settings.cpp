@@ -49,6 +49,13 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
+// Checkpoint On Detach
+//===----------------------------------------------------------------------===//
+void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -113,6 +120,23 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 //===----------------------------------------------------------------------===//
 void DeprecatedUsingKeySyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<DeprecatedUsingKeySyntax>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Enable Caching Operators
+//===----------------------------------------------------------------------===//
+void EnableCachingOperatorsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.enable_caching_operators = input.GetValue<bool>();
+}
+
+void EnableCachingOperatorsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).enable_caching_operators = ClientConfig().enable_caching_operators;
+}
+
+Value EnableCachingOperatorsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.enable_caching_operators);
 }
 
 //===----------------------------------------------------------------------===//

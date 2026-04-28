@@ -13,7 +13,7 @@ foreach col <all_types_columns>
 query I
 SELECT mode IS NOT DISTINCT FROM min_val FROM (
 	SELECT MODE(v) AS mode, MIN(v) AS min_val
-	FROM (SELECT "${col}" AS v FROM all_types UNION ALL SELECT MIN("${col}"), FROM all_types)
+	FROM (SELECT "{col}" AS v FROM all_types UNION ALL SELECT MIN("{col}"), FROM all_types)
 )
 ----
 true
@@ -21,7 +21,7 @@ true
 query I
 SELECT mode IS NOT DISTINCT FROM max_val FROM (
 	SELECT MODE(v) AS mode, MAX(v) AS max_val
-	FROM (SELECT "${col}" AS v FROM all_types UNION ALL SELECT MAX("${col}"), FROM all_types)
+	FROM (SELECT "{col}" AS v FROM all_types UNION ALL SELECT MAX("{col}"), FROM all_types)
 )
 ----
 true

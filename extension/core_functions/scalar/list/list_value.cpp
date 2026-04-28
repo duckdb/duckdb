@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -16,62 +18,43 @@ namespace duckdb {
 
 namespace {
 
-struct PrimitiveAssign {
-	template <class T>
-	static T Assign(const T &input, Vector &result) {
-		return input;
-	}
-};
-
-struct StringAssign {
-	template <class T>
-	static T Assign(const T &input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, input);
-	}
-};
-
-template <class T, class OP = PrimitiveAssign>
+template <class T>
 void TemplatedPopulateChild(DataChunk &args, Vector &result) {
 	const auto column_count = args.ColumnCount();
 	const auto row_count = args.size();
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<T>(result);
-	auto result_validity = &FlatVector::Validity(result);
-
+	auto result_data = FlatVector::Writer<T>(result, row_count * column_count);
 	auto unified_format = args.ToUnifiedFormat();
 	for (idx_t row = 0; row < row_count; row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			auto input_idx = unified_format[col].sel->get_index(row);
-			auto result_idx = row * column_count + col;
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity->SetInvalid(result_idx);
+				result_data.WriteNull();
 				continue;
 			}
 			const auto input_data = UnifiedVectorFormat::GetData<T>(unified_format[col]);
-			auto val = OP::template Assign<T>(input_data[input_idx], result);
-			result_data[result_idx] = val;
+			result_data.WriteValue(input_data[input_idx]);
 		}
 	}
 }
 
 void PopulateChildFallback(DataChunk &args, Vector &result) {
 	auto &child_type = ListType::GetChildType(result.GetType());
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i].offset = ListVector::GetListSize(result);
+		const auto entry_offset = ListVector::GetListSize(result);
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
 			ListVector::PushBack(result, val);
 		}
-		result_data[i].length = args.ColumnCount();
+		result_data.WriteValue(list_entry_t(entry_offset, args.ColumnCount()));
 	}
 }
 
 void ListFunction(DataChunk &args, Vector &result);
 bool StructFunction(DataChunk &args, Vector &result);
 
-template <class OP = PrimitiveAssign>
 bool PopulateChild(DataChunk &args, Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -115,7 +98,7 @@ bool PopulateChild(DataChunk &args, Vector &result) {
 		TemplatedPopulateChild<interval_t>(args, result);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedPopulateChild<string_t, StringAssign>(args, result);
+		TemplatedPopulateChild<string_t>(args, result);
 		break;
 	case PhysicalType::LIST:
 		ListFunction(args, result);
@@ -148,38 +131,36 @@ void ListFunction(DataChunk &args, Vector &result) {
 	ListVector::Reserve(result, offset_sum);
 
 	// The result vector is [[a], [b], ...], result_child is [a, b, ...].
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	auto unified_format = args.ToUnifiedFormat();
 	vector<const list_entry_t *> col_data;
 	for (idx_t col = 0; col < column_count; col++) {
-		auto list = args.data[col];
+		auto &list = args.data[col];
 		col_data.push_back(UnifiedVectorFormat::GetData<list_entry_t>(unified_format[col]));
 
 		const auto length = ListVector::GetListSize(list);
 		if (length == 0) {
 			continue;
 		}
-		auto &child_vector = ListVector::GetEntry(list);
+		auto &child_vector = ListVector::GetChildMutable(list);
 		VectorOperations::Copy(child_vector, result_child, length, 0, col_offsets[col]);
 	}
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-	auto result_validity = &FlatVector::Validity(result);
 
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size() * column_count);
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
-			const auto result_idx = row * column_count + col;
 			if (!unified_format[col].validity.RowIsValid(input_idx)) {
-				result_validity->SetInvalid(result_idx);
+				result_data.WriteNull();
 				continue;
 			}
 			const auto input = col_data[col][input_idx];
 			const auto length = input.length;
 			const auto offset = col_offsets[col] + input.offset;
-			result_data[result_idx] = list_entry_t(offset, length);
+			result_data.WriteValue(list_entry_t(offset, length));
 		}
 	}
 	ListVector::SetListSize(result, offset_sum);
@@ -192,7 +173,7 @@ bool StructFunction(DataChunk &args, Vector &result) {
 	for (idx_t member_idx = 0; member_idx < result_members.size(); member_idx++) {
 		// Same type for each column's member.
 		vector<LogicalType> types;
-		const auto member_type = result_members[member_idx]->GetType();
+		const auto member_type = result_members[member_idx].GetType();
 		for (idx_t col = 0; col < column_count; col++) {
 			types.push_back(member_type);
 		}
@@ -207,17 +188,17 @@ bool StructFunction(DataChunk &args, Vector &result) {
 				struct_vector.Flatten(args.size());
 			}
 			auto &struct_vector_members = StructVector::GetEntries(struct_vector);
-			chunk.data[col].Reference(*struct_vector_members[member_idx]);
+			chunk.data[col].Reference(struct_vector_members[member_idx]);
 		}
 
-		if (!PopulateChild(chunk, *result_members[member_idx])) {
+		if (!PopulateChild(chunk, result_members[member_idx])) {
 			return false;
 		}
 	}
 
 	// Set the top level result validity
 	const auto unified_format = args.ToUnifiedFormat();
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t row = 0; row < args.size(); row++) {
 		for (idx_t col = 0; col < column_count; col++) {
 			const auto input_idx = unified_format[col].sel->get_index(row);
@@ -234,39 +215,34 @@ bool StructFunction(DataChunk &args, Vector &result) {
 void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	if (args.ColumnCount() == 0) {
 		// Early out because the result is a constant empty list.
-		auto result_data = FlatVector::GetData<list_entry_t>(result);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto result_data = ConstantVector::GetData<list_entry_t>(result);
 		result_data[0].length = 0;
 		result_data[0].offset = 0;
 		return;
 	}
 
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
-
 	ListVector::Reserve(result, args.size() * args.ColumnCount());
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 
 	if (!PopulateChild(args, result_child)) {
 		PopulateChildFallback(args, result);
 	}
 
 	const idx_t column_count = args.ColumnCount();
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
 	for (idx_t row = 0; row < args.size(); row++) {
-		result_data[row].offset = row * column_count;
-		result_data[row].length = column_count;
+		result_data.WriteValue(list_entry_t(row * column_count, column_count));
 	}
 	ListVector::SetListSize(result, column_count * args.size());
 }
 
-unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bound_function,
-                                     vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// collect names and deconflict, construct return type
 	LogicalType child_type =
 	    arguments.empty() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*arguments[0]);
@@ -293,7 +269,7 @@ unique_ptr<FunctionData> UnpivotBind(ClientContext &context, ScalarFunction &bou
 	child_type = LogicalType::NormalizeType(child_type);
 
 	// this is more for completeness reasons
-	bound_function.varargs = child_type;
+	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
@@ -316,15 +292,14 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	ScalarFunctionSet set("list_value");
 
 	// Overload for 0 arguments, which returns an empty list.
-	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, nullptr,
-	                         ListValueStats);
+	ScalarFunction empty_fun({}, LogicalType::LIST(LogicalType::SQLNULL), ListValueFunction, nullptr, ListValueStats);
 	set.AddFunction(empty_fun);
 
 	// Overload for 1 + N arguments, which returns a list of the arguments.
 	auto element_type = LogicalType::TEMPLATE("T");
-	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr, nullptr,
+	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, nullptr,
 	                         ListValueStats);
-	value_fun.varargs = element_type;
+	value_fun.SetVarArgs(element_type);
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);
 
@@ -332,9 +307,8 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 }
 
 ScalarFunction UnpivotListFun::GetFunction() {
-	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, nullptr,
-	                   ListValueStats);
-	fun.varargs = LogicalTypeId::ANY;
+	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, ListValueStats);
+	fun.SetVarArgs(LogicalTypeId::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

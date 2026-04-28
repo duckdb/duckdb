@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_window_function_info.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -96,8 +97,11 @@ struct ExtensionFunctionInfo : public ScalarFunctionInfo {
 	string extension;
 };
 
-unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindExtensionFunction(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	// if this is triggered we are trying to call a method that is present in an extension
 	// but the extension is not loaded
 	// try to autoload the extension
@@ -118,12 +122,13 @@ unique_ptr<FunctionData> BindExtensionFunction(ClientContext &context, ScalarFun
 	auto &catalog = Catalog::GetSystemCatalog(db);
 	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.name);
 	// override the function with the extension function
-	bound_function = function_entry.functions.GetFunctionByArguments(context, bound_function.arguments);
+	bound_function = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
 	// call the original bind (if any)
 	if (!bound_function.HasBindCallback()) {
 		return nullptr;
 	}
-	return bound_function.GetBindCallback()(context, bound_function, arguments);
+	return bound_function.Bind(context, arguments);
+	;
 }
 
 void BuiltinFunctions::AddExtensionFunction(ScalarFunctionSet set) {

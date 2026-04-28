@@ -1,5 +1,6 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
+#include "duckdb/common/adbc/adbc.h"
 #include "duckdb/common/adbc/adbc.hpp"
 #include "duckdb/common/adbc/wrappers.hpp"
 #include "duckdb/common/adbc/options.h"
@@ -454,6 +455,34 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 	input_data.release = nullptr;
 }
 
+TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(db.adbc_error.message);
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "does not exist"));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "missing_table"));
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -478,6 +507,48 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 		auto res_persistent = db.Query("SELECT * FROM memory.main.my_table");
 		REQUIRE(!res_persistent->HasError());
 		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
+	}
+}
+
+TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// create a temp table with data1 on adbc_connection
+	auto &input_temp = db.QueryArrowForIngest("SELECT 1 AS idx, 'foo' AS value");
+	db.CreateTable("my_table", input_temp, "", true);
+
+	// create a persistent table with data2 on the SAME adbc_connection (no catalog/schema).
+	// This triggers the bug: the appender resolves "my_table" to the temp table.
+	{
+		auto &input_persistent = db.QueryArrowForIngest("SELECT 2 AS idx, 'bar' AS value");
+		AdbcStatement stmt = {};
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&stmt, ADBC_INGEST_OPTION_TARGET_TABLE, "my_table", &db.adbc_error)));
+		// No catalog, no schema, no temporary flag — should go to memory.main
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_persistent, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, nullptr, nullptr, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+		if (input_persistent.release) {
+			input_persistent.release(&input_persistent);
+		}
+	}
+
+	// Temp table should still contain only data1 (idx=1)
+	{
+		auto res = db.Query("SELECT idx FROM temp.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "1");
+	}
+	// Persistent table should contain data2 (idx=2)
+	{
+		auto res = db.Query("SELECT idx FROM memory.main.my_table ORDER BY idx");
+		REQUIRE(!res->HasError());
+		REQUIRE(res->RowCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "2");
 	}
 }
 
@@ -2901,7 +2972,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	}
 	// 6. Test constraints
 	//
-	// Available constraints: https://duckdb.org/docs/stable/sql/constraints.html
+	// Available constraints: https://duckdb.org/docs/current/sql/constraints.html
 	{
 		ADBCTestDatabase db("test_constraints");
 		// Create table 'foreign_table'
@@ -3457,6 +3528,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 	}
 
 	// Test file://localhost/<abs path> is accepted
+#ifndef _WIN32
 	{
 		auto abs_path = TestCreatePath("test_uri_localhost.db");
 		if (!abs_path.empty() && abs_path[0] != '/') {
@@ -3476,6 +3548,7 @@ TEST_CASE("Test ADBC URI option", "[adbc]") {
 		REQUIRE(file_exists(abs_path.c_str()));
 		std::remove(abs_path.c_str());
 	}
+#endif
 
 	// Test file://<non-localhost>/<abs path> is rejected
 	{
@@ -4072,6 +4145,447 @@ TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]"
 		REQUIRE(SUCCESS(AdbcConnectionGetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA, buf,
 		                                        &length, &db.adbc_error)));
 		REQUIRE(std::string(buf) == "main");
+	}
+}
+
+TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create two statements on the same connection
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute first query - get stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a, 'hello' AS b", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+
+	// Execute second query on the same connection - this should materialize stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS c, 'world' AS d", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	// Read from stream1 - should work because it was materialized
+	ArrowArray batch1;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	REQUIRE(batch1.n_children == 2);
+	batch1.release(&batch1);
+
+	// Verify end of stream1
+	ArrowArray batch1_end;
+	REQUIRE(stream1.get_next(&stream1, &batch1_end) == 0);
+	REQUIRE(batch1_end.release == nullptr);
+
+	// Read from stream2 - should work as the active streaming result
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	REQUIRE(batch2.n_children == 2);
+	batch2.release(&batch2);
+
+	// Verify end of stream2
+	ArrowArray batch2_end;
+	REQUIRE(stream2.get_next(&stream2, &batch2_end) == 0);
+	REQUIRE(batch2_end.release == nullptr);
+
+	// Clean up
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Concurrent statements with large result", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	// Create a table with enough data to produce multiple batches
+	db.Query("CREATE TABLE test_large AS SELECT i, 'value_' || i::VARCHAR AS v FROM range(5000) t(i)");
+
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute first query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT * FROM test_large ORDER BY i", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+
+	// Read first batch from stream1 before executing second query
+	ArrowArray first_batch;
+	REQUIRE(stream1.get_next(&stream1, &first_batch) == 0);
+	REQUIRE(first_batch.release != nullptr);
+	REQUIRE(first_batch.length > 0);
+	auto first_batch_len = first_batch.length;
+	first_batch.release(&first_batch);
+
+	// Execute second query - materializes remaining data in stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 42 AS answer", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	// Continue reading from stream1 - should get remaining materialized data
+	int64_t total_rows = first_batch_len;
+	while (true) {
+		ArrowArray batch;
+		REQUIRE(stream1.get_next(&stream1, &batch) == 0);
+		if (!batch.release) {
+			break;
+		}
+		total_rows += batch.length;
+		batch.release(&batch);
+	}
+	REQUIRE(total_rows == 5000);
+
+	// Read from stream2
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	// Clean up
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Concurrent statements: release before second query", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt1, stmt2;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+
+	// Execute and release first stream before second query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows1;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows1, &db.adbc_error)));
+	stream1.release(&stream1);
+
+	// Second query should work fine (active_streams was cleaned up by release)
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	int64_t rows2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows2, &db.adbc_error)));
+
+	ArrowArray batch;
+	REQUIRE(stream2.get_next(&stream2, &batch) == 0);
+	REQUIRE(batch.release != nullptr);
+	REQUIRE(batch.length == 1);
+	batch.release(&batch);
+
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Three concurrent statements", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt1, stmt2, stmt3;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt2, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt3, &db.adbc_error)));
+
+	// Execute three queries sequentially, keeping all streams open
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt1, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt1, &stream1, &rows, &db.adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt2, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt2, &stream2, &rows, &db.adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt3, "SELECT 3 AS c", &db.adbc_error)));
+	ArrowArrayStream stream3;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt3, &stream3, &rows, &db.adbc_error)));
+
+	// Read all three streams — stream1 and stream2 are materialized, stream3 is live
+	ArrowArray batch1, batch2, batch3;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	batch1.release(&batch1);
+
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	REQUIRE(stream3.get_next(&stream3, &batch3) == 0);
+	REQUIRE(batch3.release != nullptr);
+	REQUIRE(batch3.length == 1);
+	batch3.release(&batch3);
+
+	// Verify all streams end
+	ArrowArray end;
+	REQUIRE(stream1.get_next(&stream1, &end) == 0);
+	REQUIRE(end.release == nullptr);
+	REQUIRE(stream2.get_next(&stream2, &end) == 0);
+	REQUIRE(end.release == nullptr);
+	REQUIRE(stream3.get_next(&stream3, &end) == 0);
+	REQUIRE(end.release == nullptr);
+
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	stream3.release(&stream3);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt1, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt2, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt3, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Connection release while stream is active", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// Set up database manually (not using ADBCTestDatabase since we need to control release order)
+	AdbcDatabase adbc_database;
+	AdbcError adbc_error;
+	std::memset(&adbc_error, 0, sizeof(adbc_error));
+	std::memset(&adbc_database, 0, sizeof(adbc_database));
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	AdbcConnection adbc_connection;
+	std::memset(&adbc_connection, 0, sizeof(adbc_connection));
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement stmt;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &stmt, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1 AS a", &adbc_error)));
+
+	ArrowArrayStream stream;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream, &rows, &adbc_error)));
+
+	// Release connection while stream is still active
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+
+	// Stream should still be usable (materialized data is independent, conn_wrapper is nulled out)
+	ArrowArray batch;
+	REQUIRE(stream.get_next(&stream, &batch) == 0);
+	REQUIRE(batch.release != nullptr);
+	REQUIRE(batch.length == 1);
+	batch.release(&batch);
+
+	// Release stream after connection is gone — should not crash
+	stream.release(&stream);
+
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+}
+
+TEST_CASE("ADBC - Re-execute same statement while prior stream is open", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	AdbcStatement stmt;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+
+	// Execute first query
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 1 AS a", &db.adbc_error)));
+	ArrowArrayStream stream1;
+	int64_t rows;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream1, &rows, &db.adbc_error)));
+
+	// Re-execute the same statement — should materialize stream1
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "SELECT 2 AS b", &db.adbc_error)));
+	ArrowArrayStream stream2;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&stmt, &stream2, &rows, &db.adbc_error)));
+
+	// Both streams should be readable
+	ArrowArray batch1;
+	REQUIRE(stream1.get_next(&stream1, &batch1) == 0);
+	REQUIRE(batch1.release != nullptr);
+	REQUIRE(batch1.length == 1);
+	batch1.release(&batch1);
+
+	ArrowArray batch2;
+	REQUIRE(stream2.get_next(&stream2, &batch2) == 0);
+	REQUIRE(batch2.release != nullptr);
+	REQUIRE(batch2.length == 1);
+	batch2.release(&batch2);
+
+	stream1.release(&stream1);
+	stream2.release(&stream2);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Create same macro twice (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	const auto query = "CREATE MACRO my_macro(x) AS x + 1";
+	auto result = db.Query(query);
+	REQUIRE(!result->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, query, &db.adbc_error)));
+
+	ArrowArrayStream out_stream;
+	out_stream.release = nullptr;
+	int64_t rows_affected = -1;
+	auto status = AdbcStatementExecuteQuery(&stmt, &out_stream, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(out_stream.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Ingest to nonexistent schema (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto &input_data = db.QueryArrow("SELECT 44 as value");
+
+	AdbcStatement adbc_statement;
+	InitializeADBCError(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection_ingest, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "test_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_DB_SCHEMA, "nonexistent_schema",
+	                                       &db.adbc_error)));
+
+	const char *ingest_option_mode;
+	SECTION("REPLACE") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_REPLACE;
+	}
+	SECTION("CREATE_APPEND") {
+		ingest_option_mode = ADBC_INGEST_OPTION_MODE_CREATE_APPEND;
+	}
+
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ingest_option_mode, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Parameterized statement breaking unique constraint (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto r1 = db.Query("CREATE TABLE test_table(x INTEGER UNIQUE)");
+	REQUIRE(!r1->HasError());
+	auto r2 = db.Query("INSERT INTO test_table VALUES (42)");
+	REQUIRE(!r2->HasError());
+
+	AdbcStatement stmt;
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &stmt, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&stmt, "INSERT INTO test_table VALUES ($1)", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&stmt, &db.adbc_error)));
+
+	// Bind a stream containing the duplicate value — will trigger a UNIQUE violation
+	auto &input_data = db.QueryArrow("SELECT 42 AS x");
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&stmt, &input_data, &db.adbc_error)));
+
+	int64_t rows_affected;
+	auto status = AdbcStatementExecuteQuery(&stmt, nullptr, &rows_affected, &db.adbc_error);
+
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(status == ADBC_STATUS_INVALID_ARGUMENT);
+
+	REQUIRE(input_data.release == nullptr);
+	REQUIRE(db.adbc_error.release != nullptr);
+	db.adbc_error.release(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&stmt, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - regression test for #21772", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+
+	// Create a table large enough that streaming requires multiple fetch calls.
+	auto r = db.Query("CREATE TABLE big AS SELECT * FROM range(500000) r(i)");
+	REQUIRE(!r->HasError());
+
+	constexpr int ITERATIONS = 50;
+
+	for (int iter = 0; iter < ITERATIONS; iter++) {
+		AdbcStatement query_stmt;
+		ArrowArrayStream stream;
+		stream.release = nullptr;
+		int64_t rows_affected;
+
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &query_stmt, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&query_stmt, "SELECT * FROM big", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&query_stmt, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&query_stmt, &db.adbc_error)));
+
+		std::thread releaser([&stream]() {
+			if (stream.release) {
+				stream.release(&stream);
+			}
+		});
+
+		{
+			AdbcStatement materialize_stmt;
+			auto status = AdbcStatementNew(&db.adbc_connection, &materialize_stmt, &db.adbc_error);
+			if (status == ADBC_STATUS_OK) {
+				AdbcStatementSetSqlQuery(&materialize_stmt, "SELECT 1", &db.adbc_error);
+				AdbcStatementRelease(&materialize_stmt, &db.adbc_error);
+			}
+		}
+
+		releaser.join();
+		if (stream.release) {
+			stream.release(&stream);
+		}
 	}
 }
 

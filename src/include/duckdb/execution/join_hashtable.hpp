@@ -8,17 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
@@ -128,6 +130,8 @@ public:
 		void NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 		void NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
+		//! Next operator for left join when RHS keys are unique (single-pass, no state machine)
+		void NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChunk &result);
 
 		//! Scan the hashtable for matches of the specified keys, setting the found_match[] array to true or false
 		//! for every tuple
@@ -143,7 +147,7 @@ public:
 
 		//! Apply residual predicate filtering
 		idx_t ApplyResidualPredicate(DataChunk &probe_data, SelectionVector &match_sel, idx_t match_count,
-		                             SelectionVector *no_match_sel);
+		                             SelectionVector *no_match_sel, idx_t no_match_offset = 0);
 
 	private:
 		unique_ptr<ExpressionExecutor> residual_executor;
@@ -193,9 +197,9 @@ public:
 	};
 
 	JoinHashTable(ClientContext &context, const PhysicalOperator &op, const vector<JoinCondition> &conditions,
-	              vector<LogicalType> build_types, JoinType type, const vector<idx_t> &output_columns,
-	              unique_ptr<ResidualPredicateInfo> residual_p, optional_ptr<Expression> predicate_ptr = nullptr,
-	              const vector<idx_t> &output_in_probe = {});
+	              vector<LogicalType> build_types, JoinType type, idx_t initial_radix_bits,
+	              const vector<idx_t> &output_columns, unique_ptr<ResidualPredicateInfo> residual_p,
+	              optional_ptr<Expression> predicate_ptr = nullptr, const vector<idx_t> &output_in_probe = {});
 	~JoinHashTable();
 
 	//! Add the given data to the HT
@@ -211,7 +215,8 @@ public:
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel,
+	              optional_ptr<PrefixRangeFilter::BuildState> prefix_range_state = nullptr);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
@@ -370,6 +375,9 @@ private:
 	BloomFilter bloom_filter;
 	bool should_build_bloom_filter = false;
 
+	unique_ptr<PrefixRangeFilter> prefix_range_filter;
+	bool should_build_prefix_range_filter = false;
+
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
 
@@ -377,8 +385,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	static constexpr const idx_t INITIAL_RADIX_BITS = 4;
-
 	struct ProbeSpillLocalAppendState {
 		ProbeSpillLocalAppendState() {
 		}
@@ -457,6 +463,26 @@ public:
 		return bloom_filter;
 	}
 
+	void SetPrefixRangeFilter(unique_ptr<PrefixRangeFilter> filter) {
+		prefix_range_filter = std::move(filter);
+	}
+
+	void SetBuildPrefixRangeFilter() {
+		should_build_prefix_range_filter = true;
+	}
+
+	optional_ptr<PrefixRangeFilter> GetPrefixRangeFilter() {
+		return prefix_range_filter;
+	}
+
+	bool ShouldBuildPrefixRangeFilter() const {
+		return should_build_prefix_range_filter && prefix_range_filter;
+	}
+
+	unique_ptr<PrefixRangeFilter::BuildState> InitializePrefixRangeBuildState();
+	void InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx_t count, PrefixRangeFilter::BuildState &state);
+	void MergePrefixRangeBuildState(PrefixRangeFilter::BuildState &state);
+
 	//! Get total size of HT if all partitions would be built
 	idx_t GetTotalSize(const vector<unique_ptr<JoinHashTable>> &local_hts, idx_t &max_partition_size,
 	                   idx_t &max_partition_count) const;
@@ -471,6 +497,8 @@ public:
 	void InitializePartitionMasks();
 	//! How many partitions are currently active
 	idx_t CurrentPartitionCount() const;
+	//! Get the current partitions validity mask
+	const ValidityMask &GetCurrentPartitions() const;
 	//! How many partitions are fully done
 	idx_t FinishedPartitionCount() const;
 	//! Partition this HT

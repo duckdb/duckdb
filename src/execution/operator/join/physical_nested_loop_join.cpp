@@ -29,15 +29,12 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
 
 bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		UnifiedVectorFormat vdata;
-		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), vdata);
-
-		if (vdata.validity.AllValid()) {
+		auto entries = chunk.data[col_idx].Validity(chunk.size());
+		if (!entries.CanHaveNull()) {
 			continue;
 		}
 		for (idx_t i = 0; i < chunk.size(); i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
+			if (!entries.IsValid(i)) {
 				return true;
 			}
 		}
@@ -86,16 +83,15 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
-	auto bool_result = FlatVector::GetData<bool>(mark_vector);
-	auto &mask = FlatVector::Validity(mark_vector);
+	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
+	auto &mask = FlatVector::ValidityMutable(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
-		if (!jdata.validity.AllValid()) {
-			for (idx_t i = 0; i < join_keys.size(); i++) {
-				auto jidx = jdata.sel->get_index(i);
-				mask.Set(i, jdata.validity.RowIsValid(jidx));
-			}
+		auto entries = join_keys.data[col_idx].Validity(join_keys.size());
+		if (!entries.CanHaveNull()) {
+			continue;
+		}
+		for (idx_t i = 0; i < join_keys.size(); i++) {
+			mask.Set(i, entries.IsValid(i));
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
@@ -114,6 +110,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 			}
 		}
 	}
+	FlatVector::SetSize(mark_vector, result.size());
 }
 
 bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions, JoinType join_type) {

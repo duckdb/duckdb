@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/union_vector.hpp"
 #include "core_functions/scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -41,9 +42,11 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	result.Verify(args.size());
 }
 
-unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
+unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -54,7 +57,7 @@ unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction
 	if (union_member_count == 0) {
 		throw InternalException("Can't extract something from an empty union");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->return_type;
 
 	auto &key_child = arguments[1];
 	if (key_child->HasParameter()) {

@@ -58,10 +58,10 @@ void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, Confl
 	throw NotImplementedException("this implementation of VerifyConstraint does not exist.");
 }
 
-void BoundIndex::CommitDrop() {
+void BoundIndex::ResetStorage() {
 	IndexLock index_lock;
 	InitializeLock(index_lock);
-	CommitDrop(index_lock);
+	ResetStorage(index_lock);
 }
 
 idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
@@ -147,8 +147,8 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
-		    expr = make_uniq<BoundReferenceExpression>(expr->return_type,
-		                                               column_ids[bound_colref.binding.column_index.index]);
+		    expr =
+		        make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	    });
 	return root_expr;
 }

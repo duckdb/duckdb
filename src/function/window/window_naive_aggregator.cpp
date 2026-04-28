@@ -73,7 +73,7 @@ protected:
 	Vector statep;
 	//! Input data chunk, used for leaf segment aggregation
 	DataChunk leaves;
-	//! The rows beging updated.
+	//! The rows beginning updated.
 	SelectionVector update_sel;
 	//! Count of buffered values
 	idx_t flush_count;
@@ -108,7 +108,7 @@ WindowNaiveLocalState::WindowNaiveLocalState(ExecutionContext &context, const Wi
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
 	statef.Flatten(STANDARD_VECTOR_SIZE);
-	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
+	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
 		state_ptr += aggregator.state_size;
@@ -175,7 +175,7 @@ size_t WindowNaiveLocalState::Hash(idx_t rid) {
 	D_ASSERT(cursor->RowIsVisible(rid));
 	auto s = cursor->RowOffset(rid);
 	auto &scanned = cursor->chunk;
-	SelectionVector sel(&s);
+	SelectionVector sel(&s, 1);
 	leaves.Slice(scanned, sel, 1);
 	leaves.Hash(hashes);
 
@@ -193,7 +193,7 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 
 	auto &scanned = cursor->chunk;
 	auto l = cursor->RowOffset(lhs);
-	SelectionVector lsel(&l);
+	SelectionVector lsel(&l, 1);
 
 	auto rreader = cursor.get();
 	if (!cursor->RowIsVisible(rhs)) {
@@ -203,10 +203,10 @@ bool WindowNaiveLocalState::KeyEqual(const idx_t &lidx, const idx_t &ridx) {
 	}
 	auto rscanned = &rreader->chunk;
 	auto r = rreader->RowOffset(rhs);
-	SelectionVector rsel(&r);
+	SelectionVector rsel(&r, 1);
 
 	sel_t f = 0;
-	SelectionVector fsel(&f);
+	SelectionVector fsel(&f, 1);
 
 	for (column_t c = 0; c < scanned.ColumnCount(); ++c) {
 		Vector left(scanned.data[c], lsel, 1);
@@ -226,8 +226,8 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 	auto &filter_mask = gsink.filter_mask;
 	const auto types = cursor->chunk.GetTypes();
 
-	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
-	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
+	auto pdata = FlatVector::GetDataMutable<data_ptr_t>(statep);
 
 	HashRow hash_row(*this);
 	EqualRow equal_row(*this);
@@ -247,7 +247,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 			OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 
 			idx_t orderby_count = 0;
-			auto orderby_row = FlatVector::GetData<idx_t>(orderby_sink.data.back());
+			auto orderby_row = FlatVector::GetDataMutable<idx_t>(orderby_sink.data.back());
 			for (const auto &frame : frames) {
 				for (auto f = frame.start; f < frame.end; ++f) {
 					//	FILTER before the ORDER BY
@@ -294,7 +294,7 @@ void WindowNaiveLocalState::Evaluate(ExecutionContext &context, const WindowAggr
 			OperatorSourceInput source {*global_source, *local_source, interrupt};
 			orderby_scan.Reset();
 			for (; SourceResultType::FINISHED != sort->GetData(context, orderby_scan, source); orderby_scan.Reset()) {
-				orderby_row = FlatVector::GetData<idx_t>(orderby_scan.data[0]);
+				orderby_row = FlatVector::GetDataMutable<idx_t>(orderby_scan.data[0]);
 				for (idx_t i = 0; i < orderby_scan.size(); ++i) {
 					const auto f = orderby_row[i];
 					//	Seek to the current position

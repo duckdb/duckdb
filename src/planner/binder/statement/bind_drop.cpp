@@ -4,11 +4,34 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
+
+void Binder::BindDropTrigger(DropStatement &stmt, StatementProperties &properties) {
+	if (!stmt.info->extra_drop_info) {
+		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
+	}
+	auto &trigger_extra = stmt.info->extra_drop_info->Cast<ExtraDropTriggerInfo>();
+	if (!trigger_extra.base_table) {
+		throw BinderException("DROP TRIGGER requires an ON clause specifying the table");
+	}
+	auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
+	string catalog_name = base_table_ref.catalog_name;
+	string schema_name = base_table_ref.schema_name;
+	BindSchemaOrCatalog(catalog_name, schema_name);
+	// IF EXISTS only guards the trigger, not the table (PostgreSQL-compatible behavior).
+	auto &table_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, base_table_ref.table_name);
+	stmt.info->catalog = table_entry.ParentCatalog().GetName();
+	stmt.info->schema = table_entry.ParentSchema().name;
+	properties.RegisterDBModify(table_entry.ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
+}
 
 BoundStatement Binder::Bind(DropStatement &stmt) {
 	BoundStatement result;
@@ -86,6 +109,9 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		properties.requires_valid_transaction = false;
 		break;
 	}
+	case CatalogType::TRIGGER_ENTRY:
+		BindDropTrigger(stmt, properties);
+		break;
 	default:
 		throw BinderException("Unknown catalog type for drop statement: '%s'", CatalogTypeToString(stmt.info->type));
 	}

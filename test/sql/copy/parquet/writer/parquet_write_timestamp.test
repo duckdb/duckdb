@@ -10,7 +10,7 @@ PRAGMA enable_verification
 foreach type TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
 
 statement ok
-CREATE OR REPLACE TABLE timestamps(d ${type})
+CREATE OR REPLACE TABLE timestamps(d {type})
 
 statement ok
 INSERT INTO timestamps VALUES
@@ -24,19 +24,19 @@ SELECT * FROM timestamps
 ----
 
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
+COPY timestamps TO '{TEST_DIR}/timestamps.parquet' (FORMAT 'parquet');
 
 query I nosort ts_scan
-SELECT * FROM '__TEST_DIR__/timestamps.parquet'
+SELECT * FROM '{TEST_DIR}/timestamps.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27'
+SELECT * FROM '{TEST_DIR}/timestamps.parquet' WHERE d='1992-01-01 12:03:27'
 ----
 1992-01-01 12:03:27
 
 query I
-SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
+SELECT typeof(d) FROM '{TEST_DIR}/timestamps.parquet' LIMIT 1
 ----
 TIMESTAMP
 
@@ -62,18 +62,104 @@ NULL
 2020-09-27 13:12:01
 
 statement ok
-COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
+COPY timestamps TO '{TEST_DIR}/timestamps.parquet' (FORMAT 'parquet');
 
 query I nosort ns_scan
-SELECT * FROM '__TEST_DIR__/timestamps.parquet'
+SELECT * FROM '{TEST_DIR}/timestamps.parquet'
 ----
 
 query I
-SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27.123456789'
+SELECT * FROM '{TEST_DIR}/timestamps.parquet' WHERE d='1992-01-01 12:03:27.123456789'
 ----
 1992-01-01 12:03:27.123456789
 
 query I
-SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
+SELECT typeof(d) FROM '{TEST_DIR}/timestamps.parquet' LIMIT 1
 ----
 TIMESTAMP_NS
+
+# COPY option write_timestamp_as_int96 writes Spark compatible INT96 timestamp columns
+
+statement ok
+CREATE OR REPLACE TABLE timestamps_int96(
+	ts TIMESTAMP,
+	ts_s TIMESTAMP_S,
+	ts_ms TIMESTAMP_MS,
+	ts_ns TIMESTAMP_NS,
+	ts_tz TIMESTAMPTZ
+)
+
+statement ok
+INSERT INTO timestamps_int96 VALUES (
+	TIMESTAMP '1992-01-01 12:03:27.123456',
+	TIMESTAMP '1992-01-01 12:03:27',
+	TIMESTAMP '1992-01-01 12:03:27.123',
+	TIMESTAMP '1992-01-01 12:03:27.123456789',
+	TIMESTAMPTZ '1992-01-01 12:03:27.123456+00'
+)
+
+statement ok
+COPY timestamps_int96 TO '{TEST_DIR}/timestamp_int96.parquet'
+    (FORMAT 'parquet', write_timestamp_as_int96 true);
+
+query I
+SELECT COUNT(*)
+FROM parquet_schema('{TEST_DIR}/timestamp_int96.parquet')
+WHERE name IN ('ts', 'ts_s', 'ts_ms', 'ts_ns', 'ts_tz')
+  AND type = 'INT96'
+  AND logical_type IS NULL
+  AND converted_type IS NULL
+----
+5
+
+query IIIII
+SELECT ts::VARCHAR, ts_s::VARCHAR, ts_ms::VARCHAR, ts_ns::VARCHAR, ts_tz::VARCHAR
+FROM '{TEST_DIR}/timestamp_int96.parquet'
+----
+1992-01-01 12:03:27.123456	1992-01-01 12:03:27	1992-01-01 12:03:27.123	1992-01-01 12:03:27.123456	1992-01-01 12:03:27.123456
+
+# COPY option timestamp_is_adjusted_to_utc controls isAdjustedToUTC metadata
+# AUTO follows the input type, while TRUE and FALSE override it
+
+foreach type,auto_expected TIMESTAMP,0 TIMESTAMP_S,0 TIMESTAMP_MS,0 TIMESTAMP_NS,0 TIMESTAMPTZ,1
+
+statement ok
+CREATE OR REPLACE TABLE timestamps(d {type})
+
+statement ok
+INSERT INTO timestamps VALUES ('1992-01-01 12:03:27')
+
+statement ok
+COPY timestamps TO '{TEST_DIR}/timestamps_utc_auto_{type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc AUTO);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC={auto_expected}%'
+FROM parquet_schema('{TEST_DIR}/timestamps_utc_auto_{type}.parquet')
+WHERE name = 'd'
+----
+1
+
+statement ok
+COPY timestamps TO '{TEST_DIR}/timestamps_utc_true_{type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc TRUE);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC=1%'
+FROM parquet_schema('{TEST_DIR}/timestamps_utc_true_{type}.parquet')
+WHERE name = 'd'
+----
+1
+
+statement ok
+COPY timestamps TO '{TEST_DIR}/timestamps_utc_false_{type}.parquet'
+    (FORMAT 'parquet', timestamp_is_adjusted_to_utc FALSE);
+
+query I
+SELECT logical_type LIKE '%isAdjustedToUTC=0%'
+FROM parquet_schema('{TEST_DIR}/timestamps_utc_false_{type}.parquet')
+WHERE name = 'd'
+----
+1
+
+endloop

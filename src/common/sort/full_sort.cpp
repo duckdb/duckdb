@@ -173,8 +173,7 @@ SinkResultType FullSort::Sink(ExecutionContext &context, DataChunk &input_chunk,
 	if (force_payload) {
 		auto &vec = payload_chunk.data[input_chunk.ColumnCount() + sort_chunk.ColumnCount()];
 		D_ASSERT(vec.GetType().id() == LogicalTypeId::BOOLEAN);
-		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(vec, true);
+		ConstantVector::SetNull(vec, count_t(input_chunk.size()));
 	}
 
 	payload_chunk.SetCardinality(input_chunk);

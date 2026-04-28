@@ -205,6 +205,19 @@ protected:
 		}
 	}
 
+	// DuckDB Optional
+	template <typename T>
+	void WriteValue(const optional<T> &opt) {
+		if (!opt.IsValid()) {
+			OnNullableBegin(false);
+			OnNullableEnd();
+		} else {
+			OnNullableBegin(true);
+			WriteValue(opt.GetValue());
+			OnNullableEnd();
+		}
+	}
+
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {
@@ -375,7 +388,7 @@ protected:
 		WriteValue(value.index);
 	}
 	void WriteValue(ProjectionIndex value) {
-		WriteValue(value.index);
+		WriteValue(value.GetIndexUnsafe());
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);

@@ -21,7 +21,7 @@ struct RowOperationsState;
 
 typedef void (*tuple_data_scatter_function_t)(const Vector &source, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
-                                              const TupleDataLayout &layout, const Vector &row_locations,
+                                              const TupleDataLayout &layout, Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx,
                                               const UnifiedVectorFormat &list_format,
                                               const vector<TupleDataScatterFunction> &child_functions);
@@ -37,6 +37,15 @@ typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vect
                                              const vector<TupleDataGatherFunction> &child_functions);
 
 struct TupleDataGatherFunction {
+public:
+	explicit TupleDataGatherFunction(tuple_data_gather_function_t function);
+	TupleDataGatherFunction(tuple_data_gather_function_t function, vector<TupleDataGatherFunction> child_functions);
+
+	void Gather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+	            const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+	            const SelectionVector &target_sel, optional_ptr<Vector> list_vector) const;
+
+private:
 	tuple_data_gather_function_t function;
 	vector<TupleDataGatherFunction> child_functions;
 };
@@ -76,6 +85,8 @@ public:
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
 	void SetPartitionIndex(idx_t index);
+	//! Get chunk ranges that belong to a specific partition index
+	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
 	vector<data_ptr_t> GetRowBlockPointers() const;
 	//! Destroy the blocks corresponding to the chunk indices

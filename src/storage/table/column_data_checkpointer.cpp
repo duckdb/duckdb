@@ -47,26 +47,33 @@ StorageManager &ColumnDataCheckpointData::GetStorageManager() {
 
 //! ColumnDataCheckpointer
 
-static Vector CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states) {
+static void CreateIntermediateVector(vector<reference<ColumnCheckpointState>> &states, DataChunk &chunk) {
 	D_ASSERT(!states.empty());
 
 	auto &first_state = states[0];
 	auto &col_data = first_state.get().original_column;
 	auto &type = col_data.type;
+
+	vector<LogicalType> types;
 	if (type.id() == LogicalTypeId::VALIDITY) {
-		return Vector(LogicalType::BOOLEAN, true, /* initialize_to_zero = */ true);
+		types.emplace_back(LogicalType::BOOLEAN);
+	} else if (type.InternalType() == PhysicalType::LIST) {
+		types.emplace_back(LogicalType::UBIGINT);
+	} else {
+		types.emplace_back(type);
 	}
-	if (type.InternalType() == PhysicalType::LIST) {
-		return Vector(LogicalType::UBIGINT, true, false);
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+	if (type.id() == LogicalTypeId::VALIDITY) {
+		auto data = FlatVector::GetData<bool>(chunk.data[0]);
+		memset((void *)data, 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
-	return Vector(type, true, false);
 }
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpointState>> &checkpoint_states,
                                                StorageManager &storage_manager, const RowGroup &row_group,
                                                ColumnCheckpointInfo &checkpoint_info)
     : checkpoint_states(checkpoint_states), storage_manager(storage_manager), row_group(row_group),
-      intermediate(CreateIntermediateVector(checkpoint_states)), checkpoint_info(checkpoint_info) {
+      checkpoint_info(checkpoint_info) {
 	auto &db = storage_manager.GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 	compression_functions.resize(checkpoint_states.size());
@@ -78,10 +85,10 @@ ColumnDataCheckpointer::ColumnDataCheckpointer(vector<reference<ColumnCheckpoint
 			functions.push_back(&func.get());
 		}
 	}
+	CreateIntermediateVector(checkpoint_states, intermediate);
 }
 
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
-	Vector scan_vector(intermediate.GetType(), nullptr);
 	auto &first_state = checkpoint_states[0];
 	auto &col_data = first_state.get().original_column;
 
@@ -92,8 +99,9 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 		scan_state.current = segment_node;
 		segment.InitializeScan(scan_state);
 
+		auto &scan_vector = intermediate.data[0];
 		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
-			scan_vector.Reference(intermediate);
+			intermediate.Reset();
 
 			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
 			scan_state.offset_in_column = segment_node.GetRowStart() + base_row_index;
@@ -393,7 +401,7 @@ struct CheckpointBlockIdMarker : public BlockIdVisitor {
 	}
 
 	void Visit(block_id_t block_id) override {
-		manager.MarkBlockACheckpointed(block_id);
+		manager.MarkBlockAsCheckpointed(block_id);
 	}
 
 	BlockManager &manager;

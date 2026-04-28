@@ -81,7 +81,7 @@ struct ListTransformFunctor {
 	//! Appends the lambda vector to the result's child vector
 	static void AppendResult(Vector &result, Vector &lambda_vector, const idx_t elem_cnt, list_entry_t *,
 	                         ListFilterInfo &, LambdaExecuteInfo &) {
-		ListVector::Append(result, lambda_vector, elem_cnt, 0);
+		ListVector::Append(result, lambda_vector, elem_cnt);
 	}
 };
 
@@ -105,16 +105,9 @@ struct ListFilterFunctor {
 	                         ListFilterInfo &info, LambdaExecuteInfo &execute_info) {
 		idx_t count = 0;
 		SelectionVector sel(elem_cnt);
-		UnifiedVectorFormat lambda_data;
-		lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
-
-		auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
-		auto &lambda_validity = lambda_data.validity;
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (idx_t i = 0; i < elem_cnt; i++) {
-			auto entry_idx = lambda_data.sel->get_index(i);
-
+		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;
@@ -123,8 +116,8 @@ struct ListFilterFunctor {
 			}
 
 			// found a true value
-			if (lambda_validity.RowIsValid(entry_idx) && lambda_values[entry_idx]) {
-				sel.set_index(count++, i);
+			if (entry.IsValid() && entry.GetValue()) {
+				sel.set_index(count++, entry.GetIndex());
 				info.length++;
 			}
 
@@ -155,7 +148,7 @@ struct ListFilterFunctor {
 		// and append them to the result
 		idx_t source_list_idx = execute_info.has_index ? 1 : 0;
 		Vector result_lists(execute_info.input_chunk.data[source_list_idx], sel, count);
-		ListVector::Append(result, result_lists, count, 0);
+		ListVector::Append(result, result_lists, count);
 	}
 };
 
@@ -276,7 +269,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 		return;
 	}
 
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto result_entries = FlatVector::GetDataMutable<list_entry_t>(result);
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
@@ -360,7 +353,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
                                                                 ScalarFunction &bound_function) {
 	// NULL list parameter
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
@@ -385,6 +378,9 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	// get the lambda expression and put it in the bind info
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
+	if (lambda_expr->IsVolatile()) {
+		bound_function.SetVolatile();
+	}
 
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
 }

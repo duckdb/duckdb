@@ -67,7 +67,7 @@ DUCKDB_API inline hash_t Hash(TableIndex val) {
 }
 template <>
 DUCKDB_API inline hash_t Hash(ProjectionIndex val) {
-	return MurmurHash64(val.index);
+	return MurmurHash64(val.GetIndexUnsafe());
 }
 template <>
 DUCKDB_API hash_t Hash(hugeint_t val);

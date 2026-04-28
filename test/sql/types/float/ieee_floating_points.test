@@ -8,14 +8,14 @@ PRAGMA enable_verification
 foreach type FLOAT DOUBLE
 
 statement ok
-CREATE OR REPLACE TABLE tbl(val ${type})
+CREATE OR REPLACE TABLE tbl(val {type})
 
 statement ok
 INSERT INTO tbl VALUES (1), (-1), (0), ('nan'), ('inf')
 
 # division by zero
 query II
-SELECT val, val / 0::${type} FROM tbl
+SELECT val, val / 0::{type} FROM tbl
 ----
 1.0	inf
 -1.0	-inf
@@ -25,7 +25,7 @@ inf	inf
 
 # modulo by zero
 query II
-SELECT val, val % 0::${type} FROM tbl
+SELECT val, val % 0::{type} FROM tbl
 ----
 1.0	nan
 -1.0	nan
@@ -38,7 +38,7 @@ SET ieee_floating_point_ops = false;
 
 # division by zero
 query II
-SELECT val, val / 0::${type} FROM tbl
+SELECT val, val / 0::{type} FROM tbl
 ----
 1.0	NULL
 -1.0	NULL
@@ -48,7 +48,7 @@ inf	NULL
 
 # modulo by zero
 query II
-SELECT val, val % 0::${type} FROM tbl
+SELECT val, val % 0::{type} FROM tbl
 ----
 1.0	NULL
 -1.0	NULL
@@ -56,7 +56,89 @@ SELECT val, val % 0::${type} FROM tbl
 nan	NULL
 inf	NULL
 
+# math domain cases still error when IEEE behavior is disabled
+statement ok
+SET ieee_floating_point_ops = false;
+
+statement error
+SELECT sqrt(-1::{type});
+----
+
+statement error
+SELECT ln(-1::{type});
+----
+
+statement error
+SELECT asin(2::{type});
+----
+
+statement error
+SELECT acos(2::{type});
+----
+
+statement error
+SELECT atanh(2::{type});
+----
+
+statement error
+SELECT sin('inf'::{type});
+----
+
+statement error
+SELECT cos('inf'::{type});
+----
+
+statement error
+SELECT tan('inf'::{type});
+----
+
+statement error
+SELECT cot('inf'::{type});
+----
+
+statement error
+SELECT cot(0::{type});
+----
+
+statement error
+SELECT gamma(0::{type});
+----
+
+statement error
+SELECT lgamma(0::{type});
+----
+
 statement ok
 SET ieee_floating_point_ops = true;
+
+query IIII
+SELECT sqrt(-1::{type}), ln(-1::{type}), log10(-1::{type}), log2(-1::{type});
+----
+nan	nan	nan	nan
+
+query IIII
+SELECT ln(0::{type}), log10(0::{type}), log2(0::{type}), log(1::{type}, 64::{type});
+----
+-inf	-inf	-inf	inf
+
+query IIIII
+SELECT asin(2::{type}), acos(2::{type}), atanh(2::{type}), atanh(1::{type}), atanh(-1::{type});
+----
+nan	nan	nan	inf	-inf
+
+query IIII
+SELECT sin('inf'::{type}), cos('inf'::{type}), tan('inf'::{type}), cot('inf'::{type});
+----
+nan	nan	nan	nan
+
+query II
+SELECT cot(0::{type}), cot(-0::{type});
+----
+inf	-inf
+
+query IIII
+SELECT gamma(0::{type}), gamma(-1::{type}), lgamma(0::{type}), lgamma(-1::{type});
+----
+inf	nan	inf	inf
 
 endloop

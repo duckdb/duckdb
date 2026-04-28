@@ -99,3 +99,35 @@ def test_mode_json_escapes(shell):
 
     result = test.run()
     result.check_stdout('{"name":"test","a":[4,5,6],"s":{"key":7}}')
+
+def test_mode_json_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT 42 AS x WHERE 1=0;")
+    )
+
+    result = test.run()
+    result.check_stdout("[]")
+
+
+def test_mode_json_boolean(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT true AS pos, false AS neg;")
+    )
+
+    result = test.run()
+    result.check_stdout('"pos":true')
+    result.check_stdout('"neg":false')
+
+def test_long_type_empty_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".maxwidth 80")
+        .statement("select * from (values ({'thisisalongfieldnamethatresultsinalongtypename': 42, 'thisisyetanotherlongfieldname': 84})) t(s) limit 0;")
+    )
+
+    result = test.run()
+    result.check_stdout("thisisalongfieldnamethatresultsinalongtypename")

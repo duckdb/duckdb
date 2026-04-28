@@ -2,33 +2,19 @@
 # description: Test enabling and disabling the PEG Parser
 # group: [peg_parser]
 
-require autocomplete
-
-statement maybe
+statement error
 select xvariable a = 1;
 ----
 Parser Error: syntax error at or near "="
-
-statement ok
-call enable_peg_parser();
 
 # Here we should get the error from the parser override
 statement error
 select xvariable a = 1;
 ----
-Parser Error: Syntax error at or near "="
+Parser Error: syntax error at or near "="
 
 # Just check that it works properly
 query I
 SELECT * FROM values(1);
 ----
 1
-
-statement ok 
-call disable_peg_parser(); 
-
-# Here we should get the original PostgreSQL error again
-statement error
-select xvariable a = 1;
-----
-Parser Error: syntax error at or near "="

@@ -1,3 +1,9 @@
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -46,7 +52,7 @@ T *ArrowBufferData(ArrowArray &array, idx_t buffer_idx) {
 
 static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_offset, idx_t size,
                             int64_t parent_offset, int64_t nested_offset = -1, bool add_null = false) {
-	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
+	// In certain we don't need to or cannot copy arrow's validity mask to duckdb.
 	//
 	// The conditions where we do want to copy arrow's mask to duckdb are:
 	// 1. nulls exist
@@ -94,7 +100,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 void ArrowToDuckDBConversion::SetValidityMask(Vector &vector, ArrowArray &array, idx_t chunk_offset, idx_t size,
                                               int64_t parent_offset, int64_t nested_offset, bool add_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto &mask = FlatVector::Validity(vector);
+	auto &mask = FlatVector::ValidityMutable(vector);
 	GetValidityMask(mask, array, chunk_offset, size, parent_offset, nested_offset, add_null);
 }
 
@@ -123,7 +129,7 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	start_offset = offsets[0];
-	auto list_data = FlatVector::GetData<list_entry_t>(vector);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
 		le.offset = cur_offset;
@@ -152,7 +158,7 @@ static ArrowListOffsetData ConvertArrowListViewOffsetsTemplated(Vector &vector, 
 	// when we scan the child data
 
 	auto lowest_offset = size ? offsets[0] : 0;
-	auto list_data = FlatVector::GetData<list_entry_t>(vector);
+	auto list_data = FlatVector::GetDataMutable<list_entry_t>(vector);
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
 		le.offset = offsets[i];
@@ -207,13 +213,13 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, idx_t chunk_off
 
 	ListVector::Reserve(vector, list_size);
 	ListVector::SetListSize(vector, list_size);
-	auto &child_vector = ListVector::GetEntry(vector);
+	auto &child_vector = ListVector::GetChildMutable(vector);
 	ArrowToDuckDBConversion::SetValidityMask(child_vector, *array.children[0], chunk_offset, list_size, array.offset,
 	                                         NumericCast<int64_t>(start_offset));
-	auto &list_mask = FlatVector::Validity(vector);
+	auto &list_mask = FlatVector::ValidityMutable(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					list_mask.SetInvalid(i);
@@ -264,14 +270,14 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 
 	ArrowToDuckDBConversion::SetValidityMask(vector, array, chunk_offset, size, parent_offset, nested_offset);
 
-	auto &child_vector = ArrayVector::GetEntry(vector);
+	auto &child_vector = ArrayVector::GetChildMutable(vector);
 	ArrowToDuckDBConversion::SetValidityMask(child_vector, *array.children[0], chunk_offset, child_count, array.offset,
 	                                         NumericCast<int64_t>(child_offset));
 
-	auto &array_mask = FlatVector::Validity(vector);
+	auto &array_mask = FlatVector::ValidityMutable(vector);
 	if (parent_mask) {
 		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
-		if (!parent_mask->AllValid()) {
+		if (parent_mask->CanHaveNull()) {
 			for (idx_t i = 0; i < size; i++) {
 				if (!parent_mask->RowIsValid(i)) {
 					array_mask.SetInvalid(i);
@@ -281,8 +287,8 @@ static void ArrowToDuckDBArray(Vector &vector, ArrowArray &array, idx_t chunk_of
 	}
 
 	// Broadcast the validity mask to the child vector
-	if (!array_mask.AllValid()) {
-		auto &child_validity_mask = FlatVector::Validity(child_vector);
+	if (array_mask.CanHaveNull()) {
+		auto &child_validity_mask = FlatVector::ValidityMutable(child_vector);
 		for (idx_t i = 0; i < size; i++) {
 			if (!array_mask.RowIsValid(i)) {
 				for (idx_t j = 0; j < array_size; j++) {
@@ -330,7 +336,7 @@ static void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
 
 template <class T>
 static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets) {
-	auto strings = FlatVector::GetData<string_t>(vector);
+	auto strings = FlatVector::GetDataMutable<string_t>(vector);
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
@@ -345,7 +351,7 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 }
 
 static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, idx_t current_pos) {
-	auto strings = FlatVector::GetData<string_t>(vector);
+	auto strings = FlatVector::GetDataMutable<string_t>(vector);
 	auto arrow_string = ArrowBufferData<arrow_string_view_t>(array, 1) + current_pos;
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
@@ -374,22 +380,22 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 }
 
 static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
-                             uint64_t parent_offset) {
+                             uint64_t parent_offset, idx_t size) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) +
 	    internal_type * GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-	FlatVector::SetData(vector, data_ptr);
+	FlatVector::SetData(vector, data_ptr, count_t(size));
 }
 
 template <class T>
 static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                            int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
-	auto &validity_mask = FlatVector::Validity(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<dtime_t>(vector);
+	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
 				throw ConversionException("Could not convert Time to Microsecond");
@@ -410,11 +416,11 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 template <class T>
 static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                              int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetData<dtime_ns_t>(vector);
-	auto &validity_mask = FlatVector::Validity(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<dtime_ns_t>(vector);
+	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			// dtime_ns_t.micros actually holds nanos (!)
 			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
@@ -436,11 +442,11 @@ static void TimeNSConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 
 static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                            int64_t parent_offset, idx_t size) {
-	auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
-	auto &validity_mask = FlatVector::Validity(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
+	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	auto src_ptr = static_cast<const hugeint_t *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			tgt_ptr[row].lower = static_cast<uint64_t>(BSwapIfLE(src_ptr[row].upper));
 			// flip Upper MSD
@@ -462,11 +468,11 @@ static void UUIDConversion(Vector &vector, const ArrowArray &array, idx_t chunk_
 
 static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                                   int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
-	auto &validity_mask = FlatVector::Validity(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<timestamp_t>(vector);
+	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	auto src_ptr =
 	    ArrowBufferData<int64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
-	if (validity_mask.AllValid()) {
+	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
 			if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
 				throw ConversionException("Could not convert TimestampTZ to Microsecond");
@@ -486,7 +492,7 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, idx_t chunk
 
 static void IntervalConversionUs(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                                  int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<interval_t>(vector);
 	auto src_ptr =
 	    ArrowBufferData<int64_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 	for (idx_t row = 0; row < size; row++) {
@@ -500,7 +506,7 @@ static void IntervalConversionUs(Vector &vector, ArrowArray &array, idx_t chunk_
 
 static void IntervalConversionMonths(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                                      int64_t parent_offset, idx_t size) {
-	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<interval_t>(vector);
 	auto src_ptr =
 	    ArrowBufferData<int32_t>(array, 1) + GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 	for (idx_t row = 0; row < size; row++) {
@@ -512,7 +518,7 @@ static void IntervalConversionMonths(Vector &vector, ArrowArray &array, idx_t ch
 
 static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, idx_t chunk_offset,
                                             int64_t nested_offset, int64_t parent_offset, idx_t size) {
-	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
+	auto tgt_ptr = FlatVector::GetDataMutable<interval_t>(vector);
 	auto src_ptr = ArrowBufferData<ArrowInterval>(array, 1) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 	for (idx_t row = 0; row < size; row++) {
@@ -525,7 +531,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, i
 // Find the index of the first run-end that is strictly greater than the offset.
 // count is returned if no such run-end is found.
 template <class RUN_END_TYPE>
-static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offset) {
+static idx_t FindRunIndex(const VectorIterator<RUN_END_TYPE> &run_ends, idx_t count, idx_t offset) {
 	// Binary-search within the [0, count) range. For example:
 	// [0, 0, 0, 1, 1, 2] encoded as
 	// run_ends: [3, 5, 6]:
@@ -538,7 +544,7 @@ static idx_t FindRunIndex(const RUN_END_TYPE *run_ends, idx_t count, idx_t offse
 	while (begin < end) {
 		idx_t middle = (begin + end) / 2;
 		// begin < end implies middle < end
-		if (offset >= static_cast<idx_t>(run_ends[middle])) {
+		if (offset >= static_cast<idx_t>(run_ends[middle].GetValue())) {
 			// keep searching in [middle + 1, end)
 			begin = middle + 1;
 		} else {
@@ -555,14 +561,10 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto &runs = *run_end_encoding.run_ends;
 	auto &values = *run_end_encoding.values;
 
-	UnifiedVectorFormat run_end_format;
-	UnifiedVectorFormat value_format;
-	runs.ToUnifiedFormat(compressed_size, run_end_format);
-	values.ToUnifiedFormat(compressed_size, value_format);
-	auto run_ends_data = run_end_format.GetData<RUN_END_TYPE>(run_end_format);
-	auto values_data = value_format.GetData<VALUE_TYPE>(value_format);
-	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
-	auto &validity = FlatVector::Validity(result);
+	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
+	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
+	auto result_data = FlatVector::ScatterWriter<VALUE_TYPE>(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 
 	// According to the arrow spec, the 'run_ends' array is always valid
 	// so we will assume this is true and not check the validity map
@@ -572,13 +574,13 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto run = FindRunIndex(run_ends_data, compressed_size, scan_offset);
 	idx_t logical_index = scan_offset;
 	idx_t index = 0;
-	if (value_format.validity.AllValid()) {
+	if (!values_data.CanHaveNull()) {
 		// None of the compressed values are NULL
 		for (; run < compressed_size; ++run) {
-			auto run_end_index = run_end_format.sel->get_index(run);
-			auto value_index = value_format.sel->get_index(run);
-			auto &value = values_data[value_index];
-			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
+			auto run_end_entry = run_ends_data[run];
+			auto value_entry = values_data[run];
+			auto &value = value_entry.GetValue();
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
@@ -599,17 +601,17 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 		}
 	} else {
 		for (; run < compressed_size; ++run) {
-			auto run_end_index = run_end_format.sel->get_index(run);
-			auto value_index = value_format.sel->get_index(run);
-			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
+			auto run_end_entry = run_ends_data[run];
+			auto value_entry = values_data[run];
+			auto run_end = static_cast<idx_t>(run_end_entry.GetValueUnsafe());
 
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
 			// Cap the amount to scan so we don't go over size
 			to_scan = MinValue<idx_t>(to_scan, (count - index));
 
-			if (value_format.validity.RowIsValidUnsafe(value_index)) {
-				auto &value = values_data[value_index];
+			if (value_entry.IsValid()) {
+				auto &value = value_entry.GetValue();
 				for (idx_t i = 0; i < to_scan; i++) {
 					result_data[index + i] = value;
 					validity.SetValid(index + i);
@@ -679,7 +681,7 @@ static void FlattenRunEndsSwitch(Vector &result, ArrowRunEndEncodingState &run_e
 		break;
 	case PhysicalType::VARCHAR: {
 		// Share the string heap, we don't need to allocate new strings, we just reference the existing ones
-		result.SetAuxiliary(values.GetAuxiliary());
+		StringVector::AddHeapReference(result, values);
 		FlattenRunEnds<RUN_END_TYPE, string_t>(result, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	}
@@ -703,8 +705,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 	auto &values_type = struct_info.GetChild(1);
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
@@ -736,7 +738,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	case PhysicalType::INT64:
-		FlattenRunEndsSwitch<int32_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
+		FlattenRunEndsSwitch<int64_t>(vector, run_end_encoding, compressed_size, scan_offset, size);
 		break;
 	default:
 		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
@@ -748,7 +750,7 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
                     DecimalBitWidth arrow_bit_width) {
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::INT16: {
-		auto tgt_ptr = FlatVector::GetData<int16_t>(vector);
+		auto tgt_ptr = FlatVector::GetDataMutable<int16_t>(vector);
 		for (idx_t row = 0; row < size; row++) {
 			if (val_mask.RowIsValid(row)) {
 				auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
@@ -760,12 +762,12 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT32: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_32) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
-			auto tgt_ptr = FlatVector::GetData<int32_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<int32_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
@@ -778,12 +780,12 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT64: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_64) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
-			auto tgt_ptr = FlatVector::GetData<int64_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<int64_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
@@ -796,12 +798,12 @@ void ConvertDecimal(SRC src_ptr, Vector &vector, ArrowArray &array, idx_t size, 
 	}
 	case PhysicalType::INT128: {
 		if (arrow_bit_width == DecimalBitWidth::DECIMAL_128) {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) +
-			                                GetTypeIdSize(vector.GetType().InternalType()) *
-			                                    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset),
-			                                                       chunk_offset, nested_offset));
+			auto data = ArrowBufferData<data_t>(array, 1) +
+			            GetTypeIdSize(vector.GetType().InternalType()) *
+			                GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+			FlatVector::SetData(vector, data, count_t(size));
 		} else {
-			auto tgt_ptr = FlatVector::GetData<hugeint_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<hugeint_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = TryCast::Operation(src_ptr[row], tgt_ptr[row]);
@@ -836,12 +838,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		}
 	}
 
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
-	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
-		vector.Reference(Value());
+		ConstantVector::SetNull(vector, count_t(size));
 		break;
 	case LogicalTypeId::BOOLEAN: {
 		//! Arrow bit-packs boolean values
@@ -849,7 +848,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto effective_offset =
 		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 		auto src_ptr = ArrowBufferData<uint8_t>(array, 1) + effective_offset / 8;
-		auto tgt_ptr = (uint8_t *)FlatVector::GetData(vector);
+		auto tgt_ptr = (uint8_t *)FlatVector::GetDataMutable(vector);
 		int src_pos = 0;
 		idx_t cur_bit = effective_offset % 8;
 		for (idx_t row = 0; row < size; row++) {
@@ -883,7 +882,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIME_TZ: {
-		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+		DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 		break;
 	}
 	case LogicalTypeId::UUID:
@@ -924,14 +923,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			               fixed_size;
 			auto cdata = ArrowBufferData<char>(array, 1);
 			auto blob_len = fixed_size;
-			auto result = FlatVector::GetData<string_t>(vector);
+			auto result = FlatVector::ScatterWriter<string_t>(vector);
 			for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 				if (FlatVector::IsNull(vector, row_idx)) {
 					offset += blob_len;
 					continue;
 				}
 				auto bptr = cdata + offset;
-				result[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
+				result[row_idx] = string_t(bptr, UnsafeNumericCast<uint32_t>(blob_len));
 				offset += blob_len;
 			}
 		}
@@ -943,14 +942,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		auto precision = datetime_info.GetDateTimeType();
 		switch (precision) {
 		case ArrowDateTimeType::DAYS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
 			//! convert date from nanoseconds to days
 			auto src_ptr = ArrowBufferData<uint64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
-			auto tgt_ptr = FlatVector::GetData<date_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<date_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row] = date_t(UnsafeNumericCast<int32_t>(static_cast<int64_t>(src_ptr[row]) /
 				                                                 static_cast<int64_t>(1000 * 60 * 60 * 24)));
@@ -982,7 +981,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<dtime_t>(vector);
 			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			for (idx_t row = 0; row < size; row++) {
@@ -1039,11 +1038,11 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
-			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset);
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<timestamp_t>(vector);
 			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			for (idx_t row = 0; row < size; row++) {
@@ -1077,7 +1076,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
+			auto tgt_ptr = FlatVector::GetDataMutable<interval_t>(vector);
 			auto src_ptr = ArrowBufferData<int64_t>(array, 1) +
 			               GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
 			for (idx_t row = 0; row < size; row++) {
@@ -1103,7 +1102,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::DECIMAL: {
-		auto val_mask = FlatVector::Validity(vector);
+		auto &val_mask = FlatVector::ValidityMutable(vector);
 		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDecimalInfo>();
 		auto bit_width = datetime_info.GetBitWidth();
 
@@ -1156,17 +1155,17 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		//! Fill the children
 		auto &struct_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		auto &child_entries = StructVector::GetEntries(vector);
-		auto &struct_validity_mask = FlatVector::Validity(vector);
+		auto &struct_validity_mask = FlatVector::ValidityMutable(vector);
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
-			auto &child_entry = *child_entries[child_idx];
+			auto &child_entry = child_entries[child_idx];
 			auto &child_array = *array.children[child_idx];
 			auto &child_type = struct_info.GetChild(child_idx);
 			auto &child_state = array_state.GetChild(child_idx);
 
 			ArrowToDuckDBConversion::SetValidityMask(child_entry, child_array, chunk_offset, size, array.offset,
 			                                         nested_offset);
-			if (!struct_validity_mask.AllValid()) {
-				auto &child_validity_mark = FlatVector::Validity(child_entry);
+			if (struct_validity_mask.CanHaveNull()) {
+				auto &child_validity_mark = FlatVector::ValidityMutable(child_entry);
 				for (idx_t i = 0; i < size; i++) {
 					if (!struct_validity_mask.RowIsValid(i)) {
 						child_validity_mark.SetInvalid(i);
@@ -1197,11 +1196,14 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		break;
 	}
 	case LogicalTypeId::UNION: {
-		auto type_ids = ArrowBufferData<int8_t>(array, array.n_buffers == 1 ? 0 : 1);
+		idx_t type_ids_buffer_idx = array.n_buffers == 1 ? 0 : 1;
+		auto effective_offset =
+		    GetEffectiveOffset(array, NumericCast<int64_t>(parent_offset), chunk_offset, nested_offset);
+		auto type_ids = ArrowBufferData<int8_t>(array, type_ids_buffer_idx) + effective_offset;
 		D_ASSERT(type_ids);
 		auto members = UnionType::CopyMemberTypes(vector.GetType());
 
-		auto &validity_mask = FlatVector::Validity(vector);
+		auto &validity_mask = FlatVector::ValidityMutable(vector);
 		auto &union_info = arrow_type.GetTypeInfo<ArrowStructInfo>();
 		duckdb::vector<Vector> children;
 		for (idx_t child_idx = 0; child_idx < NumericCast<idx_t>(array.n_children); child_idx++) {
@@ -1250,6 +1252,9 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	}
 	default:
 		throw NotImplementedException("Unsupported type for arrow conversion: %s", vector.GetType().ToString());
+	}
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 }
 
@@ -1382,15 +1387,15 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 	if (!parent_mask) {
 		return false;
 	}
-	return !parent_mask->AllValid();
+	return parent_mask->CanHaveNull();
 }
 
 void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, idx_t chunk_offset,
                                                             ArrowArrayScanState &array_state, idx_t size,
                                                             const ArrowType &arrow_type, int64_t nested_offset,
                                                             const ValidityMask *parent_mask, uint64_t parent_offset) {
-	if (vector.GetBuffer()) {
-		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	if (vector.GetBufferRef()) {
+		vector.BufferMutable().AddAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 	}
 	D_ASSERT(arrow_type.HasDictionary());
 	const bool has_nulls = CanContainNull(array, parent_mask);
@@ -1403,7 +1408,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		auto base_vector = make_uniq<Vector>(vector.GetType(), dict_length + 1);
 		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, chunk_offset, dict_length, 0, 0,
 		                                         has_nulls);
-		FlatVector::Validity(*base_vector).SetInvalid(dict_length);
+		FlatVector::ValidityMutable(*base_vector).SetInvalid(dict_length);
 		auto &dictionary_type = arrow_type.GetDictionary();
 		auto arrow_physical_type = dictionary_type.GetPhysicalType();
 		;
@@ -1435,7 +1440,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 	if (has_nulls) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, chunk_offset, size, NumericCast<int64_t>(parent_offset));
-		if (parent_mask && !parent_mask->AllValid()) {
+		if (parent_mask && parent_mask->CanHaveNull()) {
 			auto &struct_validity_mask = *parent_mask;
 			for (idx_t i = 0; i < size; i++) {
 				if (!struct_validity_mask.RowIsValid(i)) {

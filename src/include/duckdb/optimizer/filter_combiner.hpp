@@ -13,7 +13,6 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 #include <functional>
@@ -80,6 +79,11 @@ private:
 	                                         Expression &expr);
 	FilterPushdownResult TryPushdownOrClause(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                         Expression &expr);
+	FilterPushdownResult TryPushdownTemporalCastFilter(TableFilterSet &table_filters,
+	                                                   const vector<ColumnIndex> &column_ids, Expression &expr);
+	void TryPushdownRelaxedFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                              vector<FilterPushdownResult> &pushdown_results, column_t expr_id,
+	                              vector<ExpressionValueInformation> &info_list);
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;

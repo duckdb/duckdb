@@ -28,15 +28,15 @@ public:
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ConstantOrNullBindData>();
-	result.Reference(info.value);
+	result.Reference(info.value, count_t(args.size()));
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
-			auto &input_mask = FlatVector::Validity(args.data[idx]);
-			if (!input_mask.AllValid()) {
+			auto &input_mask = FlatVector::ValidityMutable(args.data[idx]);
+			if (input_mask.CanHaveNull()) {
 				// there are null values: need to merge them into the result
 				result.Flatten(args.size());
-				auto &result_mask = FlatVector::Validity(result);
+				auto &result_mask = FlatVector::ValidityMutable(result);
 				result_mask.EnsureWritable();
 				result_mask.Combine(input_mask, args.size());
 			}
@@ -45,23 +45,21 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 		case VectorType::CONSTANT_VECTOR: {
 			if (ConstantVector::IsNull(args.data[idx])) {
 				// input is constant null, return constant null
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
 				auto &result_mask = ConstantVector::Validity(result);
 				auto &input_mask = ConstantVector::Validity(args.data[idx]);
 				result_mask.Initialize(input_mask);
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result, count_t(args.size()));
 				return;
 			}
 			break;
 		}
 		default: {
-			UnifiedVectorFormat vdata;
-			args.data[idx].ToUnifiedFormat(args.size(), vdata);
-			if (!vdata.validity.AllValid()) {
+			auto entries = args.data[idx].Validity(args.size());
+			if (entries.CanHaveNull()) {
 				result.Flatten(args.size());
-				auto &result_mask = FlatVector::Validity(result);
+				auto &result_mask = FlatVector::ValidityMutable(result);
 				for (idx_t i = 0; i < args.size(); i++) {
-					if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+					if (!entries.IsValid(i)) {
 						result_mask.SetInvalid(i);
 					}
 				}
@@ -72,8 +70,11 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &function = input.GetBoundFunction();
+
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -82,7 +83,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	}
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	bound_function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->return_type);
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
@@ -106,7 +107,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
 	                          ConstantOrNullFunction);
 	fun.SetBindCallback(ConstantOrNullBind);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

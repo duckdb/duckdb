@@ -149,9 +149,9 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"decode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"degrees", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"disable_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_compiled_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"duckdb_proj_version", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"ducklake_add_data_files", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -175,7 +175,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_table_insertions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"editdist3", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"element_at", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"enable_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"encode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"entropy", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"enum_code", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -386,6 +385,9 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_array", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_array_length", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_contains", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_copy_strftime_if_date", "json", CatalogType::MACRO_ENTRY},
+    {"json_copy_strftime_if_timestamp", "json", CatalogType::MACRO_ENTRY},
+    {"json_deep_merge", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_deserialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_each", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"json_execute_serialized_sql", "json", CatalogType::PRAGMA_FUNCTION_ENTRY},
@@ -400,11 +402,14 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"json_group_structure", "json", CatalogType::MACRO_ENTRY},
     {"json_keys", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_merge_patch", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_merge_patch_diff", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_normalize", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_object", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_pretty", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_quote", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_plan", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_serialize_sql", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"json_strip_nulls", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_structure", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"json_transform_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1067,6 +1072,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"enable_global_s3_configuration", "httpfs"},
     {"enable_server_cert_verification", "httpfs"},
     {"force_download", "httpfs"},
+    {"force_download_threshold", "httpfs"},
     {"geometry_always_xy", "spatial"},
     {"hf_max_per_page", "httpfs"},
     {"hnsw_ef_search", "vss"},
@@ -1117,6 +1123,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_version_id_pinning", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
     {"sqlite_debug_show_queries", "sqlite_scanner"},
+    {"sqlite_disable_multithreaded_scans", "sqlite_scanner"},
     {"timezone", "icu"},
     {"ui_local_port", "ui"},
     {"ui_polling_interval", "ui"},
@@ -1134,7 +1141,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
-    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+    {"parquet", "parquet"},
+    {"json", "json"},
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

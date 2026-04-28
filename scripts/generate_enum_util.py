@@ -91,6 +91,9 @@ overrides = {
         "COMPRESSION_DICT_FSST": "DICT_FSST",
     },
     "ArrowFormatVersion": {"V1_0": "1.0", "V1_1": "1.1", "V1_2": "1.2", "V1_3": "1.3", "V1_4": "1.4", "V1_5": "1.5"},
+    "TriggerTiming": {"BEFORE": "BEFORE", "AFTER": "AFTER", "INSTEAD_OF": "INSTEAD OF"},
+    "TriggerEventType": {"INSERT_EVENT": "INSERT", "DELETE_EVENT": "DELETE", "UPDATE_EVENT": "UPDATE"},
+    "TriggerForEach": {"STATEMENT": "STATEMENT", "ROW": "ROW"},
 }
 
 # get all the headers
@@ -99,8 +102,6 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
     for file in files:
         # Dont include the generated header itself recursively
         if file == "enum_util.hpp":
-            continue
-        if 'amalgamation' in root:
             continue
 
         if file.endswith(".hpp"):

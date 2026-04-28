@@ -6,9 +6,13 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/create_sort_key.hpp"
+#include <new>
 
 namespace duckdb {
 
@@ -167,6 +171,12 @@ private:
 	idx_t size;
 };
 
+struct List {
+	uint32_t capacity;
+	uint32_t size;
+	List *next;
+};
+
 template <class K, class V, class K_COMPARATOR>
 class BinaryAggregateHeap {
 	using STORAGE_TYPE = pair<HeapEntry<K>, HeapEntry<V>>;
@@ -180,9 +190,8 @@ public:
 
 	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		auto ptr = allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE));
-		memset(ptr, 0, capacity * sizeof(STORAGE_TYPE));
-		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
+		allocated_capacity = 0;
+		heap = nullptr;
 		size = 0;
 	}
 
@@ -201,6 +210,9 @@ public:
 
 		// If the heap is not full, insert the value into a new slot
 		if (size < capacity) {
+			if (size == allocated_capacity) {
+				Grow(allocator);
+			}
 			heap[size].first.Assign(allocator, key);
 			heap[size].second.Assign(allocator, value);
 			size++;
@@ -233,13 +245,33 @@ public:
 	}
 
 private:
+	void Grow(ArenaAllocator &allocator) {
+		D_ASSERT(allocated_capacity < capacity);
+		const auto old_allocated_capacity = allocated_capacity;
+		if (allocated_capacity == 0) {
+			allocated_capacity = 1;
+		} else if (allocated_capacity > capacity / 2) {
+			allocated_capacity = capacity;
+		} else {
+			allocated_capacity *= 2;
+		}
+
+		const auto old_size = old_allocated_capacity * sizeof(STORAGE_TYPE);
+		const auto new_size = allocated_capacity * sizeof(STORAGE_TYPE);
+		auto ptr = heap ? allocator.ReallocateAligned(reinterpret_cast<data_ptr_t>(heap), old_size, new_size)
+		                : allocator.AllocateAligned(new_size);
+		memset(ptr + old_size, 0, new_size - old_size);
+		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
+	}
+
 	static bool Compare(const STORAGE_TYPE &left, const STORAGE_TYPE &right) {
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
-	idx_t capacity;
-	STORAGE_TYPE *heap;
-	idx_t size;
+	idx_t capacity = 0;
+	idx_t allocated_capacity = 0;
+	STORAGE_TYPE *heap = nullptr;
+	idx_t size = 0;
 };
 
 enum class ArgMinMaxNullHandling { IGNORE_ANY_NULL, HANDLE_ARG_NULL, HANDLE_ANY_NULL };
@@ -279,7 +311,7 @@ struct MinMaxFixedValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<T>(vector)[idx] = value;
+		FlatVector::GetDataMutable<T>(vector)[idx] = value;
 	}
 
 	// Nothing to do here
@@ -302,7 +334,7 @@ struct MinMaxStringValue {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::GetData<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
+		FlatVector::GetDataMutable<string_t>(vector)[idx] = StringVector::AddStringOrBlob(vector, value);
 	}
 
 	// Nothing to do here
@@ -376,8 +408,8 @@ struct MinMaxFixedValueOrNull {
 	}
 
 	static void Assign(Vector &vector, const idx_t idx, const TYPE &value, const bool nulls_last) {
-		FlatVector::Validity(vector).Set(idx, value.is_valid);
-		FlatVector::GetData<T>(vector)[idx] = value.value;
+		FlatVector::ValidityMutable(vector).Set(idx, value.is_valid);
+		FlatVector::GetDataMutable<T>(vector)[idx] = value.value;
 	}
 
 	static EXTRA_STATE CreateExtraState(Vector &input, idx_t count) {
@@ -427,7 +459,6 @@ struct MinMaxNOperation {
 		state_vector.ToUnifiedFormat(count, state_format);
 
 		const auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
-		auto &mask = FlatVector::Validity(result);
 
 		const auto old_len = ListVector::GetListSize(result);
 
@@ -442,24 +473,24 @@ struct MinMaxNOperation {
 		// Resize the list vector to fit the new entries
 		ListVector::Reserve(result, old_len + new_entries);
 
-		const auto list_entries = FlatVector::GetData<list_entry_t>(result);
-		auto &child_data = ListVector::GetEntry(result);
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
+		auto &child_data = ListVector::GetChildMutable(result);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
-			const auto rid = i + offset;
 			const auto state_idx = state_format.sel->get_index(i);
 			auto &state = *states[state_idx];
 
 			if (!state.is_initialized || state.heap.IsEmpty()) {
-				mask.SetInvalid(rid);
+				result_data.WriteNull();
 				continue;
 			}
 
 			// Add the entries to the list vector
-			auto &list_entry = list_entries[rid];
+			list_entry_t list_entry;
 			list_entry.offset = current_offset;
 			list_entry.length = state.heap.Size();
+			result_data.WriteValue(list_entry);
 
 			// Turn the heap into a sorted list, invalidating the heap property
 			auto heap = state.heap.SortAndGetHeap();

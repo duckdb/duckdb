@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -42,16 +45,14 @@ struct HistogramBinState {
 	void InitializeBins(Vector &bin_vector, idx_t count, idx_t pos, AggregateInputData &aggr_input) {
 		bin_boundaries = new unsafe_vector<T>();
 		counts = new unsafe_vector<idx_t>();
-		UnifiedVectorFormat bin_data;
-		bin_vector.ToUnifiedFormat(count, bin_data);
-		auto bin_counts = UnifiedVectorFormat::GetData<list_entry_t>(bin_data);
-		auto bin_index = bin_data.sel->get_index(pos);
-		auto bin_list = bin_counts[bin_index];
-		if (!bin_data.validity.RowIsValid(bin_index)) {
+		auto bin_counts = bin_vector.Values<list_entry_t>(count);
+		auto bin_entry = bin_counts[pos];
+		if (!bin_entry.IsValid()) {
 			throw BinderException("Histogram bin list cannot be NULL");
 		}
+		auto bin_list = bin_entry.GetValue();
 
-		auto &bin_child = ListVector::GetEntry(bin_vector);
+		auto &bin_child = ListVector::GetChildMutable(bin_vector);
 		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
 		auto extra_state = OP::CreateExtraState(bin_count);
@@ -152,23 +153,20 @@ template <class OP, class T, class HIST>
 void HistogramBinUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, idx_t input_count,
                                 Vector &state_vector, idx_t count) {
 	auto &input = inputs[0];
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-
 	auto &bin_vector = inputs[1];
 
 	auto extra_state = OP::CreateExtraState(count);
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = UnifiedVectorFormat::GetData<HistogramBinState<T> *>(sdata);
+	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 	auto data = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(idx)) {
 			continue;
 		}
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.IsSet()) {
 			state.template InitializeBins<OP>(bin_vector, count, i, aggr_input);
 		}
@@ -260,28 +258,39 @@ Value OtherBucketValue(const LogicalType &type) {
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
-		result.Reference(Value::BOOLEAN(false));
+		result.Reference(Value::BOOLEAN(false), count_t(args.size()));
 		return;
 	}
 	auto v = OtherBucketValue(input_type);
-	Vector ref(v);
+	Vector ref(v, count_t(args.size()));
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+
+	// Set NULL if input is NULL.
+	UnifiedVectorFormat input_data;
+	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	if (!input_data.validity.CannotHaveNull()) {
+		auto &result_validity = FlatVector::ValidityMutable(result);
+		for (idx_t idx = 0; idx < args.size(); ++idx) {
+			auto input_idx = input_data.sel->get_index(idx);
+			if (!input_data.validity.RowIsValid(input_idx)) {
+				result_validity.SetInvalid(idx);
+			}
+		}
+	}
 }
 
 template <class OP, class T>
 void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
                                   idx_t offset) {
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = UnifiedVectorFormat::GetData<HistogramBinState<T> *>(sdata);
+	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
 	// figure out how much space we need
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.bin_boundaries) {
 			continue;
 		}
@@ -295,13 +304,13 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	ListVector::Reserve(result, old_len + new_entries);
 	auto &keys = MapVector::GetKeys(result);
 	auto &values = MapVector::GetValues(result);
-	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto count_entries = FlatVector::GetData<uint64_t>(values);
+	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto count_entries = FlatVector::GetDataMutable<uint64_t>(values);
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto &state = *states[sdata.sel->get_index(i)];
+		auto &state = *states[i].GetValue();
 		if (!state.bin_boundaries) {
 			mask.SetInvalid(rid);
 			continue;
@@ -380,8 +389,9 @@ AggregateFunction GetHistogramBinFunction(const LogicalType &type) {
 }
 
 template <class HIST>
-unique_ptr<FunctionData> HistogramBinBindFunction(ClientContext &context, AggregateFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
 		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();

@@ -20,16 +20,16 @@ namespace duckdb {
 //! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
 class TableFilterSet {
 public:
-	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);
+	void PushFilter(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
 	bool HasFilters() const;
 	idx_t FilterCount() const;
-	bool HasFilter(idx_t col_idx) const;
-	TableFilter &GetFilterByColumnIndexMutable(idx_t col_idx);
-	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(idx_t col_idx);
-	const TableFilter &GetFilterByColumnIndex(idx_t col_idx) const;
-	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(idx_t col_idx) const;
-	void SetFilterByColumnIndex(idx_t col_idx, unique_ptr<TableFilter> filter);
-	void RemoveFilterByColumnIndex(idx_t col_idx);
+	bool HasFilter(ProjectionIndex col_idx) const;
+	TableFilter &GetFilterByColumnIndexMutable(ProjectionIndex col_idx);
+	optional_ptr<TableFilter> TryGetFilterByColumnIndexMutable(ProjectionIndex col_idx);
+	const TableFilter &GetFilterByColumnIndex(ProjectionIndex col_idx) const;
+	optional_ptr<const TableFilter> TryGetFilterByColumnIndex(ProjectionIndex col_idx) const;
+	void SetFilterByColumnIndex(ProjectionIndex col_idx, unique_ptr<TableFilter> filter);
+	void RemoveFilterByColumnIndex(ProjectionIndex col_idx);
 	void ClearFilters();
 
 	bool Equals(TableFilterSet &other);
@@ -40,29 +40,32 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
 
+	map<ProjectionIndex, unique_ptr<TableFilter>> GetTableFiltersForSerialization(Serializer &serializer) const;
+	map<ProjectionIndex, unique_ptr<TableFilter>> &GetTableFiltersForDeserialization(Deserializer &deserializer);
+
 public:
 	class TableFilterIteratorEntry {
 	public:
-		explicit TableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::iterator);
+		explicit TableFilterIteratorEntry(map<ProjectionIndex, unique_ptr<TableFilter>>::iterator);
 
-		idx_t ColumnIndex() const;
+		ProjectionIndex GetIndex() const;
 		TableFilter &Filter();
 		const TableFilter &Filter() const;
 		unique_ptr<TableFilter> TakeFilter();
 
 	public:
-		map<idx_t, unique_ptr<TableFilter>>::iterator iterator;
+		map<ProjectionIndex, unique_ptr<TableFilter>>::iterator iterator;
 	};
 
 	class ConstTableFilterIteratorEntry {
 	public:
-		explicit ConstTableFilterIteratorEntry(map<idx_t, unique_ptr<TableFilter>>::const_iterator);
+		explicit ConstTableFilterIteratorEntry(map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator);
 
-		idx_t ColumnIndex() const;
+		ProjectionIndex GetIndex() const;
 		const TableFilter &Filter() const;
 
 	public:
-		map<idx_t, unique_ptr<TableFilter>>::const_iterator iterator;
+		map<ProjectionIndex, unique_ptr<TableFilter>>::const_iterator iterator;
 	};
 
 	// iterator
@@ -105,7 +108,7 @@ public:
 	}
 
 private:
-	map<idx_t, unique_ptr<TableFilter>> filters;
+	map<ProjectionIndex, unique_ptr<TableFilter>> filters;
 };
 
 class DynamicTableFilterSet {

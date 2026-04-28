@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class DataTable;
+class DuckTableEntry;
 
 //! Physically delete data from a table
 class PhysicalDelete : public PhysicalOperator {
@@ -20,11 +21,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELETE_OPERATOR;
 
 public:
-	PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, TableCatalogEntry &tableref,
-	               DataTable &table, vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
+	PhysicalDelete(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref, DataTable &table,
+	               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t row_id_index,
 	               idx_t estimated_cardinality, bool return_chunk, vector<idx_t> return_columns);
 
-	TableCatalogEntry &tableref;
+	DuckTableEntry &tableref;
 	DataTable &table;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	idx_t row_id_index;

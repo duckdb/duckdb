@@ -25,6 +25,18 @@ unique_ptr<LogicalOperator> CTEInlining::Optimize(unique_ptr<LogicalOperator> op
 	return op;
 }
 
+static idx_t CountBaseTableReferences(const LogicalOperator &op) {
+	idx_t number_of_references = 0;
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		number_of_references++;
+	}
+	for (auto &child : op.children) {
+		number_of_references += CountBaseTableReferences(*child);
+	}
+
+	return number_of_references;
+}
+
 static idx_t CountCTEReferences(const LogicalOperator &op, TableIndex cte_index) {
 	if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		auto &cte = op.Cast<LogicalCTERef>();
@@ -92,8 +104,20 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto &cte = op->Cast<LogicalMaterializedCTE>();
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
+			if (cte.children[0]->HasSideEffects()) {
+				// DML CTEs must always execute for side effects even when unreferenced
+				return;
+			}
 			// this CTE is not referenced, we can remove it
 			op = std::move(op->children[1]);
+			return;
+		}
+		if (cte.children[0]->HasSideEffects()) {
+			// Never inline a DML CTE: inlining removes the LOGICAL_MATERIALIZED_CTE
+			// node that guarantees the DML executes exactly once and before the query
+			// side reads the modified table.  With ref_count==1, inlining would merge
+			// the DML into the query pipeline so it no longer precedes the scan.
+			// With ref_count>1 and requires_copy, the DML would execute once per copy.
 			return;
 		}
 		if (cte.materialize == CTEMaterialize::CTE_MATERIALIZE_ALWAYS) {
@@ -130,6 +154,13 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			// Prevent inlining if the CTE ends in an aggregate or distinct operator
 			// This mimics the behavior of the CTE materialization in the binder
 			if (EndsInAggregateOrDistinct(*op->children[0])) {
+				return;
+			}
+
+			// Check how many base table references the CTE has
+			auto base_table_references = CountBaseTableReferences(*op->children[0]);
+
+			if (base_table_references > 2 && base_table_references * ref_count > 10) {
 				return;
 			}
 

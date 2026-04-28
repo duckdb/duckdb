@@ -28,6 +28,10 @@
         "test/sql/catalog/comment_on_wal.test",
         "test/sql/catalog/dependencies/test_alter_dependency_ownership.test",
         "test/sql/catalog/function/test_sequence_macro.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_supported.test",
         "test/sql/catalog/sequence/sequence_cycle.test",
         "test/sql/catalog/sequence/sequence_offset_increment.test",
         "test/sql/catalog/sequence/sequence_overflow.test",
@@ -98,6 +102,7 @@
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
         "test/sql/pragma/test_query_log.test",
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
         "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
@@ -115,6 +120,7 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/join/asof/test_asof_limit.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
@@ -125,7 +131,8 @@
         "test/sql/types/geo/geometry_shred_checkpoint.test",
         "test/sql/window/test_window_constant_allocator.test",
         "test/parquet/variant/variant_stats_propagation.test",
-        "test/sql/types/geo/geometry_compatability.test"
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/copy/parquet/parquet_glob_cache.test"
       ]
     },
     {
@@ -176,7 +183,6 @@
     {
       "reason": "Runs too long in release mode.",
       "paths": [
-        "test/sql/limit/test_limit0.test",
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
         "test/sql/sample/reservoir_testing_percentage.test",
         "test/sql/window/test_constant_orderby.test"
@@ -248,6 +254,12 @@
       "reason": "Geometry with CRS is not always string round-trippable",
       "paths": [
         "test/geoparquet/with_crs.test"
+      ]
+    },
+    {
+      "reason": "DML CTE re-execution under verification causes incorrect row counts",
+      "paths": [
+        "test/sql/cte/dml_cte.test"
       ]
     }
   ]

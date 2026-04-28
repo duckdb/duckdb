@@ -1,5 +1,6 @@
 #include "duckdb/main/relation/insert_relation.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -21,13 +22,14 @@ InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string catalog_name
 
 BoundStatement InsertRelation::Bind(Binder &binder) {
 	InsertStatement stmt;
+	auto &node = *stmt.node;
 	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
-	stmt.catalog = catalog_name;
-	stmt.schema = schema_name;
-	stmt.table = table_name;
-	stmt.select_statement = std::move(select);
+	node.catalog = catalog_name;
+	node.schema = schema_name;
+	node.table = table_name;
+	node.select_statement = std::move(select);
 	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 

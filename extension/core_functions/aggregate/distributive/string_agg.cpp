@@ -113,8 +113,10 @@ struct StringAggFunction {
 	}
 };
 
-unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction &function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() == 1) {
 		// single argument: default to comma
 		return make_uniq<StringAggBindData>(",");
@@ -169,7 +171,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
+	string_agg_param.GetArguments().emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

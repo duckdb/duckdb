@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
+#include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -203,8 +207,8 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 	ListVector::SetListSize(values, 0);
 
 	//! Initialize the dictionary
-	auto &keys_entry = ListVector::GetEntry(keys);
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	auto &keys_entry = ListVector::GetChildMutable(keys);
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 
 	VariantVectorData variant_data(result);
 	SelectionVector keys_selvec;
@@ -244,11 +248,6 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, ListVector::GetListSize(keys));
 	keys_entry.Slice(keys_selvec, ListVector::GetListSize(keys));
-
-	if (variant_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 static void VariantNormalizeFunction(DataChunk &input, ExpressionState &state, Vector &result) {

@@ -1,5 +1,5 @@
-#include "autocomplete_extension.hpp"
-
+#include "duckdb/parser/peg/autocomplete_extension.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -10,19 +10,26 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "matcher.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
+struct AutoCompleteSuggestion;
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
@@ -53,151 +60,12 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 	idx_t offset;
 };
 
-struct AutoCompleteParameters {
-	idx_t max_suggestion_count = 20;
-	idx_t max_file_suggestion_count = 1;
-	idx_t max_exact_suggestion_count = 100;
-	bool suggestion_contains_files = false;
-};
+// AutoCompleteParameters is now in autocomplete_catalog_provider.hpp
 
-static string GetSuggestionType(SuggestionState type) {
-	switch (type) {
-	case SuggestionState::SUGGEST_KEYWORD:
-		return "keyword";
-	case SuggestionState::SUGGEST_CATALOG_NAME:
-		return "catalog";
-	case SuggestionState::SUGGEST_SCHEMA_NAME:
-		return "schema";
-	case SuggestionState::SUGGEST_TABLE_NAME:
-		return "table";
-	case SuggestionState::SUGGEST_TYPE_NAME:
-		return "type";
-	case SuggestionState::SUGGEST_COLUMN_NAME:
-		return "column";
-	case SuggestionState::SUGGEST_FILE_NAME:
-		return "file_name";
-	case SuggestionState::SUGGEST_DIRECTORY:
-		return "directory";
-	case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
-		return "scalar_function";
-	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-		return "table_function";
-	case SuggestionState::SUGGEST_PRAGMA_NAME:
-		return "pragma_function";
-	case SuggestionState::SUGGEST_SETTING_NAME:
-		return "setting";
-	case SuggestionState::SUGGEST_RESERVED_VARIABLE:
-	case SuggestionState::SUGGEST_VARIABLE:
-	default:
-		return "";
-	}
-}
-
-bool PreferCaseMatching(SuggestionState suggestion_state) {
-	switch (suggestion_state) {
-	case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
-	case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-	case SuggestionState::SUGGEST_PRAGMA_NAME:
-	case SuggestionState::SUGGEST_SETTING_NAME:
-	case SuggestionState::SUGGEST_FILE_NAME:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCandidate> available_suggestions,
-                                                         const string &prefix, AutoCompleteParameters &parameters) {
-	vector<pair<string, idx_t>> scores;
-	scores.reserve(available_suggestions.size());
-
-	case_insensitive_map_t<idx_t> matches;
-	bool prefix_is_lower = StringUtil::IsLower(prefix);
-	bool prefix_is_upper = StringUtil::IsUpper(prefix);
-	auto lower_prefix = StringUtil::Lower(prefix);
-	for (idx_t i = 0; i < available_suggestions.size(); i++) {
-		auto &suggestion = available_suggestions[i];
-		const int32_t BASE_SCORE = 10;
-		const int32_t SUBSTRING_PENALTY = 10;
-		auto str = suggestion.candidate;
-		if (suggestion.extra_char != '\0') {
-			str += suggestion.extra_char;
-		}
-		auto bonus = suggestion.score_bonus;
-		if (matches.find(str) != matches.end()) {
-			// entry already exists
-			continue;
-		}
-		matches[str] = i;
-
-		D_ASSERT(BASE_SCORE - bonus >= 0);
-		auto score = idx_t(BASE_SCORE - bonus);
-		idx_t match_score = 0;
-		if (prefix.empty()) {
-		} else if (prefix.size() < str.size()) {
-			match_score = StringUtil::SimilarityScore(str.substr(0, prefix.size()), prefix);
-		} else {
-			match_score = StringUtil::SimilarityScore(str, prefix);
-		}
-		auto type = available_suggestions[i].suggestion_type;
-		if (str[0] == '.') {
-			if (type == SuggestionState::SUGGEST_DIRECTORY || type == SuggestionState::SUGGEST_FILE_NAME) {
-				score++;
-			}
-		} else if (type == SuggestionState::SUGGEST_DIRECTORY && score > 0) {
-			score--;
-		}
-		if (!StringUtil::Contains(StringUtil::Lower(str), lower_prefix)) {
-			score += SUBSTRING_PENALTY;
-		} else if (PreferCaseMatching(type) && !StringUtil::Contains(str, prefix)) {
-			// for types for which we prefer case matching - add a small penalty if we are not matching case
-			match_score++;
-		}
-		score += match_score;
-		suggestion.score = match_score;
-		scores.emplace_back(str, score);
-	}
-	idx_t fuzzy_suggestion_count = parameters.max_suggestion_count;
-	if (parameters.suggestion_contains_files) {
-		fuzzy_suggestion_count = parameters.max_file_suggestion_count;
-	}
-	idx_t suggestion_count = MaxValue<idx_t>(parameters.max_exact_suggestion_count, fuzzy_suggestion_count);
-
-	vector<AutoCompleteSuggestion> results;
-	auto top_strings = StringUtil::TopNStrings(scores, suggestion_count, 999);
-	for (auto &result : top_strings) {
-		auto entry = matches.find(result);
-		if (entry == matches.end()) {
-			throw InternalException("Auto-complete match not found");
-		}
-		if (result.size() > fuzzy_suggestion_count) {
-			// after we exceed the "fuzzy_suggestion_count" we only accept exact suggestion matches
-			if (!StringUtil::StartsWith(StringUtil::Lower(result), lower_prefix)) {
-				break;
-			}
-		}
-		auto &suggestion = available_suggestions[entry->second];
-		if (suggestion.extra_char != '\0') {
-			result.pop_back();
-		}
-		if (suggestion.candidate_type == CandidateType::KEYWORD) {
-			if (prefix_is_lower) {
-				result = StringUtil::Lower(result);
-			} else if (prefix_is_upper) {
-				result = StringUtil::Upper(result);
-			}
-		} else if (suggestion.candidate_type == CandidateType::IDENTIFIER) {
-			result = KeywordHelper::WriteOptionallyQuoted(result, '"');
-		}
-		if (suggestion.extra_char != '\0') {
-			result += suggestion.extra_char;
-		}
-		string type = GetSuggestionType(suggestion.suggestion_type);
-		results.emplace_back(std::move(result), suggestion.suggestion_pos, std::move(type), suggestion.score.GetIndex(),
-		                     suggestion.extra_char);
-	}
-	return results;
-}
+// The following functions have been moved to autocomplete_core.cpp:
+// - GetSuggestionType (now non-static, declared in autocomplete_catalog_provider.hpp)
+// - PreferCaseMatching
+// - ComputeSuggestions
 
 static vector<shared_ptr<AttachedDatabase>> GetAllCatalogs(ClientContext &context) {
 	vector<shared_ptr<AttachedDatabase>> result;
@@ -447,264 +315,66 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	return result;
 }
 
-class AutoCompleteTokenizer : public BaseTokenizer {
+// The following functions have been moved to autocomplete_core.cpp:
+// - UnicodeSpace struct
+// - ReplaceUnicodeSpaces
+// - IsValidDollarQuotedStringTagFirstChar
+// - IsValidDollarQuotedStringTagSubsequentChar
+// - StripUnicodeSpaces
+// - AutoCompleteTokenizer class
+// - GenerateAutoCompleteSuggestions
+
+// Forward declaration for StripUnicodeSpaces (defined in autocomplete_core.cpp)
+bool StripUnicodeSpaces(const string &query_str, string &new_query);
+
+// ClientContext-based provider — wraps existing Suggest* functions for in-process use.
+class ClientContextCatalogProvider : public AutoCompleteCatalogProvider {
 public:
-	AutoCompleteTokenizer(const string &sql, MatchState &state)
-	    : BaseTokenizer(sql, state.tokens), suggestions(state.suggestions) {
-		last_pos = 0;
+	explicit ClientContextCatalogProvider(ClientContext &context) : context(context) {
+	}
+	vector<AutoCompleteCandidate> SuggestCatalogName() override {
+		return ::duckdb::SuggestCatalogName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestSchemaName() override {
+		return ::duckdb::SuggestSchemaName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestTableName() override {
+		return ::duckdb::SuggestTableName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestType() override {
+		return ::duckdb::SuggestType(context);
+	}
+	vector<AutoCompleteCandidate> SuggestColumnName() override {
+		return ::duckdb::SuggestColumnName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestFileName(string &prefix, idx_t &last_pos) override {
+		return ::duckdb::SuggestFileName(context, prefix, last_pos);
+	}
+	vector<AutoCompleteCandidate> SuggestScalarFunctionName() override {
+		return ::duckdb::SuggestScalarFunctionName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestTableFunctionName() override {
+		return ::duckdb::SuggestTableFunctionName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestPragmaName() override {
+		return ::duckdb::SuggestPragmaName(context);
+	}
+	vector<AutoCompleteCandidate> SuggestSettingName() override {
+		return ::duckdb::SuggestSettingName(context);
+	}
+	shared_ptr<PEGMatcher> GetPEGMatcher() override {
+		return GetGlobalPEGMatcherCache().GetMatcher();
 	}
 
-	void OnLastToken(TokenizeState state, string last_word_p, idx_t last_pos_p) override {
-		if (TokenizeStateToType(state) == TokenType::STRING_LITERAL) {
-			suggestions.emplace_back(SuggestionState::SUGGEST_FILE_NAME);
-		}
-		if (StringUtil::StartsWith(last_word_p, "'")) {
-			last_word_p = last_word_p.substr(1, last_word_p.size() - 1);
-			last_pos_p += 1;
-		}
-		last_word = std::move(last_word_p);
-		last_pos = last_pos_p;
-	}
-
-	void OnStatementEnd(idx_t pos) override {
-		tokens.clear();
-	}
-
-	vector<MatcherSuggestion> &suggestions;
-	string last_word;
-	idx_t last_pos;
+private:
+	ClientContext &context;
 };
-
-struct UnicodeSpace {
-	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
-	}
-
-	idx_t pos;
-	idx_t bytes;
-};
-
-bool ReplaceUnicodeSpaces(const string &query, string &new_query, const vector<UnicodeSpace> &unicode_spaces) {
-	if (unicode_spaces.empty()) {
-		// no unicode spaces found
-		return false;
-	}
-	idx_t prev = 0;
-	for (auto &usp : unicode_spaces) {
-		new_query += query.substr(prev, usp.pos - prev);
-		new_query += " ";
-		prev = usp.pos + usp.bytes;
-	}
-	new_query += query.substr(prev, query.size() - prev);
-	return true;
-}
-
-bool IsValidDollarQuotedStringTagFirstChar(const unsigned char &c) {
-	// the first character can be between A-Z, a-z, underscore, or \200 - \377
-	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c >= 0x80;
-}
-
-bool IsValidDollarQuotedStringTagSubsequentChar(const unsigned char &c) {
-	// subsequent characters can also be between 0-9
-	return IsValidDollarQuotedStringTagFirstChar(c) || (c >= '0' && c <= '9');
-}
-
-// This function strips unicode space characters from the query and replaces them with regular spaces
-// It returns true if any unicode space characters were found and stripped
-// See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
-bool StripUnicodeSpaces(const string &query_str, string &new_query) {
-	const idx_t NBSP_LEN = 2;
-	const idx_t USP_LEN = 3;
-	idx_t pos = 0;
-	unsigned char quote;
-	string_t dollar_quote_tag;
-	vector<UnicodeSpace> unicode_spaces;
-	auto query = const_uchar_ptr_cast(query_str.c_str());
-	auto qsize = query_str.size();
-
-regular:
-	for (; pos + 2 < qsize; pos++) {
-		if (query[pos] == 0xC2) {
-			if (query[pos + 1] == 0xA0) {
-				// U+00A0 - C2A0
-				unicode_spaces.emplace_back(pos, NBSP_LEN);
-			}
-		}
-		if (query[pos] == 0xE2) {
-			if (query[pos + 1] == 0x80) {
-				if (query[pos + 2] >= 0x80 && query[pos + 2] <= 0x8B) {
-					// U+2000 to U+200B
-					// E28080 - E2808B
-					unicode_spaces.emplace_back(pos, USP_LEN);
-				} else if (query[pos + 2] == 0xAF) {
-					// U+202F - E280AF
-					unicode_spaces.emplace_back(pos, USP_LEN);
-				}
-			} else if (query[pos + 1] == 0x81) {
-				if (query[pos + 2] == 0x9F) {
-					// U+205F - E2819f
-					unicode_spaces.emplace_back(pos, USP_LEN);
-				} else if (query[pos + 2] == 0xA0) {
-					// U+2060 - E281A0
-					unicode_spaces.emplace_back(pos, USP_LEN);
-				}
-			}
-		} else if (query[pos] == 0xE3) {
-			if (query[pos + 1] == 0x80 && query[pos + 2] == 0x80) {
-				// U+3000 - E38080
-				unicode_spaces.emplace_back(pos, USP_LEN);
-			}
-		} else if (query[pos] == 0xEF) {
-			if (query[pos + 1] == 0xBB && query[pos + 2] == 0xBF) {
-				// U+FEFF - EFBBBF
-				unicode_spaces.emplace_back(pos, USP_LEN);
-			}
-		} else if (query[pos] == '"' || query[pos] == '\'') {
-			quote = query[pos];
-			pos++;
-			goto in_quotes;
-		} else if (query[pos] == '$' &&
-		           (query[pos + 1] == '$' || IsValidDollarQuotedStringTagFirstChar(query[pos + 1]))) {
-			// (optionally tagged) dollar-quoted string
-			auto start = &query[++pos];
-			for (; pos + 2 < qsize; pos++) {
-				if (query[pos] == '$') {
-					// end of tag
-					dollar_quote_tag =
-					    string_t(const_char_ptr_cast(start), NumericCast<uint32_t, int64_t>(&query[pos] - start));
-					goto in_dollar_quotes;
-				}
-
-				if (!IsValidDollarQuotedStringTagSubsequentChar(query[pos])) {
-					// invalid char in dollar-quoted string, continue as normal
-					goto regular;
-				}
-			}
-			goto end;
-		} else if (query[pos] == '-' && query[pos + 1] == '-') {
-			goto in_comment;
-		}
-	}
-	goto end;
-in_quotes:
-	for (; pos + 1 < qsize; pos++) {
-		if (query[pos] == quote) {
-			if (query[pos + 1] == quote) {
-				// escaped quote
-				pos++;
-				continue;
-			}
-			pos++;
-			goto regular;
-		}
-	}
-	goto end;
-in_dollar_quotes:
-	for (; pos + 2 < qsize; pos++) {
-		if (query[pos] == '$' &&
-		    qsize - (pos + 1) >= dollar_quote_tag.GetSize() + 1 && // found '$' and enough space left
-		    query[pos + dollar_quote_tag.GetSize() + 1] == '$' &&  // ending '$' at the right spot
-		    memcmp(&query[pos + 1], dollar_quote_tag.GetData(), dollar_quote_tag.GetSize()) == 0) { // tags match
-			pos += dollar_quote_tag.GetSize() + 1;
-			goto regular;
-		}
-	}
-	goto end;
-in_comment:
-	for (; pos < qsize; pos++) {
-		if (query[pos] == '\n' || query[pos] == '\r') {
-			goto regular;
-		}
-	}
-	goto end;
-end:
-	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
-}
 
 static duckdb::unique_ptr<SQLAutoCompleteFunctionData> GenerateSuggestions(ClientContext &context, const string &sql,
                                                                            AutoCompleteParameters &parameters) {
-	// tokenize the input
-	vector<MatcherToken> tokens;
-	vector<MatcherSuggestion> suggestions;
-	ParseResultAllocator parse_allocator;
-	idx_t max_token_index = 0;
-	MatchState state(tokens, suggestions, parse_allocator, max_token_index);
-	vector<UnicodeSpace> unicode_spaces;
-	string clean_sql;
-	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
-	AutoCompleteTokenizer tokenizer(sql_ref, state);
-	auto allow_complete = tokenizer.TokenizeInput();
-	if (!allow_complete) {
-		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
-	}
-	if (state.suggestions.empty()) {
-		// no suggestions found during tokenizing
-		// run the root matcher
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
-		matcher.Match(state);
-	}
-	if (state.suggestions.empty()) {
-		// still no suggestions - return
-		return make_uniq<SQLAutoCompleteFunctionData>(vector<AutoCompleteSuggestion>());
-	}
-	vector<AutoCompleteCandidate> available_suggestions;
-	for (auto &suggestion : suggestions) {
-		idx_t suggestion_pos = tokenizer.last_pos;
-		// run the suggestions
-		vector<AutoCompleteCandidate> new_suggestions;
-		switch (suggestion.type) {
-		case SuggestionState::SUGGEST_VARIABLE:
-			// variables have no suggestions available
-			break;
-		case SuggestionState::SUGGEST_KEYWORD:
-			new_suggestions.emplace_back(suggestion.keyword);
-			break;
-		case SuggestionState::SUGGEST_CATALOG_NAME:
-			new_suggestions = SuggestCatalogName(context);
-			break;
-		case SuggestionState::SUGGEST_SCHEMA_NAME:
-			new_suggestions = SuggestSchemaName(context);
-			break;
-		case SuggestionState::SUGGEST_TABLE_NAME:
-			new_suggestions = SuggestTableName(context);
-			break;
-		case SuggestionState::SUGGEST_COLUMN_NAME:
-			new_suggestions = SuggestColumnName(context);
-			break;
-		case SuggestionState::SUGGEST_TYPE_NAME:
-			new_suggestions = SuggestType(context);
-			break;
-		case SuggestionState::SUGGEST_FILE_NAME:
-			if (parameters.max_file_suggestion_count > 0) {
-				new_suggestions = SuggestFileName(context, tokenizer.last_word, suggestion_pos);
-				parameters.suggestion_contains_files = true;
-			}
-			break;
-		case SuggestionState::SUGGEST_SCALAR_FUNCTION_NAME:
-			new_suggestions = SuggestScalarFunctionName(context);
-			break;
-		case SuggestionState::SUGGEST_TABLE_FUNCTION_NAME:
-			new_suggestions = SuggestTableFunctionName(context);
-			break;
-		case SuggestionState::SUGGEST_PRAGMA_NAME:
-			new_suggestions = SuggestPragmaName(context);
-			break;
-		case SuggestionState::SUGGEST_SETTING_NAME:
-			new_suggestions = SuggestSettingName(context);
-			break;
-		default:
-			throw InternalException("Unrecognized suggestion state");
-		}
-		for (auto &new_suggestion : new_suggestions) {
-			if (new_suggestion.extra_char == '\0') {
-				new_suggestion.extra_char = suggestion.extra_char;
-			}
-			new_suggestion.suggestion_pos = suggestion_pos;
-			available_suggestions.push_back(std::move(new_suggestion));
-		}
-	}
-	auto result_suggestions = ComputeSuggestions(available_suggestions, tokenizer.last_word, parameters);
-	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result_suggestions));
+	ClientContextCatalogProvider provider(context);
+	auto result = GenerateAutoCompleteSuggestions(provider, sql, parameters);
+	return make_uniq<SQLAutoCompleteFunctionData>(std::move(result));
 }
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
@@ -757,23 +427,26 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// suggestion, VARCHAR
+	auto &suggestion = output.data[0];
+	// suggestion_start, INTEGER
+	auto &suggestion_start = output.data[1];
+	// suggestion_type, VARCHAR
+	auto &suggestion_type = output.data[2];
+	// suggestion_score, VARCHAR
+	auto &suggestion_score = output.data[3];
+	// extra_char, VARCHAR
+	auto &extra_char = output.data[4];
+
 	while (data.offset < bind_data.suggestions.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.suggestions[data.offset++];
 
-		// suggestion, VARCHAR
-		output.SetValue(0, count, Value(entry.text));
-
-		// suggestion_start, INTEGER
-		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
-
-		// suggestion_type, VARCHAR
-		output.SetValue(2, count, Value(entry.type));
-
-		// suggestion-score, VARCHAR
-		output.SetValue(3, count, Value::UBIGINT(entry.score));
-
-		// extra_char, VARCHAR
-		output.SetValue(4, count, entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
+		suggestion.Append(Value(entry.text));
+		suggestion_start.Append(Value::INTEGER(NumericCast<int32_t>(entry.pos)));
+		suggestion_type.Append(Value(entry.type));
+		suggestion_score.Append(Value::UBIGINT(entry.score));
+		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
 	output.SetCardinality(count);
@@ -782,6 +455,15 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context, const string &sql) {
 	HighlightTokenizer tokenizer(sql);
 	tokenizer.TokenizeInput();
+
+	// use the parser to annotate any tokens
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
+
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
 }
@@ -819,17 +501,20 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// offset, INTEGER
+	auto &offset_col = output.data[0];
+	// token_type, VARCHAR
+	auto &token_type = output.data[1];
+	// word, VARCHAR
+	auto &word = output.data[2];
+
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
 
-		// offset, INTEGER
-		output.SetValue(0, count, Value::INTEGER(NumericCast<int32_t>(entry.offset)));
-
-		// token_type, VARCHAR
-		output.SetValue(1, count, Value(TokenTypeToString(entry.type)));
-
-		// word, VARCHAR
-		output.SetValue(2, count, Value(entry.text));
+		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
+		token_type.Append(Value(TokenTypeToString(entry.type)));
+		word.Append(Value(entry.text));
 		count++;
 	}
 	output.SetCardinality(count);
@@ -847,42 +532,39 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
-	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return nullptr;
 	}
-	tokenizer.statements.push_back(std::move(root_tokens));
 
-	for (auto &tokens : tokenizer.statements) {
-		if (tokens.empty()) {
-			continue;
-		}
-		vector<MatcherSuggestion> suggestions;
-		ParseResultAllocator parse_allocator;
-		idx_t max_token_index = 0;
-		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
+	if (root_tokens.empty()) {
+		return nullptr;
+	}
 
-		MatcherAllocator allocator;
-		auto &matcher = Matcher::RootMatcher(allocator);
-		auto match_result = matcher.Match(state);
-		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
-			string token_list;
-			for (idx_t i = 0; i < tokens.size(); i++) {
-				if (!token_list.empty()) {
-					token_list += "\n";
-				}
-				if (i < 10) {
-					token_list += " ";
-				}
-				token_list += to_string(i) + ":" + tokens[i].text;
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto match_result = peg_matcher->Root().Match(state);
+	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+		string token_list;
+		for (idx_t i = 0; i < root_tokens.size(); i++) {
+			if (!token_list.empty()) {
+				token_list += "\n";
 			}
-			throw BinderException(
-			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-			    state.token_index, tokens[state.token_index].text, token_list);
+			if (i < 10) {
+				token_list += " ";
+			}
+			token_list += to_string(i) + ":" + root_tokens[i].text;
 		}
+		throw BinderException(
+		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+		    state.token_index, root_tokens[state.token_index].text, token_list);
 	}
 	return nullptr;
 }
@@ -897,41 +579,30 @@ public:
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
+		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+		auto &root_matcher = peg_matcher->Root();
+
 		vector<MatcherToken> root_tokens;
-		string clean_sql;
 
 		ParserTokenizer tokenizer(query, root_tokens);
 		tokenizer.TokenizeInput();
-		tokenizer.statements.push_back(std::move(root_tokens));
 
 		try {
 			vector<unique_ptr<SQLStatement>> result;
-			for (auto &tokenized_statement : tokenizer.statements) {
-				if (tokenized_statement.empty()) {
-					continue;
-				}
-				auto &transformer = PEGTransformerFactory::GetInstance();
-				auto statement = transformer.Transform(tokenized_statement, options);
-				if (statement) {
-					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
-					                tokenized_statement[tokenized_statement.size() - 1].length;
-					statement->stmt_length = last_pos - tokenized_statement[0].offset;
-				}
-				statement->query = query;
-				result.push_back(std::move(statement));
+			if (!root_tokens.empty()) {
+				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
 			}
 			if (!result.empty()) {
 				auto &last_statement = result.back();
 				last_statement->stmt_length = query.size() - last_statement->stmt_location;
-				for (auto &statement : result) {
-					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-					statement->stmt_location = 0;
-					statement->stmt_length = statement->query.size();
-					if (statement->type == StatementType::CREATE_STATEMENT) {
-						auto &create = statement->Cast<CreateStatement>();
-						create.info->sql = statement->query;
-					}
+			}
+			for (auto &statement : result) {
+				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+				statement->stmt_location = 0;
+				statement->stmt_length = statement->query.size();
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
 				}
 			}
 			return ParserOverrideResult(std::move(result));
@@ -941,22 +612,79 @@ public:
 	}
 };
 
-static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
+struct FormatSQLBindData : public FunctionData {
+	FormatterConfig config;
+
+	unique_ptr<FunctionData> Copy() const override {
+		auto result = make_uniq<FormatSQLBindData>();
+		result->config = config;
+		return std::move(result);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<FormatSQLBindData>();
+		return config.indent_size == other.config.indent_size &&
+		       config.inline_threshold == other.config.inline_threshold &&
+		       config.keyword_case == other.config.keyword_case;
+	}
+};
+
+//! Parse the MAP(VARCHAR, VARCHAR) config argument and populate FormatterConfig.
+//! Recognised keys: "indent_size", "inline_threshold", "keyword_case".
+static FormatterConfig ParseFormatterConfig(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
+	FormatterConfig config;
+	if (arguments.size() < 2) {
+		return config;
+	}
+	auto &map_expr = *arguments[1];
+	if (!map_expr.IsFoldable()) {
+		throw InvalidInputException("duckdb_format_sql: config map must be a constant expression");
+	}
+	Value map_val = ExpressionExecutor::EvaluateScalar(context, map_expr);
+	if (map_val.IsNull()) {
+		return config;
+	}
+	for (const auto &pair : MapValue::GetChildren(map_val)) {
+		const auto &kv = StructValue::GetChildren(pair);
+		const auto key = StringUtil::Lower(kv[0].ToString());
+		const auto val_str = kv[1].ToString();
+		if (key == "indent_size") {
+			config.indent_size = std::stoull(val_str);
+		} else if (key == "inline_threshold") {
+			config.inline_threshold = std::stoull(val_str);
+		} else if (key == "keyword_case") {
+			const string kc = StringUtil::Lower(val_str);
+			if (kc == "upper") {
+				config.keyword_case = KeywordCase::UPPER;
+			} else if (kc == "lower") {
+				config.keyword_case = KeywordCase::LOWER;
+			} else if (kc == "preserve") {
+				config.keyword_case = KeywordCase::PRESERVE;
+			} else {
+				throw InvalidInputException(
+				    "duckdb_format_sql: keyword_case must be 'upper', 'lower', or 'preserve'; got '%s'", val_str);
+			}
+		} else {
+			throw InvalidInputException("duckdb_format_sql: unknown config key '%s'", key);
+		}
+	}
+	return config;
 }
 
-static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
+static unique_ptr<FunctionData> FormatSQLBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+
+	auto bind_data = make_uniq<FormatSQLBindData>();
+	bind_data->config = ParseFormatterConfig(context, arguments);
+	return std::move(bind_data);
 }
 
-static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("success");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	return nullptr;
+static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &info = state.expr.Cast<BoundFunctionExpression>().bind_info->Cast<FormatSQLBindData>();
+	auto &heap = StringVector::GetStringHeap(result);
+	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+		return heap.AddString(FormatSQL(input.GetString(), info.config));
+	});
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
@@ -971,16 +699,20 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
-	TableFunction enable_peg_parser("enable_peg_parser", {}, EnablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(enable_peg_parser);
-
-	TableFunction disable_peg_parser("disable_peg_parser", {}, DisablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(disable_peg_parser);
-
 	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
 	                           SQLTokenizeInit);
 
 	loader.RegisterFunction(tokenize_fun);
+
+	const auto map_config_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	ScalarFunctionSet format_sql_set("duckdb_format_sql");
+	// duckdb_format_sql(sql)
+	format_sql_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	// duckdb_format_sql(sql, config => MAP {'indent_size':'4', 'inline_threshold':'60'})
+	format_sql_set.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, map_config_type}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
+	loader.RegisterFunction(format_sql_set);
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
 	ParserExtension::Register(config, PEGParserExtension());
 }

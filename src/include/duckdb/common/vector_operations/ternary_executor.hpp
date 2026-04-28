@@ -10,6 +10,8 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <functional>
@@ -41,12 +43,12 @@ struct TernaryLambdaWrapperWithNulls {
 struct TernaryExecutor {
 private:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
-	static inline void ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata,
-	                               const C_TYPE *__restrict cdata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector &asel, const SelectionVector &bsel,
-	                               const SelectionVector &csel, ValidityMask &avalidity, ValidityMask &bvalidity,
-	                               ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
-		if (!avalidity.AllValid() || !bvalidity.AllValid() || !cvalidity.AllValid()) {
+	static inline void
+	ExecuteLoop(const A_TYPE *__restrict adata, const B_TYPE *__restrict bdata, const C_TYPE *__restrict cdata,
+	            RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
+	            const SelectionVector &bsel, const SelectionVector &csel, const ValidityMask &avalidity,
+	            const ValidityMask &bvalidity, const ValidityMask &cvalidity, ValidityMask &result_validity, FUN fun) {
+		if (avalidity.CanHaveNull() || bvalidity.CanHaveNull() || cvalidity.CanHaveNull()) {
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
@@ -75,8 +77,9 @@ public:
 		if (a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			if (ConstantVector::IsNull(a) || ConstantVector::IsNull(b) || ConstantVector::IsNull(c)) {
-				ConstantVector::SetNull(result, true);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				auto adata = ConstantVector::GetData<A_TYPE>(a);
 				auto bdata = ConstantVector::GetData<B_TYPE>(b);
@@ -96,9 +99,9 @@ public:
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
 			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
-			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetData<RESULT_TYPE>(result), count,
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), FlatVector::GetDataMutable<RESULT_TYPE>(result), count,
 			    *adata.sel, *bdata.sel, *cdata.sel, adata.validity, bdata.validity, cdata.validity,
-			    FlatVector::Validity(result), fun);
+			    FlatVector::ValidityMutable(result), fun);
 		}
 	}
 
@@ -180,7 +183,7 @@ private:
 	static inline idx_t SelectLoopSwitch(UnifiedVectorFormat &adata, UnifiedVectorFormat &bdata,
 	                                     UnifiedVectorFormat &cdata, const SelectionVector *sel, idx_t count,
 	                                     SelectionVector *true_sel, SelectionVector *false_sel) {
-		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
+		if (adata.validity.CanHaveNull() || bdata.validity.CanHaveNull() || cdata.validity.CanHaveNull()) {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
 		} else {

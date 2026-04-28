@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/uhugeint.hpp"
@@ -8,15 +9,13 @@ namespace duckdb {
 namespace {
 template <class T>
 
-void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t target) {
-	auto ldata = UnifiedVectorFormat::GetData<T>(vdata);
+void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
 	auto result_data = (T *)target;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!vdata.validity.RowIsValid(idx)) {
-			result_data[i] = NullValue<T>();
+	for (auto entry : source.Values<T>(count)) {
+		if (!entry.IsValid()) {
+			result_data[entry.GetIndex()] = NullValue<T>();
 		} else {
-			result_data[i] = ldata[idx];
+			result_data[entry.GetIndex()] = entry.GetValue();
 		}
 	}
 }
@@ -24,9 +23,9 @@ void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t targe
 template <class T>
 void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
-	auto result_data = FlatVector::GetData<T>(result);
+	auto result_data = FlatVector::Writer<T>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i] = ldata[i];
+		result_data.WriteValue(ldata[i]);
 	}
 }
 
@@ -36,49 +35,47 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	if (count == 0) {
 		return;
 	}
-	UnifiedVectorFormat vdata;
-	source.ToUnifiedFormat(count, vdata);
 
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		CopyToStorageLoop<int8_t>(vdata, count, target);
+		CopyToStorageLoop<int8_t>(source, count, target);
 		break;
 	case PhysicalType::INT16:
-		CopyToStorageLoop<int16_t>(vdata, count, target);
+		CopyToStorageLoop<int16_t>(source, count, target);
 		break;
 	case PhysicalType::INT32:
-		CopyToStorageLoop<int32_t>(vdata, count, target);
+		CopyToStorageLoop<int32_t>(source, count, target);
 		break;
 	case PhysicalType::INT64:
-		CopyToStorageLoop<int64_t>(vdata, count, target);
+		CopyToStorageLoop<int64_t>(source, count, target);
 		break;
 	case PhysicalType::UINT8:
-		CopyToStorageLoop<uint8_t>(vdata, count, target);
+		CopyToStorageLoop<uint8_t>(source, count, target);
 		break;
 	case PhysicalType::UINT16:
-		CopyToStorageLoop<uint16_t>(vdata, count, target);
+		CopyToStorageLoop<uint16_t>(source, count, target);
 		break;
 	case PhysicalType::UINT32:
-		CopyToStorageLoop<uint32_t>(vdata, count, target);
+		CopyToStorageLoop<uint32_t>(source, count, target);
 		break;
 	case PhysicalType::UINT64:
-		CopyToStorageLoop<uint64_t>(vdata, count, target);
+		CopyToStorageLoop<uint64_t>(source, count, target);
 		break;
 	case PhysicalType::INT128:
-		CopyToStorageLoop<hugeint_t>(vdata, count, target);
+		CopyToStorageLoop<hugeint_t>(source, count, target);
 		break;
 	case PhysicalType::UINT128:
-		CopyToStorageLoop<uhugeint_t>(vdata, count, target);
+		CopyToStorageLoop<uhugeint_t>(source, count, target);
 		break;
 	case PhysicalType::FLOAT:
-		CopyToStorageLoop<float>(vdata, count, target);
+		CopyToStorageLoop<float>(source, count, target);
 		break;
 	case PhysicalType::DOUBLE:
-		CopyToStorageLoop<double>(vdata, count, target);
+		CopyToStorageLoop<double>(source, count, target);
 		break;
 	case PhysicalType::INTERVAL:
-		CopyToStorageLoop<interval_t>(vdata, count, target);
+		CopyToStorageLoop<interval_t>(source, count, target);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for WriteToStorage");

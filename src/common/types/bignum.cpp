@@ -188,7 +188,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	uint8_t *result_data = reinterpret_cast<uint8_t *>(&result[BIGNUM_HEADER_SIZE]);
 	if (is_negative) {
 		for (idx_t i = 0; i < size; i++) {
-			result_data[i] = ~data[i];
+			result_data[i] = static_cast<uint8_t>(~data[i]);
 		}
 	} else {
 		for (idx_t i = 0; i < size; i++) {
@@ -198,6 +198,7 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	return result;
 }
 
+// typos:ignore-next-line
 // Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
 string Bignum::BignumToVarchar(const bignum_t &blob) {
 	string decimal_string;
@@ -266,7 +267,7 @@ string Bignum::VarcharToBignum(const string_t &value) {
 	auto int_value_char = value.GetData();
 	idx_t actual_size = end_pos - start_pos;
 
-	// we initalize result with space for our header
+	// we initialize result with space for our header
 	string result(BIGNUM_HEADER_SIZE, '0');
 	unsafe_vector<uint64_t> digits;
 

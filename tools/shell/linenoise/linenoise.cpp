@@ -9,6 +9,7 @@
 #endif
 #include "linenoise.h"
 #include "linenoise.hpp"
+#include "shortcuts.hpp"
 #include "history.hpp"
 #include "highlighting.hpp"
 #include "terminal.hpp"
@@ -34,6 +35,7 @@
 namespace duckdb {
 
 static linenoiseCompletionCallback *completionCallback = NULL;
+static linenoiseFormatCallback *formatCallback = NULL;
 
 int linenoiseHistoryAdd(const char *line);
 
@@ -42,6 +44,40 @@ int linenoiseHistoryAdd(const char *line);
 /* Register a callback function to be called for tab-completion. */
 void Linenoise::SetCompletionCallback(linenoiseCompletionCallback *fn) {
 	completionCallback = fn;
+}
+
+/* Register a callback function to be called to format the input before returning it to the shell. */
+void Linenoise::SetFormatCallback(linenoiseFormatCallback *fn) {
+	formatCallback = fn;
+}
+
+void Linenoise::Format() {
+	if (!formatCallback) {
+		return;
+	}
+	buf[len] = '\0';
+	char *formatted = formatCallback(buf);
+	if (!formatted) {
+		return;
+	}
+	// The formatter returns \n line endings, but linenoise multiline mode uses \r\n
+	// internally. Convert \n -> \r\n so RefreshLine() renders correctly.
+	// The \r\n -> \n rewrite in Edit() will convert them back before returning.
+	string converted;
+	for (const char *p = formatted; *p; p++) {
+		if (*p == '\n' && (p == formatted || *(p - 1) != '\r')) {
+			converted += '\r';
+		}
+		converted += *p;
+	}
+	free(formatted);
+	if (converted.size() >= buflen) {
+		return;
+	}
+	memcpy(buf, converted.c_str(), converted.size() + 1);
+	len = converted.size();
+	pos = len;
+	RefreshLine();
 }
 
 CompletionType Linenoise::GetCompletionType(const char *type) {
@@ -131,6 +167,26 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 		if (has_ties) {
 			// if there are ties we don't auto-complete immediately
 			// instead we display the list of suggestions
+			// but first, complete up to the longest common prefix (like shell behavior)
+			auto &first = completions[0].completion;
+			idx_t common_len = first.size();
+			for (idx_t i = 1; i < completions.size(); i++) {
+				auto &other = completions[i].completion;
+				idx_t min_len = MinValue<idx_t>(common_len, other.size());
+				idx_t j;
+				for (j = 0; j < min_len; j++) {
+					if (first[j] != other[j]) {
+						break;
+					}
+				}
+				common_len = j;
+			}
+			if (common_len > (idx_t)len) {
+				// there is a common prefix longer than the current input - apply it
+				int nwritten = snprintf(buf, buflen, "%.*s", (int)common_len, first.c_str());
+				pos = nwritten;
+				len = nwritten;
+			}
 			completion_idx = optional_idx();
 			render_completion_suggestion = true;
 		} else {
@@ -196,7 +252,7 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 					if (!completion_idx.IsValid()) {
 						// pressing shift-tab when we don't have a selected completion means we abort searching
 						RefreshLine();
-						next_key.action = ENTER;
+						next_key.action = KEY_NULL;
 						stop = true;
 					} else if (completion_idx.GetIndex() == 0) {
 						completion_idx = optional_idx();
@@ -240,10 +296,6 @@ bool Linenoise::CompleteLine(KeyPress &next_key) {
 	// no longer completing - clear list of completions
 	completion_list.completions.clear();
 	completion_idx = optional_idx();
-	if (next_key.action == ENTER) {
-		// if we accepted the completion by pressing ENTER
-		next_key.action = KEY_NULL;
-	}
 	return true; /* Return last read character */
 }
 
@@ -1401,7 +1453,8 @@ bool Linenoise::TryGetKeyPress(int fd, KeyPress &key_press) {
 bool Linenoise::Write(int fd, const char *data, idx_t size) {
 #if defined(_WIN32) || defined(WIN32)
 	// convert to character encoding in Windows shell
-	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data);
+	string data_str = data ? string(data, size) : "";
+	auto unicode_text = duckdb_shell::ShellState::Win32Utf8ToUnicode(data_str);
 	auto out_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (!WriteConsoleW(out_handle, unicode_text.c_str(), unicode_text.size(), NULL, NULL)) {
 		return false;
@@ -1421,6 +1474,54 @@ bool Linenoise::Write(int fd, const char *data, idx_t size) {
  * when ctrl+d is typed.
  *
  * The function returns the length of the current buffer. */
+
+// Shortcut table — kept near the key handler switch so they stay in sync.
+// If you add or change a keybinding in Edit(), update this table too.
+vector<ShortcutEntry> GetShellShortcuts() {
+	const vector<ShortcutEntry> shortcuts = {
+	    // Control
+	    {"Enter / Ctrl+J", "Submit input", "Control"},
+	    {"Ctrl+C", "Cancel current input or interrupt in-flight query", "Control"},
+	    {"Ctrl+D", "Exit shell (when line is empty)", "Control"},
+	    {"Ctrl+G", "Submit input (in multiline mode)", "Control"},
+	    {"Ctrl+L", "Clear screen", "Control"},
+	    {"Ctrl+Z", "Suspend shell", "Control"},
+	    {"Tab", "Auto-complete", "Control"},
+	    {"Ctrl+Q, then click", "Move cursor to mouse click position", "Control"},
+	    // Editing
+	    {"Ctrl+D / Delete", "Delete character under cursor (or exit if line is empty)", "Editing"},
+	    {"Ctrl+H / Backspace", "Delete character before cursor", "Editing"},
+	    {"Ctrl+K", "Delete from cursor to end of line", "Editing"},
+	    {"Ctrl+U", "Delete entire line", "Editing"},
+	    {"Ctrl+W", "Delete previous word", "Editing"},
+	    {"Alt+D", "Delete next word", "Editing"},
+	    {"Alt+Backspace", "Delete previous word", "Editing"},
+	    {"Ctrl+T", "Swap character under cursor with previous", "Editing"},
+	    {"Alt+T", "Swap current word with previous", "Editing"},
+	    {"Alt+C", "Capitalize next word", "Editing"},
+	    {"Alt+L", "Lowercase next word", "Editing"},
+	    {"Alt+U", "Uppercase next word", "Editing"},
+	    {"Alt+R", "Delete entire line", "Editing"},
+	    {"Alt+\\", "Remove spaces around cursor", "Editing"},
+	    {"Ctrl+X", "Insert newline (multiline input)", "Editing"},
+	    // Navigation
+	    {"Ctrl+A / Home", "Go to beginning of line", "Navigation"},
+	    {"Ctrl+E / End", "Go to end of line", "Navigation"},
+	    {"Ctrl+B / Left", "Move cursor left", "Navigation"},
+	    {"Ctrl+F / Right", "Move cursor right", "Navigation"},
+	    {"Alt+B / Alt+Left", "Move cursor one word left", "Navigation"},
+	    {"Alt+F / Alt+Right", "Move cursor one word right", "Navigation"},
+	    // History
+	    {"Ctrl+P / Up", "Previous history entry", "History"},
+	    {"Ctrl+N / Down", "Next history entry", "History"},
+	    {"Ctrl+R", "Reverse search history", "History"},
+	    {"Ctrl+S", "Forward search history", "History"},
+	    {"Ctrl+Up", "Jump to first history entry", "History"},
+	    {"Ctrl+Down", "Jump to last history entry", "History"},
+	};
+	return shortcuts;
+}
+
 int Linenoise::Edit() {
 	/* The latest history entry is always our current buffer, that
 	 * initially is just an empty string. */
@@ -1529,6 +1630,7 @@ int Linenoise::Edit() {
 			// final refresh before returning control to the shell
 			continuation_markers = false;
 			History::RemoveLastEntry();
+			Format();
 			if (Terminal::IsMultiline()) {
 				if (pos == len) {
 					// already at the end - only refresh

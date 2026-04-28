@@ -7,13 +7,13 @@ statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiler.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiler.json';
 
 # Now the output doesn't match the file type anymore :(
 statement error
 PRAGMA enable_profiling = 'html';
 ----
-Parser Error: Profiler file type (__TEST_DIR__/profiler.json) must either have the same file extension as the profiling output type (html), or be a '.txt' file. Set 'profiling_output' to a 'html' file or run "RESET profiling_output" first.
+Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type (html), or be a '.txt' file. Set 'profiling_output' to a 'html' file or run "RESET profiling_output" first.
 
 # RESET
 statement ok
@@ -25,7 +25,7 @@ PRAGMA enable_profiling = 'html';
 
 # txt files always work!
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiler.txt';
+PRAGMA profiling_output = '{TEST_DIR}/profiler.txt';
 
 statement ok
 PRAGMA enable_profiling = 'query_tree';
@@ -42,16 +42,16 @@ RESET enable_profiling;
 
 # Setting a JSON out of the box doesn't work because the default output type is 'query_tree'
 statement error
-PRAGMA profiling_output = '__TEST_DIR__/profiler.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiler.json';
 ----
-Parser Error: Profiler file type (__TEST_DIR__/profiler.json) must either have the same file extension as the profiling output type (query_tree), or be a '.txt' file. Set "enable_profiling = 'json'" first.
+Parser Error: Profiler file type ({TEST_DIR}/profiler.json) must either have the same file extension as the profiling output type (query_tree), or be a '.txt' file. Set "enable_profiling = 'json'" first.
 
 # Make sure we can't write over another file:
 statement ok
-ATTACH '__TEST_DIR__/my_important_database.db';
+ATTACH '{TEST_DIR}/my_important_database.db';
 
 statement error
-PRAGMA profiling_output = '__TEST_DIR__/my_important_database.db.db';
+PRAGMA profiling_output = '{TEST_DIR}/my_important_database.db.db';
 ----
 Parser Error: Invalid output file type: db
 

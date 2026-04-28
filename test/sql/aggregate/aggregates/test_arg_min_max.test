@@ -181,7 +181,7 @@ INSERT INTO employees VALUES
 foreach casting true false
 
 statement ok
-SET old_implicit_casting=${casting};
+SET old_implicit_casting={casting};
 
 query I
 SELECT MAX_BY(employee_id, salary) as employee_with_biggest_salary

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/map.hpp"
@@ -26,7 +27,7 @@ struct ListArgFunctor {
 		return ListVector::GetListSize(list);
 	}
 	static Vector &GetEntry(Vector &list) {
-		return ListVector::GetEntry(list);
+		return ListVector::GetChildMutable(list);
 	}
 };
 

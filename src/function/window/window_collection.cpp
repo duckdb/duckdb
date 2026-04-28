@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/window/window_collection.hpp"
 
 namespace duckdb {
@@ -83,7 +85,7 @@ void WindowCollection::Combine(const ColumnSet &validity_cols) {
 	while (cursor.Scan()) {
 		const auto count = cursor.chunk.size();
 		for (idx_t i = 0; i < invalid_cols.size(); ++i) {
-			auto &other = FlatVector::Validity(cursor.chunk.data[i]);
+			auto &other = FlatVector::ValidityMutable(cursor.chunk.data[i]);
 			const auto col_idx = invalid_cols[i];
 			validities[col_idx].SliceInPlace(other, target_offset, 0, count);
 		}
@@ -110,9 +112,8 @@ void WindowBuilder::Sink(DataChunk &chunk, idx_t input_idx) {
 		}
 
 		// Column was valid, make sure it still is.
-		UnifiedVectorFormat data;
-		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), data);
-		if (!data.validity.AllValid()) {
+		auto validity_entries = chunk.data[col_idx].Validity(chunk.size());
+		if (validity_entries.CanHaveNull()) {
 			collection.all_valids[col_idx] = false;
 		}
 	}
@@ -128,7 +129,6 @@ WindowCursor::WindowCursor(const WindowCollection &paged, vector<column_t> colum
 		state.current_row_index = 0;
 		state.next_row_index = paged.size();
 		state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-		chunk.SetCapacity(state.next_row_index);
 		chunk.SetCardinality(state.next_row_index);
 		return;
 	} else if (chunk.data.empty()) {
@@ -169,7 +169,7 @@ void WindowCollectionChunkScanner::ReferenceStructColumns(DataChunk &chunk, Vect
 	auto &entries = StructVector::GetEntries(vec);
 	D_ASSERT(width == entries.size());
 	for (column_t i = 0; i < entries.size(); ++i) {
-		entries[i]->Reference(chunk.data[begin + i]);
+		entries[i].Reference(chunk.data[begin + i]);
 	}
 }
 

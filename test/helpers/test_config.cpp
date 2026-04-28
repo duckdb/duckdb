@@ -24,6 +24,8 @@ static const TestConfigOption test_config_options[] = {
     {"comment", "Extra free form comment line", LogicalType::VARCHAR, nullptr},
     {"initial_db", "Initial database path", LogicalType::VARCHAR, nullptr},
     {"max_threads", "Max threads to use during tests", LogicalType::BIGINT, nullptr},
+    {"max_test_threads", "Max threads to be used by the test runner itself (for e.g. concurrent loop)",
+     LogicalType::BIGINT, nullptr},
     {"base_config", "Config file to load and base initial settings on", LogicalType::VARCHAR,
      TestConfiguration::LoadBaseConfig},
     {"block_size", "Block Alloction Size; must be a power of 2", LogicalType::BIGINT, nullptr},
@@ -123,7 +125,13 @@ void TestConfiguration::UpdateEnvironment() {
 	test_env["DATA_DIR"] = working_dir + "/data"; // default: data/
 
 	string temp_dir = TestDirectoryPath();
+	auto fs = FileSystem::CreateLocal();
+	string temp_dir_absolute = temp_dir;
+	if (!fs->IsPathAbsolute(temp_dir_absolute)) {
+		temp_dir_absolute = fs->JoinPath(working_dir, temp_dir_absolute);
+	}
 	test_env["TEMP_DIR"] = temp_dir;                      // default: duckdb_unittest_tempdir/$PID
+	test_env["TEMP_DIR_ABSOLUTE"] = temp_dir_absolute;    // default: {WORKING_DIR}/duckdb_unittest_tempdir/$PID
 	test_env["CATALOG_DIR"] = temp_dir + "/" + test_uuid; // _not_ guaranteed to exist
 }
 
@@ -246,8 +254,11 @@ TestConfiguration::ExtensionAutoLoadingMode TestConfiguration::GetExtensionAutoL
 bool TestConfiguration::ShouldSkipTest(const string &test_name) {
 	if (test_name.find('/') == 0) {
 		// Full path specified, strip down to base path so the extension config lookup still works
-		const string stripped_test_name = test_name.c_str() + test_name.find("test/sql");
-		return tests_to_be_skipped.count(stripped_test_name);
+		auto pos = test_name.find("test/sql");
+		if (pos != string::npos) {
+			const string stripped_test_name = test_name.c_str() + pos;
+			return tests_to_be_skipped.count(stripped_test_name);
+		}
 	}
 	return tests_to_be_skipped.count(test_name);
 }
@@ -307,7 +318,7 @@ vector<string> TestConfiguration::ErrorMessagesToBeSkipped() {
 	} else {
 		res.push_back("HTTP");
 		res.push_back("Unable to connect");
-#ifndef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #ifndef AVOID_DUCKDB_DEBUG_ASYNC_THROW
 		// The first of those it's throw as a test of what would happen if a task were to be throwing
 		// It's OK that PositionalTableScanner react re-throwing a different exception, so they need to be removed in
@@ -420,13 +431,23 @@ void TestConfiguration::LoadConfig(const string &config_path) {
 
 void TestConfiguration::ProcessPath(string &path, const string &test_name) {
 	path = StringUtil::Replace(path, "{TEST_DIR}", TestDirectoryPath());
+	path = StringUtil::Replace(path, "{WORKING_DIRECTORY}", FileSystem::GetWorkingDirectory());
 	path = StringUtil::Replace(path, "{UUID}", UUID::ToString(UUID::GenerateRandomUUID()));
 	path = StringUtil::Replace(path, "{TEST_NAME}", test_name);
 
 	auto base_test_name = StringUtil::Replace(test_name, "/", "_");
 	path = StringUtil::Replace(path, "{BASE_TEST_NAME}", base_test_name);
-	path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
-	path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	if (StringUtil::Contains(path, "__TEST_DIR__")) {
+		Printer::PrintF("Replacing deprecated string __TEST_DIR__ in path \"%s\" - please replace with {TEST_DIR}",
+		                path);
+		path = StringUtil::Replace(path, "__TEST_DIR__", TestDirectoryPath());
+	}
+	if (StringUtil::Contains(path, "__WORKING_DIRECTORY__")) {
+		Printer::PrintF("Replacing deprecated string __WORKING_DIRECTORY__ in path \"%s\" - please replace with "
+		                "{WORKING_DIRECTORY}",
+		                path);
+		path = StringUtil::Replace(path, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
+	}
 }
 
 template <class T, class VAL_T>
@@ -448,6 +469,10 @@ string TestConfiguration::GetInitialDBPath() {
 
 optional_idx TestConfiguration::GetMaxThreads() {
 	return GetOptionOrDefault<optional_idx, idx_t>("max_threads", optional_idx());
+}
+
+optional_idx TestConfiguration::GetMaxTestThreads() {
+	return GetOptionOrDefault<optional_idx, idx_t>("max_test_threads", optional_idx());
 }
 
 optional_idx TestConfiguration::GetBlockAllocSize() {

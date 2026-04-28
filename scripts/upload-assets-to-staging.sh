@@ -56,7 +56,11 @@ if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
-python3 -m pip install awscli
+if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
+  python3 -m pip install --break-system-packages awscli
+else
+  python3 -m pip install awscli
+fi
 
 for var in "${@: 2}"
 do

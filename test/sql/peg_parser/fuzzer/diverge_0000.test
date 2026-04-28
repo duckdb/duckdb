@@ -1,0 +1,6 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0000.test
+# description: PEG should reject (currently accepts): Parser Error: syntax error at or near "EXISTS"
+# group: [fuzzer]
+
+statement ok
+DETACH IF EXISTS my_table;

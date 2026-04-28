@@ -51,6 +51,8 @@ struct PivotColumn {
 
 	void Serialize(Serializer &serializer) const;
 	static PivotColumn Deserialize(Deserializer &source);
+
+	vector<PivotColumnEntry> GetEntriesForSerialization(Serializer &serializer) const;
 };
 
 //! Represents a PIVOT or UNPIVOT expression

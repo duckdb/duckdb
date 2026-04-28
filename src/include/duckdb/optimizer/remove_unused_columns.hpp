@@ -77,6 +77,8 @@ enum class BaseColumnPrunerMode : uint8_t {
 struct MaterializedCTEInfo {
 public:
 	column_binding_map_t<ReferencedColumn> column_references;
+	unordered_set<TableIndex> expected_readers;
+	unordered_set<TableIndex> seen_readers;
 	bool everything_referenced = true;
 };
 
@@ -88,7 +90,7 @@ protected:
 	unique_ptr<Expression> VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 
 protected:
-	//! Add a reference to the column in its entirey
+	//! Add a reference to the column in its entirety
 	void AddBinding(BoundColumnRefExpression &col);
 	//! Add a reference to a sub-section of the column
 	void AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column);

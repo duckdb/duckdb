@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,8 @@ enum class AlterType : uint8_t {
 	SET_COLUMN_COMMENT = 8,
 	ALTER_DATABASE = 9
 };
+
+enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };
 
 struct AlterEntryData {
 	AlterEntryData() {
@@ -60,6 +63,10 @@ public:
 	string name;
 	//! Allow altering internal entries
 	bool allow_internal;
+	//! Determine whether to skip Bind
+	AlterBindMode bind_mode = AlterBindMode::BIND_ON_ALTER;
+	//! New dependencies for the altered entry (set during binding)
+	unique_ptr<LogicalDependencyList> new_dependencies;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;

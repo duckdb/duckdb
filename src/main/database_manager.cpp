@@ -15,8 +15,10 @@
 
 namespace duckdb {
 
+// Oids are started at 20000 to avoid colliding with Postgres builtin types, which end at 16383:
+// https://github.com/postgres/postgres/blob/db93988ab0e78396f2ed9e96c826ff988d12b9f2/src/include/access/transam.h#L156-L197
 DatabaseManager::DatabaseManager(DatabaseInstance &db)
-    : db(db), next_oid(0), current_query_number(1), current_transaction_id(0) {
+    : db(db), next_oid(20000), current_query_number(1), current_transaction_id(0) {
 	system = make_shared_ptr<AttachedDatabase>(db);
 	auto &config = DBConfig::GetConfig(db);
 	path_manager = config.path_manager;
@@ -189,6 +191,10 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto attached_db = db.CreateAttachedDatabase(context, info, options);
 
+	if (default_database.empty()) {
+		default_database = attached_db->GetName();
+	}
+
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
@@ -209,9 +215,6 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
                                                                shared_ptr<AttachedDatabase> attached_db) {
 	const auto name = attached_db->GetName();
 	attached_db->oid = NextOid();
-	if (default_database.empty()) {
-		default_database = name;
-	}
 	shared_ptr<AttachedDatabase> detached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
@@ -240,7 +243,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::FinalizeAttach(ClientContext &co
 }
 
 void DatabaseManager::DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found) {
-	if (GetDefaultDatabase(context) == name) {
+	if (StringUtil::CIEquals(GetDefaultDatabase(context), name)) {
 		throw BinderException("Cannot detach database \"%s\" because it is the default database. Select a different "
 		                      "database using `USE` to allow detaching this database",
 		                      name);
@@ -257,7 +260,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
-	AttachedDatabase::InvokeCloseIfLastReference(attached_db);
+	AttachedDatabase::InvokeCloseIfLastReference(attached_db, context);
 }
 
 void DatabaseManager::Alter(ClientContext &context, AlterInfo &info) {
@@ -303,7 +306,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const string &old_n
 		databases[new_name] = attached_db;
 	}
 
-	if (default_database == old_name) {
+	if (StringUtil::CIEquals(default_database, old_name)) {
 		default_database = new_name;
 	}
 }

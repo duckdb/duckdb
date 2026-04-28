@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 
 namespace duckdb {
 
@@ -29,6 +30,13 @@ string DropInfo::ToString() const {
 		}
 		result += " ";
 		result += QualifierToString(catalog, schema, name);
+		if (type == CatalogType::TRIGGER_ENTRY && extra_drop_info) {
+			auto &trigger_info = extra_drop_info->Cast<ExtraDropTriggerInfo>();
+			if (trigger_info.base_table) {
+				result += " ON ";
+				result += trigger_info.base_table->Cast<BaseTableRef>().ToString();
+			}
+		}
 		if (cascade) {
 			result += " CASCADE";
 		}

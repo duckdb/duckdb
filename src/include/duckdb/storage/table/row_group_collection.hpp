@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/common/enums/row_group_append_mode.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,9 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class CommitDropState;
 class DataTable;
+class DuckTableEntry;
 class RowGroupIterationHelper;
 class TableScanState;
 
@@ -108,20 +111,27 @@ public:
 	void RemoveFromIndexes(const QueryContext &context, TableIndexList &indexes, Vector &row_identifiers, idx_t count,
 	                       IndexRemovalType removal_type, optional_idx active_checkpoint = optional_idx());
 
-	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
-	void Update(TransactionData transaction, DataTable &table, row_t *ids, const vector<PhysicalIndex> &column_ids,
-	            DataChunk &updates);
-	void UpdateColumn(TransactionData transaction, DataTable &table, Vector &row_ids,
+	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids, idx_t count);
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, row_t *ids,
+	            const vector<PhysicalIndex> &column_ids, DataChunk &updates);
+	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
-	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state);
+	void InitializeVacuumState(CollectionCheckpointState &checkpoint_state, VacuumState &state,
+	                           optional_idx checkpoint_row_group_count);
 	bool ScheduleVacuumTasks(CollectionCheckpointState &checkpoint_state, VacuumState &state, idx_t segment_idx,
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
+	//! Accumulates block drops for every row group's copy of the column into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Accumulates block drops for every row group into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Drops every row group's copy of the column and immediately marks the blocks as modified.
 	void CommitDropColumn(const idx_t column_index);
+	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
@@ -157,7 +167,7 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	void SetAppendRequiresNewRowGroup();
+	void SetRowGroupAppendMode(RowGroupAppendMode mode);
 	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
 	idx_t GetSegmentCount();
 
@@ -191,8 +201,8 @@ private:
 	MetaBlockPointer metadata_pointer;
 	//! Other metadata pointers
 	vector<MetaBlockPointer> metadata_pointers;
-	//! Whether or not we need to append a new row group prior to appending
-	bool requires_new_row_group;
+	//! Controls whether the next append creates a new row group or reuses the existing one
+	RowGroupAppendMode row_group_append_mode;
 };
 
 class RowGroupIterationHelper {

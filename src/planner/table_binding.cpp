@@ -161,6 +161,10 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 			// the empty column cannot be queried by the user
 			continue;
 		}
+		if (idx == COLUMN_IDENTIFIER_ROW_NUMBER) {
+			// the row_number column cannot be queried by the user
+			continue;
+		}
 		if (name_map.find(name) == name_map.end()) {
 			name_map[name] = idx;
 		}
@@ -246,7 +250,7 @@ ColumnBinding TableBinding::GetColumnBinding(column_t column_index) {
 		}
 	}
 	// If it wasn't found, add it
-	if (binding.column_index.index == column_ids.size()) {
+	if (binding.column_index == column_ids.size()) {
 		column_ids.emplace_back(column_index);
 	}
 

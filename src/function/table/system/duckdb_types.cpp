@@ -58,6 +58,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("extension_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("labels");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
@@ -83,21 +86,44 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// database_name, VARCHAR
+	auto &database_name = output.data[0];
+	// database_oid, BIGINT
+	auto &database_oid = output.data[1];
+	// schema_name, VARCHAR
+	auto &schema_name = output.data[2];
+	// schema_oid, BIGINT
+	auto &schema_oid = output.data[3];
+	// type_oid, BIGINT
+	auto &type_oid = output.data[4];
+	// type_name, VARCHAR
+	auto &type_name = output.data[5];
+	// type_size, BIGINT
+	auto &type_size = output.data[6];
+	// logical_type, VARCHAR
+	auto &logical_type = output.data[7];
+	// type_category, VARCHAR
+	auto &type_category = output.data[8];
+	// comment, VARCHAR
+	auto &comment = output.data[9];
+	// tags, MAP
+	auto &tags = output.data[10];
+	// internal, BOOLEAN
+	auto &internal = output.data[11];
+	// extension_name, VARCHAR
+	auto &extension_name = output.data[12];
+	// labels, VARCHAR[]
+	auto &labels_vec = output.data[13];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &type_entry = data.entries[data.offset++].get();
 		auto &type = type_entry.user_type;
 
-		// return values:
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, count, type_entry.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
-		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(type_entry.schema.name));
-		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(type_entry.schema.oid)));
-		// type_oid, BIGINT
+		database_name.Append(Value(type_entry.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.catalog.GetOid())));
+		schema_name.Append(Value(type_entry.schema.name));
+		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(type_entry.schema.oid)));
 		int64_t oid;
 		if (type_entry.internal) {
 			oid = NumericCast<int64_t>(type.id());
@@ -111,18 +137,13 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		} else {
 			oid_val = Value();
 		}
-		output.SetValue(col++, count, oid_val);
-		// type_name, VARCHAR
-		output.SetValue(col++, count, Value(type_entry.name));
-		// type_size, BIGINT
+		type_oid.Append(oid_val);
+		type_name.Append(Value(type_entry.name));
 		auto internal_type = type.InternalType();
-		output.SetValue(col++, count,
-		                internal_type == PhysicalType::INVALID
-		                    ? Value()
-		                    : Value::BIGINT(NumericCast<int64_t>(GetTypeIdSize(internal_type))));
-		// logical_type, VARCHAR
-		output.SetValue(col++, count, Value(EnumUtil::ToString(type.id())));
-		// type_category, VARCHAR
+		type_size.Append(internal_type == PhysicalType::INVALID
+		                     ? Value()
+		                     : Value::BIGINT(NumericCast<int64_t>(GetTypeIdSize(internal_type))));
+		logical_type.Append(Value(EnumUtil::ToString(type.id())));
 		string category;
 		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
@@ -172,26 +193,23 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		default:
 			break;
 		}
-		output.SetValue(col++, count, category.empty() ? Value() : Value(category));
-		// comment, VARCHAR
-		output.SetValue(col++, count, Value(type_entry.comment));
-		// tags, MAP
-		output.SetValue(col++, count, Value::MAP(type_entry.tags));
-		// internal, BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(type_entry.internal));
-		// labels, VARCHAR[]
+		type_category.Append(category.empty() ? Value() : Value(category));
+		comment.Append(Value(type_entry.comment));
+		tags.Append(Value::MAP(type_entry.tags));
+		internal.Append(Value::BOOLEAN(type_entry.internal));
+		extension_name.Append(type_entry.extension_name.empty() ? Value() : Value(type_entry.extension_name));
 		if (type.id() == LogicalTypeId::ENUM && type.AuxInfo()) {
-			auto data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
+			auto enum_data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
 			idx_t size = EnumType::GetSize(type);
 
 			vector<Value> labels;
 			for (idx_t i = 0; i < size; i++) {
-				labels.emplace_back(data[i]);
+				labels.emplace_back(enum_data[i]);
 			}
 
-			output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, labels));
+			labels_vec.Append(Value::LIST(LogicalType::VARCHAR, labels));
 		} else {
-			output.SetValue(col++, count, Value());
+			labels_vec.Append(Value());
 		}
 
 		count++;
