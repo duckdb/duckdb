@@ -127,7 +127,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ceiling", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"check_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"chr", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"clear_httpfs_connection_cache", "httpfs", CatalogType::TABLE_FUNCTION_ENTRY},
     {"corr", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"cos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"cosh", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
