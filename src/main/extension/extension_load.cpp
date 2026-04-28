@@ -595,6 +595,7 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	if (!IsFullPath(extension)) {
 		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
+	// split the name if it's a full path
 	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
 	if (splits.empty()) {
 		return ExtensionHelper::ApplyExtensionAlias(extension);

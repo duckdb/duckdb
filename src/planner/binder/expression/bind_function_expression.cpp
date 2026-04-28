@@ -283,8 +283,10 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 			auto &extension_manager = ExtensionManager::Get(binder.context);
 			auto extension_name = extension_manager.GetExternalExtensionName(function.schema);
 			if (!extension_name.empty()) {
+				// assume that there are two extensions with the same signature, but different extensions, then we need to return them both?
 				auto func = GetCatalogEntry(function.catalog, INVALID_SCHEMA, function_lookup,
 												OnEntryNotFound::RETURN_NULL);
+				// todo, loop through catalog entries
 				if (func && func->extension_name == extension_name) {
 					function.schema = INVALID_SCHEMA;
 					return func;

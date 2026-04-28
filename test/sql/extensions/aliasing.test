@@ -2,14 +2,9 @@
 # description: Aliasing of extensions, and puts it in a separate extension schema
 # group: [extensions]
 
-require autocomplete
-
 require skip_reload
 
 require allow_unsigned_extensions
-
-statement ok
-call enable_peg_parser()
 
 # instead of registering in a separate schema, when loading, we register it in the global extension alias thing
 # whenever we add a new alias, we register this function in main but then with the alias and not the extension name
@@ -43,7 +38,30 @@ SELECT second_demo.bounded_max(1::BOUNDED(10))
 ----
 10
 
-# test also if we set the schema to demo, nothing will happen right?
+# load a second, different extension under a different alias
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_second.duckdb_extension' AS demo2
 
-# what would not work
-# load same extension (name), but under different alias, if same functions, this will error out ?
+# call the second extension's function directly
+query I
+SELECT demo_second_greet()
+----
+Hello from demo_second!
+
+# call via alias prefix
+query I
+SELECT demo2.demo_second_greet()
+----
+Hello from demo_second!
+
+# the first extension's alias still routes correctly
+query I
+SELECT demo.bounded_max(1::BOUNDED(10))
+----
+10
+
+# cross: demo2 does not own bounded_max, so demo2.bounded_max should not resolve via alias
+# (bounded_max exists in catalog but its extension_name != loadable_extension_demo_second)
+statement error
+SELECT demo2.bounded_max(1::BOUNDED(10))
+----

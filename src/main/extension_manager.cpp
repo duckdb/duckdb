@@ -71,16 +71,19 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
-void ExtensionManager::AddExternalExtensionAlias(const string &alias, const string &extension_name) {
-	lock_guard<mutex> guard(lock);
-
+void ExtensionManager::AddExternalExtensionAliasInternal(const string &alias, const string &extension_name) {
 	// check if alias already there
 	auto opt_extension_name = external_aliases.find(alias);
 	if (opt_extension_name != external_aliases.end()) {
 		throw InvalidInputException("Alias '%s' already exists for extension '%s' ", alias, opt_extension_name->second);
 	}
 
-	external_aliases[alias] = extension_name;
+	external_aliases[StringUtil::Lower(alias)] = StringUtil::Lower(extension_name);
+}
+
+void ExtensionManager::AddExternalExtensionAlias(const string &alias, const string &extension_name) {
+	lock_guard<mutex> guard(lock);
+	AddExternalExtensionAliasInternal(alias, extension_name);
 }
 
 string ExtensionManager::GetExternalExtensionName(const string &alias) {
@@ -93,12 +96,28 @@ string ExtensionManager::GetExternalExtensionName(const string &alias) {
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {
+
+	if (!options.alias.empty()) {
+		if (external_aliases.find(options.alias) != external_aliases.end()) {
+			auto original_extension_name = external_aliases[options.alias];
+			throw InvalidInputException("Alias '%s' already exists for extension '%s'", options.alias, original_extension_name);
+		}
+	}
+
 	auto extension_name = ExtensionHelper::GetExtensionName(options.extension_name);
 
 	unique_lock<mutex> extension_list_lock(lock);
 
 	optional_ptr<ExtensionInfo> info;
 	auto entry = loaded_extensions_info.find(extension_name);
+
+
+	// but what if we find an extension with the same name?
+	// we can load an extension with the same name, but then alias needs  to be different.
+	// then we do nothing!
+
+	// what if we have an extension with the same name, but different binary? Necessary...
+
 	if (entry == loaded_extensions_info.end()) {
 		// we don't have an entry yet - create one
 		auto extension_info = make_uniq<ExtensionInfo>();
@@ -107,6 +126,8 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {
+			// we already have obtained the lock
+			AddExternalExtensionAliasInternal(options.alias, extension_name);
 			// and it is loaded! we are done
 			return nullptr;
 		}
@@ -122,6 +143,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
 	if (info->is_loaded) {
+		AddExternalExtensionAliasInternal(options.alias, extension_name);
 		return nullptr;
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {

@@ -54,11 +54,13 @@ public:
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const ExtensionLoadOptions &options);
 
+	DUCKDB_API void AddExternalExtensionAliasInternal(const string &alias, const string &extension_name);
 	DUCKDB_API void AddExternalExtensionAlias(const string &alias, const string &extension_name);
 	DUCKDB_API string GetExternalExtensionName(const string &alias);
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
+
 
 private:
 	DatabaseInstance &db;
