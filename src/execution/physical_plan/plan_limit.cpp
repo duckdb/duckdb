@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
@@ -18,8 +19,15 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 	while (!finished) {
 		auto &current_op = current_ref.get();
 		switch (current_op.type) {
-		case PhysicalOperatorType::TABLE_SCAN:
+		case PhysicalOperatorType::TABLE_SCAN: {
+			auto &table_scan = current_op.Cast<PhysicalTableScan>();
+			if (table_scan.table_filters && !table_scan.table_filters->filters.empty()) {
+				finished = true;
+				break;
+			}
+			// limit on a table scan without filters - never use batch limit
 			return false;
+		}
 		case PhysicalOperatorType::PROJECTION:
 			current_ref = current_op.children[0];
 			break;
