@@ -1,5 +1,5 @@
 # name: test/optimizer/scalar_aggregate_fusion.test
-# description: Fuse repeated scalar aggregate derived-table branches over the same input
+# description: Scalar aggregate fusion guards for native table scans
 # group: [optimizer]
 
 statement ok
@@ -71,7 +71,7 @@ FROM
 	        OR (hd_dep_count = 0 AND hd_vehicle_count <= 2))
 	   AND s_store_name = 'ese') s3;
 ----
-logical_opt	<!REGEX>:.*CROSS_PRODUCT.*
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
 
 query III
 SELECT *
@@ -112,8 +112,8 @@ FROM
 ----
 2	1	1
 
-# Q09-style scalar aggregate subqueries can be fused even when the repeated
-# scans project different measure columns.
+# Native table scans are left as separate scalar aggregates. Repeated native
+# scans can be faster than one filtered aggregate after the data is hot.
 statement ok
 CREATE TABLE q09_sales(q INTEGER, discount INTEGER, paid INTEGER)
 
@@ -141,7 +141,7 @@ EXPLAIN SELECT
 FROM q09_reason
 WHERE r_reason_sk = 1;
 ----
-logical_opt	<REGEX>:.*AGGREGATE.*FILTER \(WHERE.*
+logical_opt	<!REGEX>:.*AGGREGATE.*FILTER \(WHERE.*
 
 query RR
 SELECT
@@ -174,7 +174,7 @@ EXPLAIN SELECT
 FROM q09_reason
 WHERE r_reason_sk = 1;
 ----
-logical_opt	<REGEX>:.*AGGREGATE.*FILTER \(WHERE.*
+logical_opt	<!REGEX>:.*AGGREGATE.*FILTER \(WHERE.*
 
 query RR
 SELECT
@@ -191,7 +191,7 @@ WHERE r_reason_sk = 1;
 ----
 20.000000	450.000000
 
-# Q28-style derived table aggregates include avg/count/count distinct.
+# Q28-style native table scans are also left as separate aggregates.
 statement ok
 CREATE TABLE q28_sales(q INTEGER, list_price INTEGER, coupon INTEGER, wholesale INTEGER)
 
@@ -209,7 +209,7 @@ FROM
 	 FROM q28_sales
 	 WHERE q BETWEEN 6 AND 10 AND (list_price BETWEEN 50 AND 60 OR wholesale BETWEEN 30 AND 40)) b2;
 ----
-logical_opt	<REGEX>:[\s\S]*AGGREGATE[\s\S]*count\(DISTINCT list_price\)[\s\S]*FILTER.*
+logical_opt	<!REGEX>:[\s\S]*FILTER \(WHERE.*
 
 query RIRRIR
 SELECT *

@@ -1,5 +1,7 @@
 #include "duckdb/optimizer/scalar_aggregate_fusion.hpp"
 
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -71,9 +73,8 @@ static void ReplaceOperatorExpressionBindings(LogicalOperator &op, const vector<
 	if (replacements.empty()) {
 		return;
 	}
-	LogicalOperatorVisitor::EnumerateExpressions(op, [&](unique_ptr<Expression> *expr) {
-		ReplaceExpressionBindings(*expr, replacements);
-	});
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [&](unique_ptr<Expression> *expr) { ReplaceExpressionBindings(*expr, replacements); });
 }
 
 static unique_ptr<Expression> MakeConjunction(ExpressionType type, vector<unique_ptr<Expression>> expressions) {
@@ -87,15 +88,6 @@ static unique_ptr<Expression> MakeConjunction(ExpressionType type, vector<unique
 	auto result = make_uniq<BoundConjunctionExpression>(type);
 	result->children = std::move(expressions);
 	return std::move(result);
-}
-
-static void PushUniqueExpression(vector<unique_ptr<Expression>> &expressions, unique_ptr<Expression> candidate) {
-	for (auto &expr : expressions) {
-		if (Expression::Equals(*expr, *candidate)) {
-			return;
-		}
-	}
-	expressions.push_back(std::move(candidate));
 }
 
 static bool FlattenCrossProduct(unique_ptr<LogicalOperator> &op,
@@ -169,46 +161,6 @@ static unique_ptr<LogicalOperator> StripPassthroughProjections(unique_ptr<Logica
 	return op;
 }
 
-static bool IsSupportedTableFunctionScan(const LogicalGet &get) {
-	if (get.GetTable()) {
-		return true;
-	}
-	// MultiFileBindData does not currently implement FunctionData::Equals, but
-	// identical Parquet scans are safe to merge when the public scan arguments,
-	// schema and returned columns match.
-	return StringUtil::CIEquals(get.function.name, "read_parquet") ||
-	       StringUtil::CIEquals(get.function.name, "parquet_scan");
-}
-
-static bool SameGetSource(const LogicalGet &left, const LogicalGet &right) {
-	auto left_table = left.GetTable();
-	auto right_table = right.GetTable();
-	if (!IsSupportedTableFunctionScan(left) || !IsSupportedTableFunctionScan(right)) {
-		return false;
-	}
-	if (left_table || right_table) {
-		if (!left_table || !right_table || left_table.get() != right_table.get()) {
-			return false;
-		}
-	} else if (left.parameters != right.parameters || left.named_parameters != right.named_parameters) {
-		return false;
-	}
-	if (left.function != right.function) {
-		return false;
-	}
-	if (left.returned_types != right.returned_types || left.names != right.names) {
-		return false;
-	}
-	if (left.input_table_types != right.input_table_types || left.input_table_names != right.input_table_names ||
-	    left.projected_input != right.projected_input) {
-		return false;
-	}
-	if (left_table && !FunctionData::Equals(left.bind_data.get(), right.bind_data.get())) {
-		return false;
-	}
-	return true;
-}
-
 static ProjectionIndex FindOrAddColumn(LogicalGet &get, const ColumnIndex &column_index) {
 	auto &column_ids = get.GetMutableColumnIds();
 	for (idx_t column_idx = 0; column_idx < column_ids.size(); column_idx++) {
@@ -219,6 +171,69 @@ static ProjectionIndex FindOrAddColumn(LogicalGet &get, const ColumnIndex &colum
 	auto result = ProjectionIndex(column_ids.size());
 	column_ids.push_back(column_index);
 	return result;
+}
+
+static bool SupportsSourceFusion(const LogicalGet &get) {
+	// Repeated native table scans can be faster than filtered aggregates once data
+	// is hot. Keep this pass scoped to serializable table functions for now.
+	if (get.GetTable() || !get.SupportSerialization()) {
+		return false;
+	}
+	return StringUtil::CIEquals(get.function.name, "read_parquet") ||
+	       StringUtil::CIEquals(get.function.name, "parquet_scan");
+}
+
+static bool GetSourceSignature(LogicalGet &get, string &signature) {
+	if (!SupportsSourceFusion(get)) {
+		return false;
+	}
+
+	auto table_index = get.table_index;
+	auto table_filters = std::move(get.table_filters);
+	auto column_ids = std::move(get.GetMutableColumnIds());
+	auto projection_ids = std::move(get.projection_ids);
+
+	get.table_index = TableIndex(0);
+	get.table_filters = TableFilterSet();
+	get.GetMutableColumnIds().clear();
+	for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
+		get.GetMutableColumnIds().push_back(ColumnIndex(col_idx));
+	}
+	for (const auto &entry : get.virtual_columns) {
+		get.GetMutableColumnIds().push_back(ColumnIndex(entry.first));
+	}
+	get.projection_ids.clear();
+
+	MemoryStream stream(DEFAULT_BLOCK_ALLOC_SIZE);
+	BinarySerializer serializer(stream);
+	const auto offset = stream.GetPosition();
+	serializer.Begin();
+	bool success = true;
+	try {
+		get.Serialize(serializer);
+	} catch (std::exception &) {
+		success = false;
+	}
+	serializer.End();
+	if (success) {
+		signature =
+		    string(char_ptr_cast(stream.GetData() + offset), NumericCast<uint32_t>(stream.GetPosition() - offset));
+	}
+
+	get.table_index = table_index;
+	get.table_filters = std::move(table_filters);
+	get.GetMutableColumnIds() = std::move(column_ids);
+	get.projection_ids = std::move(projection_ids);
+	return success;
+}
+
+static bool SameGetSource(LogicalGet &left, LogicalGet &right) {
+	string left_signature;
+	string right_signature;
+	if (!GetSourceSignature(left, left_signature) || !GetSourceSignature(right, right_signature)) {
+		return false;
+	}
+	return left_signature == right_signature;
 }
 
 static bool IsSupportedAggregate(const Expression &expr) {
@@ -419,29 +434,10 @@ static unique_ptr<LogicalOperator> CreateFusedAggregate(Optimizer &optimizer, ve
 		return nullptr;
 	}
 
-	vector<unique_ptr<Expression>> branch_or_terms;
 	vector<vector<unique_ptr<Expression>>> branch_predicates;
-	bool add_or_guard = true;
 	branch_predicates.reserve(branches.size());
 	for (auto &branch : branches) {
-		auto predicates = GetBranchPredicates(branch);
-		if (predicates.empty()) {
-			// This branch has no branch-local predicate. A filtered aggregate would
-			// be unfiltered and an OR guard would be redundant.
-			add_or_guard = false;
-		}
-		if (add_or_guard) {
-			vector<unique_ptr<Expression>> or_term_children;
-			for (auto &predicate : predicates) {
-				or_term_children.push_back(predicate->Copy());
-			}
-			PushUniqueExpression(branch_or_terms,
-			                     MakeConjunction(ExpressionType::CONJUNCTION_AND, std::move(or_term_children)));
-		}
-		branch_predicates.push_back(std::move(predicates));
-	}
-	if (add_or_guard && !branch_or_terms.empty()) {
-		common_predicates.push_back(MakeConjunction(ExpressionType::CONJUNCTION_OR, std::move(branch_or_terms)));
+		branch_predicates.push_back(GetBranchPredicates(branch));
 	}
 
 	vector<unique_ptr<Expression>> fused_aggregates;
@@ -459,9 +455,8 @@ static unique_ptr<LogicalOperator> CreateFusedAggregate(Optimizer &optimizer, ve
 		}
 	}
 
-	auto fused_aggregate = make_uniq<LogicalAggregate>(optimizer.binder.GenerateTableIndex(),
-	                                                   optimizer.binder.GenerateTableIndex(),
-	                                                   std::move(fused_aggregates));
+	auto fused_aggregate = make_uniq<LogicalAggregate>(
+	    optimizer.binder.GenerateTableIndex(), optimizer.binder.GenerateTableIndex(), std::move(fused_aggregates));
 	fused_aggregate->SetEstimatedCardinality(1);
 	auto fused_child = StripPassthroughProjections(std::move(branches[0].filter->children[0]));
 	if (!common_predicates.empty()) {

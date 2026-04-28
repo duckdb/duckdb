@@ -169,7 +169,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// Fuse repeated scalar aggregate branches over the same input into one scan
-	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
+	RunOptimizer(OptimizerType::SCALAR_AGGREGATE_FUSION, [&]() {
 		ScalarAggregateFusion scalar_aggregate_fusion(*this);
 		plan = scalar_aggregate_fusion.Optimize(std::move(plan));
 	});

@@ -49,3 +49,40 @@ SELECT
 	END b2;
 ----
 20.000000	450.000000
+
+statement ok
+CREATE TABLE q28_sales(q INTEGER, list_price INTEGER, coupon INTEGER, wholesale INTEGER)
+
+statement ok
+INSERT INTO q28_sales VALUES
+	(1, 10, 100, 10), (2, 20, 200, 20), (7, 50, 300, 30), (8, 50, 350, 35), (20, 90, 900, 90)
+
+statement ok
+COPY q28_sales TO '{TEST_DIR}/q28_sales.parquet' (FORMAT PARQUET)
+
+statement ok
+CREATE VIEW q28_sales_view AS SELECT * FROM read_parquet('{TEST_DIR}/q28_sales.parquet')
+
+query II
+EXPLAIN SELECT *
+FROM
+	(SELECT avg(list_price) lp, count(list_price) cnt, count(DISTINCT list_price) cntd
+	 FROM q28_sales_view
+	 WHERE q BETWEEN 0 AND 5 AND (list_price BETWEEN 10 AND 20 OR coupon BETWEEN 100 AND 200)) b1,
+	(SELECT avg(list_price) lp, count(list_price) cnt, count(DISTINCT list_price) cntd
+	 FROM q28_sales_view
+	 WHERE q BETWEEN 6 AND 10 AND (list_price BETWEEN 50 AND 60 OR wholesale BETWEEN 30 AND 40)) b2;
+----
+logical_opt	<REGEX>:[\s\S]*AGGREGATE[\s\S]*count\(DISTINCT list_price\)[\s\S]*FILTER[\s\S]*READ_PARQUET.*
+
+query RIRRIR
+SELECT *
+FROM
+	(SELECT avg(list_price) lp, count(list_price) cnt, count(DISTINCT list_price) cntd
+	 FROM q28_sales_view
+	 WHERE q BETWEEN 0 AND 5 AND (list_price BETWEEN 10 AND 20 OR coupon BETWEEN 100 AND 200)) b1,
+	(SELECT avg(list_price) lp, count(list_price) cnt, count(DISTINCT list_price) cntd
+	 FROM q28_sales_view
+	 WHERE q BETWEEN 6 AND 10 AND (list_price BETWEEN 50 AND 60 OR wholesale BETWEEN 30 AND 40)) b2;
+----
+15.000000	2	2	50.000000	2	1

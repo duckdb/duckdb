@@ -92,6 +92,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::OPTIMIZER_ROW_GROUP_PRUNER:
 	case MetricType::OPTIMIZER_ROW_NUMBER_REWRITER:
 	case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
+	case MetricType::OPTIMIZER_SCALAR_AGGREGATE_FUSION:
 	case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
 	case MetricType::OPTIMIZER_TOP_N:
 	case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
@@ -180,6 +181,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::OPTIMIZER_ROW_GROUP_PRUNER:
 	case MetricType::OPTIMIZER_ROW_NUMBER_REWRITER:
 	case MetricType::OPTIMIZER_SAMPLING_PUSHDOWN:
+	case MetricType::OPTIMIZER_SCALAR_AGGREGATE_FUSION:
 	case MetricType::OPTIMIZER_STATISTICS_PROPAGATION:
 	case MetricType::OPTIMIZER_TOP_N:
 	case MetricType::OPTIMIZER_TOP_N_WINDOW_ELIMINATION:
