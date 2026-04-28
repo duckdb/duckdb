@@ -549,6 +549,17 @@ struct DebugVerifyStatementSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugVerifyStatsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_stats";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify statistics are correct during execution, instead of assuming";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyVectorSetting {
 	using RETURN_TYPE = DebugVectorVerification;
 	static constexpr const char *Name = "debug_verify_vector";
