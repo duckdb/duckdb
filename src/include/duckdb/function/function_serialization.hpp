@@ -143,45 +143,130 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
+	static pair<FUNC, unique_ptr<FunctionData>> NewDeserialize(Deserializer &deserializer, CatalogType catalog_type,
+	                                                           vector<unique_ptr<Expression>> &children,
+	                                                           LogicalType return_type) { // NOLINT: clang-tidy bug
+		auto &context = deserializer.Get<ClientContext &>();
+
+		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
+		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
+
+		if (catalog_name.empty()) {
+			catalog_name = SYSTEM_CATALOG;
+		}
+		if (schema_name.empty()) {
+			schema_name = DEFAULT_SCHEMA;
+		}
+
+		if (arguments.empty() && original_arguments.empty() && !children.empty()) {
+			// The function is specified as having no arguments, but somehow expressions were passed anyway
+			// Assume this is a "varargs" function and use the types of the expressions as the arguments
+			// This can happen when we change a function that used to take varargs, to no longer do so.
+			arguments.reserve(children.size());
+			for (auto &child : children) {
+				arguments.push_back(child->return_type);
+			}
+		}
+
+		// Now lookup the function in the catalog.
+		EntryLookupInfo lookup_info(catalog_type, name);
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
+
+		if (func_catalog.type != catalog_type) {
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
+		}
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
+		const auto function = functions.functions.GetFunctionByArguments(
+		    context, original_arguments.empty() ? arguments : original_arguments);
+
+		// Does this function support serializing its bound data?
+		if (!has_serialize) {
+			// No, then just rebind the function
+			try {
+				FunctionBinder binder(context);
+				FUNC bound_function(function);
+
+				auto bound_data = binder.ResolveFunction(bound_function, children);
+
+				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
+					bound_function.SetReturnType(std::move(return_type));
+				}
+
+				return make_pair(std::move(bound_function), std::move(bound_data));
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				throw SerializationException("Error during bind of function in deserialization: %s",
+				                             error.RawMessage());
+			}
+		}
+
+		// Otherwise, construct the bound function from its parts
+		FUNC bound_function(function);
+		bound_function.GetArguments() = std::move(arguments);
+		bound_function.GetOriginalArguments() = std::move(original_arguments);
+
+		// Invoke deserialization function
+		deserializer.Set<const LogicalType &>(return_type);
+		auto bound_data = FunctionDeserialize(deserializer, bound_function);
+		deserializer.Unset<LogicalType>();
+
+		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
+			bound_function.SetReturnType(std::move(return_type));
+		}
+
+		return make_pair(std::move(bound_function), std::move(bound_data));
+	}
+
+	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
 	                                                        vector<unique_ptr<Expression>> &children,
-	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
-		auto &context = deserializer.Get<ClientContext &>();
-		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
-		auto &function = entry.first;
-		auto has_serialize = entry.second;
+	                                                        LogicalType return_type) {
+		// NOLINT: clang-tidy bug
 
-		unique_ptr<FunctionData> bind_data;
-		if (has_serialize) {
-			deserializer.Set<const LogicalType &>(return_type);
-			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
-			deserializer.Unset<LogicalType>();
+		if constexpr (std::is_same_v<FUNC, BoundScalarFunction>) {
+			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
 		} else {
-			FunctionBinder binder(context);
+			auto &context = deserializer.Get<ClientContext &>();
+			auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
+			auto &function = entry.first;
+			auto has_serialize = entry.second;
 
-			// Resolve templates
-			binder.ResolveTemplateTypes(function, children);
+			unique_ptr<FunctionData> bind_data;
+			if (has_serialize) {
+				deserializer.Set<const LogicalType &>(return_type);
+				bind_data = FunctionDeserialize<FUNC>(deserializer, function);
+				deserializer.Unset<LogicalType>();
+			} else {
+				FunctionBinder binder(context);
 
-			if (function.HasBindCallback()) {
-				try {
-					bind_data = function.Bind(context, children);
-				} catch (std::exception &ex) {
-					ErrorData error(ex);
-					throw SerializationException("Error during bind of function in deserialization: %s",
-					                             error.RawMessage());
+				// Resolve templates
+				binder.ResolveTemplateTypes(function, children);
+
+				if (function.HasBindCallback()) {
+					try {
+						bind_data = function.Bind(context, children);
+					} catch (std::exception &ex) {
+						ErrorData error(ex);
+						throw SerializationException("Error during bind of function in deserialization: %s",
+						                             error.RawMessage());
+					}
 				}
+
+				// Verify that all templates are bound to concrete types.
+				binder.CheckTemplateTypesResolved(function);
+
+				binder.CastToFunctionArguments(function, children);
 			}
 
-			// Verify that all templates are bound to concrete types.
-			binder.CheckTemplateTypesResolved(function);
-
-			binder.CastToFunctionArguments(function, children);
+			if (TypeRequiresAssignment(function.GetReturnType())) {
+				function.SetReturnType(std::move(return_type));
+			}
+			return make_pair(std::move(function), std::move(bind_data));
 		}
-
-		if (TypeRequiresAssignment(function.GetReturnType())) {
-			function.SetReturnType(std::move(return_type));
-		}
-		return make_pair(std::move(function), std::move(bind_data));
 	}
 };
 

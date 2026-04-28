@@ -305,16 +305,12 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	}
 	if (is_selected && child_map.default_value) {
 		// we have default values at a previous level wrap it in a "list"
-		child_list_t<LogicalType> default_type_list;
-		default_type_list.emplace_back("list", child_map.default_value->return_type);
 		vector<unique_ptr<Expression>> default_expressions;
 		child_map.default_value->alias = "list";
 		default_expressions.push_back(std::move(child_map.default_value));
-		auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		auto struct_pack_fun = StructPackFun::GetFunction();
-		auto bind_data = make_uniq<VariableReturnBindData>(default_type);
-		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
-		                                                          std::move(default_expressions), std::move(bind_data));
+
+		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
+		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
@@ -418,15 +414,7 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 	}
 	if (!default_expressions.empty()) {
 		// we have default values at a previous level wrap it in a "list"
-		child_list_t<LogicalType> default_type_list;
-		for (auto &expr : default_expressions) {
-			default_type_list.emplace_back(expr->GetAlias(), expr->return_type);
-		}
-		auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		auto struct_pack_fun = StructPackFun::GetFunction();
-		auto bind_data = make_uniq<VariableReturnBindData>(default_type);
-		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
-		                                                          std::move(default_expressions), std::move(bind_data));
+		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
 	}
 	vector<ColumnIndex> map_indexes;
 	map_indexes.emplace_back(0, std::move(child_indexes));
@@ -511,16 +499,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 	}
 
 	if (!default_expressions.empty()) {
-		// we have default values at this level - construct the struct pack
-		child_list_t<LogicalType> default_type_list;
-		for (auto &expr : default_expressions) {
-			default_type_list.emplace_back(expr->GetAlias(), expr->return_type);
-		}
-		auto default_type = LogicalType::STRUCT(std::move(default_type_list));
-		auto struct_pack_fun = StructPackFun::GetFunction();
-		auto bind_data = make_uniq<VariableReturnBindData>(default_type);
-		result.default_value = make_uniq<BoundFunctionExpression>(std::move(default_type), std::move(struct_pack_fun),
-		                                                          std::move(default_expressions), std::move(bind_data));
+		result.default_value = StructPackFun::GetFunction().Bind(context, std::move(default_expressions));
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	result.mapping = std::move(mapping);
@@ -599,12 +578,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
 	} else {
 		children.push_back(std::move(mapping.default_value));
 	}
-	auto remap_fun = RemapStructFun::GetFunction();
-	auto bind_data = remap_fun.Bind(context, children);
-	;
-	children[0] = BoundCastExpression::AddCastToType(context, std::move(children[0]), remap_fun.GetArguments()[0]);
-	return make_uniq<BoundFunctionExpression>(global_column.type, std::move(remap_fun), std::move(children),
-	                                          std::move(bind_data));
+	return RemapStructFun::GetFunction().Bind(context, std::move(children));
 }
 
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {

@@ -61,7 +61,7 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunction &bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
@@ -86,6 +86,14 @@ public:
 
 	void ResolveTemplateTypes(SimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
 	void CheckTemplateTypesResolved(const SimpleFunction &bound_function);
+
+	unique_ptr<FunctionData> ResolveFunction(BoundScalarFunction &bound_function,
+	                                         vector<unique_ptr<Expression>> &children);
+
+	// unique_ptr<FunctionData> ResolveFunction(BoundAggregateFunction &bound_function,
+	//					 vector<unique_ptr<Expression>> &children);
+	// unique_ptr<FunctionData> ResolveFunction(BoundWindowFunction &bound_function,
+	//					 vector<unique_ptr<Expression>> &children);
 
 private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);

@@ -705,16 +705,19 @@ void FunctionBinder::CheckTemplateTypesResolved(const SimpleFunction &bound_func
 	VerifyTemplateType(bound_function.GetReturnType(), bound_function.name);
 }
 
-unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
-                                                          vector<unique_ptr<Expression>> children, bool is_operator,
-                                                          optional_ptr<Binder> binder) {
+// TODO: Take a normal ScalarFunction here?
+unique_ptr<FunctionData> FunctionBinder::ResolveFunction(BoundScalarFunction &bound_function,
+                                                         vector<unique_ptr<Expression>> &children) {
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(bound_function, children);
+
+	// ResolveTemplateTypes(bound_function.arguments, bound_function.return_type, children, bound_function);
 
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.Bind(context, children, binder);
+		BindScalarFunctionInput input(context, bound_function, children, binder);
+		bind_info = bound_function.GetBindCallback()(input);
 	}
 
 	// After the "bind" callback, we verify that all template types are bound to concrete types.
@@ -725,24 +728,38 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 		FunctionModifiedDatabasesInput input(bind_info, properties);
 		bound_function.GetModifiedDatabasesCallback()(context, input);
 	}
-
 	HandleCollations(context, bound_function, children);
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	auto return_type = bound_function.GetReturnType();
+	return bind_info;
+}
+
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &function,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
+	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
+	BoundScalarFunction bound_function(function);
+
+	auto bind_info = ResolveFunction(bound_function, children);
+
 	unique_ptr<Expression> result;
-	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function),
+
+	auto result_func = make_uniq<BoundFunctionExpression>(bound_function.GetReturnType(), std::move(bound_function),
 	                                                      std::move(children), std::move(bind_info), is_operator);
+
 	if (result_func->function.HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
-		FunctionBindExpressionInput input(context, result_func->bind_info.get(), result_func->children);
+		FunctionBindExpressionInput input(context, result_func->function, result_func->bind_info.get(),
+		                                  result_func->children);
 		result = result_func->function.GetBindExpressionCallback()(input);
 	}
+
 	if (!result) {
 		result = std::move(result_func);
 	}
+
 	return result;
 }
 

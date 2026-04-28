@@ -80,4 +80,15 @@ void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vecto
 	result.Reference(input.data[0]);
 }
 
+unique_ptr<BoundFunctionExpression>
+ScalarFunction::Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments, optional_ptr<Binder> binder) {
+	FunctionBinder func_binder(context);
+	auto expr = func_binder.BindScalarFunction(*this, std::move(arguments), binder);
+
+	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+		throw InvalidInputException("BindScalarFunction did not return a BoundFunctionExpression");
+	}
+
+	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
+}
 } // namespace duckdb
