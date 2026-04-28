@@ -1337,6 +1337,18 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
 
+    - name: test/configs/verify_statement_explain.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_explain.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_prepare.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
+
     - name: test/configs/verify_stats.json
       if: success() || failure()
       shell: bash

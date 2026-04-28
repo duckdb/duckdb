@@ -17,7 +17,8 @@ enum class DebugStatementVerification : uint8_t {
 	COPY_STATEMENT,
 	REPARSE_STATEMENT,
 	SERIALIZE_STATEMENT,
-	PREPARED_STATEMENT
+	PREPARED_STATEMENT,
+	EXPLAIN_STATEMENT
 };
 
 } // namespace duckdb
