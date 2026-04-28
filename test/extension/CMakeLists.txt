@@ -17,16 +17,6 @@ build_loadable_extension_directory(
 #  ""
 #  ${PARAMETERS}
 #  loadable_extension_demo_alt.cpp)
-#
-#set_target_properties(loadable_extension_demo_loadable_extension PROPERTIES
-#        OUTPUT_NAME "loadable_extension_demo"
-#        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test/extension/copy
-#)
-#
-#set_target_properties(loadable_extension_demo_copy_loadable_extension PROPERTIES
-#        OUTPUT_NAME "loadable_extension_demo"
-#        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test/extension/copy
-#)
 
 if(NOT WIN32 AND NOT SUN)
   add_definitions(-DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")

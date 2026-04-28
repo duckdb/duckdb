@@ -9,6 +9,7 @@ CopyFunctionCatalogEntry::CopyFunctionCatalogEntry(Catalog &catalog, SchemaCatal
                                                    CreateCopyFunctionInfo &info)
     : StandardEntry(CatalogType::COPY_FUNCTION_ENTRY, schema, catalog, info.name), function(info.function) {
 	this->extension_name = info.extension_name;
+	this->extension_alias = info.extension_alias;
 }
 
 } // namespace duckdb

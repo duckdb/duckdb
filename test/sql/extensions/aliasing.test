@@ -36,6 +36,18 @@ SELECT copy.loadable_extension_second_demo()
 ----
 Hello from the second loadable_extension_demo binary!
 
+# check if names are not mingled
+statement error
+SELECT xxx.bounded_max(1::BOUNDED(10))
+----
+Referenced column "xxx" was not found because the FROM clause is missing
+
+# check if names are not mingled
+statement error
+SELECT copy.bounded_max(1::BOUNDED(10))
+----
+some error
+
 # the original alias still routes to its own binary's function
 query I
 SELECT demo.bounded_max(1::BOUNDED(10))

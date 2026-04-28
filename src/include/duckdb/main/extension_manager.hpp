@@ -19,6 +19,8 @@ class ExtensionInfo {
 public:
 	ExtensionInfo();
 
+	string alias;
+	string path;
 	mutex lock;
 	atomic<bool> is_loaded;
 	unique_ptr<ExtensionInstallInfo> install_info;
@@ -65,7 +67,7 @@ public:
 private:
 	DatabaseInstance &db;
 	mutex lock;
-	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	unordered_map<string, vector<unique_ptr<ExtensionInfo>>> loaded_extensions_info;
 	unordered_map<string, string> external_aliases;
 };
 

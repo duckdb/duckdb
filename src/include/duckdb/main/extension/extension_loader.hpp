@@ -112,6 +112,7 @@ private:
 private:
 	DatabaseInstance &db;
 	string extension_name;
+	string extension_alias;
 	string extension_description;
 	optional_ptr<ExtensionInfo> extension_info;
 };

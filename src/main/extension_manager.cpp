@@ -46,11 +46,19 @@ optional_ptr<ExtensionInfo> ExtensionManager::GetExtensionInfo(const string &nam
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 
 	lock_guard<mutex> guard(lock);
-	auto entry = loaded_extensions_info.find(extension_name);
-	if (entry == loaded_extensions_info.end()) {
+	auto entries = loaded_extensions_info.find(extension_name);
+	if (entries == loaded_extensions_info.end()) {
 		return nullptr;
 	}
-	return entry->second.get();
+
+	if (entries->second.size() > 1) {
+		// multiple extensions with the same
+		// TODO; somehow get alias?
+		throw InvalidInputException("Multiple extension binaries with the same name '%s' found", extension_name);
+	}
+
+	// only one entry
+	return entries->second.front().get();
 }
 
 vector<string> ExtensionManager::GetExtensions() {
@@ -74,6 +82,7 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 void ExtensionManager::AddExternalExtensionAliasInternal(const string &alias, const string &extension_name) {
 	// check if alias already there
 	auto opt_extension_name = external_aliases.find(alias);
+
 	if (opt_extension_name != external_aliases.end()) {
 		throw InvalidInputException("Alias '%s' already exists for extension '%s' ", alias, opt_extension_name->second);
 	}
@@ -95,6 +104,10 @@ string ExtensionManager::GetExternalExtensionName(const string &alias) {
 	return entry->second;
 }
 
+// bool ExtensionManager::GetExtensionEntry() {
+//
+// }
+
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {
 
 	if (!options.alias.empty()) {
@@ -104,35 +117,59 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 		}
 	}
 
-	auto extension_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	string path;
+	if (ExtensionHelper::IsFullPath(options.extension_name)) {
+		path = options.extension_name;
+	}
 
+	auto extension_name = ExtensionHelper::GetExtensionName(options.extension_name);
 	unique_lock<mutex> extension_list_lock(lock);
 
 	optional_ptr<ExtensionInfo> info;
 	auto entry = loaded_extensions_info.find(extension_name);
-
-
-	// but what if we find an extension with the same name?
-	// we can load an extension with the same name, but then alias needs  to be different.
-	// then we do nothing!
-
-	// what if we have an extension with the same name, but different binary? Necessary...
-
 	if (entry == loaded_extensions_info.end()) {
 		// we don't have an entry yet - create one
 		auto extension_info = make_uniq<ExtensionInfo>();
-		info = extension_info.get();
-		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
-	} else {
-		// we already have an entry
-		if (entry->second->is_loaded) {
-			// we already have obtained the lock
-			AddExternalExtensionAliasInternal(options.alias, extension_name);
-			// and it is loaded! we are done
-			return nullptr;
+
+		// set the full installation path
+		if (!path.empty()) {
+			extension_info->path = path;
 		}
-		// it is not loaded yet - try to load it
-		info = entry->second.get();
+
+		info = extension_info.get();
+		// create a vector which can hold multiple ExtensionInfo
+		vector<unique_ptr<ExtensionInfo>> extensions;
+		extensions.push_back(std::move(extension_info));
+		loaded_extensions_info.emplace(extension_name, std::move(extensions));
+	} else {
+		// we already have one or multiple entries
+		for (auto &extension_info_entry : entry->second) {
+			// TODO, if path empty && extension_info->path
+			if (extension_info_entry->path != path) {
+				// if paths are not coinciding,
+				continue;
+			}
+			if (extension_info_entry->is_loaded){
+				AddExternalExtensionAliasInternal(options.alias, extension_name);
+				// and it is loaded! we are done
+				return nullptr;
+			}
+			// it is not loaded yet - try to load it
+			info = extension_info_entry.get();
+		}
+
+		// we don't have an entry yet - create one
+		auto extension_info = make_uniq<ExtensionInfo>();
+
+		// set the full installation path
+		if (!path.empty()) {
+			extension_info->path = path;
+		}
+
+		// add to vector!
+		info = extension_info.get();
+		entry->second.push_back(std::move(extension_info));
+		//AddExternalExtensionAliasInternal(options.alias, extension_name);
 	}
 	extension_list_lock.unlock();
 
@@ -143,7 +180,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
 	if (info->is_loaded) {
-		AddExternalExtensionAliasInternal(options.alias, extension_name);
+		//AddExternalExtensionAliasInternal(options.alias, extension_name);
 		return nullptr;
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {

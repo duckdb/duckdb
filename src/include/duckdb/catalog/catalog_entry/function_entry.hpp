@@ -23,6 +23,7 @@ public:
 		this->dependencies = info.dependencies;
 		this->internal = info.internal;
 		this->extension_name = info.extension_name;
+		this->extension_alias = info.extension_alias;
 	}
 
 	string alias_of;

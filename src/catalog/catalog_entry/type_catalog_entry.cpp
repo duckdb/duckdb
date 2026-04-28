@@ -17,6 +17,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	this->temporary = info.temporary;
 	this->internal = info.internal;
 	this->extension_name = info.extension_name;
+	this->extension_alias = info.extension_alias;
 	this->dependencies = info.dependencies;
 	this->comment = info.comment;
 	this->tags = info.tags;
