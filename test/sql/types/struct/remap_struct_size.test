@@ -1,4 +1,4 @@
-# name: test/sql/types/struct/remap_struct.test
+# name: test/sql/types/struct/remap_struct_size.test
 # description: remap_struct must produce a correct LIST<STRUCT>
 # group: [struct]
 
