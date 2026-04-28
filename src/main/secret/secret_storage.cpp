@@ -1,16 +1,9 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/local_file_system.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/function/function_set.hpp"
-#include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/secret/secret_storage.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
-#include "duckdb/parser/parsed_data/create_secret_info.hpp"
-#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/main/secret/secret_storage.hpp"
 
 namespace duckdb {
 
@@ -137,7 +130,7 @@ LocalFileSecretStorage::LocalFileSecretStorage(SecretManager &manager, DatabaseI
 	persistent = true;
 
 	// Check existence of persistent secret dir
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetFileSystem(db);
 	if (fs.DirectoryExists(secret_path)) {
 		fs.ListFiles(secret_path, [&](const string &fname, bool is_dir) {
 			string full_path = fs.JoinPath(secret_path, fname);
@@ -186,7 +179,7 @@ static void WriteSecretFileToDisk(FileSystem &fs, const string &path, const Base
 }
 
 void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConflict on_conflict) {
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetFileSystem(db);
 
 	// We may need to create the secret dir here if the directory was not present during LocalFileSecretStorage
 	// construction
@@ -230,7 +223,7 @@ void LocalFileSecretStorage::WriteSecret(const BaseSecret &secret, OnCreateConfl
 }
 
 void LocalFileSecretStorage::RemoveSecret(const string &secret, OnEntryNotFound on_entry_not_found) {
-	LocalFileSystem fs;
+	auto &fs = FileSystem::GetFileSystem(db);
 	string file = fs.JoinPath(secret_path, secret + ".duckdb_secret");
 	persistent_secrets.erase(secret);
 	try {

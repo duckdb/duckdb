@@ -443,7 +443,7 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 }
 
 static bool IsHTTP(const string &path) {
-	return StringUtil::StartsWith(path, "http://") || !StringUtil::StartsWith(path, "https://");
+	return StringUtil::StartsWith(path, "http://") || StringUtil::StartsWith(path, "https://");
 }
 
 static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string &local_extension_path,
@@ -514,6 +514,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
 		LocalFileSystem local_fs;
+		auto &fs = FileSystem::GetFileSystem(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
