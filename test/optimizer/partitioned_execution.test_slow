@@ -109,7 +109,7 @@ FROM cte;
 ----
 logical_opt	<REGEX>:.*UNION.*
 
-query II nosort h
+query I nosort h
 WITH cte AS (
     FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
 )
@@ -167,7 +167,7 @@ FROM cte;
 
 
 # make sure the order is correct for the order by stuff with the order-preserving hash
-query II nosort asc_h
+query I nosort asc_h
 WITH cte AS (
     FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
 )

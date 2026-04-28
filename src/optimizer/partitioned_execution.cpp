@@ -165,7 +165,8 @@ static bool PartitionedExecutionCanUseStats(const unique_ptr<BaseStatistics> &st
 	case StatisticsType::NUMERIC_STATS:
 		return NumericStats::HasMinMax(*stats);
 	case StatisticsType::STRING_STATS:
-		return true;
+		// Let's not mess with BLOB for now
+		return stats->GetType() == LogicalType::VARCHAR;
 	default:
 		return false; // Only numeric/string supported for now
 	}
@@ -343,15 +344,14 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 
 			// Grow partition until "partition_count" is at least "min_partition_count"
 			PartitionedExecutionGrowPartition(
-			    column_stats_nodes[0], i, current_overlap, partition_count, partition_overlap_ratio,
+			    stats_nodes, i, current_overlap, partition_count, partition_overlap_ratio,
 			    [&partition_count, &min_partition_count] { return partition_count >= min_partition_count; });
 
 			// Grow partition until "partition_overlap" is less than the allowed maximum
-			PartitionedExecutionGrowPartition(column_stats_nodes[0], i, current_overlap, partition_count,
-			                                  partition_overlap_ratio, [&partition_overlap_ratio] {
-				                                  return partition_overlap_ratio <=
-				                                         PartitionedExecutionConfig::MAX_OVERLAP_RATIO;
-			                                  });
+			PartitionedExecutionGrowPartition(
+			    stats_nodes, i, current_overlap, partition_count, partition_overlap_ratio, [&partition_overlap_ratio] {
+				    return partition_overlap_ratio <= PartitionedExecutionConfig::MAX_OVERLAP_RATIO;
+			    });
 
 			if (partition_overlap_ratio != 0) {
 				// Temp variables for looking ahead
@@ -367,8 +367,8 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 				// Look ahead for at most half of "min_partition_count" to see if there's a point with less overlap
 				const auto end = partition_count + min_partition_count / 2;
 				PartitionedExecutionGrowPartition(
-				    column_stats_nodes[0], temp_i, temp_current_overlap, temp_partition_count,
-				    temp_partition_overlap_ratio, [&temp_partition_count, &end] { return temp_partition_count >= end; },
+				    stats_nodes, temp_i, temp_current_overlap, temp_partition_count, temp_partition_overlap_ratio,
+				    [&temp_partition_count, &end] { return temp_partition_count >= end; },
 				    [&temp_i, &temp_partition_overlap_ratio, &lowest_overlap_ratio, &lowest_i] {
 					    if (temp_partition_overlap_ratio < lowest_overlap_ratio) {
 						    lowest_overlap_ratio = temp_partition_overlap_ratio;
@@ -378,23 +378,23 @@ PartitionedExecutionComputeRanges(LogicalOperator &op, vector<PartitionedExecuti
 
 				// Actually grow if it's a success
 				if (lowest_i != i) {
-					PartitionedExecutionGrowPartition(column_stats_nodes[0], i, current_overlap, partition_count,
+					PartitionedExecutionGrowPartition(stats_nodes, i, current_overlap, partition_count,
 					                                  partition_overlap_ratio,
 					                                  [&i, &lowest_i] { return i == lowest_i; });
 				}
 
 				// Grow until the delta is non-negative
 				if (partition_overlap_ratio != 0) {
-					PartitionedExecutionGrowPartition(column_stats_nodes[0], i, current_overlap, partition_count,
+					PartitionedExecutionGrowPartition(stats_nodes, i, current_overlap, partition_count,
 					                                  partition_overlap_ratio,
-					                                  [&] { return column_stats_nodes[0][i].count_delta > 0; });
+					                                  [&] { return stats_nodes[i].count_delta > 0; });
 				}
 			}
 
 			// Finally, Grow if we would otherwise leave a remainder that is less than half of
 			// min_row_groups_per_partition
 			if (stats_nodes.size() - i < min_row_groups_per_partition / 2) {
-				PartitionedExecutionGrowPartition(column_stats_nodes[0], i, current_overlap, partition_count,
+				PartitionedExecutionGrowPartition(stats_nodes, i, current_overlap, partition_count,
 				                                  partition_overlap_ratio, [] { return false; });
 			}
 
