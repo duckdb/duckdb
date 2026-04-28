@@ -142,12 +142,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
 	// Aggressive query verification
 
-#ifdef DUCKDB_RUN_SLOW_VERIFIERS
-	bool run_slow_verifiers = true;
-#else
-	bool run_slow_verifiers = false;
-#endif
-
 	auto parameters = query_parameters.parameters;
 	query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	query_parameters.query_parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
@@ -166,25 +160,10 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// Base Statement verifiers: these are the verifiers we enable for regular builds
 	if (config.query_verification_enabled) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt, parameters));
-		statement_verifiers.emplace_back(
-		    StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt, parameters));
-
 		// FIXME: Prepared parameter verifier is broken for queries with parameters
 		if (!parameters || parameters->empty()) {
 			prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt, parameters);
 		}
-	}
-
-	// This verifier is enabled explicitly OR by enabling run_slow_verifiers
-	if (config.verify_fetch_row || (run_slow_verifiers && config.query_verification_enabled)) {
-		statement_verifiers.emplace_back(
-		    StatementVerifier::Create(VerificationType::FETCH_ROW_AS_SCAN, stmt, parameters));
-	}
-
-	// Verify external always needs to be explicitly enabled and is never part of default verifier set
-	if (config.verify_external) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt, parameters));
 	}
 
 	auto original = make_uniq<StatementVerifier>(std::move(statement), parameters);
@@ -199,7 +178,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	// Save settings
 	bool optimizer_enabled = config.enable_optimizer;
 	bool profiling_is_enabled = config.enable_profiler;
-	bool force_external = config.force_external;
 
 	// Disable profiling if it is enabled
 	if (profiling_is_enabled) {
@@ -248,7 +226,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// Restore config setting
 	config.enable_optimizer = optimizer_enabled;
-	config.force_external = force_external;
 
 	// Check explain, only if q does not already contain EXPLAIN
 	if (original->materialized_result->success) {

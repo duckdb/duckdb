@@ -473,6 +473,16 @@ struct DebugCheckpointSleepMsSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugDisableOptimizerSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_disable_optimizer";
+	static constexpr const char *Description = "DEBUG SETTING: disable optimizer for most queries";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugEvictionQueueSleepMicroSecondsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_eviction_queue_sleep_micro_seconds";
@@ -490,9 +500,19 @@ struct DebugForceExternalSetting {
 	static constexpr const char *Description =
 	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
+struct DebugForceFetchRowSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_fetch_row";
+	static constexpr const char *Description = "DEBUG SETTING: force per-row fetching during scans, used for testing";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugForceNoCrossProductSetting {
@@ -738,9 +758,9 @@ struct EnableCachingOperatorsSetting {
 	static constexpr const char *Name = "enable_caching_operators";
 	static constexpr const char *Description = "Enables caching operators that cache intermediate results";
 	static constexpr const char *InputType = "BOOLEAN";
-	static void SetLocal(ClientContext &context, const Value &parameter);
-	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(const ClientContext &context);
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct EnableExternalAccessSetting {

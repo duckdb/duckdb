@@ -302,7 +302,7 @@ public:
 			}
 		}
 		// For external hash join
-		external = ClientConfig::GetConfig(context).force_external;
+		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
 		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);

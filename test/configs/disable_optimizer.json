@@ -1,0 +1,125 @@
+{
+  "description": "Run with PRAGMA disable_optimizer.",
+  "on_init": "SET debug_disable_optimizer=true;",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Unoptimized statement differs from original result (cross product, conversion, overflow, statistics).",
+      "paths": [
+        "test/fuzzer/duckfuzz/semi_join_has_correct_left_right_relations.test",
+        "test/fuzzer/pedro/force_no_cross_product.test",
+        "test/fuzzer/pedro/strptime_null_argument.test",
+        "test/fuzzer/sqlsmith/bitstring_agg_overflow.test",
+        "test/issues/rigger/overflow_filter_pushdown.test",
+        "test/sql/aggregate/aggregates/test_bitstring_agg.test",
+        "test/sql/catalog/function/test_table_macro_complex.test",
+        "test/sql/copy/parquet/parquet_filename_filter.test",
+        "test/sql/copy/parquet/parquet_hive.test",
+        "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/join/asof/test_asof_limit.test",
+        "test/sql/optimizer/test_in_rewrite_rule.test",
+        "test/sql/storage/compression/rle/rle_constant.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_shred.test",
+        "test/sql/types/geo/geometry_shred_types.test",
+        "test/sql/types/geo/geometry_shred_empty.test",
+        "test/sql/types/geo/geometry_shred_limit.test",
+        "test/sql/types/geo/geometry_shred_checkpoint.test",
+        "test/sql/window/test_window_constant_allocator.test",
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/copy/parquet/parquet_glob_cache.test"
+      ]
+    },
+    {
+      "reason": "Time-out without optimizer.",
+      "paths": [
+        "test/optimizer/join_dependent_filter.test",
+        "test/optimizer/joins/no_duplicate_elimination_join.test",
+        "test/optimizer/joins/tpcds_nofail.test",
+        "test/sql/limit/test_limit0.test",
+        "test/sql/optimizer/plan/test_filter_pushdown_large.test"
+      ]
+    },
+    {
+      "reason": "Runs too long in release mode.",
+      "paths": [
+        "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
+        "test/sql/sample/reservoir_testing_percentage.test",
+        "test/sql/window/test_constant_orderby.test"
+      ]
+    },
+    {
+      "reason": "Recursive CTE relies on short-circuiting optimization.",
+      "paths": [
+        "test/sql/cte/test_recursive_cte_union.test",
+        "test/sql/cte/test_recursive_cte_union_all.test",
+        "test/sql/cte/test_recursive_cte_tutorial.test"
+      ]
+    },
+    {
+      "reason": "References explicit optimizer logging.",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_optimizer_settings.test",
+        "test/sql/transactions/concurrent_drop_table.test",
+        "test/sql/index/art/scan/test_art_prepared_scan.test",
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test"
+      ]
+    },
+    {
+      "reason": "Tests extension optimizer.",
+      "paths": [
+        "test/extension/test_extensible_filter.test"
+      ]
+    },
+    {
+      "reason": "Statistics are not set without optimizers.",
+      "paths": [
+        "test/optimizer/statistics/statistics_numeric.test",
+        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
+        "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
+        "test/parquet/parquet_stats_function.test",
+        "test/parquet/issue_22144.test",
+        "test/sql/types/struct/struct_stats.test",
+        "test/sql/types/list/list_stats.test",
+        "test/sql/types/nested/array/array_statistics.test",
+        "test/sql/vacuum/test_analyze.test",
+        "test/sql/function/date/date_part_stats.test",
+        "test/sql/function/date/test_date_trunc.test",
+        "test/sql/function/time/test_extract_stats.test",
+        "test/sql/function/generic/test_stats.test",
+        "test/sql/function/timetz/test_date_part.test",
+        "test/sql/storage/types/variant/variant_extract_stats.test",
+        "test/sql/alter/alter_type/test_alter_type.test",
+        "test/sql/alter/add_col/test_add_col_stats.test",
+        "test/sql/copy/return_stats.test",
+        "test/sql/copy/parquet/parquet_stats.test",
+        "test/sql/copy/parquet/writer/parquet_write_decimals.test",
+        "test/sql/copy/parquet/shredded_variant_stats.test",
+        "test/sql/copy/parquet/corrupt_stats.test",
+        "test/sql/copy/parquet/parquet_row_number.test"
+      ]
+    },
+    {
+      "reason": "Error mismatch.",
+      "paths": [
+        "test/sql/types/time/test_time_ns.test"
+      ]
+    },
+    {
+      "reason": "FIXME: crash.",
+      "paths": [
+        "test/sql/join/asof/test_asof_join_filter_pushdown.test"
+        ]
+    },
+    {
+      "reason": "FIXME: binding bug.",
+      "paths": [
+        "test/sql/merge/merge_into_invalid_column_reference.test",
+        "test/sql/merge/merge_into_by_source.test",
+        "test/sql/subquery/scalar/test_complex_correlated_subquery.test",
+        "test/sql/join/natural/natural_join.test"
+        ]
+    }
+  ]
+}
