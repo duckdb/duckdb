@@ -47,7 +47,7 @@ index 5456a8b..de3d79d 100644
  	FunctionBuilder::RegisterAggregate(loader, "ST_Extent_Agg", [&](AggregateFunctionBuilder &func) {
  		func.SetFunction(agg);
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index ec69387..1a3a2ae 100644
+index 8f7ed76..e3bc335 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
 @@ -302,7 +302,7 @@ struct ST_Transform {

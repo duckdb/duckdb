@@ -393,7 +393,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	auto asof_end = LeadFun::GetTypedFunction(asof_type, 3).Bind(context, std::move(children));
 
-	D_ASSERT(asof_end->return_type == asof_type);
+	D_ASSERT(asof_end->GetReturnType() == asof_type);
 
 	asof_end->partitions = std::move(partitions);
 	asof_end->orders = std::move(orders);

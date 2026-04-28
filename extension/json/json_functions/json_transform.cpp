@@ -86,7 +86,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 		throw BinderException("JSON structure must be a constant!");
 	}
 	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
+	if (structure_val.IsNull() || arguments[1]->GetReturnType() == LogicalTypeId::SQLNULL) {
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {
 		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {

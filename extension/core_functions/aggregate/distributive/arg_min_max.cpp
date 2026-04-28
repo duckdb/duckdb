@@ -402,7 +402,7 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetArguments() = {type, by_type};
-	function.return_type = type;
+	function.SetReturnType(type);
 	return function;
 #endif
 }
@@ -463,7 +463,7 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
 	function.GetArguments() = {type, by_type};
-	function.return_type = type;
+	function.SetReturnType(type);
 #endif
 	return function;
 }

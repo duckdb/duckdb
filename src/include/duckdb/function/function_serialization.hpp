@@ -168,7 +168,7 @@ public:
 			// This can happen when we change a function that used to take varargs, to no longer do so.
 			arguments.reserve(children.size());
 			for (auto &child : children) {
-				arguments.push_back(child->return_type);
+				arguments.push_back(child->GetReturnType());
 			}
 		}
 
