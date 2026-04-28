@@ -22,7 +22,7 @@ struct PartitionedExecutionConfig {
 	//! Maximum number of columns to try to use for splitting ranges
 	static constexpr idx_t MAXIMUM_COLUMNS = 3;
 	//! Minimum number of row groups per thread per partition to split on
-	static constexpr idx_t MIN_ROW_GROUPS_PER_THREAD_PER_PARTITION = 16;
+	static constexpr idx_t MIN_ROW_GROUPS_PER_THREAD_PER_PARTITION = 32;
 	//! Maximum overlap (as fraction of partition size) that we allow for a split
 	static constexpr double MAX_OVERLAP_RATIO = 0.1;
 	//! Minimum result cardinality before we even consider splitting
