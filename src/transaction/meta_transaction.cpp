@@ -82,7 +82,10 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 
 		return new_transaction;
 	} else {
-		D_ASSERT(entry->second.transaction.active_query == active_query);
+		// Once a transaction is shared across connections via JOIN TRANSACTION the underlying
+		// Transaction::active_query is written by whichever connection most recently entered
+		// BeginQuery, so it can no longer match any single MetaTransaction's active_query.
+		D_ASSERT(entry->second.IsShared() || entry->second.transaction.active_query == active_query);
 		return entry->second.transaction;
 	}
 }
@@ -126,9 +129,10 @@ void MetaTransaction::ImportTransaction(AttachedDatabase &db, Transaction &trans
 		    "transaction open against that database",
 		    db.GetName());
 	}
-	// Caller must hold the foreign DuckTransaction's statement lock before calling this — that
-	// lock is what makes the active_query write race-free vs. the owner's running query.
-	transaction.active_query = active_query.load();
+	// We deliberately do NOT write transaction.active_query here: the foreign Transaction is
+	// about to be shared, so its active_query field stops having a single-connection meaning.
+	// SetActiveQuery similarly skips shared transactions. The field is only ever read by the
+	// debug invariant in GetTransaction, which is relaxed for shared transactions.
 #ifdef DEBUG
 	VerifyAllTransactionsUnique(db, all_transactions);
 #endif
@@ -279,6 +283,13 @@ idx_t MetaTransaction::GetActiveQuery() {
 void MetaTransaction::SetActiveQuery(transaction_t query_number) {
 	active_query = query_number;
 	for (auto &entry : transactions) {
+		// Don't stomp Transaction::active_query for shared transactions: every other connection
+		// holding the same Transaction would see its own MetaTransaction's invariant broken on
+		// the next GetTransaction call (and the field has no single-connection meaning while
+		// shared anyway — nothing reads it for shared transactions).
+		if (entry.second.IsShared()) {
+			continue;
+		}
 		entry.second.transaction.active_query = query_number;
 	}
 }

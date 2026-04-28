@@ -19,8 +19,13 @@ SourceResultType PhysicalDetach::GetDataInternal(ExecutionContext &context, Data
 	auto &db_manager = DatabaseManager::Get(context.client);
 	// DETACH is rejected only when the target database has a shared transaction in this
 	// MetaTransaction — detaching unrelated databases while sharing main is allowed.
+	//
+	// Use the no-context GetDatabase overload so we do NOT call MetaTransaction::UseDatabase
+	// as a side effect: that would pin the AttachedDatabase (and its StoredDatabasePath) alive
+	// across the DETACH, preventing the file-path entry from being freed and breaking
+	// subsequent ATTACHes of the same path within the same transaction.
 	if (context.client.transaction.HasActiveTransaction()) {
-		auto target_db = db_manager.GetDatabase(context.client, info->name);
+		auto target_db = db_manager.GetDatabase(info->name);
 		if (target_db) {
 			auto &meta = MetaTransaction::Get(context.client);
 			auto txn = meta.TryGetTransaction(*target_db);
