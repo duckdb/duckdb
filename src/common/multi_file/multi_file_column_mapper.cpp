@@ -1105,16 +1105,6 @@ static void SetIndexToZero(unique_ptr<Expression> &root_expr) {
 #endif
 }
 
-static bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type,
-                             const LogicalType &global_type) {
-	if (local_type.id() == LogicalTypeId::STRUCT && global_type.id() == LogicalTypeId::STRUCT) {
-		// struct fields - check along the mapping
-		// mapping is global to local
-		throw InternalException("Propagate cast - check mapping");
-	}
-	return StatisticsPropagator::CanPropagateCast(local_type, global_type);
-}
-
 unique_ptr<TableFilterSet>
 MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFilter>> &filters,
                                      ResultColumnMapping &mapping) {
