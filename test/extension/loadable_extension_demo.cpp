@@ -218,9 +218,9 @@ public:
 	    : WindowFunction("duckweed", {LogicalType::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FUNCTION, Bind,
 	                     GetBounds, GetSharing, GetGlobal, GetLocal, nullptr, Finalizer, GetData) {
 		//	Not implemented
-		can_order_by = false;
+		SetCanOrderBy(false);
 		//	We are filling in NULLs
-		can_ignore_nulls = false;
+		SetCanIgnoreNulls(false);
 
 		SetCanStreamCallback(CanStream);
 		SetStreamingStateCallback(GetStreamingState);
