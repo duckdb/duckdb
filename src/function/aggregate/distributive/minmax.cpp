@@ -297,8 +297,8 @@ struct VectorMinMaxBase {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.GetArguments()[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 };
@@ -339,11 +339,11 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
 	// We should also push collations for non-VARCHAR here, but we aren't ready for it yet (see internal #8704)
-	const auto collation = arguments[0]->return_type.id() == LogicalTypeId::VARCHAR &&
-	                       (!StringType::GetCollation(arguments[0]->return_type).empty() ||
+	const auto collation = arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR &&
+	                       (!StringType::GetCollation(arguments[0]->GetReturnType()).empty() ||
 	                        !Settings::Get<DefaultCollationSetting>(context).empty());
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
-	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->return_type)) {
+	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
 		string function_name = function.name == "min" ? "arg_min" : "arg_max";
@@ -360,7 +360,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		auto &func_entry = *func;
 
 		FunctionBinder function_binder(context);
-		vector<LogicalType> types {arguments[0]->return_type, collated_arg->return_type};
+		vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType()};
 		ErrorData error;
 		auto best_function = function_binder.BindFunction(func_entry.name, func_entry.functions, types, error);
 		if (!best_function.IsValid()) {
@@ -371,12 +371,12 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
-		function.GetArguments()[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return make_uniq<ArgMinMaxFunctionData>();
 	}
 
-	auto input_type = arguments[0]->return_type;
+	auto input_type = arguments[0]->GetReturnType();
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -530,17 +530,17 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 
-	const auto val_type = arguments[0]->return_type.InternalType();
+	const auto val_type = arguments[0]->GetReturnType().InternalType();
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
 
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return nullptr;
 }
 

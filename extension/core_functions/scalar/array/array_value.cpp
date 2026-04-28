@@ -54,9 +54,9 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 	}
 
 	// construct return type
-	LogicalType child_type = arguments[0]->return_type;
+	LogicalType child_type = arguments[0]->GetReturnType();
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->return_type);
+		child_type = LogicalType::MaxLogicalType(context, child_type, arguments[i]->GetReturnType());
 	}
 
 	if (arguments.size() > ArrayType::MAX_ARRAY_SIZE) {
@@ -72,7 +72,7 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto list_stats = ArrayStats::CreateEmpty(expr.return_type);
+	auto list_stats = ArrayStats::CreateEmpty(expr.GetReturnType());
 	auto &list_child_stats = ArrayStats::GetChildStats(list_stats);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		list_child_stats.Merge(child_stats[i]);

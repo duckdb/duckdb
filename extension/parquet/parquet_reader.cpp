@@ -1362,7 +1362,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		if (it != expression_map.end()) {
 			auto &expression = it->second;
 			auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
-			    column_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
+			    column_reader->Schema(), expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
 			auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader), expression->Copy(),
 			                                                     std::move(expr_schema));
 			state.column_readers[i] = std::move(expr_reader);

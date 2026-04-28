@@ -269,7 +269,7 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (expr->return_type != LogicalType::BOOLEAN) {
+	if (expr->GetReturnType() != LogicalType::BOOLEAN) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	const auto &func = expr->Cast<BoundFunctionExpression>();
@@ -277,8 +277,8 @@ FilterPropagateResult GeometryStats::CheckZonemap(const BaseStatistics &stats, c
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 
-	if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
-	    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
+	if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
+	    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 

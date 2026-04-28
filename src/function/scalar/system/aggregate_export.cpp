@@ -629,7 +629,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, SimpleFunction &function,
                                                                vector<unique_ptr<Expression>> &arguments,
                                                                bool allow_legacy) {
-	auto &arg_return_type = arguments[0]->return_type;
+	auto &arg_return_type = arguments[0]->GetReturnType();
 	for (auto &arg_type : function.GetArguments()) {
 		arg_type = arg_return_type;
 	}
@@ -696,22 +696,22 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 	    BindAggregateStateInternal(input.GetClientContext(), input.GetBoundFunction(), input.GetArguments(), true);
 
 	// combine
-	if (arguments.size() == 2 && arguments[0]->return_type != arguments[1]->return_type &&
-	    arguments[1]->return_type.id() != LogicalTypeId::BLOB &&
-	    arguments[1]->return_type.id() != LogicalTypeId::STRUCT) {
+	if (arguments.size() == 2 && arguments[0]->GetReturnType() != arguments[1]->GetReturnType() &&
+	    arguments[1]->GetReturnType().id() != LogicalTypeId::BLOB &&
+	    arguments[1]->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("Cannot COMBINE aggregate states from different functions, %s <> %s",
-		                      arguments[0]->return_type.ToString(), arguments[1]->return_type.ToString());
+		                      arguments[0]->GetReturnType().ToString(), arguments[1]->GetReturnType().ToString());
 	}
 
 	if (bound_function.name == "finalize") {
 		bound_function.SetReturnType(bind_data->aggr.GetReturnType());
 	} else {
 		D_ASSERT(bound_function.name == "combine");
-		bound_function.SetReturnType(arguments[0]->return_type);
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 		// When the second argument is a STRUCT (e.g. from a parquet round-trip), prevent casting to AGGREGATE_STATE by
 		// matching the declared parameter type to the actual argument type.
-		if (arguments.size() == 2 && arguments[1]->return_type.id() == LogicalTypeId::STRUCT) {
-			bound_function.GetArguments()[1] = arguments[1]->return_type;
+		if (arguments.size() == 2 && arguments[1]->GetReturnType().id() == LogicalTypeId::STRUCT) {
+			bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
 		}
 	}
 
@@ -781,7 +781,7 @@ unique_ptr<FunctionData> CombineAggrBind(BindAggregateFunctionInput &input) {
 	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
 	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
 
-	function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->GetReturnType());
 
 	return std::move(bind_data);
 }

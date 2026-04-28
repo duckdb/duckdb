@@ -130,7 +130,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
 			min_max_bindings.push_back(col_ref.binding);
-			auto comparator = GetComparator(fun_name, col_ref.return_type);
+			auto comparator = GetComparator(fun_name, col_ref.GetReturnType());
 			if (!comparator) {
 				// Type has no min max statistics
 				return;

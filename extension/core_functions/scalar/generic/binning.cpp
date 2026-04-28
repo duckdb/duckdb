@@ -411,7 +411,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 	// while internally the bins are computed over a unified type
 	// the equi_width_bins function returns the same type as the input MAX
 	LogicalType child_type;
-	switch (arguments[1]->return_type.id()) {
+	switch (arguments[1]->GetReturnType().id()) {
 	case LogicalTypeId::UNKNOWN:
 	case LogicalTypeId::SQLNULL:
 		return nullptr;
@@ -420,7 +420,7 @@ unique_ptr<FunctionData> BindEquiWidthFunction(BindScalarFunctionInput &input) {
 		child_type = LogicalType::DOUBLE;
 		break;
 	default:
-		child_type = arguments[1]->return_type;
+		child_type = arguments[1]->GetReturnType();
 		break;
 	}
 	bound_function.SetReturnType(LogicalType::LIST(child_type));

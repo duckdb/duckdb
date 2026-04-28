@@ -143,7 +143,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.children) {
 				auto bound_child = expression_binder.Bind(child);
-				aggregation_input_types.push_back(bound_child->return_type);
+				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
 
@@ -194,7 +194,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				                      result.names[aggregate_idx]);
 			}
 
-			return_types[aggregate_idx] = aggregate->return_type;
+			return_types[aggregate_idx] = aggregate->GetReturnType();
 			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
 			throw BinderException(

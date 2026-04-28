@@ -660,7 +660,7 @@ struct MedianFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->return_type);
+		function = GetAggregate(arguments[0]->GetReturnType());
 		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 	}
 };
@@ -689,7 +689,7 @@ struct DiscreteQuantileListFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->return_type);
+		function = GetAggregate(arguments[0]->GetReturnType());
 		return BindQuantile(input);
 	}
 };
@@ -723,7 +723,7 @@ struct DiscreteQuantileFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->return_type);
+		function = GetAggregate(arguments[0]->GetReturnType());
 		return BindQuantile(input);
 	}
 };
@@ -752,8 +752,9 @@ struct ContinuousQuantileFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type
-		                                                                                  : function.GetArguments()[0]);
+		function =
+		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
+		                                                                           : function.GetArguments()[0]);
 		return BindQuantile(input);
 	}
 };
@@ -783,8 +784,9 @@ struct ContinuousQuantileListFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->return_type
-		                                                                                  : function.GetArguments()[0]);
+		function =
+		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
+		                                                                           : function.GetArguments()[0]);
 		return BindQuantile(input);
 	}
 };

@@ -393,12 +393,12 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 
-	function = GetHistogramBinFunction<HIST>(arguments[0]->return_type);
+	function = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
 	return nullptr;
 }
 

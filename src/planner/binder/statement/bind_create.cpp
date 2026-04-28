@@ -424,9 +424,9 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 		throw BinderException(*type_expr, "Type expression is not constant");
 	}
 
-	if (expr->return_type != LogicalTypeId::TYPE) {
+	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
 		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
-		                      expr->return_type.ToString());
+		                      expr->GetReturnType().ToString());
 	}
 
 	// Shortcut for constant expressions

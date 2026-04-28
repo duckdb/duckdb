@@ -32,7 +32,7 @@ struct LambdaExecuteInfo {
 		}
 
 		// get the result types
-		vector<LogicalType> result_types {lambda_expr.return_type};
+		vector<LogicalType> result_types {lambda_expr.GetReturnType()};
 
 		// initialize the data chunks
 		input_chunk.InitializeEmpty(input_types);
@@ -352,18 +352,18 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
                                                                 ClientContext &context,
                                                                 ScalarFunction &bound_function) {
 	// NULL list parameter
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
+	D_ASSERT(arguments[0]->GetReturnType().id() == LogicalTypeId::LIST);
 	return nullptr;
 }
 

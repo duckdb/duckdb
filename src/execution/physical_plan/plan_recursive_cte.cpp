@@ -51,7 +51,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		D_ASSERT(target->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
 		distinct_idx.emplace_back(bound_ref.index);
-		distinct_types.push_back(bound_ref.return_type);
+		distinct_types.push_back(bound_ref.GetReturnType());
 		group_by_references[bound_ref.index] = i;
 	}
 
@@ -68,7 +68,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			auto &bound_aggr = op.payload_aggregates[pay_idx]->Cast<BoundAggregateExpression>();
 
 			// add the logical type of the aggregate to the payload types
-			payload_types.push_back(bound_aggr.return_type);
+			payload_types.push_back(bound_aggr.GetReturnType());
 			payload_aggregates.push_back(std::move(op.payload_aggregates[pay_idx++]));
 			payload_idx.emplace_back(i);
 		}

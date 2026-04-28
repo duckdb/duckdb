@@ -59,7 +59,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	if (arguments.empty()) {
 		throw InvalidInputException("Missing required arguments for struct_update function.");
 	}
-	if (LogicalTypeId::STRUCT != arguments[0]->return_type.id()) {
+	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_update must be a STRUCT");
 	}
 	if (arguments.size() < 2) {
@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	}
 
 	child_list_t<LogicalType> new_children;
-	auto &existing_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
 	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
@@ -93,7 +93,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 			// Update the struct with the new data of the same name
 			auto arg_idx = update->second;
 			auto &new_child = arguments[arg_idx];
-			new_children.push_back(make_pair(new_child->GetAlias(), new_child->return_type));
+			new_children.push_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -102,7 +102,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			auto &child = arguments[arg_idx];
-			new_children.push_back(make_pair(child->GetAlias(), child->return_type));
+			new_children.push_back(make_pair(child->GetAlias(), child->GetReturnType()));
 		}
 	}
 
@@ -110,13 +110,13 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
-unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 
 	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.children.size(), true);
-	auto new_stats = StructStats::CreateUnknown(expr.return_type);
+	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
 
 	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
 		auto &new_child = expr.children[arg_idx];

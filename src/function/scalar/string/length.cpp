@@ -105,11 +105,11 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
-	const auto &arg_type = arguments[0]->return_type.id();
+	const auto &arg_type = arguments[0]->GetReturnType().id();
 	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
@@ -118,7 +118,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
@@ -174,10 +174,10 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	auto type = arguments[0]->return_type;
+	auto type = arguments[0]->GetReturnType();
 	if (type.id() == LogicalTypeId::ARRAY) {
 		bound_function.GetArguments()[0] = type;
 		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);

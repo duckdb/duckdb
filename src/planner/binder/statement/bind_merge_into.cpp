@@ -70,7 +70,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			WhereBinder where_binder(*this, context);
 			auto cond = where_binder.Bind(action.condition);
 			PlanSubqueries(cond, root);
-			auto cond_type = cond->return_type;
+			auto cond_type = cond->GetReturnType();
 			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
 			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
 		} else {
@@ -169,7 +169,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 
 		for (auto &insert_expr : insert_expressions) {
-			auto insert_type = insert_expr->return_type;
+			auto insert_type = insert_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
 			result->expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(insert_type, ColumnBinding(proj_index, expr_index)));

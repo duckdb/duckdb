@@ -60,7 +60,7 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 		throw BinderException("write_log takes at least one argument");
 	}
 
-	if (arguments[0]->return_type != LogicalType::VARCHAR) {
+	if (arguments[0]->GetReturnType() != LogicalType::VARCHAR) {
 		throw InvalidTypeException("write_log first argument must be a VARCHAR");
 	}
 
@@ -77,31 +77,31 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 		}
 		if (arg->GetAlias() == "disable_logging") {
 			ThrowIfNotConstant(*arg);
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("write_log: 'disable_logging' argument must be a boolean");
 			}
 			result->disable_logging = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->GetAlias() == "scope") {
 			ThrowIfNotConstant(*arg);
-			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
+			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'scope' argument must be a string");
 			}
 			result->scope = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->GetAlias() == "level") {
 			ThrowIfNotConstant(*arg);
-			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
+			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'level' argument must be a string");
 			}
 			result->level =
 			    EnumUtil::FromString<LogLevel>(StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg)));
 		} else if (arg->GetAlias() == "log_type") {
 			ThrowIfNotConstant(*arg);
-			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
+			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'log_type' argument must be a string");
 			}
 			result->type = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (arg->GetAlias() == "return_value") {
-			result->return_type = arg->return_type;
+			result->return_type = arg->GetReturnType();
 			result->output_col = i;
 			bound_function.SetReturnType(result->return_type);
 		} else {

@@ -42,7 +42,7 @@ unique_ptr<FunctionData> ParseLogMessageBind(BindScalarFunctionInput &input) {
 		throw BinderException("structured_log_schema: argument '%s' must be constant", arguments[0]->GetAlias());
 	}
 
-	if (arguments[0]->return_type.id() != LogicalTypeId::VARCHAR) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("structured_log_schema: 'log_type' argument must be a string");
 	}
 

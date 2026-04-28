@@ -74,7 +74,7 @@ vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exp
 	vector<LogicalType> types;
 	types.reserve(exprs.size());
 	for (const auto &expr : exprs) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	return types;
 }
@@ -366,7 +366,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	array_length_exprs.push_back(make_uniq<BoundConstantExpression>(1));
 
 	const auto array_length_fun = array_length_entry.functions.GetFunctionByArguments(
-	    context, {array_length_exprs[0]->return_type, array_length_exprs[1]->return_type});
+	    context, {array_length_exprs[0]->GetReturnType(), array_length_exprs[1]->GetReturnType()});
 	auto bound_array_length_fun = function_binder.BindScalarFunction(array_length_fun, std::move(array_length_exprs));
 
 	// generate_series
@@ -378,7 +378,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	generate_series_exprs.push_back(std::move(bound_array_length_fun));
 
 	const auto generate_series_fun = generate_series_entry.functions.GetFunctionByArguments(
-	    context, {generate_series_exprs[0]->return_type, generate_series_exprs[1]->return_type});
+	    context, {generate_series_exprs[0]->GetReturnType(), generate_series_exprs[1]->GetReturnType()});
 	auto bound_generate_series_fun =
 	    function_binder.BindScalarFunction(generate_series_fun, std::move(generate_series_exprs));
 

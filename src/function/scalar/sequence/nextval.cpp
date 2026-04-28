@@ -93,7 +93,7 @@ void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 unique_ptr<FunctionData> NextValBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {

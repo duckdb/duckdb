@@ -55,7 +55,7 @@ void LogicalRecursiveCTE::ResolveTypes() {
 		if (key_idx.find(ProjectionIndex(i)) != key_idx.end()) {
 			continue;
 		}
-		types[i] = payload_aggregates[pay_idx++]->return_type;
+		types[i] = payload_aggregates[pay_idx++]->GetReturnType();
 	}
 }
 

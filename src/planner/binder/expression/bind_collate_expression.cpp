@@ -15,14 +15,14 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (child->return_type.id() != LogicalTypeId::VARCHAR) {
+	if (child->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 		throw BinderException(child->GetQueryLocation(), "collations are only supported for type varchar");
 	}
 	// Validate the collation, but don't use it
-	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->return_type));
+	auto collation_test = make_uniq_base<Expression, BoundConstantExpression>(Value(child->GetReturnType()));
 	auto collation_type = LogicalType::VARCHAR_COLLATION(expr.collation);
 	PushCollation(context, collation_test, collation_type);
-	child->return_type = collation_type;
+	child->SetReturnType(collation_type);
 	return BindResult(std::move(child));
 }
 

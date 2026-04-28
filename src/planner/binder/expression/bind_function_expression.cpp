@@ -115,7 +115,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 
 	const bool has_initial = function_child_types.size() == 3;
 	auto &bound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
-	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
 
 	auto list_child_type = function_child_types[0];
 	if (list_child_type.id() != LogicalTypeId::SQLNULL && list_child_type.id() != LogicalTypeId::UNKNOWN) {
@@ -159,9 +159,9 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
 		// accumulator type when decimals are involved.
 		if (TypeContainsDecimal(accumulator_type) ||
-		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->return_type)) {
-			if (rebound_lambda_expr.lambda_expr->return_type != accumulator_type) {
-				const auto old_return_type = rebound_lambda_expr.lambda_expr->return_type;
+		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->GetReturnType())) {
+			if (rebound_lambda_expr.lambda_expr->GetReturnType() != accumulator_type) {
+				const auto old_return_type = rebound_lambda_expr.lambda_expr->GetReturnType();
 				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.lambda_expr),
 				                                                    accumulator_type);
 				if (!cast_expr) {
@@ -434,14 +434,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		}
 
 		const auto &child = BoundExpression::GetExpression(*function.children[i]);
-		function_child_types.push_back(child->return_type);
+		function_child_types.push_back(child->GetReturnType());
 	}
 
 	// get the logical type of the children of the list
 	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx]);
-	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::ARRAY &&
-	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
+	if (list_child->GetReturnType().id() != LogicalTypeId::LIST && list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
+	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+	    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
 		return BindResult("Invalid LIST argument during lambda function binding!");
 	}
 

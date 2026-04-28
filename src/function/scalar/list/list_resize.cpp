@@ -128,26 +128,26 @@ static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	// Early-out, if the first argument is a constant NULL.
-	if (arguments[0]->return_type == LogicalType::SQLNULL) {
+	if (arguments[0]->GetReturnType() == LogicalType::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
 
 	// Early-out, if the first argument is a prepared statement.
-	if (arguments[0]->return_type == LogicalType::UNKNOWN) {
-		bound_function.SetReturnType(arguments[0]->return_type);
+	if (arguments[0]->GetReturnType() == LogicalType::UNKNOWN) {
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
 
 	// Attempt implicit casting, if the default type does not match list the list child type.
 	if (bound_function.GetArguments().size() == 3 &&
-	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
-	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
-		bound_function.GetArguments()[2] = ListType::GetChildType(arguments[0]->return_type);
+	    ListType::GetChildType(arguments[0]->GetReturnType()) != arguments[2]->GetReturnType() &&
+	    arguments[2]->GetReturnType() != LogicalTypeId::SQLNULL) {
+		bound_function.GetArguments()[2] = ListType::GetChildType(arguments[0]->GetReturnType());
 	}
 
-	bound_function.SetReturnType(arguments[0]->return_type);
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 

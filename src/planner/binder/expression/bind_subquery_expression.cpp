@@ -35,14 +35,14 @@ public:
 	}
 };
 
-bool TypeIsUnnamedStruct(const LogicalType &type) {
+static bool TypeIsUnnamedStruct(const LogicalType &type) {
 	if (type.id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
 	return StructType::IsUnnamed(type);
 }
 
-void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result,
+static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Expression>> &result,
                              const vector<LogicalType> &types, ExpressionType comparison_type) {
 	// two scenarios
 	// Single Expression (standard):
@@ -50,7 +50,7 @@ void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Ex
 	// Multi-Expression/Struct:
 	// (a, b) IN (SELECT ...)
 	// the latter has an unnamed struct on the LHS that is created by a "ROW" expression
-	auto &return_type = child->return_type;
+	auto &return_type = child->GetReturnType();
 	if (!TypeIsUnnamedStruct(return_type)) {
 		// child is not an unnamed struct
 		return;
@@ -125,7 +125,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		if (expr.child) {
 			auto &child = BoundExpression::GetExpression(*expr.child);
 			// Check if child is an unexpanded struct before extraction
-			has_unexpanded_struct = TypeIsUnnamedStruct(child->return_type);
+			has_unexpanded_struct = TypeIsUnnamedStruct(child->GetReturnType());
 			ExtractSubqueryChildren(child, child_expressions, bound_subquery.bound_node.types, expr.comparison_type);
 			if (child_expressions.empty()) {
 				child_expressions.push_back(std::move(child));
@@ -135,7 +135,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// If we have an unexpanded struct (kept intact for ordered comparison),
 		// the subquery might return multiple columns that need to be combined into a struct
 		if (has_unexpanded_struct && expected_columns == 1 && bound_subquery.bound_node.types.size() > 1 &&
-		    TypeIsUnnamedStruct(child_expressions[0]->return_type)) {
+		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// The child is a struct with N elements, and the subquery returns N columns
 			// This is allowed - the subquery columns will be matched against the struct during execution
 			expected_columns = bound_subquery.bound_node.types.size();
@@ -162,7 +162,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// Special case: if we have a single struct child and multiple subquery types,
 		// this means we kept the struct intact for ordered comparison (e.g., (a,b) < ANY(...))
 		if (child_expressions.size() == 1 && bound_node.types.size() > 1 &&
-		    TypeIsUnnamedStruct(child_expressions[0]->return_type)) {
+		    TypeIsUnnamedStruct(child_expressions[0]->GetReturnType())) {
 			// Keep the struct as-is for proper lexicographic row comparison
 			result->children.push_back(std::move(child_expressions[0]));
 			// Store all the subquery types - they will be used to construct the RHS struct during planning

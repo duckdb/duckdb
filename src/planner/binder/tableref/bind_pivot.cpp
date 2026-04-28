@@ -494,7 +494,7 @@ BoundStatement Binder::BindBoundPivot(PivotRef &ref) {
 			}
 			result.bound_pivot.pivot_values.push_back(std::move(pivot_str));
 			names.push_back(std::move(name));
-			types.push_back(aggr->return_type);
+			types.push_back(aggr->GetReturnType());
 		}
 	}
 	result.bound_pivot.group_count = ref.bound_group_names.size();

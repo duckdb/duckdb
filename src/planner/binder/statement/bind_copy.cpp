@@ -295,7 +295,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			select_node.types.clear();
 			for (auto &expr : projection->expressions) {
 				select_node.names.push_back(expr->GetName());
-				select_node.types.push_back(expr->return_type);
+				select_node.types.push_back(expr->GetReturnType());
 			}
 			select_node.plan = std::move(projection);
 		}

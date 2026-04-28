@@ -357,12 +357,12 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution
-		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
+		if (children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}
 		// check if the type of child matches the type of function argument
 		// if not we need to add a cast
-		auto cast_result = RequiresCast(children[i]->return_type, target_type);
+		auto cast_result = RequiresCast(children[i]->GetReturnType(), target_type);
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
@@ -401,7 +401,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	    bound_function.GetReturnType().IsComplete() ? bound_function.GetReturnType() : LogicalType::SQLNULL;
 	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
-			if (child->return_type == LogicalTypeId::SQLNULL) {
+			if (child->GetReturnType() == LogicalTypeId::SQLNULL) {
 				return make_uniq<BoundConstantExpression>(Value(return_type_if_null));
 			}
 			if (!child->IsFoldable()) {
@@ -426,11 +426,11 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 	string collation;
 	for (auto &arg : children) {
-		if (!RequiresCollationPropagation(arg->return_type)) {
+		if (!RequiresCollationPropagation(arg->GetReturnType())) {
 			// not a varchar column
 			continue;
 		}
-		auto child_collation = StringType::GetCollation(arg->return_type);
+		auto child_collation = StringType::GetCollation(arg->GetReturnType());
 		if (collation.empty()) {
 			collation = child_collation;
 		} else if (!child_collation.empty() && collation != child_collation) {
@@ -470,12 +470,12 @@ static void PushCollations(ClientContext &context, ScalarFunction &bound_functio
 	}
 	// push collations to the children
 	for (auto &arg : children) {
-		if (RequiresCollationPropagation(arg->return_type)) {
+		if (RequiresCollationPropagation(arg->GetReturnType())) {
 			// if this is a varchar type - propagate the collation
-			arg->return_type = collation_type;
+			arg->SetReturnType(collation_type);
 		}
 		// now push the actual collation handling
-		ExpressionBinder::PushCollation(context, arg, arg->return_type, type);
+		ExpressionBinder::PushCollation(context, arg, arg->GetReturnType(), type);
 	}
 }
 

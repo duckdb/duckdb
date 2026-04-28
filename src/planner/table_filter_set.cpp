@@ -85,9 +85,9 @@ static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructP
 			return false;
 		}
 		string child_name;
-		if (func.children[0]->return_type.id() == LogicalTypeId::STRUCT &&
-		    !StructType::IsUnnamed(func.children[0]->return_type)) {
-			child_name = StructType::GetChildName(func.children[0]->return_type, child_idx);
+		if (func.children[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
+		    !StructType::IsUnnamed(func.children[0]->GetReturnType())) {
+			child_name = StructType::GetChildName(func.children[0]->GetReturnType(), child_idx);
 		}
 		struct_path.push_back({child_idx, std::move(child_name)});
 		return true;
@@ -108,7 +108,7 @@ static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filt
 static void NormalizeLegacyExpression(unique_ptr<Expression> &expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    expr, [](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &owned_expr) {
-		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.return_type, 0ULL);
+		    owned_expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
 	    });
 	ExpressionIterator::VisitExpressionMutable<BoundReferenceExpression>(
 	    expr, [](BoundReferenceExpression &ref, unique_ptr<Expression> &owned_expr) { ref.index = 0; });
