@@ -20,7 +20,7 @@ namespace duckdb {
 JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) : optimizer(optimizer) {
 }
 
-bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter) {
+bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter) {
 	if (expr.return_type.IsNested()) {
 		// nested columns are not supported for pushdown
 		return false;
@@ -52,6 +52,24 @@ bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColu
 	}
 	default:
 		return false;
+	}
+}
+
+bool JoinFilterPushdownUtil::JoinTypeIsSupported(JoinType join_type) {
+	switch (join_type) {
+	case JoinType::MARK:
+	case JoinType::SINGLE:
+	case JoinType::LEFT:
+	case JoinType::OUTER:
+	case JoinType::ANTI:
+	case JoinType::RIGHT_ANTI:
+		// cannot generate join filters for these join types
+		// mark/single - cannot change cardinality of probe side
+		// left/outer always need to include every row from probe side
+		// FIXME: anti/right_anti - we could do this, but need to invert the join conditions
+		return false;
+	default:
+		return true;
 	}
 }
 
@@ -150,7 +168,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 			auto &expr = proj.GetExpression(filter.probe_column_index);
-			if (!PushdownJoinFilterExpression(expr, filter)) {
+			if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, filter)) {
 				// cannot push through this expression - bail-out
 				return;
 			}
@@ -167,7 +185,7 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
 				return;
 			}
 			auto &expr = aggr.GetExpression(filter.probe_column_index);
-			if (!PushdownJoinFilterExpression(expr, filter)) {
+			if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(expr, filter)) {
 				// cannot push through this expression - bail-out
 				return;
 			}
@@ -204,20 +222,8 @@ bool JoinFilterPushdownOptimizer::IsFiltering(const unique_ptr<LogicalOperator> 
 }
 
 void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &join) {
-	switch (join.join_type) {
-	case JoinType::MARK:
-	case JoinType::SINGLE:
-	case JoinType::LEFT:
-	case JoinType::OUTER:
-	case JoinType::ANTI:
-	case JoinType::RIGHT_ANTI:
-		// cannot generate join filters for these join types
-		// mark/single - cannot change cardinality of probe side
-		// left/outer always need to include every row from probe side
-		// FIXME: anti/right_anti - we could do this, but need to invert the join conditions
+	if (!JoinFilterPushdownUtil::JoinTypeIsSupported(join.join_type)) {
 		return;
-	default:
-		break;
 	}
 	// re-order conditions here - otherwise this will happen later on and invalidate the indexes we generate
 	PhysicalComparisonJoin::ReorderConditions(join.conditions);
@@ -244,7 +250,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 		}
 
 		JoinFilterPushdownColumn pushdown_col;
-		if (!PushdownJoinFilterExpression(cond.GetLHS(), pushdown_col)) {
+		if (!JoinFilterPushdownUtil::PushdownJoinFilterExpression(cond.GetLHS(), pushdown_col)) {
 			continue;
 		}
 

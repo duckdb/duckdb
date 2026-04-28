@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -59,6 +60,11 @@ struct PushdownFilterTarget {
 
 	LogicalGet &get;
 	vector<JoinFilterPushdownColumn> columns;
+};
+
+struct JoinFilterPushdownUtil {
+	static bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter);
+	static bool JoinTypeIsSupported(JoinType join_type);
 };
 
 struct JoinFilterPushdownInfo {
