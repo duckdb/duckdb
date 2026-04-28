@@ -926,13 +926,10 @@
     },
     {
         "name": "parallelize_sequential_sources",
-        "description": "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)",
-        "type": "VARCHAR",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
         "default_scope": "local",
-        "default_value": "automatic",
-        "on_callbacks": [
-            "set"
-        ]
+        "default_value": "true"
     },
     {
         "name": "partitioned_write_flush_threshold",
