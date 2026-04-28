@@ -337,19 +337,28 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 	const auto &result_type = result.GetType().id();
 	auto &format = options.date_format_map->GetFormat(result_type);
 
-	switch (result_type) {
-	case LogicalTypeId::DATE:
-		if (!TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options)) {
+	if (format.format_specifier.empty()) {
+		if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
+		    options.strict_cast) {
+			options.object_index = 0;
 			success = false;
 		}
-		break;
-	case LogicalTypeId::TIMESTAMP:
-		if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options)) {
-			success = false;
+	} else {
+		switch (result_type) {
+		case LogicalTypeId::DATE:
+			if (!TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options)) {
+				success = false;
+			}
+			break;
+		case LogicalTypeId::TIMESTAMP:
+			if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result,
+			                                                              options)) {
+				success = false;
+			}
+			break;
+		default:
+			throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
 		}
-		break;
-	default:
-		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
 	}
 	return success;
 }
