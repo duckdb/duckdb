@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/size.hpp"
 
 namespace duckdb {
 
@@ -70,6 +71,15 @@ private:
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
 
+class VectorBufferHolder : public AuxiliaryDataHolder {
+public:
+	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer_p) : buffer(std::move(buffer_p)) {
+	}
+
+private:
+	buffer_ptr<VectorBuffer> buffer;
+};
+
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
 public:
@@ -120,9 +130,10 @@ public:
 		return nullptr;
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
-	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 
 	inline VectorType GetVectorType() const {
 		return vector_type;
@@ -181,6 +192,10 @@ public:
 	virtual void Resize(idx_t current_size, idx_t new_size);
 
 protected:
+	//! Slice a constant vector with a specific count
+	buffer_ptr<VectorBuffer> ConstantSlice(const LogicalType &type, count_t count);
+	//! Slice a constant vector with a specific count
+	virtual buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count);
 	//! Slice the buffer with a selection vector, returning a new buffer
 	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
 	//! Slice the buffer with an offset range, returning a new buffer

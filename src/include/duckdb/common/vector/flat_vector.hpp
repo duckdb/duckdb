@@ -15,10 +15,10 @@ namespace duckdb {
 
 class StandardVectorBuffer : public VectorBuffer {
 public:
-	StandardVectorBuffer(Allocator &allocator, idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity, idx_t type_size);
-	explicit StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity, idx_t type_size);
+	StandardVectorBuffer(Allocator &allocator, capacity_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(capacity_t capacity, idx_t type_size);
+	explicit StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size);
+	explicit StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size);
 
 public:
 	data_ptr_t GetData() override {
@@ -52,12 +52,13 @@ public:
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
+	buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count) override;
 	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
 
-	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, idx_t capacity) const;
+	virtual buffer_ptr<VectorBuffer> CreateBuffer(AllocatedData &&new_data, count_t count) const;
 
 protected:
 	ValidityMask validity;
@@ -151,7 +152,7 @@ struct FlatVector {
 	static inline T *GetDataMutableUnsafe(Vector &vector) {
 		return reinterpret_cast<T *>(GetDataMutableUnsafe(vector));
 	}
-	static void SetData(Vector &vector, data_ptr_t data, idx_t capacity);
+	static void SetData(Vector &vector, data_ptr_t data, count_t count);
 	template <class T>
 	static inline T GetValue(Vector &vector, idx_t idx) {
 		VerifyFlatVector(vector);

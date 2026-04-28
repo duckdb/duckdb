@@ -45,7 +45,7 @@ static inline int32_t hello_fun(string_t what) {
 }
 
 static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(Value("Hello Alias!"));
+	result.Reference(Value("Hello Alias!"), count_t(args.size()));
 }
 
 static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -178,8 +178,9 @@ public:
 		// start returning values
 		// either fill up the chunk or return all the remaining columns
 		idx_t count = 0;
+		auto &quack_col = output.data[0];
 		while (data.offset < bind_data.number_of_quacks && count < STANDARD_VECTOR_SIZE) {
-			output.SetValue(0, count, Value("QUACK"));
+			quack_col.Append(Value("QUACK"));
 			data.offset++;
 			count++;
 		}
@@ -217,9 +218,9 @@ public:
 	    : WindowFunction("duckweed", {LogicalType::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FUNCTION, Bind,
 	                     GetBounds, GetSharing, GetGlobal, GetLocal, nullptr, Finalizer, GetData) {
 		//	Not implemented
-		can_order_by = false;
+		SetCanOrderBy(false);
 		//	We are filling in NULLs
-		can_ignore_nulls = false;
+		SetCanIgnoreNulls(false);
 
 		SetCanStreamCallback(CanStream);
 		SetStreamingStateCallback(GetStreamingState);
@@ -291,8 +292,8 @@ public:
 	class StreamingState : public WindowExecutorStreamingState {
 	public:
 		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type)), executor(client),
-		      arg(wexpr.children[0]->return_type) {
+		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type), count_t(STANDARD_VECTOR_SIZE)),
+		      executor(client), arg(wexpr.children[0]->return_type) {
 			executor.AddExpression(*wexpr.children[0]);
 		}
 		//! The window expression
@@ -328,7 +329,7 @@ public:
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = unified.sel->get_index(i);
 			if (validity.RowIsValid(idx)) {
-				filler.Reference(arg.GetValue(i));
+				filler.Reference(arg.GetValue(i), count_t(count));
 			}
 			result.SetValue(i, filler.GetValue(0));
 		}
@@ -503,7 +504,7 @@ static inline void LoadedExtensionsFunction(DataChunk &args, ExpressionState &st
 		}
 		result_str += ext;
 	}
-	result.Reference(Value(result_str));
+	result.Reference(Value(result_str), count_t(args.size()));
 }
 //===--------------------------------------------------------------------===//
 // Bounded type
@@ -554,7 +555,7 @@ struct BoundedType {
 };
 
 static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &result) {
-	result.Reference(BoundedType::GetMaxValue(args.data[0].GetType()));
+	result.Reference(Value::INTEGER(BoundedType::GetMaxValue(args.data[0].GetType())), count_t(args.size()));
 }
 
 static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
@@ -764,7 +765,7 @@ static void MinMaxRangeFunc(DataChunk &args, ExpressionState &state, Vector &res
 	auto &ty = args.data[0].GetType();
 	auto min_val = MinMaxType::GetMinValue(ty);
 	auto max_val = MinMaxType::GetMaxValue(ty);
-	result.Reference(Value::INTEGER(max_val - min_val));
+	result.Reference(Value::INTEGER(max_val - min_val), count_t(args.size()));
 }
 
 //===--------------------------------------------------------------------===//

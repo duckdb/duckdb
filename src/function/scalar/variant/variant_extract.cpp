@@ -118,9 +118,9 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			ConstantVector::SetNull(unshredded_entry);
+			ConstantVector::SetNull(unshredded_entry, count_t(count));
 		}
-		ConstantVector::SetNull(unshredded_child);
+		ConstantVector::SetNull(unshredded_child, count_t(count));
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
@@ -268,9 +268,8 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 	auto &result_type_id = VariantVector::GetValuesTypeId(result);
 	auto &result_byte_offset = VariantVector::GetValuesByteOffset(result);
 
-	result_type_id.Dictionary(VariantVector::GetValuesTypeId(variant_vec), values_list_size, new_sel, values_list_size);
-	result_byte_offset.Dictionary(VariantVector::GetValuesByteOffset(variant_vec), values_list_size, new_sel,
-	                              values_list_size);
+	result_type_id.Slice(VariantVector::GetValuesTypeId(variant_vec), new_sel, values_list_size);
+	result_byte_offset.Slice(VariantVector::GetValuesByteOffset(variant_vec), new_sel, values_list_size);
 
 	if (validity.CanHaveNull()) {
 		//! Create a copy of the vector, because we used Reference before, and we now need to adjust the data

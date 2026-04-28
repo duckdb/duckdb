@@ -25,14 +25,16 @@ PULL_REQUEST_JOBS = [
     "no-string-inline",
     "vector-sizes",
     "threadsan",
-    "amalgamation-tests",
     "linux-configs",
+    "static-libs-linux",
 ]
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "check-clangd-tidy",
     "valgrind",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
 ]
 
 NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
@@ -47,9 +49,9 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "static-libraries",
-    "release-status",
-    "notify-external-repos",
+    "static-libs-linux",
+    "static-libs-osx",
+    "static-libs-windows-mingw",
 ]
 
 SKIP_TESTS_JOBS = {

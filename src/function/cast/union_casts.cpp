@@ -192,7 +192,7 @@ static unique_ptr<FunctionLocalState> InitToUnionLocalState(CastLocalStateParame
 			}
 			result->local_states.push_back(std::move(child_state));
 		}
-		return result;
+		return std::move(result);
 	} else {
 		auto member_cast_info = cast_data.member_casts[0].Copy();
 		if (!member_cast_info.HasInitLocalState()) {
@@ -256,7 +256,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 	for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
 		if (!target_member_is_mapped[target_member_idx]) {
 			auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
-			ConstantVector::SetNull(target_member_vector);
+			ConstantVector::SetNull(target_member_vector, count_t(count));
 		}
 	}
 
@@ -268,7 +268,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		// Constant vector case optimization
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		} else {
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];

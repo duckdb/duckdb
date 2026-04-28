@@ -960,8 +960,12 @@ void PartitionedCopy::InitializeFlush() {
 		return;
 	}
 
-	// Move current sink state to combine state, update flushing to true, and create task list
+	// Move current sinking state to flushing state
 	flushing_state = std::move(sinking_state);
+	if (!flushing_state) {
+		return; // Nothing to do
+	}
+
 	flushing = true;
 }
 
@@ -1034,7 +1038,7 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!flushing || !RefersToSameObject(*lstate.current_state, *flushing_state)) {
+		if (!flushing_state || !RefersToSameObject(*lstate.current_state, *flushing_state)) {
 			return; // Not flushing anymore, or can't combine this state into the flushing state
 		}
 	}
@@ -1151,8 +1155,15 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		flushing_state_copy = flushing_state;
 	}
 
-	if (!flushing_state_copy || !flushing_state_copy->global_source_state) {
+	if (!flushing_state_copy) {
 		return; // Finalization not yet complete, nothing to do
+	}
+
+	{
+		annotated_lock_guard<annotated_mutex> guard(flushing_state_copy->lock);
+		if (!flushing_state_copy->global_source_state) {
+			return; // Finalization not yet complete, nothing to do
+		}
 	}
 
 	if (ShouldStopFlushing()) {
@@ -1176,8 +1187,8 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
 			return;
 		}
-		flushing_state.reset();
 		flushing = false;
+		flushing_state.reset();
 		should_finalize_writes = finalized && !sinking_state;
 	}
 	if (should_finalize_writes) {
@@ -1475,26 +1486,25 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return fs.JoinPath(path, base);
 }
 
-void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyToFileInfo &info) {
+void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {
 	auto &file_stats = *info.file_stats;
 
 	// filename VARCHAR
-	chunk.SetValue(0, row_idx, info.file_path);
+	chunk.data[0].Append(Value(info.file_path));
 	// count BIGINT
-	chunk.SetValue(1, row_idx, Value::UBIGINT(file_stats.row_count));
+	chunk.data[1].Append(Value::UBIGINT(file_stats.row_count));
 	// file size bytes BIGINT
-	chunk.SetValue(2, row_idx, Value::UBIGINT(file_stats.file_size_bytes));
+	chunk.data[2].Append(Value::UBIGINT(file_stats.file_size_bytes));
 	// footer size bytes BIGINT
-	chunk.SetValue(3, row_idx, file_stats.footer_size_bytes);
+	chunk.data[3].Append(file_stats.footer_size_bytes);
 	// column statistics map(varchar, map(varchar, varchar))
 	auto column_stats = CreateColumnStatistics(file_stats.column_statistics);
 	auto map_val_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	chunk.SetValue(
-	    4, row_idx,
+	chunk.data[4].Append(
 	    Value::MAP(LogicalType::VARCHAR, map_val_type, std::move(column_stats.keys), std::move(column_stats.values)));
 
 	// partition_keys map(varchar, varchar)
-	chunk.SetValue(5, row_idx, info.partition_keys);
+	chunk.data[5].Append(info.partition_keys);
 }
 
 bool PhysicalCopyToFile::Rotate() const {
@@ -1790,7 +1800,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 			if (use_tmp_file) {
 				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
 			}
-			ReturnStatistics(chunk, i, file_entry);
+			ReturnStatistics(chunk, file_entry);
 		}
 		chunk.SetCardinality(count);
 		source_state.offset += count;
@@ -1801,10 +1811,10 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 	chunk.SetCardinality(1);
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(gstate.rows_copied.load())));
 		vector<Value> file_name_list;
 		for (auto &file_info : gstate.written_files) {
 			if (use_tmp_file) {
@@ -1813,7 +1823,7 @@ SourceResultType PhysicalCopyToFile::GetDataInternal(ExecutionContext &context, 
 				file_name_list.emplace_back(file_info->file_path);
 			}
 		}
-		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_name_list)));
+		chunk.data[1].Append(Value::LIST(LogicalType::VARCHAR, std::move(file_name_list)));
 		break;
 	}
 	default:

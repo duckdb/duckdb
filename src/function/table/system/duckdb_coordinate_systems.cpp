@@ -76,20 +76,35 @@ static void DuckDBCoordinateSystemsFunction(ClientContext &context, TableFunctio
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// database_name, VARCHAR
+	auto &database_name = output.data[0];
+	// database_oid, BIGINT
+	auto &database_oid = output.data[1];
+	// schema_name, VARCHAR
+	auto &schema_name = output.data[2];
+	// schema_oid, BIGINT
+	auto &schema_oid = output.data[3];
+	// crs_oid, BIGINT
+	auto &crs_oid = output.data[4];
+	// crs_name, VARCHAR
+	auto &crs_name = output.data[5];
+	// auth_name, VARCHAR
+	auto &auth_name = output.data[6];
+	// auth_code, VARCHAR
+	auto &auth_code = output.data[7];
+	// projjson, VARCHAR
+	auto &projjson = output.data[8];
+	// wkt2_2019, VARCHAR
+	auto &wkt2_2019 = output.data[9];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &crs_entry = data.entries[data.offset++].get();
 
-		// return values:
-		idx_t col = 0;
-		// database_name, VARCHAR
-		output.SetValue(col++, count, crs_entry.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(crs_entry.catalog.GetOid())));
-		// schema_name, LogicalType::VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.schema.name));
-		// schema_oid, LogicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(crs_entry.schema.oid)));
-		// crs_oid, BIGINT
+		database_name.Append(Value(crs_entry.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(crs_entry.catalog.GetOid())));
+		schema_name.Append(Value(crs_entry.schema.name));
+		schema_oid.Append(Value::BIGINT(NumericCast<int64_t>(crs_entry.schema.oid)));
 		int64_t oid = NumericCast<int64_t>(crs_entry.oid);
 		Value oid_val;
 		if (data.oids.find(oid) == data.oids.end()) {
@@ -98,18 +113,12 @@ static void DuckDBCoordinateSystemsFunction(ClientContext &context, TableFunctio
 		} else {
 			oid_val = Value();
 		}
-
-		output.SetValue(col++, count, oid_val);
-		// crs_name, VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.name));
-		// auth_name, VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.authority));
-		// auth_code, VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.code));
-		// projjson, VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.projjson_definition));
-		// wkt2_2019, VARCHAR
-		output.SetValue(col++, count, Value(crs_entry.wkt2_2019_definition));
+		crs_oid.Append(oid_val);
+		crs_name.Append(Value(crs_entry.name));
+		auth_name.Append(Value(crs_entry.authority));
+		auth_code.Append(Value(crs_entry.code));
+		projjson.Append(Value(crs_entry.projjson_definition));
+		wkt2_2019.Append(Value(crs_entry.wkt2_2019_definition));
 
 		count++;
 	}

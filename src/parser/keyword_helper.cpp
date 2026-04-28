@@ -1,18 +1,35 @@
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
+static KeywordCategory GetPEGKeywordCategory(const string &text) {
+	auto &helper = PEGKeywordHelper::Instance();
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
+		return KeywordCategory::KEYWORD_RESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+		return KeywordCategory::KEYWORD_UNRESERVED;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
+		return KeywordCategory::KEYWORD_TYPE_FUNC;
+	}
+	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+		return KeywordCategory::KEYWORD_COL_NAME;
+	}
+	return KeywordCategory::KEYWORD_NONE;
+}
+
 bool KeywordHelper::IsKeyword(const string &text, KeywordCategory category) {
-	return Parser::IsKeyword(text) != category;
+	return GetPEGKeywordCategory(text) != category;
 }
 
 KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
-	return Parser::IsKeyword(text);
+	return GetPEGKeywordCategory(text);
 }
 
-bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps, KeywordCategory category) {
+bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {
 	for (size_t i = 0; i < text.size(); i++) {
 		if (i > 0 && (text[i] >= '0' && text[i] <= '9')) {
 			continue;
@@ -30,7 +47,7 @@ bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps, KeywordC
 		}
 		return true;
 	}
-	return IsKeyword(text, category);
+	return IsKeyword(text);
 }
 
 string KeywordHelper::EscapeQuotes(const string &text, char quote) {
@@ -43,8 +60,8 @@ string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	return string(1, quote) + EscapeQuotes(text, quote) + string(1, quote);
 }
 
-string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps, KeywordCategory category) {
-	if (!RequiresQuotes(text, allow_caps, category)) {
+string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {
+	if (!RequiresQuotes(text, allow_caps)) {
 		return text;
 	}
 	return WriteQuoted(text, quote);

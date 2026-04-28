@@ -229,7 +229,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*this, *plan);
+		ProjectionPullup projection_pullup(*this, plan);
 		projection_pullup.Optimize(plan);
 	});
 

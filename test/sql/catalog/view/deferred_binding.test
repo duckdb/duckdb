@@ -2,11 +2,6 @@
 # description: Test support for deferred binding of views
 # group: [view]
 
-require autocomplete
-
-statement ok
-CALl enable_peg_parser();
-
 statement ok
 CREATE VIEW v1 WITH (DEFER_BINDING) AS SELECT * FROM tbl;
 

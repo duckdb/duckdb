@@ -2,11 +2,6 @@
 # description: Test escape string capability in PEG parser
 # group: [peg_parser]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 query I
 SELECT e'\033' = chr(27);
 ----

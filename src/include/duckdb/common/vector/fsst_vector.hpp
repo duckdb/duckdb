@@ -14,7 +14,7 @@ namespace duckdb {
 
 class VectorFSSTStringBuffer : public VectorStringBuffer {
 public:
-	explicit VectorFSSTStringBuffer(idx_t capacity);
+	explicit VectorFSSTStringBuffer(capacity_t capacity);
 
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {

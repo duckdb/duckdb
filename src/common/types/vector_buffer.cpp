@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, capacity_t capacity) {
 	if (type == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector requires full list type");
 	}
@@ -26,7 +26,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, i
 	return make_buffer<StandardVectorBuffer>(capacity, GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, capacity_t capacity) {
 	if (type.InternalType() == PhysicalType::LIST) {
 		throw InternalException("VectorBuffer::CreateStandardVector not supported for list");
 	}
@@ -157,8 +157,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &t
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, count_t(end - offset));
 	}
 	auto result = SliceInternal(type, offset, end);
 	if (result) {
@@ -171,8 +171,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, count_t(count));
 	}
 	auto result = SliceInternal(type, sel, count);
 	if (result && v_size.IsValid()) {
@@ -181,6 +181,18 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const Sele
 		}
 	}
 	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::ConstantSlice(const LogicalType &type, count_t count) {
+	if (HasSize() && count == Size()) {
+		// if the size is already set correctly we don't need to do do anything
+		return nullptr;
+	}
+	return ConstantSliceInternal(type, count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	throw InternalException("Constant slice not implemented for this vector buffer");
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,

@@ -122,8 +122,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		if (left_type.id() == LogicalTypeId::VARIANT) {
 			Vector left_vec(left.type());
 			Vector right_vec(right.type());
-			left_vec.Reference(left);
-			right_vec.Reference(right);
+			left_vec.Reference(left, count_t(1));
+			right_vec.Reference(right, count_t(1));
 
 			RecursiveUnifiedVectorFormat left_format;
 			RecursiveUnifiedVectorFormat right_format;

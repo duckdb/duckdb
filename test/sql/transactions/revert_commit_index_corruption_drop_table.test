@@ -1,0 +1,71 @@
+# name: test/sql/transactions/revert_commit_index_corruption_drop_table.test
+# description: A reverted DROP TABLE must leave the PK index intact so that concurrent index scans keep returning correct rows.
+# group: [transactions]
+
+load {TEST_DIR}/test_revert_commit_index_corruption_drop_table.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE t1 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t1 SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok
+CREATE TABLE t2 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok
+INSERT INTO t2 SELECT i, i * 10 FROM range(1000) tbl(i)
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t1 WHERE id < 500
+
+statement ok con1
+DROP TABLE t1
+
+statement ok con1
+CREATE TABLE t1 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement ok con1
+DELETE FROM t2 WHERE id < 500
+
+statement ok con2
+DROP TABLE t2
+
+statement ok con2
+CREATE TABLE t2 (id INTEGER PRIMARY KEY, val INTEGER)
+
+statement error con1
+COMMIT
+----
+another transaction has dropped this table
+
+query I
+SELECT COUNT(*) FROM t1
+----
+1000
+
+query II
+SELECT id, val FROM t1 WHERE id = 42
+----
+42	420
+
+statement error
+INSERT INTO t1 VALUES (42, 999)
+----
+Duplicate key
+
+query II
+SELECT id, val FROM t1 WHERE val = 7000
+----
+700	7000
+
+query II
+SELECT id, val FROM t1 WHERE id = 700
+----
+700	7000

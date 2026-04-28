@@ -1226,6 +1226,14 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		SetError(error, "Missing database object name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	const auto missing_table_error = std::string("Table \"") + table_name + "\" does not exist";
+	auto set_ingest_error = [&](const std::string &msg) {
+		if (msg.find("could not be found") != std::string::npos) {
+			SetError(error, missing_table_error);
+		} else {
+			SetError(error, msg);
+		}
+	};
 	if (schema && temporary) {
 		// Temporary option is not supported with ADBC_INGEST_OPTION_TARGET_DB_SCHEMA
 		SetError(error, "Temporary option is not supported with schema");
@@ -1349,6 +1357,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 	}
 	AppenderWrapper appender(connection, effective_catalog, effective_schema, table_name);
 	if (!appender.Valid()) {
+		if (!appender.CreateError().empty()) {
+			set_ingest_error(appender.CreateError());
+		} else {
+			SetError(error, missing_table_error);
+		}
 		return ADBC_STATUS_INTERNAL;
 	}
 	duckdb::ArrowArrayWrapper arrow_array_wrapper;
@@ -1373,7 +1386,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
 			auto error_data = duckdb_appender_error_data(appender.Get());
 			auto err = duckdb_error_data_message(error_data);
-			SetError(error, err);
+			if (err && err[0] != '\0') {
+				set_ingest_error(err);
+			} else {
+				SetError(error, missing_table_error);
+			}
 			bool interrupted = IsInterruptError(err);
 			duckdb_destroy_error_data(&error_data);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;

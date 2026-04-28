@@ -237,7 +237,7 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
@@ -262,7 +262,7 @@ void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
 bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &global_boundary) {
@@ -398,13 +398,13 @@ void TopNHeap::Combine(TopNHeap &other) {
 		matching_sel.set_index(match_count++, other_entry.index);
 		if (match_count >= STANDARD_VECTOR_SIZE) {
 			// flush
-			heap_data.Append(other.heap_data, true, &matching_sel, match_count);
+			heap_data.Append(other.heap_data, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 			match_count = 0;
 		}
 	}
 	if (match_count > 0) {
 		// flush
-		heap_data.Append(other.heap_data, true, &matching_sel, match_count);
+		heap_data.Append(other.heap_data, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 		match_count = 0;
 	}
 	Reduce();

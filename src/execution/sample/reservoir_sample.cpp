@@ -159,7 +159,7 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 	// set the NULL columns correctly
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		if (!ValidSampleType(types[col_idx]) && stats_sample) {
-			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx]);
+			ConstantVector::SetNull(new_sample_chunk->chunk.data[col_idx], count_t(size));
 		}
 	}
 	return new_sample_chunk;

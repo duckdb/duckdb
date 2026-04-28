@@ -14,7 +14,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConst
 void ExpressionExecutor::Execute(const BoundConstantExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	D_ASSERT(expr.value.type() == expr.return_type);
-	result.Reference(expr.value);
+	result.Reference(expr.value, count_t(count));
 }
 
 } // namespace duckdb

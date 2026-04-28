@@ -63,27 +63,35 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// oid, BIGINT
+	auto &oid = output.data[0];
+	// database_name, VARCHAR
+	auto &database_name = output.data[1];
+	// database_oid, BIGINT
+	auto &database_oid = output.data[2];
+	// schema_name, VARCHAR
+	auto &schema_name = output.data[3];
+	// comment, VARCHAR
+	auto &comment = output.data[4];
+	// tags, MAP(VARCHAR, VARCHAR)
+	auto &tags = output.data[5];
+	// internal, BOOLEAN
+	auto &internal = output.data[6];
+	// sql, VARCHAR
+	auto &sql = output.data[7];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset].get();
 
-		// return values:
-		idx_t col = 0;
-		// "oid", PhysicalType::BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.oid)));
-		// database_name, VARCHAR
-		output.SetValue(col++, count, entry.catalog.GetName());
-		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
-		// "schema_name", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value(entry.name));
-		// "comment", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value(entry.comment));
-		// "tags", MAP(VARCHAR, VARCHAR)
-		output.SetValue(col++, count, Value::MAP(entry.tags));
-		// "internal", PhysicalType::BOOLEAN
-		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
-		// "sql", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value());
+		oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.oid)));
+		database_name.Append(Value(entry.catalog.GetName()));
+		database_oid.Append(Value::BIGINT(NumericCast<int64_t>(entry.catalog.GetOid())));
+		schema_name.Append(Value(entry.name));
+		comment.Append(Value(entry.comment));
+		tags.Append(Value::MAP(entry.tags));
+		internal.Append(Value::BOOLEAN(entry.internal));
+		sql.Append(Value());
 
 		data.offset++;
 		count++;

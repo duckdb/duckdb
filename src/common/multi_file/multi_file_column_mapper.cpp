@@ -578,10 +578,12 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileL
                                               bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx.GetIndex());
-	if (!global_column.type.IsNested() ||
-	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
-	    is_trivially_mappable) {
-		// not a struct - potentially add a cast
+	bool can_use_remap_struct =
+	    global_column.type.IsNested() &&
+	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
+	    !is_trivially_mappable && local_column.type.IsNested();
+	if (!can_use_remap_struct) {
+		// use the cast path unless we actually need struct remapping and both source/target sides are nested
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}
@@ -984,7 +986,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			result->children.push_back(std::move(rewritten_child));
 		}
-		return result;
+		return std::move(result);
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
@@ -1000,7 +1002,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			}
 			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
 			result->children.push_back(std::move(child.expr));
-			return result;
+			return std::move(result);
 		}
 		case ExpressionType::COMPARE_IN: {
 			if (op.children.empty()) {
@@ -1022,7 +1024,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 				}
 				result->children.push_back(make_uniq<BoundConstantExpression>(std::move(constant)));
 			}
-			return result;
+			return std::move(result);
 		}
 		default:
 			return nullptr;
@@ -1147,6 +1149,7 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 	auto &reader = *reader_data.reader;
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
+	map<idx_t, MultiFileGlobalIndex> local_to_global;
 	for (auto &it : filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get();
@@ -1192,6 +1195,12 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			expr = make_uniq<BoundReferenceExpression>(global_type, local_id);
 		}
+		local_to_global.emplace(local_id, global_index);
+	}
+	reader.filter_global_indices.clear();
+	reader.filter_global_indices.reserve(local_to_global.size());
+	for (auto &p : local_to_global) {
+		reader.filter_global_indices.push_back(p.second);
 	}
 	return result;
 }

@@ -321,6 +321,9 @@ endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
+ifeq (${DISABLE_BUILTIN_HTTPLIB}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_HTTPLIB=1
+endif
 ifeq (${DISABLE_SHELL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
 endif
@@ -641,12 +644,6 @@ benchmark:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
-amaldebug:
-	mkdir -p ./build/amaldebug && \
-	$(PYTHON) scripts/amalgamation.py && \
-	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
 
 tidy-check:
 	mkdir -p ./build/tidy && \
@@ -680,17 +677,16 @@ tidy-fix:
 	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	$(PYTHON) scripts/amalgamation.py --compile
+	$(PYTHON) scripts/test_compile.py
 
 format-check: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py --all --check
+	$(FORMAT_PYTHON) scripts/format.py --all --check $(T)
 
 format-check-silent: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py --all --check --silent
+	$(FORMAT_PYTHON) scripts/format.py --all --check --silent $(T)
 
 format-fix: $(FORMAT_SETUP_DEPS)
-	rm -rf src/amalgamation/*
-	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm $(T)
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
@@ -707,16 +703,16 @@ check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	fi
 
 format-head: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
 format-changes: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
 format-main: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm $(T)
 
 format-feature: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm $(T)
 
 format-configs:
 	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)

@@ -302,7 +302,7 @@ struct SortedAggregateState {
 			FlushChunks(order_bind);
 		} else if (input_chunk) {
 			//	Still using data chunks
-			input_chunk->Append(input, true, &sel, nsel);
+			input_chunk->Append(input, sel, nsel, VectorAppendMode::ALLOW_RESIZE);
 		} else {
 			//	Still using linked lists
 			LinkedAppend(order_bind.buffered_funcs, aggr_input_data.allocator, input, input_linked, sel, nsel);
@@ -531,7 +531,7 @@ struct SortedAggregateFunction {
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
 		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
-		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1));
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
@@ -568,7 +568,7 @@ struct SortedAggregateFunction {
 			if (unsorted_count < order_bind.threshold) {
 				auto state = sdata[finalized].GetValueUnsafe();
 				prefixed.Reset();
-				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
+				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)), count_t(1));
 				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 				state->Finalize(order_bind, prefixed, context, sink);
 				unsorted_count += state_unprocessed[finalized];

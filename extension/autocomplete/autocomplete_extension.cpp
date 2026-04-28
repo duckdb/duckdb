@@ -1,6 +1,5 @@
-#include "autocomplete_extension.hpp"
-#include "sql_formatter.hpp"
-
+#include "duckdb/parser/peg/autocomplete_extension.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -11,37 +10,26 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "matcher.hpp"
-#include "autocomplete_catalog_provider.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
-static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
-	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
-		if (ext.parser_info) {
-			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
-			if (cache) {
-				return *cache;
-			}
-		}
-	}
-	throw InternalException("PEG autocomplete parser extension not registered");
-}
+struct AutoCompleteSuggestion;
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
@@ -375,7 +363,7 @@ public:
 		return ::duckdb::SuggestSettingName(context);
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		return GetGlobalPEGMatcherCache().GetMatcher();
 	}
 
 private:
@@ -439,23 +427,26 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// suggestion, VARCHAR
+	auto &suggestion = output.data[0];
+	// suggestion_start, INTEGER
+	auto &suggestion_start = output.data[1];
+	// suggestion_type, VARCHAR
+	auto &suggestion_type = output.data[2];
+	// suggestion_score, VARCHAR
+	auto &suggestion_score = output.data[3];
+	// extra_char, VARCHAR
+	auto &extra_char = output.data[4];
+
 	while (data.offset < bind_data.suggestions.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.suggestions[data.offset++];
 
-		// suggestion, VARCHAR
-		output.SetValue(0, count, Value(entry.text));
-
-		// suggestion_start, INTEGER
-		output.SetValue(1, count, Value::INTEGER(NumericCast<int32_t>(entry.pos)));
-
-		// suggestion_type, VARCHAR
-		output.SetValue(2, count, Value(entry.type));
-
-		// suggestion-score, VARCHAR
-		output.SetValue(3, count, Value::UBIGINT(entry.score));
-
-		// extra_char, VARCHAR
-		output.SetValue(4, count, entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
+		suggestion.Append(Value(entry.text));
+		suggestion_start.Append(Value::INTEGER(NumericCast<int32_t>(entry.pos)));
+		suggestion_type.Append(Value(entry.type));
+		suggestion_score.Append(Value::UBIGINT(entry.score));
+		extra_char.Append(entry.extra_char == '\0' ? Value() : Value(string(1, entry.extra_char)));
 		count++;
 	}
 	output.SetCardinality(count);
@@ -471,7 +462,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
@@ -510,17 +501,20 @@ void SQLTokenizeFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// offset, INTEGER
+	auto &offset_col = output.data[0];
+	// token_type, VARCHAR
+	auto &token_type = output.data[1];
+	// word, VARCHAR
+	auto &word = output.data[2];
+
 	while (data.offset < bind_data.tokens.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = bind_data.tokens[data.offset++];
 
-		// offset, INTEGER
-		output.SetValue(0, count, Value::INTEGER(NumericCast<int32_t>(entry.offset)));
-
-		// token_type, VARCHAR
-		output.SetValue(1, count, Value(TokenTypeToString(entry.type)));
-
-		// word, VARCHAR
-		output.SetValue(2, count, Value(entry.text));
+		offset_col.Append(Value::INTEGER(NumericCast<int32_t>(entry.offset)));
+		token_type.Append(Value(TokenTypeToString(entry.type)));
+		word.Append(Value(entry.text));
 		count++;
 	}
 	output.SetCardinality(count);
@@ -538,41 +532,39 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
-	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();
 	if (!allow_complete) {
 		return nullptr;
 	}
-	tokenizer.statements.push_back(std::move(root_tokens));
 
-	for (auto &tokens : tokenizer.statements) {
-		if (tokens.empty()) {
-			continue;
-		}
-		vector<MatcherSuggestion> suggestions;
-		ParseResultAllocator parse_allocator;
-		idx_t max_token_index = 0;
-		MatchState state(tokens, suggestions, parse_allocator, max_token_index);
+	if (root_tokens.empty()) {
+		return nullptr;
+	}
 
-		auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
-		auto match_result = peg_matcher->Root().Match(state);
-		if (match_result != MatchResultType::SUCCESS || state.token_index < tokens.size()) {
-			string token_list;
-			for (idx_t i = 0; i < tokens.size(); i++) {
-				if (!token_list.empty()) {
-					token_list += "\n";
-				}
-				if (i < 10) {
-					token_list += " ";
-				}
-				token_list += to_string(i) + ":" + tokens[i].text;
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_allocator;
+	idx_t max_token_index = 0;
+	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
+
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto match_result = peg_matcher->Root().Match(state);
+	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
+		string token_list;
+		for (idx_t i = 0; i < root_tokens.size(); i++) {
+			if (!token_list.empty()) {
+				token_list += "\n";
 			}
-			throw BinderException(
-			    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
-			    state.token_index, tokens[state.token_index].text, token_list);
+			if (i < 10) {
+				token_list += " ";
+			}
+			token_list += to_string(i) + ":" + root_tokens[i].text;
 		}
+		throw BinderException(
+		    "Failed to parse query \"%s\" - did not consume all tokens (got to token %d - %s)\nTokens:\n%s", sql,
+		    state.token_index, root_tokens[state.token_index].text, token_list);
 	}
 	return nullptr;
 }
@@ -584,48 +576,33 @@ class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
 		parser_override = PEGParser;
-		parser_info = make_shared_ptr<PEGMatcherCache>();
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-		auto &cache = info->Cast<PEGMatcherCache>();
-		auto peg_matcher = cache.GetMatcher();
+		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 		auto &root_matcher = peg_matcher->Root();
 
 		vector<MatcherToken> root_tokens;
-		string clean_sql;
 
 		ParserTokenizer tokenizer(query, root_tokens);
 		tokenizer.TokenizeInput();
-		tokenizer.statements.push_back(std::move(root_tokens));
 
 		try {
 			vector<unique_ptr<SQLStatement>> result;
-			for (auto &tokenized_statement : tokenizer.statements) {
-				if (tokenized_statement.empty()) {
-					continue;
-				}
-				auto statement = PEGTransformerFactory::Transform(tokenized_statement, options, root_matcher);
-				if (statement) {
-					statement->stmt_location = NumericCast<idx_t>(tokenized_statement[0].offset);
-					auto last_pos = tokenized_statement[tokenized_statement.size() - 1].offset +
-					                tokenized_statement[tokenized_statement.size() - 1].length;
-					statement->stmt_length = last_pos - tokenized_statement[0].offset;
-				}
-				statement->query = query;
-				result.push_back(std::move(statement));
+			if (!root_tokens.empty()) {
+				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
 			}
 			if (!result.empty()) {
 				auto &last_statement = result.back();
 				last_statement->stmt_length = query.size() - last_statement->stmt_location;
-				for (auto &statement : result) {
-					statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-					statement->stmt_location = 0;
-					statement->stmt_length = statement->query.size();
-					if (statement->type == StatementType::CREATE_STATEMENT) {
-						auto &create = statement->Cast<CreateStatement>();
-						create.info->sql = statement->query;
-					}
+			}
+			for (auto &statement : result) {
+				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
+				statement->stmt_location = 0;
+				statement->stmt_length = statement->query.size();
+				if (statement->type == StatementType::CREATE_STATEMENT) {
+					auto &create = statement->Cast<CreateStatement>();
+					create.info->sql = statement->query;
 				}
 			}
 			return ParserOverrideResult(std::move(result));
@@ -634,24 +611,6 @@ public:
 		}
 	}
 };
-
-static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
-}
-
-static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
-}
-
-static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("success");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	return nullptr;
-}
 
 struct FormatSQLBindData : public FunctionData {
 	FormatterConfig config;
@@ -739,12 +698,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
-
-	TableFunction enable_peg_parser("enable_peg_parser", {}, EnablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(enable_peg_parser);
-
-	TableFunction disable_peg_parser("disable_peg_parser", {}, DisablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(disable_peg_parser);
 
 	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
 	                           SQLTokenizeInit);

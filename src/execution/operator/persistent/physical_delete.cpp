@@ -162,7 +162,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
 		} else {
 			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
-			l_state.delete_chunk.data[i].Reference(Value(types[i]));
+			l_state.delete_chunk.data[i].Reference(Value(types[i]), count_t(chunk.size()));
 		}
 	}
 	// Add virtual columns (e.g., rowid) after table columns
@@ -263,7 +263,7 @@ SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, Data
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
-		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
+		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
 		return SourceResultType::FINISHED;
 	}
 
