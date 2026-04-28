@@ -569,7 +569,8 @@ public:
 
 class BoundAggregateFunction : public AggregateFunction {
 public:
-	BoundAggregateFunction(const AggregateFunction &function) : AggregateFunction(function) {
+	BoundAggregateFunction(const AggregateFunction &function)
+	    : AggregateFunction(function) { // NOLINT: allow implicit conversion
 	}
 };
 

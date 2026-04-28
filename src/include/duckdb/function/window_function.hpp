@@ -407,7 +407,7 @@ public:
 
 class BoundWindowFunction : public WindowFunction {
 public:
-	BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) {
+	BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) { // NOLINT: allow implicit conversion
 	}
 };
 

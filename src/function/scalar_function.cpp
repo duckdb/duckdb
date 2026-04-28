@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
