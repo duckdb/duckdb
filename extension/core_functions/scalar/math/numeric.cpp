@@ -1171,7 +1171,7 @@ ScalarFunction Log2Fun::GetFunction() {
 static void PiFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	Value pi_value = Value::DOUBLE(PI);
-	result.Reference(pi_value);
+	result.Reference(pi_value, count_t(args.size()));
 }
 
 ScalarFunction PiFun::GetFunction() {

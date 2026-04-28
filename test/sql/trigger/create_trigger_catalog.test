@@ -2,11 +2,6 @@
 # description: Test CREATE TRIGGER stores in catalog and duckdb_triggers()
 # group: [trigger]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 # Create table for trigger
 statement ok
 CREATE TABLE t1 (id INTEGER, data VARCHAR);

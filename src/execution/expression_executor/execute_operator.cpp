@@ -31,8 +31,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
-		Value false_val = Value::BOOLEAN(false);
-		intermediate.Reference(false_val);
+		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparison with the left

@@ -48,7 +48,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
-		ConstantVector::Reference(result, keys_vector, 0, count);
+		ConstantVector::Reference(result, count_t(count), keys_vector, 0, 1);
 		return;
 	}
 

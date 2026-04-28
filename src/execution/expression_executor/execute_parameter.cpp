@@ -16,7 +16,7 @@ void ExpressionExecutor::Execute(const BoundParameterExpression &expr, Expressio
 	D_ASSERT(expr.parameter_data);
 	D_ASSERT(expr.parameter_data->return_type == expr.return_type);
 	D_ASSERT(expr.parameter_data->GetValue().type() == expr.return_type);
-	result.Reference(expr.parameter_data->GetValue());
+	result.Reference(expr.parameter_data->GetValue(), count_t(count));
 }
 
 } // namespace duckdb

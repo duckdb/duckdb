@@ -385,7 +385,7 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(Vector &primary, const vec
 			}
 			auto &v = keys.data[c];
 			if (ConstantVector::IsNull(v)) {
-				ConstantVector::SetNull(primary);
+				ConstantVector::SetNull(primary, count_t(count));
 				return count;
 			}
 		}

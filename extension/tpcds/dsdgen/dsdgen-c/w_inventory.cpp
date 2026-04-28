@@ -110,10 +110,10 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 
 	void *info = append_info_get(info_arr, INVENTORY);
 	append_row_start(info);
-	append_key(info, r->inv_date_sk);
-	append_key(info, r->inv_item_sk);
-	append_key(info, r->inv_warehouse_sk);
-	append_integer(info, r->inv_quantity_on_hand);
+	append_key(info, r->inv_date_sk, INV_DATE_SK);
+	append_key(info, r->inv_item_sk, INV_ITEM_SK);
+	append_key(info, r->inv_warehouse_sk, INV_WAREHOUSE_SK);
+	append_integer(info, r->inv_quantity_on_hand, INV_QUANTITY_ON_HAND);
 	append_row_end(info);
 
 	return 0;

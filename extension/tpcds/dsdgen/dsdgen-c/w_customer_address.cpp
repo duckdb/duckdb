@@ -73,24 +73,24 @@ int mk_w_customer_address(void *info_arr, ds_key_t index) {
 
 	char szTemp[128];
 
-	append_key(info, r->ca_addr_sk);
-	append_varchar(info, r->ca_addr_id);
-	append_integer(info, r->ca_address.street_num);
+	append_key(info, r->ca_addr_sk, CA_ADDRESS_SK);
+	append_varchar(info, r->ca_addr_id, CA_ADDRESS_ID);
+	append_integer(info, r->ca_address.street_num, CA_ADDRESS_STREET_NUM);
 	if (r->ca_address.street_name2) {
 		sprintf(szTemp, "%s %s", r->ca_address.street_name1, r->ca_address.street_name2);
-		append_varchar(info, szTemp);
+		append_varchar(info, szTemp, CA_ADDRESS_STREET_NAME1);
 	} else
-		append_varchar(info, r->ca_address.street_name1);
-	append_varchar(info, r->ca_address.street_type);
-	append_varchar(info, &r->ca_address.suite_num[0]);
-	append_varchar(info, r->ca_address.city);
-	append_varchar(info, r->ca_address.county);
-	append_varchar(info, r->ca_address.state);
+		append_varchar(info, r->ca_address.street_name1, CA_ADDRESS_STREET_NAME1);
+	append_varchar(info, r->ca_address.street_type, CA_ADDRESS_STREET_TYPE);
+	append_varchar(info, &r->ca_address.suite_num[0], CA_ADDRESS_SUITE_NUM);
+	append_varchar(info, r->ca_address.city, CA_ADDRESS_CITY);
+	append_varchar(info, r->ca_address.county, CA_ADDRESS_COUNTY);
+	append_varchar(info, r->ca_address.state, CA_ADDRESS_STATE);
 	sprintf(szTemp, "%05d", r->ca_address.zip);
-	append_varchar(info, szTemp);
-	append_varchar(info, &r->ca_address.country[0]);
-	append_integer_decimal(info, r->ca_address.gmt_offset);
-	append_varchar(info, r->ca_location_type);
+	append_varchar(info, szTemp, CA_ADDRESS_ZIP);
+	append_varchar(info, &r->ca_address.country[0], CA_ADDRESS_COUNTRY);
+	append_integer_decimal(info, r->ca_address.gmt_offset, CA_ADDRESS_GMT_OFFSET);
+	append_varchar(info, r->ca_location_type, CA_LOCATION_TYPE);
 
 	append_row_end(info);
 

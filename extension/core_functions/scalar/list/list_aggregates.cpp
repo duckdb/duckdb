@@ -207,7 +207,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 

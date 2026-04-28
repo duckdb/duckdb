@@ -149,8 +149,8 @@ public:
 	}
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr)), sel(STANDARD_VECTOR_SIZE), eval(client),
-	      arg(wexpr.children[0]->return_type) {
+	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
+	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.children[0]->return_type) {
 		eval.AddExpression(*wexpr.children[0]);
 	}
 
@@ -392,7 +392,7 @@ public:
 		ComputeDefault(context, wexpr, dflt);
 
 		buffered = idx_t(std::abs(offset));
-		prev.Reference(dflt);
+		prev.Reference(dflt, count_t(buffered));
 		prev.Flatten(buffered);
 		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 	}
@@ -817,7 +817,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 		const auto &validity = unified.validity;
 		auto &prev = sstate.vec;
 		if (validity.CannotHaveNull()) {
-			prev.Reference(arg.GetValue(0));
+			prev.Reference(arg.GetValue(0), count_t(count));
 			result.Reference(prev);
 		} else {
 			auto &sel = sstate.sel;
@@ -827,7 +827,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 			for (sel_t i = 0; i < count; ++i) {
 				if (!s && validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
 					auto v = arg.GetValue(i);
-					prev.Reference(v);
+					prev.Reference(v, count_t(count));
 					s = 1;
 					split.SetValue(s, v);
 				}
@@ -955,7 +955,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			result.Slice(copy, sel, count);
 		}
 		//	Remember the last non-NULL value for the next iteration
-		prev.Reference(result.GetValue(count - 1));
+		prev.Reference(result.GetValue(count - 1), count_t(count));
 	} else {
 		executor.ExecuteExpression(input, result);
 	}
@@ -1126,7 +1126,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 		// One-based comparison.
 		if (nth_count == nth_index) {
 			auto v = arg.GetValue(i);
-			vec.Reference(v);
+			vec.Reference(v, count_t(count));
 			s = 1;
 			split.SetValue(s, v);
 		}
