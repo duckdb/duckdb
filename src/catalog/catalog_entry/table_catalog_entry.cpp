@@ -194,6 +194,9 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		} else if (column.HasDefaultValue()) {
 			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
 		}
+		if (column.CompressionType() != CompressionType::COMPRESSION_AUTO) {
+			ss << " USING COMPRESSION " << CompressionTypeToString(column.CompressionType());
+		}
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
 			ss << " NOT NULL";
