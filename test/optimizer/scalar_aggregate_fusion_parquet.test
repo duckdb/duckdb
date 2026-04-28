@@ -1,0 +1,51 @@
+# name: test/optimizer/scalar_aggregate_fusion_parquet.test
+# description: Fuse scalar aggregate branches through pass-through views over Parquet scans
+# group: [optimizer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE q09_sales(q INTEGER, discount INTEGER, paid INTEGER)
+
+statement ok
+INSERT INTO q09_sales VALUES
+	(1, 10, 100), (10, 20, 200), (15, 30, 300),
+	(21, 40, 400), (25, 50, 500)
+
+statement ok
+COPY q09_sales TO '{TEST_DIR}/q09_sales.parquet' (FORMAT PARQUET)
+
+statement ok
+CREATE VIEW q09_sales_view AS SELECT * FROM read_parquet('{TEST_DIR}/q09_sales.parquet')
+
+statement ok
+PRAGMA explain_output = 'OPTIMIZED_ONLY'
+
+query II
+EXPLAIN SELECT
+	CASE WHEN (SELECT count(*) FROM q09_sales_view WHERE q BETWEEN 1 AND 20) > 2
+	     THEN (SELECT avg(discount) FROM q09_sales_view WHERE q BETWEEN 1 AND 20)
+	     ELSE (SELECT avg(paid) FROM q09_sales_view WHERE q BETWEEN 1 AND 20)
+	END b1,
+	CASE WHEN (SELECT count(*) FROM q09_sales_view WHERE q BETWEEN 21 AND 40) > 9
+	     THEN (SELECT avg(discount) FROM q09_sales_view WHERE q BETWEEN 21 AND 40)
+	     ELSE (SELECT avg(paid) FROM q09_sales_view WHERE q BETWEEN 21 AND 40)
+	END b2;
+----
+logical_opt	<REGEX>:.*AGGREGATE.*FILTER \(WHERE.*READ_PARQUET.*
+
+query RR
+SELECT
+	CASE WHEN (SELECT count(*) FROM q09_sales_view WHERE q BETWEEN 1 AND 20) > 2
+	     THEN (SELECT avg(discount) FROM q09_sales_view WHERE q BETWEEN 1 AND 20)
+	     ELSE (SELECT avg(paid) FROM q09_sales_view WHERE q BETWEEN 1 AND 20)
+	END b1,
+	CASE WHEN (SELECT count(*) FROM q09_sales_view WHERE q BETWEEN 21 AND 40) > 9
+	     THEN (SELECT avg(discount) FROM q09_sales_view WHERE q BETWEEN 21 AND 40)
+	     ELSE (SELECT avg(paid) FROM q09_sales_view WHERE q BETWEEN 21 AND 40)
+	END b2;
+----
+20.000000	450.000000

@@ -24,6 +24,19 @@
 
 namespace duckdb {
 
+static bool PlanReturnsExactlyOneRow(const LogicalOperator &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		return aggr.groups.empty() && aggr.grouping_sets.empty() && aggr.grouping_functions.empty();
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		return op.children.size() == 1 && PlanReturnsExactlyOneRow(*op.children[0]);
+	default:
+		return false;
+	}
+}
+
 static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubqueryExpression &expr,
                                                        unique_ptr<LogicalOperator> &root,
                                                        unique_ptr<LogicalOperator> plan) {
@@ -79,6 +92,11 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// figure out the table index of the bound table of the entry which we want to return
 		auto bindings = plan->GetColumnBindings();
 		D_ASSERT(bindings.size() == 1);
+		if (PlanReturnsExactlyOneRow(*plan)) {
+			auto result = make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, bindings[0]);
+			root = LogicalCrossProduct::Create(std::move(root), std::move(plan));
+			return std::move(result);
+		}
 		auto table_idx = bindings[0].table_index;
 
 		bool error_on_multiple_rows = Settings::Get<ScalarSubqueryErrorOnMultipleRowsSetting>(binder.context);
