@@ -4,18 +4,25 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
+
+static constexpr idx_t JOIN_FILTER_TARGET_MIN_CARDINALITY = 1000000;
+static constexpr idx_t JOIN_FILTER_TARGET_BUILD_RATIO = 64;
 
 static void GetRowidBindings(LogicalOperator &op, vector<ColumnBinding> &bindings) {
 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
@@ -98,6 +105,78 @@ static inline idx_t ComputeOverlappingBindings(const vector<ColumnBinding> &hays
 	return result;
 }
 
+static bool ExtractPushdownColumn(const Expression &expr, JoinFilterPushdownColumn &filter) {
+	if (expr.return_type.IsNested() || expr.return_type.id() == LogicalTypeId::INTERVAL) {
+		return false;
+	}
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_COLUMN_REF:
+		filter.probe_column_index = expr.Cast<BoundColumnRefExpression>().binding;
+		return true;
+	case ExpressionClass::BOUND_CAST: {
+		auto &bound_cast = expr.Cast<BoundCastExpression>();
+		const auto &src = bound_cast.child->return_type;
+		const auto &tgt = bound_cast.return_type;
+		if (!src.IsIntegral() || !tgt.IsIntegral()) {
+			return false;
+		}
+		if (GetTypeIdSize(src.InternalType()) > GetTypeIdSize(PhysicalType::INT64) ||
+		    GetTypeIdSize(tgt.InternalType()) > GetTypeIdSize(PhysicalType::INT64)) {
+			return false;
+		}
+		return ExtractPushdownColumn(*bound_cast.child, filter);
+	}
+	default:
+		return false;
+	}
+}
+
+static idx_t MaxPushdownTargetCardinality(LogicalOperator &op, const Expression &expr) {
+	JoinFilterPushdownColumn column;
+	if (!ExtractPushdownColumn(expr, column)) {
+		return 0;
+	}
+
+	vector<JoinFilterPushdownColumn> columns;
+	columns.push_back(column);
+	vector<PushdownFilterTarget> targets;
+	JoinFilterPushdownOptimizer::GetPushdownFilterTargets(op, std::move(columns), targets);
+
+	idx_t result = 0;
+	for (auto &target : targets) {
+		auto &get = target.get;
+		if (!get.table_filters.HasFilters()) {
+			continue;
+		}
+		result = MaxValue(result, get.has_estimated_cardinality ? get.estimated_cardinality : idx_t(0));
+	}
+	return result;
+}
+
+static idx_t DynamicFilterBuildScore(LogicalComparisonJoin &join, const idx_t probe_idx, const idx_t build_idx,
+                                     const idx_t build_cardinality) {
+	if (!JoinFilterPushdownOptimizer::IsFiltering(join.children[build_idx])) {
+		return 0;
+	}
+
+	idx_t max_target_cardinality = 0;
+	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison() || cond.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto &probe_expr = probe_idx == 0 ? cond.GetLHS() : cond.GetRHS();
+		max_target_cardinality =
+		    MaxValue(max_target_cardinality, MaxPushdownTargetCardinality(*join.children[probe_idx], probe_expr));
+	}
+	if (max_target_cardinality < JOIN_FILTER_TARGET_MIN_CARDINALITY) {
+		return 0;
+	}
+	if (build_cardinality > 0 && build_cardinality > max_target_cardinality / JOIN_FILTER_TARGET_BUILD_RATIO) {
+		return 0;
+	}
+	return max_target_cardinality / MaxValue<idx_t>(build_cardinality, 1);
+}
+
 BuildSize BuildProbeSideOptimizer::GetBuildSizes(const LogicalOperator &op, const idx_t lhs_cardinality,
                                                  const idx_t rhs_cardinality) {
 	BuildSize ret;
@@ -176,6 +255,22 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &right_side_build_cost = build_sizes.right_side;
 
 	bool swap = false;
+	bool has_dynamic_filter_preference = false;
+
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::INNER) {
+			const auto right_build_score = DynamicFilterBuildScore(join, 0, 1, rhs_cardinality);
+			const auto left_build_score = DynamicFilterBuildScore(join, 1, 0, lhs_cardinality);
+			if (right_build_score > left_build_score * 4) {
+				swap = false;
+				has_dynamic_filter_preference = true;
+			} else if (left_build_score > right_build_score * 4) {
+				swap = true;
+				has_dynamic_filter_preference = true;
+			}
+		}
+	}
 
 	idx_t left_child_joins = ChildHasJoins(*op.children[0]);
 	idx_t right_child_joins = ChildHasJoins(*op.children[1]);
@@ -189,12 +284,12 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	// RHS is build side.
 	// if right_side metric is larger than left_side metric, then right_side is more costly to build on
 	// than the lhs. So we swap
-	if (right_side_build_cost > left_side_build_cost) {
+	if (!has_dynamic_filter_preference && right_side_build_cost > left_side_build_cost) {
 		swap = true;
 	}
 
 	// swap for preferred on probe side
-	if (rhs_cardinality == lhs_cardinality && !preferred_on_probe_side.empty()) {
+	if (!has_dynamic_filter_preference && rhs_cardinality == lhs_cardinality && !preferred_on_probe_side.empty()) {
 		// inspect final bindings, we prefer them on the probe side
 		auto bindings_left = left_child.GetColumnBindings();
 		auto bindings_right = right_child.GetColumnBindings();
