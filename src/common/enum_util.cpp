@@ -3150,6 +3150,8 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::OPERATOR_CARDINALITY), "OPERATOR_CARDINALITY" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_NAME), "OPERATOR_NAME" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
+		{ static_cast<uint32_t>(MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED), "OPERATOR_ROW_GROUPS_SEQ_SCANNED" },
+		{ static_cast<uint32_t>(MetricType::OPERATOR_ROW_GROUPS_TOTAL), "OPERATOR_ROW_GROUPS_TOTAL" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_TIMING), "OPERATOR_TIMING" },
 		{ static_cast<uint32_t>(MetricType::OPERATOR_TYPE), "OPERATOR_TYPE" },
 		{ static_cast<uint32_t>(MetricType::OPTIMIZER_EXPRESSION_REWRITER), "OPTIMIZER_EXPRESSION_REWRITER" },
@@ -3199,12 +3201,12 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 67, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 69, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 67, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 69, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {

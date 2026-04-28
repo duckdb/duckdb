@@ -173,6 +173,7 @@ public:
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
+	idx_t AddedRowGroups(DataTable &table) const;
 	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,

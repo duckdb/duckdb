@@ -43,6 +43,7 @@ struct TableScanLocalState : public LocalTableFunctionState {
 
 	idx_t rows_scanned = 0;
 	idx_t rows_in_current_row_group = 0;
+	idx_t row_groups_seq_scanned = 0;
 };
 
 struct IndexScanLocalState : public LocalTableFunctionState {
@@ -85,6 +86,7 @@ public:
 	virtual OperatorPartitionData TableScanGetPartitionData(ClientContext &context,
 	                                                        TableFunctionGetPartitionInput &input) = 0;
 	virtual idx_t TableScanRowsScanned(LocalTableFunctionState &state) = 0;
+	virtual idx_t TableScanRowGroupsSeqScanned(LocalTableFunctionState &state) = 0;
 
 	idx_t MaxThreads() const override {
 		return max_threads;
@@ -253,6 +255,10 @@ public:
 		auto &l_state = state.Cast<IndexScanLocalState>();
 		return l_state.rows_scanned;
 	}
+
+	idx_t TableScanRowGroupsSeqScanned(LocalTableFunctionState &) override {
+		return 0;
+	}
 };
 
 class DuckTableScanState : public TableScanGlobalState {
@@ -291,6 +297,9 @@ public:
 		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		l_state->rows_in_current_row_group = storage.NextParallelScan(context.client, state, l_state->scan_state);
+		if (l_state->rows_in_current_row_group > 0) {
+			l_state->row_groups_seq_scanned++;
+		}
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
@@ -320,6 +329,9 @@ public:
 			// We have fully processed a row group. Add to scanned_rows
 			l_state.rows_scanned += l_state.rows_in_current_row_group;
 			l_state.rows_in_current_row_group = storage.NextParallelScan(context, state, l_state.scan_state);
+			if (l_state.rows_in_current_row_group > 0) {
+				l_state.row_groups_seq_scanned++;
+			}
 
 			if (data_p.results_execution_mode == AsyncResultsExecutionMode::TASK_EXECUTOR) {
 				// We can avoid looping, and just return as appropriate
@@ -374,6 +386,11 @@ public:
 	idx_t TableScanRowsScanned(LocalTableFunctionState &state) override {
 		auto &l_state = state.Cast<TableScanLocalState>();
 		return l_state.rows_scanned;
+	}
+
+	idx_t TableScanRowGroupsSeqScanned(LocalTableFunctionState &state) override {
+		auto &l_state = state.Cast<TableScanLocalState>();
+		return l_state.row_groups_seq_scanned;
 	}
 };
 
@@ -807,6 +824,17 @@ idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctio
 	return gstate.TableScanRowsScanned(local_state);
 }
 
+idx_t TableScanRowGroupsSeqScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
+	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
+	return gstate.TableScanRowGroupsSeqScanned(local_state);
+}
+
+idx_t TableScanRowGroupsTotal(ClientContext &context, const FunctionData *bind_data_p) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	auto &storage = bind_data.table.Cast<DuckTableEntry>().GetStorage();
+	return storage.GetRowGroupCount(context);
+}
+
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
@@ -884,6 +912,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
 	scan_function.rows_scanned = TableScanRowsScanned;
+	scan_function.row_groups_seq_scanned = TableScanRowGroupsSeqScanned;
+	scan_function.row_groups_total = TableScanRowGroupsTotal;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;

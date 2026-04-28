@@ -89,6 +89,8 @@ public:
 	InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
 	                                                      LocalSourceState &lstate) const override;
 	optional_idx GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const;
+	optional_idx GetRowGroupsSeqScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const;
+	optional_idx GetRowGroupsTotal(ClientContext &context) const;
 };
 
 } // namespace duckdb

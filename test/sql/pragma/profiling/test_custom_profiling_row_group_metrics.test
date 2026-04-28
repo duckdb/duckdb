@@ -1,0 +1,279 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics.test
+# description: Test OPERATOR_ROW_GROUPS_SEQ_SCANNED and OPERATOR_ROW_GROUPS_TOTAL metrics
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+# 400000 rows with default row_group_size (122880) => 4 row groups
+statement ok
+CREATE TABLE t AS SELECT range i FROM range(400000);
+
+statement ok
+CREATE TABLE empty_t(i INTEGER);
+
+# Single row group (10 rows < row_group_size)
+statement ok
+CREATE TABLE small_t AS SELECT range i FROM range(10);
+
+statement ok
+CREATE TABLE local_t(i BIGINT);
+
+# --- Full seq_scan: all 4 row groups scanned, total 4 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+# View that flattens the profiling tree and exposes the row-group metrics for every operator.
+# Avoids brittle positional indexing into children[]. Created after the first profiling output exists
+# (DuckDB validates view bodies at creation time, so the file must be readable).
+statement ok
+CREATE VIEW operator_metrics AS
+WITH RECURSIVE ops AS (
+    SELECT children[1] AS op FROM '__TEST_DIR__/profiling_output.json'
+    UNION ALL
+    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+)
+SELECT op.operator_type,
+       op.operator_row_groups_seq_scanned AS seq_scanned,
+       op.operator_row_groups_total AS total
+FROM ops;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+# --- Filtered scan: zone-map pruning skips 3 of 4 row groups ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	4
+
+# --- Index scan: seq_scanned stays 0; total still reflects table size ---
+
+statement ok
+CREATE INDEX idx ON t(i);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i = 5;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	0	4
+
+statement ok
+DROP INDEX idx;
+
+# --- Empty table: 0 / 0 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM empty_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	0	0
+
+# --- Single-row-group table: 1 / 1 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM small_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	1
+
+# --- Enabled metric appears on non-scan operators with default value 0 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'UNGROUPED_AGGREGATE';
+----
+UNGROUPED_AGGREGATE	0	0
+
+# --- Multi-threaded scan: cross-thread sum still equals 4 ---
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+# --- Multi-threaded filtered scan: pruning still leaves 1 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	4
+
+# --- Multi-scan query (join): each scan reports its own table's row groups ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t JOIN small_t USING (i);
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total;
+----
+TABLE_SCAN	1	1
+TABLE_SCAN	1	4
+
+# --- Transaction-local append: total includes uncommitted local row groups ---
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_t SELECT range FROM range(400000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM local_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+statement ok
+ROLLBACK;

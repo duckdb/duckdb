@@ -321,6 +321,22 @@
         "description": "Type of the operator",
         "type": "string",
         "is_default": true
+      },
+      {
+        "name": "OPERATOR_ROW_GROUPS_SEQ_SCANNED",
+        "enum_value": 99,
+        "description": "Number of row groups sequentially scanned by the operator",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false
+      },
+      {
+        "name": "OPERATOR_ROW_GROUPS_TOTAL",
+        "enum_value": 100,
+        "description": "Total number of row groups in the table being scanned",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false
       }
     ]
   },

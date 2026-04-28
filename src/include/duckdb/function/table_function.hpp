@@ -322,6 +322,9 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
                                                                    const FunctionData *bind_data);
 typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
                                                LocalTableFunctionState &local_state);
+typedef idx_t (*table_function_row_groups_seq_scanned_t)(GlobalTableFunctionState &global_state,
+                                                         LocalTableFunctionState &local_state);
+typedef idx_t (*table_function_row_groups_total_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -438,6 +441,10 @@ public:
 	table_function_cardinality_t cardinality;
 	//! (Optional) returns the number of rows that have benn scanned
 	table_function_rows_scanned_t rows_scanned;
+	//! (Optional) returns the number of row groups sequentially scanned by this scan
+	table_function_row_groups_seq_scanned_t row_groups_seq_scanned;
+	//! (Optional) returns the total number of row groups in the scan target
+	table_function_row_groups_total_t row_groups_total;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
