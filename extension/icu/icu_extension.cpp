@@ -215,9 +215,10 @@ unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
 	return nullptr;
 }
 
-static string NormalizeTimeZone(const string &tz_str) {
-	if (GetKnownTimeZone(tz_str)) {
-		return tz_str;
+unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	duckdb::unique_ptr<icu::TimeZone> tz;
+	if (tz = GetKnownTimeZone(tz_str)) {
+		return tz;
 	}
 
 	//	Map UTC±NN00 to Etc/UTC±N
@@ -243,39 +244,61 @@ static string NormalizeTimeZone(const string &tz_str) {
 			break;
 		}
 
-		string mapped = "Etc/GMT";
-		mapped += sign;
-		const auto base_len = mapped.size();
+		// Collect remaining characters (digits and colons)
+		string remainder;
 		for (; pos < tz_str.size(); ++pos) {
-			const auto digit = tz_str[pos];
-			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
-			if (digit == '0' || digit == ':') {
-				continue;
-			}
-			if (!StringUtil::CharacterIsDigit(digit)) {
+			const auto ch = tz_str[pos];
+			if (ch != ':' && !StringUtil::CharacterIsDigit(ch)) {
 				break;
 			}
-			mapped += digit;
+			remainder += ch;
 		}
 		if (pos < tz_str.size()) {
 			break;
 		}
-		// If we didn't add anything, then make it +0
-		if (mapped.size() == base_len) {
-			mapped.back() = '+';
-			mapped += '0';
+
+		// Step 1: Strip leading zeros
+		idx_t start = 0;
+		while (start < remainder.size() && remainder[start] == '0') {
+			++start;
+		}
+		remainder = remainder.substr(start);
+
+		// Step 2: Parse hours based on whether colon is present
+		string hours_str;
+		auto colon_idx = remainder.find(':');
+		if (colon_idx != string::npos) {
+			// Has colon: split by colon, part before colon is hours
+			hours_str = remainder.substr(0, colon_idx);
+		} else if (remainder.size() <= 2) {
+			// 1-2 digits: entire string is hours
+			hours_str = remainder;
+		} else {
+			// No colon, 3+ digits: HHMM format, last 2 are minutes, rest are hours
+			hours_str = remainder.substr(0, remainder.size() - 2);
+		}
+
+		// Build the mapped timezone string
+		string mapped = "Etc/GMT";
+		if (hours_str.empty()) {
+			// Zero offset
+			mapped += "+0";
+		} else {
+			mapped += sign;
+			mapped += hours_str;
 		}
 		// Final sanity check
-		if (GetKnownTimeZone(mapped)) {
-			return mapped;
+		if (tz = GetKnownTimeZone(mapped)) {
+			tz_str = mapped;
+			return tz;
 		}
 	} while (false);
 
-	return tz_str;
+	return nullptr;
 }
 
 unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
-	auto tz = GetKnownTimeZone(tz_str);
+	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
 	}
@@ -332,7 +355,6 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	auto tz_str = StringValue::Get(parameter);
-	tz_str = NormalizeTimeZone(tz_str);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
 }
@@ -470,8 +492,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
 	// If the environment TZ is invalid, look for some alternatives
-	tz_string = NormalizeTimeZone(tz_string);
-	if (!GetKnownTimeZone(tz_string)) {
+	tz = GetNormalizedTimeZone(tz_string);
+	if (!tz) {
 		tz_string = "UTC";
 	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),

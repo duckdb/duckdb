@@ -2,5 +2,13 @@
   "description": "Test PEG Parser + transformer in strict mode",
   "skip_compiled": "true",
   "on_init": "set allow_parser_override_extension=strict;",
-  "statically_loaded_extensions": ["core_functions", "autocomplete"]
+  "statically_loaded_extensions": ["core_functions", "autocomplete"],
+  "skip_tests": [
+    {
+      "reason": "This test verifies pg_err_pos reset behavior specific to the Postgres parser internals (errhint from LIMIT #,# grammar rule), which does not apply to the PEG parser",
+      "paths": [
+        "test/sql/parser/pg_err_pos_reset.test"
+      ]
+    }
+  ]
 }
