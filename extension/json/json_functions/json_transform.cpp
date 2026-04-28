@@ -352,7 +352,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 			break;
 		case LogicalTypeId::TIMESTAMP:
 			if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result,
-			                                                              options)) {
+			                                                               options)) {
 				success = false;
 			}
 			break;
