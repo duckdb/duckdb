@@ -418,7 +418,7 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
-	ScalarFunction &GetBoundFunction() const {
+	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	vector<unique_ptr<Expression>> &GetArguments() const {
@@ -436,7 +436,7 @@ public:
 
 private:
 	ClientContext &context;
-	ScalarFunction &bound_function;
+	BoundScalarFunction &bound_function;
 	vector<unique_ptr<Expression>> &arguments;
 	optional_ptr<Binder> binder;
 };
