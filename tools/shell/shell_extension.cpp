@@ -51,32 +51,12 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->names);
 }
 
-// Conservative check: any plan node that may evaluate user-provided SQL at execution time.
-bool PlanContainsDynamicSQLFunction(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_GET) {
-		auto &get = op.Cast<LogicalGet>();
-		// This likely needs to be done differently
-		if (get.function.name == "query" || get.function.name == "query_table") {
-			return true;
-		}
-	}
-	for (auto &child : op.children) {
-		if (PlanContainsDynamicSQLFunction(*child)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 // Runs after the binder has finished. Releases the previous last_result early if it's
 // safe — i.e. the new query doesn't statically reference `_` (the replacement scan
-// would have fired) and doesn't contain anything that might evaluate SQL at runtime.
+// would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto &state = duckdb_shell::ShellState::Get();
 	if (state.last_result_referenced) {
-		return;
-	}
-	if (statement.plan && PlanContainsDynamicSQLFunction(*statement.plan)) {
 		return;
 	}
 	state.last_result.reset();
