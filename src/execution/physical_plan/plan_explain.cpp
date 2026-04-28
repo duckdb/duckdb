@@ -44,8 +44,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);
 	for (idx_t i = 0; i < keys.size(); i++) {
-		chunk.SetValue(0, chunk.size(), Value(keys[i]));
-		chunk.SetValue(1, chunk.size(), Value(values[i]));
+		chunk.data[0].Append(Value(keys[i]));
+		chunk.data[1].Append(Value(values[i]));
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(chunk);

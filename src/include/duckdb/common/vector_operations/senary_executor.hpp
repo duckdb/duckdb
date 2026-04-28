@@ -40,8 +40,9 @@ struct SenaryExecutor {
 
 		if (all_constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			if (any_null) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				auto adata = ConstantVector::GetData<TA>(input.data[0]);
 				auto bdata = ConstantVector::GetData<TB>(input.data[1]);
@@ -55,7 +56,7 @@ struct SenaryExecutor {
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetDataMutable<TR>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 
 			bool all_valid = true;
 			vector<UnifiedVectorFormat> vdata(NCOLS);

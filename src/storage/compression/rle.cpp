@@ -427,7 +427,7 @@ void RLESelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		// skip forward to the next index
 		scan_state.SkipInternal(index_pointer, next_idx - prev_idx);
 		// read the element
-		result_data[i] = data_pointer[scan_state.entry_pos];
+		result_data.WriteValue(data_pointer[scan_state.entry_pos]);
 		// move the next to the prev
 		prev_idx = next_idx;
 	}
@@ -457,7 +457,7 @@ void RLEFilter(ColumnSegment &segment, ColumnScanState &state, idx_t vector_coun
 		memset(scan_state.matching_runs.get(), 0, sizeof(bool) * total_run_count);
 
 		// execute the filter over all runs at once
-		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer));
+		Vector run_vector(result.GetType(), data_ptr_cast(data_pointer), total_run_count);
 
 		UnifiedVectorFormat run_format;
 		run_vector.ToUnifiedFormat(total_run_count, run_format);

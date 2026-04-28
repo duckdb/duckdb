@@ -31,8 +31,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
-		Value false_val = Value::BOOLEAN(false);
-		intermediate.Reference(false_val);
+		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparison with the left
@@ -117,11 +116,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				result.Reference(try_result);
 				return;
 			}
-			if (sel) {
-				VectorOperations::Copy(try_result, result, *sel, count, 0, 0, count);
-			} else {
-				VectorOperations::Copy(try_result, result, count, 0, 0);
-			}
+			VectorOperations::Copy(try_result, result, count, 0, 0);
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);

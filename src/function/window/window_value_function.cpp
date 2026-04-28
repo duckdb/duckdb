@@ -1,3 +1,4 @@
+#include "duckdb/function/window/window_executor.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/interpolate.hpp"
@@ -7,7 +8,6 @@
 #include "duckdb/function/window/window_index_tree.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window/window_token_tree.hpp"
-#include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -18,31 +18,18 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowValueGlobalState
 //===--------------------------------------------------------------------===//
-
 class WindowValueGlobalState : public WindowExecutorGlobalState {
 public:
 	using WindowCollectionPtr = unique_ptr<WindowCollection>;
 	WindowValueGlobalState(ClientContext &client, const WindowExecutor &executor, const idx_t payload_count,
 	                       const ValidityMask &partition_mask, const ValidityMask &order_mask)
 	    : WindowExecutorGlobalState(client, executor, payload_count, partition_mask, order_mask),
-	      ignore_nulls(&all_valid), value_idx(executor.child_idx[0]) {
+	      value_idx(executor.child_idx[0]) {
 		if (!executor.arg_order_idx.empty()) {
 			value_tree =
 			    make_uniq<WindowIndexTree>(client, executor.wexpr.arg_orders, executor.arg_order_idx, payload_count);
 		}
 	}
-
-	void Finalize(CollectionPtr collection) {
-		lock_guard<mutex> ignore_nulls_guard(lock);
-		if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
-			ignore_nulls = &collection->validities[value_idx];
-		}
-	}
-
-	// IGNORE NULLS
-	mutex lock;
-	ValidityMask all_valid;
-	optional_ptr<ValidityMask> ignore_nulls;
 
 	//! The index of the value collection
 	const column_t value_idx;
@@ -56,10 +43,10 @@ public:
 //===--------------------------------------------------------------------===//
 
 //! A class representing the state of the first_value, last_value and nth_value functions
-class WindowValueLocalState : public WindowExecutorBoundsLocalState {
+class WindowValueLocalState : public WindowExecutorLocalState {
 public:
 	WindowValueLocalState(ExecutionContext &context, const WindowValueGlobalState &gvstate)
-	    : WindowExecutorBoundsLocalState(context, gvstate), gvstate(gvstate) {
+	    : WindowExecutorLocalState(context, gvstate), gvstate(gvstate), ignore_nulls(&all_valid) {
 		WindowAggregatorLocalState::InitSubFrames(frames, gvstate.executor.wexpr.exclude_clause);
 
 		if (gvstate.value_tree) {
@@ -71,10 +58,10 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-	          OperatorSinkInput &sink) override;
+	static void Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                   OperatorSinkInput &sink);
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	//! The corresponding global value state
 	const WindowValueGlobalState &gvstate;
@@ -87,12 +74,16 @@ public:
 
 	//! The state used for reading the collection
 	unique_ptr<WindowCursor> cursor;
+
+	// IGNORE NULLS
+	ValidityMask all_valid;
+	optional_ptr<ValidityMask> ignore_nulls;
 };
 
-void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                 idx_t input_idx, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
-
+void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                   idx_t input_idx, OperatorSinkInput &sink) {
+	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
+	auto &local_value = lvstate.local_value;
 	if (local_value) {
 		const auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 		idx_t filtered = 0;
@@ -103,6 +94,7 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 		const auto coll_count = coll_chunk.size();
 		auto &values = coll_chunk.data[gvstate.value_idx];
 		auto validity = values.Validity(coll_count);
+		auto &sort_nulls = lvstate.sort_nulls;
 		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
 				if (validity.IsValid(i)) {
@@ -117,9 +109,17 @@ void WindowValueLocalState::Sink(ExecutionContext &context, DataChunk &sink_chun
 	}
 }
 
-void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowExecutorBoundsLocalState::Finalize(context, collection, sink);
+void WindowValueLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
+	auto &executor = gvstate.executor;
+	const auto &value_idx = gvstate.value_idx;
 
+	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
+	if (value_idx != DConstants::INVALID_INDEX && executor.wexpr.ignore_nulls) {
+		lvstate.ignore_nulls = &collection->validities[value_idx];
+	}
+
+	auto &local_value = lvstate.local_value;
 	if (local_value) {
 		auto &value_state = local_value->Cast<WindowIndexTreeLocalState>();
 		value_state.Finalize(context, sink.interrupt_state);
@@ -127,17 +127,70 @@ void WindowValueLocalState::Finalize(ExecutionContext &context, CollectionPtr co
 	}
 
 	// Prepare to scan
-	if (!cursor && gvstate.value_idx != DConstants::INVALID_INDEX) {
-		cursor = make_uniq<WindowCursor>(*collection, gvstate.value_idx);
+	if (!lvstate.cursor && gvstate.value_idx != DConstants::INVALID_INDEX) {
+		lvstate.cursor = make_uniq<WindowCursor>(*collection, gvstate.value_idx);
 	}
 }
 
 //===--------------------------------------------------------------------===//
+// WindowValueStreamingState
+//===--------------------------------------------------------------------===//
+class WindowValueStreamingState : public WindowExecutorStreamingState {
+public:
+	static Value GetFirstValue(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr) {
+		// Just execute the expression once
+		ExpressionExecutor executor(client);
+		executor.AddExpression(*wexpr.children[0]);
+		DataChunk result;
+		result.Initialize(client, {wexpr.children[0]->return_type});
+		executor.Execute(input, result);
+
+		return result.GetValue(0, 0);
+	}
+
+	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
+	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
+	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.children[0]->return_type) {
+		eval.AddExpression(*wexpr.children[0]);
+	}
+
+	const BoundWindowExpression &wexpr;
+	//! A constant vector holding the repeated value
+	Vector vec;
+	//! A reusable selection vector
+	SelectionVector sel;
+	//! An executor for computing the argument
+	ExpressionExecutor eval;
+	//! A reusable argument vector
+	Vector arg;
+};
+
+//===--------------------------------------------------------------------===//
 // WindowValueExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowValueExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	function.return_type = arguments[0]->return_type;
+struct WindowValueExecutor {
+	//! Blocking APIs
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	//! Streaming APIs
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
+	}
+};
+
+unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	function.SetReturnType(arguments[0]->return_type);
 
 	return nullptr;
 }
@@ -174,15 +227,7 @@ unique_ptr<GlobalSinkState> WindowValueExecutor::GetGlobal(ClientContext &client
 	return make_uniq<WindowValueGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-void WindowValueExecutor::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) const {
-	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
-	gvstate.Finalize(collection);
-
-	WindowExecutor::Finalize(context, collection, sink);
-}
-
-unique_ptr<LocalSinkState> WindowValueExecutor::GetLocalState(ExecutionContext &context,
-                                                              const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowValueExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &gvstate = gstate.Cast<WindowValueGlobalState>();
 	return make_uniq<WindowValueLocalState>(context, gvstate);
 }
@@ -262,19 +307,20 @@ public:
 	}
 
 	//! Accumulate the secondary sort values
-	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
-	          OperatorSinkInput &sink) override;
+	static void Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx,
+	                   OperatorSinkInput &sink);
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	//! The optional sorting state for the secondary sort row mapping
 	unique_ptr<LocalSinkState> local_row;
 };
 
-void WindowLeadLagLocalState::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                   idx_t input_idx, OperatorSinkInput &sink) {
-	WindowValueLocalState::Sink(context, sink_chunk, coll_chunk, input_idx, sink);
+void WindowLeadLagLocalState::Sinker(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
+                                     idx_t input_idx, OperatorSinkInput &sink) {
+	WindowValueLocalState::Sinker(context, sink_chunk, coll_chunk, input_idx, sink);
 
+	auto &local_row = sink.local_state.Cast<WindowLeadLagLocalState>().local_row;
 	if (local_row) {
 		idx_t filtered = 0;
 		optional_ptr<SelectionVector> filter_sel;
@@ -284,9 +330,10 @@ void WindowLeadLagLocalState::Sink(ExecutionContext &context, DataChunk &sink_ch
 	}
 }
 
-void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowValueLocalState::Finalize(context, collection, sink);
+void WindowLeadLagLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	WindowValueLocalState::Finalizer(context, collection, sink);
 
+	auto &local_row = sink.local_state.Cast<WindowLeadLagLocalState>().local_row;
 	if (local_row) {
 		auto &row_state = local_row->Cast<WindowMergeSortTreeLocalState>();
 		row_state.Finalize(context, sink.interrupt_state);
@@ -295,14 +342,211 @@ void WindowLeadLagLocalState::Finalize(ExecutionContext &context, CollectionPtr 
 }
 
 //===--------------------------------------------------------------------===//
+// WindowLeadLagStreamingState
+//===--------------------------------------------------------------------===//
+class WindowLeadLagStreamingState : public WindowExecutorStreamingState {
+public:
+	static bool ComputeOffset(ClientContext &client, const BoundWindowExpression &wexpr, int64_t &offset) {
+		offset = 1;
+		if (wexpr.children.size() > 1) {
+			auto &offset_expr = wexpr.children[1];
+			if (offset_expr->HasParameter() || !offset_expr->IsFoldable()) {
+				return false;
+			}
+			auto offset_value = ExpressionExecutor::EvaluateScalar(client, *offset_expr);
+			if (offset_value.IsNull()) {
+				return false;
+			}
+			Value bigint_value;
+			if (!offset_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+				return false;
+			}
+			offset = bigint_value.GetValue<int64_t>();
+		}
+
+		//	We can only support LEAD and LAG values within one standard vector
+		if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
+			offset = -offset;
+		}
+		return true;
+	}
+
+	static bool ComputeDefault(ClientContext &client, const BoundWindowExpression &wexpr, Value &result) {
+		if (wexpr.children.size() < 3) {
+			result = Value(wexpr.return_type);
+			return true;
+		}
+
+		auto &default_expr = wexpr.children[2];
+		if (default_expr && (default_expr->HasParameter() || !default_expr->IsFoldable())) {
+			return false;
+		}
+		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
+		return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
+	}
+
+	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
+	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.return_type), temp(wexpr.return_type),
+	      sel(STANDARD_VECTOR_SIZE) {
+		ComputeOffset(context, wexpr, offset);
+		ComputeDefault(context, wexpr, dflt);
+
+		buffered = idx_t(std::abs(offset));
+		prev.Reference(dflt, count_t(buffered));
+		prev.Flatten(buffered);
+		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
+	}
+
+	void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	             Vector &result) {
+		if (!curr_chunk.ColumnCount()) {
+			curr_chunk.Initialize(context.client, {result.GetType()},
+			                      MaxValue<idx_t>(STANDARD_VECTOR_SIZE, delayed_capacity));
+		}
+
+		if (offset >= 0) {
+			ExecuteLag(context, input, result);
+		} else {
+			ExecuteLead(context, input, delayed, result);
+		}
+	}
+
+	void ExecuteLag(ExecutionContext &context, DataChunk &input, Vector &result) {
+		D_ASSERT(offset >= 0);
+		auto &curr = curr_chunk.data[0];
+		curr_chunk.Reset();
+		executor.Execute(input, curr_chunk);
+		const idx_t count = input.size();
+		//	Copy prev[0, buffered] => result[0, buffered]
+		idx_t source_count = MinValue<idx_t>(buffered, count);
+		VectorOperations::Copy(prev, result, source_count, 0, 0);
+		// Special case when we have buffered enough values for the output
+		if (count < buffered) {
+			//	Shift down incomplete buffers
+			//	Copy prev[count, buffered] => temp[0, buffered-count]
+			source_count = buffered - count;
+			FlatVector::ValidityMutable(temp).Reset();
+			VectorOperations::Copy(prev, temp, buffered, count, 0);
+
+			// 	Copy temp[0, buffered-count] => prev[0, buffered-count]
+			FlatVector::ValidityMutable(prev).Reset();
+			VectorOperations::Copy(temp, prev, source_count, 0, 0);
+			// 	Copy curr[0, count] => prev[buffered-count, buffered]
+			VectorOperations::Copy(curr, prev, count, 0, source_count);
+		} else {
+			//	Copy input values beyond what we have buffered
+			source_count = count - buffered;
+			//	Copy curr[0, count-buffered] => result[buffered, count]
+			VectorOperations::Copy(curr, result, source_count, 0, buffered);
+			// 	Copy curr[count-buffered, count] => prev[0, buffered]
+			FlatVector::ValidityMutable(prev).Reset();
+			VectorOperations::Copy(curr, prev, count, source_count, 0);
+		}
+	}
+
+	void ExecuteLead(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+		//	We treat input || delayed as a logical unified buffer
+		D_ASSERT(offset < 0);
+		// Input has been set up with the number of rows we CAN produce.
+		const idx_t count = input.size();
+		auto &curr = curr_chunk.data[0];
+		// Copy unified[buffered:count] => result[pos:]
+		idx_t pos = 0;
+		idx_t unified_offset = buffered;
+		if (unified_offset < count) {
+			curr_chunk.Reset();
+			executor.Execute(input, curr_chunk);
+			VectorOperations::Copy(curr, result, count, unified_offset, pos);
+			pos += count - unified_offset;
+			unified_offset = count;
+		}
+		// Copy unified[unified_offset:] => result[pos:]
+		idx_t unified_count = count + delayed.size();
+		if (unified_offset < unified_count) {
+			curr_chunk.Reset();
+			executor.Execute(delayed, curr_chunk);
+			idx_t delayed_offset = unified_offset - count;
+			// Only copy as many values as we need
+			idx_t delayed_count = MinValue<idx_t>(delayed.size(), delayed_offset + (count - pos));
+			VectorOperations::Copy(curr, result, delayed_count, delayed_offset, pos);
+			pos += delayed_count - delayed_offset;
+		}
+		// Copy default[:count-pos] => result[pos:]
+		if (pos < count) {
+			const idx_t defaulted = count - pos;
+			VectorOperations::Copy(prev, result, defaulted, 0, pos);
+		}
+	}
+
+	//! The aggregate expression
+	const BoundWindowExpression &wexpr;
+	//! Cache the executor to cut down on memory allocation
+	ExpressionExecutor executor;
+	//! The number of rows we have buffered
+	idx_t buffered;
+	//! The constant default value
+	Value dflt;
+	//! The current set of values
+	DataChunk curr_chunk;
+	//! The previous set of values
+	Vector prev;
+	//! The copy buffer
+	Vector temp;
+	//! A temporary selection vector
+	SelectionVector sel;
+};
+
+//===--------------------------------------------------------------------===//
 // WindowLeadLagExecutor
 //===--------------------------------------------------------------------===//
-unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+struct WindowLeadLagExecutor : public WindowValueExecutor {
+public:
+	//! Blocking APIs
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can stream LEAD/LAG if the arguments are constant and the delta is less than a block behind
+		if (!wexpr.ignore_nulls) {
+			Value dflt;
+			if (!WindowLeadLagStreamingState::ComputeDefault(client, wexpr, dflt)) {
+				return false;
+			}
+			int64_t offset;
+			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
+				return false;
+			}
+
+			return UnsafeNumericCast<idx_t>(std::abs(offset)) < max_delta;
+		}
+		return false;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowLeadLagStreamingState>(client, wexpr);
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowLeadLagStreamingState>().Execute(context, input, delayed, delayed_capacity, result);
+	}
+};
+
+unique_ptr<FunctionData> WindowLeadLagExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 
 	if (arguments.size() > 2) {
-		function.arguments[2] = function.return_type;
+		function.GetArguments()[2] = function.GetReturnType();
 	}
 
 	return nullptr;
@@ -315,12 +559,23 @@ static WindowFunctionSet GetLeadLagFunctionSet(const char *name, const Expressio
 	auto bounds = WindowLeadLagLocalState::GetBounds;
 	auto sharing = WindowLeadLagExecutor::GetSharing;
 	auto global = WindowLeadLagExecutor::GetGlobal;
+	auto local = WindowLeadLagExecutor::GetLocal;
+	auto sink = WindowLeadLagLocalState::Sinker;
+	auto finalize = WindowLeadLagLocalState::Finalizer;
+	auto evaluate = WindowLeadLagExecutor::GetData;
 
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT, LogicalTypeId::ANY}, LogicalType::ANY,
-	                                 type, bind, bounds, sharing, global));
+	                                 type, bind, bounds, sharing, global, local, sink, finalize, evaluate));
 	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, type, bind, bounds,
-	                                 sharing, global));
-	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global));
+	                                 sharing, global, local, sink, finalize, evaluate));
+	funcs.AddFunction(WindowFunction({LogicalTypeId::ANY}, LogicalType::ANY, type, bind, bounds, sharing, global, local,
+	                                 sink, finalize, evaluate));
+
+	for (auto &f : funcs.functions) {
+		f.SetCanStreamCallback(WindowLeadLagExecutor::CanStream);
+		f.SetStreamingStateCallback(WindowLeadLagExecutor::GetStreamingState);
+		f.SetStreamingDataCallback(WindowLeadLagExecutor::StreamData);
+	}
 
 	return funcs;
 }
@@ -333,13 +588,13 @@ WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 
 	for (auto &func : funcs.functions) {
-		if (func.arguments.size() != nargs) {
+		if (func.GetArguments().size() != nargs) {
 			continue;
 		}
 
-		func.arguments[0] = type;
+		func.GetArguments()[0] = type;
 		if (nargs > 2) {
-			func.arguments[2] = type;
+			func.GetArguments()[2] = type;
 		}
 		return func;
 	}
@@ -358,18 +613,20 @@ unique_ptr<GlobalSinkState> WindowLeadLagExecutor::GetGlobal(ClientContext &clie
 	return make_uniq<WindowLeadLagGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocalState(ExecutionContext &context,
-                                                                const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowLeadLagExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &glstate = gstate.Cast<WindowLeadLagGlobalState>();
 	return make_uniq<WindowLeadLagLocalState>(context, glstate);
 }
 
-void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                             idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLeadLagExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                    idx_t row_idx, OperatorSinkInput &sink) {
 	auto &glstate = sink.global_state.Cast<WindowLeadLagGlobalState>();
 	auto &llstate = sink.local_state.Cast<WindowLeadLagLocalState>();
+	const auto count = eval_chunk.size();
 	auto &cursor = *llstate.cursor;
 
+	auto &wexpr = glstate.executor.wexpr;
+	auto &child_idx = glstate.executor.child_idx;
 	const bool has_offset = (child_idx.size() > 1);
 	const bool has_default = (child_idx.size() > 2);
 
@@ -379,8 +636,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
 
-	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
-	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
+	auto frame_begin = FlatVector::GetData<const idx_t>(bounds.data[FRAME_BEGIN]);
+	auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 
 	if (glstate.row_tree) {
 		// TODO: Handle subframes (SelectNth can handle it but Rank can't)
@@ -428,8 +685,8 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 		return;
 	}
 
-	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 
 	// Only shift within the frame if we are using a shared ordering clause.
 	if (glstate.use_framing) {
@@ -439,7 +696,7 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 
 	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
 	// or if we are using framing (the frame may change on each row)
-	auto &ignore_nulls = glstate.ignore_nulls;
+	auto &ignore_nulls = llstate.ignore_nulls;
 	bool can_shift = ignore_nulls->CannotHaveNull() && !glstate.use_framing;
 	if (has_offset) {
 		can_shift = can_shift && wexpr.children[1]->IsFoldable();
@@ -522,21 +779,88 @@ void WindowLeadLagExecutor::EvaluateInternal(ExecutionContext &context, DataChun
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// WindowFirstValueExecutor
+//===--------------------------------------------------------------------===//
+struct WindowFirstValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (wexpr.ignore_nulls) {
+			// We can stream first values ignoring NULLs if they are "running totals"
+			return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+		}
+		return true;
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state);
+};
+
+void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
+                                          idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+	auto &sstate = state.Cast<WindowValueStreamingState>();
+	auto &wexpr = sstate.wexpr;
+	const auto count = input.size();
+
+	// If we are ignoring NULLs and we started with a NULL,
+	// then look for a non-NULL value and update it
+	if (wexpr.ignore_nulls && ConstantVector::IsNull(sstate.vec)) {
+		//	Find the first non-NULL value
+		auto &executor = sstate.eval;
+		auto &arg = sstate.arg;
+		executor.ExecuteExpression(input, arg);
+		UnifiedVectorFormat unified;
+		arg.ToUnifiedFormat(count, unified);
+		const auto &validity = unified.validity;
+		auto &prev = sstate.vec;
+		if (validity.CannotHaveNull()) {
+			prev.Reference(arg.GetValue(0), count_t(count));
+			result.Reference(prev);
+		} else {
+			auto &sel = sstate.sel;
+			Vector split(wexpr.children[0]->return_type);
+			split.SetValue(0, prev.GetValue(0));
+			sel_t s = 0;
+			for (sel_t i = 0; i < count; ++i) {
+				if (!s && validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+					auto v = arg.GetValue(i);
+					prev.Reference(v, count_t(count));
+					s = 1;
+					split.SetValue(s, v);
+				}
+				sel.set_index(i, s);
+			}
+			result.Slice(split, sel, count);
+		}
+	} else {
+		// Reference constant vector
+		result.Reference(sstate.vec);
+	}
+}
+
 WindowFunction FirstValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FIRST_VALUE,
 	                   WindowFirstValueExecutor::Bind, WindowFirstValueExecutor::GetBounds,
-	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
+	                   WindowFirstValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal,
+	                   WindowFirstValueExecutor::GetLocal, WindowValueLocalState::Sinker,
+	                   WindowValueLocalState::Finalizer, WindowFirstValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowFirstValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowFirstValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowFirstValueExecutor::StreamData);
 	return fun;
 }
 
-void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                                idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFirstValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -578,21 +902,85 @@ void WindowFirstValueExecutor::EvaluateInternal(ExecutionContext &context, DataC
 	});
 }
 
+//===--------------------------------------------------------------------===//
+// WindowLastValueExecutor
+//===--------------------------------------------------------------------===//
+struct WindowLastValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can stream last values if they are "running totals"
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state);
+};
+
+void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
+                                         idx_t delayed_capacity, Vector &result, LocalSourceState &state) {
+	//	Evaluate the argument and copy the values
+	auto &sstate = state.Cast<WindowValueStreamingState>();
+	auto &wexpr = sstate.wexpr;
+	const auto count = input.size();
+	auto &executor = sstate.eval;
+	if (wexpr.ignore_nulls) {
+		auto &prev = sstate.vec;
+		auto &arg = sstate.arg;
+		executor.ExecuteExpression(input, arg);
+		UnifiedVectorFormat unified;
+		arg.ToUnifiedFormat(count, unified);
+		const auto &validity = unified.validity;
+		if (validity.CannotHaveNull()) {
+			VectorOperations::Copy(arg, result, count, 0, 0);
+		} else {
+			//	Copy the data as it may be a reference to the argument
+			Vector copy(wexpr.children[0]->return_type);
+			VectorOperations::Copy(arg, copy, count, 0, 0);
+			//	Overwrite the previous non-NULL value if the first one is NULL
+			if (!validity.RowIsValidUnsafe(0)) {
+				VectorOperations::Copy(prev, copy, 1, 0, 0);
+			}
+			//	Select appropriate the non-NULL values to copy over
+			auto &sel = sstate.sel;
+			sel_t non_null = 0;
+			for (sel_t i = 0; i < count; ++i) {
+				if (validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+					non_null = i;
+				}
+				sel.set_index(i, non_null);
+			}
+			result.Slice(copy, sel, count);
+		}
+		//	Remember the last non-NULL value for the next iteration
+		prev.Reference(result.GetValue(count - 1), count_t(count));
+	} else {
+		executor.ExecuteExpression(input, result);
+	}
+}
+
 WindowFunction LastValueFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_LAST_VALUE,
 	                   WindowLastValueExecutor::Bind, WindowLastValueExecutor::GetBounds,
-	                   WindowLastValueExecutor::GetSharing, WindowFirstValueExecutor::GetGlobal);
+	                   WindowLastValueExecutor::GetSharing, WindowLastValueExecutor::GetGlobal,
+	                   WindowLastValueExecutor::GetLocal, WindowValueLocalState::Sinker,
+	                   WindowValueLocalState::Finalizer, WindowLastValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowLastValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowLastValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowLastValueExecutor::StreamData);
 	return fun;
 }
 
-void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                               idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowLastValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                      Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
 		if (gvstate.value_tree) {
@@ -640,24 +1028,136 @@ void WindowLastValueExecutor::EvaluateInternal(ExecutionContext &context, DataCh
 	});
 }
 
+//===--------------------------------------------------------------------===//
+// WindowNthValueExecutor
+//===--------------------------------------------------------------------===//
+class WindowNthValueStreamingState : public WindowValueStreamingState {
+public:
+	static bool ComputeNthIndex(ClientContext &client, const BoundWindowExpression &wexpr, idx_t &nth_index) {
+		auto &nth_expr = wexpr.children[1];
+		if (nth_expr && (nth_expr->HasParameter() || !nth_expr->IsFoldable())) {
+			return false;
+		}
+		auto nth_value = ExpressionExecutor::EvaluateScalar(client, *nth_expr);
+		if (nth_value.IsNull()) {
+			return false;
+		}
+		Value bigint_value;
+		if (!nth_value.DefaultTryCastAs(LogicalType::BIGINT, bigint_value, nullptr, false)) {
+			return false;
+		}
+		//	Unlike PG we are currently accepting negative indices and mapping them to 0.
+		//	Streaming this will have the same behaviour if we use a 0 index.
+		const auto bigint = bigint_value.GetValue<int64_t>();
+		nth_index = bigint > 0 ? UnsafeNumericCast<idx_t>(bigint) : 0;
+		return true;
+	}
+	WindowNthValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
+	    : WindowValueStreamingState(client, input, wexpr) {
+		vec.SetValue(0, Value(wexpr.return_type));
+		ComputeNthIndex(client, wexpr, nth_index);
+	}
+
+	void StreamData(ExecutionContext &context, DataChunk &input, Vector &result);
+
+	//! The target N
+	idx_t nth_index = DConstants::INVALID_INDEX;
+	//! The current N
+	idx_t nth_count = 0;
+};
+
+struct WindowNthValueExecutor : public WindowValueExecutor {
+	//! Blocking APIs
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		// We can only stream Nth Value if N is positive constant.
+		idx_t nth_index;
+		if (!WindowNthValueStreamingState::ComputeNthIndex(client, wexpr, nth_index)) {
+			return false;
+		}
+
+		// We can stream Nth values if they are "running totals"
+		return wexpr.start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr.end == WindowBoundary::CURRENT_ROW_ROWS;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowNthValueStreamingState>(client, input, wexpr);
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowNthValueStreamingState>().StreamData(context, input, result);
+	}
+};
+
+void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChunk &input, Vector &result) {
+	//	If we haven't reached the chunk with the value yet, reference the current value
+	const auto count = input.size();
+	if (!wexpr.ignore_nulls && nth_count + count < nth_index) {
+		result.Reference(vec);
+		nth_count += count;
+		return;
+	}
+	//	If we have found the Nth value already, reference the current value.
+	if (nth_index <= nth_count) {
+		result.Reference(vec);
+		return;
+	}
+
+	eval.ExecuteExpression(input, arg);
+
+	UnifiedVectorFormat unified;
+	arg.ToUnifiedFormat(count, unified);
+	const auto &validity = unified.validity;
+
+	//	Split the result between NULLs and the Nth Value
+	Vector split(wexpr.children[0]->return_type, 2);
+	sel_t s = 0;
+	split.SetValue(s, vec.GetValue(0));
+
+	// If we are ignoring NULLS and there are NULLS, search for a non-NULL value.
+	const bool any_value = wexpr.ignore_nulls && !validity.CannotHaveNull();
+	for (idx_t i = 0; i < count; ++i) {
+		if (!any_value || validity.RowIsValidUnsafe(unified.sel->get_index(i))) {
+			++nth_count;
+		}
+		// One-based comparison.
+		if (nth_count == nth_index) {
+			auto v = arg.GetValue(i);
+			vec.Reference(v, count_t(count));
+			s = 1;
+			split.SetValue(s, v);
+		}
+		sel.set_index(i, s);
+	}
+	result.Slice(split, sel, count);
+}
+
 WindowFunction NthValueFun::GetFunction() {
-	WindowFunction fun(Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ExpressionType::WINDOW_NTH_VALUE, WindowNthValueExecutor::Bind,
-	                   WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
-	                   WindowNthValueExecutor::GetGlobal);
+	WindowFunction fun(
+	    Name, {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::ANY, ExpressionType::WINDOW_NTH_VALUE,
+	    WindowNthValueExecutor::Bind, WindowNthValueExecutor::GetBounds, WindowNthValueExecutor::GetSharing,
+	    WindowNthValueExecutor::GetGlobal, WindowNthValueExecutor::GetLocal, WindowValueLocalState::Sinker,
+	    WindowValueLocalState::Finalizer, WindowNthValueExecutor::GetData);
+	fun.SetCanStreamCallback(WindowNthValueExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowNthValueExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowNthValueExecutor::StreamData);
 	return fun;
 }
 
-void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result,
-                                              idx_t count, idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowNthValueExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
+                                     Vector &result, idx_t row_idx, OperatorSinkInput &sink) {
 	auto &gvstate = sink.global_state.Cast<WindowValueGlobalState>();
 	auto &lvstate = sink.local_state.Cast<WindowValueLocalState>();
 	auto &cursor = *lvstate.cursor;
-	auto &bounds = lvstate.bounds;
+	const auto count = eval_chunk.size();
 	auto &frames = lvstate.frames;
-	auto &ignore_nulls = *gvstate.ignore_nulls;
+	auto &ignore_nulls = *lvstate.ignore_nulls;
 	auto exclude_mode = gvstate.executor.wexpr.exclude_clause;
 	D_ASSERT(cursor.chunk.ColumnCount() == 1);
+	const auto &child_idx = gvstate.executor.child_idx;
 	const auto nth_idx = child_idx[1];
 	WindowInputExpression nth_col(eval_chunk, nth_idx);
 	WindowAggregator::EvaluateSubFrames(bounds, exclude_mode, count, row_idx, frames, [&](idx_t i) {
@@ -714,6 +1214,19 @@ void WindowNthValueExecutor::EvaluateInternal(ExecutionContext &context, DataChu
 //===--------------------------------------------------------------------===//
 // WindowFillExecutor
 //===--------------------------------------------------------------------===//
+struct WindowFillExecutor : public WindowValueExecutor {
+	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input);
+	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
+
+	static unique_ptr<GlobalSinkState> GetGlobal(ClientContext &client, const WindowExecutor &executor,
+	                                             const idx_t payload_count, const ValidityMask &partition_mask,
+	                                             const ValidityMask &order_mask);
+	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
+
+	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                    idx_t row_idx, OperatorSinkInput &sink);
+};
+
 template <class TO, class FROM>
 TO LossyFillCast(FROM val) {
 	return LossyNumericCast<TO, FROM>(val);
@@ -936,22 +1449,24 @@ static bool IsFillType(const LogicalType &type) {
 	return type.IsNumeric() || (type.IsTemporal() && type.id() != LogicalTypeId::TIME_TZ);
 }
 
-unique_ptr<FunctionData> WindowFillExecutor::Bind(ClientContext &context, WindowFunction &function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	WindowValueExecutor::Bind(context, function, arguments);
+unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input) {
+	WindowValueExecutor::Bind(input);
+
+	const auto &arguments = input.GetArguments();
 
 	//	Check FILL arguments support subtraction
 	if (!IsFillType(arguments[0]->return_type)) {
 		throw BinderException("FILL argument must support subtraction");
 	}
 
-	return nullptr;
-}
+	// Can we validate?
+	if (!input.HasOrders() || !input.HasArgumentOrders()) {
+		return nullptr;
+	}
 
-void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &function,
-                                  vector<unique_ptr<Expression>> &arguments, vector<OrderByNode> &orders,
-                                  vector<OrderByNode> &arg_orders) {
-	WindowValueExecutor::Bind(context, function, arguments);
+	auto &orders = input.GetOrders();
+	auto &arg_orders = input.GetArgumentOrders();
+
 	if (arg_orders.size() > 1 || (arg_orders.empty() && orders.size() != 1)) {
 		throw BinderException("FILL functions must have only one ORDER BY expression");
 	}
@@ -970,6 +1485,8 @@ void WindowFillExecutor::Validate(ClientContext &context, WindowFunction &functi
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
 	}
+
+	return nullptr;
 }
 
 void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared) {
@@ -993,11 +1510,12 @@ void WindowFillExecutor::GetSharing(WindowExecutor &executor, WindowSharedExpres
 	//	We need the sort values for interpolation, so either use the range or the secondary ordering expression
 	if (arg_order_idx.empty()) {
 		//	We use the range ordering, even if it has not been defined
-		if (!executor.range_expr) {
+		if (executor.range_idx == DConstants::INVALID_INDEX) {
 			D_ASSERT(wexpr.orders.size() == 1);
 			//	We don't need the validity mask because we have also requested the valid range for the ordering.
 			executor.range_idx = shared.RegisterCollection(wexpr.orders[0].expression, false);
 		}
+		executor.aux_idx.emplace_back(executor.range_idx);
 	} else {
 		//	For secondary sorts, we need the entire collection so we can interpolate using the values
 		D_ASSERT(arg_order_idx.size() == 1);
@@ -1049,30 +1567,31 @@ public:
 	}
 
 	//! Finish the sinking and prepare to scan
-	void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) override;
+	static void Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
 	//! Cursor for the secondary sort values
 	unique_ptr<WindowCursor> order_cursor;
 };
 
-void WindowFillLocalState::Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
-	WindowLeadLagLocalState::Finalize(context, collection, sink);
+void WindowFillLocalState::Finalizer(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink) {
+	WindowLeadLagLocalState::Finalizer(context, collection, sink);
 
 	// Prepare to scan
-	auto &gfstate = gvstate.Cast<WindowFillGlobalState>();
-	if (!order_cursor && gfstate.order_idx != DConstants::INVALID_INDEX) {
-		order_cursor = make_uniq<WindowCursor>(*collection, gfstate.order_idx);
+	auto &gfstate = sink.global_state.Cast<WindowFillGlobalState>();
+	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
+	if (!lfstate.order_cursor && gfstate.order_idx != DConstants::INVALID_INDEX) {
+		lfstate.order_cursor = make_uniq<WindowCursor>(*collection, gfstate.order_idx);
 	}
 }
 
 WindowFunction FillFun::GetFunction() {
 	WindowFunction fun(Name, {LogicalTypeId::ANY}, LogicalType::ANY, ExpressionType::WINDOW_FILL,
 	                   WindowFillExecutor::Bind, WindowFillLocalState::GetBounds, WindowFillExecutor::GetSharing,
-	                   WindowFillExecutor::GetGlobal);
-	fun.SetValidateCallback(WindowFillExecutor::Validate);
+	                   WindowFillExecutor::GetGlobal, WindowFillExecutor::GetLocal, WindowFillLocalState::Sinker,
+	                   WindowFillLocalState::Finalizer, WindowFillExecutor::GetData);
 
 	//! Never ignore nulls (that's the point!)
-	fun.can_ignore_nulls = false;
+	fun.SetCanIgnoreNulls(false);
 
 	return fun;
 }
@@ -1083,16 +1602,17 @@ unique_ptr<GlobalSinkState> WindowFillExecutor::GetGlobal(ClientContext &client,
 	return make_uniq<WindowFillGlobalState>(client, executor, payload_count, partition_mask, order_mask);
 }
 
-unique_ptr<LocalSinkState> WindowFillExecutor::GetLocalState(ExecutionContext &context,
-                                                             const GlobalSinkState &gstate) const {
+unique_ptr<LocalSinkState> WindowFillExecutor::GetLocal(ExecutionContext &context, const GlobalSinkState &gstate) {
 	const auto &gfstate = gstate.Cast<WindowFillGlobalState>();
 	return make_uniq<WindowFillLocalState>(context, gfstate);
 }
 
-void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
-                                          idx_t row_idx, OperatorSinkInput &sink) const {
+void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+                                 idx_t row_idx, OperatorSinkInput &sink) {
 	auto &lfstate = sink.local_state.Cast<WindowFillLocalState>();
+	const auto count = eval_chunk.size();
 	auto &cursor = *lfstate.cursor;
+	auto &order_cursor = *lfstate.order_cursor;
 
 	//	Assume the best and just batch copy all the values
 	WindowFillCopy(cursor, result, count, row_idx, 0);
@@ -1105,12 +1625,13 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 
 	//	Missing values - linear interpolation
 	auto &gfstate = sink.global_state.Cast<WindowFillGlobalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[PARTITION_END]);
+	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 
 	idx_t prev_valid = DConstants::INVALID_INDEX;
 	idx_t next_valid = DConstants::INVALID_INDEX;
 
+	const auto &wexpr = gfstate.executor.wexpr;
 	auto interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
 	auto value_func = GetFillValueFunction(wexpr.children[0]->return_type);
 
@@ -1118,7 +1639,6 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 	if (gfstate.value_tree) {
 		//	Roughly what we need to do is find the previous and next non-null values
 		//	with non-null ordering values. This is essentially LEAD/LAG(IGNORE NULLS)
-		auto &order_cursor = *lfstate.order_cursor;
 		auto slope_func = GetFillSlopeFunction(wexpr.arg_orders[0].expression->return_type);
 		auto order_value_func = GetFillValueFunction(wexpr.arg_orders[0].expression->return_type);
 		auto &frames = lfstate.frames;
@@ -1159,7 +1679,7 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 				}
 			}
 
-			//	If there is nothing beind us (missing early value) then scan forward
+			//	If there is nothing being us (missing early value) then scan forward
 			if (prev_valid == DConstants::INVALID_INDEX) {
 				for (idx_t n = own_row + 1; n < frame_width; ++n) {
 					auto j = gfstate.value_tree->SelectNth(frames, n).first;
@@ -1228,9 +1748,8 @@ void WindowFillExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &
 		return;
 	}
 
-	auto valid_begin = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_BEGIN]);
-	auto valid_end = FlatVector::GetData<const idx_t>(lfstate.bounds.data[VALID_END]);
-	auto &order_cursor = *lfstate.range_cursor;
+	auto valid_begin = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
+	auto valid_end = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
 	idx_t prev_partition = DConstants::INVALID_INDEX;
 	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
 	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->return_type);

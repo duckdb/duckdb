@@ -153,8 +153,9 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	});
 }
 
-static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+
 	//! Return a tagged collator
 	if (!bound_function.extra_info.empty()) {
 		return make_uniq<IcuBindData>(bound_function.extra_info);
@@ -171,8 +172,11 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, S
 	}
 }
 
-static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
@@ -363,6 +367,10 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
 			break;
@@ -377,7 +385,7 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 		//	The calendar name is all we have
 		std::string utf8;
 		calendar->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
+		name_col.Append(Value(utf8));
 
 		++index;
 	}

@@ -74,7 +74,7 @@ void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<double>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = lstate.random_engine.NextRandom();
+		result_data.WriteValue(lstate.random_engine.NextRandom());
 	}
 }
 
@@ -92,7 +92,7 @@ void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv4::GenerateRandomUUID(lstate.random_engine);
+		result_data.WriteValue(UUIDv4::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 
@@ -103,15 +103,14 @@ void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv7::GenerateRandomUUID(lstate.random_engine);
+		result_data.WriteValue(UUIDv7::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 
 } // namespace
 
 ScalarFunction RandomFun::GetFunction() {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
-	                      RandomInitLocalState);
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, RandomInitLocalState);
 	random.SetStability(FunctionStability::VOLATILE);
 	return random;
 }
@@ -121,7 +120,7 @@ ScalarFunction UUIDFun::GetFunction() {
 }
 
 ScalarFunction UUIDv4Fun::GetFunction() {
-	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v4
 	uuid_v4_function.SetStability(FunctionStability::VOLATILE);
@@ -129,7 +128,7 @@ ScalarFunction UUIDv4Fun::GetFunction() {
 }
 
 ScalarFunction UUIDv7Fun::GetFunction() {
-	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v7
 	uuid_v7_function.SetStability(FunctionStability::VOLATILE);

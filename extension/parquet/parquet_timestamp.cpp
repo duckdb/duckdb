@@ -1,9 +1,11 @@
 #include "parquet_timestamp.hpp"
 
-#include "duckdb.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 

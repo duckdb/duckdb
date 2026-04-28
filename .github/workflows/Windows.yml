@@ -56,7 +56,8 @@ jobs:
         python-version: '3.12'
 
     - uses: ./.github/actions/ccache-action
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment (x64)
+      uses: ./.github/actions/setup-msvc-env
 
     - name: Build
       shell: bash
@@ -118,11 +119,10 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python scripts/amalgamation.py
         "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-amd64.zip duckdb.exe
         tmp_zip_dir="$(mktemp -d)"
         lib_archive_path="$(pwd)/libduckdb-windows-amd64.zip"
-        cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+        cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
         (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
         rm -rf "${tmp_zip_dir}"
         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
@@ -134,7 +134,8 @@ jobs:
           libduckdb-windows-amd64.zip
           duckdb_cli-windows-amd64.zip
 
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment for export check (x64)
+      uses: ./.github/actions/setup-msvc-env
     - name: Duckdb.dll export symbols with C++ on Windows
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/duckdb.lib
@@ -143,7 +144,7 @@ jobs:
     name: Windows (32 Bit)
     needs:
       - win-release-64
-    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all == 'true' }}
+    if: ${{ github.ref_name == 'main' || github.repository != 'duckdb/duckdb' || inputs.run_all }}
     runs-on: ${{ inputs.runner_windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
@@ -159,9 +160,11 @@ jobs:
         python-version: '3.12'
 
     - uses: ./.github/actions/ccache-action
-    - uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC environment (x86 target)
+      uses: ./.github/actions/setup-msvc-env
       with:
-        arch: amd64_x86
+        arch: x86
+        host_arch: x64
 
     - name: Build
       shell: bash
@@ -198,9 +201,11 @@ jobs:
          python-version: '3.12'
 
      - uses: ./.github/actions/ccache-action
-     - uses: ilammy/msvc-dev-cmd@v1
+     - name: Set up MSVC environment (arm64 target)
+       uses: ./.github/actions/setup-msvc-env
        with:
-         arch: amd64_arm64
+         arch: arm64
+         host_arch: x64
 
      - name: Build
        shell: bash
@@ -231,11 +236,10 @@ jobs:
          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
        run: |
-         python scripts/amalgamation.py
          "/c/Program Files/7-Zip/7z.exe" a -tzip duckdb_cli-windows-arm64.zip duckdb.exe
          tmp_zip_dir="$(mktemp -d)"
          lib_archive_path="$(pwd)/libduckdb-windows-arm64.zip"
-         cp src/duckdb.dll src/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h "${tmp_zip_dir}/"
+         cp src/duckdb.dll src/duckdb.lib src/include/duckdb.h "${tmp_zip_dir}/"
          (cd "${tmp_zip_dir}" && "/c/Program Files/7-Zip/7z.exe" a -tzip "${lib_archive_path}" ./*)
          rm -rf "${tmp_zip_dir}"
          ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
@@ -338,11 +342,11 @@ jobs:
      - win-release-64
      - win-release-arm64
    steps:
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-windows-arm64
 
-    - uses: actions/download-artifact@v5
+    - uses: actions/download-artifact@v8
       with:
         name: duckdb-binaries-windows-amd64
 

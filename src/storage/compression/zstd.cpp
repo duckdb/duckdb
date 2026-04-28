@@ -901,7 +901,7 @@ public:
 	}
 
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
-		if (!skip_buffer) {
+		if (!skip_buffer.IsSet()) {
 			skip_buffer = Allocator::DefaultAllocator().Allocate(duckdb_zstd::ZSTD_DStreamOutSize());
 		}
 

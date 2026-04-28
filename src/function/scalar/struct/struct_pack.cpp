@@ -29,13 +29,14 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 	// set only the struct buffer's type - do not propagate to children
 	// since children reference external vectors (args) that may have incompatible buffer types
-	result.GetBuffer()->SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());
 }
 
 template <bool IS_STRUCT_PACK>
-static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	case_insensitive_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
@@ -77,8 +78,8 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
-	                   StructPackBind<IS_STRUCT_PACK>, nullptr, StructPackStats);
-	fun.varargs = LogicalType::ANY;
+	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

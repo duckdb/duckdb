@@ -199,6 +199,40 @@ u	timestamp	NULL	false
 v	list	NULL	false
 w	enum	NULL	false
 
+# get_columns with SQLAlchemy >= 2.0.45 collation lookup
+query II
+SELECT a.attname,
+	CASE WHEN (a.attcollation != 0 AND (
+		SELECT t.typcollation
+		FROM pg_catalog.pg_type t
+		WHERE t.oid = a.atttypid
+	) != a.attcollation) THEN (
+		SELECT c.collname
+		FROM pg_catalog.pg_collation c
+		WHERE c.oid = a.attcollation
+	) ELSE NULL END AS collation
+FROM pg_catalog.pg_attribute a
+WHERE a.attrelid = (SELECT MIN(oid) FROM pg_class WHERE relname='integral_values')
+AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY a.attnum;
+----
+j	NULL
+k	NULL
+l	NULL
+i	NULL
+z	NULL
+m	NULL
+n	NULL
+o	NULL
+p	NULL
+q	NULL
+r	NULL
+s	NULL
+t	NULL
+u	NULL
+v	NULL
+w	NULL
+
 
 # get_pk_constraint
 statement ok

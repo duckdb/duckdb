@@ -101,6 +101,26 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
+//! RAII wrapper that ensures the active query is reset if an exception occurs during preparation
+struct ActiveQueryGuard {
+	unique_ptr<ActiveQueryContext> &active_query;
+	bool set_active_query;
+
+	ActiveQueryGuard(unique_ptr<ActiveQueryContext> &active_query_p, const string &query)
+	    : active_query(active_query_p), set_active_query(false) {
+		if (!active_query) {
+			active_query = make_uniq<ActiveQueryContext>();
+			set_active_query = true;
+			active_query->query = query;
+		}
+	}
+	~ActiveQueryGuard() {
+		if (set_active_query) {
+			active_query.reset();
+		}
+	}
+};
+
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
@@ -779,7 +799,10 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	PendingQueryParameters parameters;
 	RunFunctionInTransactionInternal(
 	    lock,
-	    [&]() { prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters); },
+	    [&]() {
+		    ActiveQueryGuard guard(active_query, statement_query);
+		    prepared_data = CreatePreparedStatement(lock, statement_query, std::move(statement), parameters);
+	    },
 	    false);
 	prepared_data->unbound_statement = std::move(unbound_statement);
 	return make_uniq<PreparedStatement>(shared_from_this(), std::move(prepared_data), std::move(statement_query),
@@ -955,7 +978,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 						reparsed_transaction_stmt.info->invalidation_policy =
 						    previous_transaction_stmt.info->invalidation_policy;
 						// re-apply auto rollback
-						parser.statements[0]->Cast<TransactionStatement>().info->auto_rollback =
+						reparsed_transaction_stmt.info->auto_rollback =
 						    statement->Cast<TransactionStatement>().info->auto_rollback;
 					}
 					statement = std::move(parser.statements[0]);
@@ -1041,6 +1064,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, QueryParameters parameters) {
 	auto pending_query = PendingQuery(std::move(statement), parameters);
 	if (pending_query->HasError()) {
+		if (transaction.HasActiveTransaction() && transaction.GetAutoRollback()) {
+			transaction.Rollback(pending_query->GetErrorObject());
+		}
 		return ErrorResult<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();

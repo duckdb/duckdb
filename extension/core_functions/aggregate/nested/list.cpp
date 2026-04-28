@@ -58,7 +58,7 @@ void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_data, id
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		aggr_input_data.allocator.AlignNext();
 		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
 	}
@@ -70,7 +70,7 @@ void ListAbsorbFunction(Vector &states_vector, Vector &combined, AggregateInputD
 	auto states = states_vector.Values<ListAggState *>(count);
 	auto combined_ptr = FlatVector::GetDataMutable<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		if (state.linked_list.total_capacity == 0) {
 			// NULL, no need to append
 			// this can happen when adding a FILTER to the grouping, e.g.,
@@ -96,15 +96,15 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto &mask = FlatVector::Validity(result);
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count + offset);
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	// first iterate over all entries and set up the list entries, and get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		const auto rid = i + offset;
 		result_data[rid].offset = total_len;
 		if (state.linked_list.total_capacity == 0) {
@@ -121,9 +121,9 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
 	ListVector::Reserve(result, total_len);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[i].value;
+		auto &state = *states[i].GetValue();
 		const auto rid = i + offset;
 		if (state.linked_list.total_capacity == 0) {
 			continue;
@@ -150,7 +150,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 	auto result_type = ListType::GetChildType(list_bind_data.stype);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &source = *states[i].value;
+		auto &source = *states[i].GetValue();
 		auto &target = *combined_ptr[i];
 
 		const auto entry_count = source.linked_list.total_capacity;
@@ -167,8 +167,9 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 	}
 }
 
-unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
-                                          vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListBindFunction(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
 	return make_uniq<ListBindData>(function.GetReturnType());
 }

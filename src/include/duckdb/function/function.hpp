@@ -139,6 +139,7 @@ public:
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
+protected:
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
 	//! The set of original arguments of the function - only set if Function::EraseArgument is called
@@ -149,6 +150,30 @@ public:
 	LogicalType varargs;
 
 public:
+	vector<LogicalType> &GetArguments() {
+		return arguments;
+	}
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<LogicalType> &GetOriginalArguments() {
+		return original_arguments;
+	}
+	const vector<LogicalType> &GetOriginalArguments() const {
+		return original_arguments;
+	}
+
+	const LogicalType &GetVarArgs() const {
+		return varargs;
+	}
+	LogicalType &GetVarArgs() {
+		return varargs;
+	} // TODO: Dont expose mutable accessor
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
+	}
+
 	DUCKDB_API virtual string ToString() const;
 
 	DUCKDB_API bool HasVarArgs() const;
@@ -168,13 +193,24 @@ public:
 	DUCKDB_API bool HasNamedParameters() const;
 };
 
+class FunctionProperties {
+public:
+	FunctionStability stability = FunctionStability::CONSISTENT;
+	//! How this function handles NULL values
+	FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	//! Whether or not this function can throw an error
+	FunctionErrors errors = FunctionErrors::CANNOT_ERROR;
+	//! Collation handling of the function
+	FunctionCollationHandling collation_handling = FunctionCollationHandling::PROPAGATE_COLLATIONS;
+
+	bool operator==(const FunctionProperties &rhs) const;
+	bool operator!=(const FunctionProperties &rhs) const;
+};
+
 class BaseScalarFunction : public SimpleFunction {
 public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              FunctionStability stability,
-	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                              FunctionErrors errors = FunctionErrors::CANNOT_ERROR);
+	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~BaseScalarFunction() override;
 
 public:
@@ -188,59 +224,9 @@ public:
 		return return_type;
 	}
 
-	FunctionStability GetStability() const {
-		return stability;
-	}
-	void SetStability(FunctionStability stability_p) {
-		stability = stability_p;
-	}
-
-	FunctionNullHandling GetNullHandling() const {
-		return null_handling;
-	}
-	void SetNullHandling(FunctionNullHandling null_handling_p) {
-		null_handling = null_handling_p;
-	}
-
-	FunctionErrors GetErrorMode() const {
-		return errors;
-	}
-	void SetErrorMode(FunctionErrors errors_p) {
-		errors = errors_p;
-	}
-
-	//! Set this functions error-mode as fallible (can throw runtime errors)
-	void SetFallible() {
-		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-	}
-	//! Set this functions stability as volatile (can not be cached per row)
-	void SetVolatile() {
-		stability = FunctionStability::VOLATILE;
-	}
-
-	void SetCollationHandling(FunctionCollationHandling collation_handling_p) {
-		collation_handling = collation_handling_p;
-	}
-	FunctionCollationHandling GetCollationHandling() const {
-		return collation_handling;
-	}
-
-public:
+protected:
 	//! Return type of the function
 	LogicalType return_type;
-	//! The stability of the function (see FunctionStability enum for more info)
-	FunctionStability stability;
-	//! How this function handles NULL values
-	FunctionNullHandling null_handling;
-	//! Whether or not this function can throw an error
-	FunctionErrors errors;
-	//! Collation handling of the function
-	FunctionCollationHandling collation_handling;
-
-	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function) {
-		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-		return function;
-	}
 
 public:
 	DUCKDB_API hash_t Hash() const;

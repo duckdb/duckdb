@@ -111,7 +111,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	// Result references the dictionary
-	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input));
+	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input), args.size());
 
 	return true;
 }
@@ -190,7 +190,7 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 		result_data[i] = false;
 	}
 
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity.SetAllValid(count);
 	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	for (auto &arg : args.data) {
@@ -218,22 +218,22 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto &arguments = state->intermediate_chunk;
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
-	if (expr.function.stability == FunctionStability::VOLATILE) {
+	if (expr.function.GetStability() == FunctionStability::VOLATILE) {
 		// we cannot optimize away constant vectors for volatile functions
 		all_constant = false;
 	}
+	auto default_null_handling = expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				all_constant = false;
+			} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
+				// constant NULL input: result is NULL
+				ConstantVector::SetNull(result, count_t(count));
+				return;
 			}
-#ifdef DEBUG
-			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
-				arguments.data[i].UTFVerify(count);
-			}
-#endif
 		}
 	}
 	arguments.SetCardinality(all_constant ? 1 : count);
@@ -283,7 +283,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (!expr.function.HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-
+	// FIXME: push constant handling in here
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
 	for (idx_t i = 0; i < expr.children.size(); i++) {

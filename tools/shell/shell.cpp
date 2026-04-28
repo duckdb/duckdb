@@ -3345,6 +3345,11 @@ int RunShell(int argc, const char **argv) {
 			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
+#if !defined(_WIN32) && !defined(WIN32)
+	signal(SIGINT, SIG_IGN);
+#else
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
+#endif
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();

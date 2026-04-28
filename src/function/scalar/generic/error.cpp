@@ -9,10 +9,10 @@ namespace {
 static void ErrorFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	for (auto entry : args.data[0].Values<string_t>(args.size())) {
 		if (!entry.IsValid()) {
-			FlatVector::SetNull(result, entry.index, true);
+			FlatVector::SetNull(result, entry.GetIndex(), true);
 			continue;
 		}
-		throw InvalidInputException(entry.value.GetString());
+		throw InvalidInputException(entry.GetValue().GetString());
 	}
 }
 

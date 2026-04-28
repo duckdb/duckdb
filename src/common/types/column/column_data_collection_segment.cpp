@@ -11,8 +11,8 @@ namespace duckdb {
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
-    : allocator(std::move(allocator_p)), types(std::move(types_p)), count(0),
-      heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
+    : allocator(std::move(allocator_p)), total_allocated(0), last_chunk_total_allocated(0), types(std::move(types_p)),
+      count(0), heap(make_shared_ptr<StringHeap>(allocator->GetAllocator())) {
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
@@ -53,8 +53,9 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	auto struct_or_array = internal_type == PhysicalType::STRUCT || internal_type == PhysicalType::ARRAY;
 	auto type_size = struct_or_array ? 0 : GetTypeIdSize(internal_type);
 
-	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
-	                        meta_data.offset, chunk_state);
+	const auto allocation_size = GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE;
+	allocator->AllocateData(allocation_size, meta_data.block_id, meta_data.offset, chunk_state);
+	total_allocated += allocation_size;
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
 	    allocator->GetType() == ColumnDataAllocatorType::HYBRID) {
 		chunk_meta.block_ids.insert(meta_data.block_id);
@@ -103,7 +104,11 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 
 	VectorMetaData meta_data;
 	meta_data.count = 0;
-	allocator->AllocateData(AlignValue(size), meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
+
+	const auto allocation_size = AlignValue(size);
+	allocator->AllocateData(allocation_size, meta_data.block_id, meta_data.offset, &append_state.current_chunk_state);
+	total_allocated += allocation_size;
+
 	chunk_meta.block_ids.insert(meta_data.block_id);
 
 	VectorDataIndex index(vector_data.size());
@@ -117,6 +122,11 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateStringHeap(idx_t size, Chun
 }
 
 void ColumnDataCollectionSegment::AllocateNewChunk() {
+	if (!chunk_data.empty()) {
+		chunk_data.back().allocation_size = total_allocated - last_chunk_total_allocated;
+	}
+	last_chunk_total_allocated = total_allocated;
+
 	ChunkMetaData meta_data;
 	meta_data.count = 0;
 	meta_data.vector_data.reserve(types.size());
@@ -175,9 +185,9 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		if (TypeHasData(result.GetType())) {
-			FlatVector::SetData(result, base_ptr);
+			FlatVector::SetData(result, base_ptr, count_t(vdata.count));
 		}
-		FlatVector::Validity(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
+		FlatVector::ValidityMutable(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
 		return vdata.count;
 	}
 
@@ -196,7 +206,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
 	auto target_data = FlatVector::GetDataMutable(result);
-	auto &target_validity = FlatVector::Validity(result);
+	auto &target_validity = FlatVector::ValidityMutable(result);
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
@@ -224,11 +234,11 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto vcount = ReadVectorInternal(state, vector_index, result);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
-		auto &child_vector = ListVector::GetEntry(result);
+		auto &child_vector = ListVector::GetChildMutable(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
 	} else if (internal_type == PhysicalType::ARRAY) {
-		auto &child_vector = ArrayVector::GetEntry(result);
+		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		(void)child_count;
 	} else if (internal_type == PhysicalType::STRUCT) {
@@ -289,6 +299,15 @@ idx_t ColumnDataCollectionSegment::SizeInBytes() const {
 idx_t ColumnDataCollectionSegment::AllocationSize() const {
 	D_ASSERT(!allocator->IsShared());
 	return allocator->AllocationSize() + heap->AllocationSize();
+}
+
+idx_t ColumnDataCollectionSegment::GetChunkAllocationSize(const idx_t chunk_idx) const {
+	auto &chunk_meta = chunk_data[chunk_idx];
+	if (chunk_meta.allocation_size.IsValid()) {
+		return chunk_meta.allocation_size.GetIndex();
+	}
+	// Last chunk - derive it
+	return total_allocated - last_chunk_total_allocated;
 }
 
 void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result) {

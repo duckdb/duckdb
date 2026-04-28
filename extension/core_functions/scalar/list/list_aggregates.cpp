@@ -31,7 +31,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
 unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
-	bound_function.arguments[0] = LogicalType::SQLNULL;
+	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
 }
@@ -152,17 +152,15 @@ struct DistinctFunctor {
 		}
 		// reserve space in the list vector
 		ListVector::Reserve(result, old_len + new_entries);
-		auto &child_elements = ListVector::GetEntry(result);
-		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+		auto &child_elements = ListVector::GetChildMutable(result);
+		auto list_entries = FlatVector::Writer<list_entry_t>(result, count);
 
 		idx_t current_offset = old_len;
 		for (idx_t i = 0; i < count; i++) {
-			const auto rid = i;
 			auto &state = *states[sdata.sel->get_index(i)];
-			auto &list_entry = list_entries[rid];
-			list_entry.offset = current_offset;
+			const idx_t entry_offset = current_offset;
 			if (!state.hist) {
-				list_entry.length = 0;
+				list_entries.WriteValue(list_entry_t(entry_offset, 0));
 				continue;
 			}
 
@@ -170,7 +168,7 @@ struct DistinctFunctor {
 				OP::template HistogramFinalize<T>(entry.first, child_elements, current_offset);
 				current_offset++;
 			}
-			list_entry.length = current_offset - list_entry.offset;
+			list_entries.WriteValue(list_entry_t(entry_offset, current_offset - entry_offset));
 		}
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
@@ -190,10 +188,10 @@ struct UniqueFunctor {
 			auto state = states[sdata.sel->get_index(i)];
 
 			if (!state->hist) {
-				result_data[i] = 0;
+				result_data.WriteValue(0);
 				continue;
 			}
-			result_data[i] = state->hist->size();
+			result_data.WriteValue(state->hist->size());
 		}
 		result.Verify(count);
 	}
@@ -206,10 +204,10 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	// set the result vector
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 
@@ -224,7 +222,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 	D_ASSERT(aggr.function.HasStateUpdateCallback());
 
 	auto lists_size = ListVector::GetListSize(lists);
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto &child_vector = ListVector::GetChildMutable(lists);
 	child_vector.Flatten(lists_size);
 
 	UnifiedVectorFormat child_data;
@@ -300,8 +298,8 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	} else {
 		// finalize manually to use the map
-		D_ASSERT(aggr.function.arguments.size() == 1);
-		auto key_type = aggr.function.arguments[0];
+		D_ASSERT(aggr.function.GetArguments().size() == 1);
+		auto key_type = aggr.function.GetArguments()[0];
 
 		switch (key_type.InternalType()) {
 #ifndef DUCKDB_SMALLER_BINARY
@@ -397,7 +395,7 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 
 	FunctionBinder function_binder(context);
 	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, std::move(children));
-	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
+	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->function.GetArguments()[0]);
 
 	if (IS_AGGR) {
 		bound_function.SetReturnType(bound_aggr_function->function.GetReturnType());
@@ -413,8 +411,10 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 }
 
 template <bool IS_AGGR = false>
-unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
@@ -449,7 +449,7 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 
 	if (is_parameter) {
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
@@ -477,29 +477,29 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 	}
 
 	// create the unordered map histogram function
-	D_ASSERT(best_function.arguments.size() == 1);
+	D_ASSERT(best_function.GetArguments().size() == 1);
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
-unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the name of the aggregate function
-	D_ASSERT(bound_function.arguments.size() >= 2);
+	D_ASSERT(bound_function.GetArguments().size() >= 2);
 	D_ASSERT(arguments.size() >= 2);
 
-	return ListAggregatesBind<true>(context, bound_function, arguments);
+	return ListAggregatesBind<true>(input);
 }
 
 } // namespace
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result =
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                   ListAggregateFunction, ListAggregateBind, nullptr, nullptr, ListAggregatesInitLocalState);
+	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
+	                             ListAggregateFunction, ListAggregateBind, nullptr, ListAggregatesInitLocalState);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.varargs = LogicalType::ANY;
+	result.SetVarArgs(LogicalType::ANY);
 	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
 	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;
@@ -508,12 +508,12 @@ ScalarFunction ListAggregateFun::GetFunction() {
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::TEMPLATE("T"))},
 	                      LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
-	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListAggregatesBind<false>, nullptr, nullptr, ListAggregatesInitLocalState);
+	                      ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 }
 
 } // namespace duckdb

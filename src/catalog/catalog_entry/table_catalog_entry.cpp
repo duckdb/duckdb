@@ -387,4 +387,26 @@ vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
 	return result;
 }
 
+optional_ptr<CatalogEntry> TableCatalogEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	throw NotImplementedException("Triggers are not supported for this table type");
+}
+
+void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
+                                     const std::function<void(CatalogEntry &)> &callback) const {
+	// Default: no triggers (non-DuckDB tables do not support triggers)
+}
+
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.timing == timing && trigger.event_type == event_type) {
+			result.emplace_back(trigger);
+		}
+	});
+	return result;
+}
+
 } // namespace duckdb

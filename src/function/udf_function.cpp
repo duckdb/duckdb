@@ -10,7 +10,7 @@ namespace duckdb {
 void UDFWrapper::RegisterFunction(string name, vector<LogicalType> args, LogicalType ret_type,
                                   scalar_function_t udf_function, ClientContext &context, LogicalType varargs) {
 	ScalarFunction scalar_function(std::move(name), std::move(args), std::move(ret_type), std::move(udf_function));
-	scalar_function.varargs = std::move(varargs);
+	scalar_function.SetVarArgs(std::move(varargs));
 	scalar_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	CreateScalarFunctionInfo info(scalar_function);
 	info.schema = DEFAULT_SCHEMA;
@@ -18,7 +18,7 @@ void UDFWrapper::RegisterFunction(string name, vector<LogicalType> args, Logical
 }
 
 void UDFWrapper::RegisterAggrFunction(AggregateFunction aggr_function, ClientContext &context, LogicalType varargs) {
-	aggr_function.varargs = std::move(varargs);
+	aggr_function.SetVarArgs(std::move(varargs));
 	CreateAggregateFunctionInfo info(std::move(aggr_function));
 	context.RegisterFunction(info);
 }

@@ -8,6 +8,11 @@
 
 namespace duckdb {
 
+bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
+	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
+	       collation_handling == rhs.collation_handling;
+}
+
 FunctionData::~FunctionData() {
 }
 
@@ -73,11 +78,9 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionStability stability, LogicalType varargs_p,
-                                       FunctionNullHandling null_handling, FunctionErrors errors)
+                                       LogicalType varargs_p)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling), errors(errors),
-      collation_handling(FunctionCollationHandling::PROPAGATE_COLLATIONS) {
+      return_type(std::move(return_type_p)) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {
@@ -166,13 +169,13 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                              idx_t argument_index) {
-	if (bound_function.original_arguments.empty()) {
-		bound_function.original_arguments = bound_function.arguments;
+	if (bound_function.GetOriginalArguments().empty()) {
+		bound_function.GetOriginalArguments() = bound_function.GetArguments();
 	}
-	D_ASSERT(arguments.size() == bound_function.arguments.size());
+	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
 	D_ASSERT(argument_index < arguments.size());
 	arguments.erase_at(argument_index);
-	bound_function.arguments.erase_at(argument_index);
+	bound_function.GetArguments().erase_at(argument_index);
 }
 
 } // namespace duckdb

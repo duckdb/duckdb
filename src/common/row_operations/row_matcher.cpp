@@ -219,15 +219,16 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 	// Gather a dense Vector containing the column values being matched
 	Vector key(type);
 	const auto gather_function = TupleDataCollection::GetGatherFunction(type);
-	gather_function.function(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
-	                         *FlatVector::IncrementalSelectionVector(), nullptr, gather_function.child_functions);
-	Vector::Verify(key, *FlatVector::IncrementalSelectionVector(), count);
+	gather_function.Gather(rhs_layout, rhs_row_locations, col_idx, sel, count, key,
+	                       *FlatVector::IncrementalSelectionVector(), nullptr);
+	key.Verify(count);
 
 	// Densify the input column
 	Vector sliced(lhs_vector, sel, count);
 
 	if (NO_MATCH_SEL) {
-		SelectionVector no_match_sel_offset(no_match_sel->data() + no_match_count);
+		SelectionVector no_match_sel_offset(no_match_sel->data() + no_match_count,
+		                                    no_match_sel->Capacity() - no_match_count);
 		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
 		no_match_count += count - match_count;
 		return match_count;

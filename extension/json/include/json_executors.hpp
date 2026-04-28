@@ -76,9 +76,9 @@ public:
 						ListVector::Reserve(result, new_size);
 					}
 
-					auto &child_entry = ListVector::GetEntry(result);
+					auto &child_entry = ListVector::GetChildMutable(result);
 					auto child_vals = FlatVector::GetDataMutable<T>(child_entry);
-					auto &child_validity = FlatVector::Validity(child_entry);
+					auto &child_validity = FlatVector::ValidityMutable(child_entry);
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
@@ -135,11 +135,11 @@ public:
 
 		ListVector::Reserve(result, list_size);
 		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
-		auto &list_validity = FlatVector::Validity(result);
+		auto &list_validity = FlatVector::ValidityMutable(result);
 
-		auto &child = ListVector::GetEntry(result);
+		auto &child = ListVector::GetChildMutable(result);
 		auto child_data = FlatVector::GetDataMutable<T>(child);
-		auto &child_validity = FlatVector::Validity(child);
+		auto &child_validity = FlatVector::ValidityMutable(child);
 
 		idx_t offset = 0;
 		yyjson_val *val;

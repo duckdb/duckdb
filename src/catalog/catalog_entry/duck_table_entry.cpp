@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -597,8 +598,9 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string>
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFieldInfo &info) {
-	// follow the path
-	auto &col = GetColumn(info.column_path[0]);
+	// follow the path - the parent column must exist regardless of IF NOT EXISTS (which only applies to the new field)
+	auto col_idx = GetColumnIndex(info.column_path[0], false);
+	auto &col = GetColumn(col_idx);
 	auto res = AddFieldToStruct(col.Type(), info.column_path, info.new_field);
 	if (res.error.HasError()) {
 		if (!info.if_field_not_exists) {
@@ -766,6 +768,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	                              dropped_column_is_generated);
 
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 	}
@@ -989,6 +992,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, info.bind_mode);
+	info.new_dependencies = make_uniq<LogicalDependencyList>(std::move(bound_create_info->dependencies));
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage, triggers);
 }
 
@@ -1314,27 +1318,35 @@ void DuckTableEntry::SetAsRoot() {
 	storage->SetTableName(name);
 }
 
-void DuckTableEntry::CommitAlter(string &column_name) {
+void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_state) {
 	D_ASSERT(!column_name.empty());
-	optional_idx removed_index;
+	optional_idx logical_column_idx;
+	auto column_path = StringUtil::Split(column_name, '.');
+	D_ASSERT(!column_path.empty());
+	auto &root_column_name = column_path[0];
+	idx_t column_position = 0;
 	for (auto &col : columns.Logical()) {
-		if (col.Name() == column_name) {
+		if (StringUtil::CIEquals(col.Name(), root_column_name)) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;
 			}
-			removed_index = col.Oid();
+			logical_column_idx = column_position;
 			break;
 		}
+		column_position++;
 	}
 
-	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
+	if (!logical_column_idx.IsValid()) {
+		return;
+	}
+	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
-	storage->CommitDropColumn(column_index);
+	storage->CommitDropColumn(column_index, drop_state);
 }
 
-void DuckTableEntry::CommitDrop() {
-	storage->CommitDropTable();
+void DuckTableEntry::CommitDrop(CommitDropState &drop_state) {
+	storage->CommitDropTable(drop_state);
 }
 
 DataTable &DuckTableEntry::GetStorage() {
@@ -1370,7 +1382,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 	return triggers->GetEntry(transaction, entry_name);
 }
 
-void DuckTableEntry::ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
+void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,
+                                  const std::function<void(CatalogEntry &)> &callback) const {
 	triggers->Scan(transaction, callback);
 }
 

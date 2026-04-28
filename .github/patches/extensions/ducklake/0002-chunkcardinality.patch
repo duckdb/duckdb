@@ -1,0 +1,42 @@
+diff --git a/src/common/ducklake_util.cpp b/src/common/ducklake_util.cpp
+index 2cdd4281..98e98acc 100644
+--- a/src/common/ducklake_util.cpp
++++ b/src/common/ducklake_util.cpp
+@@ -154,7 +154,7 @@ string ToSQLString(DuckLakeMetadataManager &metadata_manager, const Value &value
+ 	case LogicalTypeId::ENUM:
+ 		return EscapeVarcharForSQL(value.ToString());
+ 	case LogicalTypeId::VARIANT: {
+-		Vector tmp(value);
++		Vector tmp(value, count_t(1));
+ 		RecursiveUnifiedVectorFormat format;
+ 		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+ 		UnifiedVariantVectorData vector_data(format);
+diff --git a/src/storage/ducklake_delete.cpp b/src/storage/ducklake_delete.cpp
+index c65f13b2..a45a06c8 100644
+--- a/src/storage/ducklake_delete.cpp
++++ b/src/storage/ducklake_delete.cpp
+@@ -88,7 +88,7 @@ static DuckLakeDeleteFile WriteDeleteFileInternal(ClientContext &context, InputT
+ 	write_chunk.Initialize(input.context, types_to_write);
+ 	// the first vector is constant (the file name)
+ 	Value filename_val(input.data_file_path);
+-	write_chunk.data[0].Reference(filename_val);
++	write_chunk.data[0].Reference(filename_val, count_t(STANDARD_VECTOR_SIZE));
+ 
+ 	optional_idx begin_snapshot;
+ 	idx_t row_count = 0;
+diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
+index 2ac62fc5..71b71922 100644
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -2230,9 +2230,10 @@ void DuckLakeTransaction::AddColumnToLocalInlinedData(DLTableIndex table_id, con
+ 		// New column: use default value or NULL
+ 		auto &new_col_vector = new_chunk.data[chunk.ColumnCount()];
+ 		if (has_default) {
+-			new_col_vector.Reference(default_value);
++			new_col_vector.Reference(default_value, count_t(chunk.size()));
+ 		} else {
+ 			new_col_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
++			FlatVector::SetSize(new_col_vector, chunk.size());
+ 			ConstantVector::SetNull(new_col_vector, true);
+ 		}
+ 

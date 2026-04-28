@@ -1,5 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -15,6 +15,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -466,6 +467,9 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	                                   create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("CREATE TRIGGER requires a base table, not a view or subquery");
+	}
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto table_ptr = get.GetTable();
 	if (!table_ptr) {
@@ -501,10 +505,28 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	}
 
-	// Bind a copy of the trigger body to validate it (keep original unbound for serialization)
+	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+			auto &t = entry.Cast<TriggerCatalogEntry>();
+			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+				throw NotImplementedException("Multiple triggers per table event are not yet supported");
+			}
+		});
+	}
+
+	// Validate the trigger body using an isolated binder (own GlobalBinderState).
+	// Set up trigger_expanded_tables to match runtime behavior.
+	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	auto validation_binder = Binder::CreateBinder(context);
+	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
+	validation_binder->global_binder_state->trigger_creation_table = &table;
+	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
-	Bind(*body_copy);
+	validation_binder->Bind(*body_copy);
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);
@@ -526,6 +548,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	result.types = {LogicalType::BIGINT};
 
 	auto catalog_type = stmt.info->type;
+	auto return_type = StatementReturnType::NOTHING;
+	auto output_type = QueryResultOutputType::FORCE_MATERIALIZED;
 	auto &properties = GetStatementProperties();
 	switch (catalog_type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -606,7 +630,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto create_table = make_uniq<LogicalCreateTable>(schema, std::move(bound_info));
 		if (root) {
 			// CREATE TABLE AS
-			properties.return_type = StatementReturnType::CHANGED_ROWS;
+			return_type = StatementReturnType::CHANGED_ROWS;
 			create_table->children.push_back(std::move(root));
 		}
 		result.plan = std::move(create_table);
@@ -658,7 +682,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::SECRET_ENTRY: {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
-		properties.return_type = StatementReturnType::QUERY_RESULT;
+		return_type = StatementReturnType::QUERY_RESULT;
 
 		auto &info = stmt.info->Cast<CreateSecretInfo>();
 
@@ -725,7 +749,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
 		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
 
-		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		result = SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
+		break;
 	}
 	case CatalogType::TRIGGER_ENTRY: {
 		auto &create_trigger_info = stmt.info->Cast<CreateTriggerInfo>();
@@ -737,8 +762,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw InternalException("Unrecognized type!");
 	}
-	properties.return_type = StatementReturnType::NOTHING;
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+
+	properties.return_type = return_type;
+	properties.output_type = output_type;
+
 	return result;
 }
 

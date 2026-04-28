@@ -2,6 +2,10 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/prefix_range_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -25,7 +29,7 @@ unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, Colum
 void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		auto &mask = FlatVector::Validity(result);
+		auto &mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
 		}
@@ -62,7 +66,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 	if (stats.CanHaveNull()) {
 		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
 		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(scan_count));
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
@@ -149,21 +153,11 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		}
 		break;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
-		filters_nulls = true;
-		break;
-	case TableFilterType::IS_NULL:
-		filters_valid_values = true;
-		break;
-	case TableFilterType::IS_NOT_NULL:
-		filters_nulls = true;
-		break;
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		Value val(type);
-		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-		filters_nulls = !expr_filter.EvaluateWithConstant(state.executor, val);
+		filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
 		filters_valid_values = false;
 		break;
 	}

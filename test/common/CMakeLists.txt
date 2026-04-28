@@ -17,8 +17,9 @@ add_library_unity(
   test_buffer_pool_reservation.cpp
   test_storage_fuzz.cpp
   test_strftime.cpp
+  test_string_stats.cpp
   test_string_util.cpp)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_common>
     PARENT_SCOPE)

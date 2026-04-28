@@ -242,8 +242,14 @@ function(duckdb_codesign_for_debugging target)
         "<plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>"
       )
     endif()
+    set(CODESIGN_SCRIPT "${CMAKE_BINARY_DIR}/codesign_debug.cmake")
+    if(NOT EXISTS "${CODESIGN_SCRIPT}")
+      file(WRITE "${CODESIGN_SCRIPT}"
+        "execute_process(COMMAND codesign -s - -f --entitlements \"\${ENTITLEMENTS_FILE}\" \"\${TARGET_FILE}\" ERROR_QUIET)\n"
+      )
+    endif()
     add_custom_command(TARGET ${target} POST_BUILD
-      COMMAND codesign -s - -f --entitlements "${ENTITLEMENTS_FILE}" "$<TARGET_FILE:${target}>"
+      COMMAND ${CMAKE_COMMAND} -DTARGET_FILE=$<TARGET_FILE:${target}> -DENTITLEMENTS_FILE=${ENTITLEMENTS_FILE} -P "${CODESIGN_SCRIPT}"
       VERBATIM
     )
   endif()
@@ -322,7 +328,7 @@ endif()
 
 option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
 if(${EXPORT_DYNAMIC_SYMBOLS})
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
@@ -331,7 +337,6 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
-# - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
@@ -508,6 +513,7 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD "Disable support for loading and installing extensions" FALSE)
+option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
@@ -537,6 +543,14 @@ option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
+
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
+if(DISABLE_BUILTIN_HTTPLIB)
+  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
+endif()
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -749,7 +763,7 @@ if(NOT DEFINED CMAKE_JOB_POOL_LINK)
   endif()
 endif()
 message(STATUS
-        "Build workers: compile=${CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 if(OS_NAME STREQUAL "windows")
   list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)
@@ -891,7 +905,6 @@ add_third_party(fastpforlib)
 add_third_party(fmt)
 add_third_party(fsst)
 add_third_party(hyperloglog)
-add_third_party(libpg_query)
 add_third_party(mbedtls)
 add_third_party(miniz)
 add_third_party(re2)

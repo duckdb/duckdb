@@ -1,7 +1,5 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -15,32 +13,23 @@ StructFilter::StructFilter(idx_t child_idx_p, string child_name_p, unique_ptr<Ta
 }
 
 FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) const {
-	D_ASSERT(stats.GetType().id() == LogicalTypeId::STRUCT);
-	// Check the child statistics
-	auto &child_stats = StructStats::GetChildStats(stats, child_idx);
-	return child_filter->CheckStatistics(child_stats);
+	throw InternalException("StructFilter::CheckStatistics should not be called: StructFilters should be converted "
+	                        "to ExpressionFilters before statistics checking");
 }
 
 string StructFilter::ToString(const string &column_name) const {
-	if (!child_name.empty()) {
-		return child_filter->ToString(column_name + "." + child_name);
-	}
-	return child_filter->ToString("struct_extract_at(" + column_name + "," + std::to_string(child_idx + 1) + ")");
+	throw InternalException("StructFilter::ToString should not be called: StructFilters should be converted to "
+	                        "ExpressionFilters before rendering");
 }
 
 bool StructFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<StructFilter>();
-	if ((!child_name.empty()) && (!other.child_name.empty())) { // if both child_names are known, sanity check
-		D_ASSERT((other.child_idx == child_idx) == StringUtil::CIEquals(other.child_name, child_name));
-	}
-	return other.child_idx == child_idx && other.child_filter->Equals(*child_filter);
+	throw InternalException("StructFilter::Equals should not be called: StructFilters should be converted to "
+	                        "ExpressionFilters before equality checking");
 }
 
 unique_ptr<TableFilter> StructFilter::Copy() const {
-	return make_uniq<StructFilter>(child_idx, child_name, child_filter->Copy());
+	throw InternalException("StructFilter::Copy should not be called: StructFilters should be converted to "
+	                        "ExpressionFilters before copying");
 }
 
 unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {

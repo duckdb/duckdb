@@ -1,11 +1,21 @@
 #include "decoder/delta_length_byte_array_decoder.hpp"
+
+#include <memory>
+#include <stdexcept>
+
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
-#include "utf8proc_wrapper.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
+class Vector;
 
 DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
     : reader(reader), length_buffer(reader.encoding_buffers[0]), length_idx(0) {
@@ -67,12 +77,12 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	const auto &string_column_reader = reader.Cast<StringColumnReader>();
 
 	const auto start_ptr = block.ptr;
-	auto result_data = FlatVector::Writer<string_t>(result, result_offset + read_count);
+	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		const auto result_idx = result_offset + row_idx;
 		if (HAS_DEFINES) {
 			if (defines[result_idx] != reader.MaxDefine()) {
-				result_data.SetInvalid(result_idx);
+				result_data.WriteNull();
 				continue;
 			}
 			if (length_idx >= byte_array_count) {
@@ -83,7 +93,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
-		result_data[result_idx] = string_t(char_ptr_cast(block.ptr), str_len);
+		result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		if (VALIDATE_INDIVIDUAL_STRINGS) {
 			string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 		}
