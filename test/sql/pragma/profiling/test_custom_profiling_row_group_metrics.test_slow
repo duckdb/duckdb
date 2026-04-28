@@ -1,4 +1,4 @@
-# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics.test
+# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics.test_slow
 # description: Test OPERATOR_ROW_GROUPS_SEQ_SCANNED and OPERATOR_ROW_GROUPS_TOTAL metrics
 # group: [profiling]
 
