@@ -84,12 +84,16 @@ public:
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
-	void ResolveTemplateTypes(BaseScalarFunction &bound_function, const vector<unique_ptr<Expression>> &children);
-	void CheckTemplateTypesResolved(const BaseScalarFunction &bound_function);
+	void ResolveTemplateTypes(SimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void CheckTemplateTypesResolved(const SimpleFunction &bound_function);
 
 private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
+
+	optional_idx BindVarArgsFunctionCost(const SimpleNamedParameterFunction &func,
+	                                     const vector<LogicalType> &arguments);
+	optional_idx BindFunctionCost(const SimpleNamedParameterFunction &func, const vector<LogicalType> &arguments);
 
 	template <class T>
 	vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,

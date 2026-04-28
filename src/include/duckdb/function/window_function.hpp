@@ -192,7 +192,7 @@ public:
 	bool can_ignore_nulls = true;
 };
 
-class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
+class WindowFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
@@ -200,7 +200,7 @@ public:
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
 	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr,
 	               window_evaluate_function_t evaluate = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type), window_enum(window_enum) {
+	    : SimpleFunction(name, arguments, return_type), window_enum(window_enum) {
 		callbacks.bind = bind;
 		callbacks.bounds = bounds;
 		callbacks.sharing = sharing;

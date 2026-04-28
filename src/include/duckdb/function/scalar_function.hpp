@@ -174,7 +174,7 @@ public:
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
 };
 
-class ScalarFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
+class ScalarFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
