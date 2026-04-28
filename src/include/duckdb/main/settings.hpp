@@ -1302,6 +1302,17 @@ struct OrderedAggregateThresholdSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ParallelUnionAllSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "parallel_union_all";
+	static constexpr const char *Description =
+	    "Allow UNION ALL branches to execute in parallel. Can substantially increase memory usage.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct PartitionedWriteFlushThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "partitioned_write_flush_threshold";
