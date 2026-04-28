@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
@@ -135,6 +135,10 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
+
+	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::UPDATE_EVENT)) {
+		return std::move(*expanded);
+	}
 
 	optional_ptr<LogicalGet> get;
 	if (node.from_table) {

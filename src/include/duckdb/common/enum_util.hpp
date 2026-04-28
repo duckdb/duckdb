@@ -258,6 +258,8 @@ enum class JoinRefType : uint8_t;
 
 enum class JoinType : uint8_t;
 
+enum class KeywordCase : uint8_t;
+
 enum class KeywordCategory : uint8_t;
 
 enum class LambdaSyntax : uint8_t;
@@ -336,7 +338,11 @@ enum class OrdinalityType : uint8_t;
 
 enum class OutputStream : uint8_t;
 
+enum class PEGKeywordCategory : uint8_t;
+
 enum class ParseInfoType : uint8_t;
+
+enum class ParseResultType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
@@ -387,6 +393,8 @@ enum class RenderMode : uint8_t;
 enum class RequestType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
+
+enum class RowGroupAppendMode : uint8_t;
 
 enum class SampleMethod : uint8_t;
 
@@ -449,6 +457,8 @@ enum class StrTimeSpecifier : uint8_t;
 enum class StreamExecutionResult : uint8_t;
 
 enum class SubqueryType : uint8_t;
+
+enum class SuggestionState : uint8_t;
 
 enum class TableColumnType : uint8_t;
 
@@ -861,6 +871,9 @@ template<>
 const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
+const char* EnumUtil::ToChars<KeywordCase>(KeywordCase value);
+
+template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
 
 template<>
@@ -978,7 +991,13 @@ template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
 
 template<>
+const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value);
+
+template<>
 const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
+
+template<>
+const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
@@ -1054,6 +1073,9 @@ const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
+
+template<>
+const char* EnumUtil::ToChars<RowGroupAppendMode>(RowGroupAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<SampleMethod>(SampleMethod value);
@@ -1147,6 +1169,9 @@ const char* EnumUtil::ToChars<StreamExecutionResult>(StreamExecutionResult value
 
 template<>
 const char* EnumUtil::ToChars<SubqueryType>(SubqueryType value);
+
+template<>
+const char* EnumUtil::ToChars<SuggestionState>(SuggestionState value);
 
 template<>
 const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
@@ -1594,6 +1619,9 @@ template<>
 JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
+KeywordCase EnumUtil::FromString<KeywordCase>(const char *value);
+
+template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
 
 template<>
@@ -1711,7 +1739,13 @@ template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
 
 template<>
+PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value);
+
+template<>
 ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
+
+template<>
+ParseResultType EnumUtil::FromString<ParseResultType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
@@ -1787,6 +1821,9 @@ RequestType EnumUtil::FromString<RequestType>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);
+
+template<>
+RowGroupAppendMode EnumUtil::FromString<RowGroupAppendMode>(const char *value);
 
 template<>
 SampleMethod EnumUtil::FromString<SampleMethod>(const char *value);
@@ -1880,6 +1917,9 @@ StreamExecutionResult EnumUtil::FromString<StreamExecutionResult>(const char *va
 
 template<>
 SubqueryType EnumUtil::FromString<SubqueryType>(const char *value);
+
+template<>
+SuggestionState EnumUtil::FromString<SuggestionState>(const char *value);
 
 template<>
 TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);

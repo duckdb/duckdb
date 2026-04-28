@@ -71,6 +71,7 @@ overrides = {
         "HEAD_REQUEST": "HEAD",
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
+        "OPTIONS_REQUEST": "OPTIONS",
     },
     "CompressionType": {
         "COMPRESSION_AUTO": "AUTO",

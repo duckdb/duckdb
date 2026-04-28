@@ -258,7 +258,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	VectorOperations::Copy(args.data[0], list_or_str_vector, count, 0, 0);
 
 	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 

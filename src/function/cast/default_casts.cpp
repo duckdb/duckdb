@@ -62,7 +62,7 @@ bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	ConstantVector::SetNull(result);
+	ConstantVector::SetNull(result, count_t(count));
 	return success;
 }
 
@@ -120,7 +120,7 @@ static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType 
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	ConstantVector::SetNull(result);
+	ConstantVector::SetNull(result, count_t(count));
 	return true;
 }
 

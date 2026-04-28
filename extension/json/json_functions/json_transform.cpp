@@ -521,7 +521,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
 		if (projected_indices.find(child_i) == projected_indices.end()) {
-			ConstantVector::SetNull(child_vs[child_i]);
+			ConstantVector::SetNull(child_vs[child_i], count_t(count));
 		}
 	}
 

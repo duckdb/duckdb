@@ -1,0 +1,48 @@
+# name: test/sql/settings/enable_caching_operators.test_slow
+# group: [settings]
+
+require parquet
+
+statement ok
+set threads=1
+
+statement ok
+set preserve_insertion_order=false;
+
+# 8 strings ~8 MB each for a total of ~64 mb per file, 8 files so 512 mb total
+
+loop i 0 8
+
+statement ok
+copy (select range id, {i} || repeat('a', 8e6::int) || range as c from range(8)) to '{TEST_DIR}/enable_caching_operators_input{i}.parquet'
+
+endloop
+
+# create table to join with so that caching physical operator is triggered
+
+statement ok
+create table build as select range id from range(8)
+
+statement ok
+set memory_limit='300mb'
+
+# runs out of memory when caching operators are enabled because strings are accumulated
+statement error
+copy (
+    select c
+    from '{TEST_DIR}/enable_caching_operators_input*.parquet'
+    where id in (from build)
+) to '{TEST_DIR}/enable_caching_operators_output.parquet' (row_group_size_bytes '64mb');
+----
+Out of Memory
+
+# runs fine when disabled
+statement ok
+set enable_caching_operators=false;
+
+statement ok
+copy (
+    select c
+    from '{TEST_DIR}/enable_caching_operators_input*.parquet'
+    where id in (from build)
+) to '{TEST_DIR}/enable_caching_operators_output.parquet' (row_group_size_bytes '64mb');

@@ -24,7 +24,7 @@ public:
 		unordered_map<string, unique_ptr<Vector>> map_copy;
 		for (const auto &kv : const_struct_names) {
 			// The vectors are const vectors of the key value
-			map_copy[kv.first] = make_uniq<Vector>(Value(kv.first));
+			map_copy[kv.first] = make_uniq<Vector>(Value(kv.first), count_t(STANDARD_VECTOR_SIZE));
 		}
 		return make_uniq<JSONCreateFunctionData>(std::move(map_copy));
 	}
@@ -86,7 +86,8 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> child_types;
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			const_struct_names[child_type.first] = make_uniq<Vector>(Value(child_type.first));
+			const_struct_names[child_type.first] =
+			    make_uniq<Vector>(Value(child_type.first), count_t(STANDARD_VECTOR_SIZE));
 			child_types.emplace_back(child_type.first, GetJSONType(const_struct_names, child_type.second));
 		}
 		return LogicalType::STRUCT(child_types);
@@ -100,7 +101,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 			auto &member_name = UnionType::GetMemberName(type, member_idx);
 			auto &member_type = UnionType::GetMemberType(type, member_idx);
 
-			const_struct_names[member_name] = make_uniq<Vector>(Value(member_name));
+			const_struct_names[member_name] = make_uniq<Vector>(Value(member_name), count_t(STANDARD_VECTOR_SIZE));
 			member_types.emplace_back(member_name, GetJSONType(const_struct_names, member_type));
 		}
 		return LogicalType::UNION(member_types);
@@ -776,7 +777,8 @@ public:
 	unique_ptr<BoundCastData> Copy() const override {
 		auto result = make_uniq<NestedToJSONCastData>();
 		for (auto &csn : const_struct_names) {
-			result->const_struct_names.emplace(csn.first, make_uniq<Vector>(csn.second->GetValue(0)));
+			result->const_struct_names.emplace(
+			    csn.first, make_uniq<Vector>(csn.second->GetValue(0), count_t(STANDARD_VECTOR_SIZE)));
 		}
 		return std::move(result);
 	}

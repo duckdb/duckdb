@@ -390,7 +390,7 @@ jobs:
 
       - name: Regression Test Extension binary size
         run: |
-          python scripts/regression_test_extension_size.py --old build/base/release/extension --new build/current/release/extension --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost

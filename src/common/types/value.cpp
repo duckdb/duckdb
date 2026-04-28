@@ -1685,7 +1685,7 @@ hash_t Value::Hash() const {
 	if (IsNull()) {
 		return 0;
 	}
-	Vector input(*this);
+	Vector input(*this, count_t(1));
 	Vector result(LogicalType::HASH, 1);
 	VectorOperations::Hash(input, result, 1);
 
@@ -1731,7 +1731,7 @@ string Value::ToSQLString() const {
 	}
 	case LogicalTypeId::VARIANT: {
 		string ret = "VARIANT(";
-		Vector tmp(*this);
+		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
 		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
 		UnifiedVariantVectorData vector_data(format);
@@ -2070,7 +2070,7 @@ bool Value::TryCastAs(CastFunctionSet &set, GetCastFunctionInput &get_input, con
 		new_value = Copy();
 		return true;
 	}
-	Vector input(*this);
+	Vector input(*this, count_t(1));
 	Vector result(target_type);
 	if (!VectorOperations::TryCast(set, get_input, input, result, 1, error_message, strict)) {
 		return false;

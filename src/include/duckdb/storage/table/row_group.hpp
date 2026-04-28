@@ -48,6 +48,7 @@ struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
+class CommitDropState;
 class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
@@ -78,6 +79,7 @@ struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
+	vector<bool> keep_column_loaded;
 	bool reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
 	optional_idx write_count;
@@ -123,8 +125,12 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
+	//! Accumulates this row group's on-disk blocks into the drop state.
+	void CommitDrop(CommitDropState &drop_state);
+	//! Accumulates the given column's on-disk blocks into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Drops every column's on-disk blocks and marks them as modified immediately.
 	void CommitDrop();
-	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
@@ -171,6 +177,7 @@ public:
 	idx_t GetCommittedRowCount();
 	//! Returns the number of rows visible to the given transaction
 	idx_t GetVisibleRowCount(TransactionData transaction);
+	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);
@@ -232,6 +239,8 @@ private:
 	void LoadRowIdColumnData() const;
 	void LoadRowNumberColumnData() const;
 	void SetCount(idx_t count);
+	bool ColumnIsLoaded(storage_t c) const;
+	void UnloadColumn(storage_t c);
 
 	bool HasUnloadedDeletes() const;
 

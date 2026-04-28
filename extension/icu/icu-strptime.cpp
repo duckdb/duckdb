@@ -246,7 +246,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(str_arg, result, args.size(),
 			                                             [&](string_t input, ValidityMask &mask, idx_t idx) {

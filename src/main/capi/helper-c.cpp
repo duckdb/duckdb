@@ -89,6 +89,8 @@ LogicalTypeId LogicalTypeIdFromC(const duckdb_type type) {
 		return LogicalTypeId::TIME_NS;
 	case DUCKDB_TYPE_GEOMETRY:
 		return LogicalTypeId::GEOMETRY;
+	case DUCKDB_TYPE_VARIANT:
+		return LogicalTypeId::VARIANT;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -183,6 +185,8 @@ duckdb_type LogicalTypeIdToC(const LogicalTypeId type) {
 		return DUCKDB_TYPE_TIME_NS;
 	case LogicalTypeId::GEOMETRY:
 		return DUCKDB_TYPE_GEOMETRY;
+	case LogicalTypeId::VARIANT:
+		return DUCKDB_TYPE_VARIANT;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;

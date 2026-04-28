@@ -1,0 +1,26 @@
+diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
+index b85f470..edb4d5a 100644
+--- a/src/hnsw/hnsw_index.cpp
++++ b/src/hnsw/hnsw_index.cpp
+@@ -408,7 +408,7 @@ void HNSWIndex::ResetMultiScan(IndexScanState &state) {
+ 	scan_state.row_ids.clear();
+ }
+ 
+-void HNSWIndex::CommitDrop(IndexLock &index_lock) {
++void HNSWIndex::ResetStorage(IndexLock &index_lock) {
+ 	// Acquire an exclusive lock to drop the index
+ 	auto lock = rwlock.GetExclusiveLock();
+ 
+diff --git a/src/include/hnsw/hnsw_index.hpp b/src/include/hnsw/hnsw_index.hpp
+index 591e707..076633c 100644
+--- a/src/include/hnsw/hnsw_index.hpp
++++ b/src/include/hnsw/hnsw_index.hpp
+@@ -79,7 +79,7 @@ public:
+ 	ErrorData Append(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+ 
+ 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+-	void CommitDrop(IndexLock &index_lock) override;
++	void ResetStorage(IndexLock &index_lock) override;
+ 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
+ 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
+ 	//! Insert a chunk of entries into the index
