@@ -143,9 +143,9 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>> NewDeserialize(Deserializer &deserializer, CatalogType catalog_type,
-	                                                           vector<unique_ptr<Expression>> &children,
-	                                                           LogicalType return_type) { // NOLINT: clang-tidy bug
+	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
+	                                                        vector<unique_ptr<Expression>> &children,
+	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
 
 		auto name = deserializer.ReadProperty<string>(500, "name");
@@ -219,58 +219,6 @@ public:
 		}
 
 		return make_pair(std::move(bound_function), std::move(bound_data));
-	}
-
-	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>> Deserialize(Deserializer &deserializer, CatalogType catalog_type,
-	                                                        vector<unique_ptr<Expression>> &children,
-	                                                        LogicalType return_type) {
-		// NOLINT: clang-tidy bug
-
-		if constexpr (std::is_same_v<FUNC, BoundScalarFunction>) {
-			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
-		} else if constexpr (std::is_same_v<FUNC, BoundAggregateFunction>) {
-			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
-		} else if constexpr (std::is_same_v<FUNC, BoundWindowFunction>) {
-			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
-		} else {
-			auto &context = deserializer.Get<ClientContext &>();
-			auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
-			auto &function = entry.first;
-			auto has_serialize = entry.second;
-
-			unique_ptr<FunctionData> bind_data;
-			if (has_serialize) {
-				deserializer.Set<const LogicalType &>(return_type);
-				bind_data = FunctionDeserialize<FUNC>(deserializer, function);
-				deserializer.Unset<LogicalType>();
-			} else {
-				FunctionBinder binder(context);
-
-				// Resolve templates
-				binder.ResolveTemplateTypes(function, children);
-
-				if (function.HasBindCallback()) {
-					try {
-						bind_data = function.Bind(context, children);
-					} catch (std::exception &ex) {
-						ErrorData error(ex);
-						throw SerializationException("Error during bind of function in deserialization: %s",
-						                             error.RawMessage());
-					}
-				}
-
-				// Verify that all templates are bound to concrete types.
-				binder.CheckTemplateTypesResolved(function);
-
-				binder.CastToFunctionArguments(function, children);
-			}
-
-			if (TypeRequiresAssignment(function.GetReturnType())) {
-				function.SetReturnType(std::move(return_type));
-			}
-			return make_pair(std::move(function), std::move(bind_data));
-		}
 	}
 };
 
