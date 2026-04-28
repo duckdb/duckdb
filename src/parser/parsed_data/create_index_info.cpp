@@ -84,9 +84,13 @@ string CreateIndexInfo::ToString() const {
 		result += " WITH (";
 		idx_t i = 0;
 		for (auto &opt : options) {
-			result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			if (i > 0) {
 				result += ", ";
+			}
+			if (opt.second.IsNull()) {
+				result += opt.first;
+			} else {
+				result += StringUtil::Format("%s = %s", opt.first, opt.second.ToString());
 			}
 			i++;
 		}
