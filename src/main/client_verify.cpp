@@ -5,6 +5,17 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/box_renderer_context.hpp"
+#include "duckdb/common/enums/debug_statement_verification.hpp"
+#include "duckdb/main/settings.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
+#include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -19,6 +30,110 @@ static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
 	auto &error = result.GetErrorObject();
 	if (error.Type() == ExceptionType::INTERNAL) {
 		error.Throw();
+	}
+}
+
+void ClientContext::StatementVerification(unique_ptr<SQLStatement> &statement) {
+	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
+	if (verification == DebugStatementVerification::COPY_STATEMENT) {
+		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
+			// COPY verification not supported for plan statements
+			return;
+		}
+		statement = statement->Copy();
+	} else if (verification == DebugStatementVerification::REPARSE_STATEMENT) {
+		if (statement->type == StatementType::RELATION_STATEMENT) {
+			// reparsing not supported for relation statements
+			return;
+		}
+		Parser parser(GetParserOptions());
+		ErrorData error;
+		parser.ParseQuery(statement->ToString());
+		// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
+		if (statement->type == StatementType::UPDATE_STATEMENT) {
+			// re-apply `prioritize_table_when_binding` (which is normally set during transform)
+			parser.statements[0]->Cast<UpdateStatement>().node->prioritize_table_when_binding =
+			    statement->Cast<UpdateStatement>().node->prioritize_table_when_binding;
+		} else if (statement->type == StatementType::TRANSACTION_STATEMENT) {
+			// re-apply invalidation policy
+			auto &reparsed_transaction_stmt = parser.statements[0]->Cast<TransactionStatement>();
+			auto &previous_transaction_stmt = statement->Cast<TransactionStatement>();
+			reparsed_transaction_stmt.info->invalidation_policy = previous_transaction_stmt.info->invalidation_policy;
+			// re-apply auto rollback
+			reparsed_transaction_stmt.info->auto_rollback = statement->Cast<TransactionStatement>().info->auto_rollback;
+		}
+		statement = std::move(parser.statements[0]);
+	} else if (verification == DebugStatementVerification::SERIALIZE_STATEMENT) {
+		switch (statement->type) {
+		case StatementType::SELECT_STATEMENT:
+		case StatementType::INSERT_STATEMENT:
+		case StatementType::DELETE_STATEMENT:
+		case StatementType::UPDATE_STATEMENT:
+			break;
+		default:
+			// unsupported statement for serialization
+			return;
+		}
+		Allocator allocator;
+		MemoryStream stream(allocator);
+		SerializationOptions options;
+		options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+		optional_ptr<SelectStatement> to_serialize_stmt;
+		optional_ptr<QueryNode> to_serialize_node;
+		switch (statement->type) {
+		case StatementType::SELECT_STATEMENT:
+			to_serialize_stmt = statement->Cast<SelectStatement>();
+			break;
+		case StatementType::INSERT_STATEMENT:
+			to_serialize_node = (QueryNode &)*statement->Cast<InsertStatement>().node;
+			break;
+		case StatementType::DELETE_STATEMENT:
+			to_serialize_node = (QueryNode &)*statement->Cast<DeleteStatement>().node;
+			break;
+		case StatementType::UPDATE_STATEMENT:
+			to_serialize_node = (QueryNode &)*statement->Cast<UpdateStatement>().node;
+			break;
+		default:
+			throw InternalException("Unsupported type for serialization verification");
+		}
+		// do the round-trip
+		unique_ptr<SelectStatement> deserialized_stmt;
+		unique_ptr<QueryNode> deserialized_node;
+		if (to_serialize_stmt) {
+			BinarySerializer::Serialize(*to_serialize_stmt, stream, options);
+			stream.Rewind();
+			deserialized_stmt = BinaryDeserializer::Deserialize<SelectStatement>(stream);
+		} else {
+			BinarySerializer::Serialize(*to_serialize_node, stream, options);
+			stream.Rewind();
+			deserialized_node = BinaryDeserializer::Deserialize<QueryNode>(stream);
+		}
+
+		switch (statement->type) {
+		case StatementType::SELECT_STATEMENT:
+			statement = std::move(deserialized_stmt);
+			break;
+		case StatementType::INSERT_STATEMENT: {
+			auto result = make_uniq<InsertStatement>();
+			result->node = unique_ptr_cast<QueryNode, InsertQueryNode>(std::move(deserialized_node));
+			statement = std::move(result);
+			break;
+		}
+		case StatementType::DELETE_STATEMENT: {
+			auto result = make_uniq<DeleteStatement>();
+			result->node = unique_ptr_cast<QueryNode, DeleteQueryNode>(std::move(deserialized_node));
+			statement = std::move(result);
+			break;
+		}
+		case StatementType::UPDATE_STATEMENT: {
+			auto result = make_uniq<UpdateStatement>();
+			result->node = unique_ptr_cast<QueryNode, UpdateQueryNode>(std::move(deserialized_node));
+			statement = std::move(result);
+			break;
+		}
+		default:
+			throw InternalException("Unsupported type for serialization verification");
+		}
 	}
 }
 
@@ -51,8 +166,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 
 	// Base Statement verifiers: these are the verifiers we enable for regular builds
 	if (config.query_verification_enabled) {
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt, parameters));
-		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt, parameters));
 		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt, parameters));
 		statement_verifiers.emplace_back(
 		    StatementVerifier::Create(VerificationType::NO_OPERATOR_CACHING, stmt, parameters));
@@ -99,10 +212,6 @@ ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &quer
 	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
 		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
 	                                });
-	if (!any_failed) {
-		statement_verifiers.emplace_back(
-		    StatementVerifier::Create(VerificationType::PARSED, *statement_copy_for_explain, parameters));
-	}
 	// Execute the verifiers
 	for (auto &verifier : statement_verifiers) {
 		bool failed = verifier->Run(*this, query,

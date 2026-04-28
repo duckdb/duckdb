@@ -7,10 +7,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/verification/copied_statement_verifier.hpp"
-#include "duckdb/verification/deserialized_statement_verifier.hpp"
 #include "duckdb/verification/external_statement_verifier.hpp"
-#include "duckdb/verification/parsed_statement_verifier.hpp"
 #include "duckdb/verification/prepared_statement_verifier.hpp"
 #include "duckdb/verification/unoptimized_statement_verifier.hpp"
 #include "duckdb/verification/no_operator_caching_verifier.hpp"
@@ -51,12 +48,6 @@ unique_ptr<StatementVerifier>
 StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p,
                           optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	switch (type) {
-	case VerificationType::COPIED:
-		return CopiedStatementVerifier::Create(statement_p, parameters);
-	case VerificationType::DESERIALIZED:
-		return DeserializedStatementVerifier::Create(statement_p, parameters);
-	case VerificationType::PARSED:
-		return ParsedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::UNOPTIMIZED:
 		return UnoptimizedStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::NO_OPERATOR_CACHING:

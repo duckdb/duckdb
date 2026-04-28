@@ -1,4 +1,6 @@
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -24,7 +26,7 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), std::move(varargs)) {
+    : SimpleFunction(std::move(name), std::move(arguments), std::move(return_type), std::move(varargs)) {
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
@@ -80,4 +82,16 @@ void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vecto
 	result.Reference(input.data[0]);
 }
 
+unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
+                                                         vector<unique_ptr<Expression>> arguments,
+                                                         optional_ptr<Binder> binder) const {
+	FunctionBinder func_binder(context);
+	auto expr = func_binder.BindScalarFunction(*this, std::move(arguments), binder);
+
+	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+		throw InvalidInputException("BindScalarFunction did not return a BoundFunctionExpression");
+	}
+
+	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
+}
 } // namespace duckdb

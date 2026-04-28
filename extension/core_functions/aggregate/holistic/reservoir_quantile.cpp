@@ -74,13 +74,13 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function) {
+	                      const BoundAggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "sample_size", result->sample_size);

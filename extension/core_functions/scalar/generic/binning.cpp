@@ -474,11 +474,11 @@ void UnsupportedEquiWidth(DataChunk &args, ExpressionState &state, Vector &) {
 	throw BinderException(state.expr, "Unsupported type \"%s\" for equi_width_bins", args.data[0].GetType());
 }
 
-void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const ScalarFunction &) {
+void EquiWidthBinSerialize(Serializer &, const optional_ptr<FunctionData>, const BoundScalarFunction &) {
 	return;
 }
 
-unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }

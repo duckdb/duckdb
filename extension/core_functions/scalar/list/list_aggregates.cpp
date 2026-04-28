@@ -63,12 +63,13 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                              const ScalarFunction &function) {
+	                              const BoundScalarFunction &function) {
 		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer,
+	                                                    BoundScalarFunction &bound_function) {
 		auto result = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {

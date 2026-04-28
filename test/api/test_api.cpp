@@ -751,7 +751,7 @@ TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements wit
 
 	sql = "INSERT INTO test (id) VALUES (1) RETURNING id AS inserted";
 	auto stmts = con.ExtractStatements(sql);
-	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id ) (VALUES (1)) RETURNING id AS inserted");
+	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id) (VALUES (1)) RETURNING id AS inserted");
 
 	sql = "UPDATE test SET id = 1 RETURNING id AS updated";
 	stmts = con.ExtractStatements(sql);

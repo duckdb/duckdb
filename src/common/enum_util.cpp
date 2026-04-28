@@ -28,6 +28,7 @@
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
+#include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
@@ -1543,6 +1544,26 @@ const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value) {
 template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value) {
 	return static_cast<DebugInitialize>(StringUtil::StringToEnum(GetDebugInitializeValues(), 3, "DebugInitialize", value));
+}
+
+const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugStatementVerification::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugStatementVerification::COPY_STATEMENT), "COPY_STATEMENT" },
+		{ static_cast<uint32_t>(DebugStatementVerification::REPARSE_STATEMENT), "REPARSE_STATEMENT" },
+		{ static_cast<uint32_t>(DebugStatementVerification::SERIALIZE_STATEMENT), "SERIALIZE_STATEMENT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value) {
+	return StringUtil::EnumToString(GetDebugStatementVerificationValues(), 4, "DebugStatementVerification", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value) {
+	return static_cast<DebugStatementVerification>(StringUtil::StringToEnum(GetDebugStatementVerificationValues(), 4, "DebugStatementVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugVectorVerificationValues() {
@@ -4415,19 +4436,20 @@ const StringUtil::EnumStringLiteral *GetRequestTypeValues() {
 		{ static_cast<uint32_t>(RequestType::PUT_REQUEST), "PUT" },
 		{ static_cast<uint32_t>(RequestType::HEAD_REQUEST), "HEAD" },
 		{ static_cast<uint32_t>(RequestType::DELETE_REQUEST), "DELETE" },
-		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST" }
+		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST" },
+		{ static_cast<uint32_t>(RequestType::OPTIONS_REQUEST), "OPTIONS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value) {
-	return StringUtil::EnumToString(GetRequestTypeValues(), 5, "RequestType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetRequestTypeValues(), 6, "RequestType", static_cast<uint32_t>(value));
 }
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value) {
-	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 5, "RequestType", value));
+	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {
@@ -5779,9 +5801,6 @@ VectorType EnumUtil::FromString<VectorType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(VerificationType::ORIGINAL), "ORIGINAL" },
-		{ static_cast<uint32_t>(VerificationType::COPIED), "COPIED" },
-		{ static_cast<uint32_t>(VerificationType::DESERIALIZED), "DESERIALIZED" },
-		{ static_cast<uint32_t>(VerificationType::PARSED), "PARSED" },
 		{ static_cast<uint32_t>(VerificationType::UNOPTIMIZED), "UNOPTIMIZED" },
 		{ static_cast<uint32_t>(VerificationType::NO_OPERATOR_CACHING), "NO_OPERATOR_CACHING" },
 		{ static_cast<uint32_t>(VerificationType::PREPARED), "PREPARED" },
@@ -5795,12 +5814,12 @@ const StringUtil::EnumStringLiteral *GetVerificationTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
-	return StringUtil::EnumToString(GetVerificationTypeValues(), 11, "VerificationType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVerificationTypeValues(), 8, "VerificationType", static_cast<uint32_t>(value));
 }
 
 template<>
 VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
-	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 11, "VerificationType", value));
+	return static_cast<VerificationType>(StringUtil::StringToEnum(GetVerificationTypeValues(), 8, "VerificationType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVerifyExistenceTypeValues() {

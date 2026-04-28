@@ -114,8 +114,6 @@ public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
-	bool AnyVerification() const;
-
 	void SetUserVariable(const String &name, Value value);
 	bool GetUserVariable(const string &name, Value &result);
 	void ResetUserVariable(const String &name);

@@ -1325,6 +1325,30 @@ jobs:
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
+    - name: test/configs/verify_statement_copy.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_copy.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_to_string.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
+
+    - name: test/configs/verify_stats.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+
+    - name: test/configs/verify_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_serialization.json ./build/release/test/unittest
+
     - name: test/configs/force_storage.json
       if: success() || failure()
       shell: bash

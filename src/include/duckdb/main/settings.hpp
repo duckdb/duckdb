@@ -538,6 +538,28 @@ struct DebugVerifyBlocksSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerifyStatementSetting {
+	using RETURN_TYPE = DebugStatementVerification;
+	static constexpr const char *Name = "debug_verify_statement";
+	static constexpr const char *Description = "DEBUG SETTING: the type of statement verification to perform";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "NONE";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugVerifyStatsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_stats";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: verify statistics are correct during execution, instead of assuming";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyVectorSetting {
 	using RETURN_TYPE = DebugVectorVerification;
 	static constexpr const char *Name = "debug_verify_vector";

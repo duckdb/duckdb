@@ -968,18 +968,13 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult &res
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
-#ifdef DUCKDB_ALTERNATIVE_VERIFY
-	if (statement && statement->type != StatementType::LOGICAL_PLAN_STATEMENT) {
-		statement = statement->Copy();
-	}
-#endif
-	if (statement && config.query_verification_enabled) {
-		// query verification is enabled
-		// create a copy of the statement, and use the copy
-		// this way we verify that the copy correctly copies all properties
-		auto copied_statement = statement->Copy();
-		switch (statement->type) {
-		case StatementType::SELECT_STATEMENT: {
+	if (statement) {
+		StatementVerification(statement);
+		if (config.query_verification_enabled && statement->type == StatementType::SELECT_STATEMENT) {
+			// query verification is enabled
+			// create a copy of the statement, and use the copy
+			// this way we verify that the copy correctly copies all properties
+			auto copied_statement = statement->Copy();
 			// in case this is a select query, we verify the original statement
 			ErrorData error;
 			try {
@@ -992,45 +987,6 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 				return ErrorResult<PendingQueryResult>(std::move(error), query);
 			}
 			statement = std::move(copied_statement);
-			break;
-		}
-		default: {
-#ifndef DUCKDB_ALTERNATIVE_VERIFY
-			bool reparse_statement = true;
-#else
-			bool reparse_statement = false;
-#endif
-			statement = std::move(copied_statement);
-			if (statement->type == StatementType::RELATION_STATEMENT) {
-				reparse_statement = false;
-			}
-			if (reparse_statement) {
-				try {
-					Parser parser(GetParserOptions());
-					ErrorData error;
-					parser.ParseQuery(statement->ToString());
-					// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
-					if (statement->type == StatementType::UPDATE_STATEMENT) {
-						// re-apply `prioritize_table_when_binding` (which is normally set during transform)
-						parser.statements[0]->Cast<UpdateStatement>().node->prioritize_table_when_binding =
-						    statement->Cast<UpdateStatement>().node->prioritize_table_when_binding;
-					} else if (statement->type == StatementType::TRANSACTION_STATEMENT) {
-						// re-apply invalidation policy
-						auto &reparsed_transaction_stmt = parser.statements[0]->Cast<TransactionStatement>();
-						auto &previous_transaction_stmt = statement->Cast<TransactionStatement>();
-						reparsed_transaction_stmt.info->invalidation_policy =
-						    previous_transaction_stmt.info->invalidation_policy;
-						// re-apply auto rollback
-						reparsed_transaction_stmt.info->auto_rollback =
-						    statement->Cast<TransactionStatement>().info->auto_rollback;
-					}
-					statement = std::move(parser.statements[0]);
-				} catch (const NotImplementedException &) {
-					// ToString was not implemented, just use the copied statement
-				}
-			}
-			break;
-		}
 		}
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
