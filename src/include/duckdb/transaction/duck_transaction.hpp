@@ -137,9 +137,14 @@ public:
 	//! responsible for finalizing the underlying DuckTransaction at the storage layer.
 	bool Detach(bool rollback);
 	//! Undo a TryAddParticipant() that was not followed by a successful import. Decrements
-	//! participant_count without touching rollback_requested. Must NOT be used as a substitute
+	//! participant_count without setting rollback_requested. Must NOT be used as a substitute
 	//! for Detach() — this is purely a setup-failure rollback.
-	void CancelParticipation();
+	//!
+	//! If the owner detached between our TryAddParticipant and this CancelParticipation, this
+	//! caller becomes the last detacher (count 1 → 0) and is responsible for driving storage-
+	//! layer finalization, otherwise the DuckTransaction would leak in DuckTransactionManager's
+	//! active list. We honor rollback_requested if set, otherwise commit.
+	void CancelParticipation(ClientContext &context);
 	//! Detach + finalize-if-last in one call. Used by MetaTransaction::Commit/Rollback when a
 	//! TransactionReference is shared (see TransactionReference::IsShared). Encapsulates the
 	//! eager-fail-on-doom check and the conditional CommitTransaction/RollbackTransaction call

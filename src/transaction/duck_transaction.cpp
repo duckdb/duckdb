@@ -60,10 +60,24 @@ bool DuckTransaction::Detach(bool rollback) {
 	return previous == 1;
 }
 
-void DuckTransaction::CancelParticipation() {
+void DuckTransaction::CancelParticipation(ClientContext &context) {
 	auto previous = participant_count.fetch_sub(1);
-	D_ASSERT(previous > 1);
-	(void)previous;
+	D_ASSERT(previous > 0);
+	if (previous != 1) {
+		return;
+	}
+	// We just dropped the count to 0 — the owner detached concurrently between our claim and
+	// this cancel. Drive storage-layer finalization here; otherwise this DuckTransaction would
+	// stay in DuckTransactionManager's active list forever, holding undo buffers and locks.
+	try {
+		if (rollback_requested.load()) {
+			manager.RollbackTransaction(*this);
+		} else {
+			(void)manager.CommitTransaction(context, *this);
+		}
+	} catch (...) { // NOLINT
+		            // The caller has already errored on whatever caused the cancel — do not compound it.
+	}
 }
 
 SharedFinalizeResult DuckTransaction::FinalizeShared(ClientContext &context, TransactionManager &manager,

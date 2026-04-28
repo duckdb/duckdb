@@ -40,7 +40,12 @@ void TransactionContext::BeginTransaction() {
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
 	auto global_transaction_id = context.db->GetDatabaseManager().GetNewTransactionNumber();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, global_transaction_id);
+	{
+		// meta_lock serializes the publish of current_transaction against foreign readers
+		// (TryForeignClaimParticipant), so they never observe a torn pointer.
+		lock_guard<mutex> guard(meta_lock);
+		current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, global_transaction_id);
+	}
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.registered_state->States()) {
@@ -52,7 +57,14 @@ void TransactionContext::Commit() {
 	if (!current_transaction) {
 		throw TransactionException("failed to commit: no transaction active");
 	}
-	auto transaction = std::move(current_transaction);
+	unique_ptr<MetaTransaction> transaction;
+	{
+		// Move out under meta_lock so foreign readers see either "active" or "no active txn",
+		// never a half-moved unique_ptr. The MetaTransaction object itself stays alive in the
+		// local `transaction` variable for the rest of this function.
+		lock_guard<mutex> guard(meta_lock);
+		transaction = std::move(current_transaction);
+	}
 	ClearTransaction();
 	auto error = transaction->Commit();
 	// Notify any registered state of transaction commit
@@ -87,7 +99,11 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 	if (!current_transaction) {
 		throw TransactionException("failed to rollback: no transaction active");
 	}
-	auto transaction = std::move(current_transaction);
+	unique_ptr<MetaTransaction> transaction;
+	{
+		lock_guard<mutex> guard(meta_lock);
+		transaction = std::move(current_transaction);
+	}
 	ClearTransaction();
 	context.client_data->profiler->Reset();
 
@@ -109,7 +125,16 @@ void TransactionContext::Rollback(optional_ptr<ErrorData> error) {
 
 void TransactionContext::ClearTransaction() {
 	SetAutoCommit(true);
+	lock_guard<mutex> guard(meta_lock);
 	current_transaction = nullptr;
+}
+
+ClaimParticipantResult TransactionContext::TryForeignClaimParticipant(const string &db_name) {
+	lock_guard<mutex> guard(meta_lock);
+	if (!current_transaction) {
+		return ClaimParticipantResult();
+	}
+	return current_transaction->TryClaimParticipant(db_name);
 }
 
 idx_t TransactionContext::GetActiveQuery() {
@@ -173,19 +198,21 @@ void TransactionContext::JoinTransaction(const string &transaction_id) {
 		throw TransactionException("Invalid transaction id '%s': no live connection with id %llu", transaction_id,
 		                           static_cast<uint64_t>(conn_id));
 	}
-	if (!owner_context->transaction.HasActiveTransaction()) {
-		throw TransactionException("Invalid transaction id '%s': owner connection is not currently in a transaction",
-		                           transaction_id);
-	}
-	auto &owner_meta = owner_context->transaction.ActiveTransaction();
-	// Atomic lookup-and-bump under owner_meta.lock — protects against a concurrent
-	// RemoveTransaction() (e.g. owner-side DETACH) destroying the DuckTransaction between
-	// lookup and TryAddParticipant.
-	auto claim = owner_meta.TryClaimParticipant(db_name);
+	// Single foreign call that atomically: takes the owner's TransactionContext meta_lock,
+	// checks current_transaction is non-null, and runs TryClaimParticipant under owner_meta.lock.
+	// This closes two race windows at once:
+	//   - the cross-connection torn-read of current_transaction during a concurrent
+	//     Commit/Rollback that is std::move'ing it,
+	//   - the TOCTOU between lookup and TryAddParticipant that an owner-side DETACH could slip
+	//     into.
+	// On success the foreign DuckTransaction is pinned by the bumped participant_count, so the
+	// owner can finalize its MetaTransaction freely from this point on.
+	auto claim = owner_context->transaction.TryForeignClaimParticipant(db_name);
 	if (!claim.transaction) {
-		throw TransactionException("Invalid transaction id '%s': owner has no live transaction for database '%s' "
-		                           "(database not yet touched, finalized, or not a DuckDB database)",
-		                           transaction_id, db_name);
+		throw TransactionException(
+		    "Invalid transaction id '%s': owner has no live transaction for database '%s' "
+		    "(no active transaction, database not yet touched, finalized, or not a DuckDB database)",
+		    transaction_id, db_name);
 	}
 	// Acquire the foreign DuckTransaction's statement lock BEFORE touching its state. This
 	// blocks until any owner query in flight on this transaction completes. With BeginQuery
@@ -195,13 +222,13 @@ void TransactionContext::JoinTransaction(const string &transaction_id) {
 	try {
 		foreign_guard = claim.transaction->LockStatement();
 	} catch (...) {
-		claim.transaction->CancelParticipation();
+		claim.transaction->CancelParticipation(context);
 		throw;
 	}
 	try {
 		current_transaction->ImportTransaction(*claim.database, *claim.transaction);
 	} catch (...) {
-		claim.transaction->CancelParticipation();
+		claim.transaction->CancelParticipation(context);
 		throw;
 	}
 	// Stash the lock on the active query so it stays held for the rest of this statement and
