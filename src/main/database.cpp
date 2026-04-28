@@ -316,7 +316,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		}
 		auto storage_extension = StorageExtension::Find(config, config.options.database_type);
 		if (!storage_extension) {
-			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+			ExtensionHelper::LoadExternalExtension(*this, *config.file_system, {config.options.database_type});
 		}
 	}
 

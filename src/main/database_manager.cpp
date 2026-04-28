@@ -380,7 +380,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 		// FIXME: Here it might be preferable to use an AutoLoadOrThrow kind of function
 		// so that either there will be success or a message to throw, and load will be
 		// attempted only once respecting the auto-loading options
-		ExtensionHelper::LoadExternalExtension(context, options.db_type);
+		ExtensionHelper::LoadExternalExtension(context, {config.options.database_type});
 	}
 }
 

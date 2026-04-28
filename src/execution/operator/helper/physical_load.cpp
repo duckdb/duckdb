@@ -39,7 +39,8 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		}
 
 	} else {
-		ExtensionHelper::LoadExternalExtension(context.client, info->filename);
+		ExtensionLoadOptions options {info->filename, info->alias};
+		ExtensionHelper::LoadExternalExtension(context.client, options);
 	}
 
 	return SourceResultType::FINISHED;

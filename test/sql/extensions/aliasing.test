@@ -1,0 +1,32 @@
+# name: test/sql/extensions/aliasing.test
+# description: Aliasing of extensions, and puts it in a separate extension schema
+# group: [extensions]
+
+require autocomplete
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+call enable_peg_parser()
+
+# instead of registering in a separate schema, when loading, we register it in the global extension alias thing
+# whenever we add a new alias, we register this function in main but then with the alias and not the extension name
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
+
+# todo, add alias to AliasMap, if its already there, then we error out!
+# statement ok
+# LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
+
+
+statement ok
+call disable_peg_parser()
+
+query I
+SELECT bounded_max(1::BOUNDED(10))
+----
+10
+
+# if we use same alias for

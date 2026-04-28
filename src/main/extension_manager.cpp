@@ -9,10 +9,6 @@ namespace duckdb {
 ExtensionInfo::ExtensionInfo() : is_loaded(false) {
 }
 
-ExtensionActiveLoad::ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p)
-    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)) {
-}
-
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
@@ -70,8 +66,8 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
-unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
-	auto extension_name = ExtensionHelper::GetExtensionName(name);
+unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {
+	auto extension_name = ExtensionHelper::GetExtensionName(options.extension_name);
 
 	unique_lock<mutex> extension_list_lock(lock);
 
@@ -95,7 +91,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
-	auto result = make_uniq<ExtensionActiveLoad>(db, *info, extension_name);
+	auto result = make_uniq<ExtensionActiveLoad>(db, *info, extension_name, options.alias);
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load

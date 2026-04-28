@@ -14,6 +14,9 @@ static const ExtensionAlias internal_aliases[] = {{"http", "httpfs"}, // httpfs
                                                   {"uc_catalog", "unity_catalog"}, // old name for compatibility
                                                   {nullptr, nullptr}};
 
+
+static unordered_map<string, string> external_aliases;
+
 idx_t ExtensionHelper::ExtensionAliasCount() {
 	idx_t index;
 	for (index = 0; internal_aliases[index].alias != nullptr; index++) {
@@ -21,11 +24,12 @@ idx_t ExtensionHelper::ExtensionAliasCount() {
 	return index;
 }
 
-ExtensionAlias ExtensionHelper::GetExtensionAlias(idx_t index) {
+ExtensionAlias ExtensionHelper::GetInternalExtensionAlias(idx_t index) {
 	D_ASSERT(index < ExtensionAliasCount());
 	return internal_aliases[index];
 }
 
+// todo; we might want to update this
 string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
 	auto lname = StringUtil::Lower(extension_name);
 	for (idx_t index = 0; internal_aliases[index].alias; index++) {
@@ -34,6 +38,19 @@ string ExtensionHelper::ApplyExtensionAlias(const string &extension_name) {
 		}
 	}
 	return lname;
+}
+
+void ExtensionHelper::AddExternalExtensionAlias(const string &alias, const string &extension_name) {
+	external_aliases[alias] = extension_name;
+}
+
+string ExtensionHelper::GetExternalExtensionName(const string &alias) {
+	auto entry = external_aliases.find(alias);
+	if (entry == external_aliases.end()) {
+		// return an empty string if not found
+		return string();
+	}
+	return entry->second;
 }
 
 } // namespace duckdb

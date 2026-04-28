@@ -87,7 +87,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::NOT_INSTALLED;
 		info.description = extension.description;
 		for (idx_t k = 0; k < alias_count; k++) {
-			auto alias = ExtensionHelper::GetExtensionAlias(k);
+			auto alias = ExtensionHelper::GetInternalExtensionAlias(k);
 			if (info.name == alias.extension) {
 				info.aliases.emplace_back(alias.alias);
 			}
