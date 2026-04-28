@@ -48,7 +48,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	unordered_map<idx_t, idx_t> group_by_references;
 	for (idx_t i = 0; i < op.key_targets.size(); i++) {
 		auto &target = op.key_targets[i];
-		D_ASSERT(target->type == ExpressionType::BOUND_REF);
+		D_ASSERT(target->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = target->Cast<BoundReferenceExpression>();
 		distinct_idx.emplace_back(bound_ref.index);
 		distinct_types.push_back(bound_ref.return_type);
@@ -64,7 +64,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		// Check if we can directly refer to a group, or if we need to push an aggregate
 		auto entry = group_by_references.find(i);
 		if (entry == group_by_references.end()) {
-			D_ASSERT(op.payload_aggregates[pay_idx]->type == ExpressionType::BOUND_AGGREGATE);
+			D_ASSERT(op.payload_aggregates[pay_idx]->GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 			auto &bound_aggr = op.payload_aggregates[pay_idx]->Cast<BoundAggregateExpression>();
 
 			// add the logical type of the aggregate to the payload types

@@ -119,7 +119,7 @@ struct FieldIdMapper : public ColumnMapper {
 		if (!default_val) {
 			throw InternalException("No default expression in FieldId Map");
 		}
-		if (default_val->type != ExpressionType::VALUE_CONSTANT) {
+		if (default_val->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw NotImplementedException("Default expression that isn't constant is not supported yet");
 		}
 		auto &constant_expr = default_val->Cast<ConstantExpression>();
@@ -306,7 +306,7 @@ ColumnMapResult MapColumnList(ClientContext &context, const MultiFileColumnDefin
 	if (is_selected && child_map.default_value) {
 		// we have default values at a previous level wrap it in a "list"
 		vector<unique_ptr<Expression>> default_expressions;
-		child_map.default_value->alias = "list";
+		child_map.default_value->SetAlias("list");
 		default_expressions.push_back(std::move(child_map.default_value));
 
 		// auto default_type = LogicalType::STRUCT(std::move(default_type_list));
@@ -394,7 +394,7 @@ ColumnMapResult MapColumnMap(ClientContext &context, const MultiFileColumnDefini
 			column_mapping.emplace_back(name, std::move(map_result.column_map));
 		}
 		if (map_result.default_value) {
-			map_result.default_value->alias = name;
+			map_result.default_value->SetAlias(name);
 			default_expressions.push_back(std::move(map_result.default_value));
 		}
 	}
@@ -479,7 +479,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 		//! FIXME: the 'default_value' should only be used if the STRUCT's default value is not NULL
 		if (child_map.default_value) {
 			// found a default value for this child - emplace it
-			child_map.default_value->alias = global_child.name;
+			child_map.default_value->SetAlias(global_child.name);
 			default_expressions.push_back(std::move(child_map.default_value));
 		}
 	}
@@ -644,13 +644,13 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 					Doing neither or both is not a valid option.
 				)");
 			}
-			if (expr && expr->type == ExpressionType::VALUE_CONSTANT) {
+			if (expr && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				// the column is constant after all - handle it
 				expressions.push_back(std::move(expr));
 				continue;
 			}
 			if (!global_column_reference) {
-				auto is_reference = expr->type == ExpressionType::BOUND_REF;
+				auto is_reference = expr->GetExpressionType() == ExpressionType::BOUND_REF;
 				expressions.push_back(std::move(expr));
 
 				MultiFileLocalColumnId local_id(reader.columns.size());
@@ -826,7 +826,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index) {
 	auto global_column_id = global_column_ids[global_index].GetPrimaryIndex();
 	auto &expr = reader_data.expressions[global_index];
-	if (expr->type == ExpressionType::VALUE_CONSTANT) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		return expr->Cast<BoundConstantExpression>().value;
 	}
 	for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
@@ -936,7 +936,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COMPARISON: {
 		auto &comparison = expr.Cast<BoundComparisonExpression>();
-		if (comparison.right->type != ExpressionType::VALUE_CONSTANT) {
+		if (comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return nullptr;
 		}
 		auto lhs = RewriteMappedValueExpression(*comparison.left, mapping, target_type);
@@ -947,12 +947,12 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		if (!TryCastConstant(constant, *lhs.type)) {
 			return nullptr;
 		}
-		return make_uniq<BoundComparisonExpression>(comparison.type, std::move(lhs.expr),
+		return make_uniq<BoundComparisonExpression>(comparison.GetExpressionType(), std::move(lhs.expr),
 		                                            make_uniq<BoundConstantExpression>(std::move(constant)));
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
-		auto result = make_uniq<BoundConjunctionExpression>(conjunction.type);
+		auto result = make_uniq<BoundConjunctionExpression>(conjunction.GetExpressionType());
 		for (auto &child : conjunction.children) {
 			auto rewritten_child = TryCastFilterExpression(*child, mapping, target_type);
 			if (!rewritten_child) {
@@ -964,7 +964,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		switch (op.type) {
+		switch (op.GetExpressionType()) {
 		case ExpressionType::OPERATOR_IS_NULL:
 		case ExpressionType::OPERATOR_IS_NOT_NULL: {
 			if (op.children.size() != 1) {
@@ -974,7 +974,7 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			if (!child.expr) {
 				return nullptr;
 			}
-			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
+			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.return_type);
 			result->children.push_back(std::move(child.expr));
 			return std::move(result);
 		}
@@ -986,10 +986,10 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 			if (!lhs.expr || !lhs.type) {
 				return nullptr;
 			}
-			auto result = make_uniq<BoundOperatorExpression>(op.type, op.return_type);
+			auto result = make_uniq<BoundOperatorExpression>(op.GetExpressionType(), op.return_type);
 			result->children.push_back(std::move(lhs.expr));
 			for (idx_t i = 1; i < op.children.size(); i++) {
-				if (op.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+				if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 					return nullptr;
 				}
 				auto constant = op.children[i]->Cast<BoundConstantExpression>().value;

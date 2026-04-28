@@ -45,7 +45,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
                                   optional_ptr<const Expression> cast_source, optional_idx error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
-		column = " when casting from source column " + cast_source->alias;
+		column = " when casting from source column " + cast_source->GetAlias();
 	}
 	if (!error_message_ptr) {
 		throw ConversionException(error_location, error_message + column);

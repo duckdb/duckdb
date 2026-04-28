@@ -33,11 +33,11 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 	});
 }
@@ -383,7 +383,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->alias = "source_marker";
+		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -404,7 +404,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->alias = "source_marker";
+		marker_ref->SetAlias("source_marker");
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

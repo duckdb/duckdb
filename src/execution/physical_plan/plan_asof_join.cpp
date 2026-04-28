@@ -244,7 +244,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 	pk->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	pk->end = WindowBoundary::CURRENT_ROW_ROWS;
-	pk->alias = "row_number";
+	pk->SetAlias("row_number");
 	window_select.emplace_back(std::move(pk));
 
 	auto window_types = probe.GetTypes();

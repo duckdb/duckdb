@@ -246,8 +246,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 						for (auto &entry : child_types) {
 							vector<string> current_key_path;
 							// During recursive expansion, not all expressions are BoundFunctionExpression
-							if (keep_parent_names && expr->type == ExpressionType::BOUND_FUNCTION) {
-								current_key_path.push_back(expr->alias);
+							if (keep_parent_names && expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+								current_key_path.push_back(expr->GetAlias());
 							}
 							current_key_path.push_back(entry.first);
 							new_expressions.push_back(

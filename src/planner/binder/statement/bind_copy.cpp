@@ -454,7 +454,7 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (!expr) {
 		return result;
 	}
-	if (expr->type == ExpressionType::STAR) {
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		// for compatibility with previous copy implementation - turn a raw * into a * string literal
 		if (star.relation_name.empty() && star.exclude_list.empty() && star.replace_list.empty() &&

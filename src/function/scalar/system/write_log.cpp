@@ -47,7 +47,7 @@ public:
 
 void ThrowIfNotConstant(const Expression &arg) {
 	if (!arg.IsFoldable()) {
-		throw BinderException("write_log: argument '%s' must be constant", arg.alias);
+		throw BinderException("write_log: argument '%s' must be constant", arg.GetAlias());
 	}
 }
 
@@ -75,37 +75,37 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 		if (arg->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->alias == "disable_logging") {
+		if (arg->GetAlias() == "disable_logging") {
 			ThrowIfNotConstant(*arg);
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("write_log: 'disable_logging' argument must be a boolean");
 			}
 			result->disable_logging = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "scope") {
+		} else if (arg->GetAlias() == "scope") {
 			ThrowIfNotConstant(*arg);
 			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'scope' argument must be a string");
 			}
 			result->scope = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "level") {
+		} else if (arg->GetAlias() == "level") {
 			ThrowIfNotConstant(*arg);
 			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'level' argument must be a string");
 			}
 			result->level =
 			    EnumUtil::FromString<LogLevel>(StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg)));
-		} else if (arg->alias == "log_type") {
+		} else if (arg->GetAlias() == "log_type") {
 			ThrowIfNotConstant(*arg);
 			if (arg->return_type.id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'log_type' argument must be a string");
 			}
 			result->type = StringValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "return_value") {
+		} else if (arg->GetAlias() == "return_value") {
 			result->return_type = arg->return_type;
 			result->output_col = i;
 			bound_function.SetReturnType(result->return_type);
 		} else {
-			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", arg->alias));
+			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", arg->GetAlias()));
 		}
 	}
 

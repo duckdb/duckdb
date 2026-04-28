@@ -120,7 +120,7 @@ optional_ptr<LogicalOrder> RowGroupPruner::FindLogicalOrder(const LogicalLimit &
 		return nullptr;
 	}
 
-	if (logical_order.orders[0].expression->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (logical_order.orders[0].expression->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 

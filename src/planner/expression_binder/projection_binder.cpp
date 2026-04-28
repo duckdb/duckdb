@@ -22,7 +22,7 @@ BindResult ProjectionBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 	auto alias = result.expression->GetName();
 	auto proj_col_idx = ColumnBinding::PushExpression(proj_expressions, std::move(result.expression));
 	auto proj_ref = make_uniq<BoundColumnRefExpression>(return_type, ColumnBinding(proj_index, proj_col_idx));
-	proj_ref->alias = std::move(alias);
+	proj_ref->SetAlias(std::move(alias));
 	return BindResult(std::move(proj_ref));
 }
 

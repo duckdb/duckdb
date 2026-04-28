@@ -388,12 +388,12 @@ ReaderInitializeType MultiFileReader::CreateMapping(
 
 string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
                                  idx_t expr_idx, string &first_message) {
-	if (expr.type != ExpressionType::OPERATOR_CAST) {
+	if (expr.GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		// not a cast
 		return string();
 	}
 	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.child->type != ExpressionType::BOUND_REF) {
+	if (cast_expr.child->GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
 	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();

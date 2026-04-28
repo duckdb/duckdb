@@ -159,7 +159,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::Optimize(unique_ptr<Logical
 
 bool WindowSelfJoinOptimizer::CanOptimize(const BoundWindowExpression &w_expr,
                                           const BoundWindowExpression &w_expr0) const {
-	if (w_expr.type != ExpressionType::WINDOW_AGGREGATE) {
+	if (w_expr.GetExpressionType() != ExpressionType::WINDOW_AGGREGATE) {
 		return false;
 	}
 	//	We can only accept ORDER BY clauses if the frame is the entire partition

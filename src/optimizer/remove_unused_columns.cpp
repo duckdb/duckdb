@@ -692,7 +692,7 @@ void RemoveUnusedColumns::CheckPushdownExtract(LogicalOperator &op) {
 				//! No children of this column are referenced, skip
 				continue;
 			}
-			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				//! Not a column reference, can't pull up the extract
 				continue;
 			}
@@ -1182,7 +1182,7 @@ void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 }
 
 static bool TryGetCastChild(unique_ptr<Expression> &expr, optional_ptr<unique_ptr<Expression>> &child) {
-	if (expr->type != ExpressionType::OPERATOR_CAST) {
+	if (expr->GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		return false;
 	}
 	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_CAST);

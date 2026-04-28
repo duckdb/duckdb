@@ -294,7 +294,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
-			if (param_expr->type == ExpressionType::VALUE_CONSTANT) {
+			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				continue;
 			}
 
@@ -311,7 +311,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			// Save this back as a constant expression
 			auto const_expr = make_uniq<ConstantExpression>(default_val);
-			const_expr->alias = param_name;
+			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
 		}
 

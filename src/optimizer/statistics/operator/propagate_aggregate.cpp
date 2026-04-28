@@ -124,7 +124,8 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 		const string &fun_name = aggr_expr.function.name;
 		if (fun_name == "min" || fun_name == "max") {
-			if (aggr_expr.children.size() != 1 || aggr_expr.children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (aggr_expr.children.size() != 1 ||
+			    aggr_expr.children[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				return;
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
@@ -149,7 +150,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		for (auto &binding : min_max_bindings) {
 			auto &proj = child_ref.get().Cast<LogicalProjection>();
 			auto &expr = proj.GetExpression(binding);
-			if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				return;
 			}
 			binding = expr.Cast<BoundColumnRefExpression>().binding;
