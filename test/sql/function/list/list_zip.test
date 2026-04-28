@@ -137,6 +137,25 @@ SELECT list_zip(i, j, b) FROM integers, integers2, bools order by all desc
 []
 []
 
+# regression: table-sourced VARCHAR lists with uneven lengths through UNNEST
+statement ok
+CREATE TABLE varchar_lists_repro (a VARCHAR[], b VARCHAR[])
+
+statement ok
+INSERT INTO varchar_lists_repro VALUES (['x'], []), (['x', 'y'], ['p'])
+
+query I
+SELECT x FROM varchar_lists_repro, UNNEST(list_zip(a, b)) u(x) ORDER BY ALL
+----
+(x, p)
+(x, NULL)
+(y, NULL)
+
+query I
+SELECT x FROM varchar_lists_repro, UNNEST(list_zip(a, b, true)) u(x) ORDER BY ALL
+----
+(x, p)
+
 # very large lists
 
 statement ok
