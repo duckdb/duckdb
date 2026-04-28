@@ -244,6 +244,43 @@ SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total
 TABLE_SCAN	1	1
 TABLE_SCAN	1	4
 
+query II
+SELECT sum(seq_scanned)::BIGINT, sum(total)::BIGINT
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2	5
+
+# --- Repeated scan query: same table's row groups are counted once per scan operator ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SEQ_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT count(*) FROM t a, t b WHERE a.i < 100 AND b.i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY seq_scanned, total;
+----
+TABLE_SCAN	1	4
+TABLE_SCAN	1	4
+
+query II
+SELECT sum(seq_scanned)::BIGINT, sum(total)::BIGINT
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2	8
+
 # --- Transaction-local append: total includes uncommitted local row groups ---
 
 statement ok
