@@ -332,6 +332,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_verify_stats",
+        "description": "DEBUG SETTING: verify statistics are correct during execution, instead of assuming",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_vector",
         "description": "DEBUG SETTING: enable vector verification",
         "type": "ENUM<DebugVectorVerification>",
