@@ -7,6 +7,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -574,7 +575,7 @@ jobs:
     needs: check-draft
     runs-on: ubuntu-22.04
     steps:
-    - uses: mymindstorm/setup-emsdk@v12
+    - uses: mymindstorm/setup-emsdk@v16
       with:
         version: 'latest'
 
@@ -742,7 +743,7 @@ jobs:
           python-version: '3.11'
 
       - name: Download DuckDB binary
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: duckdb-binary
           path: build/release
@@ -804,7 +805,7 @@ jobs:
     if: always()
     steps:
       - name: Download all test artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: bwc-test-results-*
           merge-multiple: true
@@ -847,7 +848,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create Dir
         run: |

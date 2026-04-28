@@ -322,6 +322,13 @@ public:
 		return false;
 	}
 
+	idx_t GetAllocationSize() const {
+		if (!validity_mask) {
+			return 0;
+		}
+		return EntryCount(capacity) * sizeof(V);
+	}
+
 public:
 	inline void Initialize(validity_t *validity, idx_t new_capacity) {
 		validity_data.reset();
@@ -376,6 +383,7 @@ public:
 	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
 	DUCKDB_API void CopySel(const ValidityMask &other, const SelectionVector &sel, idx_t source_offset,
 	                        idx_t target_offset, idx_t count);
+	DUCKDB_API void CopyRange(const ValidityMask &other, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
 	DUCKDB_API string ToString() const;

@@ -143,11 +143,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 		if (string_size > 0) {
 			state.have_valid_row = true;
-			if (data[idx].IsInlined()) {
-				state.fsst_strings.push_back(data[idx]);
-			} else {
-				state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
-			}
+			state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
 			state.fsst_string_total_size += string_size;
 		} else {
 			state.empty_strings++;
@@ -675,11 +671,11 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			result_data = FSSTVector::GetCompressedData(result);
 		} else {
 			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-			result_data = FlatVector::GetData<string_t>(result);
+			result_data = FlatVector::GetDataMutable<string_t>(result);
 		}
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result_data = FlatVector::GetData<string_t>(result);
+		result_data = FlatVector::GetDataMutable<string_t>(result);
 	}
 
 	auto offsets = StartScan(scan_state, base_data, start, scan_count);
@@ -693,8 +689,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			    segment, dict.end, result, baseptr,
 			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]),
 			    string_length);
-			FSSTVector::SetCount(result, scan_count);
 		}
+		FSSTVector::SetCount(result, scan_count);
 	} else {
 		// Just decompress
 		auto &str_allocator = StringVector::GetStringAllocator(result);
@@ -725,7 +721,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	auto &str_allocator = StringVector::GetStringAllocator(result);
 	auto offsets = StartScan(scan_state, base_data, start, vector_count);
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
@@ -750,7 +746,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto block_size = segment.GetBlockSize();
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width, block_size);
 
-	auto result_data = FlatVector::GetData<string_t>(result);
+	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 	if (!have_symbol_table) {
 		// There is no FSST symtable. This is only the case for empty strings or NULLs. We emit an empty string.
 		result_data[result_idx] = string_t(nullptr, 0);

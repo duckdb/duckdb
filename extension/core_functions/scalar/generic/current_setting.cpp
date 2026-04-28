@@ -30,11 +30,13 @@ public:
 void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<CurrentSettingBindData>();
-	result.Reference(info.value);
+	result.Reference(info.value, count_t(args.size()));
 }
 
-unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
-                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> CurrentSettingBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto &key_child = arguments[0];
 	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();

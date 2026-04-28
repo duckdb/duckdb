@@ -8,6 +8,10 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <string.h>
+#include <string>
+
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
 #include "parquet_statistics.hpp"
@@ -22,16 +26,42 @@
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_crypto.hpp"
-
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+class TBase;
+
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
 
 namespace duckdb {
 class ParquetReader;
 struct TableFilterState;
+class Allocator;
+class RleBpDecoder;
+class ThriftFileTransport;
+class Vector;
 
 using duckdb_apache::thrift::protocol::TProtocol;
 
@@ -53,6 +83,18 @@ enum class ColumnEncoding {
 	PLAIN
 };
 
+struct ColumnReaderInput {
+public:
+	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out)
+	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out) {
+	}
+
+public:
+	uint64_t num_values;
+	data_ptr_t define_out;
+	data_ptr_t repeat_out;
+};
+
 class ColumnReader {
 	friend class ByteStreamSplitDecoder;
 	friend class DeltaBinaryPackedDecoder;
@@ -68,12 +110,12 @@ public:
 public:
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
-	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const SelectionVector &sel, idx_t approved_tuple_count);
-	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, bool is_first_filter);
+	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
+	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+	                    idx_t approved_tuple_count);
+	virtual void Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+	                    TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+	                    bool is_first_filter);
 	static void ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
@@ -188,24 +230,24 @@ protected:
 	virtual bool SupportsDirectSelect() const {
 		return false;
 	}
-	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                  const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                  idx_t &approved_tuple_count);
-	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-	                  const SelectionVector &sel, idx_t approved_tuple_count);
+	void DirectFilter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+	                  TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count);
+	void DirectSelect(ColumnReaderInput &input, Vector &result, const SelectionVector &sel, idx_t approved_tuple_count);
 	void ReadEncrypted(duckdb_apache::thrift::TBase &object);
 	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module);
 	void Read(PageHeader &page_hdr);
 	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
-	//! Check if a previous table filter has filtered out this page
-	bool PageIsFilteredOut(PageHeader &page_hdr);
+	//! this function tries to skip a page in the below conditions:
+	//! 1. a previous table filter has filtered out this page
+	//! 2. page statistics can be used to skip page
+	bool PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
 	                      optional_ptr<TableFilterState> filter_state = nullptr);
-	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
+	idx_t ReadInternal(ColumnReaderInput &input, Vector &result);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
 	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
@@ -214,7 +256,7 @@ private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
 		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
 			// we can memcpy
 			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
@@ -222,7 +264,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -255,8 +297,8 @@ private:
 	void PlainSelectTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
-		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);

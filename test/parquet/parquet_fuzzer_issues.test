@@ -15,3 +15,15 @@ statement error
 from 'data/parquet-testing/broken/internal_6165.parquet';
 ----
 row group does not have enough columns
+
+# duckdb-fuzzer issue 4381: negative data_page_offset causes assertion failure
+statement error
+from read_parquet('data/parquet-testing/broken/fuzzer4381.parquet', filename='my_cool_filename');
+----
+metadata is corrupt
+
+# duckdb fuzzer issue 4384
+statement error
+from 'data/parquet-testing/broken/duckdb_fuzzer_4384.parquet';
+----
+schema element has no children

@@ -20,18 +20,24 @@ static void ManyArrayLengthFunction(DataChunk &args, ExpressionState &state, Vec
 
 static void GetArrayLengthFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
 	set.AddFunction(ScalarFunction({input_type}, LogicalType::UBIGINT, UnaryArrayLengthFunction, nullptr, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::UBIGINT, BinaryArrayLengthFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::UBIGINT), ManyArrayLengthFunction,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.GetArguments().size() == 1 && func.GetArguments()[0].IsJSONType()) {
+			continue;
+		}
+		func.SetFallible();
+	}
 	return set;
 }
 

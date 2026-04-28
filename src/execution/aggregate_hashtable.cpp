@@ -449,13 +449,13 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
 	auto &dictionary_addresses = *dict_state.dictionary_addresses;
-	auto dict_addresses = FlatVector::GetData<uintptr_t>(dictionary_addresses);
+	auto dict_addresses = FlatVector::GetDataMutable<uintptr_t>(dictionary_addresses);
 	for (idx_t i = 0; i < unique_count; i++) {
 		auto dict_idx = unique_entries.get_index(i);
 		dict_addresses[dict_idx] = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
 	}
 	// now set up the addresses for the aggregates
-	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
+	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
 		result_addresses[i] = dict_addresses[dict_idx];
@@ -499,7 +499,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	}
 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
-	auto result_addresses = FlatVector::GetData<uintptr_t>(state.addresses);
+	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses[i] = aggregate_address;
@@ -689,7 +689,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
 
 	addresses_v.Flatten(chunk_size);
-	const auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
+	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
 
 	if (skip_lookups) {
 		// Just appending now
@@ -712,8 +712,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	// Compute the entry in the table based on the hash using a modulo,
 	// and precompute the hash salts for faster comparison below
-	const auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
-	const auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
+	const auto ht_offsets = FlatVector::GetDataMutable<uint64_t>(state.ht_offsets);
+	const auto hash_salts = FlatVector::GetDataMutable<hash_t>(state.hash_salts);
 
 	// We also compute the occupied count, which is essentially useless.
 	// However, this loop is branchless, while the main lookup loop below is not.
@@ -739,7 +739,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 		// "new_groups_out" contains ALL groups for the chunk, "empty_vector" only the groups for this iteration,
 		// so it's just the same selection vector, but offset by the current "new_group_count".
-		empty_vector.Initialize(new_groups_out.data() + new_group_count);
+		empty_vector.Initialize(new_groups_out.data() + new_group_count, new_groups_out.Capacity() - new_group_count);
 		if (sel_vector->IsSet()) {
 			GroupedAggregateHashTableInnerLoop<true>(entries, capacity, bitmask, hash_salts, ht_offsets, sel_vector,
 			                                         remaining_entries, empty_vector, state.group_compare_vector,

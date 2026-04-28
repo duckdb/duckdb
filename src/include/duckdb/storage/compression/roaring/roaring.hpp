@@ -20,7 +20,7 @@ namespace roaring {
 
 //! Used for compressed runs/arrays
 static constexpr uint16_t COMPRESSED_SEGMENT_SIZE = 256;
-//! compresed segment size is 256, instead of division we can make use of shifting
+//! compressed segment size is 256, instead of division we can make use of shifting
 static constexpr uint16_t COMPRESSED_SEGMENT_SHIFT_AMOUNT = 8;
 //! The amount of values that are encoded per container
 static constexpr idx_t ROARING_CONTAINER_SIZE = 2048;
@@ -48,7 +48,7 @@ static_assert(BITSET_CONTAINER_SENTINEL_VALUE < NumericLimits<uint8_t>::Maximum(
               "The array/bitset size is encoded in a maximum of 8 bits");
 
 static_assert(ROARING_CONTAINER_SIZE % COMPRESSED_SEGMENT_SIZE == 0,
-              "The (maximum) container size has to be cleanly divisable by the segment size");
+              "The (maximum) container size has to be cleanly divisible by the segment size");
 
 static_assert((1 << RUN_CONTAINER_SIZE_BITWIDTH) - 1 >= MAX_RUN_IDX,
               "The bitwidth used to store the size of a run container has to be big enough to store the maximum size");
@@ -397,7 +397,7 @@ public:
 	}
 
 public:
-	virtual void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) = 0;
+	virtual void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) = 0;
 	virtual void Skip(idx_t count) = 0;
 	virtual void Verify() const = 0;
 
@@ -437,7 +437,7 @@ public:
 	RunContainerScanState(idx_t container_index, idx_t container_size, idx_t count, data_ptr_t data_p);
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override;
+	void ScanPartial(ValidityMask &result, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
 	void Verify() const override;
 
@@ -486,9 +486,7 @@ public:
 	}
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override {
-		auto &result_mask = FlatVector::Validity(result);
-
+	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override {
 		// This method assumes that the validity mask starts off as having all bits set for the entries that are being
 		// scanned.
 
@@ -599,7 +597,7 @@ public:
 	BitsetContainerScanState(idx_t container_index, idx_t count, validity_t *bitset);
 
 public:
-	void ScanPartial(Vector &result, idx_t result_offset, idx_t to_scan) override;
+	void ScanPartial(ValidityMask &result_mask, idx_t result_offset, idx_t to_scan) override;
 	void Skip(idx_t to_skip) override;
 	void Verify() const override;
 
@@ -617,9 +615,9 @@ public:
 	ContainerMetadata GetContainerMetadata(idx_t container_index);
 	data_ptr_t GetStartOfContainerData(idx_t container_index);
 	ContainerScanState &LoadContainer(idx_t container_index, idx_t internal_offset);
-	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, Vector &result, idx_t offset);
+	void ScanInternal(ContainerScanState &scan_state, idx_t to_scan, ValidityMask &result, idx_t offset);
 	idx_t GetContainerIndex(idx_t start_index, idx_t &offset);
-	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count);
+	void ScanPartial(idx_t start_idx, ValidityMask &result, idx_t offset, idx_t count);
 	void Skip(ContainerScanState &scan_state, idx_t skip_count);
 
 public:

@@ -27,7 +27,7 @@ struct ListArgFunctor {
 		return ListVector::GetListSize(list);
 	}
 	static Vector &GetEntry(Vector &list) {
-		return ListVector::GetEntry(list);
+		return ListVector::GetChildMutable(list);
 	}
 };
 

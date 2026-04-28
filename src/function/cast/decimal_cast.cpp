@@ -52,23 +52,23 @@ struct DecimalScaleInput {
 
 struct DecimalScaleUpOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalScaleInput<INPUT_TYPE, RESULT_TYPE> *)dataptr;
-		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input) * data->factor;
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx,
+	                             DecimalScaleInput<INPUT_TYPE, RESULT_TYPE> &data) {
+		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input) * data.factor;
 	}
 };
 
 struct DecimalScaleUpCheckOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalScaleInput<INPUT_TYPE, RESULT_TYPE> *)dataptr;
-		if (input >= data->limit || input <= -data->limit) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx,
+	                             DecimalScaleInput<INPUT_TYPE, RESULT_TYPE> &data) {
+		if (input >= data.limit || input <= -data.limit) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
-			                                Decimal::ToString(input, data->source_width, data->source_scale),
-			                                data->result.GetType().ToString());
-			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data->vector_cast_data);
+			                                Decimal::ToString(input, data.source_width, data.source_scale),
+			                                data.result.GetType().ToString());
+			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data.vector_cast_data);
 		}
-		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input) * data->factor;
+		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input) * data.factor;
 	}
 };
 
@@ -85,13 +85,13 @@ static bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count,
 	if (source_width < target_width) {
 		DecimalScaleInput<SOURCE, DEST> input(result, multiply_factor, parameters);
 		// type will always fit: no need to check limit
-		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpOperator>(source, result, count, &input);
+		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpOperator>(source, result, count, input);
 		return true;
 	} else {
 		// type might not fit: check limit
 		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE, DEST> input(result, limit, multiply_factor, parameters, source_width, source_scale);
-		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpCheckOperator>(source, result, count, &input,
+		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleUpCheckOperator>(source, result, count, input,
 		                                                                         parameters.error_message);
 		return input.vector_cast_data.all_converted;
 	}
@@ -99,11 +99,10 @@ static bool TemplatedDecimalScaleUp(Vector &source, Vector &result, idx_t count,
 
 struct DecimalScaleDownOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DecimalScaleInput<INPUT_TYPE> &data) {
 		//	We need to round here, not truncate.
-		auto data = (DecimalScaleInput<INPUT_TYPE> *)dataptr;
 		//	Scale first so we don't overflow when rounding.
-		const auto scaling = data->factor / 2;
+		const auto scaling = data.factor / 2;
 		input /= scaling;
 		if (input < 0) {
 			input -= 1;
@@ -147,15 +146,14 @@ bool CanScaleDownDecimal<hugeint_t>(hugeint_t input, DecimalScaleInput<hugeint_t
 
 struct DecimalScaleDownCheckOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = static_cast<DecimalScaleInput<INPUT_TYPE> *>(dataptr);
-		if (!CanScaleDownDecimal(input, *data)) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DecimalScaleInput<INPUT_TYPE> &data) {
+		if (!CanScaleDownDecimal(input, data)) {
 			auto error = StringUtil::Format("Casting value \"%s\" to type %s failed: value is out of range!",
-			                                Decimal::ToString(input, data->source_width, data->source_scale),
-			                                data->result.GetType().ToString());
-			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data->vector_cast_data);
+			                                Decimal::ToString(input, data.source_width, data.source_scale),
+			                                data.result.GetType().ToString());
+			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data.vector_cast_data);
 		}
-		return DecimalScaleDownOperator::Operation<INPUT_TYPE, RESULT_TYPE>(input, mask, idx, dataptr);
+		return DecimalScaleDownOperator::Operation<INPUT_TYPE, RESULT_TYPE>(input, mask, idx, data);
 	}
 };
 
@@ -172,13 +170,13 @@ static bool TemplatedDecimalScaleDown(Vector &source, Vector &result, idx_t coun
 	if (source_width < target_width) {
 		DecimalScaleInput<SOURCE> input(result, divide_factor, parameters);
 		// type will always fit: no need to check limit
-		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownOperator>(source, result, count, &input);
+		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownOperator>(source, result, count, input);
 		return true;
 	} else {
 		// type might not fit: check limit
 		auto limit = UnsafeNumericCast<SOURCE>(POWERS_SOURCE::POWERS_OF_TEN[target_width]);
 		DecimalScaleInput<SOURCE> input(result, limit, divide_factor, parameters, source_width, source_scale);
-		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, &input,
+		UnaryExecutor::GenericExecute<SOURCE, DEST, DecimalScaleDownCheckOperator>(source, result, count, input,
 		                                                                           parameters.error_message);
 		return input.vector_cast_data.all_converted;
 	}
@@ -227,21 +225,20 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 	}
 }
 
-struct DecimalCastInput {
-	DecimalCastInput(Vector &result_p, uint8_t width_p, uint8_t scale_p)
-	    : result(result_p), width(width_p), scale(scale_p) {
+struct DecimalStringCastInput {
+	DecimalStringCastInput(Vector &result_p, uint8_t width_p, uint8_t scale_p)
+	    : heap(StringVector::GetStringHeap(result_p)), width(width_p), scale(scale_p) {
 	}
 
-	Vector &result;
+	StringHeap &heap;
 	uint8_t width;
 	uint8_t scale;
 };
 
 struct StringCastFromDecimalOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = reinterpret_cast<DecimalCastInput *>(dataptr);
-		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data->width, data->scale, data->result);
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DecimalStringCastInput &data) {
+		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data.width, data.scale, data.heap);
 	}
 };
 
@@ -250,9 +247,9 @@ static bool DecimalToStringCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &source_type = source.GetType();
 	auto width = DecimalType::GetWidth(source_type);
 	auto scale = DecimalType::GetScale(source_type);
-	DecimalCastInput input(result, width, scale);
+	DecimalStringCastInput input(result, width, scale);
 
-	UnaryExecutor::GenericExecute<SRC, string_t, StringCastFromDecimalOperator>(source, result, count, (void *)&input);
+	UnaryExecutor::GenericExecute<SRC, string_t, StringCastFromDecimalOperator>(source, result, count, input);
 	return true;
 }
 

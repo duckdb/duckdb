@@ -367,7 +367,7 @@ static string EntryToString(CatalogEntryInfo &info) {
 		return StringUtil::Format("index \"%s\"", info.name);
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		return StringUtil::Format("index \"%s\"", info.name);
+		return StringUtil::Format("sequence \"%s\"", info.name);
 	}
 	case CatalogType::COLLATION_ENTRY: {
 		return StringUtil::Format("collation \"%s\"", info.name);
@@ -680,8 +680,13 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	});
 
 	// Keep old dependencies
-	dependency_set_t dependents;
+	bool has_new_dependencies = alter_info.new_dependencies.get();
 	ScanSubjects(transaction, old_info, [&](DependencyEntry &dep) {
+		if (has_new_dependencies && !dep.Subject().flags.IsOwnership()) {
+			// The alter provided updated dependencies - skip old non-ownership subject dependencies
+			// as they will be replaced by the new dependencies
+			return;
+		}
 		auto entry = LookupEntry(transaction, dep);
 		if (!entry) {
 			return;
@@ -692,15 +697,18 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 		dependencies.emplace_back(dep_info);
 	});
 
-	// FIXME: we should update dependencies in the future
-	// some alters could cause dependencies to change (imagine types of table columns)
-	// or DEFAULT depending on a sequence
-	if (!StringUtil::CIEquals(old_obj.name, new_obj.name)) {
-		// The name has been changed, we need to recreate the dependency links
+	if (has_new_dependencies || !StringUtil::CIEquals(old_obj.name, new_obj.name)) {
+		// The dependencies have changed (e.g. SET DEFAULT) or the name has changed
+		// We need to recreate the dependency links
 		CleanupDependencies(transaction, old_obj);
 	}
 
-	// Reinstate the old dependencies
+	if (has_new_dependencies) {
+		// Add the new dependencies
+		CreateDependencies(transaction, new_obj, *alter_info.new_dependencies);
+	}
+
+	// Reinstate any old dependencies
 	for (auto &dep : dependencies) {
 		CreateDependency(transaction, dep);
 	}

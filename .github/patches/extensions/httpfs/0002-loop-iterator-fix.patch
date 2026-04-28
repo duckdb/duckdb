@@ -1,0 +1,1446 @@
+diff --git a/test/extension/autoloading_base.test b/test/extension/autoloading_base.test
+index 86f2dbb..238f1fd 100644
+--- a/test/extension/autoloading_base.test
++++ b/test/extension/autoloading_base.test
+@@ -89,7 +89,7 @@ select * from thistablefunctionwillnotexistfosho();
+ 
+ ### Autoloading with correct tmp repo
+ statement ok
+-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
++set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
+ 
+ statement ok
+ SET s3_region='eu-west-1';
+diff --git a/test/extension/autoloading_current_setting.test b/test/extension/autoloading_current_setting.test
+index 5567c12..8d4b98d 100644
+--- a/test/extension/autoloading_current_setting.test
++++ b/test/extension/autoloading_current_setting.test
+@@ -38,7 +38,7 @@ select current_setting('s3_region');
+ 
+ ### Autoloading with autoinstall and correct extension repo
+ statement ok
+-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
++set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
+ 
+ statement ok
+ set autoinstall_known_extensions=true
+diff --git a/test/extension/autoloading_filesystems.test b/test/extension/autoloading_filesystems.test
+index fde60fc..24e152d 100644
+--- a/test/extension/autoloading_filesystems.test
++++ b/test/extension/autoloading_filesystems.test
+@@ -35,7 +35,7 @@ statement ok
+ set autoinstall_known_extensions=true
+ 
+ statement ok
+-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
++set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
+ 
+ # Set an invalid endpoint to ensure we fail in the httpfs extension when trying to connect
+ statement ok
+diff --git a/test/extension/autoloading_load_only.test b/test/extension/autoloading_load_only.test
+index eaa4031..66f9770 100644
+--- a/test/extension/autoloading_load_only.test
++++ b/test/extension/autoloading_load_only.test
+@@ -38,7 +38,7 @@ SET s3_region='eu-west-1';
+ 
+ ### Manually install the extension from the local repo
+ statement ok
+-INSTALL httpfs FROM '${LOCAL_EXTENSION_REPO}'
++INSTALL httpfs FROM '{LOCAL_EXTENSION_REPO}'
+ 
+ # now autoloading works!
+ statement ok
+diff --git a/test/extension/autoloading_reset_setting.test b/test/extension/autoloading_reset_setting.test
+index 5726ee3..3473e3b 100644
+--- a/test/extension/autoloading_reset_setting.test
++++ b/test/extension/autoloading_reset_setting.test
+@@ -40,7 +40,7 @@ Extension
+ 
+ ### Autoloading with correct tmp repo and autoinstall
+ statement ok
+-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
++set autoinstall_extension_repository='{LOCAL_EXTENSION_REPO}';
+ 
+ statement ok
+ set autoinstall_known_extensions=true
+diff --git a/test/sql/attach/attach_httpfs.test b/test/sql/attach/attach_httpfs.test
+index 8742ecb..dfcadb1 100644
+--- a/test/sql/attach/attach_httpfs.test
++++ b/test/sql/attach/attach_httpfs.test
+@@ -20,7 +20,7 @@ require-env S3_ATTACH_DB_PRESIGNED_URL
+ 
+ # ATTACH a DuckDB database over HTTPFS
+ statement ok
+-ATTACH '${S3_ATTACH_DB_PRESIGNED_URL}' AS db (READONLY 1);
++ATTACH '{S3_ATTACH_DB_PRESIGNED_URL}' AS db (READONLY 1);
+ 
+ query IIIII
+ SELECT * FROM db.integral_values
+diff --git a/test/sql/attach/attach_s3.test b/test/sql/attach/attach_s3.test
+index 555d074..1d057da 100644
+--- a/test/sql/attach/attach_s3.test
++++ b/test/sql/attach/attach_s3.test
+@@ -22,16 +22,16 @@ statement ok
+ CREATE SECRET (
+     TYPE S3,
+     PROVIDER config,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}'
+ )
+ 
+ # ATTACH a DuckDB database over HTTPFS
+ statement ok
+-ATTACH '${S3_ATTACH_DB}' AS db (READONLY 1);
++ATTACH '{S3_ATTACH_DB}' AS db (READONLY 1);
+ 
+ query IIIII
+ SELECT * FROM db.integral_values
+diff --git a/test/sql/attach/attach_s3_tpch.test_slow b/test/sql/attach/attach_s3_tpch.test_slow
+index 20df6e6..f287085 100644
+--- a/test/sql/attach/attach_s3_tpch.test_slow
++++ b/test/sql/attach/attach_s3_tpch.test_slow
+@@ -22,11 +22,11 @@ statement ok
+ CREATE SECRET (
+     TYPE S3,
+     PROVIDER config,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}'
+ )
+ 
+ # ATTACH a DuckDB database over HTTPFS
+@@ -39,18 +39,18 @@ USE db
+ loop i 1 9
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q0${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q0{i}.csv
+ 
+ endloop
+ 
+ loop i 10 23
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q{i}.csv
+ 
+ endloop
+ 
+diff --git a/test/sql/copy/csv/glob/copy_csv_glob_s3.test b/test/sql/copy/csv/glob/copy_csv_glob_s3.test
+index 17d292f..d77f7f8 100644
+--- a/test/sql/copy/csv/glob/copy_csv_glob_s3.test
++++ b/test/sql/copy/csv/glob/copy_csv_glob_s3.test
+@@ -50,7 +50,7 @@ COPY dates FROM 's3://test-bucket/copy_csv_glob_s3/copy/a[123]/*.csv' (AUTO_DETE
+ foreach urlstyle path vhost
+ 
+ statement ok
+-SET s3_url_style='${urlstyle}'
++SET s3_url_style='{urlstyle}'
+ 
+ query I
+ SELECT * FROM dates ORDER BY 1
+diff --git a/test/sql/copy/csv/glob/read_csv_glob_s3.test b/test/sql/copy/csv/glob/read_csv_glob_s3.test
+index 94d0d8c..9afda32 100644
+--- a/test/sql/copy/csv/glob/read_csv_glob_s3.test
++++ b/test/sql/copy/csv/glob/read_csv_glob_s3.test
+@@ -49,7 +49,7 @@ COPY (select * from read_csv_auto('duckdb/data/csv/glob/a2/a2.csv')) to 's3://te
+ foreach urlstyle path vhost
+ 
+ statement ok
+-SET s3_url_style='${urlstyle}'
++SET s3_url_style='{urlstyle}'
+ 
+ # simple globbing
+ query I
+diff --git a/test/sql/copy/csv/test_csv_httpfs.test b/test/sql/copy/csv/test_csv_httpfs.test
+index d461416..1d3cb98 100644
+--- a/test/sql/copy/csv/test_csv_httpfs.test
++++ b/test/sql/copy/csv/test_csv_httpfs.test
+@@ -15,7 +15,7 @@ CALL enable_logging('HTTP');
+ foreach httpfs_implementation curl httplib
+ 
+ statement ok
+-SET httpfs_client_implementation='${httpfs_implementation}';
++SET httpfs_client_implementation='{httpfs_implementation}';
+ 
+ query II
+ select * from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/job_role_type.parquet' order by all;
+diff --git a/test/sql/copy/encryption/different_aes_engines.test b/test/sql/copy/encryption/different_aes_engines.test
+index 3fc9317..60bd4ff 100644
+--- a/test/sql/copy/encryption/different_aes_engines.test
++++ b/test/sql/copy/encryption/different_aes_engines.test
+@@ -7,7 +7,7 @@ statement ok
+ SET force_mbedtls_unsafe = 'true';
+ 
+ statement ok
+-ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
+ 
+ statement ok
+ CREATE TABLE enc.test (a INTEGER, b INTEGER);
+@@ -23,7 +23,7 @@ restart
+ require httpfs
+ 
+ statement ok
+-ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
+ 
+ query II
+ FROM enc.test
+@@ -45,7 +45,7 @@ foreach cipher GCM CTR
+ require httpfs
+ 
+ statement ok
+-ATTACH '{TEST_DIR}/enc_test2_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test2_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
+ 
+ statement ok
+ CREATE TABLE enc.test (a INTEGER, b INTEGER);
+@@ -59,7 +59,7 @@ DETACH enc
+ restart
+ 
+ statement ok
+-ATTACH '{TEST_DIR}/enc_test_${cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/enc_test_{cipher}.db' as enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
+ 
+ query II
+ FROM enc.test
+diff --git a/test/sql/copy/no_head_on_write.test b/test/sql/copy/no_head_on_write.test
+index 6caab7a..0274fb7 100644
+--- a/test/sql/copy/no_head_on_write.test
++++ b/test/sql/copy/no_head_on_write.test
+@@ -22,20 +22,20 @@ statement ok
+ SET enable_logging=true
+ 
+ statement ok
+-set s3_use_ssl='${DUCKDB_S3_USE_SSL}'
++set s3_use_ssl='{DUCKDB_S3_USE_SSL}'
+ 
+ statement ok
+-set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
++set s3_endpoint='{DUCKDB_S3_ENDPOINT}'
+ 
+ statement ok
+-set s3_region='${AWS_DEFAULT_REGION}'
++set s3_region='{AWS_DEFAULT_REGION}'
+ 
+ # Create some test data
+ statement ok
+ CREATE SECRET s1 (
+     TYPE S3,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
+     REQUESTER_PAYS true
+ )
+ 
+diff --git a/test/sql/copy/parquet/parquet_encryption_httpfs.test b/test/sql/copy/parquet/parquet_encryption_httpfs.test
+index 86bfbb9..52e327d 100644
+--- a/test/sql/copy/parquet/parquet_encryption_httpfs.test
++++ b/test/sql/copy/parquet/parquet_encryption_httpfs.test
+@@ -24,10 +24,10 @@ PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
+ foreach key_len 128 192 256
+ 
+ statement ok
+-COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
+ 
+ query I
+-SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_openssl.parquet', encryption_config={footer_key: 'key{key_len}'})
+ ----
+ 42
+ 
+@@ -35,7 +35,7 @@ statement ok
+ CREATE OR REPLACE TABLE test (i INTEGER)
+ 
+ statement ok
+-COPY test FROM '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY test FROM '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
+ 
+ query I
+ SELECT * FROM test
+diff --git a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+index 77e9642..7eeca7b 100644
+--- a/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
++++ b/test/sql/copy/parquet/parquet_encryption_mbedtls_openssl.test
+@@ -25,18 +25,18 @@ foreach key_len 128 192 256
+ 
+ # write files with OpenSSL enabled (is enabled by default)
+ statement ok
+-COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
+ 
+ statement ok
+ SET force_mbedtls_unsafe = true;
+ 
+ # write files with mbedtls enabled
+ statement ok
+-COPY (SELECT 42 i) to '{TEST_DIR}/encrypted${key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
++COPY (SELECT 42 i) to '{TEST_DIR}/encrypted{key_len}_mbedtls.parquet' (ENCRYPTION_CONFIG {footer_key: 'key{key_len}'})
+ 
+ # read OpenSSL encrypted files by using mbedtls
+ query I
+-SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_openssl.parquet', encryption_config={footer_key: 'key{key_len}'})
+ ----
+ 42
+ 
+@@ -45,7 +45,7 @@ SET force_mbedtls_unsafe = false;
+ 
+ # read mbedtls encrypted files with OpenSSL
+ query I
+-SELECT * FROM read_parquet('{TEST_DIR}/encrypted${key_len}_mbedtls.parquet', encryption_config={footer_key: 'key${key_len}'})
++SELECT * FROM read_parquet('{TEST_DIR}/encrypted{key_len}_mbedtls.parquet', encryption_config={footer_key: 'key{key_len}'})
+ ----
+ 42
+ 
+diff --git a/test/sql/copy/parquet/parquet_glob_s3.test b/test/sql/copy/parquet/parquet_glob_s3.test
+index 9a6d0b2..f2735f9 100644
+--- a/test/sql/copy/parquet/parquet_glob_s3.test
++++ b/test/sql/copy/parquet/parquet_glob_s3.test
+@@ -62,7 +62,7 @@ COPY vals2 FROM 's3://test-bucket/parquet_glob_s3/nonexistentfolderblablabla/t*.
+ foreach urlstyle path vhost
+ 
+ statement ok
+-SET s3_url_style='${urlstyle}'
++SET s3_url_style='{urlstyle}'
+ 
+ # Begin tests
+ query I
+diff --git a/test/sql/copy/parquet/parquet_lazy_glob.test_slow b/test/sql/copy/parquet/parquet_lazy_glob.test_slow
+index 12afe33..8b474cc 100644
+--- a/test/sql/copy/parquet/parquet_lazy_glob.test_slow
++++ b/test/sql/copy/parquet/parquet_lazy_glob.test_slow
+@@ -23,13 +23,13 @@ require-env DUCKDB_S3_USE_SSL
+ foreach part_count 2 2000
+ 
+ statement ok
+-CREATE OR REPLACE TABLE vals AS SELECT i part_key, concat('this is a value for part key ', i) v FROM range(${part_count}) t(i);
++CREATE OR REPLACE TABLE vals AS SELECT i part_key, concat('this is a value for part key ', i) v FROM range({part_count}) t(i);
+ 
+ statement ok
+ COPY vals to 's3://test-bucket/parquet_glob_s3_many_files' (FORMAT PARQUET, PARTITION_BY (part_key), OVERWRITE 1);
+ 
+ query I
+-SELECT case when COUNT(*) = ${part_count} then NULL else {'expected': ${part_count}, 'got': COUNT(*)} end FROM glob('s3://test-bucket/parquet_glob_s3_many_files/**/*.parquet')
++SELECT case when COUNT(*) = {part_count} then NULL else {'expected': {part_count}, 'got': COUNT(*)} end FROM glob('s3://test-bucket/parquet_glob_s3_many_files/**/*.parquet')
+ ----
+ NULL
+ 
+diff --git a/test/sql/copy/s3/download_config.test b/test/sql/copy/s3/download_config.test
+index 2b8b860..b3edced 100644
+--- a/test/sql/copy/s3/download_config.test
++++ b/test/sql/copy/s3/download_config.test
+@@ -28,13 +28,13 @@ CREATE TABLE test as SELECT * FROM range(0,10) tbl(i);
+ foreach url_style path vhost
+ # Have to set these because they get altered during the loop
+ statement ok
+-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
++SET s3_secret_access_key='{AWS_SECRET_ACCESS_KEY}';
+ 
+ statement ok
+-SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
++SET s3_access_key_id='{AWS_ACCESS_KEY_ID}';
+ 
+ statement ok
+-SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';
++SET s3_endpoint='{DUCKDB_S3_ENDPOINT}';
+ 
+ statement ok
+ SET http_retries=2;
+@@ -53,14 +53,14 @@ SET http_keep_alive=false;
+ 
+ # Test the vhost style urls (this is the default)
+ statement ok
+-SET s3_url_style='${url_style}';
++SET s3_url_style='{url_style}';
+ 
+ statement ok
+-COPY test TO 's3://test-bucket-public/root-dir/test_${url_style}_url_style.parquet';
++COPY test TO 's3://test-bucket-public/root-dir/test_{url_style}_url_style.parquet';
+ 
+ # vhost style access
+ query I
+-SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
++SELECT i FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/root-dir/test_{url_style}_url_style.parquet" LIMIT 3
+ ----
+ 0
+ 1
+@@ -68,7 +68,7 @@ SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/test_${u
+ 
+ # path style access
+ query I
+-SELECT i FROM "http://${DUCKDB_S3_ENDPOINT}/test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
++SELECT i FROM "http://{DUCKDB_S3_ENDPOINT}/test-bucket-public/root-dir/test_{url_style}_url_style.parquet" LIMIT 3
+ ----
+ 0
+ 1
+@@ -79,7 +79,7 @@ statement ok
+ SET s3_secret_access_key='';SET s3_access_key_id='';
+ 
+ query I
+-SELECT i FROM "s3://test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
++SELECT i FROM "s3://test-bucket-public/root-dir/test_{url_style}_url_style.parquet" LIMIT 3
+ ----
+ 0
+ 1
+@@ -89,13 +89,13 @@ endloop
+ 
+ # empty url style is also allowed to select the default
+ statement ok
+-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';SET s3_region='${AWS_DEFAULT_REGION}'; SET s3_endpoint='${DUCKDB_S3_ENDPOINT}'; SET s3_use_ssl=${DUCKDB_S3_USE_SSL};
++SET s3_secret_access_key='{AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='{AWS_ACCESS_KEY_ID}';SET s3_region='{AWS_DEFAULT_REGION}'; SET s3_endpoint='{DUCKDB_S3_ENDPOINT}'; SET s3_use_ssl={DUCKDB_S3_USE_SSL};
+ 
+ statement ok
+ COPY test TO 's3://test-bucket-public/root-dir/test_default_url_style.parquet';
+ 
+ query I
+-SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/test_default_url_style.parquet" LIMIT 3
++SELECT i FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/root-dir/test_default_url_style.parquet" LIMIT 3
+ ----
+ 0
+ 1
+@@ -111,7 +111,7 @@ COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
+ 
+ # 404
+ statement error
+-SELECT i FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
++SELECT i FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/root-dir/non-existent-file-ljaslkjdas.parquet" LIMIT 3
+ ----
+ 404 Not Found
+ 
+diff --git a/test/sql/copy/s3/fully_qualified_s3_url.test b/test/sql/copy/s3/fully_qualified_s3_url.test
+index 99b9113..a40ae34 100644
+--- a/test/sql/copy/s3/fully_qualified_s3_url.test
++++ b/test/sql/copy/s3/fully_qualified_s3_url.test
+@@ -40,10 +40,10 @@ Unable to connect to URL
+ 
+ #test with .csv file
+ statement ok
+-COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}';
++COPY test TO 's3://test-bucket/s3_query_params/test.csv?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}';
+ 
+ query I
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" LIMIT 3
+ ----
+ 0
+ 1
+@@ -51,10 +51,10 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.csv?s3_access_key_id=${AWS_
+ 
+ #test with .parquet file
+ statement ok
+-COPY test TO 's3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}' (FORMAT 'parquet');
++COPY test TO 's3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}' (FORMAT 'parquet');
+ 
+ query I
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" LIMIT 3
+ ----
+ 0
+ 1
+@@ -62,7 +62,7 @@ SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${
+ 
+ #test GLOB with .parquet file
+ query I
+-SELECT i FROM "s3://test-bucket/s3_query_params/*.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/*.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" LIMIT 3
+ ----
+ 0
+ 1
+@@ -95,7 +95,7 @@ SELECT j FROM "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=mini
+ 
+ #test a joining of two tables with different credentials
+ query II
+-SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" T1 
++SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" T1 
+     INNER JOIN "s3://test-bucket/s3_query_params/test_2.csv?s3_access_key_id=minio_duckdb_user_2&s3_secret_access_key=minio_duckdb_user_2_password" T2 
+     ON T1.i+100=T2.j LIMIT 3;
+ ----
+@@ -104,47 +104,47 @@ SELECT T1.i, T2.j FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_
+ 2	102
+ 
+ statement ok
+-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
++SET s3_secret_access_key='{AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='{AWS_ACCESS_KEY_ID}';
+ 
+ #test region param
+ statement ok
+ SET s3_region='false_region';
+ 
+ statement ok
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region={AWS_DEFAULT_REGION}" LIMIT 3
+ 
+ statement ok
+-SET s3_region='${AWS_DEFAULT_REGION}';
++SET s3_region='{AWS_DEFAULT_REGION}';
+ 
+ # test endpoint param
+ statement ok
+ SET s3_endpoint='false_endpoint';
+ 
+ statement ok
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_endpoint={DUCKDB_S3_ENDPOINT}" LIMIT 3
+ 
+ statement ok
+-SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';
++SET s3_endpoint='{DUCKDB_S3_ENDPOINT}';
+ 
+ #test secret_access_key
+ statement ok
+ SET s3_secret_access_key='false_acces_key';
+ 
+ statement ok
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_secret_access_key=${AWS_SECRET_ACCESS_KEY}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_secret_access_key={AWS_SECRET_ACCESS_KEY}" LIMIT 3
+ 
+ statement ok
+-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';
++SET s3_secret_access_key='{AWS_SECRET_ACCESS_KEY}';
+ 
+ #test access_key
+ statement ok
+ SET s3_access_key_id='false_acces_key_id';
+ 
+ statement ok
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id=${AWS_ACCESS_KEY_ID}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}" LIMIT 3
+ 
+ statement ok
+-SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';
++SET s3_access_key_id='{AWS_ACCESS_KEY_ID}';
+ 
+ #test use_ssl
+ statement ok
+@@ -166,23 +166,23 @@ statement ok
+ SET s3_access_key_id='false_id'; SET s3_region='false_region';
+ 
+ statement ok
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=${AWS_ACCESS_KEY_ID}&s3_endpoint=${DUCKDB_S3_ENDPOINT}" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region={AWS_DEFAULT_REGION}&s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_endpoint={DUCKDB_S3_ENDPOINT}" LIMIT 3
+ 
+ statement ok
+-SET s3_access_key_id='${AWS_ACCESS_KEY_ID}'; SET s3_region='${AWS_DEFAULT_REGION}';
++SET s3_access_key_id='{AWS_ACCESS_KEY_ID}'; SET s3_region='{AWS_DEFAULT_REGION}';
+ 
+ # test faulty input
+ statement error
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region={AWS_DEFAULT_REGION}&s3_access_key_id=incorrect_key_id" LIMIT 3
+ ----
+ 
+ statement error
+-SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region=${AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
++SELECT i FROM "s3://test-bucket/s3_query_params/test.parquet?s3_region={AWS_DEFAULT_REGION}&bla=bla" LIMIT 3
+ ----
+ 
+ # test endpoint valid path
+ statement ok
+-SET s3_endpoint='${DUCKDB_S3_ENDPOINT}/test-bucket'; SET s3_url_style='path';
++SET s3_endpoint='{DUCKDB_S3_ENDPOINT}/test-bucket'; SET s3_url_style='path';
+ 
+ statement ok
+ SELECT i FROM "s3://s3_query_params/test.parquet" LIMIT 3
+@@ -197,7 +197,7 @@ SELECT i FROM "s3://s3_query_params/test.parquet" LIMIT 3
+ 
+ # test endpoint invalid path
+ statement ok
+-SET s3_endpoint='${DUCKDB_S3_ENDPOINT}/s3_query_params'; SET s3_url_style='path';
++SET s3_endpoint='{DUCKDB_S3_ENDPOINT}/s3_query_params'; SET s3_url_style='path';
+ 
+ statement error
+ SELECT i FROM "s3://test-bucket/test.parquet" LIMIT 3
+diff --git a/test/sql/copy/s3/glob_s3_paging.test_slow b/test/sql/copy/s3/glob_s3_paging.test_slow
+index e147367..71ac210 100644
+--- a/test/sql/copy/s3/glob_s3_paging.test_slow
++++ b/test/sql/copy/s3/glob_s3_paging.test_slow
+@@ -37,7 +37,7 @@ SET enable_http_metadata_cache=true;
+ foreach urlstyle path vhost
+ 
+ statement ok
+-SET s3_url_style='${urlstyle}'
++SET s3_url_style='{urlstyle}'
+ 
+ ## For both formats we generate 2000 files which we will glob to test the paging mechanism of aws ListObjectV2 call is handled properly
+ foreach format parquet csv
+@@ -51,7 +51,7 @@ foreach k 0 1 2 3 4 5 6 7 8 9
+ foreach l 0 1 2 3 4 5 6 7 8 9
+ 
+ statement ok
+-COPY (select (${i}${j}${k}${l})::INT as column0) to 's3://test-bucket/parquet_glob_s3_paging/paging/t${i}${j}${k}${l}-${urlstyle}-urls.${format}';
++COPY (select ({i}{j}{k}{l})::INT as column0) to 's3://test-bucket/parquet_glob_s3_paging/paging/t{i}{j}{k}{l}-{urlstyle}-urls.{format}';
+ 
+ endloop
+ 
+@@ -63,7 +63,7 @@ endloop
+ 
+ # Begin tests
+ query I
+-select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
++select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-{urlstyle}-urls.{format}'
+ ----
+ 1999000
+ 
+@@ -83,7 +83,7 @@ loop i 0 2
+ 
+ # Begin tests
+ query I
+-select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-${urlstyle}-urls.${format}'
++select sum(column0) from 's3://test-bucket/parquet_glob_s3_paging/paging/t*-{urlstyle}-urls.{format}'
+ ----
+ 1999000
+ 
+@@ -99,7 +99,7 @@ CALL enable_logging('HTTP');
+ foreach s3_allow_recursive_globs true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${s3_allow_recursive_globs}
++SET s3_allow_recursive_globbing = {s3_allow_recursive_globs}
+ 
+ query I
+ SELECT count(*) FROM glob('s3://test-bucket/parquet_glob*/some-non-existent-folder/*');
+@@ -120,4 +120,3 @@ FROM (FROM duckdb_logs_parsed('HTTP') SELECT count(*), sum(request.type == 'HEAD
+ 11	0	11	0	0
+ 11	0	11	0	0
+ 11	0	11	0	0
+-
+diff --git a/test/sql/copy/s3/glob_s3_recursive.test_slow b/test/sql/copy/s3/glob_s3_recursive.test_slow
+index e10c8e1..7cf9fcc 100644
+--- a/test/sql/copy/s3/glob_s3_recursive.test_slow
++++ b/test/sql/copy/s3/glob_s3_recursive.test_slow
+@@ -24,7 +24,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/*s/non-existing-folder/*');
+@@ -49,7 +49,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/*s/parquet/*');
+@@ -74,7 +74,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM (FROM glob('s3://coiled-datasets/timeseries/*s/parquet/*.parquet') LIMIT 100);
+@@ -99,7 +99,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/1990s/parquet/*');
+@@ -124,7 +124,7 @@ CALL truncate_duckdb_logs();
+ foreach allow_globbing true false
+ 
+ statement ok
+-SET s3_allow_recursive_globbing = ${allow_globbing};
++SET s3_allow_recursive_globbing = {allow_globbing};
+ 
+ query I
+ SELECT count(*) FROM glob('s3://coiled-datasets/timeseries/1990s/**/*.parquet');
+diff --git a/test/sql/copy/s3/hive_partitioned_write_s3.test b/test/sql/copy/s3/hive_partitioned_write_s3.test
+index 85ece68..e6ae203 100644
+--- a/test/sql/copy/s3/hive_partitioned_write_s3.test
++++ b/test/sql/copy/s3/hive_partitioned_write_s3.test
+@@ -25,11 +25,11 @@ statement ok
+ CREATE SECRET (
+     TYPE S3,
+     PROVIDER config,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}'
+ )
+ 
+ statement ok
+diff --git a/test/sql/copy/s3/hive_partitioned_write_s3.test_slow b/test/sql/copy/s3/hive_partitioned_write_s3.test_slow
+index fd96685..4ec90d1 100644
+--- a/test/sql/copy/s3/hive_partitioned_write_s3.test_slow
++++ b/test/sql/copy/s3/hive_partitioned_write_s3.test_slow
+@@ -56,17 +56,17 @@ CREATE VIEW lineitem as SELECT * FROM parquet_scan('s3://test-bucket/lineitem_sf
+ loop i 1 9
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q0${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q0{i}.csv
+ 
+ endloop
+ 
+ loop i 10 23
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf1/q{i}.csv
+ 
+ endloop
+diff --git a/test/sql/copy/s3/http_proxy.test b/test/sql/copy/s3/http_proxy.test
+index 72e34b2..77d8164 100644
+--- a/test/sql/copy/s3/http_proxy.test
++++ b/test/sql/copy/s3/http_proxy.test
+@@ -51,7 +51,7 @@ FROM 's3://test-bucket/proxy-test/test.parquet'
+ 
+ # Now a working one
+ statement ok
+-set http_proxy='${HTTP_PROXY_PUBLIC}'
++set http_proxy='{HTTP_PROXY_PUBLIC}'
+ 
+ statement ok
+ RESET http_proxy_username
+@@ -66,7 +66,7 @@ value-1
+ 
+ # And try the working one with an 'http://' prefix.
+ statement ok
+-set http_proxy='http://${HTTP_PROXY_PUBLIC}'
++set http_proxy='http://{HTTP_PROXY_PUBLIC}'
+ 
+ query I
+ FROM 's3://test-bucket/proxy-test/test.parquet'
+@@ -81,7 +81,7 @@ set http_proxy='blabla:1337'
+ statement ok
+ CREATE SECRET http1 (
+     TYPE HTTP, 
+-    http_proxy '${HTTP_PROXY_PUBLIC}'
++    http_proxy '{HTTP_PROXY_PUBLIC}'
+ );
+ 
+ # This works now, because it uses the secret
+@@ -125,9 +125,9 @@ require-env HTTP_PROXY_PRIVATE_PASSWORD
+ statement ok
+ CREATE SECRET http2 (
+     TYPE HTTP, 
+-    http_proxy '${HTTP_PROXY_PRIVATE}',
+-    http_proxy_username '${HTTP_PROXY_PRIVATE_USERNAME}',
+-    http_proxy_password '${HTTP_PROXY_PRIVATE_PASSWORD}'
++    http_proxy '{HTTP_PROXY_PRIVATE}',
++    http_proxy_username '{HTTP_PROXY_PRIVATE_USERNAME}',
++    http_proxy_password '{HTTP_PROXY_PRIVATE_PASSWORD}'
+ );
+ 
+ # Correct auth means it works!
+@@ -143,7 +143,7 @@ DROP SECRET http2
+ statement ok
+ CREATE SECRET http3 (
+     TYPE HTTP, 
+-    http_proxy '${HTTP_PROXY_PRIVATE}',
++    http_proxy '{HTTP_PROXY_PRIVATE}',
+     http_proxy_username 'malicious',
+     http_proxy_password 'intruder'
+ );
+diff --git a/test/sql/copy/s3/http_secret.test b/test/sql/copy/s3/http_secret.test
+index 9b627cf..8788ce6 100644
+--- a/test/sql/copy/s3/http_secret.test
++++ b/test/sql/copy/s3/http_secret.test
+@@ -76,11 +76,11 @@ statement ok
+ CREATE SECRET (
+     TYPE S3,
+     PROVIDER config,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}',
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}',
+     EXTRA_HTTP_HEADERS MAP{
+     		'CustomHeader': 'fliepflap'
+     	}
+diff --git a/test/sql/copy/s3/parquet_s3_tpcds.test_slow b/test/sql/copy/s3/parquet_s3_tpcds.test_slow
+index 757a4b5..86f2bd5 100644
+--- a/test/sql/copy/s3/parquet_s3_tpcds.test_slow
++++ b/test/sql/copy/s3/parquet_s3_tpcds.test_slow
+@@ -49,10 +49,10 @@ CALL dsdgen(sf=0.01, schema='tpcds');
+ foreach tbl call_center catalog_page catalog_returns catalog_sales customer customer_demographics customer_address date_dim household_demographics inventory income_band item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
+ 
+ statement ok
+-COPY tpcds.${tbl} TO 's3://test-bucket/tpcds-sf0_01/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
++COPY tpcds.{tbl} TO 's3://test-bucket/tpcds-sf0_01/{tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+ 
+ statement ok
+-CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('s3://test-bucket/tpcds-sf0_01/${tbl}.parquet');
++CREATE VIEW {tbl} AS SELECT * FROM parquet_scan('s3://test-bucket/tpcds-sf0_01/{tbl}.parquet');
+ 
+ endloop
+ 
+@@ -62,35 +62,35 @@ endloop
+ loop i 1 9
+ 
+ query I
+-PRAGMA tpcds(${i})
++PRAGMA tpcds({i})
+ ----
+-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
++<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0{i}.csv
+ 
+ endloop
+ 
+ loop i 10 64
+ 
+ query I
+-PRAGMA tpcds(${i})
++PRAGMA tpcds({i})
+ ----
+-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
++<FILE>:extension/tpcds/dsdgen/answers/sf0.01/{i}.csv
+ 
+ endloop
+ 
+ loop i 65 85
+ 
+ query I
+-PRAGMA tpcds(${i})
++PRAGMA tpcds({i})
+ ----
+-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
++<FILE>:extension/tpcds/dsdgen/answers/sf0.01/{i}.csv
+ 
+ endloop
+ 
+ loop i 86 99
+ 
+ query I
+-PRAGMA tpcds(${i})
++PRAGMA tpcds({i})
+ ----
+-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
++<FILE>:extension/tpcds/dsdgen/answers/sf0.01/{i}.csv
+ 
+ endloop
+diff --git a/test/sql/copy/s3/parquet_s3_tpch.test_slow b/test/sql/copy/s3/parquet_s3_tpch.test_slow
+index 2e3d79d..2fa08c3 100644
+--- a/test/sql/copy/s3/parquet_s3_tpch.test_slow
++++ b/test/sql/copy/s3/parquet_s3_tpch.test_slow
+@@ -76,17 +76,17 @@ CREATE VIEW orders as SELECT * FROM 's3://test-bucket/tpch-sf0_01/orders.parquet
+ loop i 1 9
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf0.01/q0${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf0.01/q0{i}.csv
+ 
+ endloop
+ 
+ loop i 10 23
+ 
+ query I
+-PRAGMA tpch(${i})
++PRAGMA tpch({i})
+ ----
+-<FILE>:duckdb/extension/tpch/dbgen/answers/sf0.01/q${i}.csv
++<FILE>:duckdb/extension/tpch/dbgen/answers/sf0.01/q{i}.csv
+ 
+ endloop
+diff --git a/test/sql/copy/s3/s3_hive_partition.test b/test/sql/copy/s3/s3_hive_partition.test
+index 2080140..4dc4a62 100644
+--- a/test/sql/copy/s3/s3_hive_partition.test
++++ b/test/sql/copy/s3/s3_hive_partition.test
+@@ -76,7 +76,7 @@ Create table t1 (a int, b int, c int);
+ foreach i 0 1 2 3 4 5 6 7 8 9
+ 
+ statement ok
+-insert into t1 (select range, ${i}*10, ${i}*100 from range(0,10));
++insert into t1 (select range, {i}*10, {i}*100 from range(0,10));
+ 
+ endloop
+ 
+diff --git a/test/sql/copy/s3/s3_presigned_read.test b/test/sql/copy/s3/s3_presigned_read.test
+index 21c344f..f7c53e6 100644
+--- a/test/sql/copy/s3/s3_presigned_read.test
++++ b/test/sql/copy/s3/s3_presigned_read.test
+@@ -28,13 +28,13 @@ require-env S3_SMALL_PARQUET_PRESIGNED_URL
+ set ignore_error_messages
+ 
+ query I
+-SELECT phone FROM read_csv_auto('${S3_SMALL_CSV_PRESIGNED_URL}');
++SELECT phone FROM read_csv_auto('{S3_SMALL_CSV_PRESIGNED_URL}');
+ ----
+ +318855443322
+ +552244331122
+ +12233445567
+ 
+ query I
+-SELECT i FROM '${S3_SMALL_PARQUET_PRESIGNED_URL}';
++SELECT i FROM '{S3_SMALL_PARQUET_PRESIGNED_URL}';
+ ----
+ 1
+diff --git a/test/sql/copy/s3/s3_presigned_read.test_slow b/test/sql/copy/s3/s3_presigned_read.test_slow
+index 9bd3da9..84557f1 100644
+--- a/test/sql/copy/s3/s3_presigned_read.test_slow
++++ b/test/sql/copy/s3/s3_presigned_read.test_slow
+@@ -37,7 +37,7 @@ query I
+ SELECT
+     sum(l_extendedprice * l_discount) AS revenue
+ FROM
+-    '${S3_LARGE_PARQUET_PRESIGNED_URL}' 
++    '{S3_LARGE_PARQUET_PRESIGNED_URL}' 
+ WHERE
+     l_shipdate >= CAST('1994-01-01' AS date)
+     AND l_shipdate < CAST('1995-01-01' AS date)
+diff --git a/test/sql/copy/s3/s3_remove_files.test b/test/sql/copy/s3/s3_remove_files.test
+index ad12c81..8b50a25 100644
+--- a/test/sql/copy/s3/s3_remove_files.test
++++ b/test/sql/copy/s3/s3_remove_files.test
+@@ -24,7 +24,7 @@ set ignore_error_messages
+ foreach url_style path vhost
+ 
+ statement ok
+-SET s3_url_style='${url_style}'
++SET s3_url_style='{url_style}'
+ 
+ # Step 1: Clean up any leftover files from previous test runs (OVERWRITE clears the directory)
+ # and create initial partitioned file (part_col=1)
+diff --git a/test/sql/copy/s3/upload_file_parallel.test_slow b/test/sql/copy/s3/upload_file_parallel.test_slow
+index dc5086a..ed69e3a 100644
+--- a/test/sql/copy/s3/upload_file_parallel.test_slow
++++ b/test/sql/copy/s3/upload_file_parallel.test_slow
+@@ -53,17 +53,17 @@ WHERE
+ concurrentloop threadid 0 2
+ 
+ statement ok
+-SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';SET s3_use_ssl=${DUCKDB_S3_USE_SSL};
++SET s3_endpoint='{DUCKDB_S3_ENDPOINT}';SET s3_use_ssl={DUCKDB_S3_USE_SSL};
+ 
+ # Parquet file
+ statement ok
+-COPY lineitem TO 's3://test-bucket/multipart/export_large_${threadid}.parquet' (FORMAT 'parquet');
++COPY lineitem TO 's3://test-bucket/multipart/export_large_{threadid}.parquet' (FORMAT 'parquet');
+ 
+ query I
+ SELECT
+     sum(l_extendedprice * l_discount) AS revenue
+ FROM
+-    "s3://test-bucket/multipart/export_large_${threadid}.parquet"
++    "s3://test-bucket/multipart/export_large_{threadid}.parquet"
+ WHERE
+     l_shipdate >= CAST('1994-01-01' AS date)
+     AND l_shipdate < CAST('1995-01-01' AS date)
+@@ -96,20 +96,20 @@ WHERE
+ concurrentloop threadid 0 100
+ 
+ statement ok
+-SET s3_secret_access_key='${AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='${AWS_ACCESS_KEY_ID}';SET s3_region='${AWS_DEFAULT_REGION}'; SET s3_endpoint='${DUCKDB_S3_ENDPOINT}';SET s3_use_ssl=${DUCKDB_S3_USE_SSL};
++SET s3_secret_access_key='{AWS_SECRET_ACCESS_KEY}';SET s3_access_key_id='{AWS_ACCESS_KEY_ID}';SET s3_region='{AWS_DEFAULT_REGION}'; SET s3_endpoint='{DUCKDB_S3_ENDPOINT}';SET s3_use_ssl={DUCKDB_S3_USE_SSL};
+ 
+ statement ok
+ SET s3_uploader_thread_limit=1
+ 
+ # Parquet file
+ statement ok
+-COPY lineitem_small TO 's3://test-bucket/multipart/export_small_${threadid}.parquet' (FORMAT 'parquet');
++COPY lineitem_small TO 's3://test-bucket/multipart/export_small_{threadid}.parquet' (FORMAT 'parquet');
+ 
+ query I
+ SELECT
+     sum(l_extendedprice * l_discount) AS revenue
+ FROM
+-    "s3://test-bucket/multipart/export_small_${threadid}.parquet"
++    "s3://test-bucket/multipart/export_small_{threadid}.parquet"
+ WHERE
+     l_shipdate >= CAST('1994-01-01' AS date)
+     AND l_shipdate < CAST('1995-01-01' AS date)
+diff --git a/test/sql/copy/s3/url_encode.test b/test/sql/copy/s3/url_encode.test
+index 209f5ee..35349fd 100644
+--- a/test/sql/copy/s3/url_encode.test
++++ b/test/sql/copy/s3/url_encode.test
+@@ -32,60 +32,60 @@ CREATE TABLE test_4 as (SELECT 4 FROM range(0,5));
+ foreach prefix s3:// r2:// s3a:// s3n://
+ 
+ statement ok
+-COPY test_1 TO '${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
++COPY test_1 TO '{prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
+ 
+ statement ok
+-COPY test_2 TO '${prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
++COPY test_2 TO '{prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
+ 
+ statement ok
+-COPY test_3 TO '${prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet' (FORMAT 'parquet');
++COPY test_3 TO '{prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet' (FORMAT 'parquet');
+ 
+ # For S3 urls spaces are fine
+ query I
+-SELECT * FROM "${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
++SELECT * FROM "{prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
+ ----
+ 1
+ 
+ # In S3 urls, + means a plus symbol
+ query I
+-SELECT * FROM "${prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
++SELECT * FROM "{prefix}test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
+ ----
+ 2
+ 
+ # Colons in S3 urls are encoded by duckdb internaly like boto3 (issue #5502)
+ query I
+-SELECT * FROM "${prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet" LIMIT 1;
++SELECT * FROM "{prefix}test-bucket-public/url_encode/should:avoid:using:colon:in:paths.parquet" LIMIT 1;
+ ----
+ 3
+ 
+ # NOTE! For HTTP(s) urls, the + symbol is not encoded by duckdb, leaving it up to the server to decide if it should be interpreted
+ # as a space or a plus. In the case of AWS S3, they are interpreted as encoded spaces, however Minio does not
+ #query I
+-#SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just+because+you+can+doesnt+mean+you+should.parquet" LIMIT 1;
++#SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/just+because+you+can+doesnt+mean+you+should.parquet" LIMIT 1;
+ #----
+ #1
+ 
+ # For HTTP urls, we also allow regular spaces, which will get encoded to %20 by duckdb
+ query I
+-SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
++SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
+ ----
+ 1
+ 
+ # For HTTP urls from AWS with + symbols, encoding them with %2B is required
+ query I
+-SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just%2Bdont%2Buse%2Bplus%2Bor%2Bspaces%2Bplease.parquet" LIMIT 1;
++SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/just%2Bdont%2Buse%2Bplus%2Bor%2Bspaces%2Bplease.parquet" LIMIT 1;
+ ----
+ 2
+ 
+ # However Minio interprets them as spaces so this works too
+ query I
+-SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
++SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
+ ----
+ 2
+ 
+ # Due to our support for query parameters, this will fail
+ statement error
+-COPY test_4 TO '${prefix}test-bucket-public/url_encode/question?marks?are?even?worse.parquet' (FORMAT 'parquet');
++COPY test_4 TO '{prefix}test-bucket-public/url_encode/question?marks?are?even?worse.parquet' (FORMAT 'parquet');
+ ----
+ Invalid query parameters found.
+ 
+@@ -95,16 +95,16 @@ statement ok
+ SET s3_url_compatibility_mode=true;
+ 
+ statement ok
+-COPY test_4 TO '${prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet' (FORMAT 'parquet');
++COPY test_4 TO '{prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet' (FORMAT 'parquet');
+ 
+ query I
+-SELECT * FROM "${prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet" LIMIT 1;
++SELECT * FROM "{prefix}test-bucket-public/url_encode/question?marks?and*stars[and]brackets.parquet" LIMIT 1;
+ ----
+ 4
+ 
+ # HTTP urls will be encoded here
+ query I
+-SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/question%3Fmarks%3Fand%2Astars%5Band%5Dbrackets.parquet" LIMIT 1;
++SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/question%3Fmarks%3Fand%2Astars%5Band%5Dbrackets.parquet" LIMIT 1;
+ ----
+ 4
+ 
+@@ -116,11 +116,11 @@ statement ok
+ set s3_endpoint='s3.some.random.endpoint.com';
+ 
+ statement error
+-SELECT * FROM '${prefix}test-bucket/whatever.parquet';
++SELECT * FROM '{prefix}test-bucket/whatever.parquet';
+ ----
+ <REGEX>:.*IO Error.*Could not.*error for HTTP HEAD to.*
+ 
+ statement ok
+-set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
++set s3_endpoint='{DUCKDB_S3_ENDPOINT}'
+ 
+ endloop
+diff --git a/test/sql/curl_client/test_relative_path_parsing.test b/test/sql/curl_client/test_relative_path_parsing.test
+index 53c7821..702c4ae 100644
+--- a/test/sql/curl_client/test_relative_path_parsing.test
++++ b/test/sql/curl_client/test_relative_path_parsing.test
+@@ -14,22 +14,22 @@ statement ok
+ CREATE TABLE lineitem as (SELECT 1 FROM range(0,5));
+ 
+ statement ok
+-copy lineitem to '${PYTHON_HTTP_SERVER_DIR}/lineitem.csv'
++copy lineitem to '{PYTHON_HTTP_SERVER_DIR}/lineitem.csv'
+ 
+ foreach httpfs_implementation curl httplib
+ 
+ query I
+-SELECT count(*) FROM '${PYTHON_HTTP_SERVER_URL}/lineitem.csv';
++SELECT count(*) FROM '{PYTHON_HTTP_SERVER_URL}/lineitem.csv';
+ ----
+ 6
+ 
+ foreach parts ./ // /./
+ 
+ statement ok
+-SET httpfs_client_implementation='${httpfs_implementation}';
++SET httpfs_client_implementation='{httpfs_implementation}';
+ 
+ query I
+-SELECT count(*) FROM '${PYTHON_HTTP_SERVER_URL}/${parts}lineitem.csv';
++SELECT count(*) FROM '{PYTHON_HTTP_SERVER_URL}/{parts}lineitem.csv';
+ ----
+ 6
+ 
+diff --git a/test/sql/full_file_download_fallback.test b/test/sql/full_file_download_fallback.test
+index dc50249..3fa96d4 100644
+--- a/test/sql/full_file_download_fallback.test
++++ b/test/sql/full_file_download_fallback.test
+@@ -18,13 +18,13 @@ statement ok
+ call dbgen(sf=1);
+ 
+ statement ok
+-copy lineitem to '${PYTHON_HTTP_SERVER_DIR}/lineitem.csv'
++copy lineitem to '{PYTHON_HTTP_SERVER_DIR}/lineitem.csv'
+ 
+ statement ok
+ drop table lineitem;
+ 
+ statement ok
+-CREATE view lineitem AS FROM '${PYTHON_HTTP_SERVER_URL}/lineitem.csv';
++CREATE view lineitem AS FROM '{PYTHON_HTTP_SERVER_URL}/lineitem.csv';
+ 
+ query I
+ pragma tpch(6);
+diff --git a/test/sql/httpfs/curl_space_encoding.test b/test/sql/httpfs/curl_space_encoding.test
+index 128b491..3ba657d 100644
+--- a/test/sql/httpfs/curl_space_encoding.test
++++ b/test/sql/httpfs/curl_space_encoding.test
+@@ -32,11 +32,11 @@ SET httpfs_client_implementation = curl
+ foreach prefix s3:// r2:// s3a:// s3n://
+ 
+ statement ok
+-COPY test_1 TO '${prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
++COPY test_1 TO '{prefix}test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
+ 
+ # For HTTP urls, we also allow regular spaces, which will get encoded to %20 by duckdb
+ query I
+-SELECT * FROM "http://test-bucket-public.${DUCKDB_S3_ENDPOINT}/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
++SELECT * FROM "http://test-bucket-public.{DUCKDB_S3_ENDPOINT}/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
+ ----
+ 1
+ 
+diff --git a/test/sql/httpfs/hffs.test_slow b/test/sql/httpfs/hffs.test_slow
+index 646c248..1865100 100644
+--- a/test/sql/httpfs/hffs.test_slow
++++ b/test/sql/httpfs/hffs.test_slow
+@@ -98,7 +98,7 @@ select size from read_text('hf://spaces/samansmink/duckdb_ci_tests/README.md');
+ require-env HUGGING_FACE_TOKEN
+ 
+ statement ok
+-CREATE SECRET hf1 (TYPE HUGGINGFACE, TOKEN '${HUGGING_FACE_TOKEN}');
++CREATE SECRET hf1 (TYPE HUGGINGFACE, TOKEN '{HUGGING_FACE_TOKEN}');
+ 
+ query III rowsort
+ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+@@ -112,7 +112,7 @@ DROP SECRET hf1
+ # Same can be achieved with an http secret setting the bearer token manually
+ 
+ statement ok
+-CREATE SECRET http1 (TYPE HTTP, BEARER_TOKEN '${HUGGING_FACE_TOKEN}');
++CREATE SECRET http1 (TYPE HTTP, BEARER_TOKEN '{HUGGING_FACE_TOKEN}');
+ 
+ query III rowsort
+ FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_private/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);
+@@ -126,7 +126,7 @@ DROP SECRET http1
+ # Note that the huggingface secret takes precedence over the http secret
+ 
+ statement ok
+-CREATE SECRET hf2 (TYPE HUGGINGFACE, TOKEN '${HUGGING_FACE_TOKEN}');
++CREATE SECRET hf2 (TYPE HUGGINGFACE, TOKEN '{HUGGING_FACE_TOKEN}');
+ 
+ statement ok
+ CREATE SECRET http2 (TYPE HTTP, BEARER_TOKEN 'hocus pocus this token is bogus');
+@@ -155,7 +155,7 @@ statement ok
+ CREATE SECRET http3 (
+     TYPE HTTP, 
+     EXTRA_HTTP_HEADERS MAP{
+-		'Authorization': 'Bearer ${HUGGING_FACE_TOKEN}',
++		'Authorization': 'Bearer {HUGGING_FACE_TOKEN}',
+ 	}
+ );
+ 
+diff --git a/test/sql/s3/incorrect_s3_region.test_slow b/test/sql/s3/incorrect_s3_region.test_slow
+index 700ee5e..374bb6f 100644
+--- a/test/sql/s3/incorrect_s3_region.test_slow
++++ b/test/sql/s3/incorrect_s3_region.test_slow
+@@ -26,7 +26,7 @@ statement ok
+ FROM parquet_scan('s3://overturemaps-us-west-2/bridgefiles/2025-03-19.0-beta.0/dataset=Esri Community Maps/theme=buildings/type=building/part-00000-947c2149-23db-4abc-a7ee-3a892aac90ff.c000.snappy.parquet') LIMIT 1;
+ 
+ statement ok
+-SET s3_region='${s3_region}'
++SET s3_region='{s3_region}'
+ 
+ endloop
+ 
+diff --git a/test/sql/secret/secret_aws.test b/test/sql/secret/secret_aws.test
+index b1eba63..9c8e5d9 100644
+--- a/test/sql/secret/secret_aws.test
++++ b/test/sql/secret/secret_aws.test
+@@ -23,26 +23,26 @@ require parquet
+ foreach httpfs_implementation curl httplib
+ 
+ statement ok
+-SET httpfs_client_implementation='${httpfs_implementation}';
++SET httpfs_client_implementation='{httpfs_implementation}';
+ 
+ statement ok
+ SET enable_logging=true
+ 
+ statement ok
+-set s3_use_ssl='${DUCKDB_S3_USE_SSL}'
++set s3_use_ssl='{DUCKDB_S3_USE_SSL}'
+ 
+ statement ok
+-set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
++set s3_endpoint='{DUCKDB_S3_ENDPOINT}'
+ 
+ statement ok
+-set s3_region='${AWS_DEFAULT_REGION}'
++set s3_region='{AWS_DEFAULT_REGION}'
+ 
+ # Create some test data
+ statement ok
+ CREATE or replace SECRET s1 (
+     TYPE AWS,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}'
+ )
+ 
+ statement ok
+@@ -53,4 +53,4 @@ FROM "s3://test-bucket/test-file.parquet"
+ ----
+ 1
+ 
+-endloop
+\ No newline at end of file
++endloop
+diff --git a/test/sql/secret/secret_refresh.test b/test/sql/secret/secret_refresh.test
+index 857e7ec..980d2e7 100644
+--- a/test/sql/secret/secret_refresh.test
++++ b/test/sql/secret/secret_refresh.test
+@@ -24,20 +24,20 @@ statement ok
+ SET enable_logging=true
+ 
+ statement ok
+-set s3_use_ssl='${DUCKDB_S3_USE_SSL}'
++set s3_use_ssl='{DUCKDB_S3_USE_SSL}'
+ 
+ statement ok
+-set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
++set s3_endpoint='{DUCKDB_S3_ENDPOINT}'
+ 
+ statement ok
+-set s3_region='${AWS_DEFAULT_REGION}'
++set s3_region='{AWS_DEFAULT_REGION}'
+ 
+ # Create some test data
+ statement ok
+ CREATE SECRET s1 (
+     TYPE S3,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}'
+ )
+ 
+ statement ok
+@@ -53,8 +53,8 @@ CREATE SECRET s1 (
+     KEY_ID 'BOGUS',
+     SECRET 'ALSO BOGUS',
+     REFRESH_INFO MAP {
+-        'KEY_ID': '${AWS_ACCESS_KEY_ID}',
+-        'SECRET': '${AWS_SECRET_ACCESS_KEY}'
++        'KEY_ID': '{AWS_ACCESS_KEY_ID}',
++        'SECRET': '{AWS_SECRET_ACCESS_KEY}'
+     }
+ )
+ 
+@@ -102,7 +102,7 @@ CREATE SECRET s1 (
+     KEY_ID 'BOGUS',
+     SECRET 'ALSO BOGUS',
+     REFRESH_INFO MAP {
+-        'THIS_KEY_DOES_NOT_EXIST': '${BOGUS}'
++        'THIS_KEY_DOES_NOT_EXIST': '{BOGUS}'
+     }
+ )
+ 
+diff --git a/test/sql/secret/secret_refresh_attach.test b/test/sql/secret/secret_refresh_attach.test
+index 7cff03e..7dc954b 100644
+--- a/test/sql/secret/secret_refresh_attach.test
++++ b/test/sql/secret/secret_refresh_attach.test
+@@ -26,7 +26,7 @@ statement ok
+ SET enable_logging=true
+ 
+ statement ok
+-set s3_use_ssl='${DUCKDB_S3_USE_SSL}'
++set s3_use_ssl='{DUCKDB_S3_USE_SSL}'
+ 
+ # Create secret with incorrect credentials to trigger secret refreshing
+ statement ok
+@@ -35,9 +35,9 @@ CREATE SECRET uhuh_this_mah_sh (
+     PROVIDER config,
+     KEY_ID 'all the girls',
+     SECRET 'stomp yo feet like dis',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}',
+     REFRESH 'auto'
+ )
+ 
+diff --git a/test/sql/secret/secret_s3_requester_pays.test b/test/sql/secret/secret_s3_requester_pays.test
+index 3451dce..0dd3103 100644
+--- a/test/sql/secret/secret_s3_requester_pays.test
++++ b/test/sql/secret/secret_s3_requester_pays.test
+@@ -22,20 +22,20 @@ statement ok
+ SET enable_logging=true
+ 
+ statement ok
+-set s3_use_ssl='${DUCKDB_S3_USE_SSL}'
++set s3_use_ssl='{DUCKDB_S3_USE_SSL}'
+ 
+ statement ok
+-set s3_endpoint='${DUCKDB_S3_ENDPOINT}'
++set s3_endpoint='{DUCKDB_S3_ENDPOINT}'
+ 
+ statement ok
+-set s3_region='${AWS_DEFAULT_REGION}'
++set s3_region='{AWS_DEFAULT_REGION}'
+ 
+ # Create some test data
+ statement ok
+ CREATE SECRET s1 (
+     TYPE S3,
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
+     REQUESTER_PAYS true
+ )
+ 
+diff --git a/test/sql/secrets/create_secret_minio.test b/test/sql/secrets/create_secret_minio.test
+index 5787236..5da1bc8 100644
+--- a/test/sql/secrets/create_secret_minio.test
++++ b/test/sql/secrets/create_secret_minio.test
+@@ -47,11 +47,11 @@ CREATE PERSISTENT SECRET (
+     TYPE S3,
+     PROVIDER config,
+     SCOPE 's3://test-bucket/only-this-file-gets-auth.parquet',
+-    KEY_ID '${AWS_ACCESS_KEY_ID}',
+-    SECRET '${AWS_SECRET_ACCESS_KEY}',
+-    REGION '${AWS_DEFAULT_REGION}',
+-    ENDPOINT '${DUCKDB_S3_ENDPOINT}',
+-    USE_SSL '${DUCKDB_S3_USE_SSL}'
++    KEY_ID '{AWS_ACCESS_KEY_ID}',
++    SECRET '{AWS_SECRET_ACCESS_KEY}',
++    REGION '{AWS_DEFAULT_REGION}',
++    ENDPOINT '{DUCKDB_S3_ENDPOINT}',
++    USE_SSL '{DUCKDB_S3_USE_SSL}'
+ )
+ 
+ # scope doesn't match! query still fails
+diff --git a/test/sql/secrets/create_secret_transactional.test b/test/sql/secrets/create_secret_transactional.test
+index 332dcd9..0782307 100644
+--- a/test/sql/secrets/create_secret_transactional.test
++++ b/test/sql/secrets/create_secret_transactional.test
+@@ -21,13 +21,13 @@ statement ok con1
+ BEGIN TRANSACTION
+ 
+ statement ok con1
+-CREATE ${secret_type} SECRET s1 (TYPE S3)
++CREATE {secret_type} SECRET s1 (TYPE S3)
+ 
+ statement ok con2
+ BEGIN TRANSACTION
+ 
+ statement ok con2
+-CREATE ${secret_type} SECRET s2 (TYPE S3)
++CREATE {secret_type} SECRET s2 (TYPE S3)
+ 
+ query I con1
+ SELECT name FROM duckdb_secrets();
+@@ -143,4 +143,4 @@ query I con2
+ SELECT name FROM duckdb_secrets() ORDER BY name;
+ ----
+ tmp_s1
+-tmp_s2
+\ No newline at end of file
++tmp_s2
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+index d74864a..c59f64d 100644
+--- a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
++++ b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+@@ -18,7 +18,7 @@ statement ok
+ SET memory_limit='1GB';
+ 
+ statement ok
+-ATTACH '{TEST_DIR}/encrypted_temp_files_${cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '${cipher}');
++ATTACH '{TEST_DIR}/encrypted_temp_files_{cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');
+ 
+ statement ok
+ USE enc;
+@@ -69,4 +69,4 @@ USE mem
+ statement ok
+ DETACH enc
+ 
+-endloop
+\ No newline at end of file
++endloop

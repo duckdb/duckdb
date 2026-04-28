@@ -1,15 +1,21 @@
 #include "reader/variant/variant_binary_decoder.hpp"
-#include "duckdb/common/printer.hpp"
+
+#include <string.h>
+#include <utility>
+#include <cmath>
+
 #include "utf8proc_wrapper.hpp"
-
 #include "reader/uuid_column_reader.hpp"
-
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/value.hpp"
 
 static constexpr uint8_t VERSION_MASK = 0xF;
 static constexpr uint8_t SORTED_STRINGS_MASK = 0x1;
@@ -145,7 +151,7 @@ VariantValue VariantBinaryDecoder::PrimitiveTypeDecode(const VariantValueMetadat
                                                        const_data_ptr_t data) {
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::NULL_TYPE: {
-		return VariantValue(Value());
+		return VariantValue::NullValue();
 	}
 	case VariantPrimitiveType::BOOLEAN_TRUE: {
 		return VariantValue(Value::BOOLEAN(true));

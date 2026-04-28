@@ -1,8 +1,8 @@
 #include "duckdb/planner/filter/in_filter.hpp"
 
-#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
 
@@ -23,63 +23,27 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 }
 
 FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) const {
-	if (!stats.CanHaveNoNull()) {
-		// no non-null values are possible: always false
-		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-	}
-	switch (values[0].type().InternalType()) {
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::UINT128:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-		return NumericStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                  array_ptr<const Value>(values.data(), values.size()));
-	case PhysicalType::VARCHAR:
-		return StringStats::CheckZonemap(stats, ExpressionType::COMPARE_EQUAL,
-		                                 array_ptr<const Value>(values.data(), values.size()));
-	default:
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
+	throw InternalException("InFilter::CheckStatistics should not be called: InFilters should be converted to "
+	                        "ExpressionFilters before statistics checking");
 }
 
 string InFilter::ToString(const string &column_name) const {
-	string in_list;
-	for (auto &val : values) {
-		if (!in_list.empty()) {
-			in_list += ", ";
-		}
-		in_list += val.ToSQLString();
-	}
-	return column_name + " IN (" + in_list + ")";
+	throw InternalException("InFilter::ToString should not be called: InFilters should be converted to "
+	                        "ExpressionFilters before rendering");
 }
 
 unique_ptr<Expression> InFilter::ToExpression(const Expression &column) const {
-	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
-	result->children.push_back(column.Copy());
-	for (auto &val : values) {
-		result->children.push_back(make_uniq<BoundConstantExpression>(val));
-	}
-	return std::move(result);
+	return ExpressionFilter::CreateInExpression(column.Copy(), values);
 }
 
 bool InFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
-		return false;
-	}
-	auto &other = other_p.Cast<InFilter>();
-	return other.values == values;
+	throw InternalException("InFilter::Equals should not be called: InFilters should be converted to "
+	                        "ExpressionFilters before equality checking");
 }
 
 unique_ptr<TableFilter> InFilter::Copy() const {
-	return make_uniq<InFilter>(values);
+	throw InternalException("InFilter::Copy should not be called: InFilters should be converted to "
+	                        "ExpressionFilters before copying");
 }
 
 } // namespace duckdb

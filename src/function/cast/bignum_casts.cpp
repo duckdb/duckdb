@@ -8,7 +8,7 @@
 namespace duckdb {
 
 template <class T>
-static bignum_t IntToBignum(Vector &result, T int_value) {
+static bignum_t IntToBignum(StringHeap &heap, T int_value) {
 	// Determine if the number is negative
 	bool is_negative = int_value < 0;
 	// Determine the number of data bytes
@@ -30,7 +30,7 @@ static bignum_t IntToBignum(Vector &result, T int_value) {
 	}
 
 	uint32_t blob_size = data_byte_size + Bignum::BIGNUM_HEADER_SIZE;
-	auto blob = StringVector::EmptyString(result, blob_size);
+	auto blob = heap.EmptyString(blob_size);
 	auto writable_blob = blob.GetDataWriteable();
 	Bignum::SetHeader(writable_blob, data_byte_size, is_negative);
 
@@ -49,7 +49,7 @@ static bignum_t IntToBignum(Vector &result, T int_value) {
 }
 
 template <>
-bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, Vector &result) {
+bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, StringHeap &heap) {
 	uint32_t data_byte_size;
 	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
 		data_byte_size =
@@ -73,7 +73,7 @@ bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, Vector &result) {
 		data_byte_size++;
 	}
 	uint32_t blob_size = data_byte_size + Bignum::BIGNUM_HEADER_SIZE;
-	auto blob = StringVector::EmptyString(result, blob_size);
+	auto blob = heap.EmptyString(blob_size);
 	auto writable_blob = blob.GetDataWriteable();
 	Bignum::SetHeader(writable_blob, data_byte_size, false);
 
@@ -91,7 +91,7 @@ bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, Vector &result) {
 }
 
 template <>
-bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, Vector &result) {
+bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, StringHeap &heap) {
 	// Determine if the number is negative
 	bool is_negative = int_value.upper >> 63 & 1;
 	if (is_negative) {
@@ -99,7 +99,7 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, Vector &result) {
 		// without overflowing
 		if (int_value == NumericLimits<hugeint_t>::Minimum()) {
 			uhugeint_t u_int_value {0x8000000000000000, 0};
-			auto cast_value = Operation<uhugeint_t>(u_int_value, result);
+			auto cast_value = Operation<uhugeint_t>(u_int_value, heap);
 			// We have to do all the bit flipping.
 			auto writable_value_ptr = cast_value.data.GetDataWriteable();
 			Bignum::SetHeader(writable_value_ptr, cast_value.data.GetSize() - Bignum::BIGNUM_HEADER_SIZE, is_negative);
@@ -138,7 +138,7 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, Vector &result) {
 		data_byte_size++;
 	}
 	uint32_t blob_size = data_byte_size + Bignum::BIGNUM_HEADER_SIZE;
-	auto blob = StringVector::EmptyString(result, blob_size);
+	auto blob = heap.EmptyString(blob_size);
 	auto writable_blob = blob.GetDataWriteable();
 	Bignum::SetHeader(writable_blob, data_byte_size, is_negative);
 

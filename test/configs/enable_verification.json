@@ -28,6 +28,10 @@
         "test/sql/catalog/comment_on_wal.test",
         "test/sql/catalog/dependencies/test_alter_dependency_ownership.test",
         "test/sql/catalog/function/test_sequence_macro.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_not_supported.test",
+        "test/sql/catalog/sequence/sequence_currval_before_nextval_wal_supported.test",
         "test/sql/catalog/sequence/sequence_cycle.test",
         "test/sql/catalog/sequence/sequence_offset_increment.test",
         "test/sql/catalog/sequence/sequence_overflow.test",
@@ -98,6 +102,7 @@
         "test/sql/logging/logging_types.test",
         "test/sql/logging/test_logging_function.test",
         "test/sql/pragma/test_query_log.test",
+        "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
         "test/sql/cte/warn_deprecated_union_in_using_key.test"
       ]
@@ -249,6 +254,12 @@
       "reason": "Geometry with CRS is not always string round-trippable",
       "paths": [
         "test/geoparquet/with_crs.test"
+      ]
+    },
+    {
+      "reason": "DML CTE re-execution under verification causes incorrect row counts",
+      "paths": [
+        "test/sql/cte/dml_cte.test"
       ]
     }
   ]

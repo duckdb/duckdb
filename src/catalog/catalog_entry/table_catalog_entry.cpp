@@ -40,6 +40,9 @@ StorageIndex TableCatalogEntry::GetStorageIndex(const ColumnIndex &column_id) co
 	if (column_id.IsRowIdColumn()) {
 		return StorageIndex(COLUMN_IDENTIFIER_ROW_ID);
 	}
+	if (column_id.IsRowNumberColumn()) {
+		return StorageIndex(COLUMN_IDENTIFIER_ROW_NUMBER);
+	}
 
 	// The index of the base ColumnIndex is equal to the physical column index in the table
 	// for any child indices because the indices are already the physical indices.
@@ -381,6 +384,28 @@ virtual_column_map_t TableCatalogEntry::GetVirtualColumns() const {
 vector<column_t> TableCatalogEntry::GetRowIdColumns() const {
 	vector<column_t> result;
 	result.push_back(COLUMN_IDENTIFIER_ROW_ID);
+	return result;
+}
+
+optional_ptr<CatalogEntry> TableCatalogEntry::CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) {
+	throw NotImplementedException("Triggers are not supported for this table type");
+}
+
+void TableCatalogEntry::ScanTriggers(CatalogTransaction transaction,
+                                     const std::function<void(CatalogEntry &)> &callback) const {
+	// Default: no triggers (non-DuckDB tables do not support triggers)
+}
+
+vector<const_reference<TriggerCatalogEntry>> TableCatalogEntry::GetTriggersForEvent(CatalogTransaction transaction,
+                                                                                    TriggerTiming timing,
+                                                                                    TriggerEventType event_type) const {
+	vector<const_reference<TriggerCatalogEntry>> result;
+	ScanTriggers(transaction, [&](CatalogEntry &entry) {
+		auto &trigger = entry.Cast<TriggerCatalogEntry>();
+		if (trigger.timing == timing && trigger.event_type == event_type) {
+			result.emplace_back(trigger);
+		}
+	});
 	return result;
 }
 

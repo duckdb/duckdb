@@ -7,6 +7,9 @@
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -18,10 +21,26 @@ struct BoundCTEData {
 	shared_ptr<CTEBindState> cte_bind_state;
 };
 
+static bool IsDMLQueryNode(const CommonTableExpressionInfo &cte) {
+	if (!cte.query_node) {
+		return false;
+	}
+	auto t = cte.query_node->type;
+	return t == QueryNodeType::INSERT_QUERY_NODE || t == QueryNodeType::UPDATE_QUERY_NODE ||
+	       t == QueryNodeType::DELETE_QUERY_NODE;
+}
+
 BoundStatement Binder::BindNode(QueryNode &node) {
 	reference<Binder> current_binder(*this);
 	vector<BoundCTEData> bound_ctes;
+	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
+		if (IsDMLQueryNode(*cte.second)) {
+			if (parent && !cte.second->is_trigger_generated) {
+				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
+			}
+			++dml_cte_count;
+		}
 		bound_ctes.push_back(current_binder.get().PrepareCTE(cte.first, *cte.second));
 		current_binder = *bound_ctes.back().child_binder;
 	}
@@ -55,6 +74,18 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	for (idx_t i = bound_ctes.size(); i > 0; i--) {
 		auto &finish_binder = i == 1 ? *this : *bound_ctes[i - 2].child_binder;
 		result = finish_binder.FinishCTE(bound_ctes[i - 1], std::move(result));
+	}
+	if (dml_cte_count > 1) {
+		auto &properties = GetStatementProperties();
+		auto &manager = DatabaseManager::Get(context);
+		for (auto &entry : properties.modified_databases) {
+			auto db = manager.GetDatabase(context, entry.first);
+			if (db && !db->GetCatalog().SupportsMultipleDMLCTEs()) {
+				throw BinderException("Multiple DML statements in a single WITH clause are not supported for "
+				                      "database \"%s\"",
+				                      entry.first);
+			}
+		}
 	}
 	return result;
 }
@@ -117,7 +148,7 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 	// first recursively visit the materialized CTE operations
 	// the left side is visited first and is added to the BindContext of the right side
-	D_ASSERT(statement.query);
+	D_ASSERT(statement.query_node);
 
 	result.ctename = ctename;
 	result.materialized = statement.materialized;
@@ -125,12 +156,12 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 	// instead of eagerly binding the CTE here we add the CTE bind state to the list of CTE bindings
 	// the CTE is bound lazily - when referenced for the first time we perform the binding
-	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query->node, statement.aliases);
+	result.cte_bind_state = make_shared_ptr<CTEBindState>(*this, *statement.query_node, statement.aliases);
 
 	result.child_binder = Binder::CreateBinder(context, this);
 
 	// Add bindings of left side to temporary CTE bindings context
-	// as we are binding a CTE currently, we take precendence over the existing binding.
+	// as we are binding a CTE currently, we take precedence over the existing binding.
 	// This implements the CTE shadowing behavior.
 	auto cte_binding = make_uniq<CTEBinding>(BindingAlias(ctename), result.cte_bind_state, result.setop_index);
 	result.child_binder->bind_context.AddCTEBinding(std::move(cte_binding));
@@ -139,9 +170,19 @@ BoundCTEData Binder::PrepareCTE(const string &ctename, CommonTableExpressionInfo
 
 BoundStatement Binder::FinishCTE(BoundCTEData &bound_cte, BoundStatement child) {
 	if (!bound_cte.cte_bind_state->IsBound()) {
-		// CTE was not bound - just ignore it
-		MoveCorrelatedExpressions(*bound_cte.child_binder);
-		return child;
+		auto node_type = bound_cte.cte_bind_state->cte_def.type;
+		bool is_dml = node_type == QueryNodeType::INSERT_QUERY_NODE || node_type == QueryNodeType::UPDATE_QUERY_NODE ||
+		              node_type == QueryNodeType::DELETE_QUERY_NODE;
+		if (is_dml) {
+			// DML CTEs always execute even if not referenced - force bind now
+			auto dummy_binding =
+			    make_uniq<CTEBinding>(BindingAlias(bound_cte.ctename), bound_cte.cte_bind_state, bound_cte.setop_index);
+			bound_cte.cte_bind_state->Bind(*dummy_binding);
+		} else {
+			// Non-DML CTE was not referenced - just ignore it
+			MoveCorrelatedExpressions(*bound_cte.child_binder);
+			return child;
+		}
 	}
 	auto &bind_state = *bound_cte.cte_bind_state;
 	for (auto &c : bind_state.query_binder->correlated_columns) {

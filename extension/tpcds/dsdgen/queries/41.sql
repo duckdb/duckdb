@@ -25,7 +25,7 @@ WHERE i_manufact_id BETWEEN 738 AND 738+40
                      AND (i_units = 'N/A'
                           OR i_units = 'Dozen')
                      AND (i_size = 'petite'
-                          OR i_size = 'petite'))
+                          OR i_size = 'large'))
                  OR (i_category = 'Men'
                      AND (i_color = 'light'
                           OR i_color = 'cornflower')
@@ -54,7 +54,7 @@ WHERE i_manufact_id BETWEEN 738 AND 738+40
                     AND (i_units = 'Each'
                          OR i_units = 'Tbl')
                     AND (i_size = 'petite'
-                         OR i_size = 'petite'))
+                         OR i_size = 'large'))
                 OR (i_category = 'Men'
                     AND (i_color = 'forest'
                          OR i_color = 'ghost')

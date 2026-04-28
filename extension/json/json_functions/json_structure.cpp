@@ -527,13 +527,16 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
+	for (auto &func : set.functions) {
+		func.SetFallible();
+	}
 	GetStructureFunctionInternal(set, LogicalType::JSON());
 	return set;
 }

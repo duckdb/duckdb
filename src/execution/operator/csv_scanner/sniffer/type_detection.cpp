@@ -355,7 +355,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 		D_ASSERT(cur_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		D_ASSERT(cur_vector.GetType() == LogicalType::VARCHAR);
 		auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-		auto null_mask = FlatVector::Validity(cur_vector);
+		auto null_mask = FlatVector::ValidityMutable(cur_vector);
 		auto &col_type_candidates = info_sql_types_candidates[col_idx];
 		for (idx_t row_idx = start_idx_detection; row_idx < chunk_size; row_idx++) {
 			// col_type_candidates can't be empty since anything in a CSV file should at least be a string
@@ -495,7 +495,7 @@ void CSVSniffer::DetectTypes() {
 				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 					auto &cur_vector = data_chunk.data[col_idx];
 					auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-					auto null_mask = FlatVector::Validity(cur_vector);
+					auto null_mask = FlatVector::ValidityMutable(cur_vector);
 					if (null_mask.RowIsValid(0)) {
 						auto value = HeaderValue(vector_data[0]);
 						best_header_row.push_back(value);
