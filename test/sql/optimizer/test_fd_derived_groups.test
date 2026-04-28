@@ -36,25 +36,25 @@ SELECT floor(x), floor(x)+1, count(*) FROM f GROUP BY floor(x), floor(x)+1 ORDER
 2.0	3.0	1
 
 # Float base: 0e0 == -0e0 but signbit distinguishes them — must not collapse.
-# Inline VALUES so -0e0's sign bit survives storage/verification round-trips.
-query III
-SELECT x, signbit(x), count(*) FROM (VALUES (0e0::DOUBLE), (-0e0::DOUBLE)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
+# Project signbit only; -0.0 renders as 0.0 under --verify-vector sequence_operator.
+query II
+SELECT signbit(x), count(*) FROM (VALUES (0e0::DOUBLE), (-0e0::DOUBLE)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
 ----
-0.0	false	1
--0.0	true	1
+0	1
+1	1
 
-query III
-SELECT x, signbit(x), count(*) FROM (VALUES (0e0::FLOAT), (-0e0::FLOAT)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
+query II
+SELECT signbit(x), count(*) FROM (VALUES (0e0::FLOAT), (-0e0::FLOAT)) t(x) GROUP BY x, signbit(x) ORDER BY signbit(x);
 ----
-0.0	false	1
--0.0	true	1
+0	1
+1	1
 
 # Nested float (STRUCT containing DOUBLE) is also unsafe.
-query III
-SELECT s, signbit(s.b), count(*) FROM (VALUES ({'a': 1::INTEGER, 'b': 0e0::DOUBLE}), ({'a': 1::INTEGER, 'b': -0e0::DOUBLE})) t(s) GROUP BY s, signbit(s.b) ORDER BY signbit(s.b);
+query II
+SELECT signbit(s.b), count(*) FROM (VALUES ({'a': 1::INTEGER, 'b': 0e0::DOUBLE}), ({'a': 1::INTEGER, 'b': -0e0::DOUBLE})) t(s) GROUP BY s, signbit(s.b) ORDER BY signbit(s.b);
 ----
-{'a': 1, 'b': 0.0}	false	1
-{'a': 1, 'b': -0.0}	true	1
+0	1
+1	1
 
 # INTERVAL: '1 day' == '24 hour' but datepart('day', ...) distinguishes them. The binder
 # currently wraps INTERVAL groups in normalized_interval(...) so a bare colref shouldn't
