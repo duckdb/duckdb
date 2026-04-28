@@ -28,6 +28,7 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
+    test_scalar_function_select_hook.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_progress_bar.cpp
@@ -38,6 +39,7 @@ set(TEST_API_OBJECTS
     test_windows_header_compatibility.cpp
     test_windows_unicode_path.cpp
     test_object_cache.cpp
+    test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
     test_update_query_node.cpp
     test_delete_query_node.cpp
@@ -56,6 +58,6 @@ if(DUCKDB_EXTENSION_TPCH_SHOULD_LINK)
 endif()
 
 add_library(test_api OBJECT ${TEST_API_OBJECTS})
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_api>
     PARENT_SCOPE)

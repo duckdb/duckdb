@@ -149,7 +149,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"decode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"degrees", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"delta_scan", "delta", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"disable_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"drop_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"dsdgen", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"duckdb_format_sql", "autocomplete", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -176,7 +175,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"ducklake_table_insertions", "ducklake", CatalogType::TABLE_FUNCTION_ENTRY},
     {"editdist3", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"element_at", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"enable_peg_parser", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"encode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"entropy", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"enum_code", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -1143,7 +1141,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {
-    {"parquet", "parquet"}, {"json", "json"}, {"avro", "avro"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
+    {"parquet", "parquet"},
+    {"json", "json"},
+    {"avro", "avro"},
+    {"iceberg", "iceberg"}}; // END_OF_EXTENSION_COPY_FUNCTIONS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

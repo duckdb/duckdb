@@ -45,6 +45,10 @@ TupleDataCollection::~TupleDataCollection() {
 
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
+	if (TuplesPerBlock() == 0) {
+		throw NotImplementedException("Too many columns: tuple width exceeds block size of %llu",
+		                              allocator->GetBufferManager().GetBlockSize());
+	}
 	this->count = 0;
 	this->data_size = 0;
 	if (layout.IsSortKeyLayout()) {
@@ -335,7 +339,8 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 	}
 	case PhysicalType::LIST:
 		D_ASSERT(format.children.size() == 1);
-		ToUnifiedFormatInternal(format.children[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ListVector::GetChildMutable(vector),
+		                        ListVector::GetListSize(vector));
 		break;
 	case PhysicalType::ARRAY: {
 		D_ASSERT(format.children.size() == 1);
@@ -358,7 +363,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), child_array_total_size);
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetChildMutable(vector), child_array_total_size);
 		break;
 	}
 	default:
@@ -471,7 +476,7 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const {
 	D_ASSERT(!layout.AllConstant());
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
-	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	const auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
 
 	auto &not_found = chunk_state.utility;
 	idx_t not_found_count = 0;

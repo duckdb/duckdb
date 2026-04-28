@@ -17,6 +17,7 @@ add_library_unity(
   test_capi_arrow.cpp
   test_capi_data_chunk.cpp
   test_capi_extract.cpp
+  test_capi_geometry.cpp
   test_capi_instance_cache.cpp
   test_capi_logging.cpp
   test_capi_pending.cpp
@@ -30,7 +31,8 @@ add_library_unity(
   test_capi_replacement_scan.cpp
   test_capi_streaming.cpp
   test_capi_table_description.cpp
+  test_capi_variant.cpp
   test_without_disabled_functions.cpp)
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi>
     PARENT_SCOPE)

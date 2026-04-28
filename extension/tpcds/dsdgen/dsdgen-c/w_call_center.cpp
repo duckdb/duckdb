@@ -200,45 +200,45 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 
 	append_row_start(info);
 
-	append_key(info, r->cc_call_center_sk);
-	append_varchar(info, r->cc_call_center_id);
-	append_date(info, r->cc_rec_start_date_id);
-	append_date(info, r->cc_rec_end_date_id);
-	append_key(info, r->cc_closed_date_id);
-	append_key(info, r->cc_open_date_id);
-	append_varchar(info, r->cc_name);
-	append_varchar(info, &r->cc_class[0]);
-	append_integer(info, r->cc_employees);
-	append_integer(info, r->cc_sq_ft);
-	append_varchar(info, r->cc_hours);
-	append_varchar(info, &r->cc_manager[0]);
-	append_integer(info, r->cc_market_id);
-	append_varchar(info, &r->cc_market_class[0]);
-	append_varchar(info, &r->cc_market_desc[0]);
-	append_varchar(info, &r->cc_market_manager[0]);
-	append_integer(info, r->cc_division_id);
-	append_varchar(info, &r->cc_division_name[0]);
-	append_integer(info, r->cc_company);
-	append_varchar(info, &r->cc_company_name[0]);
-	append_integer(info, r->cc_address.street_num);
+	append_key(info, r->cc_call_center_sk, CC_CALL_CENTER_SK);
+	append_varchar(info, r->cc_call_center_id, CC_CALL_CENTER_ID);
+	append_date(info, r->cc_rec_start_date_id, CC_REC_START_DATE_ID);
+	append_date(info, r->cc_rec_end_date_id, CC_REC_END_DATE_ID);
+	append_key(info, r->cc_closed_date_id, CC_CLOSED_DATE_ID);
+	append_key(info, r->cc_open_date_id, CC_OPEN_DATE_ID);
+	append_varchar(info, r->cc_name, CC_NAME);
+	append_varchar(info, &r->cc_class[0], CC_CLASS);
+	append_integer(info, r->cc_employees, CC_EMPLOYEES);
+	append_integer(info, r->cc_sq_ft, CC_SQ_FT);
+	append_varchar(info, r->cc_hours, CC_HOURS);
+	append_varchar(info, &r->cc_manager[0], CC_MANAGER);
+	append_integer(info, r->cc_market_id, CC_MARKET_ID);
+	append_varchar(info, &r->cc_market_class[0], CC_MARKET_CLASS);
+	append_varchar(info, &r->cc_market_desc[0], CC_MARKET_DESC);
+	append_varchar(info, &r->cc_market_manager[0], CC_MARKET_MANAGER);
+	append_integer(info, r->cc_division_id, CC_DIVISION);
+	append_varchar(info, &r->cc_division_name[0], CC_DIVISION_NAME);
+	append_integer(info, r->cc_company, CC_COMPANY);
+	append_varchar(info, &r->cc_company_name[0], CC_COMPANY_NAME);
+	append_integer(info, r->cc_address.street_num, CC_ADDRESS);
 
 	if (r->cc_address.street_name2) {
 		sprintf(szTemp, "%s %s", r->cc_address.street_name1, r->cc_address.street_name2);
-		append_varchar(info, szTemp);
+		append_varchar(info, szTemp, CC_ADDRESS);
 	} else {
-		append_varchar(info, r->cc_address.street_name1);
+		append_varchar(info, r->cc_address.street_name1, CC_ADDRESS);
 	}
 
-	append_varchar(info, r->cc_address.street_type);
-	append_varchar(info, &r->cc_address.suite_num[0]);
-	append_varchar(info, r->cc_address.city);
-	append_varchar(info, r->cc_address.county);
-	append_varchar(info, r->cc_address.state);
+	append_varchar(info, r->cc_address.street_type, CC_ADDRESS);
+	append_varchar(info, &r->cc_address.suite_num[0], CC_ADDRESS);
+	append_varchar(info, r->cc_address.city, CC_ADDRESS);
+	append_varchar(info, r->cc_address.county, CC_ADDRESS);
+	append_varchar(info, r->cc_address.state, CC_ADDRESS);
 	sprintf(szTemp, "%05d", r->cc_address.zip);
-	append_varchar(info, szTemp);
-	append_varchar(info, &r->cc_address.country[0]);
-	append_integer_decimal(info, r->cc_address.gmt_offset);
-	append_decimal(info, &r->cc_tax_percentage);
+	append_varchar(info, szTemp, CC_ADDRESS);
+	append_varchar(info, &r->cc_address.country[0], CC_ADDRESS);
+	append_integer_decimal(info, r->cc_address.gmt_offset, CC_ADDRESS);
+	append_decimal(info, &r->cc_tax_percentage, CC_TAX_PERCENTAGE);
 
 	append_row_end(info);
 

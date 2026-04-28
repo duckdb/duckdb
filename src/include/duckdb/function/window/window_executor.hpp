@@ -46,24 +46,13 @@ public:
 	                  OperatorSinkInput &sink);
 	virtual void Finalize(ExecutionContext &context, CollectionPtr collection, OperatorSinkInput &sink);
 
-	//! The state used for reading the range collection
-	unique_ptr<WindowCursor> range_cursor;
+	WindowBoundariesState state;
 };
 
-class WindowExecutorBoundsLocalState : public WindowExecutorLocalState {
+class WindowExecutorStreamingState : public LocalSourceState {
 public:
-	WindowExecutorBoundsLocalState(ExecutionContext &context, const WindowExecutorGlobalState &gstate);
-	~WindowExecutorBoundsLocalState() override {
-	}
-
-	virtual void UpdateBounds(WindowExecutorGlobalState &gstate, idx_t row_idx, DataChunk &eval_chunk,
-	                          optional_ptr<WindowCursor> range);
-
-	// Frame management
-	const ValidityMask &partition_mask;
-	const ValidityMask &order_mask;
-	DataChunk bounds;
-	WindowBoundariesState state;
+	//! The constant offset
+	int64_t offset = 0;
 };
 
 class WindowExecutor {
@@ -73,8 +62,6 @@ public:
 	WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
 	virtual ~WindowExecutor() {
 	}
-
-	virtual bool IgnoreNulls() const;
 
 	virtual unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const idx_t payload_count,
 	                                                   const ValidityMask &partition_mask,
@@ -100,9 +87,18 @@ public:
 	optional_ptr<Expression> range_expr;
 	column_t range_idx = DConstants::INVALID_INDEX;
 
+	//! The column indices of any argument expressions
+	vector<column_t> child_idx;
+
+	//! The column indices of any ORDER BY argument expressions
+	vector<column_t> arg_order_idx;
+
+	//! The column indices of any other expressions the function may need
+	vector<column_t> aux_idx;
+
 protected:
-	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, Vector &result, idx_t count,
-	                              idx_t row_idx, OperatorSinkInput &sink) const = 0;
+	virtual void EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
+	                              idx_t row_idx, OperatorSinkInput &sink) const;
 };
 
 } // namespace duckdb

@@ -11,7 +11,7 @@ namespace duckdb {
 static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	// Early-out, if the return value is a constant NULL.
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 
@@ -24,7 +24,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
-	auto &child_vector = ListVector::GetEntry(lists);
+	auto &child_vector = ListVector::GetChild(lists);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(row_count, child_data);
 
@@ -48,9 +48,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-	auto &result_child_vector = ListVector::GetEntry(result);
+	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
+	auto &result_child_vector = ListVector::GetChildMutable(result);
 
 	// Get the default values, if provided.
 	UnifiedVectorFormat default_data;
@@ -67,7 +66,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		// Set to NULL, if the list is NULL.
 		if (!lists_data.validity.RowIsValid(list_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_entries.WriteNull();
 			continue;
 		}
 
@@ -81,8 +80,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto copy_count = MinValue<ubigint_t>(list_entries[list_idx].length, new_size);
 
 		// Set the result entry.
-		result_entries[row_idx].offset = offset.value;
-		result_entries[row_idx].length = new_size.value;
+		result_entries.WriteValue(list_entry_t(offset.value, new_size.value));
 
 		// Copy the child vector's values.
 		// The number of elements to copy is later determined like so: source_count - source_offset.
@@ -119,17 +117,19 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	}
 }
 
-static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
-	bound_function.arguments[1] = LogicalType::UBIGINT;
+static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	D_ASSERT(bound_function.GetArguments().size() == 2 || arguments.size() == 3);
+	bound_function.GetArguments()[1] = LogicalType::UBIGINT;
 
 	// If the first argument is an array, cast it to a list.
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
 	// Early-out, if the first argument is a constant NULL.
 	if (arguments[0]->return_type == LogicalType::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
@@ -141,10 +141,10 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	}
 
 	// Attempt implicit casting, if the default type does not match list the list child type.
-	if (bound_function.arguments.size() == 3 &&
+	if (bound_function.GetArguments().size() == 3 &&
 	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
 	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
-		bound_function.arguments[2] = ListType::GetChildType(arguments[0]->return_type);
+		bound_function.GetArguments()[2] = ListType::GetChildType(arguments[0]->return_type);
 	}
 
 	bound_function.SetReturnType(arguments[0]->return_type);

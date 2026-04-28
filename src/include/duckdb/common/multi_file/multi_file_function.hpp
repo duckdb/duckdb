@@ -323,6 +323,9 @@ public:
 				parallel_lock.lock();
 				if (can_skip_file) {
 					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					// release the reader so its file handle is closed; skipped files are
+					// never scanned, so nothing else needs the reader
+					current_reader_data.reader = nullptr;
 					//! Intentionally do not increase 'i'
 					continue;
 				}
@@ -342,7 +345,7 @@ public:
 			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
-			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
+			// requires getting the ref to the file mutex pointer with the lock still held: readers get be resized
 			parallel_lock.unlock();
 			unique_lock<mutex> current_file_lock(file_mutex);
 			parallel_lock.lock();
@@ -540,6 +543,7 @@ public:
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
+					reader_data->reader = nullptr;
 					result->file_index++;
 				}
 			}

@@ -247,7 +247,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 		auto &key = keys[i];
 		auto entry = entries[i];
 		if (entry.IsValid()) {
-			key.values[col_idx] = GetHiveKeyValue(entry.value, type);
+			key.values[col_idx] = GetHiveKeyValue(entry.GetValue(), type);
 		} else {
 			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
@@ -332,7 +332,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	const auto partition_indices = FlatVector::GetDataMutable<idx_t>(state.partition_indices);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		key.hash = hashes[i];

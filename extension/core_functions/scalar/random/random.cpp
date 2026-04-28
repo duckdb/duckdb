@@ -13,7 +13,7 @@ namespace {
 
 struct ExtractVersionUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		char uuid[36]; // Intentionally no initialize.
 		BaseUUID::ToString(input, uuid);
 		// UUIDv4 and UUIDv7 stores version as the 15-th uint8_t.
@@ -23,7 +23,7 @@ struct ExtractVersionUuidOperator {
 
 struct ExtractTimestampUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		// Validate whether the given UUID is v7.
 		const uint8_t version = (static_cast<uint8_t>((input.upper) >> 8) & 0xf0) >> 4;
 		if (version != 7) {
@@ -48,7 +48,7 @@ void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &res
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, uint32_t, OP>(input, result, count);
+	UnaryExecutor::Execute<INPUT, uint32_t, OP>(input, result, count);
 }
 
 template <typename INPUT, typename OP>
@@ -56,7 +56,7 @@ void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(args.ColumnCount() == 1);
 	auto &input = args.data[0];
 	idx_t count = args.size();
-	UnaryExecutor::ExecuteString<INPUT, timestamp_t, OP>(input, result, count);
+	UnaryExecutor::Execute<INPUT, timestamp_t, OP>(input, result, count);
 }
 
 struct RandomLocalState : public FunctionLocalState {
@@ -74,7 +74,7 @@ void RandomFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<double>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = lstate.random_engine.NextRandom();
+		result_data.WriteValue(lstate.random_engine.NextRandom());
 	}
 }
 
@@ -92,7 +92,7 @@ void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv4::GenerateRandomUUID(lstate.random_engine);
+		result_data.WriteValue(UUIDv4::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 
@@ -103,15 +103,14 @@ void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &res
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<hugeint_t>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUIDv7::GenerateRandomUUID(lstate.random_engine);
+		result_data.WriteValue(UUIDv7::GenerateRandomUUID(lstate.random_engine));
 	}
 }
 
 } // namespace
 
 ScalarFunction RandomFun::GetFunction() {
-	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, nullptr,
-	                      RandomInitLocalState);
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, nullptr, nullptr, RandomInitLocalState);
 	random.SetStability(FunctionStability::VOLATILE);
 	return random;
 }
@@ -121,7 +120,7 @@ ScalarFunction UUIDFun::GetFunction() {
 }
 
 ScalarFunction UUIDv4Fun::GetFunction() {
-	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v4
 	uuid_v4_function.SetStability(FunctionStability::VOLATILE);
@@ -129,7 +128,7 @@ ScalarFunction UUIDv4Fun::GetFunction() {
 }
 
 ScalarFunction UUIDv7Fun::GetFunction() {
-	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr, nullptr,
+	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr,
 	                                RandomInitLocalState);
 	// generate a random uuid v7
 	uuid_v7_function.SetStability(FunctionStability::VOLATILE);

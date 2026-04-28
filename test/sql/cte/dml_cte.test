@@ -1,5 +1,5 @@
 # name: test/sql/cte/dml_cte.test
-# description: Test DML statements (INSERT/UPDATE/DELETE) as CTE bodies, including RETURNING, unreferenced CTEs, side-effect semantics, snapshot isolation, nested WITH, transactions, prepared statements, and rejection of DML CTEs inside views
+# description: Test DML statements (INSERT/UPDATE/DELETE) as CTE bodies, including RETURNING, unreferenced CTEs, side-effect semantics, multiple DML CTEs, snapshot isolation, nested WITH, transactions, prepared statements, and rejection of DML CTEs inside views
 # group: [cte]
 
 statement ok
@@ -282,21 +282,714 @@ WITH RECURSIVE del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
 ----
 <REGEX>:.*Recursive CTEs with DML statements are not supported.*
 
-# Multiple DML CTEs in one WITH clause are not supported
-statement error
-WITH ins AS (INSERT INTO t VALUES (1, 2)), del AS (DELETE FROM t WHERE i = 1) SELECT 1;
+# ============================================================
+# Multiple DML CTEs in one WITH clause
+# ============================================================
+
+statement ok
+CREATE TABLE t1 (i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE t_aux (i INTEGER, j INTEGER);
+
+# --- Basic multi-DML CTEs targeting different tables ---
+
+# Two INSERTs into different tables
+query I rowsort
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t_aux VALUES (2, 20) RETURNING i)
+SELECT * FROM ins1
+UNION ALL
+SELECT * FROM ins2;
 ----
-<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+1
+2
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	10
+
+query II rowsort
+SELECT * FROM t_aux;
+----
+2	20
+
+# INSERT + DELETE across tables
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30);
+
+query I rowsort
+WITH ins AS (INSERT INTO t_aux VALUES (99, 99) RETURNING i),
+     del AS (DELETE FROM t1 WHERE i <= 2 RETURNING i)
+SELECT * FROM del;
+----
+1
+2
+
+query II rowsort
+SELECT * FROM t1;
+----
+3	30
+
+query II
+SELECT * FROM t_aux;
+----
+99	99
+
+# INSERT + UPDATE across tables
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20);
+
+query I rowsort
+WITH ins AS (INSERT INTO t_aux VALUES (5, 50) RETURNING i),
+     upd AS (UPDATE t1 SET j = j * 10 RETURNING i)
+SELECT * FROM ins;
+----
+5
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	100
+2	200
+
+# DELETE + UPDATE across tables
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO t_aux VALUES (10, 100), (20, 200);
+
+query I rowsort
+WITH upd AS (UPDATE t1 SET j = 0 RETURNING i),
+     del AS (DELETE FROM t_aux WHERE i = 10 RETURNING i)
+SELECT * FROM del;
+----
+10
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	0
+2	0
+
+query II
+SELECT * FROM t_aux;
+----
+20	200
+
+# Three DML CTEs
+statement ok
+CREATE TABLE t3 (i INTEGER);
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+query I rowsort
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t_aux VALUES (2, 20) RETURNING i),
+     ins3 AS (INSERT INTO t3 VALUES (3) RETURNING i)
+SELECT * FROM ins1
+UNION ALL SELECT * FROM ins2
+UNION ALL SELECT * FROM ins3;
+----
+1
+2
+3
+
+statement ok
+DROP TABLE t3;
+
+# --- RETURNING and cross-references between DML CTEs ---
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t_aux VALUES (1, 10), (2, 20), (3, 30);
+
+# ins inserts into t1, del uses ins's RETURNING to decide what to delete from t_aux
+query I rowsort
+WITH ins AS (INSERT INTO t1 VALUES (1, 100), (2, 200) RETURNING i),
+     del AS (DELETE FROM t_aux WHERE i IN (SELECT i FROM ins) RETURNING i)
+SELECT * FROM del;
+----
+1
+2
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	100
+2	200
+
+query II
+SELECT * FROM t_aux;
+----
+3	30
+
+# DML CTEs with and without RETURNING mixed
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+WITH ins AS (INSERT INTO t1 VALUES (1, 10)),
+     del AS (DELETE FROM t_aux)
+SELECT 1;
+
+query II
+SELECT * FROM t1;
+----
+1	10
+
+query I
+SELECT count(*) FROM t_aux;
+----
+0
+
+# --- Same-table modifications from multiple CTEs ---
+
+# INSERT + DELETE on the same table.
+# The DELETE CTE runs after the INSERT CTE (enforced by pipeline dependencies), so it
+# sees the newly inserted row in local (transaction-local) storage and deletes it.
+# Final state: only the pre-existing committed row remains.
+statement ok
+TRUNCATE t1;
+
+statement ok
+INSERT INTO t1 VALUES (10, 100);
+
+statement ok
+WITH ins AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     del AS (DELETE FROM t1 WHERE i = 1 RETURNING i)
+SELECT 1;
+
+query II rowsort
+SELECT * FROM t1;
+----
+10	100
+
+# Two INSERTs into the same table
+statement ok
+TRUNCATE t1;
+
+query I rowsort
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t1 VALUES (2, 20) RETURNING i)
+SELECT * FROM ins1 UNION ALL SELECT * FROM ins2;
+----
+1
+2
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	10
+2	20
+
+# --- CTE influence / ordering semantics ---
+
+# DuckDB does not implement Postgres-style statement-level snapshot isolation for
+# DML CTEs.  Instead, pipeline dependencies ensure each DML CTE completes before
+# the next one starts, so later CTEs see the effects of earlier ones on the same
+# table.
+
+statement ok
+TRUNCATE t1;
+
+# A SELECT CTE that follows an INSERT CTE on the same table sees the inserted rows,
+# because the INSERT pipeline runs before the SELECT is initialised.
+query II rowsort
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20) RETURNING i),
+     sel AS (SELECT * FROM t1)
+SELECT sel.* FROM sel;
+----
+1	10
+2	20
+
+# INSERT followed by UPDATE on the same table: the UPDATE's scan is initialised
+# after the INSERT completes, so it sees the newly inserted rows and updates them.
+statement ok
+TRUNCATE t1;
+
+statement ok
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20)),
+     upd AS (UPDATE t1 SET j = j + 1)
+SELECT 1;
+
+query II rowsort
+SELECT i, j FROM t1;
+----
+1	11
+2	21
+
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10)),
+     ins2 AS (INSERT INTO t_aux VALUES (2, 20))
+SELECT 42;
+
+query II
+SELECT * FROM t1;
+----
+1	10
+
+query II
+SELECT * FROM t_aux;
+----
+2	20
+
+# Only one referenced, both must still execute
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+query I
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t_aux VALUES (2, 20))
+SELECT * FROM ins1;
+----
+1
+
+query II
+SELECT * FROM t_aux;
+----
+2	20
+
+# --- Transaction semantics ---
+
+# ROLLBACK undoes all DML CTE effects
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+BEGIN;
+
+statement ok
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10)),
+     ins2 AS (INSERT INTO t_aux VALUES (2, 20))
+SELECT 1;
+
+statement ok
+ROLLBACK;
+
+query I
+SELECT count(*) FROM t1;
+----
+0
+
+query I
+SELECT count(*) FROM t_aux;
+----
+0
+
+# Constraint violation in a DML CTE produces an error
+statement ok
+TRUNCATE t1;
+
+statement ok
+CREATE TABLE t_unique (i INTEGER UNIQUE);
+
+statement ok
+INSERT INTO t_unique VALUES (1);
 
 statement error
-WITH ins AS (INSERT INTO t VALUES (1, 2) RETURNING i), upd AS (UPDATE t SET j = 0 RETURNING i) SELECT * FROM ins;
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10)),
+     ins2 AS (INSERT INTO t_unique VALUES (1))
+SELECT 1;
 ----
-<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+<REGEX>:.*Constraint Error.*
 
-statement error
-WITH upd AS (UPDATE t SET j = 0 RETURNING i), del AS (DELETE FROM t WHERE i = 1 RETURNING i) SELECT * FROM upd;
+statement ok
+DROP TABLE t_unique;
+
+# --- Prepared statements ---
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+PREPARE multi_dml AS
+    WITH ins1 AS (INSERT INTO t1 VALUES ($1, $2) RETURNING i),
+         ins2 AS (INSERT INTO t_aux VALUES ($3, $4) RETURNING i)
+    SELECT * FROM ins1 UNION ALL SELECT * FROM ins2;
+
+query I rowsort
+EXECUTE multi_dml(1, 10, 2, 20);
 ----
-<REGEX>:.*Only a single DML statement.*is allowed per WITH clause.*
+1
+2
+
+query II
+SELECT * FROM t1;
+----
+1	10
+
+query II
+SELECT * FROM t_aux;
+----
+2	20
+
+statement ok
+DEALLOCATE multi_dml;
+
+# --- Interaction with explicit MATERIALIZED ---
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+query I rowsort
+WITH ins1 AS MATERIALIZED (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS MATERIALIZED (INSERT INTO t_aux VALUES (2, 20) RETURNING i)
+SELECT * FROM ins1 UNION ALL SELECT * FROM ins2;
+----
+1
+2
+
+# --- Multi-DML CTEs as WITH clause of UPDATE and DELETE statements ---
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO t_aux VALUES (100, 1000);
+
+# Two DML CTEs targeting DIFFERENT tables, feeding an UPDATE as the main statement
+query II rowsort
+WITH ins AS (INSERT INTO t_aux VALUES (200, 2000) RETURNING i),
+     del AS (DELETE FROM t1 WHERE i = 1 RETURNING i)
+UPDATE t1 SET j = j + 1 WHERE i = 2 RETURNING *;
+----
+2	21
+
+query II rowsort
+SELECT * FROM t_aux;
+----
+100	1000
+200	2000
+
+query II
+SELECT * FROM t1;
+----
+2	21
+
+# --- Multi-DML CTEs with SELECT CTEs in the same WITH clause ---
+
+statement ok
+TRUNCATE t1;
+
+statement ok
+TRUNCATE t_aux;
+
+statement ok
+INSERT INTO t_aux VALUES (5, 50);
+
+query I rowsort
+WITH sel AS (SELECT * FROM t_aux),
+     ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t1 VALUES (2, 20) RETURNING i)
+SELECT * FROM ins1 UNION ALL SELECT * FROM ins2;
+----
+1
+2
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	10
+2	20
+
+# --- Same-table multi-DML: sequential execution semantics ---
+# Pipeline dependencies enforce definition order: each CTE completes before the next starts.
+# This means later CTEs always see the effects of earlier ones on the same table.
+
+# Multiple UPDATEs on the same rows of the same table.
+# upd1 runs first (j += 1), upd2 sees upd1's result and doubles it.
+# RETURNING from each reflects the state at the time that CTE executed.
+statement ok
+TRUNCATE t1;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+
+query III rowsort
+WITH upd1 AS (UPDATE t1 SET j = j + 1  WHERE i <= 2 RETURNING i, j),
+     upd2 AS (UPDATE t1 SET j = j * 2  WHERE i <= 2 RETURNING i, j)
+SELECT 'upd1', i, j FROM upd1
+UNION ALL
+SELECT 'upd2', i, j FROM upd2;
+----
+upd1	1	11
+upd1	2	21
+upd2	1	22
+upd2	2	42
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	22
+2	42
+3	30
+4	40
+
+# Multiple DELETEs on the same rows of the same table.
+# del1 runs first and removes i<=2; del2 finds those rows already gone → 0 rows deleted.
+# RETURNING from del1 shows the deleted rows; del2 returns nothing.
+statement ok
+TRUNCATE t1;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+
+query III rowsort
+WITH del1 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i, j),
+     del2 AS (DELETE FROM t1 WHERE i <= 2 RETURNING i, j)
+SELECT 'del1', i, j FROM del1
+UNION ALL
+SELECT 'del2', i, j FROM del2;
+----
+del1	1	10
+del1	2	20
+
+query II rowsort
+SELECT * FROM t1;
+----
+3	30
+4	40
+
+# Multiple UPDATE/DELETE on different (disjoint) rows of the same table.
+# upd_even updates i%2=0 rows, del_odd deletes i%2=1 rows — no overlap.
+statement ok
+TRUNCATE t1;
+
+statement ok
+INSERT INTO t1 VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+
+query II rowsort
+WITH upd_even AS (UPDATE t1 SET j = j + 100 WHERE i % 2 = 0 RETURNING i, j),
+     del_odd  AS (DELETE FROM t1 WHERE i % 2 = 1 RETURNING i, j)
+SELECT * FROM upd_even UNION ALL SELECT * FROM del_odd;
+----
+1	10
+2	120
+3	30
+4	140
+
+query II rowsort
+SELECT * FROM t1;
+----
+2	120
+4	140
+
+# INSERT + UPDATE on the same table.
+# The UPDATE CTE runs after the INSERT CTE, so it sees the newly inserted rows
+# in local (transaction-local) storage and updates them too.
+statement ok
+TRUNCATE t1;
+
+query II rowsort
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20) RETURNING i, j),
+     upd AS (UPDATE t1 SET j = j + 1 RETURNING i, j)
+SELECT * FROM ins;
+----
+1	10
+2	20
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	11
+2	21
+
+# Three DML CTEs on the same table: INSERT → UPDATE → DELETE.
+# Pipeline dependencies enforce sequential execution:
+#   ins inserts (1,10) and (2,20);
+#   upd sees both new rows and increments j → (1,11), (2,21);
+#   del sees the updated rows and deletes i=1.
+# Final state: only (2,21) remains.
+statement ok
+TRUNCATE t1;
+
+query II rowsort
+WITH ins AS (INSERT INTO t1 VALUES (1, 10), (2, 20) RETURNING i, j),
+     upd AS (UPDATE t1 SET j = j + 1 RETURNING i, j),
+     del AS (DELETE FROM t1 WHERE i = 1 RETURNING i, j)
+SELECT * FROM ins;
+----
+1	10
+2	20
+
+query II
+SELECT * FROM t1;
+----
+2	21
+
+# Three DML CTEs on the same table: INSERT → UPDATE → UPDATE.
+# ins inserts (1,10),(2,20); upd1 increments j → 11,21; upd2 doubles j → 22,42.
+# Each UPDATE sees the result of the previous one (sequential pipeline deps).
+statement ok
+TRUNCATE t1;
+
+statement ok
+WITH ins  AS (INSERT INTO t1 VALUES (1, 10), (2, 20)),
+     upd1 AS (UPDATE t1 SET j = j + 1),
+     upd2 AS (UPDATE t1 SET j = j * 2)
+SELECT 1;
+
+query II rowsort
+SELECT * FROM t1;
+----
+1	22
+2	42
+
+# Three DML CTEs on the same table: INSERT → INSERT → DELETE all.
+# ins1 inserts (1,10); ins2 inserts (2,20); del deletes every row it sees.
+# Because del runs after both inserts complete it sees all rows and removes them.
+statement ok
+TRUNCATE t1;
+
+statement ok
+WITH ins1 AS (INSERT INTO t1 VALUES (1, 10) RETURNING i),
+     ins2 AS (INSERT INTO t1 VALUES (2, 20) RETURNING i),
+     del  AS (DELETE FROM t1 RETURNING i)
+SELECT 1;
+
+query I
+SELECT count(*) FROM t1;
+----
+0
+
+# --- INSERT ON CONFLICT (upsert) as a CTE body ---
+# INSERT ON CONFLICT is internally rewritten to MERGE INTO at the binder level.
+# HasSideEffects / ContainsDML must recognise LOGICAL_MERGE_INTO / MERGE_INTO so
+# that upsert CTEs are treated as DML CTEs: never inlined, never silently dropped.
+
+statement ok
+CREATE TABLE upsert_t (i INTEGER PRIMARY KEY, j INTEGER);
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10), (2, 20);
+
+# Referenced upsert CTE: updates existing row and inserts new one.
+query II rowsort
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (2, 99), (3, 30)
+    ON CONFLICT (i) DO UPDATE SET j = excluded.j
+    RETURNING i, j
+)
+SELECT * FROM ups;
+----
+2	99
+3	30
+
+query II rowsort
+SELECT * FROM upsert_t;
+----
+1	10
+2	99
+3	30
+
+# Unreferenced upsert CTE: side effect must still execute even though the CTE
+# is not used in the outer SELECT.  Previously LOGICAL_MERGE_INTO was missing
+# from HasSideEffects, causing the CTE to be silently dropped.
+statement ok
+TRUNCATE upsert_t;
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10);
+
+statement ok
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (2, 20) ON CONFLICT (i) DO NOTHING
+)
+SELECT 1;
+
+query II rowsort
+SELECT * FROM upsert_t;
+----
+1	10
+2	20
+
+# Upsert CTE followed by scan of the same table: the scan runs after the upsert
+# completes (pipeline dependency via MERGE_INTO in ContainsDML).
+statement ok
+TRUNCATE upsert_t;
+
+statement ok
+INSERT INTO upsert_t VALUES (1, 10);
+
+query II rowsort
+WITH ups AS (
+    INSERT INTO upsert_t VALUES (1, 99), (2, 20)
+    ON CONFLICT (i) DO UPDATE SET j = excluded.j
+    RETURNING i, j
+)
+SELECT * FROM upsert_t;
+----
+1	99
+2	20
+
+statement ok
+DROP TABLE upsert_t;
+
+# --- Cleanup multi-DML tables ---
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t_aux;
 
 # DML CTEs must be at the top level (not inside subqueries)
 
@@ -459,9 +1152,69 @@ CREATE VIEW v_bad AS WITH del AS (DELETE FROM t RETURNING i) SELECT * FROM del;
 ----
 <REGEX>:.*DML statements.*are not allowed.*VIEW.*
 
+# The outer SELECT must observe rows inserted by a DML CTE in the same WITH clause.
+statement ok
+CREATE TABLE cso_t (i INTEGER);
+
+# CommonSubplanOptimizer must not merge the two SEQ_SCAN(cso_t) nodes into one.
+# The INSERT's scan reads cso_t BEFORE the insert; the outer SELECT's scan reads
+# cso_t AFTER.  If the optimizer deduplicates them into a shared materialized CTE
+# both counts would reflect the same snapshot and the row count would never grow.
+#
+# First run: cso_t is empty → INSERT inserts COUNT(i)=0 → outer SELECT sees 1 row.
+query I
+WITH cte AS (
+    INSERT INTO cso_t SELECT COUNT(i) FROM cso_t RETURNING i
+) SELECT COUNT(i) FROM cso_t;
+----
+1
+
+# Second run: cso_t has 1 row → INSERT inserts COUNT(i)=1 → outer SELECT sees 2 rows.
+query I
+WITH cte AS (
+    INSERT INTO cso_t SELECT COUNT(i) FROM cso_t RETURNING i
+) SELECT COUNT(i) FROM cso_t;
+----
+2
+
+statement ok
+DROP TABLE cso_t;
+
+# StatisticsPropagator must not eliminate the outer query using plan-time stats.
+# When the table is empty at plan time the propagator would previously replace
+# "SELECT * FROM t WHERE i = 1" with EMPTY_RESULT, producing 0 rows even after
+# the INSERT CTE populated the table.
+statement ok
+CREATE TABLE stats_t (i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO stats_t VALUES (1), (2), (3) RETURNING i)
+SELECT * FROM stats_t WHERE i = 2;
+----
+2
+
+statement ok
+DROP TABLE stats_t;
+
+# CTEInlining must not inline a DML CTE.
+# Previously, a DML CTE referenced exactly once could be inlined (removing the
+# LOGICAL_MATERIALIZED_CTE wrapper), which caused the INSERT to execute inside
+# the query pipeline rather than before it, so the outer scan saw 0 rows.
+statement ok
+CREATE TABLE cte_inline_t (i INTEGER);
+
+query I
+WITH ins AS (INSERT INTO cte_inline_t VALUES (42) RETURNING i)
+SELECT COUNT(*) FROM cte_inline_t;
+----
+1
+
+statement ok
+DROP TABLE cte_inline_t;
+
 # Serialization: verify that views containing SELECT CTEs survive a DB restart
 # (exercises the v8 query_node field serialization path)
-load __TEST_DIR__/dml_cte_storage.db
+load {TEST_DIR}/dml_cte_storage.db
 
 statement ok
 CREATE TABLE persist_t (i INTEGER);

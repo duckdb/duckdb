@@ -7,7 +7,7 @@ static void EnumFirstFunction(DataChunk &input, ExpressionState &state, Vector &
 	D_ASSERT(types.size() == 1);
 	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
 	auto val = Value(enum_vector.GetValue(0));
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -16,7 +16,7 @@ static void EnumLastFunction(DataChunk &input, ExpressionState &state, Vector &r
 	auto enum_size = EnumType::GetSize(types[0]);
 	auto &enum_vector = EnumType::GetValuesInsertOrder(types[0]);
 	auto val = Value(enum_vector.GetValue(enum_size - 1));
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -29,7 +29,7 @@ static void EnumRangeFunction(DataChunk &input, ExpressionState &state, Vector &
 		enum_values.emplace_back(enum_vector.GetValue(i));
 	}
 	auto val = Value::LIST(LogicalType::VARCHAR, enum_values);
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -57,7 +57,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 		enum_values.emplace_back(enum_vector.GetValue(i));
 	}
 	auto val = Value::LIST(LogicalType::VARCHAR, enum_values);
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 static void EnumCodeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -71,8 +71,8 @@ static void CheckEnumParameter(const Expression &expr) {
 	}
 }
 
-static unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumFunction(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -80,8 +80,9 @@ static unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarF
 	return nullptr;
 }
 
-static unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumCodeFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
@@ -108,8 +109,8 @@ static unique_ptr<FunctionData> BindEnumCodeFunction(ClientContext &context, Sca
 	return nullptr;
 }
 
-static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                              vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	CheckEnumParameter(*arguments[1]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {

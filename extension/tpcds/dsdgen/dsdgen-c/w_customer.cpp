@@ -126,24 +126,24 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 	void *info = append_info_get(info_arr, CUSTOMER);
 	append_row_start(info);
 
-	append_key(info, r->c_customer_sk);
-	append_varchar(info, r->c_customer_id);
-	append_key(info, r->c_current_cdemo_sk);
-	append_key(info, r->c_current_hdemo_sk);
-	append_key(info, r->c_current_addr_sk);
-	append_integer(info, r->c_first_shipto_date_id);
-	append_integer(info, r->c_first_sales_date_id);
-	append_varchar(info, r->c_salutation);
-	append_varchar(info, r->c_first_name);
-	append_varchar(info, r->c_last_name);
-	append_varchar(info, r->c_preferred_cust_flag ? "Y" : "N");
-	append_integer(info, r->c_birth_day);
-	append_integer(info, r->c_birth_month);
-	append_integer(info, r->c_birth_year);
-	append_varchar(info, r->c_birth_country);
-	append_varchar(info, &r->c_login[0]);
-	append_varchar(info, &r->c_email_address[0]);
-	append_integer(info, r->c_last_review_date);
+	append_key(info, r->c_customer_sk, C_CUSTOMER_SK);
+	append_varchar(info, r->c_customer_id, C_CUSTOMER_ID);
+	append_key(info, r->c_current_cdemo_sk, C_CURRENT_CDEMO_SK);
+	append_key(info, r->c_current_hdemo_sk, C_CURRENT_HDEMO_SK);
+	append_key(info, r->c_current_addr_sk, C_CURRENT_ADDR_SK);
+	append_integer(info, r->c_first_shipto_date_id, C_FIRST_SHIPTO_DATE_ID);
+	append_integer(info, r->c_first_sales_date_id, C_FIRST_SALES_DATE_ID);
+	append_varchar(info, r->c_salutation, C_SALUTATION);
+	append_varchar(info, r->c_first_name, C_FIRST_NAME);
+	append_varchar(info, r->c_last_name, C_LAST_NAME);
+	append_varchar(info, r->c_preferred_cust_flag ? "Y" : "N", C_PREFERRED_CUST_FLAG);
+	append_integer(info, r->c_birth_day, C_BIRTH_DAY);
+	append_integer(info, r->c_birth_month, C_BIRTH_MONTH);
+	append_integer(info, r->c_birth_year, C_BIRTH_YEAR);
+	append_varchar(info, r->c_birth_country, C_BIRTH_COUNTRY);
+	append_varchar(info, &r->c_login[0], C_LOGIN);
+	append_varchar(info, &r->c_email_address[0], C_EMAIL_ADDRESS);
+	append_integer(info, r->c_last_review_date, C_LAST_REVIEW_DATE);
 
 	append_row_end(info);
 

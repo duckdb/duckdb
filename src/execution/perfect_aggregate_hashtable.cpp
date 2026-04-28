@@ -34,7 +34,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
-	auto address_data = FlatVector::GetData<uintptr_t>(addresses);
+	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	idx_t init_count = 0;
 	for (idx_t i = 0; i < total_groups; i++) {
 		address_data[init_count] = uintptr_t(data) + (tuple_size * i);
@@ -116,7 +116,7 @@ static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_d
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
 	// first we need to find the location in the HT of each of the groups
-	auto address_data = FlatVector::GetData<uintptr_t>(addresses);
+	auto address_data = FlatVector::GetDataMutable<uintptr_t>(addresses);
 	// zero-initialize the address data
 	memset(address_data, 0, groups.size() * sizeof(uintptr_t));
 	D_ASSERT(groups.ColumnCount() == group_minima.size());
@@ -166,8 +166,8 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 
 	Vector source_addresses(LogicalType::POINTER);
 	Vector target_addresses(LogicalType::POINTER);
-	auto source_addresses_ptr = FlatVector::GetData<data_ptr_t>(source_addresses);
-	auto target_addresses_ptr = FlatVector::GetData<data_ptr_t>(target_addresses);
+	auto source_addresses_ptr = FlatVector::GetDataMutable<data_ptr_t>(source_addresses);
+	auto target_addresses_ptr = FlatVector::GetDataMutable<data_ptr_t>(target_addresses);
 
 	// iterate over all entries of both hash tables and call combine for all entries that can be combined
 	data_ptr_t source_ptr = other.data;
@@ -201,19 +201,18 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 template <class T>
 static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min, idx_t mask, idx_t shift,
                                             idx_t entry_count, Vector &result) {
-	auto data = FlatVector::GetData<T>(result);
-	auto &validity_mask = FlatVector::Validity(result);
+	auto data = FlatVector::Writer<T>(result, entry_count);
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
 		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
-			validity_mask.SetInvalid(i);
+			data.WriteNull();
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
-			                               UnsafeNumericCast<int64_t>(group_index) - 1);
+			data.WriteValue(UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
+			                                     UnsafeNumericCast<int64_t>(group_index) - 1));
 		}
 	}
 }
@@ -253,7 +252,7 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 }
 
 void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	auto data_pointers = FlatVector::GetDataMutable<data_ptr_t>(addresses);
 	uint32_t group_values[STANDARD_VECTOR_SIZE];
 
 	// iterate over the HT until we either have exhausted the entire HT, or
@@ -299,7 +298,7 @@ void PerfectAggregateHashTable::Destroy() {
 	}
 	// there are aggregates with destructors: loop over the hash table
 	// and call the destructor method for each of the aggregates
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+	auto data_pointers = FlatVector::GetDataMutable<data_ptr_t>(addresses);
 	idx_t count = 0;
 
 	// iterate over all initialised slots of the hash table
