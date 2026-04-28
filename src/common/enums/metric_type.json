@@ -325,7 +325,7 @@
       {
         "name": "OPERATOR_ROW_GROUPS_SEQ_SCANNED",
         "enum_value": 99,
-        "description": "Number of row groups sequentially scanned by the operator",
+        "description": "Number of row groups sequentially scanned by this table scan operator. To compute query-level scan work, sum this metric over TABLE_SCAN operators; repeated scans of the same table are counted once per scan operator.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false
@@ -333,7 +333,7 @@
       {
         "name": "OPERATOR_ROW_GROUPS_TOTAL",
         "enum_value": 100,
-        "description": "Total number of row groups in the table being scanned",
+        "description": "Total number of row groups available to this table scan operator. To compute a query-level denominator, sum this metric over TABLE_SCAN operators; repeated scans of the same table are counted once per scan operator.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false
