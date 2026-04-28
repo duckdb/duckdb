@@ -44,6 +44,11 @@ public:
 	void Commit();
 	void Rollback(optional_ptr<ErrorData>);
 	void ClearTransaction();
+	//! Import a transaction snapshot of the form "<connection_id>/<database_name>" into the
+	//! current transaction. The current transaction must be explicit (not auto-commit) and must
+	//! not yet hold a transaction against the named database. Throws TransactionException on
+	//! any precondition or lookup failure.
+	void ImportSnapshot(const string &snapshot_id);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {

@@ -41,6 +41,75 @@ DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext 
 DuckTransaction::~DuckTransaction() {
 }
 
+bool DuckTransaction::TryAddParticipant() {
+	auto current = participant_count.load();
+	while (current > 0) {
+		if (participant_count.compare_exchange_weak(current, current + 1)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool DuckTransaction::Detach(bool rollback) {
+	if (rollback) {
+		rollback_requested.store(true);
+	}
+	auto previous = participant_count.fetch_sub(1);
+	D_ASSERT(previous > 0);
+	return previous == 1;
+}
+
+void DuckTransaction::CancelParticipation() {
+	auto previous = participant_count.fetch_sub(1);
+	D_ASSERT(previous > 1);
+	(void)previous;
+}
+
+SharedFinalizeResult DuckTransaction::FinalizeShared(ClientContext &context, TransactionManager &manager,
+                                                     bool caller_voted_rollback) {
+	SharedFinalizeResult result;
+	// Eager-fail-on-doom: if anyone has already requested rollback, this caller's COMMIT must
+	// fail even though the underlying transaction may not be finalized yet (last detacher
+	// will roll back at the storage layer).
+	bool already_doomed = rollback_requested.load();
+	if (already_doomed && !caller_voted_rollback) {
+		result.error = ErrorData(ExceptionType::TRANSACTION,
+		                         "Cannot COMMIT shared transaction: another connection has rolled back. "
+		                         "The transaction will be rolled back when the last participant detaches.");
+	}
+	bool effective_rollback = caller_voted_rollback || result.error.HasError();
+	result.was_last_detacher = Detach(effective_rollback);
+	result.committed = !effective_rollback;
+	if (!result.was_last_detacher) {
+		return result;
+	}
+	// We are the last detacher and own storage-layer finalization.
+	try {
+		if (rollback_requested.load()) {
+			manager.RollbackTransaction(*this);
+			result.committed = false;
+		} else {
+			auto storage_error = manager.CommitTransaction(context, *this);
+			if (storage_error.HasError()) {
+				result.error.Merge(storage_error);
+				result.committed = false;
+			}
+		}
+	} catch (std::exception &ex) {
+		result.error.Merge(ErrorData(ex));
+		result.committed = false;
+	}
+	return result;
+}
+
+unique_lock<mutex> DuckTransaction::LockSharedStatement() {
+	if (!IsShared()) {
+		return unique_lock<mutex>();
+	}
+	return unique_lock<mutex>(statement_lock);
+}
+
 DuckTransaction &DuckTransaction::Get(ClientContext &context, AttachedDatabase &db) {
 	return DuckTransaction::Get(context, db.GetCatalog());
 }

@@ -4,9 +4,21 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
+
+bool TransactionReference::IsShared() const {
+	if (is_imported) {
+		return true;
+	}
+	if (!transaction.IsDuckTransaction()) {
+		return false;
+	}
+	auto &duck = transaction.Cast<DuckTransaction>();
+	return duck.IsShared() || duck.RollbackRequested();
+}
 
 MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p,
                                  transaction_t transaction_id_p)
@@ -105,6 +117,34 @@ Transaction &Transaction::Get(ClientContext &context, Catalog &catalog) {
 	return Transaction::Get(context, catalog.GetAttached());
 }
 
+void MetaTransaction::ImportTransaction(AttachedDatabase &db, Transaction &transaction) {
+	lock_guard<mutex> guard(lock);
+	if (transactions.find(db) != transactions.end()) {
+		throw TransactionException(
+		    "Cannot import a transaction snapshot for database '%s': this connection already has a "
+		    "transaction open against that database",
+		    db.GetName());
+	}
+	transaction.active_query = active_query.load();
+#ifdef DEBUG
+	VerifyAllTransactionsUnique(db, all_transactions);
+#endif
+	all_transactions.push_back(db);
+	transactions.insert(make_pair(reference<AttachedDatabase>(db), TransactionReference(transaction, true)));
+	auto shared_db = db.shared_from_this();
+	UseDatabase(shared_db);
+}
+
+bool MetaTransaction::IsParticipatingInSharedTransaction() {
+	lock_guard<mutex> guard(lock);
+	for (auto &entry : transactions) {
+		if (entry.second.IsShared()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 ErrorData MetaTransaction::Commit() {
 	ErrorData error;
 #ifdef DEBUG
@@ -132,6 +172,17 @@ ErrorData MetaTransaction::Commit() {
 		}
 		auto &transaction = transaction_ref.transaction;
 		try {
+			if (transaction_ref.IsShared()) {
+				// All shared-lifecycle bookkeeping (eager-doom, decrement, finalize-if-last)
+				// lives in DuckTransaction::FinalizeShared.
+				auto result = transaction.Cast<DuckTransaction>().FinalizeShared(context, transaction_manager,
+				                                                                 /*caller_voted_rollback=*/false);
+				if (result.error.HasError()) {
+					error.Merge(result.error);
+				}
+				transaction_ref.state = result.committed ? TransactionState::COMMITTED : TransactionState::ROLLED_BACK;
+				continue;
+			}
 			if (!error.HasError()) {
 				// Commit the transaction.
 				error = transaction_manager.CommitTransaction(context, transaction);
@@ -163,7 +214,15 @@ void MetaTransaction::Rollback() {
 		}
 		try {
 			auto &transaction = transaction_ref.transaction;
-			transaction_manager.RollbackTransaction(transaction);
+			if (transaction_ref.IsShared()) {
+				auto result = transaction.Cast<DuckTransaction>().FinalizeShared(context, transaction_manager,
+				                                                                 /*caller_voted_rollback=*/true);
+				if (result.error.HasError()) {
+					error.Merge(result.error);
+				}
+			} else {
+				transaction_manager.RollbackTransaction(transaction);
+			}
 		} catch (std::exception &ex) {
 			error.Merge(ErrorData(ex));
 		}

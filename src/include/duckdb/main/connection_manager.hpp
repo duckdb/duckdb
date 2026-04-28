@@ -32,6 +32,9 @@ public:
 	idx_t GetConnectionCount() const;
 
 	void AssignConnectionId(Connection &connection);
+	//! Look up a live connection by its assigned connection id. Returns nullptr if no live
+	//! connection with that id exists in this DatabaseInstance.
+	shared_ptr<ClientContext> FindByConnectionId(connection_t connection_id);
 
 	static ConnectionManager &Get(DatabaseInstance &db);
 	static ConnectionManager &Get(ClientContext &context);

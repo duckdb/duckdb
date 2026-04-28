@@ -7,6 +7,8 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -15,6 +17,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 SourceResultType PhysicalAttach::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
+	// ATTACH inside a shared transaction would mutate the database set asymmetrically across
+	// participants. The shared transaction's database set is fixed at import time.
+	if (context.client.transaction.HasActiveTransaction() &&
+	    MetaTransaction::Get(context.client).IsParticipatingInSharedTransaction()) {
+		throw TransactionException("ATTACH cannot be issued inside a shared transaction");
+	}
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	// construct the options

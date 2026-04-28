@@ -7,6 +7,11 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -117,6 +122,75 @@ idx_t TransactionContext::GetActiveQuery() {
 void TransactionContext::ResetActiveQuery() {
 	if (current_transaction) {
 		SetActiveQuery(MAXIMUM_QUERY_ID);
+	}
+}
+
+void TransactionContext::ImportSnapshot(const string &snapshot_id) {
+	if (auto_commit) {
+		throw TransactionException(
+		    "SET TRANSACTION SNAPSHOT can only be used inside an explicit transaction (use BEGIN first)");
+	}
+	if (!current_transaction) {
+		throw TransactionException("SET TRANSACTION SNAPSHOT called without an active transaction");
+	}
+	auto slash = snapshot_id.find('/');
+	if (slash == string::npos || slash == 0 || slash == snapshot_id.size() - 1) {
+		throw TransactionException("Invalid transaction snapshot id '%s': expected '<connection_id>/<database_name>'",
+		                           snapshot_id);
+	}
+	auto conn_id_str = snapshot_id.substr(0, slash);
+	auto db_name = snapshot_id.substr(slash + 1);
+	uint64_t conn_id_raw;
+	if (!TryCast::Operation<string_t, uint64_t>(string_t(conn_id_str), conn_id_raw)) {
+		throw TransactionException("Invalid transaction snapshot id '%s': connection id is not a number", snapshot_id);
+	}
+	auto conn_id = static_cast<connection_t>(conn_id_raw);
+	if (conn_id == context.GetConnectionId()) {
+		throw TransactionException("Cannot import a transaction snapshot from the same connection");
+	}
+	auto &connection_manager = ConnectionManager::Get(context);
+	auto owner_context = connection_manager.FindByConnectionId(conn_id);
+	if (!owner_context) {
+		throw TransactionException("Invalid transaction snapshot id '%s': no live connection with id %llu", snapshot_id,
+		                           static_cast<uint64_t>(conn_id));
+	}
+	if (!owner_context->transaction.HasActiveTransaction()) {
+		throw TransactionException(
+		    "Invalid transaction snapshot id '%s': owner connection is not currently in a transaction", snapshot_id);
+	}
+	auto &owner_meta = owner_context->transaction.ActiveTransaction();
+	optional_ptr<AttachedDatabase> matching_db;
+	for (auto &db_ref : owner_meta.OpenedTransactions()) {
+		auto &db = db_ref.get();
+		if (StringUtil::CIEquals(db.GetName(), db_name)) {
+			matching_db = &db;
+			break;
+		}
+	}
+	if (!matching_db) {
+		throw TransactionException(
+		    "Invalid transaction snapshot id '%s': owner has not yet started a transaction against database '%s'",
+		    snapshot_id, db_name);
+	}
+	auto owner_transaction = owner_meta.TryGetTransaction(*matching_db);
+	if (!owner_transaction) {
+		throw TransactionException("Invalid transaction snapshot id '%s': owner has no transaction for database '%s'",
+		                           snapshot_id, db_name);
+	}
+	if (!owner_transaction->IsDuckTransaction()) {
+		throw TransactionException("Database '%s' does not support shared transactions (not a DuckDB-managed database)",
+		                           db_name);
+	}
+	auto &duck_transaction = owner_transaction->Cast<DuckTransaction>();
+	if (!duck_transaction.TryAddParticipant()) {
+		throw TransactionException("Invalid transaction snapshot id '%s': transaction has already been finalized",
+		                           snapshot_id);
+	}
+	try {
+		current_transaction->ImportTransaction(*matching_db, duck_transaction);
+	} catch (...) {
+		duck_transaction.CancelParticipation();
+		throw;
 	}
 }
 

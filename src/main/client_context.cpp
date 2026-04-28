@@ -1,4 +1,6 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -84,6 +86,12 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Statement locks held on any shared DuckTransactions referenced by the active
+	//! MetaTransaction. Released automatically when this struct is destroyed (i.e. at
+	//! end of query), serializing concurrent statements across all connections that share
+	//! a transaction. Only populated when the active MetaTransaction references a shared
+	//! DuckTransaction; otherwise empty (zero overhead for unshared queries).
+	vector<unique_lock<mutex>> shared_statement_guards;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -254,6 +262,27 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	active_query = make_uniq<ActiveQueryContext>();
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
+	}
+
+	// If this MetaTransaction references any shared DuckTransactions, acquire each one's
+	// statement lock for the duration of the query. Preserves the single-writer-per-
+	// DuckTransaction invariant across the owner and any participants.
+	//
+	// Lock ordering: MetaTransaction::lock is acquired and released inside TryGetTransaction
+	// before we attempt LockSharedStatement on the returned DuckTransaction. Do not invert.
+	{
+		auto &meta = transaction.ActiveTransaction();
+		for (auto &db_ref : meta.OpenedTransactions()) {
+			auto txn = meta.TryGetTransaction(db_ref.get());
+			if (!txn || !txn->IsDuckTransaction()) {
+				continue;
+			}
+			auto &duck = txn->Cast<DuckTransaction>();
+			auto guard = duck.LockSharedStatement();
+			if (guard.owns_lock()) {
+				active_query->shared_statement_guards.push_back(std::move(guard));
+			}
+		}
 	}
 
 	transaction.SetActiveQuery(db->GetDatabaseManager().GetNewQueryNumber());

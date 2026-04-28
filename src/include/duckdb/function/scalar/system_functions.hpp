@@ -65,6 +65,16 @@ struct CurrentTransactionId {
 	static ScalarFunction GetFunction();
 };
 
+struct ExportTransactionSnapshot {
+	static constexpr const char *Name = "duckdb_export_transaction";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Export the current transaction so other connections can attach to it via SET TRANSACTION SNAPSHOT. Returns '<connection_id>/<database>' for the database currently being modified, or the search-path default database if none has been modified yet.";
+	static constexpr const char *Example = "duckdb_export_transaction()";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentQueryId {
 	static constexpr const char *Name = "current_query_id";
 	static constexpr const char *Parameters = "";

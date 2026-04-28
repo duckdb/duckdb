@@ -5445,19 +5445,20 @@ const StringUtil::EnumStringLiteral *GetTransactionTypeValues() {
 		{ static_cast<uint32_t>(TransactionType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(TransactionType::BEGIN_TRANSACTION), "BEGIN_TRANSACTION" },
 		{ static_cast<uint32_t>(TransactionType::COMMIT), "COMMIT" },
-		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" }
+		{ static_cast<uint32_t>(TransactionType::ROLLBACK), "ROLLBACK" },
+		{ static_cast<uint32_t>(TransactionType::SET_SNAPSHOT), "SET_SNAPSHOT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TransactionType>(TransactionType value) {
-	return StringUtil::EnumToString(GetTransactionTypeValues(), 4, "TransactionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTransactionTypeValues(), 5, "TransactionType", static_cast<uint32_t>(value));
 }
 
 template<>
 TransactionType EnumUtil::FromString<TransactionType>(const char *value) {
-	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 4, "TransactionType", value));
+	return static_cast<TransactionType>(StringUtil::StringToEnum(GetTransactionTypeValues(), 5, "TransactionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTriggerEventTypeValues() {

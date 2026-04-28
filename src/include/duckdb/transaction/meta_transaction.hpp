@@ -26,12 +26,26 @@ class Transaction;
 enum class TransactionState { UNCOMMITTED, COMMITTED, ROLLED_BACK };
 
 struct TransactionReference {
-	explicit TransactionReference(Transaction &transaction_p)
-	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p) {
+	explicit TransactionReference(Transaction &transaction_p, bool is_imported_p = false)
+	    : state(TransactionState::UNCOMMITTED), transaction(transaction_p), is_imported(is_imported_p) {
 	}
 
 	TransactionState state;
 	Transaction &transaction;
+	//! True if this transaction was imported via SET TRANSACTION SNAPSHOT (the underlying
+	//! DuckTransaction is owned by another connection's MetaTransaction). Imported transactions
+	//! detach via DuckTransaction::FinalizeShared instead of going through
+	//! TransactionManager::Commit / Rollback for this MetaTransaction.
+	bool is_imported;
+
+	//! Whether this reference's lifecycle is shared with other MetaTransactions and therefore
+	//! requires the FinalizeShared path. True when:
+	//!   - we imported it (foreign DuckTransaction we don't own), or
+	//!   - we own it but other participants are currently attached (IsShared), or
+	//!   - we own it but a previous detacher has already voted rollback (RollbackRequested),
+	//!     in which case we still need the doom-aware finalize even if no participants remain.
+	//! This is the canonical "do not call TransactionManager::Commit/Rollback directly" check.
+	bool IsShared() const;
 };
 
 //! The MetaTransaction manages multiple transactions for different attached databases
@@ -59,6 +73,13 @@ public:
 	Transaction &GetTransaction(AttachedDatabase &db);
 	optional_ptr<Transaction> TryGetTransaction(AttachedDatabase &db);
 	void RemoveTransaction(AttachedDatabase &db);
+	//! Import an existing DuckTransaction belonging to another connection. The participant_count
+	//! on the DuckTransaction must already have been bumped by the caller (via TryAddParticipant).
+	void ImportTransaction(AttachedDatabase &db, Transaction &transaction);
+	//! Whether this MetaTransaction is part of a shared session (in either role): it has
+	//! imported a transaction from another connection, or another connection has imported a
+	//! transaction it owns. Used by ATTACH/DETACH guards.
+	bool IsParticipatingInSharedTransaction();
 
 	ErrorData Commit();
 	void Rollback();

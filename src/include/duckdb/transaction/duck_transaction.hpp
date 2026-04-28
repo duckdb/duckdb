@@ -24,6 +24,7 @@ class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
+class TransactionManager;
 struct DataTableInfo;
 struct UndoBufferProperties;
 
@@ -31,6 +32,22 @@ struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
+};
+
+//! Result of DuckTransaction::FinalizeShared. Conveys both the local outcome (whether COMMIT
+//! was rejected because the transaction is doomed) and whether this caller drove the
+//! storage-layer finalize (last detacher).
+struct SharedFinalizeResult {
+	//! True iff this caller's Detach() dropped participant_count to zero, meaning we ran the
+	//! storage-layer commit-or-rollback through the TransactionManager. Other detachers
+	//! (count went 1 → 0 was someone else) leave this false.
+	bool was_last_detacher;
+	//! True iff this MetaTransaction's COMMIT/ROLLBACK is recorded as committed. False when
+	//! either the caller voted rollback or another participant had already doomed the txn.
+	bool committed;
+	//! Any error to surface to the caller. Includes the eager-doom error and any storage
+	//! finalization error from CommitTransaction/RollbackTransaction.
+	ErrorData error;
 };
 
 class DuckTransaction : public Transaction {
@@ -102,6 +119,40 @@ public:
 		is_checkpoint_transaction = true;
 	}
 
+	//! Whether this transaction is currently shared with more than one MetaTransaction.
+	bool IsShared() const {
+		return participant_count.load() > 1;
+	}
+	idx_t ParticipantCount() const {
+		return participant_count.load();
+	}
+	bool RollbackRequested() const {
+		return rollback_requested.load();
+	}
+	//! Attempt to add a participant. Returns false if the transaction has already been finalized
+	//! (participant_count reached 0 - cannot revive). Used by SET TRANSACTION SNAPSHOT import.
+	bool TryAddParticipant();
+	//! Decrement the participant count. If rollback is true, sets rollback_requested. Returns
+	//! true iff this caller is the last detacher (participant_count went to 0) and is therefore
+	//! responsible for finalizing the underlying DuckTransaction at the storage layer.
+	bool Detach(bool rollback);
+	//! Undo a TryAddParticipant() that was not followed by a successful import. Decrements
+	//! participant_count without touching rollback_requested. Must NOT be used as a substitute
+	//! for Detach() — this is purely a setup-failure rollback.
+	void CancelParticipation();
+	//! Detach + finalize-if-last in one call. Used by MetaTransaction::Commit/Rollback when a
+	//! TransactionReference is shared (see TransactionReference::IsShared). Encapsulates the
+	//! eager-fail-on-doom check and the conditional CommitTransaction/RollbackTransaction call
+	//! through the per-database TransactionManager.
+	SharedFinalizeResult FinalizeShared(ClientContext &context, TransactionManager &manager,
+	                                    bool caller_voted_rollback);
+	//! Acquire the shared-statement lock. Returns an empty unique_lock if the transaction is
+	//! not currently shared (participant_count == 1). Callers should treat an empty lock as a
+	//! no-op. A doomed-but-no-longer-shared transaction (rollback_requested set, count back at 1)
+	//! also returns an empty lock — only the sole remaining holder can mutate it, and it is
+	//! about to be rolled back regardless.
+	unique_lock<mutex> LockSharedStatement();
+
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
 	//! or deleted
@@ -126,6 +177,17 @@ private:
 	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
+	//! Number of MetaTransactions currently referencing this DuckTransaction (1 = owner only,
+	//! >1 = shared with one or more participants). Bumped on import, decremented on detach.
+	atomic<idx_t> participant_count {1};
+	//! Set if any referencing MetaTransaction asked to roll this transaction back. Once set, the
+	//! last detacher rolls back instead of committing, and any further COMMIT attempts on this
+	//! transaction throw eagerly.
+	atomic<bool> rollback_requested {false};
+	//! Serializes statement execution across owner + participants while the transaction is shared.
+	//! Preserves the single-writer-per-DuckTransaction invariant (LocalStorage / UndoBuffer / per-
+	//! table local indexes were designed assuming one query thread mutates at a time).
+	mutex statement_lock;
 };
 
 } // namespace duckdb

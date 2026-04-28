@@ -42,4 +42,13 @@ unique_ptr<TransactionStatement> PEGTransformerFactory::TransformCommitTransacti
 unique_ptr<TransactionStatement> PEGTransformerFactory::TransformRollbackTransaction(PEGTransformer &, ParseResult &) {
 	return make_uniq<TransactionStatement>(make_uniq<TransactionInfo>(TransactionType::ROLLBACK));
 }
+
+unique_ptr<TransactionStatement> PEGTransformerFactory::TransformSetTransactionSnapshot(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	// SetTransactionSnapshot <- 'SET' Transaction 'SNAPSHOT' StringLiteral
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto info = make_uniq<TransactionInfo>(TransactionType::SET_SNAPSHOT);
+	info->snapshot_id = transformer.Transform<string>(list_pr.Child<StringLiteralParseResult>(3));
+	return make_uniq<TransactionStatement>(std::move(info));
+}
 } // namespace duckdb
