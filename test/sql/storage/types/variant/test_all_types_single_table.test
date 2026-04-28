@@ -29,7 +29,7 @@ query I nosort expected_res
 select * from tbl
 ----
 
-loop i 0 40
+loop i 0 41
 
 statement ok
 set variable my_type = (
