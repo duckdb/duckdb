@@ -67,7 +67,7 @@ public:
 	                                                     optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<BoundAggregateExpression>
-	BindAggregateFunction(AggregateFunction bound_function, vector<unique_ptr<Expression>> children,
+	BindAggregateFunction(const AggregateFunction &bound_function, vector<unique_ptr<Expression>> children,
 	                      unique_ptr<Expression> filter = nullptr,
 	                      AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
@@ -90,8 +90,8 @@ public:
 	unique_ptr<FunctionData> ResolveFunction(BoundScalarFunction &bound_function,
 	                                         vector<unique_ptr<Expression>> &children);
 
-	// unique_ptr<FunctionData> ResolveFunction(BoundAggregateFunction &bound_function,
-	//					 vector<unique_ptr<Expression>> &children);
+	unique_ptr<FunctionData> ResolveFunction(BoundAggregateFunction &bound_function,
+	                                         vector<unique_ptr<Expression>> &children);
 	// unique_ptr<FunctionData> ResolveFunction(BoundWindowFunction &bound_function,
 	//					 vector<unique_ptr<Expression>> &children);
 

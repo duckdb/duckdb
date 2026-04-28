@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
+BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
                                              unique_ptr<WindowFunction> window, unique_ptr<FunctionData> bind_info)
     : Expression(window.get() ? window->window_enum : ExpressionType::WINDOW_AGGREGATE, ExpressionClass::BOUND_WINDOW,
                  std::move(return_type)),
@@ -142,9 +142,9 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() const {
-	unique_ptr<AggregateFunction> agg_copy;
+	unique_ptr<BoundAggregateFunction> agg_copy;
 	if (aggregate) {
-		agg_copy = make_uniq<AggregateFunction>(*aggregate);
+		agg_copy = make_uniq<BoundAggregateFunction>(*aggregate);
 	}
 	unique_ptr<WindowFunction> win_copy;
 	if (window) {
@@ -269,13 +269,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	auto expression_type = deserializer.Get<ExpressionType>();
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<BoundAggregateFunction> aggregate;
 	unique_ptr<WindowFunction> window;
 	unique_ptr<FunctionData> bind_info;
 	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
-		auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		auto entry = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
 		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
-		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
+		aggregate = make_uniq<BoundAggregateFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);
 	} else if (expression_type == ExpressionType::WINDOW_FUNCTION) {
 		//	New window function

@@ -208,7 +208,7 @@ public:
 	bind_scalar_function_t GetBindCallback() const { return callbacks.bind; };
 	void SetBindCallback(bind_scalar_function_t callback) { callbacks.bind = callback; }
 
-	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments, optional_ptr<Binder> binder = nullptr);
+	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments, optional_ptr<Binder> binder = nullptr) const;
 
 	bool HasBindLambdaCallback() const { return callbacks.bind_lambda != nullptr; }
 	bind_lambda_function_t GetBindLambdaCallback() const { return callbacks.bind_lambda; }

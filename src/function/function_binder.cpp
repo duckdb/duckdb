@@ -763,15 +763,16 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 	return result;
 }
 
-unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
-                                                                           vector<unique_ptr<Expression>> children,
-                                                                           unique_ptr<Expression> filter,
-                                                                           AggregateType aggr_type) {
+unique_ptr<FunctionData> FunctionBinder::ResolveFunction(BoundAggregateFunction &bound_function,
+                                                         vector<unique_ptr<Expression>> &children) {
 	ResolveTemplateTypes(bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
+
 	if (bound_function.HasBindCallback()) {
-		bind_info = bound_function.Bind(context, children);
+		BindAggregateFunctionInput input(context, bound_function, children);
+		bind_info = bound_function.GetBindCallback()(input);
+
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
 	}
@@ -780,6 +781,18 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
+
+	return bind_info;
+}
+
+unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const AggregateFunction &function,
+                                                                           vector<unique_ptr<Expression>> children,
+                                                                           unique_ptr<Expression> filter,
+                                                                           AggregateType aggr_type) {
+	// Make a BoundFunction out of the func
+	BoundAggregateFunction bound_function(function);
+
+	auto bind_info = ResolveFunction(bound_function, children);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
 	                                           std::move(bind_info), aggr_type);

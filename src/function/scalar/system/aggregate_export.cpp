@@ -21,10 +21,10 @@ namespace {
 
 // aggregate state export
 struct ExportAggregateBindData : public FunctionData {
-	AggregateFunction aggr;
+	BoundAggregateFunction aggr;
 	idx_t state_size;
 
-	explicit ExportAggregateBindData(AggregateFunction aggr_p, idx_t state_size_p)
+	explicit ExportAggregateBindData(BoundAggregateFunction aggr_p, idx_t state_size_p)
 	    : aggr(std::move(aggr_p)), state_size(state_size_p) {
 	}
 
@@ -651,18 +651,21 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", state_type.function_name);
 	}
-	auto &aggr = func.Cast<AggregateFunctionCatalogEntry>();
+	auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
 
 	ErrorData error;
 
 	FunctionBinder function_binder(context);
 	auto best_function =
-	    function_binder.BindFunction(aggr.name, aggr.functions, state_type.bound_argument_types, error);
+	    function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, state_type.bound_argument_types, error);
 	if (!best_function.IsValid()) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());
 	}
-	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+
+	BoundAggregateFunction bound_aggr(aggr);
+
 	if (bound_aggr.GetBindCallback()) {
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
@@ -671,7 +674,8 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		for (auto &arg_type : state_type.bound_argument_types) {
 			args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
 		}
-		auto bind_info = bound_aggr.Bind(context, args);
+
+		auto bind_info = function_binder.ResolveFunction(bound_aggr, args);
 		if (bind_info) {
 			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
 		}
@@ -748,11 +752,11 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 }
 
 void ExportStateAggregateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                   const AggregateFunction &function) {
+                                   const BoundAggregateFunction &function) {
 	throw NotImplementedException("FIXME: export state serialize");
 }
 
-unique_ptr<FunctionData> ExportStateAggregateDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+unique_ptr<FunctionData> ExportStateAggregateDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	throw NotImplementedException("FIXME: export state deserialize");
 }
 

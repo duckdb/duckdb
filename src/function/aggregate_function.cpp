@@ -1,4 +1,5 @@
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,12 @@ bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rh
 }
 
 AggregateFunctionInfo::~AggregateFunctionInfo() {
+}
+
+unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &context,
+                                                             vector<unique_ptr<Expression>> arguments) const {
+	FunctionBinder func_binder(context);
+	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
 } // namespace duckdb
