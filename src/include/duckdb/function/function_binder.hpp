@@ -77,7 +77,7 @@ public:
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
 	DUCKDB_API unique_ptr<BoundWindowExpression>
-	BindWindowFunction(WindowFunction bound_function, vector<unique_ptr<Expression>> children,
+	BindWindowFunction(const WindowFunction &bound_function, vector<unique_ptr<Expression>> children,
 	                   vector<OrderByNode> &orders, vector<OrderByNode> &arg_orders,
 	                   AggregateType aggr_type = AggregateType::NON_DISTINCT);
 
@@ -92,8 +92,10 @@ public:
 
 	unique_ptr<FunctionData> ResolveFunction(BoundAggregateFunction &bound_function,
 	                                         vector<unique_ptr<Expression>> &children);
-	// unique_ptr<FunctionData> ResolveFunction(BoundWindowFunction &bound_function,
-	//					 vector<unique_ptr<Expression>> &children);
+	unique_ptr<FunctionData> ResolveFunction(BoundWindowFunction &bound_function,
+	                                         vector<unique_ptr<Expression>> &children,
+	                                         optional_ptr<vector<OrderByNode>> orders = nullptr,
+	                                         optional_ptr<vector<OrderByNode>> arg_orders = nullptr);
 
 private:
 	optional_idx BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);

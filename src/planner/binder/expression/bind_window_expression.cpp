@@ -201,7 +201,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	//  Determine the function type.
 	LogicalType sql_type;
 	unique_ptr<BoundAggregateFunction> aggregate;
-	unique_ptr<WindowFunction> window_func;
+	unique_ptr<BoundWindowFunction> window_func;
 	unique_ptr<FunctionData> bind_info;
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();

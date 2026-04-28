@@ -31,6 +31,7 @@ add_library_unity(
   scalar_function.cpp
   table_function.cpp
   udf_function.cpp
+  window_function.cpp
   copy_blob.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_function>

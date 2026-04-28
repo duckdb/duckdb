@@ -798,17 +798,17 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(const
 	                                           std::move(bind_info), aggr_type);
 }
 
-unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunction bound_function,
-                                                                     vector<unique_ptr<Expression>> children,
-                                                                     vector<OrderByNode> &orders,
-                                                                     vector<OrderByNode> &arg_orders,
-                                                                     AggregateType aggr_type) {
+unique_ptr<FunctionData> FunctionBinder::ResolveFunction(BoundWindowFunction &bound_function,
+                                                         vector<unique_ptr<Expression>> &children,
+                                                         optional_ptr<vector<OrderByNode>> orders,
+                                                         optional_ptr<vector<OrderByNode>> arg_orders) {
 	ResolveTemplateTypes(bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
+
 	if (bound_function.HasBindCallback()) {
-		BindWindowFunctionInput bind_input(context, bound_function, children, &orders, &arg_orders);
-		bind_info = bound_function.Bind(bind_input);
+		BindWindowFunctionInput input(context, bound_function, children, orders, arg_orders);
+		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
 	}
@@ -818,9 +818,21 @@ unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(WindowFunct
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	auto window = make_uniq<WindowFunction>(bound_function);
-	auto result = make_uniq<BoundWindowExpression>(bound_function.GetReturnType(), nullptr, std::move(window),
-	                                               std::move(bind_info));
+	return bind_info;
+}
+
+unique_ptr<BoundWindowExpression> FunctionBinder::BindWindowFunction(const WindowFunction &function,
+                                                                     vector<unique_ptr<Expression>> children,
+                                                                     vector<OrderByNode> &orders,
+                                                                     vector<OrderByNode> &arg_orders,
+                                                                     AggregateType aggr_type) {
+	BoundWindowFunction bound_function(function);
+
+	auto bind_info = ResolveFunction(bound_function, children, orders, arg_orders);
+	auto return_type = bound_function.GetReturnType();
+
+	auto window = make_uniq<BoundWindowFunction>(std::move(bound_function));
+	auto result = make_uniq<BoundWindowExpression>(return_type, nullptr, std::move(window), std::move(bind_info));
 	result->children = std::move(children);
 
 	return result;

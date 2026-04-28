@@ -231,6 +231,8 @@ public:
 			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
 		} else if constexpr (std::is_same_v<FUNC, BoundAggregateFunction>) {
 			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
+		} else if constexpr (std::is_same_v<FUNC, BoundWindowFunction>) {
+			return NewDeserialize<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children, return_type);
 		} else {
 			auto &context = deserializer.Get<ClientContext &>();
 			auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);

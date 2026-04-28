@@ -305,9 +305,7 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
-		auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-		auto row_number =
-		    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
+		auto row_number = RowNumberFun::GetFunction().Bind(context);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;

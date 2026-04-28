@@ -199,9 +199,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		auto col_ref = make_uniq<BoundReferenceExpression>(col_type, col_idx);
 		aggr_children.push_back(std::move(col_ref));
 
-		auto first_aggregate = FirstFunctionGetter::GetFunction(col_type);
-		auto aggr_expr = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+		auto aggr_expr = FirstFunctionGetter::GetFunction(col_type).Bind(context, std::move(aggr_children));
+
 		D_ASSERT(col_type == aggr_expr->return_type);
 		aggregates.emplace_back(std::move(aggr_expr));
 	}
@@ -239,7 +238,10 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	// Add a synthetic primary integer key to the probe relation using streaming windowing.
 	auto row_number = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 	vector<unique_ptr<Expression>> window_select;
-	auto pk = make_uniq<BoundWindowExpression>(pk_type, nullptr, std::move(row_number), nullptr);
+
+	auto pk = RowNumberFun::GetFunction().Bind(context);
+	D_ASSERT(pk->return_type == pk_type);
+
 	pk->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	pk->end = WindowBoundary::CURRENT_ROW_ROWS;
 	pk->alias = "row_number";
@@ -362,29 +364,39 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	auto &asof_comp = op.conditions[asof_idx];
 	auto &asof_column = asof_comp.RightReference();
 	auto asof_type = asof_column->return_type;
-	auto lead2 = make_uniq<WindowFunction>(LeadFun::GetTypedFunction(asof_type, 3));
-	auto asof_end = make_uniq<BoundWindowExpression>(asof_type, nullptr, std::move(lead2), nullptr);
-	asof_end->children.emplace_back(asof_column->Copy());
+
+	vector<unique_ptr<Expression>> children;
+	vector<unique_ptr<Expression>> partitions;
+	vector<BoundOrderByNode> orders;
+
+	children.emplace_back(asof_column->Copy());
+
 	// TODO: If infinities are not supported for a type, fake them by looking at LHS statistics?
-	asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));
+	children.emplace_back(make_uniq<BoundConstantExpression>(Value::BIGINT(1)));
 	for (auto equi_idx : equi_indexes) {
-		asof_end->partitions.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
+		partitions.emplace_back(op.conditions[equi_idx].GetRHS().Copy());
 	}
 	switch (asof_comp.GetComparisonType()) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case ExpressionType::COMPARE_GREATERTHAN:
-		asof_end->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
-		asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::Infinity(asof_type)));
+		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
+		children.emplace_back(make_uniq<BoundConstantExpression>(Value::Infinity(asof_type)));
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
-		asof_end->orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
-		asof_end->children.emplace_back(make_uniq<BoundConstantExpression>(Value::NegativeInfinity(asof_type)));
+		orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_FIRST, asof_column->Copy());
+		children.emplace_back(make_uniq<BoundConstantExpression>(Value::NegativeInfinity(asof_type)));
 		break;
 	default:
 		throw InternalException("Invalid ASOF JOIN ordering for WINDOW");
 	}
 
+	auto asof_end = LeadFun::GetTypedFunction(asof_type, 3).Bind(context, std::move(children));
+
+	D_ASSERT(asof_end->return_type == asof_type);
+
+	asof_end->partitions = std::move(partitions);
+	asof_end->orders = std::move(orders);
 	asof_end->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	asof_end->end = WindowBoundary::CURRENT_ROW_ROWS;
 
