@@ -381,12 +381,7 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	if (function.HasBindCallback()) {
-		return function.Bind(input.GetClientContext(), arguments);
-		;
-	} else {
-		return nullptr;
-	}
+	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>
