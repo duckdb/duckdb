@@ -248,6 +248,15 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		throw BinderException("Can only merge into base tables!");
 	}
 	auto &table = *table_ptr;
+
+	bool has_triggers = false;
+	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);
+	table.ScanTriggers(transaction, [&](CatalogEntry &) { has_triggers = true; });
+	if (has_triggers && !global_binder_state->trigger_expanded_tables.count(table)) {
+		// if the table is not in the trigger_expanded tables, it means that we're on a top level MERGE INTO
+		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
+	}
+
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();

@@ -1382,7 +1382,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 	return triggers->GetEntry(transaction, entry_name);
 }
 
-void DuckTableEntry::ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
+void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,
+                                  const std::function<void(CatalogEntry &)> &callback) const {
 	triggers->Scan(transaction, callback);
 }
 

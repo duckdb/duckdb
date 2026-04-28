@@ -2,6 +2,9 @@
 # description: Test that triggers survive WAL replay (database restart without checkpoint)
 # group: [trigger]
 
+require noforcestorage
+
+
 statement ok
 SET checkpoint_threshold = '10.0 GB';
 

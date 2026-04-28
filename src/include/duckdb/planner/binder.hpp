@@ -29,7 +29,9 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/enums/trigger_type.hpp"
 
 //! fwd declare
 namespace duckdb_re2 {
@@ -183,6 +185,12 @@ struct GlobalBinderState {
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 	//! The set of parameter expressions bound by this binder
 	optional_ptr<BoundParameterMap> parameters;
+	//! Tables whose triggers have already been expanded in this query (recursion detection)
+	reference_set_t<TableCatalogEntry> trigger_expanded_tables;
+	//! Set during CREATE TRIGGER body validation to detect self-recursive writes
+	optional_ptr<TableCatalogEntry> trigger_creation_table;
+	//! Name of the trigger being created (for error messages)
+	string trigger_creation_name;
 };
 
 // QueryBinderState is state shared WITHIN a query, a new query-binder state is created when binding inside e.g. a view
@@ -453,6 +461,11 @@ private:
 	BoundStatement BindNode(QueryNode &node);
 	BoundStatement BindNode(StatementNode &node);
 	BoundStatement BindNode(InsertQueryNode &node);
+	unique_ptr<BoundStatement> TryExpandAfterTriggers(QueryNode &node,
+	                                                  vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                                  TableCatalogEntry &table, TriggerEventType event_type);
+	BoundStatement ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+	                                   const vector<const_reference<TriggerCatalogEntry>> &triggers);
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 
