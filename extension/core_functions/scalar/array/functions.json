@@ -56,5 +56,65 @@
         "categories": ["array"],
         "type": "scalar_function_set",
         "aliases": ["array_negative_dot_product"]
+    },
+    {
+        "name": "array_tensor_shape",
+        "parameters": "array",
+        "description": "Returns the dimensions of an array (possibly nested) as a list of integers.",
+        "example": "array_tensor_shape(array_value(array_value(1, 2, 3), array_value(4, 5, 6)))",
+        "categories": ["array"],
+        "type": "scalar_function",
+        "aliases": ["tensor_shape"]
+    },
+    {
+        "name": "array_transpose",
+        "parameters": "array",
+        "description": "Transposes a 2D array (matrix). The array elements can not be `NULL`.",
+        "example": "array_transpose([[1,2,3],[4,5,6]]::INT[2][3])",
+        "categories": ["array"],
+        "type": "scalar_function_set",
+        "aliases": ["transpose"]
+    },
+    {
+        "name": "array_flatten",
+        "parameters": "array",
+        "description": "Flattens a nested array to a 1D array.",
+        "example": "array_flatten([[1,2],[3,4]]::INT[2][2])",
+        "categories": ["array"],
+        "type": "scalar_function"
+    },
+    {
+        "name": "array_reshape",
+        "parameters": "array,dimensions...",
+        "description": "Reshapes an array to the specified dimensions. The total number of elements must match. Dimension arguments must be constant integers.",
+        "example": "array_reshape(array_value(1,2,3,4,5,6), 2, 3)",
+        "categories": ["array"],
+        "type": "scalar_function",
+        "aliases": ["reshape"]
+    },
+    {
+        "name": "array_matmul",
+        "parameters": "matrix1,matrix2",
+        "description": "Computes the matrix multiplication of two 2D arrays. The inner dimensions must match (A[m][k] * B[k][n] = C[m][n]). The array elements can not be `NULL`.",
+        "example": "array_matmul([[1,2],[3,4]]::FLOAT[2][2], [[5,6],[7,8]]::FLOAT[2][2])",
+        "categories": ["array"],
+        "type": "scalar_function_set",
+        "aliases": ["matmul"]
+    },
+    {
+        "name": "array_trace",
+        "parameters": "matrix",
+        "description": "Computes the trace (sum of diagonal elements) of a square 2D array. The array elements can not be `NULL`.",
+        "example": "array_trace([[1,2],[3,4]]::FLOAT[2][2])",
+        "categories": ["array"],
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "array_determinant",
+        "parameters": "matrix",
+        "description": "Computes the determinant of a square 2D array. The array elements can not be `NULL`.",
+        "example": "array_determinant([[1,2],[3,4]]::FLOAT[2][2])",
+        "categories": ["array"],
+        "type": "scalar_function_set"
     }
 ]

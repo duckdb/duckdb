@@ -1539,6 +1539,7 @@ ClientProperties ClientContext::GetClientProperties() {
 	}
 	bool arrow_use_list_view = Settings::Get<ArrowOutputListViewSetting>(*this);
 	bool arrow_lossless_conversion = Settings::Get<ArrowLosslessConversionSetting>(*this);
+	bool arrow_output_fixed_shape_tensor = Settings::Get<ArrowOutputFixedShapeTensorSetting>(*this);
 	bool arrow_use_string_view = Settings::Get<ProduceArrowStringViewSetting>(*this);
 	auto arrow_format_version = Settings::Get<ArrowOutputVersionSetting>(*this);
 	return {timezone,
@@ -1547,7 +1548,8 @@ ClientProperties ClientContext::GetClientProperties() {
 	        arrow_use_string_view,
 	        arrow_lossless_conversion,
 	        arrow_format_version,
-	        this};
+	        this,
+	        arrow_output_fixed_shape_tensor};
 }
 
 bool ClientContext::ExecutionIsFinished() {

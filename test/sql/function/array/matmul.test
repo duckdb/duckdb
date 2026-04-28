@@ -1,0 +1,148 @@
+# name: test/sql/function/array/matmul.test
+# description: Test array_matmul function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+foreach TYPE FLOAT DOUBLE
+
+# 2x2 * 2x2 matrix multiply
+query I
+SELECT array_matmul([[1,2],[3,4]]::{TYPE}[2,2], [[5,6],[7,8]]::{TYPE}[2,2]);
+----
+[[19.0, 22.0], [43.0, 50.0]]
+
+# Non-square: 2x3 * 3x2 = 2x2
+query I
+SELECT array_matmul([[1,2,3],[4,5,6]]::{TYPE}[3,2], [[7,8],[9,10],[11,12]]::{TYPE}[2,3]);
+----
+[[58.0, 64.0], [139.0, 154.0]]
+
+# Non-square: 2x3 * 3x1 = 2x1
+query I
+SELECT array_matmul([[1,2,3],[4,5,6]]::{TYPE}[3,2], [[1],[2],[3]]::{TYPE}[1,3]);
+----
+[[14.0], [32.0]]
+
+# Identity matrix multiplication
+query I
+SELECT array_matmul([[1,0],[0,1]]::{TYPE}[2,2], [[5,6],[7,8]]::{TYPE}[2,2]);
+----
+[[5.0, 6.0], [7.0, 8.0]]
+
+# 1x1 matrix multiply
+query I
+SELECT array_matmul([[3]]::{TYPE}[1,1], [[4]]::{TYPE}[1,1]);
+----
+[[12.0]]
+
+# Left NULL input
+query I
+SELECT array_matmul(NULL::{TYPE}[2,2], [[1,2],[3,4]]::{TYPE}[2,2]);
+----
+NULL
+
+# Right NULL input
+query I
+SELECT array_matmul([[1,2],[3,4]]::{TYPE}[2,2], NULL::{TYPE}[2,2]);
+----
+NULL
+
+# Both NULL
+query I
+SELECT array_matmul(NULL::{TYPE}[2,2], NULL::{TYPE}[2,2]);
+----
+NULL
+
+# Storage round-trip with columnar inputs and multiple rows
+statement ok
+CREATE OR REPLACE TABLE t_array_matmul_a (m {TYPE}[2,2]);
+
+statement ok
+CREATE OR REPLACE TABLE t_array_matmul_b (m {TYPE}[2,2]);
+
+statement ok
+INSERT INTO t_array_matmul_a VALUES
+    ([[1,2],[3,4]]::{TYPE}[2,2]),
+    ([[1,0],[0,1]]::{TYPE}[2,2]),
+    (NULL);
+
+statement ok
+INSERT INTO t_array_matmul_b VALUES
+    ([[5,6],[7,8]]::{TYPE}[2,2]),
+    ([[9,10],[11,12]]::{TYPE}[2,2]),
+    ([[1,2],[3,4]]::{TYPE}[2,2]);
+
+query I
+SELECT array_matmul(a.m, b.m) FROM t_array_matmul_a a, t_array_matmul_b b WHERE a.rowid = b.rowid ORDER BY a.rowid;
+----
+[[19.0, 22.0], [43.0, 50.0]]
+[[9.0, 10.0], [11.0, 12.0]]
+NULL
+
+# NULL element in left arg
+statement error
+SELECT array_matmul([[1,NULL],[3,4]]::{TYPE}[2,2], [[5,6],[7,8]]::{TYPE}[2,2]);
+----
+left matrix elements cannot be NULL
+
+# NULL element in right arg
+statement error
+SELECT array_matmul([[1,2],[3,4]]::{TYPE}[2,2], [[5,NULL],[7,8]]::{TYPE}[2,2]);
+----
+right matrix elements cannot be NULL
+
+endloop
+
+# Integer matrix multiply
+foreach TYPE INTEGER BIGINT
+
+query I
+SELECT array_matmul([[1,2],[3,4]]::{TYPE}[2,2], [[5,6],[7,8]]::{TYPE}[2,2]);
+----
+[[19, 22], [43, 50]]
+
+# Identity matrix
+query I
+SELECT array_matmul([[1,0],[0,1]]::{TYPE}[2,2], [[5,6],[7,8]]::{TYPE}[2,2]);
+----
+[[5, 6], [7, 8]]
+
+# NULL handling
+query I
+SELECT array_matmul(NULL::{TYPE}[2,2], [[1,2],[3,4]]::{TYPE}[2,2]);
+----
+NULL
+
+endloop
+
+# Verify return types (outside loop)
+query I
+SELECT typeof(array_matmul([[1,2],[3,4]]::FLOAT[2,2], [[5,6],[7,8]]::FLOAT[2,2]));
+----
+FLOAT[2][2]
+
+query I
+SELECT typeof(array_matmul([[1,2,3],[4,5,6]]::FLOAT[3,2], [[1],[2],[3]]::FLOAT[1,3]));
+----
+FLOAT[1][2]
+
+# Error: dimension mismatch
+statement error
+SELECT array_matmul([[1,2],[3,4]]::FLOAT[2,2], [[1,2,3]]::FLOAT[3,1]);
+----
+Inner dimensions must match
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_array_matmul_large AS
+SELECT [[i, i+1],[i+2, i+3]]::FLOAT[2,2] AS a,
+       [[1, 0],[0, 1]]::FLOAT[2,2] AS b
+FROM range(3000) tbl(i);
+
+# Multiplying by identity should return original
+query I
+SELECT count(*) FROM t_array_matmul_large WHERE array_matmul(a, b) != a;
+----
+0

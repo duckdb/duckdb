@@ -136,7 +136,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"MapType <- 'MAP' Parens(List(Type))\n"
 	"ColIdType <- ColId Type\n"
 	"ArrayBounds <- SquareBracketsArray / 'ARRAY'\n"
-	"SquareBracketsArray <- '[' Expression? ']'\n"
+	"SquareBracketsArray <- '[' List(Expression)? ']'\n"
 	"TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?\n"
 	"TimeOrTimestamp <- TimeTypeId / TimestampTypeId\n"
 	"TimeTypeId <- 'TIME'\n"

@@ -32,27 +32,17 @@ static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, co
 	return mat.GetValue(1, 0).ToString();
 }
 
-// Helper: check for a standalone FILTER operator node in the explain output
-static bool StandaloneFilter(const std::string &explain_str) {
-	// Look for FILTER as a standalone operator node name (not "Filters:" which is a scan attribute)
-	std::string::size_type pos = 0;
-	while ((pos = explain_str.find("FILTER", pos)) != std::string::npos) {
-		// Check this is the standalone node name, not part of "Filters:"
-		if (pos + 6 >= explain_str.size() || explain_str[pos + 6] != 's') {
-			return true;
-		}
-		pos += 6;
-	}
-	return false;
+// Helper: search for a standalone FILTER node in the explain output.
+// The FILTER node appears as "│           FILTER          │" — all caps with spaces.
+// This must not match "Filters:" which appears inside a scan node.
+static bool StandaloneFilter(const string &explain_str) {
+	return StringUtil::Contains(explain_str, "FILTER") && !StringUtil::Contains(explain_str, "Filters:");
 }
 
-// Helper: check for a scan node with filter pushdown in the explain output
-static bool FilterInScan(const std::string &explain_str) {
-	auto arrow_pos = explain_str.find("ARROW_SCAN");
-	if (arrow_pos == std::string::npos) {
-		return false;
-	}
-	return explain_str.find("Filters:", arrow_pos) != std::string::npos;
+// Helper: search for a scan node that has filters pushed into it.
+// This checks for both "Function: ARROW_SCAN" and "Filters:" in the explain output.
+static bool FilterInScan(const string &explain_str) {
+	return StringUtil::Contains(explain_str, "Function: ARROW_SCAN") && StringUtil::Contains(explain_str, "Filters:");
 }
 
 TEST_CASE("Arrow filter pushdown - view types disable pushdown", "[arrow]") {

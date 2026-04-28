@@ -58,49 +58,58 @@ LogicalType PEGTransformerFactory::TransformType(PEGTransformer &transformer, Pa
 	}
 	auto &array_bounds_repeat = opt_array_bounds_pr.GetResult().Cast<RepeatParseResult>();
 	for (auto &array_bound : array_bounds_repeat.GetChildren()) {
-		vector<unique_ptr<ParsedExpression>> children_types;
-		children_types.push_back(std::move(type));
-
-		auto array_size = transformer.Transform<int64_t>(array_bound);
-		if (array_size < 0) {
-			type = make_uniq<TypeExpression>("list", std::move(children_types));
-		} else {
-			children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
-			type = make_uniq<TypeExpression>("array", std::move(children_types));
+		auto array_sizes = transformer.Transform<vector<int64_t>>(array_bound);
+		for (auto array_size : array_sizes) {
+			vector<unique_ptr<ParsedExpression>> children_types;
+			children_types.push_back(std::move(type));
+			if (array_size < 0) {
+				type = make_uniq<TypeExpression>("list", std::move(children_types));
+			} else {
+				children_types.push_back(make_uniq<ConstantExpression>(Value::BIGINT(array_size)));
+				type = make_uniq<TypeExpression>("array", std::move(children_types));
+			}
 		}
 	}
 	return LogicalType::UNBOUND(std::move(type));
 }
 
-int64_t PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result) {
+vector<int64_t> PEGTransformerFactory::TransformArrayBounds(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.name.empty()) {
-		return -1;
+		// 'ARRAY' keyword: a single unbounded list dimension
+		return {-1};
 	}
-	return transformer.Transform<int64_t>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+	return transformer.Transform<vector<int64_t>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
 }
 
-int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer, ParseResult &parse_result) {
+vector<int64_t> PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &opt_array_size = list_pr.Child<OptionalParseResult>(1);
 	if (!opt_array_size.HasResult()) {
-		// Empty array so we return -1 to signify it's a list
-		return -1;
+		// Empty brackets [] so we return -1 to signify it's a list
+		return {-1};
 	}
-	auto number_expr = transformer.Transform<unique_ptr<ParsedExpression>>(opt_array_size.GetResult());
-	if (number_expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
-		throw ParserException("Expected a constant number as array size");
+	auto expressions = ExtractParseResultsFromList(opt_array_size.GetResult());
+	vector<int64_t> result;
+	result.reserve(expressions.size());
+	for (auto expr_ref : expressions) {
+		auto number_expr = transformer.Transform<unique_ptr<ParsedExpression>>(expr_ref);
+		if (number_expr->GetExpressionClass() != ExpressionClass::CONSTANT) {
+			throw ParserException("Expected a constant number as array size");
+		}
+		auto &const_number = number_expr->Cast<ConstantExpression>();
+		if (!const_number.value.type().IsIntegral()) {
+			throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
+		}
+		auto number_val = const_number.value.GetValue<int64_t>();
+		if (number_val < 0) {
+			throw ParserException("Array size must be greater than 0");
+		}
+		result.push_back(number_val);
 	}
-	auto &const_number = number_expr->Cast<ConstantExpression>();
-	if (!const_number.value.type().IsIntegral()) {
-		throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
-	}
-	auto number_val = const_number.value.GetValue<int64_t>();
-	if (number_val < 0) {
-		throw ParserException("Array size must be greater than 0");
-	}
-	return number_val;
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransformer &transformer,

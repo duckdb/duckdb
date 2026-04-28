@@ -330,6 +330,54 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::ARRAY: {
 		auto array_size = ArrayType::GetSize(type);
 		auto &child_type = ArrayType::GetChildType(type);
+
+		if (child_type.id() == LogicalTypeId::ARRAY && options.arrow_output_fixed_shape_tensor) {
+			// Multi-dimensional array: export as arrow.fixed_shape_tensor
+			// Extract all dimensions and leaf type
+			vector<idx_t> shape;
+			idx_t total = 1;
+			auto current = type;
+			while (current.id() == LogicalTypeId::ARRAY) {
+				auto sz = ArrayType::GetSize(current);
+				shape.push_back(sz);
+				total *= sz;
+				current = ArrayType::GetChildType(current);
+			}
+			// 'current' is now the leaf element type
+
+			// Set format to flat FixedSizeList: "+w:N"
+			auto format = "+w:" + to_string(total);
+			root_holder.owned_type_names.push_back(AddName(format));
+			child.format = root_holder.owned_type_names.back().get();
+
+			// Add arrow.fixed_shape_tensor extension metadata
+			ArrowSchemaMetadata schema_metadata;
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.fixed_shape_tensor");
+			string shape_json = "{\"shape\": [";
+			for (idx_t i = 0; i < shape.size(); i++) {
+				if (i > 0) {
+					shape_json += ", ";
+				}
+				shape_json += to_string(shape[i]);
+			}
+			shape_json += "]}";
+			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, shape_json);
+			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
+			child.metadata = root_holder.metadata_info.back().get();
+
+			// One child: the leaf element type
+			child.n_children = 1;
+			root_holder.nested_children.emplace_back();
+			root_holder.nested_children.back().resize(1);
+			root_holder.nested_children_ptr.emplace_back();
+			root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+			InitializeChild(root_holder.nested_children.back()[0], root_holder);
+			child.children = &root_holder.nested_children_ptr.back()[0];
+			SetArrowFormat(root_holder, **child.children, current, options, context);
+			break;
+		}
+
+		// 1D array: standard FixedSizeList export
 		auto format = "+w:" + to_string(array_size);
 		root_holder.owned_type_names.push_back(AddName(format));
 		child.format = root_holder.owned_type_names.back().get();

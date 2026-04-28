@@ -1,0 +1,69 @@
+# name: test/sql/types/nested/array/array_comma_syntax.test
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Basic 2D comma syntax: FLOAT[3,4] = FLOAT[3][4]
+query I
+SELECT typeof(NULL::FLOAT[3,4]);
+----
+FLOAT[3][4]
+
+# Comma syntax produces same type as bracket syntax
+query I
+SELECT typeof(NULL::FLOAT[3,4]) = typeof(NULL::FLOAT[3][4]);
+----
+true
+
+# 3D comma syntax
+query I
+SELECT typeof(NULL::FLOAT[2,3,4]);
+----
+FLOAT[2][3][4]
+
+# 3D comma syntax matches equivalent bracket syntax
+query I
+SELECT typeof(NULL::FLOAT[2,3,4]) = typeof(NULL::FLOAT[2][3][4]);
+----
+true
+
+# INT type
+query I
+SELECT typeof(NULL::INT[3,4]);
+----
+INTEGER[3][4]
+
+# DOUBLE type
+query I
+SELECT typeof(NULL::DOUBLE[2,3]);
+----
+DOUBLE[2][3]
+
+# Can cast values using comma syntax
+query I
+SELECT [[1,2,3],[4,5,6]]::INT[3,2];
+----
+[[1, 2, 3], [4, 5, 6]]
+
+# Can create tables with comma syntax
+statement ok
+CREATE TABLE t_matrix (m FLOAT[3,3]);
+
+query I
+SELECT typeof(m) FROM t_matrix LIMIT 0;
+----
+
+statement ok
+INSERT INTO t_matrix VALUES ([[1,0,0],[0,1,0],[0,0,1]]::FLOAT[3,3]);
+
+query I
+SELECT * FROM t_matrix;
+----
+[[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+# Mixed: comma syntax followed by bracket syntax
+query I
+SELECT typeof(NULL::INT[2,3][4]);
+----
+INTEGER[2][3][4]

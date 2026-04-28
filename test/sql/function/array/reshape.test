@@ -1,0 +1,135 @@
+# name: test/sql/function/array/reshape.test
+# description: Test array_reshape function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+# Reshape 1D to 2D (2x3)
+query I
+SELECT array_reshape(array_value(1,2,3,4,5,6), 2, 3);
+----
+[[1, 2, 3], [4, 5, 6]]
+
+# Verify return type
+query I
+SELECT typeof(array_reshape(array_value(1,2,3,4,5,6), 2, 3));
+----
+INTEGER[3][2]
+
+# Reshape 1D to 2D (3x2)
+query I
+SELECT array_reshape(array_value(1,2,3,4,5,6), 3, 2);
+----
+[[1, 2], [3, 4], [5, 6]]
+
+# Reshape to 1D (identity-ish)
+query I
+SELECT array_reshape(array_value(1,2,3,4), 4);
+----
+[1, 2, 3, 4]
+
+# Reshape 2D to different 2D
+query I
+SELECT array_reshape([[1,2,3],[4,5,6]]::INT[3,2], 3, 2);
+----
+[[1, 2], [3, 4], [5, 6]]
+
+# FLOAT type
+query I
+SELECT array_reshape(array_value(1.0, 2.0, 3.0, 4.0)::FLOAT[4], 2, 2);
+----
+[[1.0, 2.0], [3.0, 4.0]]
+
+# DOUBLE type
+query I
+SELECT array_reshape(array_value(1.0, 2.0, 3.0, 4.0)::DOUBLE[4], 2, 2);
+----
+[[1.0, 2.0], [3.0, 4.0]]
+
+# Alias: reshape
+query I
+SELECT reshape(array_value(1,2,3,4,5,6), 2, 3);
+----
+[[1, 2, 3], [4, 5, 6]]
+
+# NULL input
+query I
+SELECT array_reshape(NULL::INT[6], 2, 3);
+----
+NULL
+
+# Storage round-trip with columnar inputs
+statement ok
+CREATE TABLE t_reshape (a INT[6]);
+
+statement ok
+INSERT INTO t_reshape VALUES
+    (array_value(1,2,3,4,5,6)),
+    (array_value(7,8,9,10,11,12)),
+    (NULL);
+
+query I
+SELECT array_reshape(a, 2, 3) FROM t_reshape;
+----
+[[1, 2, 3], [4, 5, 6]]
+[[7, 8, 9], [10, 11, 12]]
+NULL
+
+# Error: element count mismatch
+statement error
+SELECT array_reshape(array_value(1,2,3,4,5), 2, 3);
+----
+Total elements mismatch
+
+# Error: negative dimension
+statement error
+SELECT array_reshape(array_value(1,2,3,4), -1, 4);
+----
+must be positive
+
+# Error: zero dimension
+statement error
+SELECT array_reshape(array_value(1,2,3,4), 0, 4);
+----
+must be positive
+
+# Error: NULL dimension
+statement error
+SELECT array_reshape(array_value(1,2,3,4), NULL, 2);
+----
+cannot be NULL
+
+# Error: no dimension args
+statement error
+SELECT array_reshape(array_value(1,2,3,4));
+----
+At least one dimension
+
+# Error: mid-level NULL in source 2D array
+statement error
+SELECT array_reshape(array_value(array_value(1,2), NULL::INT[2]), 4);
+----
+nested array elements cannot be NULL
+
+# Round-trip: array_flatten(reshape(x, 2, 3)) == x
+query I
+SELECT array_flatten(array_reshape(array_value(1,2,3,4,5,6), 2, 3)) = array_value(1,2,3,4,5,6);
+----
+true
+
+# Round-trip: reshape(array_flatten(m), 2, 3) == m
+query I
+SELECT array_reshape(array_flatten([[1,2,3],[4,5,6]]::INT[3,2]), 2, 3) = [[1,2,3],[4,5,6]]::INT[3,2];
+----
+true
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_reshape_large AS
+SELECT array_value(i, i+1, i+2, i+3, i+4, i+5)::INT[6] AS a FROM range(3000) tbl(i);
+
+query I
+SELECT count(*) FROM t_reshape_large WHERE array_flatten(array_reshape(a, 2, 3)) != a;
+----
+0

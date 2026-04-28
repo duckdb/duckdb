@@ -126,6 +126,13 @@
         "default_value": "false"
     },
     {
+        "name": "arrow_output_fixed_shape_tensor",
+        "description": "Whether multi-dimensional ARRAY types should be exported as arrow.fixed_shape_tensor extension type",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "arrow_output_list_view",
         "description": "Whether export to Arrow format should use ListView as the physical layout for LIST columns",
         "type": "BOOLEAN",

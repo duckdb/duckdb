@@ -1,0 +1,109 @@
+# name: test/sql/function/array/transpose.test
+# description: Test array_transpose function
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+foreach TYPE FLOAT DOUBLE
+
+# Basic 2x3 transpose
+query I
+SELECT array_transpose([[1,2,3],[4,5,6]]::{TYPE}[3,2]);
+----
+[[1.0, 4.0], [2.0, 5.0], [3.0, 6.0]]
+
+# Square matrix transpose
+query I
+SELECT array_transpose([[1,2],[3,4]]::{TYPE}[2,2]);
+----
+[[1.0, 3.0], [2.0, 4.0]]
+
+# 1x3 matrix (row vector -> column vector)
+query I
+SELECT array_transpose([[1,2,3]]::{TYPE}[3,1]);
+----
+[[1.0], [2.0], [3.0]]
+
+# 3x1 matrix (column vector -> row vector)
+query I
+SELECT array_transpose([[1],[2],[3]]::{TYPE}[1,3]);
+----
+[[1.0, 2.0, 3.0]]
+
+# NULL input returns NULL
+query I
+SELECT array_transpose(NULL::{TYPE}[3,2]);
+----
+NULL
+
+# Storage round-trip with columnar inputs and multiple rows
+statement ok
+CREATE OR REPLACE TABLE t_transpose (m {TYPE}[2,2]);
+
+statement ok
+INSERT INTO t_transpose VALUES
+    ([[1,2],[3,4]]::{TYPE}[2,2]),
+    ([[5,6],[7,8]]::{TYPE}[2,2]),
+    (NULL);
+
+query I
+SELECT array_transpose(m) FROM t_transpose;
+----
+[[1.0, 3.0], [2.0, 4.0]]
+[[5.0, 7.0], [6.0, 8.0]]
+NULL
+
+# NULL element in row should fail
+statement error
+SELECT array_transpose([[1,NULL],[3,4]]::{TYPE}[2,2]);
+----
+input matrix elements cannot be NULL
+
+endloop
+
+# Verify type changes: FLOAT[3,2] (= FLOAT[3][2]) transposed -> FLOAT[2][3]
+query I
+SELECT typeof(array_transpose([[1,2,3],[4,5,6]]::FLOAT[3,2]));
+----
+FLOAT[2][3]
+
+# INT type also works
+query I
+SELECT array_transpose([[1,2,3],[4,5,6]]::INT[3,2]);
+----
+[[1, 4], [2, 5], [3, 6]]
+
+# BIGINT type
+query I
+SELECT array_transpose([[1,2],[3,4]]::BIGINT[2,2]);
+----
+[[1, 3], [2, 4]]
+
+# Alias: transpose
+query I
+SELECT transpose([[1,2],[3,4]]::FLOAT[2,2]);
+----
+[[1.0, 3.0], [2.0, 4.0]]
+
+# Error: 1D array
+statement error
+SELECT array_transpose(array_value(1.0, 2.0, 3.0));
+----
+No function matches the given name and argument types
+
+# transpose(transpose(x)) == x identity property
+query I
+SELECT transpose(transpose([[1,2,3],[4,5,6]]::FLOAT[3,2])) = [[1,2,3],[4,5,6]]::FLOAT[3,2];
+----
+true
+
+# Large batch test (> STANDARD_VECTOR_SIZE = 2048)
+statement ok
+CREATE OR REPLACE TABLE t_transpose_large AS
+SELECT [[i, i+1, i+2],[i+3, i+4, i+5]]::FLOAT[3,2] AS m FROM range(3000) tbl(i);
+
+query I
+SELECT count(*) FROM t_transpose_large WHERE transpose(transpose(m)) != m;
+----
+0
