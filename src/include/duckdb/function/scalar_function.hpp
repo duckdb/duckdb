@@ -404,8 +404,8 @@ public:
 
 class BoundScalarFunction : public ScalarFunction {
 public:
-	BoundScalarFunction(const ScalarFunction &function)
-	    : ScalarFunction(function) { // NOLINT: allow implicit conversion
+	BoundScalarFunction(const ScalarFunction &function) // NOLINT: allow implicit conversion
+	    : ScalarFunction(function) {
 	}
 };
 
