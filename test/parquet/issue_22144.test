@@ -12,11 +12,11 @@ INSERT INTO t VALUES (1, 'hello', 3.14), (2, NULL, 2.71);
 
 # COPY from a table
 statement ok
-COPY t TO '__TEST_DIR__/not_null.parquet';
+COPY t TO '{TEST_DIR}/not_null.parquet';
 
 query II
 SELECT name, repetition_type
-FROM parquet_schema('__TEST_DIR__/not_null.parquet')
+FROM parquet_schema('{TEST_DIR}/not_null.parquet')
 WHERE name != 'duckdb_schema'
 ORDER BY name;
 ----
@@ -29,11 +29,11 @@ statement ok
 CREATE VIEW v AS SELECT * FROM t;
 
 statement ok
-COPY v TO '__TEST_DIR__/not_null_view.parquet';
+COPY v TO '{TEST_DIR}/not_null_view.parquet';
 
 query II
 SELECT name, repetition_type
-FROM parquet_schema('__TEST_DIR__/not_null_view.parquet')
+FROM parquet_schema('{TEST_DIR}/not_null_view.parquet')
 WHERE name != 'duckdb_schema'
 ORDER BY name;
 ----
@@ -43,11 +43,11 @@ c	REQUIRED
 
 # COPY from a subquery
 statement ok
-COPY (FROM t) TO '__TEST_DIR__/not_null_subquery.parquet';
+COPY (FROM t) TO '{TEST_DIR}/not_null_subquery.parquet';
 
 query II
 SELECT name, repetition_type
-FROM parquet_schema('__TEST_DIR__/not_null_subquery.parquet')
+FROM parquet_schema('{TEST_DIR}/not_null_subquery.parquet')
 WHERE name != 'duckdb_schema'
 ORDER BY name;
 ----
