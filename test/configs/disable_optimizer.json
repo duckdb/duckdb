@@ -1,5 +1,5 @@
 {
-  "description": "Run with PRAGMA disable_optimizer.",
+  "description": "Run with SET debug_disable_optimizer=true;.",
   "on_init": "SET debug_disable_optimizer=true;",
   "skip_compiled": "true",
   "skip_tests": [

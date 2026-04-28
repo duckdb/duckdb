@@ -1391,6 +1391,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
 
+    - name: test/configs/disable_caching_operators.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
+
     - name: test/configs/wal_verification.json
       if: success() || failure()
       shell: bash
