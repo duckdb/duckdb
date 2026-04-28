@@ -580,6 +580,7 @@ public:
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
 		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+		auto peg_factory = GetGlobalPEGMatcherCache().GetTransformerFactory();
 		auto &root_matcher = peg_matcher->Root();
 
 		vector<MatcherToken> root_tokens;
@@ -590,7 +591,7 @@ public:
 		try {
 			vector<unique_ptr<SQLStatement>> result;
 			if (!root_tokens.empty()) {
-				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
+				result = peg_factory->Transform(root_tokens, options, root_matcher);
 			}
 			if (!result.empty()) {
 				auto &last_statement = result.back();

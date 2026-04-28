@@ -219,14 +219,20 @@ private:
 	optional_ptr<Matcher> root;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher.
-struct PEGMatcherCache : ParserExtensionInfo {
+// Forward declaration -- full type needed only in matcher.cpp
+class PEGTransformerFactory;
+
+//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
+//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+struct PEGMatcherCache {
 	shared_ptr<PEGMatcher> GetMatcher();
+	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();
 
 private:
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
+	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
 //! Returns the process-wide singleton PEGMatcherCache (built once, reused for all parses).

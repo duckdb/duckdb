@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
 // #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
@@ -1475,9 +1476,25 @@ shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
 	return matcher;
 }
 
+shared_ptr<PEGTransformerFactory> PEGMatcherCache::GetTransformerFactory() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (transformer_factory) {
+			return transformer_factory;
+		}
+	}
+	auto new_factory = make_shared_ptr<PEGTransformerFactory>();
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!transformer_factory) {
+		transformer_factory = std::move(new_factory);
+	}
+	return transformer_factory;
+}
+
 void PEGMatcherCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
+	transformer_factory = nullptr;
 }
 
 } // namespace duckdb

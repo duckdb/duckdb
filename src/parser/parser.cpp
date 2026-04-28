@@ -248,13 +248,14 @@ void Parser::ParseQuery(const string &query) {
 	}
 	// PEG parser: tokenize then transform
 	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto peg_factory = GetGlobalPEGMatcherCache().GetTransformerFactory();
 
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		try {
-			auto peg_statements = PEGTransformerFactory::Transform(tokens, options, peg_matcher->Root());
+			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root());
 			for (auto &stmt : peg_statements) {
 				statements.push_back(std::move(stmt));
 			}
