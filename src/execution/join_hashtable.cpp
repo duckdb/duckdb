@@ -179,20 +179,6 @@ static void InitializeMarkJoinNullRemainder(MarkJoinNullRemainder &remainder, Bu
 	remainder.data->InitializeAppend(remainder.append_state);
 }
 
-static void AppendMarkJoinNullRows(MarkJoinNullRemainder &remainder, DataChunk &keys, const SelectionVector &sel,
-                                   idx_t sel_count) {
-	if (sel_count == 0) {
-		return;
-	}
-	DataChunk key_chunk;
-	key_chunk.InitializeEmpty(remainder.key_types);
-	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		key_chunk.data[col_idx].Reference(keys.data[col_idx]);
-	}
-	key_chunk.SetCardinality(keys);
-	remainder.data->Append(remainder.append_state, key_chunk, sel, sel_count);
-}
-
 void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
 	if (!UseMarkJoinNullRemainder()) {
 		return;
@@ -237,7 +223,10 @@ void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
 	}
 	null_info.has_null_rows |= null_count > 0;
 	null_info.has_all_null |= has_all_null.CountValid(keys.size()) > 0;
-	AppendMarkJoinNullRows(null_info.remainder, keys, null_sel, null_count);
+
+	if (null_count > 0) {
+		null_info.remainder.data->Append(null_info.remainder.append_state, keys, null_sel, null_count);
+	}
 }
 
 void JoinHashTable::MergeMarkJoinNullRows(JoinHashTable &other) {
@@ -255,6 +244,97 @@ void JoinHashTable::MergeMarkJoinNullRows(JoinHashTable &other) {
 	mark_join_null_info.remainder.data->Combine(*other.mark_join_null_info.remainder.data);
 }
 
+static idx_t BuildUnresolvedSelection(const bool *found_match, ValidityMask &mask, idx_t count,
+                                      SelectionVector &unresolved_sel) {
+	idx_t unresolved_count = 0;
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!found_match[row_idx] && mask.RowIsValid(row_idx)) {
+			unresolved_sel.set_index(unresolved_count++, NumericCast<sel_t>(row_idx));
+		}
+	}
+	return unresolved_count;
+}
+
+static void InvalidateSelection(ValidityMask &mask, const SelectionVector &sel, idx_t count) {
+	for (idx_t i = 0; i < count; i++) {
+		mask.SetInvalid(sel.get_index(i));
+	}
+}
+
+static idx_t CompactUnresolvedSelection(const SelectionVector &unresolved_sel, idx_t unresolved_count,
+                                        const ValidityMask &matched_mask, SelectionVector &remaining_sel) {
+	idx_t remaining_count = 0;
+	for (idx_t i = 0; i < unresolved_count; i++) {
+		const auto row_idx = unresolved_sel.get_index(i);
+		if (!matched_mask.RowIsValid(row_idx)) {
+			remaining_sel.set_index(remaining_count++, row_idx);
+		}
+	}
+	return remaining_count;
+}
+
+static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unresolved_sel, idx_t unresolved_count,
+                                     DataChunk &scan_chunk, SelectionVector &matched_sel) {
+	SelectionVector equal_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector candidate_sel_a(STANDARD_VECTOR_SIZE);
+	SelectionVector candidate_sel_b(STANDARD_VECTOR_SIZE);
+	ValidityMask matched_mask(join_keys.size());
+	matched_mask.SetAllInvalid(join_keys.size());
+
+	vector<UnifiedVectorFormat> scan_formats(scan_chunk.ColumnCount());
+	for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
+		scan_chunk.data[col_idx].ToUnifiedFormat(scan_chunk.size(), scan_formats[col_idx]);
+	}
+
+	for (idx_t scan_row = 0; scan_row < scan_chunk.size(); scan_row++) {
+		const SelectionVector *candidate_sel = &unresolved_sel;
+		idx_t candidate_count = unresolved_count;
+		bool use_a = true;
+		for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
+			auto scan_idx = scan_formats[col_idx].sel->get_index(scan_row);
+			if (!scan_formats[col_idx].validity.RowIsValid(scan_idx)) {
+				continue;
+			}
+			Vector constant_value(scan_chunk.data[col_idx].GetType());
+			ConstantVector::Reference(constant_value, scan_chunk.data[col_idx], scan_row, candidate_count);
+			ValidityMask null_mask(join_keys.size());
+			null_mask.SetAllValid(join_keys.size());
+			idx_t equal_count = VectorOperations::Equals(join_keys.data[col_idx], constant_value, candidate_sel,
+			                                             candidate_count, &equal_sel, &false_sel, &null_mask);
+			auto &next_candidate_sel = use_a ? candidate_sel_a : candidate_sel_b;
+			idx_t next_candidate_count = 0;
+			for (idx_t i = 0; i < equal_count; i++) {
+				next_candidate_sel.set_index(next_candidate_count++, equal_sel.get_index(i));
+			}
+			for (idx_t i = 0; i < candidate_count - equal_count; i++) {
+				auto candidate_idx = false_sel.get_index(i);
+				if (!null_mask.RowIsValid(candidate_idx)) {
+					next_candidate_sel.set_index(next_candidate_count++, candidate_idx);
+				}
+			}
+			candidate_sel = &next_candidate_sel;
+			candidate_count = next_candidate_count;
+			use_a = !use_a;
+			if (candidate_count == 0) {
+				break;
+			}
+		}
+		for (idx_t i = 0; i < candidate_count; i++) {
+			matched_mask.SetValid(candidate_sel->get_index(i));
+		}
+	}
+
+	idx_t matched_count = 0;
+	for (idx_t i = 0; i < unresolved_count; i++) {
+		const auto row_idx = unresolved_sel.get_index(i);
+		if (matched_mask.RowIsValid(row_idx)) {
+			matched_sel.set_index(matched_count++, row_idx);
+		}
+	}
+	return matched_count;
+}
+
 void JoinHashTable::ProbeMarkJoinNullRows(DataChunk &join_keys, ValidityMask &mask, const bool *found_match) {
 	D_ASSERT(UseMarkJoinNullRemainder());
 	auto &null_info = mark_join_null_info;
@@ -262,93 +342,36 @@ void JoinHashTable::ProbeMarkJoinNullRows(DataChunk &join_keys, ValidityMask &ma
 		return;
 	}
 	SelectionVector unresolved_sel(STANDARD_VECTOR_SIZE);
-	idx_t unresolved_count = 0;
-	for (idx_t row_idx = 0; row_idx < join_keys.size(); row_idx++) {
-		if (!found_match[row_idx] && mask.RowIsValid(row_idx)) {
-			unresolved_sel.set_index(unresolved_count++, NumericCast<sel_t>(row_idx));
-		}
-	}
+	idx_t unresolved_count = BuildUnresolvedSelection(found_match, mask, join_keys.size(), unresolved_sel);
 	if (unresolved_count == 0) {
 		return;
 	}
 	if (null_info.has_all_null) {
-		for (idx_t i = 0; i < unresolved_count; i++) {
-			mask.SetInvalid(unresolved_sel.get_index(i));
-		}
+		InvalidateSelection(mask, unresolved_sel, unresolved_count);
 		return;
 	}
 	if (!null_info.remainder.data) {
 		return;
 	}
 
-	bool null_match[STANDARD_VECTOR_SIZE];
-	memset(null_match, 0, sizeof(null_match));
-
 	TupleDataScanState scan_state;
 	null_info.remainder.data->InitializeScan(scan_state);
 	DataChunk scan_chunk;
 	null_info.remainder.data->InitializeScanChunk(scan_state, scan_chunk);
-
-	SelectionVector equal_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector candidate_sel_a(STANDARD_VECTOR_SIZE);
-	SelectionVector candidate_sel_b(STANDARD_VECTOR_SIZE);
+	SelectionVector matched_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector remaining_sel(STANDARD_VECTOR_SIZE);
 
 	while (unresolved_count > 0 && null_info.remainder.data->Scan(scan_state, scan_chunk)) {
-		vector<UnifiedVectorFormat> scan_formats(scan_chunk.ColumnCount());
-		for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
-			scan_chunk.data[col_idx].ToUnifiedFormat(scan_chunk.size(), scan_formats[col_idx]);
+		const idx_t matched_count =
+		    MatchNullRemainderChunk(join_keys, unresolved_sel, unresolved_count, scan_chunk, matched_sel);
+		if (matched_count == 0) {
+			continue;
 		}
-		for (idx_t scan_row = 0; scan_row < scan_chunk.size() && unresolved_count > 0; scan_row++) {
-			const SelectionVector *candidate_sel = &unresolved_sel;
-			idx_t candidate_count = unresolved_count;
-			bool use_a = true;
-			for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
-				auto scan_idx = scan_formats[col_idx].sel->get_index(scan_row);
-				if (!scan_formats[col_idx].validity.RowIsValid(scan_idx)) {
-					continue;
-				}
-				Vector constant_value(scan_chunk.data[col_idx].GetType());
-				ConstantVector::Reference(constant_value, scan_chunk.data[col_idx], scan_row, candidate_count);
-				ValidityMask null_mask(join_keys.size());
-				null_mask.SetAllValid(join_keys.size());
-				idx_t equal_count = VectorOperations::Equals(join_keys.data[col_idx], constant_value, candidate_sel,
-				                                             candidate_count, &equal_sel, &false_sel, &null_mask);
-				auto &next_candidate_sel = use_a ? candidate_sel_a : candidate_sel_b;
-				idx_t next_candidate_count = 0;
-				for (idx_t i = 0; i < equal_count; i++) {
-					next_candidate_sel.set_index(next_candidate_count++, equal_sel.get_index(i));
-				}
-				for (idx_t i = 0; i < candidate_count - equal_count; i++) {
-					auto candidate_idx = false_sel.get_index(i);
-					if (!null_mask.RowIsValid(candidate_idx)) {
-						next_candidate_sel.set_index(next_candidate_count++, candidate_idx);
-					}
-				}
-				candidate_sel = &next_candidate_sel;
-				candidate_count = next_candidate_count;
-				use_a = !use_a;
-				if (candidate_count == 0) {
-					break;
-				}
-			}
-			for (idx_t i = 0; i < candidate_count; i++) {
-				null_match[candidate_sel->get_index(i)] = true;
-			}
-		}
-		idx_t next_unresolved_count = 0;
+		InvalidateSelection(mask, matched_sel, matched_count);
+		unresolved_count = CompactUnresolvedSelection(unresolved_sel, unresolved_count, mask, remaining_sel);
 		for (idx_t i = 0; i < unresolved_count; i++) {
-			auto row_idx = unresolved_sel.get_index(i);
-			if (null_match[row_idx]) {
-				mask.SetInvalid(row_idx);
-			} else {
-				candidate_sel_a.set_index(next_unresolved_count++, row_idx);
-			}
+			unresolved_sel.set_index(i, remaining_sel.get_index(i));
 		}
-		for (idx_t i = 0; i < next_unresolved_count; i++) {
-			unresolved_sel.set_index(i, candidate_sel_a.get_index(i));
-		}
-		unresolved_count = next_unresolved_count;
 	}
 }
 
