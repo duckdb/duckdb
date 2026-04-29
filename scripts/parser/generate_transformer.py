@@ -98,7 +98,7 @@ EXCLUDED_RULES = {
     "SetData",
     "CTEBodyContent",
     "SingleArrowPair",
-    "OperatorLiteral"
+    "OperatorLiteral",
 }
 
 
@@ -128,9 +128,7 @@ def load_grammar_types(types_file):
     def register(rule_name, cpp_type, source):
         rule_name = str(rule_name)
         if rule_name in rule_to_type:
-            duplicates.append(
-                f"  '{rule_name}' in '{source}' (already listed in '{rule_to_source[rule_name]}')"
-            )
+            duplicates.append(f"  '{rule_name}' in '{source}' (already listed in '{rule_to_source[rule_name]}')")
         else:
             rule_to_type[rule_name] = str(cpp_type)
             rule_to_source[rule_name] = source
