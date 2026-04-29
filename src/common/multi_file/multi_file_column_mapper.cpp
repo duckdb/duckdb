@@ -447,6 +447,25 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 	}
 
 	auto nested_mapper = mapper.Create(local_column.children);
+
+	if (global_index.IsPushdownExtract()) {
+		auto &child_index = global_index.GetChildIndexes()[0];
+		auto &child_column = global_column.children[child_index.GetPrimaryIndex()];
+		auto child_mapping = MapColumn(context, child_column, child_index, local_column.children, *nested_mapper);
+
+		if (child_mapping.column_index) {
+			vector<ColumnIndex> single_child;
+			single_child.push_back(std::move(*child_mapping.column_index));
+			child_mapping.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), single_child);
+			child_mapping.column_index->SetType(global_column.type);
+			child_mapping.column_index->SetPushdownExtract();
+
+			mapping->child_mapping.emplace(MultiFileGlobalIndex(0), std::move(child_mapping.mapping));
+			child_mapping.mapping = std::move(mapping);
+		}
+		return child_mapping;
+	}
+
 	child_list_t<Value> column_mapping;
 	vector<unique_ptr<Expression>> default_expressions;
 	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
@@ -498,6 +517,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 
 	ColumnMapResult result;
 	result.local_column = local_column;
+
 	if (!column_mapping.empty()) {
 		// we have column mappings at this level - construct the struct
 		result.column_map = Value::STRUCT(std::move(column_mapping));
@@ -524,10 +544,7 @@ ColumnMapResult MapColumnStruct(ClientContext &context, const MultiFileColumnDef
 	}
 	result.column_index = make_uniq<ColumnIndex>(local_id.GetIndex(), std::move(child_indexes));
 	if (global_index.HasType()) {
-		result.column_index->SetType(global_index.GetType());
-	}
-	if (global_index.IsPushdownExtract()) {
-		result.column_index->SetPushdownExtract();
+		result.column_index->SetType(global_column.type);
 	}
 	result.mapping = std::move(mapping);
 	return result;
@@ -581,9 +598,7 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 
 static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, MultiFileLocalIndex local_idx,
                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
-                                                     const ColumnIndex &column_index, bool is_trivially_mappable) {
-	auto &local_column = *mapping.local_column;
-	auto local_column_type = column_index.HasType() ? column_index.GetScanType() : local_column.type;
+                                                     const LogicalType &local_column_type, bool is_trivially_mappable) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
 	if (!global_column_type.IsNested() ||
 	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
@@ -740,12 +755,13 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto local_id = local_index->GetPrimaryIndex();
 		auto &local_type = local_columns[local_id].type;
 		auto global_column_type = global_id.HasType() ? global_id.GetScanType() : global_column.type;
+		auto local_column_type = local_index->HasType() ? local_index->GetScanType() : local_type;
 		auto expr =
-		    ConstructMapExpression(context, local_idx, column_map, global_column_type, *local_index, trivial_map);
+		    ConstructMapExpression(context, local_idx, column_map, global_column_type, local_column_type, trivial_map);
 		reader_data.expressions.push_back(std::move(expr));
 		auto filter_conversion = trivial_map ? FilterConversionType::COPY_DIRECTLY : FilterConversionType::CAST_FILTER;
 
-		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_type, global_column.type,
+		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_column_type, global_column_type,
 		                                 filter_conversion);
 		result.global_to_local.insert(make_pair(global_idx, std::move(index_mapping)));
 		reader.column_ids.emplace_back(local_id);
