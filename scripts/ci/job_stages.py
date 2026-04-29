@@ -19,7 +19,6 @@ PULL_REQUEST_JOBS = [
     "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
-    "upload-libduckdb-src",
     "swift",
     "windows",
     "no-string-inline",

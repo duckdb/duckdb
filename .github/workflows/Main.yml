@@ -550,6 +550,16 @@ jobs:
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
 
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+
  linux-release-tests:
     name: Linux Release Tests
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
@@ -851,30 +861,6 @@ jobs:
         cd tools/juliapkg
         julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
         ./format_check.sh
-
- upload-libduckdb-src:
-    name: Upload libduckdb-src.zip
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'upload-libduckdb-src') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
 
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
@@ -1542,7 +1528,6 @@ jobs:
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia
-      - upload-libduckdb-src
       - swift
       - windows
       - osx
