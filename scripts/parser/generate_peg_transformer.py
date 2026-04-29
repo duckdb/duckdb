@@ -26,7 +26,11 @@ ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
 
+# Matches: Register("RuleName", &SomeFunction) — direct registration bypassing the macro
+DIRECT_REGISTER_REGEX = re.compile(r'Register\s*\(\s*"(\w+)"\s*,')
+
 EXCLUDED_RULES = {
+    "Program",
     "FunctionType",
     "IfExists",
     "Database",
@@ -55,6 +59,8 @@ EXCLUDED_RULES = {
     "ReservedSchemaName",
     "ReservedIdentifier",
     "TableName",
+    "ConstraintName",
+    "IntervalNumber",
     "ReservedTableName",
     "ColumnName",
     "ReservedColumnName",
@@ -90,6 +96,9 @@ EXCLUDED_RULES = {
     "ForEachRow",
     "ForEachStatement",
     "SetData",
+    "CTEBodyContent",
+    "SingleArrowPair",
+    "OperatorLiteral"
 }
 
 
@@ -228,17 +237,19 @@ def find_transformer_rules(transformer_path):
 
 def find_factory_registrations(factory_file_path):
     """
-    Scans the factory file for RegisterEnum<...> and REGISTER_TRANSFORM(...)
+    Scans the factory file for RegisterEnum<...>, REGISTER_TRANSFORM(...),
+    and direct Register("name", &func) calls.
 
-    Returns two sets:
-    (enum_rules, registered_rules)
+    Returns three sets:
+    (enum_rules, registered_rules, directly_registered_rules)
     """
     enum_rules = set()
     registered_rules = set()
+    directly_registered_rules = set()
 
     if not factory_file_path.is_file():
         print(f"Error: Factory file not found: {factory_file_path}", file=sys.stderr)
-        return enum_rules, registered_rules
+        return enum_rules, registered_rules, directly_registered_rules
 
     print(f"Scanning factory file: {factory_file_path}...")
 
@@ -246,20 +257,19 @@ def find_factory_registrations(factory_file_path):
         with factory_file_path.open("r", encoding="utf-8") as f:
             content = f.read()
 
-            # Find enums
-            enum_matches = ENUM_RULE_REGEX.finditer(content)
-            for match in enum_matches:
+            for match in ENUM_RULE_REGEX.finditer(content):
                 enum_rules.add(match.group(1))
 
-            # Find transformer registrations
-            reg_matches = REGISTER_TRANSFORM_REGEX.finditer(content)
-            for match in reg_matches:
+            for match in REGISTER_TRANSFORM_REGEX.finditer(content):
                 registered_rules.add(match.group(1))
+
+            for match in DIRECT_REGISTER_REGEX.finditer(content):
+                directly_registered_rules.add(match.group(1))
 
     except Exception as e:
         print(f"Error reading {factory_file_path}: {e}", file=sys.stderr)
 
-    return enum_rules, registered_rules
+    return enum_rules, registered_rules, directly_registered_rules
 
 
 def generate_declaration_stub(rule_name, cpp_type):
@@ -337,7 +347,7 @@ def main():
     rule_to_type = load_grammar_types(GRAMMAR_TYPES_FILE)
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
     transformer_impls = find_transformer_rules(Path(TRANSFORMER_DIR))
-    enum_rules, registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
+    enum_rules, registered_rules, directly_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
 
     if not grammar_rules_by_file:
         print("Error: Could not find grammar rules. Exiting.", file=sys.stderr)
@@ -381,10 +391,14 @@ def main():
             is_enum = rule_name in enum_rules
             is_transformer = rule_name in transformer_impls
             is_registered = rule_name in registered_rules
+            is_directly_registered = rule_name in directly_registered_rules
 
             if is_enum:
                 status_str = "[ ENUM ]"
                 total_found_enum += 1
+            elif is_directly_registered:
+                status_str = "[ FOUND ]"
+                total_found_registered += 1
             elif is_transformer:
                 if is_registered:
                     status_str = "[ FOUND ]"
@@ -447,6 +461,12 @@ def main():
         print("\n[!] Orphan Registrations (No matching grammar rule):")
         for rule in sorted(list(orphan_registrations)):
             print(f"  - REGISTER_TRANSFORM(Transform{rule})")
+
+    orphan_direct = directly_registered_rules - all_grammar_rules_flat - EXCLUDED_RULES
+    if orphan_direct:
+        print("\n[!] Orphan Direct Registrations (No matching grammar rule):")
+        for rule in sorted(list(orphan_direct)):
+            print(f"  - Register(\"{rule}\", ...)")
 
     missing_impl = registered_rules - transformer_impls
     if missing_impl:
