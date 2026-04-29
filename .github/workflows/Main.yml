@@ -1403,6 +1403,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
 
+    - name: test/configs/verify_fetch_row.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
+
     - name: test/configs/disable_caching_operators.json
       if: success() || failure()
       shell: bash
