@@ -59,27 +59,29 @@ public:
 		source.Initialize(Allocator::Get(context.client), table.types);
 	}
 
-	idx_t Refill(ExecutionContext &context) {
+	SourceResultType Refill(ExecutionContext &context, InterruptState &interrupt_state, idx_t &available) {
 		if (source_offset >= source.size()) {
 			if (!exhausted) {
 				source.Reset();
 
-				InterruptState interrupt_state;
 				OperatorSourceInput source_input {global_state, *local_state, interrupt_state};
 				auto source_result = SourceResultType::HAVE_MORE_OUTPUT;
 				while (source_result == SourceResultType::HAVE_MORE_OUTPUT && source.size() == 0) {
-					// TODO: this could as well just be propagated further, but for now iterating it is
 					source_result = table.GetData(context, source, source_input);
 					if (source_result == SourceResultType::BLOCKED) {
-						throw NotImplementedException(
-						    "Unexpected interrupt from table Source in PositionalTableScanner refill");
+						// Propagate suspension upward; the child source has registered its
+						// wakeup on interrupt_state, and GetDataInternal will return BLOCKED
+						// to the executor. On resume, this Refill is retried: source.size()
+						// is still 0, so we re-enter the loop and call GetData again.
+						available = 0;
+						return SourceResultType::BLOCKED;
 					}
 				}
 			}
 			source_offset = 0;
 		}
 
-		const auto available = source.size() - source_offset;
+		available = source.size() - source_offset;
 		if (!available) {
 			if (!exhausted) {
 				source.Reset();
@@ -91,19 +93,21 @@ public:
 			}
 		}
 
-		return available;
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
-	idx_t CopyData(ExecutionContext &context, DataChunk &output, const idx_t count, const idx_t col_offset) {
-		if (!source_offset && (source.size() >= count || exhausted)) {
+	SourceResultType CopyData(ExecutionContext &context, InterruptState &interrupt_state, DataChunk &output,
+	                          const idx_t count, const idx_t col_offset, idx_t &target_offset, idx_t &cols_copied) {
+		if (target_offset == 0 && !source_offset && (source.size() >= count || exhausted)) {
 			//	Fast track: aligned and has enough data
 			for (idx_t i = 0; i < source.ColumnCount(); ++i) {
 				output.data[col_offset + i].Reference(source.data[i]);
 			}
 			source_offset += count;
+			target_offset = count;
 		} else {
 			// Copy data
-			for (idx_t target_offset = 0; target_offset < count;) {
+			while (target_offset < count) {
 				const auto needed = count - target_offset;
 				const auto available = exhausted ? needed : (source.size() - source_offset);
 				const auto copy_size = MinValue(needed, available);
@@ -114,11 +118,19 @@ public:
 				}
 				target_offset += copy_size;
 				source_offset += copy_size;
-				Refill(context);
+				if (target_offset < count) {
+					idx_t refill_available = 0;
+					auto refill_result = Refill(context, interrupt_state, refill_available);
+					if (refill_result == SourceResultType::BLOCKED) {
+						cols_copied = 0;
+						return SourceResultType::BLOCKED;
+					}
+				}
 			}
 		}
 
-		return source.ColumnCount();
+		cols_copied = source.ColumnCount();
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	ProgressData GetProgress(ClientContext &context) {
@@ -145,6 +157,16 @@ public:
 	}
 
 	vector<unique_ptr<PositionalTableScanner>> scanners;
+
+	// Resume state when GetDataInternal returns BLOCKED partway through a chunk.
+	// All zero/false on a fresh call; populated when we propagate BLOCKED upward
+	// so we can pick up where we left off when the executor calls us back.
+	bool resuming = false;
+	idx_t resume_phase = 0; // 0: refilling scanners; 1: copying data
+	idx_t resume_count = 0;
+	idx_t resume_scanner_index = 0;
+	idx_t resume_col_offset = 0;
+	idx_t resume_target_offset = 0;
 };
 
 unique_ptr<LocalSourceState> PhysicalPositionalScan::GetLocalSourceState(ExecutionContext &context,
@@ -160,23 +182,61 @@ SourceResultType PhysicalPositionalScan::GetDataInternal(ExecutionContext &conte
                                                          OperatorSourceInput &input) const {
 	auto &lstate = input.local_state.Cast<PositionalScanLocalSourceState>();
 
-	// Find the longest source block
-	idx_t count = 0;
-	for (auto &scanner : lstate.scanners) {
-		count = MaxValue(count, scanner->Refill(context));
+	idx_t count = lstate.resuming ? lstate.resume_count : 0;
+	idx_t scanner_index = lstate.resuming ? lstate.resume_scanner_index : 0;
+	idx_t col_offset = lstate.resuming ? lstate.resume_col_offset : 0;
+	idx_t target_offset = lstate.resuming ? lstate.resume_target_offset : 0;
+	const idx_t resume_phase = lstate.resuming ? lstate.resume_phase : 0;
+
+	// Phase 0: find the longest source block by refilling each scanner.
+	// Refill is idempotent w.r.t. BLOCKED — if a scanner returns BLOCKED we can
+	// re-enter at the same scanner_index on resume; previously-refilled scanners
+	// already have data cached in their `source` chunk and Refill becomes a no-op.
+	if (!lstate.resuming || resume_phase == 0) {
+		for (; scanner_index < lstate.scanners.size(); scanner_index++) {
+			idx_t available = 0;
+			auto refill_result = lstate.scanners[scanner_index]->Refill(context, input.interrupt_state, available);
+			if (refill_result == SourceResultType::BLOCKED) {
+				lstate.resuming = true;
+				lstate.resume_phase = 0;
+				lstate.resume_count = count;
+				lstate.resume_scanner_index = scanner_index;
+				return SourceResultType::BLOCKED;
+			}
+			count = MaxValue(count, available);
+		}
+
+		if (!count) {
+			lstate.resuming = false;
+			return SourceResultType::FINISHED;
+		}
+
+		// Phase 0 complete; fall through to phase 1 starting from the first scanner.
+		scanner_index = 0;
+		col_offset = 0;
+		target_offset = 0;
 	}
 
-	//	All done?
-	if (!count) {
-		return SourceResultType::FINISHED;
+	// Phase 1: copy or reference the source columns into the output.
+	for (; scanner_index < lstate.scanners.size(); scanner_index++) {
+		auto &scanner = lstate.scanners[scanner_index];
+		idx_t cols_copied = 0;
+		auto copy_result = scanner->CopyData(context, input.interrupt_state, output, count, col_offset, target_offset,
+		                                     cols_copied);
+		if (copy_result == SourceResultType::BLOCKED) {
+			lstate.resuming = true;
+			lstate.resume_phase = 1;
+			lstate.resume_count = count;
+			lstate.resume_scanner_index = scanner_index;
+			lstate.resume_col_offset = col_offset;
+			lstate.resume_target_offset = target_offset;
+			return SourceResultType::BLOCKED;
+		}
+		col_offset += cols_copied;
+		target_offset = 0;
 	}
 
-	// Copy or reference the source columns
-	idx_t col_offset = 0;
-	for (auto &scanner : lstate.scanners) {
-		col_offset += scanner->CopyData(context, output, count, col_offset);
-	}
-
+	lstate.resuming = false;
 	output.SetCardinality(count);
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
