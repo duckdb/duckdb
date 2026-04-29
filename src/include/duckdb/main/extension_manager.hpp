@@ -28,9 +28,10 @@ public:
 
 class ExtensionActiveLoad {
 public:
-	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p, string alias_p)
+	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p, string alias_p,
+	                    bool prefix_functions_with_alias_p = false)
 	    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)),
-	      alias(std::move(alias_p)) {
+	      alias(std::move(alias_p)), prefix_functions_with_alias(prefix_functions_with_alias_p) {
 	};
 
 	~ExtensionActiveLoad() = default;
@@ -40,6 +41,7 @@ public:
 	ExtensionInfo &info;
 	string extension_name;
 	string alias;
+	bool prefix_functions_with_alias = false;
 
 public:
 	void FinishLoad(ExtensionInstallInfo &install_info);
@@ -59,6 +61,10 @@ public:
 	DUCKDB_API void AddExternalExtensionAlias(const string &alias, const string &extension_name);
 	DUCKDB_API string GetExternalExtensionName(const string &alias);
 
+	DUCKDB_API void SetActiveLoadPrefix(const string &prefix);
+	DUCKDB_API void ClearActiveLoadPrefix();
+	DUCKDB_API string GetActiveLoadPrefix();
+
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
 
@@ -68,6 +74,7 @@ private:
 	mutex lock;
 	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
 	unordered_map<string, string> external_aliases;
+	string active_load_prefix;
 };
 
 } // namespace duckdb

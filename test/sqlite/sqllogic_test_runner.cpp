@@ -574,6 +574,11 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
+	if (param == "double_extension_loading") {
+		con->Query("SET allow_double_extension_loading = true");
+		return RequireResult::PRESENT;
+	}
+
 	if (param == "no_alternative_verify") {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 		return RequireResult::MISSING;

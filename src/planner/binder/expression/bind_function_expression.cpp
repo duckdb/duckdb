@@ -279,19 +279,6 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		}
 		// not a table function - check if the schema is set
 		if (!function.schema.empty()) {
-			// check if the schema is an extension alias
-			auto &extension_manager = ExtensionManager::Get(binder.context);
-			auto extension_name = extension_manager.GetExternalExtensionName(function.schema);
-			if (!extension_name.empty()) {
-				// assume that there are two extensions with the same signature, but different extensions, then we need to return them both?
-				auto func = GetCatalogEntry(function.catalog, INVALID_SCHEMA, function_lookup,
-												OnEntryNotFound::RETURN_NULL);
-				// todo, loop through catalog entries
-				if (func && func->extension_name == extension_name && func->extension_alias == function.schema) {
-					function.schema = INVALID_SCHEMA;
-					return func;
-				}
-			}
 			// the schema is set - check if we can turn this the schema into a column ref
 			// does this function exist in the system catalog?
 			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);

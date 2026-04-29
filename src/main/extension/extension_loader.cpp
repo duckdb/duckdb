@@ -254,6 +254,9 @@ void ExtensionLoader::RegisterType(string type_name, LogicalType type, bind_logi
 	info.internal = true;
 	info.extension_name = extension_name;
 	info.extension_alias = extension_alias;
+	if (!ExtensionManager::Get(db).GetActiveLoadPrefix().empty()) {
+		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateType(data, info);
