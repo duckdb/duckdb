@@ -38,6 +38,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/common_subplan_optimizer.hpp"
+#include "duckdb/optimizer/partitioned_execution.hpp"
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
@@ -363,6 +364,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::REORDER_FILTER, [&]() {
 		ExpressionHeuristics expression_heuristics(*this);
 		plan = expression_heuristics.Rewrite(std::move(plan));
+	});
+
+	// split pipelines into partitions and union them back together
+	RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
+		PartitionedExecution partitioned_execution(*this, plan);
+		partitioned_execution.Optimize(plan);
 	});
 
 	// perform join filter pushdown after the dust has settled
