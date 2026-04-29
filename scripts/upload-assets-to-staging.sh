@@ -58,7 +58,7 @@ fi
 if ! command -v rclone >/dev/null 2>&1; then
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
-      choco install rclone -y
+      python3 scripts/ci/retry.py -- choco install rclone -y
       ;;
     *)
       install_runner=(bash)
