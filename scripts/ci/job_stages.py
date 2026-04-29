@@ -13,7 +13,6 @@ PULL_REQUEST_JOBS = [
     "linux-relassert-tests",
     "regression",
     "tidy-check",
-    "check-clangd-tidy",
     "extensions",
     "wasm-eh",
     "linux-release",
@@ -31,7 +30,7 @@ PULL_REQUEST_JOBS = [
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    # "check-clangd-tidy",
+    "check-clangd-tidy",
     "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
