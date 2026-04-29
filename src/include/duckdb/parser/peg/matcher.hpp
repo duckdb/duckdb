@@ -11,6 +11,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
@@ -214,6 +215,9 @@ struct PEGMatcher {
 	Matcher &Root() {
 		return *root;
 	}
+
+	static shared_ptr<PEGMatcher> Get(ClientContext &context);
+	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
 
 private:
 	friend struct ParserCache;

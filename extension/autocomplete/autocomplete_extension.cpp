@@ -363,7 +363,7 @@ public:
 		return ::duckdb::SuggestSettingName(context);
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+		return PEGMatcher::Get(context);
 	}
 
 private:
@@ -462,7 +462,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
@@ -549,7 +549,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->Root().Match(state);
 	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
 		string token_list;

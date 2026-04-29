@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
@@ -1443,6 +1444,16 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 
 	// now create the matchers for each of the rules recursively - starting at the root rule
 	return CreateMatcher(parser, root_rule);
+}
+
+shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	return PEGMatcher::Get(db);
+}
+
+shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
+	auto &parser_cache = db.GetParserCache();
+	return parser_cache.GetMatcher();
 }
 
 shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
