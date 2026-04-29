@@ -343,7 +343,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: python3 scripts/ci/retry.py -- bash scripts/install-s5cmd.sh
+        run: python3 scripts/ci/retry.py -- bash -lc 'curl https://rclone.org/install.sh | sudo bash'
 
       - uses: ./.github/actions/ccache-action
 

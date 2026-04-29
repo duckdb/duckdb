@@ -56,13 +56,12 @@ if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
-if ! command -v s5cmd >/dev/null 2>&1; then
-  "$(dirname "$0")/install-s5cmd.sh"
+if ! command -v rclone >/dev/null 2>&1; then
+  curl https://rclone.org/install.sh | sudo bash
 fi
 
 set -x
 
-for var in "${@: 2}"
-do
-    s5cmd $DRY_RUN_PARAM cp "$var" "s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
-done
+rclone $DRY_RUN_PARAM copy \
+  "${@:2}" \
+  ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
