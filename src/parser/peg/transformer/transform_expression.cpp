@@ -2630,11 +2630,16 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformGroupingExpression(
                                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto expr_list = ExtractParseResultsFromList(extract_parens);
+	auto &expr_list_opt = extract_parens.Cast<OptionalParseResult>();
+
 	vector<unique_ptr<ParsedExpression>> grouping_expressions;
-	for (auto expr : expr_list) {
-		grouping_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+	if (expr_list_opt.HasResult()) {
+		auto expr_list = ExtractParseResultsFromList(expr_list_opt.GetResult());
+		for (auto expr : expr_list) {
+			grouping_expressions.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(expr));
+		}
 	}
+
 	auto result = make_uniq<OperatorExpression>(ExpressionType::GROUPING_FUNCTION, std::move(grouping_expressions));
 	return std::move(result);
 }
