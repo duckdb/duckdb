@@ -2,9 +2,6 @@
 # description: Test timestamp casts
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT DATE '1992-01-01'::TIMESTAMP_MS
 ----

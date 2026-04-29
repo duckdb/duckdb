@@ -30,7 +30,8 @@ namespace duckdb {
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 
-ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, ExpressionValueInformation &right);
+static ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left,
+                                                     ExpressionValueInformation &right);
 
 FilterCombiner::FilterCombiner(ClientContext &context) : context(context) {
 }
@@ -307,7 +308,7 @@ bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
 	return true;
 }
 
-bool TypeSupportsConstantFilter(const LogicalType &type) {
+static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
 	}
@@ -362,7 +363,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
-		    expr = make_uniq<BoundReferenceExpression>(col_ref.alias, col_ref.return_type, 0ULL);
+		    expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
 	    });
 }
 
@@ -808,7 +809,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	auto &const_side = invert ? *comp.left : *comp.right;
 	auto &cast_expr = cast_side.Cast<BoundCastExpression>();
 	auto source_type = cast_expr.source_type();
-	auto &target_type = cast_expr.return_type;
+	auto &target_type = cast_expr.GetReturnType();
 	int64_t margin = GetTemporalCastMargin(source_type.id(), target_type.id());
 	if (margin < 0) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -958,7 +959,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// get the current bucket of constant values
 		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &info_list = constant_values.find(equivalence_set)->second;
-		if (node.return_type != info.constant.type()) {
+		if (node.GetReturnType() != info.constant.type()) {
 			return FilterResult::UNSUPPORTED;
 		}
 		// check the existing constant comparisons to see if we can do any pruning
@@ -1164,7 +1165,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			if (st_col_ref.binding != col_ref.binding) {
 				continue;
 			}
-			if (bound_cast_expr.return_type != stored_exp.second->return_type) {
+			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
 				continue;
 			}
 			bound_cast_expr.child = stored_exp.second->Copy();
@@ -1294,7 +1295,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 	return nullptr;
 }
 
-ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {
+static ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {
 	if (result == ValueComparisonResult::PRUNE_RIGHT) {
 		return ValueComparisonResult::PRUNE_LEFT;
 	}

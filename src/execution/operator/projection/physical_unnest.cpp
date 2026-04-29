@@ -22,7 +22,7 @@ public:
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->GetExpressionType() == ExpressionType::BOUND_UNNEST);
 			auto &bue = exp->Cast<BoundUnnestExpression>();
-			list_data_types.push_back(bue.child->return_type);
+			list_data_types.push_back(bue.child->GetReturnType());
 			executor.AddExpression(*bue.child.get());
 
 			unnest_sels.emplace_back(STANDARD_VECTOR_SIZE);

@@ -223,7 +223,7 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 	LogicalType child_type = LogicalType::SQLNULL;
 	bool all_null = true;
 	for (auto &arg : arguments) {
-		auto &return_type = arg->return_type;
+		auto &return_type = arg->GetReturnType();
 		if (return_type == LogicalTypeId::SQLNULL) {
 			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 			continue;
@@ -250,7 +250,7 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 						type_list += ", ";
 					}
 				}
-				type_list += arguments[arg_idx]->return_type.ToString();
+				type_list += arguments[arg_idx]->GetReturnType().ToString();
 			}
 			throw BinderException(*arg, "Cannot concatenate types %s - an explicit cast is required", type_list);
 		}
@@ -279,16 +279,16 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 	// blob concat is only supported for the concat operator - regular concat converts to varchar
 	bool all_blob = is_operator ? true : false;
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->return_type.id() == LogicalTypeId::LIST || arg->return_type.id() == LogicalTypeId::ARRAY) {
+		if (arg->GetReturnType().id() == LogicalTypeId::LIST || arg->GetReturnType().id() == LogicalTypeId::ARRAY) {
 			list_concat = true;
 		}
-		if (arg->return_type.id() != LogicalTypeId::BLOB) {
+		if (arg->GetReturnType().id() != LogicalTypeId::BLOB) {
 			all_blob = false;
 		}
-		if (arg->return_type.id() != LogicalTypeId::SQLNULL) {
+		if (arg->GetReturnType().id() != LogicalTypeId::SQLNULL) {
 			all_null = false;
 		}
 	}

@@ -2,9 +2,6 @@
 # description: Having subquery alias in subquery
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification;
-
 statement error
 SELECT sum(c2) c0 FROM (SELECT 1) t1(c2) HAVING (SELECT c0);
 ----

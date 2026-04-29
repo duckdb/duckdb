@@ -2,9 +2,6 @@
 # description: Test range joins
 # group: [inner]
 
-statement ok
-PRAGMA enable_verification
-
 # create tables
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

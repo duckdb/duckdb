@@ -17,7 +17,7 @@
 namespace duckdb {
 
 namespace {
-DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType &type) {
+DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, const LogicalType &type) {
 	const auto part = GetDatePartSpecifier(specifier);
 	switch (type.id()) {
 	case LogicalType::TIMESTAMP:
@@ -1779,7 +1779,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "julian";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
-		switch (arguments[0]->return_type.id()) {
+		switch (arguments[0]->GetReturnType().id()) {
 		case LogicalType::TIMESTAMP:
 		case LogicalType::TIMESTAMP_S:
 		case LogicalType::TIMESTAMP_MS:
@@ -1802,7 +1802,7 @@ unique_ptr<FunctionData> DatePartBind(BindScalarFunctionInput &input) {
 		bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 		bound_function.name = "epoch";
 		bound_function.SetReturnType(LogicalType::DOUBLE);
-		switch (arguments[0]->return_type.id()) {
+		switch (arguments[0]->GetReturnType().id()) {
 		case LogicalType::TIMESTAMP:
 		case LogicalType::TIMESTAMP_S:
 		case LogicalType::TIMESTAMP_MS:
@@ -1970,7 +1970,7 @@ struct StructDatePart {
 					throw BinderException("NULL struct entry name in %s", bound_function.name);
 				}
 				const auto part_name = part_value.ToString();
-				const auto part_code = GetDateTypePartSpecifier(part_name, arguments[1]->return_type);
+				const auto part_code = GetDateTypePartSpecifier(part_name, arguments[1]->GetReturnType());
 				if (name_collision_set.find(part_name) != name_collision_set.end()) {
 					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
 				}
@@ -2078,14 +2078,15 @@ struct StructDatePart {
 	}
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                              const ScalarFunction &function) {
+	                              const BoundScalarFunction &function) {
 		D_ASSERT(bind_data_p);
 		auto &info = bind_data_p->Cast<BindData>();
 		serializer.WriteProperty(100, "stype", info.stype);
 		serializer.WriteProperty(101, "part_codes", info.part_codes);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer,
+	                                                    BoundScalarFunction &bound_function) {
 		auto stype = deserializer.ReadProperty<LogicalType>(100, "stype");
 		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(101, "part_codes");
 		return make_uniq<BindData>(std::move(stype), std::move(part_codes));

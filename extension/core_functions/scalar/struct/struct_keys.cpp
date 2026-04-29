@@ -65,16 +65,16 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructKeysBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
-	auto return_type = arguments[0]->return_type;
+	auto return_type = arguments[0]->GetReturnType();
 	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
 
-	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->return_type);
+	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->GetReturnType());
 	if (is_unnamed) {
 		throw InvalidInputException("struct_keys() cannot be applied to an unnamed STRUCT");
 	}
-	return make_uniq<StructKeysBindData>(arguments[0]->return_type);
+	return make_uniq<StructKeysBindData>(arguments[0]->GetReturnType());
 }
 
 ScalarFunction StructKeysFun::GetFunction() {

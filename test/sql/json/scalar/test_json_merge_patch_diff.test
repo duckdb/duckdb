@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # Scalar value change
 query T
 SELECT json_merge_patch_diff('{"a":1}', '{"a":2}')

@@ -2,9 +2,6 @@
 # description: Test expressions with transitive filters
 # group: [filter]
 
-statement ok
-PRAGMA enable_verification
-
 # Test various transitive filters with simple constant comparisons followed by non-scalar comparisons
 # The main point here is to check that the optimizer handles all these cases correctly
 

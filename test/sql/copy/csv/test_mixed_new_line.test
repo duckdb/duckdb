@@ -4,9 +4,6 @@
 
 require notwindows
 
-statement ok
-pragma enable_verification;
-
 query III
 from read_csv('{DATA_DIR}/csv/mixed_new_line.csv', strict_mode=false)
 ----

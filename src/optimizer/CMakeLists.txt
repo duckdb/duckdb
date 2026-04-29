@@ -32,6 +32,7 @@ add_library_unity(
   late_materialization_helper.cpp
   optimizer.cpp
   outer_join_simplification.cpp
+  partitioned_execution.cpp
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp

@@ -3,9 +3,6 @@
 # group: [pivot]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE Cities (Name VARCHAR, id INTEGER);
 INSERT INTO Cities VALUES ('Test', 1);
 INSERT INTO Cities VALUES ('test',2);

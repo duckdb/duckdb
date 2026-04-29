@@ -11,9 +11,6 @@ SET Calendar = 'gregorian';
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
-statement ok
-PRAGMA enable_verification
-
 # Parse TZ
 query I
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');

@@ -70,7 +70,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
 			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
-			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
+			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
 		if (!arg->GetAlias().empty()) {
 			// Default argument

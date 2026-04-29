@@ -2,9 +2,6 @@
 # description: Test interval try cast
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT cast('   ' as interval)
 ----

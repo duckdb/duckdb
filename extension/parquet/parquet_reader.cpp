@@ -1175,14 +1175,14 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		// Handle comparison expressions (from ConstantFilter conversion)
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comp = expr.Cast<BoundComparisonExpression>();
-			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+			if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant = comp.right->Cast<BoundConstantExpression>();
 				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
 					auto &min_value = pq_col_stats.min_value;
 					auto &max_value = pq_col_stats.max_value;
 					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-					                                 comp.type, StringValue::Get(constant.value));
+					                                 comp.GetExpressionType(), StringValue::Get(constant.value));
 				}
 			}
 		}
@@ -1365,7 +1365,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		if (it != expression_map.end()) {
 			auto &expression = it->second;
 			auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
-			    column_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
+			    column_reader->Schema(), expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
 			auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader), expression->Copy(),
 			                                                     std::move(expr_schema));
 			state.column_readers[i] = std::move(expr_reader);

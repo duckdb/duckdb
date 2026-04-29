@@ -18,6 +18,7 @@ namespace duckdb {
 
 class BufferManager;
 class InterruptState;
+class BoundAggregateFunction;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -54,7 +55,7 @@ struct WindowPartitionInput {
 
 class BindAggregateFunctionInput {
 public:
-	BindAggregateFunctionInput(ClientContext &context_p, AggregateFunction &bound_function_p,
+	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
 	                           vector<unique_ptr<Expression>> &arguments_p)
 	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
 	}
@@ -62,7 +63,7 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
-	AggregateFunction &GetBoundFunction() const {
+	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	vector<unique_ptr<Expression>> &GetArguments() const {
@@ -71,7 +72,7 @@ public:
 
 private:
 	ClientContext &context;
-	AggregateFunction &bound_function;
+	BoundAggregateFunction &bound_function;
 	vector<unique_ptr<Expression>> &arguments;
 };
 
@@ -120,8 +121,9 @@ typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const W
                                     data_ptr_t g_state);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                      const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
+                                      const BoundAggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
+                                                            BoundAggregateFunction &function);
 
 typedef LogicalType (*aggregate_get_state_type_t)(const AggregateFunction &function);
 
@@ -293,11 +295,8 @@ public:
 	bool HasBindCallback() const { return callbacks.bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return callbacks.bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { callbacks.bind = callback; }
-	unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
-	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
-		BindAggregateFunctionInput bind_input(context, *this, arguments);
-		return Bind(bind_input);
-	}
+
+	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
 	bool HasStateInitCallback() const { return callbacks.initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return callbacks.initialize; }
@@ -565,6 +564,13 @@ public:
 	template <class STATE, class OP>
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
+	}
+};
+
+class BoundAggregateFunction : public AggregateFunction {
+public:
+	BoundAggregateFunction(const AggregateFunction &function) // NOLINT: allow implicit conversion
+	    : AggregateFunction(function) {
 	}
 };
 

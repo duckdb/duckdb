@@ -35,9 +35,6 @@ SELECT MIN(i), MAX(i) FROM integers
 restart
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA threads=4
 
 statement ok

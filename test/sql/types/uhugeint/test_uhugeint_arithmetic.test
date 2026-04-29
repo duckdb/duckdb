@@ -2,9 +2,6 @@
 # description: Test arithmetic with unsigned huge integers
 # group: [uhugeint]
 
-statement ok
-PRAGMA enable_verification
-
 # negation
 query II
 SELECT ~(-50::UHUGEINT), -(-(50::UHUGEINT));

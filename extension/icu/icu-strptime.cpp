@@ -332,7 +332,9 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		return bound_function.Bind(context, arguments);
+		BindScalarFunctionInput new_input(context, bound_function, arguments,
+		                                  input.HasBinder() ? &input.GetBinder() : nullptr);
+		return bound_function.GetBindCallback()(new_input);
 	}
 
 	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {

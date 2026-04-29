@@ -223,7 +223,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	if (!child_stats) {
 		return nullptr;
 	}
-	auto result_stats = TryPropagateCast(*child_stats, cast.child->return_type, cast.return_type);
+	auto result_stats = TryPropagateCast(*child_stats, cast.child->GetReturnType(), cast.GetReturnType());
 	if (cast.try_cast && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}

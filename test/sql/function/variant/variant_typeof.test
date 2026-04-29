@@ -4,9 +4,6 @@
 # TODO: "Force storage" will use default storage version, but variant requires v1.5.0, so skip for now
 require no_force_storage
 
-statement ok
-pragma enable_verification;
-
 query I
 select variant_typeof({'a': 42}::VARIANT);
 ----

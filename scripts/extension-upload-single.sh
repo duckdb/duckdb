@@ -76,11 +76,45 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     exit 0
 fi
 
+if ! command -v rclone >/dev/null 2>&1; then
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        choco install rclone -y
+        ;;
+      *)
+        install_runner=(bash)
+        if command -v sudo >/dev/null 2>&1; then
+          install_runner=(sudo bash)
+        fi
+        curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+        ;;
+    esac
+fi
+
 # Set dry run unless guard var is set
-DRY_RUN_PARAM="--dryrun"
+DRY_RUN_PARAM="--dry-run"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   DRY_RUN_PARAM=""
 fi
+
+dest_extension="gz"
+extra_upload_args=()
+if [[ $4 == wasm* ]]; then
+  dest_extension="wasm"
+  extra_upload_args=(
+    --header-upload "Content-Encoding: br"
+    --header-upload "Content-Type: application/wasm"
+  )
+fi
+
+upload_extension() {
+  local destination="$1"
+  rclone $DRY_RUN_PARAM copyto \
+    --s3-acl public-read \
+    "${extra_upload_args[@]}" \
+    "$ext.compressed" \
+    ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:${destination}"
+}
 
 # upload versioned version
 if [[ $7 = 'true' ]]; then
@@ -90,20 +124,12 @@ if [[ $7 = 'true' ]]; then
     exit 1
   fi
 
-  if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
-  else
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
-  fi
+  upload_extension "$5/$1/$2/$3/$4/$1.duckdb_extension.$dest_extension"
 fi
 
 # upload to latest version
 if [[ $6 = 'true' ]]; then
-  if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
-  else
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
-  fi
+  upload_extension "$5/$3/$4/$1.duckdb_extension.$dest_extension"
 fi
 
 # clean up

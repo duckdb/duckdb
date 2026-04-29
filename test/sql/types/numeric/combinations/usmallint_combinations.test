@@ -2,9 +2,6 @@
 # description: Testing resulting types of different types combined with USMALLINT
 # group: [combinations]
 
-statement ok
-PRAGMA enable_verification
-
 #SMALLINT -> SMALLINT
 query I
 select typeof([100::USMALLINT, 10000::SMALLINT]);
