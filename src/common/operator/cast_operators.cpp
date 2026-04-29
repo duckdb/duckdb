@@ -1806,6 +1806,12 @@ bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 }
 
 template <>
+bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
+	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, false) ==
+	       TimestampCastResult::SUCCESS;
+}
+
+template <>
 bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict) {
 	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true) ==
 	       TimestampCastResult::SUCCESS;
@@ -1815,11 +1821,6 @@ template <>
 bool TryCast::Operation(string_t input, timestamp_tz_ns_t &result, bool strict) {
 	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result, true) ==
 	       TimestampCastResult::SUCCESS;
-}
-
-template <>
-bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict) {
-	return Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result) == TimestampCastResult::SUCCESS;
 }
 
 template <>

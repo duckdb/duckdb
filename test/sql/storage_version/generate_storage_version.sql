@@ -52,7 +52,7 @@ CREATE TABLE alias_values (
 INSERT INTO alias_values
     VALUES (2, 'hello world', 'alias'), (NULL, NULL, NULL);
 -- all types
-CREATE TABLE all_types AS SELECT * FROM test_all_types();
+CREATE TABLE all_types AS SELECT * EXCLUDE(geometry) FROM test_all_types();
 -- test constraints
 CREATE TABLE check_constraint (
     i integer,

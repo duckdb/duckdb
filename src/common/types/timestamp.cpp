@@ -200,13 +200,15 @@ bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestam
 	return IsFinite(result);
 }
 
-TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result, bool use_offset,
+                                                   bool strict) {
 	int32_t nanos = 0;
-	auto success = TryConvertTimestamp(str, len, result, true, &nanos);
+	timestamp_t micros;
+	auto success = TryConvertTimestamp(str, len, micros, use_offset, &nanos, strict);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
 	}
-	if (!TryFromTimestampNanos(result, nanos, result)) {
+	if (!TryFromTimestampNanos(micros, nanos, result)) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	return TimestampCastResult::SUCCESS;
