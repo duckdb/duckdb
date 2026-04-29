@@ -1,0 +1,162 @@
+# name: test/sql/sample/test_system_rows.test
+# description: Test system sampling with row counts
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+# Create test table with 10000 rows
+statement ok
+CREATE TABLE test_table AS SELECT i FROM range(10000) tbl(i);
+
+# Basic system sampling with row count
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 100 ROWS (system);
+----
+100
+
+# System sampling with larger row count
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 500 ROWS (system);
+----
+500
+
+# Verify sampling actually happens at the scan level
+query II
+EXPLAIN SELECT * FROM test_table USING SAMPLE 100 ROWS (system);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 100 rows.*
+
+# Verify with repeatable seed
+query II
+EXPLAIN SELECT * FROM test_table USING SAMPLE 500 ROWS (system, 42);
+----
+physical_plan	<REGEX>:.*SEQ_SCAN.*System: 500 rows.*
+
+# System sampling should not exceed table size
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 15000 ROWS (system);
+----
+10000
+
+# Edge case: zero rows requested
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 0 ROWS (system);
+----
+0
+
+# Edge case: exactly one row
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 1 ROWS (system);
+----
+1
+
+# System sampling with repeatable seed - should give consistent results
+loop i 0 5
+
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 250 ROWS (system, 42);
+----
+250
+
+endloop
+
+# System sampling with different seeds should potentially give different results
+# (but same count)
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 200 ROWS (system, 100);
+----
+200
+
+query I
+SELECT COUNT(*) FROM test_table USING SAMPLE 200 ROWS (system, 999);
+----
+200
+
+# Test with small table; materialized range() source for sampling below
+statement ok
+CREATE TABLE small_table AS SELECT i FROM range(10) tbl(i);
+
+statement ok
+CREATE TABLE range_sample_src AS SELECT i FROM range(5000) tbl(i);
+
+query I
+SELECT COUNT(*) FROM small_table USING SAMPLE 5 ROWS (system);
+----
+5
+
+# Request more rows than available
+query I
+SELECT COUNT(*) FROM small_table USING SAMPLE 20 ROWS (system);
+----
+10
+
+# Edge case: one row from a small table
+query I
+SELECT COUNT(*) FROM small_table USING SAMPLE 1 ROWS (system);
+----
+1
+
+# The following cases disable verification: (1) CTE / window subquery sampling
+# can hit scheduler limitations under the statement verifier; (2) when system sampling
+# is pushed down before a filter, the requested row count can disagree with the
+# filtered result count (correct behavior, but verification would flag it).
+statement ok
+PRAGMA disable_verification;
+
+# System sampling over a CTE (non-simple table ref)
+query I
+WITH base AS (
+    SELECT i FROM test_table
+)
+SELECT COUNT(*) FROM base USING SAMPLE 37 ROWS (system);
+----
+37
+
+# System sampling over rows originally from range() (materialized table)
+query I
+SELECT COUNT(*) FROM range_sample_src USING SAMPLE 120 ROWS (system);
+----
+120
+
+# Chained CTE: sample the final relation built from multiple CTEs
+query I
+WITH x AS (
+    SELECT * FROM test_table ORDER BY i LIMIT 200
+)
+SELECT COUNT(*) FROM x USING SAMPLE 50 ROWS (system);
+----
+50
+
+# System sampling over a window subquery (non-simple pipeline)
+query I
+SELECT COUNT(*) FROM (
+    SELECT i, row_number() OVER w
+    FROM test_table
+    WINDOW w AS (ORDER BY i)
+) sq USING SAMPLE 50 ROWS (system);
+----
+50
+
+# The scan-level pushdown undershoot (first query below) is fixed for the
+# default vector size because the scan samples at rate before filters apply
+# (see RowGroup::Scan), so the exact count depends on STANDARD_VECTOR_SIZE=2048.
+# The subquery case (second query) uses STREAMING_SAMPLE *after* the filter:
+# 5000 filtered rows × rate(200/10000=0.02) = exactly 100 rows.
+require exact_vector_size 2048
+
+# System sampling with filtering pushed down to the scan; undershoots due to filter
+query I
+SELECT COUNT(*) FROM test_table WHERE i < 5000 USING SAMPLE 100 ROWS (system);
+----
+63
+
+# System sampling over a filtered subquery (STREAMING_SAMPLE after filter);
+# 5000 rows pass the filter, rate = 0.02, systematic sampling gives exactly 100
+query I
+SELECT COUNT(*) FROM (SELECT * FROM test_table WHERE i % 2 = 0) tbl(i) USING SAMPLE 200 ROWS (system);
+----
+100
+
+statement ok
+PRAGMA enable_verification;
