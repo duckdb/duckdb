@@ -156,47 +156,11 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		if (column.Oid() > 0) {
 			ss << ", ";
 		}
-		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
-		auto &column_type = column.Type();
-		if (column_type.id() != LogicalTypeId::ANY) {
-			ss << column.Type().ToString();
-		}
-		auto extra_type_info = column_type.AuxInfo();
-		if (extra_type_info) {
-			if (extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-				auto &string_info = extra_type_info->Cast<StringTypeInfo>();
-				if (!string_info.collation.empty()) {
-					ss << " COLLATE " + string_info.collation;
-				}
-			}
-			if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
-				// TODO
-				// auto &colllation = UnboundType::GetCollation(column_type);
-				// if (!colllation.empty()) {
-				//	ss << " COLLATE " + colllation;
-				//}
-			}
-		}
+		ss << column.ToSQLString();
 		bool not_null = not_null_columns.find(column.Logical()) != not_null_columns.end();
 		bool is_single_key_pk = pk_columns.find(column.Logical()) != pk_columns.end();
 		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
 		bool is_unique = unique_columns.find(column.Logical()) != unique_columns.end();
-		if (column.Generated()) {
-			reference<const ParsedExpression> generated_expression = column.GeneratedExpression();
-			if (column_type.id() != LogicalTypeId::ANY) {
-				// We artificially add a cast if the type is specified, need to strip it
-				auto &expr = generated_expression.get();
-				D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
-				auto &cast_expr = expr.Cast<CastExpression>();
-				generated_expression = *cast_expr.child;
-			}
-			ss << " GENERATED ALWAYS AS(" << generated_expression.get().ToString() << ")";
-		} else if (column.HasDefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue().ToString() << ")";
-		}
-		if (column.CompressionType() != CompressionType::COMPRESSION_AUTO) {
-			ss << " USING COMPRESSION " << CompressionTypeToString(column.CompressionType());
-		}
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
 			ss << " NOT NULL";

@@ -4437,19 +4437,20 @@ const StringUtil::EnumStringLiteral *GetRequestTypeValues() {
 		{ static_cast<uint32_t>(RequestType::PUT_REQUEST), "PUT" },
 		{ static_cast<uint32_t>(RequestType::HEAD_REQUEST), "HEAD" },
 		{ static_cast<uint32_t>(RequestType::DELETE_REQUEST), "DELETE" },
-		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST" }
+		{ static_cast<uint32_t>(RequestType::POST_REQUEST), "POST" },
+		{ static_cast<uint32_t>(RequestType::OPTIONS_REQUEST), "OPTIONS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value) {
-	return StringUtil::EnumToString(GetRequestTypeValues(), 5, "RequestType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetRequestTypeValues(), 6, "RequestType", static_cast<uint32_t>(value));
 }
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value) {
-	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 5, "RequestType", value));
+	return static_cast<RequestType>(StringUtil::StringToEnum(GetRequestTypeValues(), 6, "RequestType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetResultModifierTypeValues() {

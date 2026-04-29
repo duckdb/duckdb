@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
+BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction function,
+                                                   vector<unique_ptr<Expression>> children,
                                                    unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
                                                    AggregateType aggr_type)
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
@@ -93,7 +94,7 @@ void BoundAggregateExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
 	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
 	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
 	auto filter =

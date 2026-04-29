@@ -83,14 +83,14 @@ struct IcuBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function) {
+	                      const BoundScalarFunction &function) {
 		auto &bind_data = bind_data_p->Cast<IcuBindData>();
 		serializer.WriteProperty(100, "language", bind_data.language);
 		serializer.WriteProperty(101, "country", bind_data.country);
 		serializer.WritePropertyWithDefault<string>(102, "tag", bind_data.tag);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		string language;
 		string country;
 		string tag;

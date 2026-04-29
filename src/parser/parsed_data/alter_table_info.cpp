@@ -261,21 +261,20 @@ unique_ptr<AlterInfo> AddFieldInfo::Copy() const {
 }
 
 string AddFieldInfo::ToString() const {
-	string result = "";
-	result += "ALTER TABLE ";
+	string result = "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
-	result += " ADD COLUMN";
+	result += " ADD COLUMN ";
 	if (if_field_not_exists) {
-		result += " IF NOT EXISTS";
+		result += "IF NOT EXISTS ";
 	}
 	for (auto &path : column_path) {
 		result += KeywordHelper::WriteOptionallyQuoted(path);
 		result += ".";
 	}
-	throw NotImplementedException("FIXME: column definition to string");
+	result += new_field.ToSQLString();
 	result += ";";
 	return result;
 }

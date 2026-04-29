@@ -11,6 +11,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/main/settings.hpp"
 
@@ -382,15 +383,18 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto name = std::move(function.name);
 
 	auto state_export_type = function.GetStateTypeCallback();
-	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
-	function.SetStructStateExport(state_export_type);
-	function.name = std::move(name);
-	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	if (function.HasBindCallback()) {
-		return function.Bind(context, arguments);
-	}
-	return nullptr;
+	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
+
+	minmax_func.SetStructStateExport(state_export_type);
+	minmax_func.name = std::move(name);
+	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+
+	auto expr = minmax_func.Bind(context, std::move(arguments));
+	arguments = std::move(expr->children);
+
+	function = std::move(expr->function);
+	return std::move(expr->bind_info);
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
