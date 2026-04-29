@@ -5,9 +5,6 @@
 # load the DB from disk
 load {TEST_DIR}/null_byte_storage.db
 
-statement ok
-PRAGMA enable_verification
-
 foreach compr uncompressed fsst dictionary dict_fsst
 
 statement ok

@@ -318,17 +318,11 @@ jobs:
            echo "PATH=$PATH"
            where python
            python --version
-           where unittest.exe || true
-           if [ -f build/release/test/unittest.exe ]; then
-             ls -l build/release/test/unittest.exe
-           fi
            echo "Nearby DLLs and EXEs:"
            find build/release -maxdepth 3 \( -name '*.dll' -o -name '*.exe' \) | sort || true
            /c/Windows/System32/cmd.exe /c "where libstdc++-6.dll" || true
            /c/Windows/System32/cmd.exe /c "where libgcc_s_seh-1.dll" || true
            /c/Windows/System32/cmd.exe /c "where libwinpthread-1.dll" || true
-           objdump -p build/release/test/unittest.exe | sed -n '/DLL Name:/p' || true
-           ./build/release/test/unittest.exe --list-tests || true
 
        - name: Build
          run: python scripts/ci/retry.py -- make release

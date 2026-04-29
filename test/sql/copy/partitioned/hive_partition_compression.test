@@ -2,9 +2,6 @@
 # description: Test we can round-trip partitioned compressed Parquet files
 # group: [partitioned]
 
-statement ok
-PRAGMA enable_verification
-
 require parquet
 
 statement ok

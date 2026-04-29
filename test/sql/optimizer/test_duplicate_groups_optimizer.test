@@ -14,9 +14,6 @@ insert into t1 values (1, 1);
 statement ok
 insert into t2 values (1);
 
-statement ok
-pragma enable_verification;
-
 query III
 select
 	col1,

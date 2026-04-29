@@ -300,7 +300,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
 	bool is_empty = false;
-	if (param->return_type.id() == LogicalTypeId::LIST) {
+	if (param->GetReturnType().id() == LogicalTypeId::LIST) {
 		auto empty_list = make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 		is_empty = param->Equals(*empty_list);
 		if (!is_empty) {
@@ -318,17 +318,17 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
 	D_ASSERT(bound_function.GetArguments().size() == 3 || bound_function.GetArguments().size() == 4);
 
-	switch (arguments[0]->return_type.id()) {
+	switch (arguments[0]->GetReturnType().id()) {
 	case LogicalTypeId::ARRAY: {
 		// Cast to list
-		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		auto child_type = ArrayType::GetChildType(arguments[0]->GetReturnType());
 		auto target_type = LogicalType::LIST(child_type);
 		arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), target_type);
-		bound_function.SetReturnType(arguments[0]->return_type);
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	} break;
 	case LogicalTypeId::LIST:
 		// The result is the same type
-		bound_function.SetReturnType(arguments[0]->return_type);
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
@@ -338,15 +338,15 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 			    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
 			    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
 		}
-		if (arguments[0]->return_type.IsJSONType()) {
+		if (arguments[0]->GetReturnType().IsJSONType()) {
 			// This is needed to avoid producing invalid JSON
 			bound_function.GetArguments()[0] = LogicalType::VARCHAR;
 			bound_function.SetReturnType(LogicalType::VARCHAR);
 		} else {
-			bound_function.SetReturnType(arguments[0]->return_type);
+			bound_function.SetReturnType(arguments[0]->GetReturnType());
 		}
 		for (idx_t i = 1; i < 3; i++) {
-			if (arguments[i]->return_type.id() != LogicalTypeId::LIST) {
+			if (arguments[i]->GetReturnType().id() != LogicalTypeId::LIST) {
 				bound_function.GetArguments()[i] = LogicalType::BIGINT;
 			}
 		}

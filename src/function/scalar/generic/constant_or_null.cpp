@@ -83,7 +83,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	}
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 

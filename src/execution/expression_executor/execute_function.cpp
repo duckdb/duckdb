@@ -12,7 +12,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
-	if (expr.return_type.InternalType() == PhysicalType::STRUCT) {
+	if (expr.GetReturnType().InternalType() == PhysicalType::STRUCT) {
 		return; // FIXME: get this working for STRUCT
 	}
 
@@ -30,7 +30,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
 			}
-			if (child.return_type.InternalType() == PhysicalType::STRUCT) {
+			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
 				break; // FIXME
 			}
 			input_col_idx = child_idx;
@@ -173,9 +173,9 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 
 static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
                                   Vector &result) {
-	if (expr.return_type != LogicalType::BOOLEAN) {
+	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
 		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.name,
-		                            expr.return_type.ToString());
+		                            expr.GetReturnType().ToString());
 	}
 	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
 		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
@@ -225,7 +225,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto default_null_handling = expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			D_ASSERT(state->types[i] == expr.children[i]->return_type);
+			D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				all_constant = false;
@@ -263,7 +263,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	}
 
 	VerifyNullHandling(expr, arguments, result);
-	D_ASSERT(result.GetType() == expr.return_type);
+	D_ASSERT(result.GetType() == expr.GetReturnType());
 }
 
 static void ScatterSelectionResult(const SelectionVector &source, idx_t source_count, const SelectionVector *sel,
@@ -287,7 +287,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		D_ASSERT(state->types[i] == expr.children[i]->return_type);
+		D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 	}
 	arguments.SetCardinality(count);

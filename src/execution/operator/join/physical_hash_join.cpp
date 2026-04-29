@@ -57,7 +57,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
 
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.IsComparison());
-		condition_types.push_back(condition.GetLHS().return_type);
+		condition_types.push_back(condition.GetLHS().GetReturnType());
 	}
 
 	vector<idx_t> probe_cols;
@@ -302,7 +302,7 @@ public:
 			}
 		}
 		// For external hash join
-		external = ClientConfig::GetConfig(context).force_external;
+		external = Settings::Get<DebugForceExternalSetting>(context);
 		// Set probe types
 		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
@@ -440,7 +440,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
-			delim_payload_types.push_back(aggr->return_type);
+			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto count_fun = CountFunctionBase::GetFunction();
@@ -450,7 +450,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
-			delim_payload_types.push_back(aggr->return_type);
+			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = BufferAllocator::Get(context);
@@ -1010,7 +1010,7 @@ bool JoinFilterPushdownInfo::CanUsePrefixRangeFilter(ClientContext &context, opt
 		return false;
 	}
 
-	const auto &key_type = ht->conditions[0].GetLHS().return_type;
+	const auto &key_type = ht->conditions[0].GetLHS().GetReturnType();
 	return PrefixRangeTableFilter::SupportedType(key_type);
 }
 
@@ -1020,7 +1020,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	// If the nulls are equal, we let nulls pass. If not, we filter them
 	auto filters_null_values = !ht.NullValuesAreEqual(0);
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
-	const auto key_type = ht.conditions[0].GetLHS().return_type;
+	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	ht.SetBuildBloomFilter(true);
 	auto filter =
 	    make_uniq_base<TableFilter, BFTableFilter>(ht.GetBloomFilter(), filters_null_values, key_name, key_type);
@@ -1043,7 +1043,7 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
                                                        JoinHashTable &ht, const PhysicalOperator &op,
                                                        ProjectionIndex filter_col_idx, const Value &min_val,
                                                        const Value &max_val) const {
-	const auto key_type = ht.conditions[0].GetLHS().return_type;
+	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
 	if (!ht.GetPrefixRangeFilter()) {
 		auto prefix_filter = PrefixRangeFilter::CreatePrefixRangeFilter(key_type);
 		prefix_filter->Initialize(context, ht.Count(), min_val, max_val);
@@ -1062,7 +1062,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeMinMax(JoinFilterGlobalSta
 	// finalize the min/max aggregates
 	vector<LogicalType> min_max_types;
 	for (auto &aggr_expr : min_max_aggregates) {
-		min_max_types.push_back(aggr_expr->return_type);
+		min_max_types.push_back(aggr_expr->GetReturnType());
 	}
 	auto final_min_max = make_uniq<DataChunk>();
 	final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
@@ -1274,9 +1274,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		filter_min_max = filter_pushdown->FinalizeMinMax(*sink.global_filter_state);
 		min = filter_min_max->data[0].GetValue(0);
 		max = filter_min_max->data[1].GetValue(0);
-	} else if (TypeIsIntegral(conditions[0].GetRHS().return_type.InternalType())) {
-		min = Value::MinimumValue(conditions[0].GetRHS().return_type);
-		max = Value::MaximumValue(conditions[0].GetRHS().return_type);
+	} else if (TypeIsIntegral(conditions[0].GetRHS().GetReturnType().InternalType())) {
+		min = Value::MinimumValue(conditions[0].GetRHS().GetReturnType());
+		max = Value::MaximumValue(conditions[0].GetRHS().GetReturnType());
 	}
 
 	// check for possible perfect hash table

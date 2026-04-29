@@ -8,34 +8,35 @@
 
 #pragma once
 
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
 
-class BoundColumnRefExpression;
+class LogicalAggregate;
+class LogicalProjection;
+class Optimizer;
 
-//! The RemoveDuplicateGroups optimizer traverses the logical operator tree and removes any duplicate aggregate groups
-//! Duplicate groups may be introduced when joins columns are removed, e.g., by Deliminator or RemoveUnusedColumns
-class RemoveDuplicateGroups : public LogicalOperatorVisitor {
+//! Removes same-binding duplicate groups (e.g. from Deliminator / RemoveUnusedColumns) and
+//! groups that are deterministic functions of a sibling column-ref group (e.g.
+//! `GROUP BY x, x-1, cast(x AS BIGINT)`). The latter are recomputed in a projection above.
+class RemoveDuplicateGroups : public BaseColumnPruner {
 public:
-	RemoveDuplicateGroups() {
-	}
+	explicit RemoveDuplicateGroups(Optimizer &optimizer);
 
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
 	void VisitAggregate(LogicalAggregate &aggr);
 
-protected:
-	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
-
 private:
-	//! The map of column references
-	column_binding_map_t<vector<reference<BoundColumnRefExpression>>> column_references;
+	Optimizer &optimizer;
 	//! Stored expressions (kept around so we don't have dangling pointers)
 	vector<unique_ptr<Expression>> stored_expressions;
+	//! Filled by VisitAggregate, consumed by VisitOperator post-recursion when we own the slot.
+	reference_map_t<LogicalAggregate, unique_ptr<LogicalProjection>> pending_projections;
 };
 
 } // namespace duckdb

@@ -26,7 +26,7 @@ PhysicalPivot::PhysicalPivot(PhysicalPlan &physical_plan, vector<LogicalType> ty
 		auto state = make_unsafe_uniq_array<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
 		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())), count_t(1));
-		Vector result_vector(aggr_expr->return_type);
+		Vector result_vector(aggr_expr->GetReturnType());
 		AggregateInputData aggr_input_data(aggr.bind_info.get(), physical_plan.ArenaRef());
 		aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, result_vector, 1, 0);
 		empty_aggregates.push_back(result_vector.GetValue(0));

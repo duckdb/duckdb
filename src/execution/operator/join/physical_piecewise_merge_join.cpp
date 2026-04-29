@@ -21,8 +21,8 @@ PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(PhysicalPlan &physical_pl
     : PhysicalRangeJoin(physical_plan, op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, left, right, std::move(cond),
                         join_type, estimated_cardinality, std::move(pushdown_info_p)) {
 	for (auto &join_cond : conditions) {
-		D_ASSERT(join_cond.GetLHS().return_type == join_cond.GetRHS().return_type);
-		join_key_types.push_back(join_cond.GetLHS().return_type);
+		D_ASSERT(join_cond.GetLHS().GetReturnType() == join_cond.GetRHS().GetReturnType());
+		join_key_types.push_back(join_cond.GetLHS().GetReturnType());
 
 		// Convert the conditions to sort orders
 		auto left_expr = join_cond.GetLHS().Copy();
@@ -204,7 +204,7 @@ public:
 		vector<LogicalType> condition_types;
 		for (auto &order : op.rhs_orders) {
 			rhs_executor.AddExpression(*order.expression);
-			condition_types.push_back(order.expression->return_type);
+			condition_types.push_back(order.expression->GetReturnType());
 		}
 		rhs_keys.Initialize(client, condition_types);
 		rhs_input.Initialize(client, op.children[1].get().GetTypes());
@@ -316,7 +316,7 @@ static bool MergeJoinStrictComparison(ExpressionType comparison) {
 
 //	Compare using </<=
 template <typename T>
-bool MergeJoinBefore(const T &lhs, const T &rhs, const bool strict) {
+static bool MergeJoinBefore(const T &lhs, const T &rhs, const bool strict) {
 	const bool less_than = lhs < rhs;
 	if (!less_than && !strict) {
 		return !(rhs < lhs);

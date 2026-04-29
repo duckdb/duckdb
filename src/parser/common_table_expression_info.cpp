@@ -30,6 +30,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::Copy() {
 		result->payload_aggregates.push_back(agg->Copy());
 	}
 	result->materialized = materialized;
+	result->is_trigger_generated = is_trigger_generated;
 	return result;
 }
 

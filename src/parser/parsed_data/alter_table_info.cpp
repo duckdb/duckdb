@@ -36,7 +36,7 @@ string ChangeOwnershipInfo::ToString() const {
 	result += TypeToString(entry_catalog_type);
 	result += " ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += "IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " OWNED BY ";
@@ -120,7 +120,7 @@ string RenameColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
@@ -153,7 +153,7 @@ string RenameFieldInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
@@ -190,7 +190,7 @@ string RenameTableInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
@@ -220,11 +220,11 @@ unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 
 string AddColumnInfo::ToString() const {
 	string result = "";
-	result += "ALTER TABLE";
+	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
-	result += " " + QualifierToString(catalog, schema, name);
+	result += QualifierToString(catalog, schema, name);
 	result += " ADD COLUMN";
 	if (if_column_not_exists) {
 		result += " IF NOT EXISTS";
@@ -261,21 +261,20 @@ unique_ptr<AlterInfo> AddFieldInfo::Copy() const {
 }
 
 string AddFieldInfo::ToString() const {
-	string result = "";
-	result += "ALTER TABLE ";
+	string result = "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
-	result += " ADD COLUMN";
+	result += " ADD COLUMN ";
 	if (if_field_not_exists) {
-		result += " IF NOT EXISTS";
+		result += "IF NOT EXISTS ";
 	}
 	for (auto &path : column_path) {
 		result += KeywordHelper::WriteOptionallyQuoted(path);
 		result += ".";
 	}
-	throw NotImplementedException("FIXME: column definition to string");
+	result += new_field.ToSQLString();
 	result += ";";
 	return result;
 }
@@ -301,7 +300,7 @@ string RemoveColumnInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
@@ -337,7 +336,7 @@ string RemoveFieldInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " DROP COLUMN ";
@@ -380,7 +379,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -426,7 +425,7 @@ string SetDefaultInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -461,7 +460,7 @@ string SetNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -491,7 +490,7 @@ string DropNotNullInfo::ToString() const {
 	string result = "";
 	result += "ALTER TABLE ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
@@ -563,7 +562,7 @@ string RenameViewInfo::ToString() const {
 	string result = "";
 	result += "ALTER VIEW ";
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		result += " IF EXISTS";
+		result += "IF EXISTS ";
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";

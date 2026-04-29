@@ -28,7 +28,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 
 	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
-		return make_uniq<BoundConstantExpression>(Value(date_part.return_type));
+		return make_uniq<BoundConstantExpression>(Value(date_part.GetReturnType()));
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));

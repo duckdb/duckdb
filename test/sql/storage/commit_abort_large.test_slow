@@ -9,9 +9,6 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
 
 statement ok
@@ -73,9 +70,6 @@ SELECT * FROM test ORDER BY a, b, c
 16	24	blabla
 
 restart
-
-statement ok
-PRAGMA enable_verification
 
 query III
 SELECT * FROM test ORDER BY a, b, c

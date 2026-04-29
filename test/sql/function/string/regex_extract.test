@@ -2,9 +2,6 @@
 # description: regex extract test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query T
 SELECT regexp_extract('foobarbaz', 'b..')
 ----

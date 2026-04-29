@@ -104,9 +104,8 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
 	PEGTransformerState transformer_state(tokens);
-	auto &factory = GetInstance();
-	PEGTransformer transformer(transformer_allocator, transformer_state, factory.sql_transform_functions,
-	                           factory.parser.rules, factory.enum_mappings, options);
+	PEGTransformer transformer(transformer_allocator, transformer_state, sql_transform_functions, parser.rules,
+	                           enum_mappings, options);
 
 	vector<unique_ptr<SQLStatement>> result;
 	optional_ptr<ParseResult> current_stmt;
@@ -146,11 +145,6 @@ vector<unique_ptr<SQLStatement>> PEGTransformerFactory::Transform(vector<Matcher
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
-
-PEGTransformerFactory &PEGTransformerFactory::GetInstance() {
-	static PEGTransformerFactory instance;
-	return instance;
-}
 
 void PEGTransformerFactory::RegisterAlter() {
 	// alter.gram

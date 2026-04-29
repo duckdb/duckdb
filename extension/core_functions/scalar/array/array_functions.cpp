@@ -9,8 +9,8 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	const auto &lhs_type = arguments[0]->return_type;
-	const auto &rhs_type = arguments[1]->return_type;
+	const auto &lhs_type = arguments[0]->GetReturnType();
+	const auto &rhs_type = arguments[1]->GetReturnType();
 
 	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
 		bound_function.GetArguments()[0] = rhs_type;

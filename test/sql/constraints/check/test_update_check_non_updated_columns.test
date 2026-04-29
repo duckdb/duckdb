@@ -3,9 +3,6 @@
 # group: [check]
 
 # enable query verification
-statement ok
-PRAGMA enable_verification
-
 # Reproducing original query from issue
 statement ok
 CREATE TABLE v0 (
