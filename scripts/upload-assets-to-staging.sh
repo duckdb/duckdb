@@ -56,11 +56,18 @@ if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
 fi
 
 if ! command -v rclone >/dev/null 2>&1; then
-  install_runner=(bash)
-  if command -v sudo >/dev/null 2>&1; then
-    install_runner=(sudo bash)
-  fi
-  curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      choco install rclone -y
+      ;;
+    *)
+      install_runner=(bash)
+      if command -v sudo >/dev/null 2>&1; then
+        install_runner=(sudo bash)
+      fi
+      curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+      ;;
+  esac
 fi
 
 set -x

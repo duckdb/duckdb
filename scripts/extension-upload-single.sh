@@ -77,11 +77,18 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
 fi
 
 if ! command -v rclone >/dev/null 2>&1; then
-    install_runner=(bash)
-    if command -v sudo >/dev/null 2>&1; then
-      install_runner=(sudo bash)
-    fi
-    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | "${install_runner[@]}"
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        choco install rclone -y
+        ;;
+      *)
+        install_runner=(bash)
+        if command -v sudo >/dev/null 2>&1; then
+          install_runner=(sudo bash)
+        fi
+        curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+        ;;
+    esac
 fi
 
 # Set dry run unless guard var is set
