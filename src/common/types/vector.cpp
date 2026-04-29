@@ -86,13 +86,6 @@ Vector::Vector(const Value &value, count_t count) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
-bool Vector::HasSize() const {
-	if (!buffer) {
-		return true;
-	}
-	return buffer->HasSize();
-}
-
 idx_t Vector::size() const {
 	if (!buffer) {
 		return 0;
@@ -184,7 +177,7 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() && HasSize() && count == size()) {
+	if (!sel.IsSet() && count == size()) {
 		// no-op: no selection vector, and the requested count matches the current size
 		return;
 	}
@@ -199,7 +192,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() && HasSize() && count == size()) {
+	if (!sel.IsSet() && count == size()) {
 		return;
 	}
 	if (!buffer) {
@@ -213,14 +206,14 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!HasSize() || dictionary_size != size()) {
+	if (dictionary_size != size()) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Slice(sel, count);
 }
 
 void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!dict.HasSize() || dict.size() != dictionary_size) {
+	if (dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Reference(dict);
@@ -278,9 +271,6 @@ void Vector::AddHeapReference(const Vector &other) {
 }
 
 void Vector::Reserve(idx_t to_reserve) {
-	if (!HasSize()) {
-		throw InternalException("Vector::Reserve can only be called on vectors with a size");
-	}
 	Resize(buffer ? buffer->Capacity() : 0, to_reserve);
 }
 
@@ -453,7 +443,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 }
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
-	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
+	this->buffer = make_buffer<SequenceBuffer>(start, increment, count_t(count));
 }
 
 void Vector::Shred(Vector &shredded_data, idx_t capacity) {
@@ -464,7 +454,7 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, count_t(capacity));
 }
 
 // FIXME: This should ideally be const
