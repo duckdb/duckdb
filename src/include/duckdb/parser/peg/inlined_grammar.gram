@@ -829,14 +829,18 @@ SingleExpression <-
 
 # LEVEL 1 (Lowest)
 Expression <- LambdaArrowExpression
+ColumnDefaultExpr <- ColDefOrExpr
 # LEVEL 1.5
 LambdaArrowExpression <- LogicalOrExpression SingleArrowPair*
 SingleArrowPair <- '->' LogicalOrExpression
 LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
+ColDefOrExpr <- ColDefAndExpr ('OR' ColDefAndExpr)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
+ColDefAndExpr <- ColDefNotExpr ('AND' ColDefNotExpr)*
 # LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
+ColDefNotExpr <- 'NOT'* IsDistinctFromExpression
 # LEVEL 4
 IsExpression <- IsDistinctFromExpression IsTest*
 IsTest <- IsLiteral / NotNull / IsNull
@@ -1073,7 +1077,7 @@ ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint 
 NotNullConstraint <- 'NOT'? 'NULL'
 UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
-DefaultValue <- 'DEFAULT' Expression
+DefaultValue <- 'DEFAULT' ColumnDefaultExpr
 CheckConstraint <- 'CHECK' Parens(Expression)
 ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
 ColumnCollation <- 'COLLATE' DottedIdentifier
