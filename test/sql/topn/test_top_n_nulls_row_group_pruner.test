@@ -2,9 +2,6 @@
 # description: Test row group pruning with NULLS LAST and offset across mixed row groups
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
-
 load {TEST_DIR}/top_n_nulls_row_group_pruner.duckdb
 
 statement ok

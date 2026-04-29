@@ -2,9 +2,6 @@
 # description: Test casting structs
 # group: [common]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT struct_pack(b => 42)::STRUCT(a INT);
 ----

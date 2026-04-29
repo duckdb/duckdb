@@ -1,0 +1,5 @@
+{
+  "description": "Run with SET debug_verify_serializer=true to test logical plan serialization",
+  "on_init": "SET debug_verify_serializer=true",
+  "skip_compiled": "true"
+}

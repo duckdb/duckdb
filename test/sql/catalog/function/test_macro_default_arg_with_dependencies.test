@@ -11,9 +11,6 @@ statement ok
 set enable_macro_dependencies=true
 
 statement ok
-pragma enable_verification;
-
-statement ok
 CREATE MACRO f(x := NULL) AS x+1;
 
 query I

@@ -4,9 +4,6 @@
 
 require 64bit
 
-statement ok
-pragma enable_verification
-
 # integers
 statement ok
 create table integers(i int);

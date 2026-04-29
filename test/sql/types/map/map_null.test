@@ -1,9 +1,6 @@
 # name: test/sql/types/map/map_null.test
 # group: [map]
 
-statement ok
-pragma enable_verification;
-
 query I
 select map(NULL::INT[], [1,2,3])
 ----

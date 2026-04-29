@@ -2,9 +2,6 @@
 # description: Test basic transaction functionality
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 # cannot commit or rollback in auto commit mode
 statement error
 COMMIT

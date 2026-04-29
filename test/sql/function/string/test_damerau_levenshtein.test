@@ -2,10 +2,6 @@
 # description: Test damerau_levenshtein function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
-
 # normal queries
 query I
 SELECT damerau_levenshtein('out', 'out')

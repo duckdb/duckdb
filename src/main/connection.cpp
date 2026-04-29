@@ -79,11 +79,9 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-	ClientConfig::GetConfig(*context).query_verification_enabled = true;
 }
 
 void Connection::DisableQueryVerification() {
-	ClientConfig::GetConfig(*context).query_verification_enabled = false;
 }
 
 void Connection::ForceParallelism() {

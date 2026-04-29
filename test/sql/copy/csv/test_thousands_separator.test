@@ -2,9 +2,6 @@
 # description: Test the thousands separator option
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Test NULL
 statement ok
 FROM read_csv('{DATA_DIR}/csv/thousands_separator/simple.csv', thousands = NULL, delim = NULL)

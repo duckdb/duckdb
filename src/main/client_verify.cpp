@@ -1,10 +1,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/box_renderer.hpp"
-#include "duckdb/common/box_renderer_context.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -23,20 +20,6 @@
 #include "duckdb/parser/statement/prepare_statement.hpp"
 
 namespace duckdb {
-
-static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
-	if (!verifier.materialized_result) {
-		return;
-	}
-	auto &result = *verifier.materialized_result;
-	if (!result.HasError()) {
-		return;
-	}
-	auto &error = result.GetErrorObject();
-	if (error.Type() == ExceptionType::INTERNAL) {
-		error.Throw();
-	}
-}
 
 struct PreparedStatementVerification {
 	PreparedStatementVerification() {

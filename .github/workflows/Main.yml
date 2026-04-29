@@ -1349,6 +1349,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
 
+    - name: test/configs/verify_serializer.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_serializer.json ./build/release/test/unittest
+
     - name: test/configs/verify_stats.json
       if: success() || failure()
       shell: bash
@@ -1444,12 +1450,6 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/enable_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification.json ./build/release/test/unittest
 
     - name: test/configs/block_allocator_100mib.json
       if: success() || failure()
