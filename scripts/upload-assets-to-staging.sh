@@ -46,12 +46,12 @@ fi
 
 TARGET=$(git log -1 --format=%h)
 
-if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
+if [ "${UPLOAD_ASSETS_TO_STAGING_TARGET:-}" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"
 fi
 
 # decide target for staging
-if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
+if [ "${OVERRIDE_GIT_DESCRIBE:-}" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
