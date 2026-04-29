@@ -12,4 +12,4 @@ fi
 python "$GRAMMAR_FILE" --grammar-file
 python "$GRAMMAR_FILE"
 
-echo "Successfully build PEG grammar files"
+echo "Successfully build grammar files"

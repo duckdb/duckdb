@@ -1,7 +1,7 @@
 # grammar_types.yml
 #
 # Maps grammar rules to their expected C++ return types, grouped by type category.
-# Used by scripts/parser/generate_peg_transformer.py to generate stubs with the
+# Used by scripts/parser/generate_transformer.py to generate stubs with the
 # correct return type instead of the placeholder unique_ptr<SQLStatement>.
 #
 # Structure:
@@ -18,8 +18,8 @@
 #       RuleName: "<C++ return type>"
 #
 # Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
-# by generate_peg_transformer.py from peg_transformer_factory.cpp).
-# Rules in EXCLUDED_RULES in generate_peg_transformer.py are also NOT listed here.
+# by generate_transformer.py from peg_transformer_factory.cpp).
+# Rules in EXCLUDED_RULES in generate_transformer.py are also NOT listed here.
 
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
