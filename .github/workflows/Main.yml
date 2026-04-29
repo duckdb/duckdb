@@ -1203,8 +1203,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -1246,8 +1246,8 @@ jobs:
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
