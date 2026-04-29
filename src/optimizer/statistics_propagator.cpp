@@ -151,7 +151,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
 	auto stats = PropagateExpression(*expr, expr);
 	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
-		expr->verification_stats = stats->ToUnique();
+		expr->SetVerificationStats(stats->ToUnique());
 	}
 	return stats;
 }

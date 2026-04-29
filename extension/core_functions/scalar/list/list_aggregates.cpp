@@ -63,12 +63,13 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                              const ScalarFunction &function) {
+	                              const BoundScalarFunction &function) {
 		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer,
+	                                                    BoundScalarFunction &bound_function) {
 		auto result = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<ListAggregatesBindData>>(
 		    100, "bind_data", unique_ptr<ListAggregatesBindData>(nullptr));
 		if (!result) {
@@ -417,17 +418,17 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		return ListAggregatesBindFailure(bound_function);
 	}
 
-	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;
+	bool is_parameter = arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN;
 	LogicalType child_type;
 	if (is_parameter) {
 		child_type = LogicalType::ANY;
-	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
-	           arguments[0]->return_type.id() == LogicalTypeId::MAP) {
-		child_type = ListType::GetChildType(arguments[0]->return_type);
+	} else if (arguments[0]->GetReturnType().id() == LogicalTypeId::LIST ||
+	           arguments[0]->GetReturnType().id() == LogicalTypeId::MAP) {
+		child_type = ListType::GetChildType(arguments[0]->GetReturnType());
 	} else {
 		// Unreachable
 		throw InvalidInputException("First argument of list aggregate must be a list, map or array");
@@ -460,7 +461,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	types.push_back(child_type);
 	// push any extra arguments into the type list
 	for (idx_t i = 2; i < arguments.size(); i++) {
-		types.push_back(arguments[i]->return_type);
+		types.push_back(arguments[i]->GetReturnType());
 	}
 
 	FunctionBinder function_binder(context);

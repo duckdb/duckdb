@@ -51,8 +51,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.IsComparison());
-		D_ASSERT(condition.GetLHS().return_type == condition.GetRHS().return_type);
-		auto type = condition.GetLHS().return_type;
+		D_ASSERT(condition.GetLHS().GetReturnType() == condition.GetRHS().GetReturnType());
+		auto type = condition.GetLHS().GetReturnType();
 		if (condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
 		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// ensure that all equality conditions are at the front,

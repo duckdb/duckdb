@@ -129,7 +129,7 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 	// Prepare the column binding replacer once
 	ColumnBindingReplacer replacer;
 	for (idx_t i = 0; i < proj.expressions.size(); i++) {
-		if (proj.expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
+		if (proj.expressions[i]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			auto &colref = proj.expressions[i]->Cast<BoundColumnRefExpression>();
 			replacer.replacement_bindings.emplace_back(proj_bindings[i], colref.binding);
 		}
@@ -280,7 +280,7 @@ void ProjectionPullup::Optimize(unique_ptr<LogicalOperator> &op) {
 		column_binding_map_t<unique_ptr<Expression>> projection_map;
 		for (idx_t i = 0; i < proj.expressions.size(); i++) {
 			projection_map[proj_bindings[i]] = proj.expressions[i]->Copy();
-			if (proj.expressions[i]->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (proj.expressions[i]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				all_column_refs = false;
 			}
 			if (proj.expressions[i]->IsVolatile()) {

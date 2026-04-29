@@ -328,7 +328,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	}
 
 	// Try to write this as an old "USER" type, if possible
-	if (expr->type != ExpressionType::TYPE) {
+	if (expr->GetExpressionType() != ExpressionType::TYPE) {
 		throw SerializationException(
 		    "Cannot serialize non-type type expression when targeting database storage version '%s'",
 		    serializer.GetOptions().serialization_compatibility.duckdb_version);
@@ -342,7 +342,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	// Try to write the user type mods too
 	vector<Value> user_type_mods;
 	for (auto &param : type_expr.GetChildren()) {
-		if (param->type != ExpressionType::VALUE_CONSTANT) {
+		if (param->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw SerializationException(
 			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
 			    serializer.GetOptions().serialization_compatibility.duckdb_version);

@@ -309,7 +309,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(unique_ptr<Expression> input,
                                                                                 const BaseStatistics &stats) {
-	const auto &type = input->return_type;
+	const auto &type = input->GetReturnType();
 	if (type != stats.GetType()) { // LCOV_EXCL_START
 		return nullptr;
 	} // LCOV_EXCL_STOP
@@ -344,7 +344,7 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 
 unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(unique_ptr<Expression> input,
                                                                               const BaseStatistics &stats) {
-	const auto &type = input->return_type;
+	const auto &type = input->GetReturnType();
 	if (GetTypeIdSize(type.InternalType()) == 1) {
 		return nullptr;
 	}
@@ -356,7 +356,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 		// All NULL
 		cast_type = LogicalType::UTINYINT;
 		range_value = Value::UTINYINT(0);
-		min = Value(input->return_type);
+		min = Value(input->GetReturnType());
 	} else if (NumericStats::HasMinMax(stats)) {
 		// Get range and cast to UBIGINT (might fail for HUGEINT, in which case we just return)
 		range_value = GetIntegralRangeValue(context, type, stats);
@@ -483,7 +483,7 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
                                                                         const LogicalType &result_type,
                                                                         const BaseStatistics &stats) {
 	D_ASSERT(!stats.CanHaveNoNull() || NumericStats::HasMinMax(stats));
-	auto decompress_function = CMIntegralDecompressFun::GetFunction(input->return_type, result_type);
+	auto decompress_function = CMIntegralDecompressFun::GetFunction(input->GetReturnType(), result_type);
 	const auto min = !stats.CanHaveNoNull() ? Value(result_type) : NumericStats::Min(stats);
 
 	vector<unique_ptr<Expression>> arguments;
@@ -496,7 +496,7 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
                                                                       const LogicalType &result_type,
                                                                       const BaseStatistics &stats) {
 	D_ASSERT(!stats.CanHaveNoNull() || StringStats::HasMaxStringLength(stats));
-	auto decompress_function = CMStringDecompressFun::GetFunction(input->return_type);
+	auto decompress_function = CMStringDecompressFun::GetFunction(input->GetReturnType());
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
 	return make_uniq<BoundFunctionExpression>(result_type, decompress_function, std::move(arguments), nullptr);

@@ -31,7 +31,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 
 	for (idx_t i = 0; i < unbound_expressions.size(); ++i) {
 		auto &expr = unbound_expressions[i];
-		indexed_column_types.push_back(expr->return_type);
+		indexed_column_types.push_back(expr->GetReturnType());
 		indexed_columns.push_back(i);
 	}
 

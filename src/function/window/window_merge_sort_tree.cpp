@@ -25,7 +25,7 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 	vector<BoundOrderByNode> orders;
 	for (const auto &order_p : orders_p) {
 		auto order = order_p.Copy();
-		const auto &type = order.expression->return_type;
+		const auto &type = order.expression->GetReturnType();
 		scan_types.emplace_back(type);
 		order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 		orders.emplace_back(std::move(order));

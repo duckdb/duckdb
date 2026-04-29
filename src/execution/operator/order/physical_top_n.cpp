@@ -45,7 +45,7 @@ struct TopNScanState {
 
 struct TopNBoundaryValue {
 	explicit TopNBoundaryValue(const PhysicalTopN &op)
-	    : op(op), boundary_vector(op.orders[0].expression->return_type),
+	    : op(op), boundary_vector(op.orders[0].expression->GetReturnType()),
 	      boundary_modifiers(op.orders[0].type, op.orders[0].null_order) {
 	}
 
@@ -174,7 +174,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
 		auto &expr = order.expression;
-		sort_types.push_back(expr->return_type);
+		sort_types.push_back(expr->GetReturnType());
 		executor.AddExpression(*expr);
 		modifiers.emplace_back(order.type, order.null_order);
 	}

@@ -952,8 +952,12 @@ void PartitionedCopy::InitializeFlush() {
 		return;
 	}
 
-	// Move current sink state to combine state, update flushing to true, and create task list
+	// Move current sinking state to flushing state
 	flushing_state = std::move(sinking_state);
+	if (!flushing_state) {
+		return; // Nothing to do
+	}
+
 	flushing = true;
 }
 
@@ -1025,7 +1029,7 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 
 	{
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		if (!flushing || !RefersToSameObject(*lstate.current_state, *flushing_state)) {
+		if (!flushing_state || !RefersToSameObject(*lstate.current_state, *flushing_state)) {
 			return; // Not flushing anymore, or can't combine this state into the flushing state
 		}
 	}
@@ -1134,8 +1138,15 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		flushing_state_copy = flushing_state;
 	}
 
-	if (!flushing_state_copy || !flushing_state_copy->global_source_state) {
+	if (!flushing_state_copy) {
 		return; // Finalization not yet complete, nothing to do
+	}
+
+	{
+		annotated_lock_guard<annotated_mutex> guard(flushing_state_copy->lock);
+		if (!flushing_state_copy->global_source_state) {
+			return; // Finalization not yet complete, nothing to do
+		}
 	}
 
 	if (ShouldStopFlushing()) {
@@ -1159,8 +1170,8 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		if (!flushing || !RefersToSameObject(*flushing_state, *flushing_state_copy)) {
 			return;
 		}
-		flushing_state.reset();
 		flushing = false;
+		flushing_state.reset();
 		should_finalize_writes = finalized && !sinking_state;
 	}
 	if (should_finalize_writes) {

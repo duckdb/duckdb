@@ -496,7 +496,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformArrayParensSelect(P
 			} else if (sub_select) {
 				// if we have a SELECT we can push the ORDER BY clause into the SELECT list and reference it
 				auto alias = "__array_internal_idx_" + to_string(++array_idx);
-				order.expression->alias = alias;
+				order.expression->SetAlias(alias);
 				sub_select->select_list.push_back(std::move(order.expression));
 				order.expression = make_uniq<ColumnRefExpression>(alias);
 			} else {
@@ -1337,7 +1337,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformPrefixExpression(PE
 	for (auto it = prefixes.rbegin(); it != prefixes.rend(); ++it) {
 		const string &prefix = *it;
 
-		if (prefix == "-" && expr->type == ExpressionType::VALUE_CONSTANT) {
+		if (prefix == "-" && expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			auto &const_expr = expr->Cast<ConstantExpression>();
 			if (TryNegateValue(const_expr.value)) {
 				continue;
@@ -2509,8 +2509,8 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformListComprehensionEx
 	auto filter_expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_comprehension_filter.GetResult());
 
 	// STAGE 1: list_apply(in_expr, x -> struct_pack(filter := ..., result := ...))
-	filter_expr->alias = "filter";
-	result_expr->alias = "result";
+	filter_expr->SetAlias("filter");
+	result_expr->SetAlias("result");
 
 	vector<unique_ptr<ParsedExpression>> struct_children;
 	struct_children.push_back(std::move(filter_expr));
