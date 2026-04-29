@@ -484,6 +484,9 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformExpressionAlias);
 	REGISTER_TRANSFORM(TransformBaseExpression);
 	REGISTER_TRANSFORM(TransformExpression);
+	Register("ColumnDefaultExpr", &TransformExpression);
+	Register("ColDefOrExpr", &TransformLogicalOrExpression);
+	Register("ColDefAndExpr", &TransformLogicalAndExpression);
 	REGISTER_TRANSFORM(TransformLambdaArrowExpression);
 	REGISTER_TRANSFORM(TransformLogicalOrExpression);
 	REGISTER_TRANSFORM(TransformLogicalAndExpression);
