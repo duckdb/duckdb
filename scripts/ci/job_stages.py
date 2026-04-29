@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from typing import TextIO
 
 PULL_REQUEST_JOBS = [
-    "linux-debug",
-    "linux-debug-tests",
+    "linux-relassert",
+    "linux-relassert-tests",
     "regression",
     "tidy-check",
     "extensions",
@@ -40,7 +40,7 @@ NIGHTLY_ONLY_JOBS = [
 NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
-    "linux-debug",
+    "linux-relassert",
     "linux-release",
     "linux-release-tests",
     "check-clangd-tidy",
@@ -55,7 +55,7 @@ RELEASE_JOBS = [
 ]
 
 SKIP_TESTS_JOBS = {
-    "linux-debug-tests",
+    "linux-relassert-tests",
     "regression",
     "swift",
     "linux-configs",
