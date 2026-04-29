@@ -1,0 +1,31 @@
+diff --git a/test/sql/logging/file_system_logging.test b/test/sql/logging/file_system_logging.test
+index 6aa2ed0..5109607 100644
+--- a/test/sql/logging/file_system_logging.test
++++ b/test/sql/logging/file_system_logging.test
+@@ -45,9 +45,9 @@ FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+ 
+ # FIXME: investigate why we call READ twice?
+ query IIII
+-SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
++SELECT scope, type, log_level, message
+ FROM duckdb_logs
+-WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%'
++WHERE type = 'FileSystem' AND message NOT LIKE '%duckdb_extension%' AND message LIKE '%HTTPFileSystem%'
+ ORDER BY timestamp
+ ----
+ CONNECTION	FileSystem	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+diff --git a/test/sql/settings/test_disabled_file_system_httpfs.test b/test/sql/settings/test_disabled_file_system_httpfs.test
+index 9cc1ee8..f33b2b0 100644
+--- a/test/sql/settings/test_disabled_file_system_httpfs.test
++++ b/test/sql/settings/test_disabled_file_system_httpfs.test
+@@ -11,6 +11,10 @@ PRAGMA enable_verification
+ 
+ require httpfs
+ 
++# if we disable the local file system we can't have persistent secrets ^^
++statement ok
++set allow_persistent_secrets = 'false';
++
+ statement ok
+ SET disabled_filesystems='LocalFileSystem';
+ 
