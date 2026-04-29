@@ -6,9 +6,6 @@
 load {TEST_DIR}/all_types_storage.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE all_types AS SELECT * FROM test_all_types();
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1

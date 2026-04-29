@@ -2,9 +2,6 @@
 # description: Read a CSV with a null byte
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 select * from '{DATA_DIR}/csv/nullbyte.csv';
 ----

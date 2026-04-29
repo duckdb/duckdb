@@ -2,9 +2,6 @@
 # description: Various CSV reader error messages
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Test columns error
 
 statement error

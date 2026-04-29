@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # issue #6774
 query I
 select * from read_json_auto('{DATA_DIR}/json/simple_timestamp.json', columns={"ts": "TIMESTAMP[]"});

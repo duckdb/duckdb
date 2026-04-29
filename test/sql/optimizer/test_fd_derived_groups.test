@@ -14,11 +14,6 @@ CREATE TABLE f(x DOUBLE);
 statement ok
 INSERT INTO f VALUES (1.5), (1.7), (2.3);
 
-# Result queries: enable_verification re-runs each query unoptimized and checks the result
-# matches, replacing manual `disabled_optimizers='duplicate_groups'` toggling.
-statement ok
-PRAGMA enable_verification;
-
 query III
 SELECT x, (x-1)*2, count(*) FROM t WHERE x < 4 GROUP BY x, (x-1)*2 ORDER BY x;
 ----

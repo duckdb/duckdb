@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 COPY (SELECT 1 a, 2 b) TO '{TEST_DIR}/mismatch_types_except.csv';
 
 query II

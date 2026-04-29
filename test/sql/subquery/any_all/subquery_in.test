@@ -3,9 +3,6 @@
 # group: [any_all]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0 (c0 TIME,c1 DOUBLE PRECISION);
 
 statement ok

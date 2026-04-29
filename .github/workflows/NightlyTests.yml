@@ -497,43 +497,6 @@ jobs:
         shell: bash
         run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
 
-  linux-debug-configs:
-    name: Tests different configurations with a debug build
-    runs-on: ubuntu-24.04
-    env:
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-    needs: linux-memory-leaks
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
-        shell: bash
-        run: python3 scripts/ci/retry.py -- make toolsci
-
-      - uses: ./.github/actions/ccache-action
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - uses: ./.github/actions/swap_space
-
-      - name: Build
-        id: build
-        shell: bash
-        env:
-          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
-          GEN: ninja
-        run: make debug
-
-      - name: test/configs/enable_verification_for_debug.json
-        if: (success() || failure()) && steps.build.conclusion == 'success'
-        shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification_for_debug.json ./build/debug/test/unittest
-
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04

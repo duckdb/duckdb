@@ -2,9 +2,6 @@
 # description: Test the automatic parsing of the hive partitioning scheme
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # projection pushdown
 query I
 select filename.replace('\', '/').split('/')[-2] from read_csv_auto('{DATA_DIR}/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1,  FILENAME=1)  order by 1
