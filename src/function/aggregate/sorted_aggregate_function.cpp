@@ -719,7 +719,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	expr.function = std::move(ordered_aggregate);
+	expr.function = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
 }
@@ -775,7 +775,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	aggregate = std::move(ordered_aggregate);
+	aggregate = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.arg_orders.clear();
 }
