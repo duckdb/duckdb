@@ -12,6 +12,23 @@
 
 namespace duckdb {
 
+optional_idx ParquetColumnSchema::GetChildIndexByName(const string &name) const {
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &child = children[i];
+		if (StringUtil::CIEquals(name, child.name)) {
+			return i;
+		}
+	}
+	return optional_idx();
+}
+
+const ParquetColumnSchema &ParquetColumnSchema::GetChildByIndex(idx_t index) const {
+	if (index >= children.size()) {
+		throw InternalException("ParquetColumnSchema::GetChildByIndex: index (%d) out of range (size: %d)", index, children.size());
+	}
+	return children[index];
+}
+
 void ParquetColumnSchema::SetSchemaIndex(idx_t schema_idx) {
 	D_ASSERT(!schema_index.IsValid());
 	schema_index = schema_idx;

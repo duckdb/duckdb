@@ -449,36 +449,150 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
-static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) const {
-	D_ASSERT(IsShredded());
-	auto &shredded = *sub_columns[1];
-	auto &variant_stats = GetStatisticsRef();
+//static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) {
+//	D_ASSERT(IsShredded());
+//	auto &shredded = *sub_columns[1];
+//	auto &variant_stats = GetStatisticsRef();
 
-	if (!VariantStats::IsShredded(variant_stats)) {
-		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
-		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
-		return false;
+//	if (!VariantStats::IsShredded(variant_stats)) {
+//		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
+//		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
+//		return false;
+//	}
+
+//	//! shredded.typed_value
+//	ColumnIndex column_index(0);
+
+//	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
+//	LogicalType root_type;
+//	if (!FindShreddedColumnInternal(shredded, shredded_stats, variant_extract, column_index, root_type)) {
+//		return false;
+//	}
+//	if (shredded_stats.get().GetType().IsNested()) {
+//		//! Can't push down an extract if the leaf we're extracting is not a primitive
+//		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
+//		return false;
+//	}
+//	if (root_type.id() != LogicalTypeId::INVALID) {
+//		column_index.SetPushdownExtractType(shredded.type, root_type);
+//	}
+
+//	out_struct_extract = column_index;
+//	return true;
+//}
+
+static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_meta_data, const ParquetColumnSchema &column, const ParquetOptions &parquet_options) {
+	unique_ptr<BaseStatistics> column_stats;
+
+	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data.row_groups.size(); row_group_idx++) {
+		auto &row_group = file_meta_data.row_groups[row_group_idx];
+		auto chunk_stats = column.Stats(file_meta_data, parquet_options, row_group_idx, row_group.columns);
+		if (!chunk_stats) {
+			return nullptr;
+		}
+		if (!column_stats) {
+			column_stats = std::move(chunk_stats);
+		} else {
+			column_stats->Merge(*chunk_stats);
+		}
+	}
+	return column_stats;
+}
+
+static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &file_meta_data,
+                                                         const ParquetColumnSchema &root_schema,
+                                                         const ParquetOptions &parquet_options,
+                                                         const idx_t &file_col_idx) {
+	auto &column_schema = root_schema.children[file_col_idx];
+	return ReadColumnStatistics(file_meta_data, column_schema, parquet_options);
+}
+
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
+	idx_t file_col_idx;
+	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
+		if (columns[file_col_idx].name == name) {
+			break;
+		}
+	}
+	if (file_col_idx == columns.size()) {
+		return nullptr;
 	}
 
-	//! shredded.typed_value
-	ColumnIndex column_index(0);
+	return ReadStatisticsInternal(*GetFileMetadata(), *root_schema, parquet_options, file_col_idx);
+}
 
-	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
-	LogicalType root_type;
-	if (!FindShreddedColumnInternal(shredded, shredded_stats, variant_extract, column_index, root_type)) {
-		return false;
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
+                                                         shared_ptr<ParquetFileMetadataCache> metadata,
+                                                         const string &name) {
+	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
+	return reader.ReadStatistics(name);
+}
+
+unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const string &name) {
+	const auto &col_names = union_data.names;
+
+	idx_t file_col_idx;
+	for (file_col_idx = 0; file_col_idx < col_names.size(); file_col_idx++) {
+		if (col_names[file_col_idx] == name) {
+			break;
+		}
 	}
-	if (shredded_stats.get().GetType().IsNested()) {
-		//! Can't push down an extract if the leaf we're extracting is not a primitive
-		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
-		return false;
-	}
-	if (root_type.id() != LogicalTypeId::INVALID) {
-		column_index.SetPushdownExtractType(shredded.type, root_type);
+	if (file_col_idx == col_names.size()) {
+		return nullptr;
 	}
 
-	out_struct_extract = StorageIndex::FromColumnIndex(column_index);
-	return true;
+	return ReadStatisticsInternal(*union_data.metadata->metadata, *union_data.root_schema, union_data.options,
+	                              file_col_idx);
+}
+
+static bool IsFullyShredded(BaseStatistics &variant_stats, const ColumnIndex &column_index) {
+	D_ASSERT(column_index.IsPushdownExtract());
+	return VariantStats::IsShredded(variant_stats, column_index);
+}
+
+static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &schema, const ColumnIndex &column_id) {
+	D_ASSERT(schema.name == "typed_value");
+	reference<const ParquetColumnSchema> typed_value(schema);
+
+	reference<const ColumnIndex> path_iter(column_id);
+	ColumnIndex result_index(0);
+	reference<ColumnIndex> result(result_index);
+	while (path_iter.get().HasChildren()) {
+		auto &child = path_iter.get().GetChildIndexes()[0];
+		auto &field_name = child.GetFieldName();
+		auto child_column_index = typed_value.get().GetChildIndexByName(field_name);
+		if (!child_column_index.IsValid()) {
+			throw InternalException("Can't locate the child by name '%s' in the VARIANT column", field_name);
+		}
+		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
+		if (child_column.type.id() != LogicalTypeId::STRUCT) {
+			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)", child_column.type.ToString());
+		}
+		auto typed_value_index = child_column.GetChildIndexByName("typed_value");
+		if (!typed_value_index.IsValid()) {
+			throw InternalException("Can't find 'typed_value' inside type %s", child_column.type.ToString());
+		}
+		auto &typed_value_column = child_column.GetChildByIndex(typed_value_index.GetIndex());
+
+		//! <field_name>
+		ColumnIndex index(child_column_index.GetIndex());
+		index.SetType(child_column.type);
+		result.get().AddChildIndex(std::move(index));
+		result = result.get().GetChildIndexesMutable()[0];
+
+		//! <field_name>.typed_value
+		ColumnIndex nested_typed_value(typed_value_index.GetIndex());
+		nested_typed_value.SetType(typed_value_column.type);
+		result.get().AddChildIndex(std::move(nested_typed_value));
+		result.get().SetPushdownExtract();
+		result = result.get().GetChildIndexesMutable()[0];
+
+		typed_value = typed_value_column;
+		path_iter = child;
+	}
+	result_index.SetType(schema.type);
+	result_index.SetPushdownExtract();
+	return result_index;
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &column_id,
@@ -547,23 +661,44 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		for (idx_t child_index = 0; child_index < 2; child_index++) {
-			children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
-		}
-		if (schema.children.size() == 3) {
-			//! VARIANT is shredded, has a 'typed_value' column
-			auto &typed_value_schema = schema.children[2];
-			D_ASSERT(typed_value_schema.name == "typed_value");
-			if (column_id.IsPushdownExtract()) {
-				auto &child = indexes[0];
-				throw NotImplementedException("VARIANT PushdownExtract!");
-				children[2] = CreateReaderRecursive(context, ColumnIndex(0), typed_value_schema);
-			} else {
-				//! Not a pushdown extract, just create a regular column index
-				children[2] = CreateReaderRecursive(context, ColumnIndex(2), typed_value_schema);
+		if (schema.children.size() != 3) {
+			//! Not shredded
+			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
+				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
+			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 		}
-		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+		//! VARIANT is shredded, has a 'typed_value' column
+		auto &typed_value_schema = schema.children[2];
+		D_ASSERT(typed_value_schema.name == "typed_value");
+		if (!column_id.IsPushdownExtract()) {
+			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
+				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+			}
+			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+		}
+
+		//! VARIANT is shredded AND we have a pushed down extract to execute
+		auto &child = indexes[0];
+		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
+
+		if (IsFullyShredded(*variant_stats, column_id)) {
+			//! This field is present in 'typed_value' across all rowgroups
+			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
+			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
+			return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
+		} else {
+			for (idx_t child_index = 0; child_index < 2; child_index++) {
+				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+			}
+			children[2] = CreateReaderRecursive(context, ColumnIndex(2), typed_value_schema);
+		}
+
+		auto scan_type = column_id.GetScanType();
+		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), column_id.GetPrimaryIndex());
+		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
+		return make_uniq<ExpressionColumnReader>(context, std::move(column_reader), std::move(cast_expression), typed_value_schema);
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
@@ -1041,66 +1176,6 @@ const FileMetaData *ParquetReader::GetFileMetadata() const {
 	D_ASSERT(metadata);
 	D_ASSERT(metadata->metadata);
 	return metadata->metadata.get();
-}
-
-static unique_ptr<BaseStatistics> ReadStatisticsInternal(const FileMetaData &file_meta_data,
-                                                         const ParquetColumnSchema &root_schema,
-                                                         const ParquetOptions &parquet_options,
-                                                         const idx_t &file_col_idx) {
-	unique_ptr<BaseStatistics> column_stats;
-	auto &column_schema = root_schema.children[file_col_idx];
-
-	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data.row_groups.size(); row_group_idx++) {
-		auto &row_group = file_meta_data.row_groups[row_group_idx];
-		auto chunk_stats = column_schema.Stats(file_meta_data, parquet_options, row_group_idx, row_group.columns);
-		if (!chunk_stats) {
-			return nullptr;
-		}
-		if (!column_stats) {
-			column_stats = std::move(chunk_stats);
-		} else {
-			column_stats->Merge(*chunk_stats);
-		}
-	}
-	return column_stats;
-}
-
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
-	idx_t file_col_idx;
-	for (file_col_idx = 0; file_col_idx < columns.size(); file_col_idx++) {
-		if (columns[file_col_idx].name == name) {
-			break;
-		}
-	}
-	if (file_col_idx == columns.size()) {
-		return nullptr;
-	}
-
-	return ReadStatisticsInternal(*GetFileMetadata(), *root_schema, parquet_options, file_col_idx);
-}
-
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
-                                                         shared_ptr<ParquetFileMetadataCache> metadata,
-                                                         const string &name) {
-	ParquetReader reader(context, std::move(parquet_options), std::move(metadata));
-	return reader.ReadStatistics(name);
-}
-
-unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const ParquetUnionData &union_data, const string &name) {
-	const auto &col_names = union_data.names;
-
-	idx_t file_col_idx;
-	for (file_col_idx = 0; file_col_idx < col_names.size(); file_col_idx++) {
-		if (col_names[file_col_idx] == name) {
-			break;
-		}
-	}
-	if (file_col_idx == col_names.size()) {
-		return nullptr;
-	}
-
-	return ReadStatisticsInternal(*union_data.metadata->metadata, *union_data.root_schema, union_data.options,
-	                              file_col_idx);
 }
 
 string ParquetReader::GetUniqueFileIdentifier(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {

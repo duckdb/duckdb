@@ -927,10 +927,7 @@ static bool TableSupportsPushdownExtract(const FunctionData &bind_data_ref, cons
 		return false;
 	}
 	auto column_type = column.GetType();
-	if (column_type.id() != LogicalTypeId::STRUCT && column_type.id() != LogicalTypeId::VARIANT) {
-		return false;
-	}
-	return true;
+	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
 }
 
 bool TableScanPushdownExpression(ClientContext &context, const LogicalGet &get, Expression &expr) {
