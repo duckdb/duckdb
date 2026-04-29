@@ -138,10 +138,9 @@ struct RegexpExtractBindData : public RegexpBaseBindData {
 	// On no match, return the input instead of an empty string (set via the `k` option, also used by
 	// the regexp_replace -> regexp_extract optimizer rewrite).
 	bool no_match_returns_input = false;
-	// Set only by the regexp_replace -> regexp_extract optimizer rewrite when it strips a trailing
-	// `.*$` from the pattern. The runtime then rejects matches whose remainder contains a newline
-	// to preserve the original pattern's end-of-text semantics under default options.
-	// Round-trips via the regexp_extract custom serialize callbacks.
+	// Set when RegexExtractBind has stripped a trailing `.*$` from constant_string (see the bind
+	// for the gate). Tells the runtime to reject matches whose remainder contains `\n`, preserving
+	// the original end-of-text-without-newline semantics under default RE2 options.
 	bool trim_dotstar_dollar = false;
 
 	unique_ptr<FunctionData> Copy() const override;

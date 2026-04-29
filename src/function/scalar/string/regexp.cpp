@@ -11,8 +11,6 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -385,38 +383,16 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		}
 	}
 
-	// trim_dotstar_dollar is set only by the regexp_replace -> regexp_extract optimizer rewrite.
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
-	                                        no_match_returns_input, false);
-}
+	// Strip a trailing `.*$`; the runtime restores end-of-text semantics via a remainder-newline
+	// check. Gated to default newline-sensitive options and group_index >= 1 (group 0 = whole match).
+	bool trim_dotstar_dollar = false;
+	if (constant_pattern && group_index >= 1 && !options.literal() && !options.dot_nl() &&
+	    constant_string.size() >= 4 && constant_string.front() == '^' &&
+	    constant_string.compare(constant_string.size() - 3, 3, ".*$") == 0) {
+		constant_string.resize(constant_string.size() - 3);
+		trim_dotstar_dollar = true;
+	}
 
-// Custom serialize/deserialize: the optimizer rewrite trims the pattern in the children and sets
-// trim_dotstar_dollar on the bind data. After the trim the bind callback can no longer detect the
-// pre-trim shape, so we round-trip the full bind data here instead of re-running the bind callback.
-static void RegexExtractSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                  const ScalarFunction &) {
-	auto &info = bind_data->Cast<RegexpExtractBindData>();
-	serializer.WriteProperty(100, "case_sensitive", info.options.case_sensitive());
-	serializer.WriteProperty(101, "dot_nl", info.options.dot_nl());
-	serializer.WriteProperty(102, "literal", info.options.literal());
-	serializer.WriteProperty(103, "constant_string", info.constant_string);
-	serializer.WriteProperty(104, "constant_pattern", info.constant_pattern);
-	serializer.WriteProperty(105, "group_index", info.group_index);
-	serializer.WriteProperty(106, "no_match_returns_input", info.no_match_returns_input);
-	serializer.WriteProperty(107, "trim_dotstar_dollar", info.trim_dotstar_dollar);
-}
-
-static unique_ptr<FunctionData> RegexExtractDeserialize(Deserializer &deserializer, ScalarFunction &) {
-	duckdb_re2::RE2::Options options;
-	options.set_case_sensitive(deserializer.ReadProperty<bool>(100, "case_sensitive"));
-	options.set_dot_nl(deserializer.ReadProperty<bool>(101, "dot_nl"));
-	options.set_literal(deserializer.ReadProperty<bool>(102, "literal"));
-	options.set_log_errors(false);
-	auto constant_string = deserializer.ReadProperty<string>(103, "constant_string");
-	auto constant_pattern = deserializer.ReadProperty<bool>(104, "constant_pattern");
-	auto group_index = deserializer.ReadProperty<int8_t>(105, "group_index");
-	auto no_match_returns_input = deserializer.ReadProperty<bool>(106, "no_match_returns_input");
-	auto trim_dotstar_dollar = deserializer.ReadProperty<bool>(107, "trim_dotstar_dollar");
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
 	                                        no_match_returns_input, trim_dotstar_dollar);
 }
@@ -463,29 +439,19 @@ ScalarFunctionSet RegexpReplaceFun::GetFunctions() {
 
 ScalarFunctionSet RegexpExtractFun::GetFunctions() {
 	ScalarFunctionSet regexp_extract("regexp_extract");
-	// Scalar (non-struct) variants share a fixed VARCHAR return type, so it is safe to bypass the
-	// bind callback on deserialize. The custom serialize callbacks below round-trip the
-	// trim_dotstar_dollar flag set by the regexp_replace -> regexp_extract optimizer rewrite.
-	ScalarFunction extract_2({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexExtractFunction,
-	                         RegexExtractBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
-	ScalarFunction extract_3({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR,
-	                         RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
-	ScalarFunction extract_4({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR},
-	                         LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
-	                         LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                         FunctionNullHandling::SPECIAL_HANDLING);
-	for (auto *func : {&extract_2, &extract_3, &extract_4}) {
-		func->SetSerializeCallback(RegexExtractSerialize);
-		func->SetDeserializeCallback(RegexExtractDeserialize);
-	}
-	regexp_extract.AddFunction(std::move(extract_2));
-	regexp_extract.AddFunction(std::move(extract_3));
-	regexp_extract.AddFunction(std::move(extract_4));
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                          RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
+	                                          LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                                          FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
+	                                          LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr,
+	                                          RegexInitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                                          FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::VARCHAR},
+	                   LogicalType::VARCHAR, RegexExtractFunction, RegexExtractBind, nullptr, RegexInitLocalState,
+	                   LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
 	// REGEXP_EXTRACT(<string>, <pattern>, [<group 1 name>[, <group n name>]...])
-	// Struct variants mutate the function return type at bind time (VARCHAR -> STRUCT(...)), so the
-	// bind callback must run on deserialize; these intentionally do NOT register custom callbacks.
 	regexp_extract.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)},
 	                   LogicalType::VARCHAR, RegexExtractStructFunction, RegexExtractBind, nullptr, RegexInitLocalState,

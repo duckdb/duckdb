@@ -232,12 +232,9 @@ RegexpReplaceShortExtractRule::RegexpReplaceShortExtractRule(ExpressionRewriter 
 	root = std::move(func);
 }
 
-// Rewrites regexp_replace(s, '^...(group)...$', '\1') into regexp_extract(s, '^...(group)...', 1, 'k'):
-//  - `k` (keep-input-on-no-match) preserves regexp_replace's pass-through semantics.
-//  - The trailing `.*$` is stripped from the pattern so RE2 stops once `\1` is captured; the runtime
-//    fast path rejects matches whose remainder contains `\n` to preserve end-of-text semantics under
-//    default options. That bind-data flag (trim_dotstar_dollar) is set here and round-trips via the
-//    regexp_extract custom serialize callbacks.
+// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P's `^...$`
+// shape forces a whole-input match. The `.*$` trim and remainder-newline check happen in
+// regexp_extract's bind, so the bind data here stays a pure function of the children.
 unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
                                                             vector<reference<Expression>> &bindings, bool &changes_made,
                                                             bool is_root) {
@@ -249,9 +246,8 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 	if (!bind_data.constant_pattern || bind_data.global_replace) {
 		return nullptr;
 	}
-	// Trim+newline-check is only correct under default RE2 semantics: `.` excludes `\n` and `$` is
-	// end-of-text. Skip if either of those is altered.
-	if (bind_data.options.literal() || bind_data.options.dot_nl()) {
+	// Literal mode treats `^`/`$` as literal chars, so the shape check below would be meaningless.
+	if (bind_data.options.literal()) {
 		return nullptr;
 	}
 
@@ -269,13 +265,11 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 		return nullptr;
 	}
 
-	// Only rewrite when the compiled pattern has at least one capturing group for `\1`.
+	// `\1` requires at least one capture group; multi-group patterns are still valid.
 	duckdb_re2::RE2 compiled(duckdb_re2::StringPiece(pattern.c_str(), pattern.size()), bind_data.options);
 	if (!compiled.ok() || compiled.NumberOfCapturingGroups() < 1) {
 		return nullptr;
 	}
-
-	string trimmed_pattern = pattern.substr(0, pattern.size() - 3);
 
 	string options_str = "k";
 	if (root.children.size() == 4) {
@@ -288,7 +282,7 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 
 	vector<unique_ptr<Expression>> extract_children;
 	extract_children.emplace_back(std::move(root.children[0]));
-	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(trimmed_pattern))));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(pattern)));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(options_str))));
 
@@ -298,8 +292,6 @@ unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
 	if (!extract_expr) {
 		return nullptr;
 	}
-	auto &bound_extract = extract_expr->Cast<BoundFunctionExpression>();
-	bound_extract.bind_info->Cast<RegexpExtractBindData>().trim_dotstar_dollar = true;
 	return extract_expr;
 }
 
