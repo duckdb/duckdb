@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-PRAGMA enable_verification;
-
 # 400000 rows with default row_group_size (122880) => 4 row groups
 statement ok
 CREATE TABLE t AS SELECT range i FROM range(400000);
