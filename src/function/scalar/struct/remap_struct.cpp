@@ -98,7 +98,6 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	bool has_top_level_null = false;
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
@@ -117,7 +116,6 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 					result_validity.SetInvalid(i);
 				}
 			}
-			has_top_level_null = result_validity.CanHaveNull();
 		}
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
@@ -136,7 +134,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	result_vectors.emplace_back(result_key_vector);
 	result_vectors.emplace_back(result_value_vector);
 
-	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null, list_size);
+	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, false, list_size);
 }
 
 void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
@@ -147,7 +145,6 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	bool has_top_level_null = false;
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
@@ -166,7 +163,6 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 					result_validity.SetInvalid(i);
 				}
 			}
-			has_top_level_null = result_validity.CanHaveNull();
 		}
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		for (idx_t i = 0; i < result_size; i++) {
@@ -181,7 +177,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	vector<reference<Vector>> result_vectors;
 	result_vectors.emplace_back(result_vector);
 
-	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, has_top_level_null, list_size);
+	RemapChildVectors(result, input_vectors, result_vectors, remap_info, default_vector, false, list_size);
 }
 
 void RemapStruct(Vector &input, Vector &default_vector, Vector &result, idx_t result_size,
