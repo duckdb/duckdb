@@ -235,7 +235,4 @@ private:
 	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
 
-//! Returns the process-wide singleton PEGMatcherCache (built once, reused for all parses).
-PEGMatcherCache &GetGlobalPEGMatcherCache();
-
 } // namespace duckdb

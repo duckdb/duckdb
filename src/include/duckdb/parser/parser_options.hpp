@@ -15,6 +15,7 @@
 namespace duckdb {
 class ExtensionCallbackManager;
 class ParserExtension;
+struct PEGMatcherCache;
 
 struct ParserOptions {
 	bool preserve_identifier_case = true;
@@ -22,6 +23,7 @@ struct ParserOptions {
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
+	optional_ptr<PEGMatcherCache> peg_matcher_cache;
 };
 
 } // namespace duckdb

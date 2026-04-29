@@ -21,11 +21,6 @@
 
 namespace duckdb {
 
-PEGMatcherCache &GetGlobalPEGMatcherCache() {
-	static PEGMatcherCache *cache = new PEGMatcherCache();
-	return *cache;
-}
-
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
 	if (entry != state.added_suggestions.end()) {

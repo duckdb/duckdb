@@ -1523,6 +1523,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
+	options.peg_matcher_cache = &db->GetPEGMatcherCache();
 	return options;
 }
 

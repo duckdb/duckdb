@@ -21,6 +21,18 @@ namespace duckdb {
 Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
+Parser::~Parser() = default;
+
+PEGMatcherCache &Parser::GetCache() {
+	if (options.peg_matcher_cache) {
+		return *options.peg_matcher_cache;
+	}
+	if (!local_cache) {
+		local_cache = make_uniq<PEGMatcherCache>();
+	}
+	return *local_cache;
+}
+
 static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<UnicodeSpace> &unicode_spaces) {
 	if (unicode_spaces.empty()) {
 		// no unicode spaces found
@@ -247,8 +259,9 @@ void Parser::ParseQuery(const string &query) {
 		}
 	}
 	// PEG parser: tokenize then transform
-	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
-	auto peg_factory = GetGlobalPEGMatcherCache().GetTransformerFactory();
+	auto &cache = GetCache();
+	auto peg_matcher = cache.GetMatcher();
+	auto peg_factory = cache.GetTransformerFactory();
 
 	vector<MatcherToken> tokens;
 	ParserTokenizer tokenizer(query, tokens);
