@@ -576,7 +576,7 @@ endef
 .PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
 	pkg-config --exists libcurl || { \
 		sudo apt-get update -y -qq; \
 		sudo apt-get install -y -qq libcurl4-openssl-dev; \
