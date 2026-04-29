@@ -21,6 +21,7 @@ add_library_unity(
   ordered_aggregate_optimizer.cpp
   predicate_factoring.cpp
   regex_optimizations.cpp
+  struct_extract_struct_pack_folding.cpp
   timestamp_comparison.cpp
   constant_order_normalization.cpp)
 set(ALL_OBJECT_FILES
