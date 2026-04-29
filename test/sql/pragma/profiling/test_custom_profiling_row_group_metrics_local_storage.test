@@ -1,0 +1,82 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics_local_storage.test
+# description: Test row group profiling metrics with multiple table scans and local storage
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE local_pruned(i BIGINT);
+
+statement ok
+INSERT INTO local_pruned VALUES
+	(1000000), (1000001), (1000002), (1000003), (1000004),
+	(1000005), (1000006), (1000007), (1000008), (1000009);
+
+statement ok
+CREATE TABLE persistent_only(i BIGINT);
+
+statement ok
+INSERT INTO persistent_only VALUES
+	(0), (1), (2), (3), (4),
+	(5), (6), (7), (8), (9);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_pruned VALUES
+	(0), (1), (2), (3), (4),
+	(5), (6), (7), (8), (9);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM local_pruned a, persistent_only b WHERE a.i < 100 AND b.i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE VIEW operator_metrics AS
+WITH RECURSIVE ops AS (
+    SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
+    UNION ALL
+    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+)
+SELECT op.operator_type,
+       op.operator_row_groups_scanned AS scanned,
+       op.operator_row_groups_total AS total
+FROM ops;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total;
+----
+TABLE_SCAN	1	1
+TABLE_SCAN	1	2
+
+# 2 row groups scanned, 3 were available to scan across all operators.
+query T
+SELECT sum(scanned)::VARCHAR || '/' || sum(total)::VARCHAR
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2/3
+
+query II
+SELECT cumulative_row_groups_scanned::BIGINT, cumulative_total_row_groups_to_scan::BIGINT
+FROM '__TEST_DIR__/profiling_output.json';
+----
+2	3
+
+statement ok
+ROLLBACK;

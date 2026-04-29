@@ -440,13 +440,13 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 				}
 			}
 		}
-		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED) &&
+		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROW_GROUPS_SCANNED) &&
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
 			const auto scanned = table_scan.GetRowGroupsSeqScanned(gstate, lstate);
 			if (scanned.IsValid()) {
 				auto &info = GetOperatorInfo(*active_operator);
-				info.AddMetric(MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED, scanned.GetIndex());
+				info.AddMetric(MetricType::OPERATOR_ROW_GROUPS_SCANNED, scanned.GetIndex());
 			}
 		}
 	}
@@ -500,8 +500,8 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROWS_SCANNED)) {
 			info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, node.second.rows_scanned);
 		}
-		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED)) {
-			info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED, node.second.row_groups_seq_scanned);
+		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROW_GROUPS_SCANNED)) {
+			info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED, node.second.row_groups_scanned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);
@@ -847,7 +847,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 	if (depth != 0) {
 		info.metrics[MetricType::OPERATOR_NAME] = root_p.GetName();
 		info.MetricSum<uint8_t>(MetricType::OPERATOR_TYPE, static_cast<uint8_t>(root_p.type));
-		if (info.Enabled(settings, MetricType::OPERATOR_ROW_GROUPS_TOTAL) &&
+		if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_ROW_GROUPS_TOTAL) &&
 		    root_p.type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = root_p.Cast<PhysicalTableScan>();
 			const auto total = table_scan.GetRowGroupsTotal(context);

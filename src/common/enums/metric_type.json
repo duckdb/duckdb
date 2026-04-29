@@ -34,6 +34,26 @@
         "child": "OPERATOR_ROWS_SCANNED"
       },
       {
+        "name": "CUMULATIVE_ROW_GROUPS_SCANNED",
+        "enum_value": 101,
+        "description": "Cumulative number of row groups scanned by the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_ROW_GROUPS_SCANNED"
+      },
+      {
+        "name": "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN",
+        "enum_value": 102,
+        "description": "Cumulative number of row groups that could have been scanned by the query",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_ROW_GROUPS_TOTAL"
+      },
+      {
         "name": "EXTRA_INFO",
         "enum_value": 3,
         "description": "Unique operator metrics",
@@ -323,9 +343,9 @@
         "is_default": true
       },
       {
-        "name": "OPERATOR_ROW_GROUPS_SEQ_SCANNED",
+        "name": "OPERATOR_ROW_GROUPS_SCANNED",
         "enum_value": 99,
-        "description": "Number of row groups scanned by this table scan operator using a sequential scan",
+        "description": "Number of row groups scanned by this table scan operator",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false

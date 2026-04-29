@@ -50,7 +50,7 @@ struct OperatorInformation {
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
 	idx_t rows_scanned = 0;
-	idx_t row_groups_seq_scanned = 0;
+	idx_t row_groups_scanned = 0;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
@@ -81,8 +81,8 @@ struct OperatorInformation {
 		case MetricType::OPERATOR_ROWS_SCANNED:
 			rows_scanned = LossyNumericCast<idx_t>(metric);
 			break;
-		case MetricType::OPERATOR_ROW_GROUPS_SEQ_SCANNED:
-			row_groups_seq_scanned = LossyNumericCast<idx_t>(metric);
+		case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
+			row_groups_scanned = LossyNumericCast<idx_t>(metric);
 			break;
 		default:
 			throw InternalException("OperatorProfiler: Unknown metric type");
