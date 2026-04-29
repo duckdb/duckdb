@@ -429,6 +429,13 @@ void ClientContext::RegisterSharedStatementGuard(unique_lock<mutex> guard) {
 	active_query->shared_statement_guards.push_back(std::move(guard));
 }
 
+void ClientContext::ReleaseSharedStatementGuards() {
+	if (!active_query) {
+		return;
+	}
+	active_query->shared_statement_guards.clear();
+}
+
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->IsOpenResult(pending));
