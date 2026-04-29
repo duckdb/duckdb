@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -331,10 +332,11 @@ static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &ty
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
-	BoundFunctionExpression sub(type, SubtractFunction::GetFunction(type, type), std::move(arguments), nullptr);
+
+	auto sub = SubtractFunction::GetFunction(type, type).Bind(context, std::move(arguments));
 
 	Value result;
-	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {
+	if (ExpressionExecutor::TryEvaluateScalar(context, *sub, result)) {
 		return result;
 	} else {
 		// Couldn't evaluate: Return max uhugeint as range so GetIntegralCompress will return nullptr
@@ -394,8 +396,10 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
+
+	BoundScalarFunction bound_function(compress_function);
 	auto compress_expr =
-	    make_uniq<BoundFunctionExpression>(cast_type, compress_function, std::move(arguments), nullptr);
+	    make_uniq<BoundFunctionExpression>(cast_type, std::move(bound_function), std::move(arguments), nullptr);
 
 	auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
 	compress_stats.CopyBase(stats);
@@ -461,8 +465,11 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	auto compress_function = CMStringCompressFun::GetFunction(cast_type);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
+
+	BoundScalarFunction bound_function(compress_function);
+
 	auto compress_expr =
-	    make_uniq<BoundFunctionExpression>(cast_type, compress_function, std::move(arguments), nullptr);
+	    make_uniq<BoundFunctionExpression>(cast_type, std::move(bound_function), std::move(arguments), nullptr);
 	return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique());
 }
 
@@ -485,11 +492,13 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	D_ASSERT(!stats.CanHaveNoNull() || NumericStats::HasMinMax(stats));
 	auto decompress_function = CMIntegralDecompressFun::GetFunction(input->GetReturnType(), result_type);
 	const auto min = !stats.CanHaveNoNull() ? Value(result_type) : NumericStats::Min(stats);
-
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
-	return make_uniq<BoundFunctionExpression>(result_type, decompress_function, std::move(arguments), nullptr);
+
+	BoundScalarFunction bound_function(decompress_function);
+
+	return make_uniq<BoundFunctionExpression>(result_type, std::move(bound_function), std::move(arguments), nullptr);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr<Expression> input,
@@ -499,7 +508,10 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	auto decompress_function = CMStringDecompressFun::GetFunction(input->GetReturnType());
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
-	return make_uniq<BoundFunctionExpression>(result_type, decompress_function, std::move(arguments), nullptr);
+
+	BoundScalarFunction bound_function(decompress_function);
+
+	return make_uniq<BoundFunctionExpression>(result_type, std::move(bound_function), std::move(arguments), nullptr);
 }
 
 } // namespace duckdb

@@ -57,7 +57,11 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expr
 	func.GetArguments()[0] = type;
 	func.SetReturnType(type);
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
-	return make_uniq<BoundFunctionExpression>(type, func, std::move(children), ConstantOrNull::Bind(std::move(value)));
+
+	BoundScalarFunction bound_func(func);
+
+	return make_uniq<BoundFunctionExpression>(type, std::move(bound_func), std::move(children),
+	                                          ConstantOrNull::Bind(std::move(value)));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {

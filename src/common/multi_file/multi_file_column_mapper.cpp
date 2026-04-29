@@ -878,7 +878,10 @@ static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expressio
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(source_expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(static_cast<int64_t>(child_idx + 1))));
-	return make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
+
+	BoundScalarFunction bound_func(GetExtractAtFunction());
+
+	return make_uniq<BoundFunctionExpression>(child_type, std::move(bound_func), std::move(arguments),
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 

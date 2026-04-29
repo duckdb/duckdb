@@ -11,6 +11,7 @@
 #include "struct_column_writer.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/variant.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
 
 namespace duckdb {
@@ -97,7 +98,9 @@ public:
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));
 
-		return make_uniq<BoundFunctionExpression>(TransformedType(), GetTransformFunction(), std::move(arguments),
+		BoundScalarFunction bound_func(GetTransformFunction());
+
+		return make_uniq<BoundFunctionExpression>(TransformedType(), std::move(bound_func), std::move(arguments),
 		                                          nullptr, false);
 	}
 

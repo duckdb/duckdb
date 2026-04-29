@@ -140,25 +140,22 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 }
 
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
-                                                       string pattern, bool is_not_like) {
+                                                       string pattern, bool is_not_like) const {
 	// replace LIKE by an optimized function
-	unique_ptr<Expression> result;
-	auto new_function =
-	    make_uniq<BoundFunctionExpression>(expr.GetReturnType(), function, std::move(expr.children), nullptr);
+	auto result = function.Bind(GetContext(), std::move(expr.children));
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	new_function->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
+	result->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
 
-	result = std::move(new_function);
-	if (is_not_like) {
-		auto negation = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
-		negation->children.push_back(std::move(result));
-		result = std::move(negation);
+	if (!is_not_like) {
+		return std::move(result);
 	}
 
-	return result;
+	auto negation = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+	negation->children.push_back(std::move(result));
+	return std::move(negation);
 }
 
 } // namespace duckdb
