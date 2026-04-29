@@ -211,12 +211,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT+8
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40-08
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40-08
 
@@ -233,12 +233,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-5
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+05
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+05
 
@@ -255,12 +255,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-14
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+14
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+14
 
@@ -269,7 +269,7 @@ endloop
 foreach utc UTC+1000 UTC+10 UTC+10:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -277,12 +277,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-10
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+10
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+10
 
@@ -299,12 +299,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT+0
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+00
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+00
 
