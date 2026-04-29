@@ -429,18 +429,18 @@ optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, Loca
 	return optional_idx();
 }
 
-optional_idx PhysicalTableScan::GetRowGroupsSeqScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.row_groups_seq_scanned) {
+optional_idx PhysicalTableScan::GetRowGroupsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+	if (function.row_groups_scanned) {
 		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.row_groups_seq_scanned(*gstate.global_state, *state.local_state);
+		return function.row_groups_scanned(*gstate.global_state, *state.local_state);
 	}
 	return optional_idx();
 }
 
-optional_idx PhysicalTableScan::GetRowGroupsTotal(ClientContext &context) const {
-	if (function.row_groups_total && bind_data) {
-		return function.row_groups_total(context, bind_data.get());
+optional_idx PhysicalTableScan::GetTotalRowGroupsToScan(ClientContext &context) const {
+	if (function.total_row_groups_to_scan && bind_data) {
+		return function.total_row_groups_to_scan(context, bind_data.get());
 	}
 	return optional_idx();
 }

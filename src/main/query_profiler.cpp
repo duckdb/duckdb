@@ -443,7 +443,7 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROW_GROUPS_SCANNED) &&
 		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-			const auto scanned = table_scan.GetRowGroupsSeqScanned(gstate, lstate);
+			const auto scanned = table_scan.GetRowGroupsScanned(gstate, lstate);
 			if (scanned.IsValid()) {
 				auto &info = GetOperatorInfo(*active_operator);
 				info.AddMetric(MetricType::OPERATOR_ROW_GROUPS_SCANNED, scanned.GetIndex());
@@ -850,7 +850,7 @@ unique_ptr<ProfilingNode> QueryProfiler::CreateTree(const PhysicalOperator &root
 		if (info.Enabled(info.expanded_settings, MetricType::OPERATOR_ROW_GROUPS_TOTAL) &&
 		    root_p.type == PhysicalOperatorType::TABLE_SCAN) {
 			const auto &table_scan = root_p.Cast<PhysicalTableScan>();
-			const auto total = table_scan.GetRowGroupsTotal(context);
+			const auto total = table_scan.GetTotalRowGroupsToScan(context);
 			if (total.IsValid()) {
 				info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_TOTAL, total.GetIndex());
 			}

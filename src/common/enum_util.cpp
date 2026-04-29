@@ -202,6 +202,7 @@ const StringUtil::EnumStringLiteral *GetARTConflictTypeValues() {
 	};
 	return values;
 }
+
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
 	return StringUtil::EnumToString(GetARTConflictTypeValues(), 3, "ARTConflictType", static_cast<uint32_t>(value));
@@ -5691,3 +5692,4 @@ WindowMergeSortStage EnumUtil::FromString<WindowMergeSortStage>(const char *valu
 }
 
 }
+

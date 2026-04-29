@@ -322,9 +322,9 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
                                                                    const FunctionData *bind_data);
 typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
                                                LocalTableFunctionState &local_state);
-typedef idx_t (*table_function_row_groups_seq_scanned_t)(GlobalTableFunctionState &global_state,
-                                                         LocalTableFunctionState &local_state);
-typedef idx_t (*table_function_row_groups_total_t)(ClientContext &context, const FunctionData *bind_data);
+typedef idx_t (*table_function_row_groups_scanned_t)(GlobalTableFunctionState &global_state,
+                                                     LocalTableFunctionState &local_state);
+typedef idx_t (*table_function_total_row_groups_to_scan_t)(ClientContext &context, const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -439,12 +439,12 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows scanned
+	//! (Optional) returns the number of rows scanned by this table scan operator
 	table_function_rows_scanned_t rows_scanned;
-	//! (Optional) returns the number of row groups scanned by the current operator
-	table_function_row_groups_seq_scanned_t row_groups_seq_scanned;
-	//! (Optional) returns the row group count for the current operator's scan target
-	table_function_row_groups_total_t row_groups_total;
+	//! (Optional) returns the number of row groups scanned by this table scan operator
+	table_function_row_groups_scanned_t row_groups_scanned;
+	//! (Optional) returns the total number of row groups available to this table scan operator
+	table_function_total_row_groups_to_scan_t total_row_groups_to_scan;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
