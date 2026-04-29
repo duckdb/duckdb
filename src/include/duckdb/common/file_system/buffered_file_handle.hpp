@@ -35,8 +35,9 @@ public:
 
 	//! Positional read; serves from the buffer when fully covered, else forwards
 	//! to the inner handle (realizing a pending hint with one inner Read).
-	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
-	DUCKDB_API void ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) override;
+	//! Returns bytes actually read (0 at/past EOF). Never throws on short reads.
+	DUCKDB_API idx_t Read(void *buffer, idx_t nr_bytes, idx_t location);
+	DUCKDB_API idx_t ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) override;
 
 	DUCKDB_API idx_t GetFileSize() override;
 	DUCKDB_API string GetPath() const override;

@@ -42,6 +42,7 @@ DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, c
 
 	handle_slot->RegisterPrefetch(0, HEADER_PREFETCH_SIZE);
 
+	// Buffer is zero-initialized so a short read at EOF yields a non-match.
 	char buffer[MAGIC_BYTES_READ_SIZE] = {};
 	handle_slot->Read(buffer, MAGIC_BYTES_READ_SIZE, 0);
 	return ClassifyMagicBytes(buffer);

@@ -76,7 +76,8 @@ class BaseFileHandle {
 public:
 	DUCKDB_API virtual ~BaseFileHandle() = default;
 
-	DUCKDB_API virtual void ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) = 0;
+	//! Read up to nr_bytes from location. Returns bytes actually read (0 if at/past EOF). Never throws on short reads.
+	DUCKDB_API virtual idx_t ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) = 0;
 	DUCKDB_API virtual idx_t GetFileSize() = 0;
 	DUCKDB_API virtual string GetPath() const = 0;
 };
@@ -114,7 +115,7 @@ public:
 	DUCKDB_API bool OnDiskFile();
 	DUCKDB_API idx_t GetFileSize() override;
 	DUCKDB_API FileType GetType();
-	DUCKDB_API void ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) override;
+	DUCKDB_API idx_t ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) override;
 	DUCKDB_API FileMetadata Stats();
 
 	DUCKDB_API void TryAddLogger(FileOpener &opener);

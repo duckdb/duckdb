@@ -47,49 +47,46 @@ void BufferedFileHandle::RegisterPrefetch(idx_t offset, idx_t size) {
 	range_size = size;
 }
 
-void BufferedFileHandle::ReadIntoBuffer(QueryContext context, void *out, idx_t nr_bytes, idx_t location) {
+idx_t BufferedFileHandle::ReadIntoBuffer(QueryContext context, void *out, idx_t nr_bytes, idx_t location) {
 	D_ASSERT(inner);
 
 	if (state == BufferedFileHandleState::REALIZED) {
 		if (location >= range_offset && location + nr_bytes <= range_offset + range_size) {
 			std::memcpy(out, buffer.get() + (location - range_offset), nr_bytes);
-			return;
+			return nr_bytes;
 		}
 		// miss → fall through to forward
 	} else if (state == BufferedFileHandleState::HINT) {
-		// Realize the hint if the request overlaps the hint range.
+		// Realize the hint if the request overlaps the hint range. The inner
+		// ReadIntoBuffer clamps to file size so we never read past EOF.
 		const idx_t hint_end = range_offset + range_size;
 		const bool overlaps = location < hint_end && location + nr_bytes > range_offset;
 		if (overlaps) {
-			// Clamp the prefetch to actual file size so we don't try to read past EOF.
-			const idx_t file_size = inner->GetFileSize();
-			if (range_offset >= file_size) {
+			auto buf = make_unsafe_uniq_array<char>(range_size);
+			const idx_t actual_size = inner->ReadIntoBuffer(context, buf.get(), range_size, range_offset);
+			if (actual_size == 0) {
 				// Hint is entirely past EOF; nothing to buffer. Forward verbatim.
 				state = BufferedFileHandleState::EMPTY;
 				range_offset = 0;
 				range_size = 0;
 			} else {
-				const idx_t available = file_size - range_offset;
-				const idx_t actual_size = MinValue<idx_t>(range_size, available);
-				buffer = make_unsafe_uniq_array<char>(actual_size);
-				inner->Read(context, buffer.get(), actual_size, range_offset);
+				buffer = std::move(buf);
 				range_size = actual_size;
 				state = BufferedFileHandleState::REALIZED;
 				if (location >= range_offset && location + nr_bytes <= range_offset + range_size) {
 					std::memcpy(out, buffer.get() + (location - range_offset), nr_bytes);
-					return;
+					return nr_bytes;
 				}
 				// Caller's request straddles past the realized buffer; fall through.
 			}
 		}
 	}
 
-	// Forward verbatim to the inner handle.
-	inner->Read(context, out, nr_bytes, location);
+	return inner->ReadIntoBuffer(context, out, nr_bytes, location);
 }
 
-void BufferedFileHandle::Read(void *out, idx_t nr_bytes, idx_t location) {
-	ReadIntoBuffer(QueryContext(), out, nr_bytes, location);
+idx_t BufferedFileHandle::Read(void *out, idx_t nr_bytes, idx_t location) {
+	return ReadIntoBuffer(QueryContext(), out, nr_bytes, location);
 }
 
 idx_t BufferedFileHandle::GetFileSize() {
