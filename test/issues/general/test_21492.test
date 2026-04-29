@@ -1,0 +1,86 @@
+# name: test/issues/general/test_21492.test
+# description: Table subscript with constant / getvariable should fold to a column ref (column pruning)
+# group: [general]
+
+statement ok
+CREATE OR REPLACE TABLE issue_21492_t (grd_quart INTEGER, typl INTEGER, ipondl INTEGER, catl VARCHAR);
+
+statement ok
+INSERT INTO issue_21492_t VALUES (1, 2, 100, '1'), (1, 2, 200, '1');
+
+# Bracket subscript must match direct column reference (same aggregation result)
+query III
+FROM issue_21492_t AS s
+SELECT grd_quart, s['typl'], sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY 1, 2
+----
+1	2	300
+
+query III
+FROM issue_21492_t AS s
+SELECT grd_quart, typl, sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY 1, 2
+----
+1	2	300
+
+statement ok
+SET VARIABLE col = 'typl';
+
+query III
+FROM issue_21492_t AS s
+SELECT grd_quart, s[getvariable('col')], sum(ipondl) AS eft
+WHERE catl = '1'
+GROUP BY ALL
+ORDER BY 1, 2
+----
+1	2	300
+
+statement ok
+RESET VARIABLE col;
+
+# Non-table struct_pack + struct_extract must still work (fold is semantics-preserving)
+query I
+SELECT struct_extract(struct_pack(a := 40, b := 2), 'a') AS x
+----
+40
+
+# Regression (#21492): bracket / getvariable must not leave struct_pack in the physical plan (column pruning).
+# Without the fold, EXPLAIN showed array_extract(struct_pack(all columns), 'typl') which forces reading every column.
+statement ok
+CREATE OR REPLACE TABLE issue_21492_explain_t (grd INTEGER, typl INTEGER, ipondl INTEGER, catl VARCHAR);
+
+statement ok
+INSERT INTO issue_21492_explain_t VALUES (1, 2, 100, '1');
+
+query II
+EXPLAIN SELECT grd, s['typl'], sum(ipondl) FROM issue_21492_explain_t AS s WHERE catl = '1' GROUP BY ALL;
+----
+physical_plan	<!REGEX>:(?s).*struct_pack.*
+
+statement ok
+SET VARIABLE col = 'typl';
+
+query II
+EXPLAIN SELECT grd, s[getvariable('col')], sum(ipondl) FROM issue_21492_explain_t AS s WHERE catl = '1' GROUP BY ALL;
+----
+physical_plan	<!REGEX>:(?s).*struct_pack.*
+
+statement ok
+RESET VARIABLE col;
+
+# Direct column reference should match the same no-struct_pack shape (control).
+query II
+EXPLAIN SELECT grd, typl, sum(ipondl) FROM issue_21492_explain_t AS s WHERE catl = '1' GROUP BY ALL;
+----
+physical_plan	<!REGEX>:(?s).*struct_pack.*
+
+statement ok
+DROP TABLE issue_21492_explain_t;
+
+# After optimization the projection should not depend on building the full struct for the extract
+statement ok
+DROP TABLE issue_21492_t;

@@ -30,6 +30,7 @@
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/join_dependent_filter.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
+#include "duckdb/optimizer/rule/struct_extract_struct_pack_folding.hpp"
 #include "duckdb/optimizer/sampling_pushdown.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/aggregate_function_rewriter.hpp"
@@ -53,6 +54,7 @@ namespace duckdb {
 Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context), binder(binder), rewriter(context) {
 	rewriter.rules.push_back(make_uniq<ConstantOrderNormalizationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ConstantFoldingRule>(rewriter));
+	rewriter.rules.push_back(make_uniq<StructExtractStructPackFoldingRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<DistributivityRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<ArithmeticSimplificationRule>(rewriter));
 	rewriter.rules.push_back(make_uniq<CaseSimplificationRule>(rewriter));

@@ -11,6 +11,7 @@
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 

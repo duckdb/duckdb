@@ -1,0 +1,17 @@
+# name: test/sql/merge/issue_21836_type_isolation.test
+# description: DISTINCT ON + fixed ARRAY uses first(); sanity check (issue #21836)
+# group: [merge]
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE t_distinct_array(id INT, v DOUBLE[8]);
+
+statement ok
+INSERT INTO t_distinct_array VALUES (1, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]);
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT ON (id) * FROM t_distinct_array) s;
+----
+1

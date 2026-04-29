@@ -1,4 +1,7 @@
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -219,6 +222,334 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 };
 
+//===--------------------------------------------------------------------===//
+// FIRST/LAST for fixed-size ARRAY (constant-size child): copy raw payload.
+// Avoids CreateSortKey/DecodeSortKey used by FirstVectorFunction, which is
+// prohibitively expensive for large arrays (e.g. DISTINCT ON from INSERT ON
+// CONFLICT → MERGE rewrite). See issue #21836.
+//===--------------------------------------------------------------------===//
+static void CopyArrayRowToBuffer(Vector &array_vec, idx_t row_idx, idx_t array_size, const LogicalType &child_type,
+                                 UnifiedVectorFormat &child_fmt, data_ptr_t dest) {
+	auto base_flat = row_idx * array_size;
+	switch (child_type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8: {
+		auto data = UnifiedVectorFormat::GetData<int8_t>(child_fmt);
+		auto out = reinterpret_cast<int8_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::INT16: {
+		auto data = UnifiedVectorFormat::GetData<int16_t>(child_fmt);
+		auto out = reinterpret_cast<int16_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::INT32: {
+		auto data = UnifiedVectorFormat::GetData<int32_t>(child_fmt);
+		auto out = reinterpret_cast<int32_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::INT64: {
+		auto data = UnifiedVectorFormat::GetData<int64_t>(child_fmt);
+		auto out = reinterpret_cast<int64_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::UINT8: {
+		auto data = UnifiedVectorFormat::GetData<uint8_t>(child_fmt);
+		auto out = reinterpret_cast<uint8_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::UINT16: {
+		auto data = UnifiedVectorFormat::GetData<uint16_t>(child_fmt);
+		auto out = reinterpret_cast<uint16_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::UINT32: {
+		auto data = UnifiedVectorFormat::GetData<uint32_t>(child_fmt);
+		auto out = reinterpret_cast<uint32_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::UINT64: {
+		auto data = UnifiedVectorFormat::GetData<uint64_t>(child_fmt);
+		auto out = reinterpret_cast<uint64_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::INT128: {
+		auto data = UnifiedVectorFormat::GetData<hugeint_t>(child_fmt);
+		auto out = reinterpret_cast<hugeint_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::UINT128: {
+		auto data = UnifiedVectorFormat::GetData<uhugeint_t>(child_fmt);
+		auto out = reinterpret_cast<uhugeint_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::FLOAT: {
+		auto data = UnifiedVectorFormat::GetData<float>(child_fmt);
+		auto out = reinterpret_cast<float *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::DOUBLE: {
+		auto data = UnifiedVectorFormat::GetData<double>(child_fmt);
+		auto out = reinterpret_cast<double *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	case PhysicalType::INTERVAL: {
+		auto data = UnifiedVectorFormat::GetData<interval_t>(child_fmt);
+		auto out = reinterpret_cast<interval_t *>(dest);
+		for (idx_t e = 0; e < array_size; e++) {
+			auto cidx = child_fmt.sel->get_index(base_flat + e);
+			out[e] = data[cidx];
+		}
+		return;
+	}
+	default:
+		throw NotImplementedException("FIRST aggregate: unsupported ARRAY child type %s", child_type.ToString());
+	}
+}
+
+template <bool LAST, bool SKIP_NULLS>
+struct FirstArrayFunction : public FirstFunctionBase {
+	using STATE = FirstState<string_t>;
+
+	template <class STATE_TYPE, bool COMBINE = false>
+	static void SetValue(STATE_TYPE &state, AggregateInputData &input_data, string_t value, bool is_null) {
+		if (LAST && state.is_set) {
+			Destroy(state, input_data);
+		}
+		if (is_null) {
+			if (!SKIP_NULLS) {
+				state.is_set = true;
+				state.is_null = true;
+			}
+		} else {
+			state.is_set = true;
+			state.is_null = false;
+			if (COMBINE && !LAST) {
+				auto len = value.GetSize();
+				auto ptr = input_data.allocator.Allocate(len);
+				memcpy(ptr, value.GetData(), len);
+				state.value = string_t(const_char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
+			} else {
+				auto len = value.GetSize();
+				data_ptr_t ptr;
+				if (LAST) {
+					ptr = data_ptr_cast(new char[len]);
+				} else {
+					ptr = input_data.allocator.Allocate(len);
+				}
+				memcpy(ptr, value.GetData(), len);
+				state.value = string_t(const_char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(len));
+			}
+		}
+	}
+
+	template <class STATE_TYPE>
+	static void Destroy(STATE_TYPE &state, AggregateInputData &) {
+		if (!LAST || !state.is_set || state.is_null || state.value.GetSize() == 0) {
+			return;
+		}
+		delete[] state.value.GetData();
+	}
+
+	template <class STATE_TYPE, class OP>
+	static void Combine(const STATE_TYPE &source, STATE_TYPE &target, AggregateInputData &input_data) {
+		if (source.is_set && (LAST || !target.is_set)) {
+			SetValue<STATE_TYPE, true>(target, input_data, source.value, source.is_null);
+		}
+	}
+
+	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
+		auto &input = inputs[0];
+		D_ASSERT(input.GetType().id() == LogicalTypeId::ARRAY);
+		auto array_size = ArrayType::GetSize(input.GetType());
+		auto &child_type = ArrayType::GetChildType(input.GetType());
+		auto elem_size = GetTypeIdSize(child_type.InternalType());
+		auto byte_len = array_size * elem_size;
+
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
+
+		auto &child = ArrayVector::GetEntry(input);
+		UnifiedVectorFormat child_fmt;
+		child.ToUnifiedFormat(count * array_size, child_fmt);
+
+		sel_t assign_sel[STANDARD_VECTOR_SIZE];
+		idx_t assign_count = 0;
+		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = idata.sel->get_index(i);
+			bool is_null = !idata.validity.RowIsValid(idx);
+			if (SKIP_NULLS && is_null) {
+				continue;
+			}
+			auto &state = *states[sdata.sel->get_index(i)];
+			if (!LAST && state.is_set) {
+				continue;
+			}
+			assign_sel[assign_count++] = NumericCast<sel_t>(i);
+		}
+		if (assign_count == 0) {
+			return;
+		}
+
+		for (idx_t i = 0; i < assign_count; i++) {
+			const auto state_idx = sdata.sel->get_index(assign_sel[i]);
+			auto &state = *states[state_idx];
+			if (!LAST && state.is_set) {
+				continue;
+			}
+			const auto idx = idata.sel->get_index(assign_sel[i]);
+			bool is_null = !idata.validity.RowIsValid(idx);
+			if (!is_null) {
+				if (LAST && state.is_set) {
+					Destroy(state, input_data);
+				}
+				data_ptr_t ptr;
+				if (LAST) {
+					ptr = data_ptr_cast(new char[byte_len]);
+				} else {
+					ptr = input_data.allocator.Allocate(byte_len);
+				}
+				CopyArrayRowToBuffer(input, idx, array_size, child_type, child_fmt, ptr);
+				state.is_set = true;
+				state.is_null = false;
+				state.value = string_t(const_char_ptr_cast(ptr), UnsafeNumericCast<uint32_t>(byte_len));
+			} else {
+				if (!SKIP_NULLS) {
+					state.is_set = true;
+					state.is_null = true;
+				}
+			}
+		}
+	}
+
+	template <class STATE_TYPE>
+	static void Finalize(STATE_TYPE &state, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set || state.is_null) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		auto &result = finalize_data.result;
+		D_ASSERT(result.GetType().id() == LogicalTypeId::ARRAY);
+		auto array_size = ArrayType::GetSize(result.GetType());
+		auto &child_type = ArrayType::GetChildType(result.GetType());
+		auto elem_size = GetTypeIdSize(child_type.InternalType());
+		D_ASSERT(state.value.GetSize() == array_size * elem_size);
+
+		FlatVector::SetNull(result, finalize_data.result_idx, false);
+		auto &result_child = ArrayVector::GetEntry(result);
+		auto dest_row_base = finalize_data.result_idx * array_size;
+		auto src = const_data_ptr_cast(state.value.GetData());
+		auto byte_len = state.value.GetSize();
+		switch (child_type.InternalType()) {
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
+			memcpy(FlatVector::GetDataMutable<int8_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::INT16:
+			memcpy(FlatVector::GetDataMutable<int16_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::INT32:
+			memcpy(FlatVector::GetDataMutable<int32_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::INT64:
+			memcpy(FlatVector::GetDataMutable<int64_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::UINT8:
+			memcpy(FlatVector::GetDataMutable<uint8_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::UINT16:
+			memcpy(FlatVector::GetDataMutable<uint16_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::UINT32:
+			memcpy(FlatVector::GetDataMutable<uint32_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::UINT64:
+			memcpy(FlatVector::GetDataMutable<uint64_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::INT128:
+			memcpy(FlatVector::GetDataMutable<hugeint_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::UINT128:
+			memcpy(FlatVector::GetDataMutable<uhugeint_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::FLOAT:
+			memcpy(FlatVector::GetDataMutable<float>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::DOUBLE:
+			memcpy(FlatVector::GetDataMutable<double>(result_child) + dest_row_base, src, byte_len);
+			break;
+		case PhysicalType::INTERVAL:
+			memcpy(FlatVector::GetDataMutable<interval_t>(result_child) + dest_row_base, src, byte_len);
+			break;
+		default:
+			throw InternalException("FIRST aggregate finalize: unsupported ARRAY child type %s", child_type.ToString());
+		}
+		auto &child_validity = FlatVector::Validity(result_child);
+		for (idx_t e = 0; e < array_size; e++) {
+			child_validity.SetValid(dest_row_base + e);
+		}
+	}
+
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+		function.arguments[0] = arguments[0]->return_type;
+		function.SetReturnType(arguments[0]->return_type);
+		return nullptr;
+	}
+};
+
 LogicalType GetFirstStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	LogicalType value_type = function.GetArguments()[0];
@@ -226,6 +557,19 @@ LogicalType GetFirstStateType(const AggregateFunction &function) {
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 	child_types.emplace_back("is_null", LogicalType::BOOLEAN);
 	return LogicalType::STRUCT(std::move(child_types));
+}
+
+template <bool LAST, bool SKIP_NULLS>
+AggregateFunction GetFirstArrayAggregate(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	using OP = FirstArrayFunction<LAST, SKIP_NULLS>;
+	using STATE = FirstState<string_t>;
+	auto fun = AggregateFunction(
+	    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>, OP::Update,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
+	fun.SetStructStateExport(GetFirstStateType);
+	return fun;
 }
 
 template <class T, bool LAST, bool SKIP_NULLS>
@@ -336,6 +680,11 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 			fun.SetStructStateExport(GetFirstStateType);
 			return fun;
 		}
+	case PhysicalType::ARRAY:
+		if (TypeIsConstantSize(ArrayType::GetChildType(type).InternalType())) {
+			return GetFirstArrayAggregate<LAST, SKIP_NULLS>(type);
+		}
+		[[fallthrough]];
 	default: {
 		using OP = FirstVectorFunction<LAST, SKIP_NULLS>;
 		using STATE = FirstState<string_t>;

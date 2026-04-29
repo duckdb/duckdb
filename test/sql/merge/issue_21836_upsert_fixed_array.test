@@ -1,0 +1,26 @@
+# name: test/sql/merge/issue_21836_upsert_fixed_array.test
+# description: INSERT ON CONFLICT with large fixed arrays stays within memory (issue #21836)
+# group: [merge]
+
+statement ok
+SET memory_limit = '120MB';
+
+statement ok
+SET threads = 1;
+
+statement ok
+CREATE TABLE t21836 (id INT PRIMARY KEY, a DOUBLE[128], b DOUBLE[128], c DOUBLE[128]);
+
+statement ok
+INSERT INTO t21836 (id, a)
+VALUES (1, (SELECT list(0.0) FROM generate_series(1, 128))::DOUBLE[128]);
+
+statement ok
+INSERT INTO t21836 (id, b)
+VALUES (1, (SELECT list(1.0) FROM generate_series(1, 128))::DOUBLE[128])
+ON CONFLICT DO UPDATE SET b = EXCLUDED.b, a = a, c = c;
+
+query RRR
+SELECT a[1], b[1], c[1] FROM t21836 WHERE id = 1;
+----
+0.0	1.0	NULL
