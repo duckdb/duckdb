@@ -1,11 +1,6 @@
 # name: test/sql/peg_parser/fuzzer/internal_0208.test
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
 statement error
 INSTALL 'CWQqtzCCq9' FROM ''''' 'bj7OGvEqL'
 ----

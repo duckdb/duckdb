@@ -48,15 +48,15 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_size) {
-	child->Append(to_append, to_append_size);
+	child->Append(to_append, to_append_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size) {
-	child->Append(to_append, sel, to_append_size);
+	child->Append(to_append, sel, to_append_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void VectorListBuffer::PushBack(const Value &insert) {
-	child->Append(insert);
+	child->Append(insert, VectorAppendMode::ALLOW_RESIZE);
 }
 
 idx_t VectorListBuffer::GetChildCapacity() const {
@@ -136,7 +136,15 @@ buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type
 	auto count = count_t(end - offset);
 	auto result = make_buffer<VectorListBuffer>(offset_ptr, count, *this);
 	result->GetValidityMask().Slice(validity, offset, count);
-	result->SetVectorSize(count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 

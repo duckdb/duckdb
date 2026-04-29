@@ -7,6 +7,6 @@ add_library_unity(
   test_argumented_vec_udf.cpp
   test_aggregate_udf.cpp)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_api_udf_function>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_api_udf_function>
     PARENT_SCOPE)

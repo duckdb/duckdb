@@ -32,7 +32,7 @@ struct LambdaExecuteInfo {
 		}
 
 		// get the result types
-		vector<LogicalType> result_types {lambda_expr.return_type};
+		vector<LogicalType> result_types {lambda_expr.GetReturnType()};
 
 		// initialize the data chunks
 		input_chunk.InitializeEmpty(input_types);
@@ -214,7 +214,7 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 //===--------------------------------------------------------------------===//
 
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                   const ScalarFunction &) {
+                                   const BoundScalarFunction &) {
 	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
@@ -222,7 +222,7 @@ void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<Fu
 	serializer.WritePropertyWithDefault<bool>(103, "has_initial", bind_data.has_initial, false);
 }
 
-unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
+unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, BoundScalarFunction &) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
 	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
 	                                                                                        unique_ptr<Expression>());
@@ -352,18 +352,18 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
                                                                 ClientContext &context,
                                                                 ScalarFunction &bound_function) {
 	// NULL list parameter
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), nullptr);
 	}
 	// prepared statements
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
+	D_ASSERT(arguments[0]->GetReturnType().id() == LogicalTypeId::LIST);
 	return nullptr;
 }
 

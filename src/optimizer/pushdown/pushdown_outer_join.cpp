@@ -80,7 +80,7 @@ static bool ExprIsFunctionOnlyOf(const Expression &expr, const expression_set_t 
 
 	ExpressionIterator::EnumerateExpression(expr_to_check, [&](unique_ptr<Expression> &sub_expr) {
 		if (args.find(*sub_expr) != args.end()) {
-			auto null_value = make_uniq<BoundConstantExpression>(Value(sub_expr->return_type));
+			auto null_value = make_uniq<BoundConstantExpression>(Value(sub_expr->GetReturnType()));
 			sub_expr = std::move(null_value);
 		}
 	});

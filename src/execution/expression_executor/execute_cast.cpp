@@ -43,7 +43,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		if (ConstantVector::IsNull(child) && result.GetType().id() != LogicalTypeId::UNION) {
 			// if the input is constant NULL the output is always constant NULL
 			// ... except for unions, that are special
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return;
 		}
 		count = 1;

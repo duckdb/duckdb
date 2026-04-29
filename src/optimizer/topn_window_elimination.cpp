@@ -9,6 +9,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
@@ -73,7 +74,7 @@ vector<LogicalType> ExtractReturnTypes(const vector<unique_ptr<Expression>> &exp
 	vector<LogicalType> types;
 	types.reserve(exprs.size());
 	for (const auto &expr : exprs) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	return types;
 }
@@ -156,7 +157,7 @@ string GetLHSRowIdColumnName(const unique_ptr<LogicalOperator> &op, idx_t column
 	if (op.get()->type != LogicalOperatorType::LOGICAL_GET) {
 		D_ASSERT(op.get()->type == LogicalOperatorType::LOGICAL_PROJECTION);
 		D_ASSERT(op.get()->expressions.size() > column_id &&
-		         op.get()->expressions[column_id]->type == ExpressionType::BOUND_COLUMN_REF);
+		         op.get()->expressions[column_id]->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		const auto &colref = op.get()->expressions[column_id]->Cast<BoundColumnRefExpression>();
 		column_id = colref.binding.column_index;
 		current_op = *op.get()->children[0];
@@ -339,7 +340,7 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 	aggregate->group_stats.resize(aggregate->groups.size());
 	for (idx_t i = 0; i < aggregate->groups.size(); i++) {
 		auto &group = aggregate->groups[i];
-		if (group->type == ExpressionType::BOUND_COLUMN_REF) {
+		if (group->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 			auto &column_ref = group->Cast<BoundColumnRefExpression>();
 			auto group_stats = stats->find(column_ref.binding);
 			if (group_stats == stats->end()) {
@@ -365,7 +366,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	array_length_exprs.push_back(make_uniq<BoundConstantExpression>(1));
 
 	const auto array_length_fun = array_length_entry.functions.GetFunctionByArguments(
-	    context, {array_length_exprs[0]->return_type, array_length_exprs[1]->return_type});
+	    context, {array_length_exprs[0]->GetReturnType(), array_length_exprs[1]->GetReturnType()});
 	auto bound_array_length_fun = function_binder.BindScalarFunction(array_length_fun, std::move(array_length_exprs));
 
 	// generate_series
@@ -377,13 +378,13 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	generate_series_exprs.push_back(std::move(bound_array_length_fun));
 
 	const auto generate_series_fun = generate_series_entry.functions.GetFunctionByArguments(
-	    context, {generate_series_exprs[0]->return_type, generate_series_exprs[1]->return_type});
+	    context, {generate_series_exprs[0]->GetReturnType(), generate_series_exprs[1]->GetReturnType()});
 	auto bound_generate_series_fun =
 	    function_binder.BindScalarFunction(generate_series_fun, std::move(generate_series_exprs));
 
 	// unnest
 	auto unnest_row_number_expr = make_uniq<BoundUnnestExpression>(LogicalType::BIGINT);
-	unnest_row_number_expr->alias = "row_number";
+	unnest_row_number_expr->SetAlias("row_number");
 	unnest_row_number_expr->child = std::move(bound_generate_series_fun);
 
 	return unique_ptr<Expression>(std::move(unnest_row_number_expr));
@@ -446,7 +447,7 @@ void TopNWindowElimination::AddStructExtractExprs(
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 
 		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
-		bound_function->alias = alias;
+		bound_function->SetAlias(alias);
 		exprs.push_back(std::move(bound_function));
 	}
 }
@@ -511,7 +512,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	const auto comparison = filter.expressions[0]->type;
+	const auto comparison = filter.expressions[0]->GetExpressionType();
 	switch (comparison) {
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case ExpressionType::COMPARE_LESSTHAN:
@@ -522,7 +523,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 	}
 
 	auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	if (filter_comparison.right->type != ExpressionType::VALUE_CONSTANT) {
+	if (filter_comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		return false;
 	}
 	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
@@ -555,7 +556,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	if (filter_comparison.left->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (filter_comparison.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
 	VisitExpression(&filter_comparison.left);
@@ -603,7 +604,7 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 			}
 		}
 	}
-	if (window.expressions[0]->type != ExpressionType::WINDOW_ROW_NUMBER) {
+	if (window.expressions[0]->GetExpressionType() != ExpressionType::WINDOW_ROW_NUMBER) {
 		return false;
 	}
 	auto &window_expr = window.expressions[0]->Cast<BoundWindowExpression>();
@@ -678,7 +679,7 @@ vector<unique_ptr<Expression>> TopNWindowElimination::GenerateAggregatePayload(c
 		const auto aggregate_value_binding = column_references.begin()->first;
 		column_references.clear();
 
-		if (window_expr.orders[0].expression->type == ExpressionType::BOUND_COLUMN_REF &&
+		if (window_expr.orders[0].expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
 		    aggregate_args[0]->Cast<BoundColumnRefExpression>().binding == aggregate_value_binding) {
 			return {};
 		}
@@ -712,6 +713,29 @@ bool TopNWindowElimination::TraverseProjectionBindings(const vector<ColumnBindin
 
 	return true;
 }
+
+class ColumnBindingTyper : public LogicalOperatorVisitor {
+public:
+	explicit ColumnBindingTyper(const vector<ColumnBinding> &bindings) : bindings(bindings) {
+		types.resize(bindings.size());
+	}
+
+	void VisitOperator(LogicalOperator &op) override {
+		for (const auto &table_index : op.GetTableIndex()) {
+			for (idx_t i = 0; i < bindings.size(); ++i) {
+				const auto &binding = bindings[i];
+				if (binding.table_index == table_index) {
+					types[i] = op.types[binding.column_index];
+				}
+			}
+		}
+
+		LogicalOperatorVisitor::VisitOperator(op);
+	}
+
+	const vector<ColumnBinding> &bindings;
+	vector<LogicalType> types;
+};
 
 unique_ptr<LogicalOperator>
 TopNWindowElimination::UpdateTopmostBindings(TableIndex window_idx, unique_ptr<LogicalOperator> op,
@@ -786,11 +810,17 @@ TopNWindowElimination::UpdateTopmostBindings(TableIndex window_idx, unique_ptr<L
 	//	because the set operators assume that all the inputs have the same schema.
 	//	To fix this, we have to inject another projection using the new bindings.
 	replacer.replacement_bindings.reserve(new_bindings.size());
+	ColumnBindingTyper original(new_bindings);
+	original.VisitOperator(*op);
 	const auto proj_table = optimizer.binder.GenerateTableIndex();
 	vector<unique_ptr<Expression>> proj_exprs;
 	for (idx_t i = 0; i < topmost_bindings.size(); ++i) {
 		auto &new_binding = new_bindings[i];
-		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
+		unique_ptr<Expression> proj_expr = make_uniq<BoundColumnRefExpression>(original.types[i], new_binding);
+		if (original.types[i] != types[i]) {
+			proj_expr = BoundCastExpression::AddDefaultCastToType(std::move(proj_expr), types[i]);
+		}
+		proj_exprs.emplace_back(std::move(proj_expr));
 		new_binding.table_index = proj_table;
 		new_binding.column_index = ProjectionIndex(i);
 		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
@@ -838,7 +868,7 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
 
 bool TopNWindowElimination::ExtractSingleBinding(unique_ptr<Expression> *expr, ColumnBinding &binding,
                                                  const bool require_direct_column_ref) {
-	if (require_direct_column_ref && expr->get()->type != ExpressionType::BOUND_COLUMN_REF) {
+	if (require_direct_column_ref && expr->get()->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
 	VisitExpression(expr);

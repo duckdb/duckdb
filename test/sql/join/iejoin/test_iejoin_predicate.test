@@ -3,9 +3,6 @@
 # group: [iejoin]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 statement ok

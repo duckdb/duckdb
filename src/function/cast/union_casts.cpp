@@ -74,7 +74,7 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
 				best_cost = member_cast_cost;
 			}
 			names.emplace_back(member_name);
-			candidates.emplace_back(member_idx, std::move(input.GetCastFunction(source, member_type)), member_type);
+			candidates.emplace_back(member_idx, input.GetCastFunction(source, member_type), member_type);
 		}
 	};
 
@@ -256,7 +256,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 	for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
 		if (!target_member_is_mapped[target_member_idx]) {
 			auto &target_member_vector = UnionVector::GetMember(result, target_member_idx);
-			ConstantVector::SetNull(target_member_vector);
+			ConstantVector::SetNull(target_member_vector, count_t(count));
 		}
 	}
 
@@ -268,7 +268,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		// Constant vector case optimization
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		} else {
 			// map the tag
 			auto source_tag = ConstantVector::GetData<union_tag_t>(source_tag_vector)[0];

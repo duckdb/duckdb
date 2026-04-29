@@ -4,10 +4,6 @@
 
 namespace duckdb {
 
-bool ClientConfig::AnyVerification() const {
-	return query_verification_enabled || verify_external || verify_serializer || verify_fetch_row;
-}
-
 void ClientConfig::SetUserVariable(const String &name, Value value) {
 	user_variables[name.ToStdString()] = std::move(value);
 }

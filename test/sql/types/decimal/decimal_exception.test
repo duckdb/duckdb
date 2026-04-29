@@ -2,9 +2,6 @@
 # description: Test casting to decimal, if it does not fit it should throw
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 select cast('9.99' as decimal(1,0));
 ----

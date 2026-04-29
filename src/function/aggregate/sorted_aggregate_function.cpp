@@ -28,7 +28,7 @@ struct SortedAggregateBindData : public FunctionData {
 		//	Describe the arguments.
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());
-			buffered_types.emplace_back(child->return_type);
+			buffered_types.emplace_back(child->GetReturnType());
 
 			//	Column 0 in the sort data is the group number
 			scan_cols.emplace_back(buffered_cols.size());
@@ -45,7 +45,7 @@ struct SortedAggregateBindData : public FunctionData {
 		for (idx_t ord_idx = 0; ord_idx < order_bys.size(); ++ord_idx) {
 			auto order = order_bys[ord_idx].Copy();
 			bool matched = false;
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 
 			for (idx_t arg_idx = 0; arg_idx < children.size(); ++arg_idx) {
 				auto &child = children[arg_idx];
@@ -302,7 +302,7 @@ struct SortedAggregateState {
 			FlushChunks(order_bind);
 		} else if (input_chunk) {
 			//	Still using data chunks
-			input_chunk->Append(input, true, &sel, nsel);
+			input_chunk->Append(input, sel, nsel, VectorAppendMode::ALLOW_RESIZE);
 		} else {
 			//	Still using linked lists
 			LinkedAppend(order_bind.buffered_funcs, aggr_input_data.allocator, input, input_linked, sel, nsel);
@@ -531,7 +531,7 @@ struct SortedAggregateFunction {
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
 		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
-		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1));
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
@@ -568,7 +568,7 @@ struct SortedAggregateFunction {
 			if (unsorted_count < order_bind.threshold) {
 				auto state = sdata[finalized].GetValueUnsafe();
 				prefixed.Reset();
-				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)));
+				prefixed.data[0].Reference(Value::USMALLINT(UnsafeNumericCast<uint16_t>(finalized)), count_t(1));
 				OperatorSinkInput sink {*global_sink, *local_sink, interrupt};
 				state->Finalize(order_bind, prefixed, context, sink);
 				unsorted_count += state_unprocessed[finalized];
@@ -704,7 +704,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	vector<LogicalType> arguments;
 	arguments.reserve(children.size());
 	for (const auto &child : children) {
-		arguments.emplace_back(child->return_type);
+		arguments.emplace_back(child->GetReturnType());
 	}
 
 	// Replace the aggregate with the wrapper
@@ -719,7 +719,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	expr.function = std::move(ordered_aggregate);
+	expr.function = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
 }
@@ -761,7 +761,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	vector<LogicalType> arguments;
 	arguments.reserve(children.size());
 	for (const auto &child : children) {
-		arguments.emplace_back(child->return_type);
+		arguments.emplace_back(child->GetReturnType());
 	}
 
 	// Replace the aggregate with the wrapper
@@ -775,7 +775,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	aggregate = std::move(ordered_aggregate);
+	aggregate = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.arg_orders.clear();
 }

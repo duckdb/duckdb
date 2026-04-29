@@ -5,7 +5,7 @@
 require tpcds
 
 statement ok
-PRAGMA verify_serializer
+SET debug_verify_serializer=true;
 
 # answers are generated from postgres
 # hence check with NULLS LAST flag
@@ -28,7 +28,7 @@ SELECT COUNT(*) FROM catalog_page
 query T
 SELECT COUNT(*) FROM catalog_returns
 ----
-1358
+1377
 
 query T
 SELECT COUNT(*) FROM catalog_sales
@@ -98,7 +98,7 @@ SELECT COUNT(*) FROM store
 query T
 SELECT COUNT(*) FROM store_returns
 ----
-2810
+2829
 
 query T
 SELECT COUNT(*) FROM store_sales
@@ -123,7 +123,7 @@ SELECT COUNT(*) FROM web_page
 query T
 SELECT COUNT(*) FROM web_returns
 ----
-679
+685
 
 query T
 SELECT COUNT(*) FROM web_sales

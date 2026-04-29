@@ -6,9 +6,6 @@
 require httpfs
 
 statement ok
-SET temp_file_encryption=true;
-
-statement ok
 PRAGMA memory_limit='400M'
 
 statement ok
@@ -16,6 +13,9 @@ PRAGMA threads=4
 
 statement ok
 SET temp_directory='{TEST_DIR}/temp.tmp'
+
+statement ok
+SET temp_file_encryption=true;
 
 # Force PhysicalAsOfJoin
 statement ok

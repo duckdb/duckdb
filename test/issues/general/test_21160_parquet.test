@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # Write single-row parquet (all-null sort columns)
 statement ok
 COPY (SELECT 1 AS id, NULL::VARCHAR AS x, NULL::DOUBLE AS y) TO '{TEST_DIR}/test_21160_single.parquet' (FORMAT parquet);

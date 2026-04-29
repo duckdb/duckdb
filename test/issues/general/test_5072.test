@@ -2,9 +2,6 @@
 # description: Issue 5072: CARDINALITY on NULL map results in non-deterministic result
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT CARDINALITY(CAST(NULL AS MAP(VARCHAR, INT)));
 ----

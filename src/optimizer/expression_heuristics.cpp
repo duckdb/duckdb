@@ -86,11 +86,11 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
 	idx_t cast_cost = 0;
-	if (expr.return_type != expr.source_type()) {
+	if (expr.GetReturnType() != expr.source_type()) {
 		// if cast from or to varchar
 		// TODO: we might want to add more cases
-		if (expr.return_type.id() == LogicalTypeId::VARCHAR || expr.source_type().id() == LogicalTypeId::VARCHAR ||
-		    expr.return_type.id() == LogicalTypeId::BLOB || expr.source_type().id() == LogicalTypeId::BLOB) {
+		if (expr.GetReturnType().id() == LogicalTypeId::VARCHAR || expr.source_type().id() == LogicalTypeId::VARCHAR ||
+		    expr.GetReturnType().id() == LogicalTypeId::BLOB || expr.source_type().id() == LogicalTypeId::BLOB) {
 			cast_cost = 200;
 		} else {
 			cast_cost = 5;
@@ -200,19 +200,19 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		auto &col_expr = expr.Cast<BoundColumnRefExpression>();
-		return ExpressionCost(col_expr.return_type.InternalType(), 8);
+		return ExpressionCost(col_expr.GetReturnType().InternalType(), 8);
 	}
 	case ExpressionClass::BOUND_CONSTANT: {
 		auto &const_expr = expr.Cast<BoundConstantExpression>();
-		return ExpressionCost(const_expr.return_type.InternalType(), 1);
+		return ExpressionCost(const_expr.GetReturnType().InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_PARAMETER: {
 		auto &const_expr = expr.Cast<BoundParameterExpression>();
-		return ExpressionCost(const_expr.return_type.InternalType(), 1);
+		return ExpressionCost(const_expr.GetReturnType().InternalType(), 1);
 	}
 	case ExpressionClass::BOUND_REF: {
 		auto &col_expr = expr.Cast<BoundReferenceExpression>();
-		return ExpressionCost(col_expr.return_type.InternalType(), 8);
+		return ExpressionCost(col_expr.GetReturnType().InternalType(), 8);
 	}
 	default: {
 		break;

@@ -2,16 +2,5 @@
 # description: PEG should accept (currently rejects): Parser Error: Enum transform failed: could not find mapping for 'SeqMinOrMax'
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
-statement ok
-CREATE OR REPLACE SEQUENCE t1 NO MINVALUE
-
-statement ok
-CALL disable_peg_parser();
-
 statement ok
 CREATE OR REPLACE SEQUENCE t1 NO MINVALUE

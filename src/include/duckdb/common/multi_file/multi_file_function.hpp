@@ -323,6 +323,9 @@ public:
 				parallel_lock.lock();
 				if (can_skip_file) {
 					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					// release the reader so its file handle is closed; skipped files are
+					// never scanned, so nothing else needs the reader
+					current_reader_data.reader = nullptr;
 					//! Intentionally do not increase 'i'
 					continue;
 				}
@@ -375,7 +378,7 @@ public:
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->return_type);
+				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
 			} else {
 				auto &col = local_columns[local_id];
 				intermediate_chunk_types.push_back(col.type);
@@ -540,6 +543,7 @@ public:
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
+					reader_data->reader = nullptr;
 					result->file_index++;
 				}
 			}

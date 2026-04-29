@@ -315,7 +315,7 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 	    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 		    !Value::IsFinite(*ConstantVector::GetData<T>(origin_arg))) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);

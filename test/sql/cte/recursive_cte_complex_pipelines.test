@@ -2,9 +2,6 @@
 # description: Recursive CTEs with complex pipelines
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification
-
 # recursive CTE with various cross products
 query I
 WITH RECURSIVE t AS

@@ -9,7 +9,7 @@ namespace duckdb {
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(input.size()));
 		return;
 	}
 

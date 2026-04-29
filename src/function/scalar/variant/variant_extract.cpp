@@ -84,9 +84,9 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
 	auto &path = *arguments[1];
-	if (path.return_type.id() != LogicalTypeId::VARCHAR && path.return_type.id() != LogicalTypeId::UINTEGER) {
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.return_type.ToString());
+		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
@@ -118,9 +118,9 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			ConstantVector::SetNull(unshredded_entry);
+			ConstantVector::SetNull(unshredded_entry, count_t(count));
 		}
-		ConstantVector::SetNull(unshredded_child);
+		ConstantVector::SetNull(unshredded_child, count_t(count));
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 

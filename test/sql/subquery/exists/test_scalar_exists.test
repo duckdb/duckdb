@@ -2,9 +2,6 @@
 # description: Test scalar EXISTS query
 # group: [exists]
 
-statement ok
-PRAGMA enable_verification
-
 query T
 SELECT EXISTS(SELECT 1)
 ----

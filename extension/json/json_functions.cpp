@@ -74,7 +74,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(BindScalarFunctionInput &inp
 			path_type = CheckPath(path_val, path, len);
 		}
 	}
-	if (arguments[1]->return_type.IsIntegral()) {
+	if (arguments[1]->GetReturnType().IsIntegral()) {
 		bound_function.GetArguments()[1] = LogicalType::BIGINT;
 	} else {
 		bound_function.GetArguments()[1] = LogicalType::VARCHAR;

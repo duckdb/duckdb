@@ -2,9 +2,6 @@
 # description: Test format
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # format without format specifiers
 query TT
 SELECT format('hello'), format(NULL)

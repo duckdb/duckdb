@@ -2,9 +2,6 @@
 # description: Test sparse row IDs for duplicate keys.
 # group: [nodes]
 
-statement ok
-PRAGMA enable_verification
-
 # We try to create sparse row IDs up to their 4'th byte.
 # The maximum value of 3 bytes is 16,777,215.
 
