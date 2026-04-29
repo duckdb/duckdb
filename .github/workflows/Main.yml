@@ -301,6 +301,17 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - name: Fix ASan runtime
+      shell: bash
+      run: |
+        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
+        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
+        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
+        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
+          sudo mkdir -p "${asan_static_dir}"
+          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
+        fi
+
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
