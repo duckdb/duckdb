@@ -377,6 +377,9 @@ public:
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
 				intermediate_chunk_types.push_back(expr_entry->second->return_type);
+			} else if (local_id.IsRowIdColumn()) {
+				//! FIXME: should this generically check for all virtual columns??
+				intermediate_chunk_types.push_back(LogicalType::ROW_TYPE);
 			} else {
 				auto &col = local_columns[primary_index];
 				//! FIXME: do we need to check whether the MultiFileInfo implementation supports pushdown ??
