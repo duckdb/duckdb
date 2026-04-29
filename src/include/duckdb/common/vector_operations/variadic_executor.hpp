@@ -106,8 +106,8 @@ private:
 			}
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-			auto &result_validity = FlatVector::Validity(result);
+			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+			auto &result_validity = FlatVector::ValidityMutable(result);
 
 			std::array<UnifiedVectorFormat, N> vdata;
 			for (size_t i = 0; i < N; i++) {
@@ -132,6 +132,7 @@ private:
 					    fun, result_validity, i, std::get<Is>(data_ptrs)[vdata[Is].sel->get_index(i)]...);
 				}
 			}
+			FlatVector::SetSize(result, count);
 		}
 	}
 
