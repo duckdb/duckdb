@@ -119,7 +119,7 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	}
 
 	D_ASSERT(children.size() == 1);
-	D_ASSERT(children[0]->return_type == root.return_type);
+	D_ASSERT(children[0]->GetReturnType() == root.GetReturnType());
 
 	return std::move(children[0]);
 }

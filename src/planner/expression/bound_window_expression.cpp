@@ -315,7 +315,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		vector<LogicalType> arguments;
 		arguments.reserve(result->children.size());
 		for (auto &child : result->children) {
-			arguments.push_back(child->return_type);
+			arguments.push_back(child->GetReturnType());
 		}
 
 		auto &context = deserializer.Get<ClientContext &>();

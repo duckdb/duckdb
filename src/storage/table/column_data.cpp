@@ -33,7 +33,8 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 			return false;
 		}
 		auto &op = expr->Cast<BoundOperatorExpression>();
-		if ((op.type != ExpressionType::OPERATOR_IS_NULL && op.type != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
 		    op.children.size() != 1) {
 			return false;
 		}

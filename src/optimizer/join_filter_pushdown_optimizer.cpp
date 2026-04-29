@@ -21,11 +21,11 @@ JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) :
 }
 
 bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColumn &filter) {
-	if (expr.return_type.IsNested()) {
+	if (expr.GetReturnType().IsNested()) {
 		// nested columns are not supported for pushdown
 		return false;
 	}
-	if (expr.return_type.id() == LogicalTypeId::INTERVAL) {
+	if (expr.GetReturnType().id() == LogicalTypeId::INTERVAL) {
 		// interval is not supported for pushdown
 		return false;
 	}
@@ -39,8 +39,8 @@ bool PushdownJoinFilterExpression(const Expression &expr, JoinFilterPushdownColu
 	case ExpressionClass::BOUND_CAST: {
 		// We allow pushing through integral down/upcasts, as long as source/target are (u)bigint or smaller
 		const auto &bound_cast = expr.Cast<BoundCastExpression>();
-		const auto &src = bound_cast.child->return_type;
-		const auto &tgt = bound_cast.return_type;
+		const auto &src = bound_cast.child->GetReturnType();
+		const auto &tgt = bound_cast.GetReturnType();
 		if (!src.IsIntegral() || !tgt.IsIntegral()) {
 			return false;
 		}
@@ -277,7 +277,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 	const auto compute_aggregates_anyway =
 	    join.join_type == JoinType::INNER && join.conditions.size() == 1 && pushdown_info->join_condition.size() == 1 &&
 	    join.conditions[0].IsComparison() && join.conditions[0].GetComparisonType() == ExpressionType::COMPARE_EQUAL &&
-	    TypeIsIntegral(join.conditions[0].GetRHS().return_type.InternalType());
+	    TypeIsIntegral(join.conditions[0].GetRHS().GetReturnType().InternalType());
 	if (pushdown_info->probe_info.empty() && !compute_aggregates_anyway) {
 		// no table sources found in which we can push down filters
 		return;

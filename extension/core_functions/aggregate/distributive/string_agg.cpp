@@ -124,7 +124,7 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 	D_ASSERT(arguments.size() == 2);
 	// Check if any argument is of UNKNOWN type (parameter not yet bound)
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}

@@ -166,7 +166,7 @@ UngroupedAggregateExecuteState::UngroupedAggregateExecuteState(ClientContext &co
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		// initialize the payload chunk
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 			child_executor.AddExpression(*child);
 		}
 		aggregate_objects.emplace_back(&aggr);

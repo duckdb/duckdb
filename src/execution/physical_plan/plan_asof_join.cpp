@@ -182,7 +182,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	}
 	vector<LogicalType> comp_types = join_op.types;
 	auto comp_expr = op.conditions[asof_idx].GetRHS().Copy();
-	comp_types.emplace_back(comp_expr->return_type);
+	comp_types.emplace_back(comp_expr->GetReturnType());
 	comp_list.emplace_back(std::move(comp_expr));
 
 	//	Bind the aggregates first so we can abort safely if we can't find one.
@@ -201,7 +201,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 
 		auto aggr_expr = FirstFunctionGetter::GetFunction(col_type).Bind(context, std::move(aggr_children));
 
-		D_ASSERT(col_type == aggr_expr->return_type);
+		D_ASSERT(col_type == aggr_expr->GetReturnType());
 		aggregates.emplace_back(std::move(aggr_expr));
 	}
 
@@ -219,7 +219,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		aggr_children.push_back(std::move(comp_expr));
 		vector<LogicalType> child_types;
 		for (const auto &child : aggr_children) {
-			child_types.emplace_back(child->return_type);
+			child_types.emplace_back(child->GetReturnType());
 		}
 
 		auto &func = arg_min_max_entry;
@@ -231,7 +231,7 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 		auto aggr_expr = function_binder.BindAggregateFunction(bound_function, std::move(aggr_children), nullptr,
 		                                                       AggregateType::NON_DISTINCT);
-		D_ASSERT(col_type == aggr_expr->return_type);
+		D_ASSERT(col_type == aggr_expr->GetReturnType());
 		aggregates.emplace_back(std::move(aggr_expr));
 	}
 
@@ -240,11 +240,11 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	vector<unique_ptr<Expression>> window_select;
 
 	auto pk = RowNumberFun::GetFunction().Bind(context);
-	D_ASSERT(pk->return_type == pk_type);
+	D_ASSERT(pk->GetReturnType() == pk_type);
 
 	pk->start = WindowBoundary::UNBOUNDED_PRECEDING;
 	pk->end = WindowBoundary::CURRENT_ROW_ROWS;
-	pk->alias = "row_number";
+	pk->SetAlias("row_number");
 	window_select.emplace_back(std::move(pk));
 
 	auto window_types = probe.GetTypes();
@@ -363,7 +363,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 	//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_end
 	auto &asof_comp = op.conditions[asof_idx];
 	auto &asof_column = asof_comp.RightReference();
-	auto asof_type = asof_column->return_type;
+	auto asof_type = asof_column->GetReturnType();
 
 	vector<unique_ptr<Expression>> children;
 	vector<unique_ptr<Expression>> partitions;
@@ -393,7 +393,7 @@ PhysicalOperator &PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op)
 
 	auto asof_end = LeadFun::GetTypedFunction(asof_type, 3).Bind(context, std::move(children));
 
-	D_ASSERT(asof_end->return_type == asof_type);
+	D_ASSERT(asof_end->GetReturnType() == asof_type);
 
 	asof_end->partitions = std::move(partitions);
 	asof_end->orders = std::move(orders);

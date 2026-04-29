@@ -81,7 +81,7 @@ static void CRSFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 static unique_ptr<Expression> BindCRSFunctionExpression(FunctionBindExpressionInput &input) {
-	const auto &return_type = input.children[0]->return_type;
+	const auto &return_type = input.children[0]->GetReturnType();
 	if (return_type.id() != LogicalTypeId::GEOMETRY) {
 		// parameter - unknown return type
 		return nullptr;
@@ -94,12 +94,12 @@ static unique_ptr<FunctionData> BindCRSFunction(BindScalarFunctionInput &input) 
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	if (arguments[0]->return_type.id() != LogicalTypeId::GEOMETRY) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
 		return nullptr;
 	}
 
 	// Propagate the CRS from the input argument to the parameter type
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 

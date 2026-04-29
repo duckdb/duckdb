@@ -234,7 +234,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->return_type;
+	auto decimal_type = arguments[0]->GetReturnType();
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
 	function.GetArguments()[0] = decimal_type;

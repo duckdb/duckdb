@@ -283,7 +283,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimal(BindAggregateFunctionInput &i
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalFunction(arguments[0]->return_type);
+	function = ApproxQuantileDecimalFunction(arguments[0]->GetReturnType());
 	return bind_data;
 }
 
@@ -404,7 +404,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimalList(BindAggregateFunctionInpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalListFunction(arguments[0]->return_type);
+	function = ApproxQuantileDecimalListFunction(arguments[0]->GetReturnType());
 	return bind_data;
 }
 

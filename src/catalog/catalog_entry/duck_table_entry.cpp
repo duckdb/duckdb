@@ -1078,7 +1078,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 
 	// Infer the target_type from the USING expression, if not set explicitly.
 	if (info.target_type == LogicalType::UNKNOWN) {
-		info.target_type = bound_expression->return_type;
+		info.target_type = bound_expression->GetReturnType();
 	}
 
 	// Check if type is supported in this database version

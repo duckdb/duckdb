@@ -541,27 +541,29 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	D_ASSERT(arguments.size() == 4);
 	for (idx_t arg_idx = 0; arg_idx < 3; arg_idx++) {
 		auto &arg = arguments[arg_idx];
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->return_type.id() == LogicalTypeId::SQLNULL && arg_idx == 2) {
+		if (arg->GetReturnType().id() == LogicalTypeId::SQLNULL && arg_idx == 2) {
 			// remap target can be NULL
 			continue;
 		}
-		if (!IsRemappable(arg->return_type)) {
-			throw BinderException("Struct remap can only remap nested types, not '%s'", arg->return_type.ToString());
-		} else if (arg->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->return_type)) {
+		if (!IsRemappable(arg->GetReturnType())) {
+			throw BinderException("Struct remap can only remap nested types, not '%s'",
+			                      arg->GetReturnType().ToString());
+		} else if (arg->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(arg->GetReturnType())) {
 			throw BinderException("Struct remap can only remap named structs");
 		}
 	}
-	auto &from_type = arguments[0]->return_type;
-	auto &to_type = arguments[1]->return_type;
+	auto &from_type = arguments[0]->GetReturnType();
+	auto &to_type = arguments[1]->GetReturnType();
 
 	auto &defaults = arguments[3];
-	if (defaults->return_type.id() != LogicalTypeId::SQLNULL && defaults->return_type.id() != LogicalTypeId::STRUCT) {
+	if (defaults->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+	    defaults->GetReturnType().id() != LogicalTypeId::STRUCT) {
 		throw BinderException("The defaults provided to 'remap_struct' should be of type STRUCT if they're not NULL");
 	}
-	if (defaults->return_type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->return_type)) {
+	if (defaults->GetReturnType().id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(defaults->GetReturnType())) {
 		throw BinderException("The defaults have to be either NULL or a named STRUCT, not an unnamed struct");
 	}
 
@@ -581,7 +583,7 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	// (recursively) generate the remap entries
 	case_insensitive_map_t<RemapEntry> remap_map;
 	if (!remap_val.IsNull()) {
-		auto &remap_types = StructType::GetChildTypes(arguments[2]->return_type);
+		auto &remap_types = StructType::GetChildTypes(arguments[2]->GetReturnType());
 		auto &remap_values = StructValue::GetChildren(remap_val);
 		for (idx_t remap_idx = 0; remap_idx < remap_values.size(); remap_idx++) {
 			auto &remap_val = remap_values[remap_idx];
@@ -593,9 +595,9 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 		throw BinderException("Default values must be constants");
 	}
 
-	if (arguments[3]->return_type.id() != LogicalTypeId::SQLNULL) {
+	if (arguments[3]->GetReturnType().id() != LogicalTypeId::SQLNULL) {
 		// (recursively) handle the defaults (if there are any)
-		auto &default_types = StructType::GetChildTypes(arguments[3]->return_type);
+		auto &default_types = StructType::GetChildTypes(arguments[3]->GetReturnType());
 		for (idx_t default_idx = 0; default_idx < default_types.size(); default_idx++) {
 			auto &default_target = default_types[default_idx].first;
 			auto &default_type = default_types[default_idx].second;
@@ -610,10 +612,10 @@ unique_ptr<FunctionData> RemapStructBind(BindScalarFunctionInput &input) {
 	auto new_type = RemapEntry::RemapCast(from_type, remap_map);
 
 	bound_function.GetArguments()[0] = std::move(new_type);
-	bound_function.GetArguments()[1] = arguments[1]->return_type;
-	bound_function.GetArguments()[2] = arguments[2]->return_type;
-	bound_function.GetArguments()[3] = arguments[3]->return_type;
-	bound_function.SetReturnType(arguments[1]->return_type);
+	bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
+	bound_function.GetArguments()[2] = arguments[2]->GetReturnType();
+	bound_function.GetArguments()[3] = arguments[3]->GetReturnType();
+	bound_function.SetReturnType(arguments[1]->GetReturnType());
 
 	return make_uniq<RemapStructBindData>(std::move(remap));
 }

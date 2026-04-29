@@ -44,7 +44,7 @@ public:
 			state_ptr = state.data();
 			aggregate.GetStateInitCallback()(aggregate, state.data());
 			for (auto &child : wexpr.children) {
-				arg_types.push_back(child->return_type);
+				arg_types.push_back(child->GetReturnType());
 				executor.AddExpression(*child);
 			}
 			if (!arg_types.empty()) {

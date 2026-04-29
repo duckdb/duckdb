@@ -310,10 +310,10 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
-			row_number->alias = column_name_alias[return_names.size()];
+			row_number->SetAlias(column_name_alias[return_names.size()]);
 			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
-			row_number->alias = ordinality_column_name;
+			row_number->SetAlias(ordinality_column_name);
 		}
 		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);

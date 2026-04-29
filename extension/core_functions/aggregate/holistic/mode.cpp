@@ -503,7 +503,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetModeAggregate(arguments[0]->return_type);
+	function = GetModeAggregate(arguments[0]->GetReturnType());
 	function.name = "mode";
 	return nullptr;
 }
@@ -605,7 +605,7 @@ AggregateFunction GetEntropyFunction(const LogicalType &type) {
 unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetEntropyFunction(arguments[0]->return_type);
+	function = GetEntropyFunction(arguments[0]->GetReturnType());
 	function.name = "entropy";
 	return nullptr;
 }

@@ -48,7 +48,7 @@ struct ReduceExecuteInfo {
 			input_types.push_back(LogicalType::BIGINT);
 		}
 		input_types.push_back(info.child_vector->GetType());
-		input_types.push_back(info.lambda_expr->return_type);
+		input_types.push_back(info.lambda_expr->GetReturnType());
 
 		// info.column_infos includes the list column plus captured args (and the initial value if present).
 		// skip the first entry if there is an initial value
@@ -56,7 +56,7 @@ struct ReduceExecuteInfo {
 			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
-		accumulator_cast = make_uniq<Vector>(info.lambda_expr->return_type, info.row_count);
+		accumulator_cast = make_uniq<Vector>(info.lambda_expr->GetReturnType(), info.row_count);
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
 	};
 
@@ -230,15 +230,15 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 	bool has_initial = arguments.size() == 3;
 	LogicalType accumulator_type;
 	if (has_initial) {
-		const auto &initial_value_type = arguments[2]->return_type;
+		const auto &initial_value_type = arguments[2]->GetReturnType();
 		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-		auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+		auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
 		accumulator_type = ResolveReduceAccumulatorType(context, initial_value_type, lambda_return_type);
 		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), accumulator_type);
 	} else {
 		auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->return_type);
-		auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+		auto list_child_type = LambdaFunctions::DetermineListChildType(arguments[0]->GetReturnType());
+		auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(context, list_child_type, lambda_return_type, accumulator_type)) {
 			throw BinderException("No common super type between list element type %s and lambda return type %s",
 			                      list_child_type.ToString(), lambda_return_type.ToString());
@@ -251,14 +251,14 @@ unique_ptr<FunctionData> ListReduceBind(BindScalarFunctionInput &input) {
 	}
 	auto has_index = bound_lambda_expr.parameter_count == 3;
 
-	const auto lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+	const auto lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
 	auto cast_lambda_expr =
 	    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), accumulator_type);
 	if (!cast_lambda_expr) {
 		throw BinderException("Could not cast lambda return type %s to accumulator type %s",
 		                      lambda_return_type.ToString(), accumulator_type.ToString());
 	}
-	bound_function.SetReturnType(cast_lambda_expr->return_type);
+	bound_function.SetReturnType(cast_lambda_expr->GetReturnType());
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(cast_lambda_expr), has_index,
 	                                     has_initial);
 }
@@ -301,10 +301,10 @@ void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state
 	// This means there is always an empty result chunk for the next iteration,
 	// without the referenced chunk having to be reset until the current iteration is complete.
 	DataChunk odd_result_chunk;
-	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
+	odd_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->GetReturnType()});
 
 	DataChunk even_result_chunk;
-	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->return_type});
+	even_result_chunk.Initialize(Allocator::DefaultAllocator(), {info.lambda_expr->GetReturnType()});
 
 	// Execute reduce until all rows are finished.
 	idx_t loops = 0;
