@@ -45,7 +45,7 @@ string InsertQueryNode::ToString() const {
 			}
 			result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
 		}
-		result += " )";
+		result += ")";
 	}
 	result += " ";
 	auto values_list = GetValuesList();

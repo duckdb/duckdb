@@ -7,7 +7,10 @@ namespace duckdb {
 
 string JoinRef::ToString() const {
 	string result;
-	result = left->ToString() + " ";
+	if (!is_implicit) {
+		result += "(";
+	}
+	result += left->ToString() + " ";
 	switch (ref_type) {
 	case JoinRefType::REGULAR:
 		result += EnumUtil::ToString(type) + " JOIN ";
@@ -44,6 +47,9 @@ string JoinRef::ToString() const {
 			}
 			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
 		}
+		result += ")";
+	}
+	if (!is_implicit) {
 		result += ")";
 	}
 	return result;

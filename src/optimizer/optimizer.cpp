@@ -229,7 +229,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Pull up projection from joins
 	RunOptimizer(OptimizerType::PROJECTION_PULLUP, [&]() {
-		ProjectionPullup projection_pullup(*this, *plan);
+		ProjectionPullup projection_pullup(*this, plan);
 		projection_pullup.Optimize(plan);
 	});
 
@@ -265,7 +265,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
-		RemoveDuplicateGroups remove;
+		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
 	});
 

@@ -42,8 +42,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
+      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -51,8 +51,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.IsComparison());
-		D_ASSERT(condition.GetLHS().return_type == condition.GetRHS().return_type);
-		auto type = condition.GetLHS().return_type;
+		D_ASSERT(condition.GetLHS().GetReturnType() == condition.GetRHS().GetReturnType());
+		auto type = condition.GetLHS().GetReturnType();
 		if (condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
 		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// ensure that all equality conditions are at the front,
@@ -1474,7 +1474,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
 				Vector &vec = result.data[i];
-				ConstantVector::SetNull(vec);
+				ConstantVector::SetNull(vec, count_t(remaining_count));
 			}
 		}
 		finished = true;
@@ -1645,7 +1645,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {
 		Vector &vec = result.data[i];
-		ConstantVector::SetNull(vec);
+		ConstantVector::SetNull(vec, count_t(found_entries));
 	}
 
 	// gather the values from the RHS

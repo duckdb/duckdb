@@ -2,14 +2,9 @@
 # description: Test use statement with new transformer
 # group: [transformer]
 
-require autocomplete
-
 require skip_reload
 
 require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
-
-statement ok
-call enable_peg_parser();
 
 statement ok
 ATTACH ':memory:' as "my""db";

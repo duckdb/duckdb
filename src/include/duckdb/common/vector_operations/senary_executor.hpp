@@ -40,8 +40,9 @@ struct SenaryExecutor {
 
 		if (all_constant) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			if (any_null) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				auto adata = ConstantVector::GetData<TA>(input.data[0]);
 				auto bdata = ConstantVector::GetData<TB>(input.data[1]);

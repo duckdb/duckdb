@@ -47,9 +47,9 @@ public:
 
 	//! Serializes a lambda function's bind data
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function);
+	                      const BoundScalarFunction &function);
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
 
 class LambdaFunctions {
@@ -101,7 +101,7 @@ public:
 			result_validity = &FlatVector::ValidityMutable(result);
 
 			if (list_column.GetType().id() == LogicalTypeId::SQLNULL) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(row_count));
 				result_is_null = true;
 				return;
 			}

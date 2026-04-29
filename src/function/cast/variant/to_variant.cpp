@@ -127,9 +127,9 @@ struct VariantLocalData : FunctionLocalState {
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			ConstantVector::SetNull(unshredded_entry);
+			ConstantVector::SetNull(unshredded_entry, count_t(new_capacity));
 		}
-		ConstantVector::SetNull(unshredded_child);
+		ConstantVector::SetNull(unshredded_child, count_t(new_capacity));
 	}
 
 	Vector &GetShreddedVector(idx_t req_capacity) {

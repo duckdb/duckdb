@@ -201,19 +201,18 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 template <class T>
 static void ReconstructGroupVectorTemplated(uint32_t group_values[], Value &min, idx_t mask, idx_t shift,
                                             idx_t entry_count, Vector &result) {
-	auto data = FlatVector::GetDataMutable<T>(result);
-	auto &validity_mask = FlatVector::ValidityMutable(result);
+	auto data = FlatVector::Writer<T>(result, entry_count);
 	auto min_data = min.GetValueUnsafe<T>();
 	for (idx_t i = 0; i < entry_count; i++) {
 		// extract the value of this group from the total group index
 		auto group_index = UnsafeNumericCast<int32_t>((group_values[i] >> shift) & mask);
 		if (group_index == 0) {
 			// if it is 0, the value is NULL
-			validity_mask.SetInvalid(i);
+			data.WriteNull();
 		} else {
 			// otherwise we add the value (minus 1) to the min value
-			data[i] = UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
-			                               UnsafeNumericCast<int64_t>(group_index) - 1);
+			data.WriteValue(UnsafeNumericCast<T>(UnsafeNumericCast<int64_t>(min_data) +
+			                                     UnsafeNumericCast<int64_t>(group_index) - 1));
 		}
 	}
 }

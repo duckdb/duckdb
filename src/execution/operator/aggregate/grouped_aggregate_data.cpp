@@ -25,13 +25,13 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
-		aggregate_return_types.push_back(aggr.return_type);
+		aggregate_return_types.push_back(aggr.GetReturnType());
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 		}
 		if (aggr.filter) {
 			filter_count++;
-			payload_types_filters.push_back(aggr.filter->return_type);
+			payload_types_filters.push_back(aggr.filter->GetReturnType());
 		}
 		if (!aggr.function.HasStateCombineCallback()) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
@@ -53,12 +53,12 @@ void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggr
 
 	// bindings.push_back(&aggr);
 	filter_count = 0;
-	aggregate_return_types.push_back(aggr.return_type);
+	aggregate_return_types.push_back(aggr.GetReturnType());
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = aggr.children[i];
-		group_types.push_back(child->return_type);
+		group_types.push_back(child->GetReturnType());
 		groups.push_back(child->Copy());
-		payload_types.push_back(child->return_type);
+		payload_types.push_back(child->GetReturnType());
 		if (aggr.filter) {
 			filter_count++;
 		}
@@ -73,7 +73,7 @@ void GroupedAggregateData::InitializeDistinctGroups(const vector<unique_ptr<Expr
 		return;
 	}
 	for (auto &expr : *groups_p) {
-		group_types.push_back(expr->return_type);
+		group_types.push_back(expr->GetReturnType());
 		groups.push_back(expr->Copy());
 	}
 }
@@ -81,7 +81,7 @@ void GroupedAggregateData::InitializeDistinctGroups(const vector<unique_ptr<Expr
 void GroupedAggregateData::InitializeGroupbyGroups(vector<unique_ptr<Expression>> groups) {
 	// Add all the expressions of the group by clause
 	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
+		group_types.push_back(expr->GetReturnType());
 	}
 	this->groups = std::move(groups);
 }

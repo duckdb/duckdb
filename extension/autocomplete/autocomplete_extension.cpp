@@ -1,6 +1,5 @@
-#include "autocomplete_extension.hpp"
-#include "sql_formatter.hpp"
-
+#include "duckdb/parser/peg/autocomplete_extension.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -11,37 +10,26 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "transformer/peg_transformer.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "matcher.hpp"
-#include "autocomplete_catalog_provider.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "include/parser/tokenizer/base_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/base_tokenizer.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "parser/tokenizer/highlight_tokenizer.hpp"
-#include "parser/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
-
-static PEGMatcherCache &GetPEGMatcherCache(DBConfig &config) {
-	for (auto &ext : config.GetCallbackManager().ParserExtensions()) {
-		if (ext.parser_info) {
-			auto *cache = dynamic_cast<PEGMatcherCache *>(ext.parser_info.get());
-			if (cache) {
-				return *cache;
-			}
-		}
-	}
-	throw InternalException("PEG autocomplete parser extension not registered");
-}
+struct AutoCompleteSuggestion;
 
 struct SQLTokenizeFunctionData : public TableFunctionData {
 	explicit SQLTokenizeFunctionData(vector<MatcherToken> tokens_p) : tokens(std::move(tokens_p)) {
@@ -375,7 +363,7 @@ public:
 		return ::duckdb::SuggestSettingName(context);
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+		return GetGlobalPEGMatcherCache().GetMatcher();
 	}
 
 private:
@@ -474,7 +462,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
@@ -544,7 +532,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 	vector<MatcherToken> root_tokens;
 	string clean_sql;
-	const string &sql_ref = StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
+	const string &sql_ref = Parser::StripUnicodeSpaces(sql, clean_sql) ? clean_sql : sql;
 	ParserTokenizer tokenizer(sql_ref, root_tokens);
 
 	auto allow_complete = tokenizer.TokenizeInput();
@@ -561,7 +549,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetPEGMatcherCache(DBConfig::GetConfig(context)).GetMatcher();
+	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 	auto match_result = peg_matcher->Root().Match(state);
 	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
 		string token_list;
@@ -588,12 +576,10 @@ class PEGParserExtension : public ParserExtension {
 public:
 	PEGParserExtension() {
 		parser_override = PEGParser;
-		parser_info = make_shared_ptr<PEGMatcherCache>();
 	}
 
 	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-		auto &cache = info->Cast<PEGMatcherCache>();
-		auto peg_matcher = cache.GetMatcher();
+		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
 		auto &root_matcher = peg_matcher->Root();
 
 		vector<MatcherToken> root_tokens;
@@ -625,24 +611,6 @@ public:
 		}
 	}
 };
-
-static void EnablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("strict"));
-}
-
-static void DisablePEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &db_config = DBConfig::GetConfig(context);
-	db_config.SetOptionByName("allow_parser_override_extension", Value("default"));
-}
-
-static duckdb::unique_ptr<FunctionData> EnablePEGParserBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("success");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	return nullptr;
-}
 
 struct FormatSQLBindData : public FunctionData {
 	FormatterConfig config;
@@ -730,12 +698,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
 	                                   CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
-
-	TableFunction enable_peg_parser("enable_peg_parser", {}, EnablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(enable_peg_parser);
-
-	TableFunction disable_peg_parser("disable_peg_parser", {}, DisablePEGParserFunction, EnablePEGParserBind, nullptr);
-	loader.RegisterFunction(disable_peg_parser);
 
 	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
 	                           SQLTokenizeInit);

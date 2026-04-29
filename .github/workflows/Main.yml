@@ -283,6 +283,7 @@ jobs:
       CRASH_ON_ASSERT: 1
       FORCE_DEBUG: 1
       FORCE_ASSERT: 1
+      EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
       EXTENSIONS_STATIC_BUILD: 0
 
@@ -975,6 +976,10 @@ jobs:
           path: |
             static-libs-linux-${{ matrix.config.arch }}.zip
 
+      - name: Trim ccache
+        if: ${{ always() }}
+        uses: ./.github/actions/trim-ccache
+
  static-libs-osx:
     name: Static Libs OSX (${{ matrix.architecture }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'static-libs-osx') }}
@@ -1320,6 +1325,42 @@ jobs:
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
+    - name: test/configs/verify_statement_copy.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_copy.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_to_string.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_explain.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_explain.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_prepare.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
+
+    - name: test/configs/verify_stats.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+
+    - name: test/configs/verify_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_serialization.json ./build/release/test/unittest
+
     - name: test/configs/force_storage.json
       if: success() || failure()
       shell: bash
@@ -1344,11 +1385,29 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
 
-    - name: test/configs/verify_fetch_row.json
+    - name: test/configs/disable_optimizer.json
       if: success() || failure()
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
+
+    - name: test/configs/force_external.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
+
+    - name: test/configs/verify_stats.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+
+    - name: test/configs/disable_caching_operators.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
 
     - name: test/configs/wal_verification.json
       if: success() || failure()
@@ -1463,18 +1522,6 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/encryption.json ./build/release/test/unittest
-
-    - name: Test PEG parser on fallback mode
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser.json ./build/release/test/unittest
-
-    - name: Test PEG parser on strict when supported mode
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/peg_parser_strict.json ./build/release/test/unittest
 
  summary:
     name: Summary

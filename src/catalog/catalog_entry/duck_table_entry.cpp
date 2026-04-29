@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -1077,7 +1078,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context
 
 	// Infer the target_type from the USING expression, if not set explicitly.
 	if (info.target_type == LogicalType::UNKNOWN) {
-		info.target_type = bound_expression->return_type;
+		info.target_type = bound_expression->GetReturnType();
 	}
 
 	// Check if type is supported in this database version
@@ -1317,7 +1318,7 @@ void DuckTableEntry::SetAsRoot() {
 	storage->SetTableName(name);
 }
 
-void DuckTableEntry::CommitAlter(string &column_name) {
+void DuckTableEntry::CommitAlter(string &column_name, CommitDropState &drop_state) {
 	D_ASSERT(!column_name.empty());
 	optional_idx logical_column_idx;
 	auto column_path = StringUtil::Split(column_name, '.');
@@ -1341,11 +1342,11 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 	}
 	auto logical_column_index = LogicalIndex(logical_column_idx.GetIndex());
 	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
-	storage->CommitDropColumn(column_index);
+	storage->CommitDropColumn(column_index, drop_state);
 }
 
-void DuckTableEntry::CommitDrop() {
-	storage->CommitDropTable();
+void DuckTableEntry::CommitDrop(CommitDropState &drop_state) {
+	storage->CommitDropTable(drop_state);
 }
 
 DataTable &DuckTableEntry::GetStorage() {
@@ -1381,7 +1382,8 @@ optional_ptr<CatalogEntry> DuckTableEntry::CreateTrigger(CatalogTransaction tran
 	return triggers->GetEntry(transaction, entry_name);
 }
 
-void DuckTableEntry::ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback) {
+void DuckTableEntry::ScanTriggers(CatalogTransaction transaction,
+                                  const std::function<void(CatalogEntry &)> &callback) const {
 	triggers->Scan(transaction, callback);
 }
 

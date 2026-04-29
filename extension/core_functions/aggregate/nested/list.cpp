@@ -170,7 +170,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 unique_ptr<FunctionData> ListBindFunction(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return make_uniq<ListBindData>(function.GetReturnType());
 }
 

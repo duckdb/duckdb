@@ -110,6 +110,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 			}
 		}
 	}
+	FlatVector::SetSize(mark_vector, result.size());
 }
 
 bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions, JoinType join_type) {
@@ -120,9 +121,9 @@ bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions
 		if (!cond.IsComparison()) {
 			continue;
 		}
-		if (cond.GetLHS().return_type.InternalType() == PhysicalType::STRUCT ||
-		    cond.GetLHS().return_type.InternalType() == PhysicalType::LIST ||
-		    cond.GetLHS().return_type.InternalType() == PhysicalType::ARRAY) {
+		if (cond.GetLHS().GetReturnType().InternalType() == PhysicalType::STRUCT ||
+		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::LIST ||
+		    cond.GetLHS().GetReturnType().InternalType() == PhysicalType::ARRAY) {
 			return false;
 		}
 	}
@@ -180,7 +181,7 @@ public:
 		vector<LogicalType> condition_types;
 		for (auto &cond : op.conditions) {
 			rhs_executor.AddExpression(cond.GetRHS());
-			condition_types.push_back(cond.GetRHS().return_type);
+			condition_types.push_back(cond.GetRHS().GetReturnType());
 		}
 		right_condition.Initialize(Allocator::Get(context), condition_types);
 
@@ -200,7 +201,7 @@ public:
 vector<LogicalType> PhysicalNestedLoopJoin::GetJoinTypes() const {
 	vector<LogicalType> result;
 	for (auto &cond : conditions) {
-		result.push_back(cond.GetRHS().return_type);
+		result.push_back(cond.GetRHS().GetReturnType());
 	}
 	return result;
 }
@@ -282,7 +283,7 @@ public:
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(cond.GetLHS());
-			condition_types.push_back(cond.GetLHS().return_type);
+			condition_types.push_back(cond.GetLHS().GetReturnType());
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);

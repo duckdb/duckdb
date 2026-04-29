@@ -146,7 +146,7 @@ struct ICUStrptime : public ICUDateFunc {
 		D_ASSERT(fmt_arg.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
 		if (ConstantVector::IsNull(fmt_arg)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -231,7 +231,9 @@ struct ICUStrptime : public ICUDateFunc {
 
 		// Fall back to faster, non-TZ parsing
 		bound_function.SetBindCallback(bind_strptime);
-		return bound_function.Bind(context, arguments);
+		BindScalarFunctionInput new_input(context, bound_function, arguments,
+		                                  input.HasBinder() ? &input.GetBinder() : nullptr);
+		return bound_function.GetBindCallback()(new_input);
 	}
 
 	static void TailPatch(const string &name, ExtensionLoader &loader, const vector<LogicalType> &types) {

@@ -305,17 +305,15 @@ BoundStatement Binder::BindTableFunctionInternal(TableFunction &table_function, 
 
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);
-		auto row_number_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-		auto row_number =
-		    make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(row_number_func), nullptr);
+		auto row_number = RowNumberFun::GetFunction().Bind(context);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
 		string ordinality_alias = ordinality_column_name;
 		if (return_names.size() < column_name_alias.size()) {
-			row_number->alias = column_name_alias[return_names.size()];
+			row_number->SetAlias(column_name_alias[return_names.size()]);
 			ordinality_alias = column_name_alias[return_names.size()];
 		} else {
-			row_number->alias = ordinality_column_name;
+			row_number->SetAlias(ordinality_column_name);
 		}
 		return_names.push_back(ordinality_alias);
 		return_types.push_back(LogicalType::BIGINT);

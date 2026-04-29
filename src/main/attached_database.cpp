@@ -105,6 +105,7 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
 		unordered_map<string, Value> options;
 		AttachOptions attach_options(options, AccessMode::READ_WRITE);
+		options["storage_version"] = "latest";
 		storage = make_uniq<SingleFileStorageManager>(*this, string(IN_MEMORY_PATH), attach_options);
 	}
 

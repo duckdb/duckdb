@@ -2,11 +2,6 @@
 # description: PEG should reject (currently accepts): Not implemented Error: Unimplemented explain type: entry
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
 statement error
 EXPLAIN ( entry ) RESET SESSION item
 ----
@@ -16,11 +11,3 @@ statement error
 EXPLAIN ( t , s , t ) LOAD XMLCONCAT
 ----
 Not implemented Error: Unimplemented explain type: t
-
-statement ok
-CALL disable_peg_parser();
-
-statement error
-EXPLAIN ( entry ) RESET SESSION item
-----
-Not implemented Error: Unimplemented explain type: entry
