@@ -33,8 +33,7 @@ DataFileType MagicBytes::CheckMagicBytes(QueryContext context, FileSystem &fs, c
 	unique_ptr<BufferedFileHandle> local_handle;
 	auto &handle_slot = out_handle ? *out_handle : local_handle;
 	if (!handle_slot) {
-		auto raw_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS |
-		                                        FileFlags::FILE_FLAGS_DIRECT_IO);
+		auto raw_handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
 		if (!raw_handle) {
 			return DataFileType::FILE_DOES_NOT_EXIST;
 		}
