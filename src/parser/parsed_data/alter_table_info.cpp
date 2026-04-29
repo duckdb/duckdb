@@ -124,9 +124,9 @@ string RenameColumnInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME COLUMN ";
-	result += KeywordHelper::WriteOptionallyQuoted(old_name);
+	result += SQLIdentifier(old_name);
 	result += " TO ";
-	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += SQLIdentifier(new_name);
 	result += ";";
 	return result;
 }
@@ -161,10 +161,10 @@ string RenameFieldInfo::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+		result += SQLIdentifier(column_path[i]);
 	}
 	result += " TO ";
-	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += SQLIdentifier(new_name);
 	result += ";";
 	return result;
 }
@@ -194,7 +194,7 @@ string RenameTableInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
-	result += KeywordHelper::WriteOptionallyQuoted(new_table_name);
+	result += SQLIdentifier(new_table_name);
 	result += ";";
 	return result;
 }
@@ -271,7 +271,7 @@ string AddFieldInfo::ToString() const {
 		result += "IF NOT EXISTS ";
 	}
 	for (auto &path : column_path) {
-		result += KeywordHelper::WriteOptionallyQuoted(path);
+		result += SQLIdentifier(path);
 		result += ".";
 	}
 	result += new_field.ToSQLString();
@@ -307,7 +307,7 @@ string RemoveColumnInfo::ToString() const {
 	if (if_column_exists) {
 		result += "IF EXISTS ";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(removed_column);
+	result += SQLIdentifier(removed_column);
 	if (cascade) {
 		result += " CASCADE";
 	}
@@ -347,7 +347,7 @@ string RemoveFieldInfo::ToString() const {
 		if (i > 0) {
 			result += ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+		result += SQLIdentifier(column_path[i]);
 	}
 	if (cascade) {
 		result += " CASCADE";
@@ -383,7 +383,7 @@ string ChangeColumnTypeInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += SQLIdentifier(column_name);
 	result += " TYPE ";
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
@@ -429,7 +429,7 @@ string SetDefaultInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += SQLIdentifier(column_name);
 	if (expression) {
 		result += " SET DEFAULT ";
 		result += expression->ToString();
@@ -464,7 +464,7 @@ string SetNotNullInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += SQLIdentifier(column_name);
 	result += " SET NOT NULL";
 	result += ";";
 	return result;
@@ -494,7 +494,7 @@ string DropNotNullInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " ALTER COLUMN ";
-	result += KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += SQLIdentifier(column_name);
 	result += " DROP NOT NULL";
 	result += ";";
 	return result;
@@ -566,7 +566,7 @@ string RenameViewInfo::ToString() const {
 	}
 	result += QualifierToString(catalog, schema, name);
 	result += " RENAME TO ";
-	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
+	result += SQLIdentifier(new_view_name);
 	result += ";";
 	return result;
 }
@@ -706,7 +706,7 @@ string SetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + entry.second->ToString();
+		result += SQLString(entry.first) + "=" + entry.second->ToString();
 		i++;
 	}
 	result += ")";
@@ -743,7 +743,7 @@ string ResetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry, '\'');
+		result += SQLString(entry);
 		i++;
 	}
 	result += ")";

@@ -22,14 +22,14 @@ string PivotColumn::ToString() const {
 		D_ASSERT(pivot_expressions.empty());
 		// unpivot
 		if (unpivot_names.size() == 1) {
-			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+			result += SQLIdentifier(unpivot_names[0]);
 		} else {
 			result += "(";
 			for (idx_t n = 0; n < unpivot_names.size(); n++) {
 				if (n > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+				result += SQLIdentifier(unpivot_names[n]);
 			}
 			result += ")";
 		}
@@ -68,12 +68,12 @@ string PivotColumn::ToString() const {
 				result += ")";
 			}
 			if (!entry.alias.empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(entry.alias);
+				result += " AS " + SQLIdentifier(entry.alias);
 			}
 		}
 		result += ")";
 	} else {
-		result += KeywordHelper::WriteOptionallyQuoted(pivot_enum);
+		result += SQLIdentifier(pivot_enum);
 	}
 	return result;
 }
@@ -337,7 +337,7 @@ string PivotRef::ToString() const {
 			}
 			result += aggregates[aggr_idx]->ToString();
 			if (!aggregates[aggr_idx]->GetAlias().empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->GetAlias());
+				result += " AS " + SQLIdentifier(aggregates[aggr_idx]->GetAlias());
 			}
 		}
 	} else {
@@ -348,14 +348,14 @@ string PivotRef::ToString() const {
 		}
 		result += "(";
 		if (unpivot_names.size() == 1) {
-			result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[0]);
+			result += SQLIdentifier(unpivot_names[0]);
 		} else {
 			result += "(";
 			for (idx_t n = 0; n < unpivot_names.size(); n++) {
 				if (n > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(unpivot_names[n]);
+				result += SQLIdentifier(unpivot_names[n]);
 			}
 			result += ")";
 		}
@@ -376,14 +376,14 @@ string PivotRef::ToString() const {
 	}
 	result += ")";
 	if (!alias.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		result += " AS " + SQLIdentifier(alias);
 		if (!column_name_alias.empty()) {
 			result += "(";
 			for (idx_t i = 0; i < column_name_alias.size(); i++) {
 				if (i > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(column_name_alias[i]);
+				result += SQLIdentifier(column_name_alias[i]);
 			}
 			result += ")";
 		}

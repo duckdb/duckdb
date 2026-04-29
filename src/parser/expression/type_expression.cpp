@@ -24,10 +24,10 @@ TypeExpression::TypeExpression() : ParsedExpression(ExpressionType::TYPE, Expres
 string TypeExpression::ToString() const {
 	string result;
 	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
 
 	auto &params = children;
@@ -48,7 +48,7 @@ string TypeExpression::ToString() const {
 		}
 		string struct_result = "STRUCT(";
 		for (idx_t i = 0; i < params.size(); i++) {
-			struct_result += KeywordHelper::WriteOptionallyQuoted(params[i]->GetAlias()) + " " + params[i]->ToString();
+			struct_result += SQLIdentifier(params[i]->GetAlias()) + " " + params[i]->ToString();
 			if (i < params.size() - 1) {
 				struct_result += ", ";
 			}
@@ -62,7 +62,7 @@ string TypeExpression::ToString() const {
 		}
 		string union_result = "UNION(";
 		for (idx_t i = 0; i < params.size(); i++) {
-			union_result += KeywordHelper::WriteOptionallyQuoted(params[i]->GetAlias()) + " " + params[i]->ToString();
+			union_result += SQLIdentifier(params[i]->GetAlias()) + " " + params[i]->ToString();
 			if (i < params.size() - 1) {
 				union_result += ", ";
 			}
@@ -93,7 +93,7 @@ string TypeExpression::ToString() const {
 		// Built-in type name
 		result += type_name;
 	} else {
-		result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true);
+		result += SQLIdentifier(type_name);
 	}
 
 	if (!params.empty()) {

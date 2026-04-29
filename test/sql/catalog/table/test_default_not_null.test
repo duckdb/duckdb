@@ -1,0 +1,68 @@
+# name: test/sql/catalog/table/test_default_not_null.test
+# description: Test DEFAULT value combined with NOT NULL constraint on the same column
+# group: [table]
+
+statement ok
+PRAGMA enable_verification
+
+# DEFAULT + NOT NULL unparenthesized function call
+statement ok
+CREATE TABLE uuids(u UUID DEFAULT gen_random_uuid() NOT NULL, a INTEGER);
+
+statement ok
+INSERT INTO uuids (a) VALUES (42);
+
+query I
+SELECT a FROM uuids;
+----
+42
+
+query I
+SELECT u IS NOT NULL FROM uuids;
+----
+true
+
+# Parenthesized DEFAULT + NOT NULL
+statement ok
+CREATE TABLE uuids2(u UUID DEFAULT (gen_random_uuid()) NOT NULL, a INTEGER);
+
+statement ok
+INSERT INTO uuids2 (a) VALUES (1);
+
+query I
+SELECT u IS NOT NULL FROM uuids2;
+----
+true
+
+# DEFAULT literal + NOT NULL
+statement ok
+CREATE TABLE t(v INTEGER DEFAULT 42 NOT NULL, a INTEGER);
+
+statement ok
+INSERT INTO t (a) VALUES (1);
+
+query II
+SELECT v, a FROM t;
+----
+42	1
+
+# NOT NULL constraint is enforced - explicit NULL insert should fail
+statement ok
+CREATE TABLE t3(v INTEGER DEFAULT 42 NOT NULL, a INTEGER);
+
+statement error
+INSERT INTO t3 VALUES (NULL, 1);
+----
+<REGEX>:.*NOT NULL.*
+
+# DEFAULT IS NOT NULL still works when parenthesized
+statement ok
+CREATE TABLE t2(v BOOLEAN DEFAULT (42 IS NOT NULL), a INTEGER);
+
+statement ok
+INSERT INTO t2 (a) VALUES (1);
+
+query II
+SELECT v, a FROM t2;
+----
+true	1
