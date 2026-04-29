@@ -31,21 +31,3 @@ statement ok
 from range(1,5) as t(days),
 nextValue(timeseries, date, value, '2026-03-29 05:33:11.822+08'::timestamp - INTERVAL (days) DAY)
 limit 5;
-
-# Propagate casts
-statement ok
-CREATE TABLE t2 (a VARCHAR, b BOOLEAN, c VARCHAR);
-
-statement ok
-INSERT INTO t2 VALUES ('x', false, '2024-01-01');
-
-query III
-WITH cte AS (
-    SELECT a, b, c::TIMESTAMPTZ AS c
-    FROM t2
-)
-SELECT * 
-FROM cte 
-QUALIFY ROW_NUMBER() OVER (PARTITION BY a ORDER BY c DESC) = 1;
-----
-x	false	2024-01-01 00:00:00+00

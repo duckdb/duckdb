@@ -9,7 +9,6 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/late_materialization_helper.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cte.hpp"
@@ -714,29 +713,6 @@ bool TopNWindowElimination::TraverseProjectionBindings(const vector<ColumnBindin
 	return true;
 }
 
-class ColumnBindingTyper : public LogicalOperatorVisitor {
-public:
-	explicit ColumnBindingTyper(const vector<ColumnBinding> &bindings) : bindings(bindings) {
-		types.resize(bindings.size());
-	}
-
-	void VisitOperator(LogicalOperator &op) override {
-		for (const auto &table_index : op.GetTableIndex()) {
-			for (idx_t i = 0; i < bindings.size(); ++i) {
-				const auto &binding = bindings[i];
-				if (binding.table_index == table_index) {
-					types[i] = op.types[binding.column_index];
-				}
-			}
-		}
-
-		LogicalOperatorVisitor::VisitOperator(op);
-	}
-
-	const vector<ColumnBinding> &bindings;
-	vector<LogicalType> types;
-};
-
 unique_ptr<LogicalOperator>
 TopNWindowElimination::UpdateTopmostBindings(TableIndex window_idx, unique_ptr<LogicalOperator> op,
                                              const vector<LogicalType> &types, const map<idx_t, idx_t> &group_idxs,
@@ -810,17 +786,11 @@ TopNWindowElimination::UpdateTopmostBindings(TableIndex window_idx, unique_ptr<L
 	//	because the set operators assume that all the inputs have the same schema.
 	//	To fix this, we have to inject another projection using the new bindings.
 	replacer.replacement_bindings.reserve(new_bindings.size());
-	ColumnBindingTyper original(new_bindings);
-	original.VisitOperator(*op);
 	const auto proj_table = optimizer.binder.GenerateTableIndex();
 	vector<unique_ptr<Expression>> proj_exprs;
 	for (idx_t i = 0; i < topmost_bindings.size(); ++i) {
 		auto &new_binding = new_bindings[i];
-		unique_ptr<Expression> proj_expr = make_uniq<BoundColumnRefExpression>(original.types[i], new_binding);
-		if (original.types[i] != types[i]) {
-			proj_expr = BoundCastExpression::AddDefaultCastToType(std::move(proj_expr), types[i]);
-		}
-		proj_exprs.emplace_back(std::move(proj_expr));
+		proj_exprs.push_back(make_uniq<BoundColumnRefExpression>(types[i], new_binding));
 		new_binding.table_index = proj_table;
 		new_binding.column_index = ProjectionIndex(i);
 		replacer.replacement_bindings.emplace_back(topmost_bindings[i], new_binding);
