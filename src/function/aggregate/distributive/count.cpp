@@ -242,6 +242,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
+	fun.SetStatisticsCallback(CountPropagateStats);
 	return fun;
 }
 
@@ -257,7 +258,6 @@ AggregateFunction CountStarFun::GetFunction() {
 
 AggregateFunctionSet CountFun::GetFunctions() {
 	AggregateFunction count_function = CountFunctionBase::GetFunction();
-	count_function.SetStatisticsCallback(CountPropagateStats);
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

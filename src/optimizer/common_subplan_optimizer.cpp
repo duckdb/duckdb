@@ -350,14 +350,14 @@ private:
 		// Replace default fields
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
-			expression_info.emplace_back(std::move(expr.alias), expr.query_location);
-			expr.alias.clear();
-			expr.query_location.SetInvalid();
+			expression_info.emplace_back(expr.GetAlias(), expr.GetQueryLocation());
+			expr.ClearAlias();
+			expr.SetQueryLocation(optional_idx());
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			auto &info = expression_info[info_idx++];
-			expr.alias = std::move(info.first);
-			expr.query_location = info.second;
+			expr.SetAlias(std::move(info.first));
+			expr.SetQueryLocation(info.second);
 			break;
 		}
 		if (expr.IsVolatile()) {

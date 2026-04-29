@@ -19,7 +19,7 @@ static unique_ptr<FunctionData> ListFilterBind(BindScalarFunctionInput &input) {
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 
 	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
-	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
+	if (bound_lambda_expr.lambda_expr->GetReturnType() != LogicalType::BOOLEAN) {
 		auto cast_lambda_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
 		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
@@ -27,7 +27,7 @@ static unique_ptr<FunctionData> ListFilterBind(BindScalarFunctionInput &input) {
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	bound_function.SetReturnType(arguments[0]->return_type);
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
 	auto has_index = bound_lambda_expr.parameter_count == 2;
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }

@@ -172,7 +172,7 @@ static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParame
 			auto list_data = ConstantVector::GetData<list_entry_t>(result);
 			for (idx_t j = 0; j < list_data->length; j++) {
 				if (!key_validity.IsValid(list_data->offset + j)) {
-					ConstantVector::SetNull(result);
+					ConstantVector::SetNull(result, count_t(count));
 					break;
 				}
 			}

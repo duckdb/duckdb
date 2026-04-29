@@ -283,6 +283,13 @@
         "default_value": "0"
     },
     {
+        "name": "debug_disable_optimizer",
+        "description": "DEBUG SETTING: disable optimizer for most queries",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
         "name": "debug_eviction_queue_sleep_micro_seconds",
         "description": "DEBUG SETTING: time for the eviction queue to sleep before acquiring shared ownership of block memory",
         "type": "UBIGINT",
@@ -293,8 +300,15 @@
         "name": "debug_force_external",
         "description": "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing",
         "type": "BOOLEAN",
-        "scope": "local",
-        "internal_setting": "force_external"
+        "default_scope": "local",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_force_fetch_row",
+        "description": "DEBUG SETTING: force per-row fetching during scans, used for testing",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "false"
     },
     {
         "name": "debug_force_no_cross_product",
@@ -320,6 +334,20 @@
     {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_statement",
+        "description": "DEBUG SETTING: the type of statement verification to perform",
+        "type": "ENUM<DebugStatementVerification>",
+        "default_scope": "global",
+        "default_value": "NONE"
+    },
+    {
+        "name": "debug_verify_stats",
+        "description": "DEBUG SETTING: verify statistics are correct during execution, instead of assuming",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -458,6 +486,13 @@
         "type": "UBIGINT",
         "default_scope": "local",
         "default_value": "50"
+    },
+    {
+        "name": "enable_caching_operators",
+        "description": "Enables caching operators that cache intermediate results",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
     },
     {
         "name": "enable_external_access",

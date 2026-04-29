@@ -4,6 +4,7 @@
 #include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -189,7 +190,7 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 }
 
 OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext &context) {
-	if (!context.client.config.enable_caching_operators) {
+	if (!Settings::Get<EnableCachingOperatorsSetting>(context.client)) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
 		return OperatorCachingMode::NONE;

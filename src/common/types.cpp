@@ -500,7 +500,7 @@ string LogicalType::ToString() const {
 		}
 
 		auto &expr = UnboundType::GetTypeExpression(*this);
-		if (expr->type != ExpressionType::TYPE) {
+		if (expr->GetExpressionType() != ExpressionType::TYPE) {
 			return "(" + expr->ToString() + ")";
 		} else {
 			return expr->ToString();
@@ -2048,7 +2048,7 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 }
 
 static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
-	if (expr.type != ExpressionType::TYPE) {
+	if (expr.GetExpressionType() != ExpressionType::TYPE) {
 		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
 	}
 	const auto &type_expr = expr.Cast<TypeExpression>();

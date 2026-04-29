@@ -388,15 +388,15 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	if (arguments[0]->return_type.id() == LogicalTypeId::VARCHAR) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARCHAR) {
 		function.SetStateUpdateCallback(ApproxTopKUpdate<string_t, HistogramStringFunctor>);
 		function.SetStateFinalizeCallback(ApproxTopKFinalize<HistogramStringFunctor>);
 	}
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return nullptr;
 }
 

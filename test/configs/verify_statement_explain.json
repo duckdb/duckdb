@@ -1,0 +1,50 @@
+{
+  "description": "Run with debug_verify_statement set to explain_statement - forcing statements to be explained",
+  "on_init": "SET debug_verify_statement='explain_statement';",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Extra queries mess up logs",
+      "paths": [
+        "test/sql/pragma/test_query_log.test",
+        "test/sql/cte/warn_deprecated_union_in_using_key.test",
+        "test/sql/function/list/lambdas/arrow/warn_deprecated_arrow.test",
+        "test/sql/logging/test_logging_function.test",
+        "test/sql/logging/logging_buffer_size.test",
+        "test/sql/logging/logging_types.test",
+        "test/sql/logging/logging.test",
+        "test/sql/logging/logging_context_ids.test",
+        "test/sql/logging/logging_csv.test"
+      ]
+    },
+    {
+      "reason": "Explain exceeds 300KB memory limit",
+      "paths": [
+        "test/issues/internal/test_5457.test"
+      ]
+    },
+    {
+      "reason": "Random errors",
+      "paths": [
+        "test/sql/binder/column_ref_as_alias.test",
+        "test/sql/cast/cast_error_location.test",
+        "test/sql/pragma/test_pragma_sanitized_inputs.test",
+        "test/sql/pragma/profiling/test_profiling_fs.test",
+        "test/sql/pragma/profiling/test_profiling_all.test",
+        "test/sql/pragma/profiling/test_autocheckpoint_latency.test",
+        "test/sql/pragma/profiling/test_checkpoint_profiling.test",
+        "test/sql/pragma/profiling/test_commit_write_wal_latency_and_count.test",
+        "test/sql/storage/wal/wal_autocheckpoint_entries.test",
+        "test/sql/transactions/statement-preprocessor/multistatement_is_transactional.test",
+        "test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_PRAGMA.test",
+        "test/sql/copy/csv/glob/read_csv_glob.test",
+        "test/sql/copy/parquet/parquet_list.test",
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/error/qualified_column_error.test",
+        "test/sql/copy_database/copy_table_with_sequence.test",
+        "test/sql/copy_database/copy_database_simple.test",
+        "test/sql/copy_database/copy_database_errors.test"
+      ]
+    }
+  ]
+}

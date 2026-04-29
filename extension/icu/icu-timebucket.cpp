@@ -494,7 +494,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 			    !Value::IsFinite(*ConstantVector::GetData<timestamp_t>(origin_arg))) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(args.size()));
 			} else {
 				interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 				BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);

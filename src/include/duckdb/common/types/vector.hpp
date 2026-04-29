@@ -39,7 +39,7 @@ public:
 	//! Create a vector that slices another vector between a pair of offsets
 	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
-	DUCKDB_API explicit Vector(const Value &value);
+	DUCKDB_API explicit Vector(const Value &value, count_t count);
 	//! Create a vector of size capacity (non-standard)
 	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE,
 	                           VectorDataInitialization initialize = VectorDataInitialization::UNINITIALIZED);
@@ -65,7 +65,7 @@ public:
 	DUCKDB_API static Vector Ref(const Vector &other);
 
 	//! Create a vector that references the specified value.
-	DUCKDB_API void Reference(const Value &value);
+	DUCKDB_API void Reference(const Value &value, count_t count);
 	//! Causes this vector to reference the data held by the other vector.
 	//! The type of the "other" vector should match the type of this vector
 	DUCKDB_API void Reference(const Vector &other);

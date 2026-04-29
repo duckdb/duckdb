@@ -463,7 +463,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &c
 	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gsink.shared.coll_shared);
 	vector<LogicalType> types;
 	for (auto &expr : shared) {
-		types.emplace_back(expr->return_type);
+		types.emplace_back(expr->GetReturnType());
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(gsink.client);
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
@@ -840,7 +840,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 	vector<LogicalType> output_types;
 	for (auto &wexec : gsink.executors) {
 		auto &wexpr = wexec->wexpr;
-		output_types.emplace_back(wexpr.return_type);
+		output_types.emplace_back(wexpr.GetReturnType());
 	}
 	output_chunk.Initialize(gsource.client, output_types);
 
