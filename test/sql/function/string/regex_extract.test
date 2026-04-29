@@ -138,3 +138,24 @@ statement error
 SELECT regexp_replace('foobarbaz', 'b..', 'X', 'k')
 ----
 <REGEX>:.*Option 'k'.*
+
+# Bind-time `^...(group)Y.*$` trim is escape-aware: `^(a)\.*$` ends with "literal-dot star, EOT",
+# so chopping the last 3 bytes would leave a stray `\` that fails to compile. Non-constant input
+# bypasses constant folding.
+query T
+SELECT regexp_extract(s, '^(a)\.*$', 1) FROM (VALUES ('a.'), ('a..'), ('b')) v(s);
+----
+a
+a
+(empty)
+
+# Gates that suppress the trim — group 0 keeps the whole-match span; the `s` flag accepts newlines.
+query T
+SELECT regexp_extract('abc', '^a.*$', 0)
+----
+abc
+
+query T
+SELECT regexp_extract(E'abc\ndef', '^(a).*$', 1, 's')
+----
+a

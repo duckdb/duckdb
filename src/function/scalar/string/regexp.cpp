@@ -414,12 +414,17 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 
 	// Strip a trailing `.*$`; the runtime restores end-of-text semantics via a remainder-newline
 	// check. Gated to default newline-sensitive options and group_index >= 1 (group 0 = whole match).
+	// Test-compile guards the byte-suffix check against escaped `.` (e.g. `^(a)\.*$`).
 	bool trim_dotstar_dollar = false;
 	if (constant_pattern && group_index >= 1 && !options.literal() && !options.dot_nl() &&
 	    constant_string.size() >= 4 && constant_string.front() == '^' &&
 	    constant_string.compare(constant_string.size() - 3, 3, ".*$") == 0) {
-		constant_string.resize(constant_string.size() - 3);
-		trim_dotstar_dollar = true;
+		string trimmed = constant_string.substr(0, constant_string.size() - 3);
+		const duckdb_re2::RE2 trial(duckdb_re2::StringPiece(trimmed.c_str(), trimmed.size()), options);
+		if (trial.ok()) {
+			constant_string = std::move(trimmed);
+			trim_dotstar_dollar = true;
+		}
 	}
 
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,

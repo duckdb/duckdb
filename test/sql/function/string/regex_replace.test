@@ -158,10 +158,13 @@ SELECT regexp_replace(E'https://www.example.com/path\nsecond-line',
 example.com
 
 # Pattern whose trailing `.*$` is preceded by an escape (`\.*$` = literal-dot star, end-of-text).
+# Non-constant input bypasses constant folding so the optimizer rewrite + bind-time trim path runs.
 query T
-SELECT regexp_replace('ab', '^a(b)\.*$', '\1');
+SELECT regexp_replace(s, '^a(b)\.*$', '\1') FROM (VALUES ('ab'), ('ab.'), ('cd')) v(s);
 ----
 b
+b
+cd
 
 # UTF-8 input: capture group must be returned on byte-aligned UTF-8 character boundaries.
 query T
