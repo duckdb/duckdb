@@ -34,20 +34,23 @@ struct CommitInfo {
 	optional_ptr<CommitDropState> drop_state;
 };
 
-//! Result of DuckTransaction::FinalizeShared. Conveys both the local outcome (whether COMMIT
-//! was rejected because the transaction is doomed) and whether this caller drove the
-//! storage-layer finalize (last detacher).
-struct SharedFinalizeResult {
-	//! True iff this caller's Detach() dropped participant_count to zero, meaning we ran the
-	//! storage-layer commit-or-rollback through the TransactionManager. Other detachers
-	//! (count went 1 → 0 was someone else) leave this false.
-	bool was_last_detacher;
-	//! True iff this MetaTransaction's COMMIT/ROLLBACK is recorded as committed. False when
-	//! either the caller voted rollback or another participant had already doomed the txn.
-	bool committed;
-	//! Any error to surface to the caller. Includes the eager-doom error and any storage
-	//! finalization error from CommitTransaction/RollbackTransaction.
-	ErrorData error;
+//! RAII guard returned by DuckTransaction::LockStatement. Holds both the unique_lock and a
+//! shared_ptr<mutex> "keeper" so the underlying mutex outlives the DuckTransaction itself —
+//! a COMMIT may destroy the DuckTransaction before this guard naturally goes out of scope.
+//! Member declaration order matters: `guard` is declared after `keeper`, so destruction
+//! (reverse of declaration) unlocks before dropping the keeper.
+struct StatementGuard {
+	StatementGuard() = default;
+	StatementGuard(shared_ptr<mutex> keeper_p, unique_lock<mutex> guard_p)
+	    : keeper(std::move(keeper_p)), guard(std::move(guard_p)) {
+	}
+	StatementGuard(StatementGuard &&) = default;
+	StatementGuard &operator=(StatementGuard &&) = default;
+	StatementGuard(const StatementGuard &) = delete;
+	StatementGuard &operator=(const StatementGuard &) = delete;
+
+	shared_ptr<mutex> keeper;
+	unique_lock<mutex> guard;
 };
 
 class DuckTransaction : public Transaction {
@@ -145,19 +148,26 @@ public:
 	//! layer finalization, otherwise the DuckTransaction would leak in DuckTransactionManager's
 	//! active list. We honor rollback_requested if set, otherwise commit.
 	void CancelParticipation(ClientContext &context);
-	//! Detach + finalize-if-last in one call. Used by MetaTransaction::Commit/Rollback when a
-	//! TransactionReference is shared (see TransactionReference::IsShared). Encapsulates the
-	//! eager-fail-on-doom check and the conditional CommitTransaction/RollbackTransaction call
-	//! through the per-database TransactionManager.
-	SharedFinalizeResult FinalizeShared(ClientContext &context, TransactionManager &manager,
-	                                    bool caller_voted_rollback);
+	//! Drive the storage-layer finalize for this MetaTransaction's reference. Decrements the
+	//! participant count. If this caller is the last to detach, runs CommitTransaction or
+	//! RollbackTransaction through the per-database TransactionManager. `vote_rollback=true`
+	//! sticks `rollback_requested` so any concurrent COMMIT attempt fails eagerly and the
+	//! eventual last detacher rolls back regardless of how it itself voted.
+	//!
+	//! This is the single entry point for ending a MetaTransaction's reference to a
+	//! DuckTransaction — both for the unshared owner case (count 1 → 0, fires finalize) and
+	//! shared cases (each non-last detacher just decrements).
+	ErrorData Finalize(ClientContext &context, bool vote_rollback);
+
 	//! Acquire the per-DuckTransaction statement lock. Always returns a held lock — taking the
 	//! mutex unconditionally (rather than only when shared) is required for correctness: when
-	//! a participant joins via TryAddParticipant the owner may already be mid-query, and a
+	//! a participant joins via JOIN TRANSACTION the owner may already be mid-query, and a
 	//! conditional acquire would let owner and participant mutate LocalStorage / UndoBuffer
 	//! concurrently across the 1→2 transition. Cost is one uncontended-mutex acquire per query
-	//! per opened DuckTransaction.
-	unique_lock<mutex> LockStatement();
+	//! per opened DuckTransaction. The returned guard pins the underlying mutex via shared_ptr
+	//! so it survives DuckTransaction destruction (a COMMIT may destroy the DuckTransaction
+	//! before the guard's natural end-of-query release).
+	StatementGuard LockStatement();
 
 private:
 	//! The undo buffer is used to store old versions of rows that are updated
@@ -192,8 +202,11 @@ private:
 	atomic<bool> rollback_requested {false};
 	//! Serializes statement execution across owner + participants while the transaction is shared.
 	//! Preserves the single-writer-per-DuckTransaction invariant (LocalStorage / UndoBuffer / per-
-	//! table local indexes were designed assuming one query thread mutates at a time).
-	mutex statement_lock;
+	//! table local indexes were designed assuming one query thread mutates at a time). Held via
+	//! shared_ptr so the lock outlives the DuckTransaction — explicit COMMIT may destroy the
+	//! DuckTransaction before its statement guard naturally unwinds, and we mustn't unlock a
+	//! freed mutex. Initialized in the constructor.
+	shared_ptr<mutex> statement_lock;
 };
 
 } // namespace duckdb

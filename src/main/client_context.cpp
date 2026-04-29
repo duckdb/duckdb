@@ -88,12 +88,13 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
-	//! Statement locks held on any shared DuckTransactions referenced by the active
-	//! MetaTransaction. Released automatically when this struct is destroyed (i.e. at
-	//! end of query), serializing concurrent statements across all connections that share
-	//! a transaction. Only populated when the active MetaTransaction references a shared
-	//! DuckTransaction; otherwise empty (zero overhead for unshared queries).
-	vector<unique_lock<mutex>> shared_statement_guards;
+	//! Statement guards held on every DuckTransaction referenced by the active MetaTransaction.
+	//! Released automatically when this struct is destroyed (i.e. at end of query), serializing
+	//! concurrent statements across all connections that share a transaction. Each guard pins
+	//! its mutex via shared_ptr so the guard survives DuckTransaction destruction (a COMMIT may
+	//! destroy the underlying DuckTransaction during this query but the guard's natural unwind
+	//! still happens on this connection's thread without touching freed memory).
+	vector<StatementGuard> statement_guards;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -289,7 +290,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 			          return std::less<const void *>()(&a.get(), &b.get());
 		          });
 		for (auto &duck : ducks) {
-			active_query->shared_statement_guards.push_back(duck.get().LockStatement());
+			active_query->statement_guards.push_back(duck.get().LockStatement());
 		}
 	}
 
@@ -421,19 +422,6 @@ const string &ClientContext::GetCurrentQuery() {
 
 connection_t ClientContext::GetConnectionId() const {
 	return connection_id;
-}
-
-void ClientContext::RegisterSharedStatementGuard(unique_lock<mutex> guard) {
-	D_ASSERT(active_query);
-	D_ASSERT(guard.owns_lock());
-	active_query->shared_statement_guards.push_back(std::move(guard));
-}
-
-void ClientContext::ReleaseSharedStatementGuards() {
-	if (!active_query) {
-		return;
-	}
-	active_query->shared_statement_guards.clear();
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {

@@ -50,14 +50,9 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 		if (client.transaction.IsAutoCommit()) {
 			throw TransactionException("cannot commit - no transaction is active");
 		} else {
-			// Release the per-DuckTransaction statement guards before finalizing: COMMIT may
-			// destroy the underlying DuckTransaction (and therefore its statement_lock mutex),
-			// after which the unique_locks held in active_query would unlock freed memory at
-			// end-of-query. EndQueryInternal already does this for autocommit by resetting
-			// active_query before transaction.Commit(); the explicit-COMMIT path needs the
-			// same ordering.
-			client.ReleaseSharedStatementGuards();
-			// explicitly commit the current transaction
+			// explicitly commit the current transaction. The active_query's StatementGuards
+			// pin their statement_lock mutexes via shared_ptr, so even if COMMIT destroys
+			// the underlying DuckTransaction the guards' end-of-query unlock is safe.
 			client.transaction.Commit();
 			// Suppress further interrupts for the remainder of this query.
 			// A committed transaction is irreversible. If a concurrent Interrupt()
@@ -76,9 +71,6 @@ SourceResultType PhysicalTransaction::GetDataInternal(ExecutionContext &context,
 		if (client.transaction.IsAutoCommit()) {
 			throw TransactionException("cannot rollback - no transaction is active");
 		} else {
-			// Same ordering requirement as COMMIT: release guards before finalizing so the
-			// unique_locks don't outlive the DuckTransactions they reference.
-			client.ReleaseSharedStatementGuards();
 			// Explicitly rollback the current transaction
 			// If it is because of an invalidated transaction, we need to rollback with an error
 			auto &valid_checker = ValidChecker::Get(client.transaction.ActiveTransaction());

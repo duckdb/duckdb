@@ -206,19 +206,24 @@ ErrorData MetaTransaction::Commit() {
 		}
 		auto &transaction = transaction_ref.transaction;
 		try {
-			if (transaction_ref.IsShared()) {
-				// All shared-lifecycle bookkeeping (eager-doom, decrement, finalize-if-last)
-				// lives in DuckTransaction::FinalizeShared.
-				auto result = transaction.Cast<DuckTransaction>().FinalizeShared(context, transaction_manager,
-				                                                                 /*caller_voted_rollback=*/false);
-				if (result.error.HasError()) {
-					error.Merge(result.error);
+			if (transaction.IsDuckTransaction()) {
+				// Always route DuckTransaction commits through Finalize, regardless of whether
+				// the transaction is shared. Finalize handles the unshared case as the count
+				// 1 → 0 transition (last detacher fires CommitTransaction) and the shared case
+				// as a non-last decrement (defers commit until the last detacher leaves). It
+				// also enforces eager-fail-on-doom if any other participant rolled back.
+				auto vote_rollback = error.HasError();
+				auto finalize_error = transaction.Cast<DuckTransaction>().Finalize(context, vote_rollback);
+				if (finalize_error.HasError()) {
+					error.Merge(finalize_error);
+					transaction_ref.state = TransactionState::ROLLED_BACK;
+				} else {
+					transaction_ref.state = vote_rollback ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 				}
-				transaction_ref.state = result.committed ? TransactionState::COMMITTED : TransactionState::ROLLED_BACK;
 				continue;
 			}
 			if (!error.HasError()) {
-				// Commit the transaction.
+				// Commit the non-DuckTransaction transaction.
 				error = transaction_manager.CommitTransaction(context, transaction);
 				transaction_ref.state = error.HasError() ? TransactionState::ROLLED_BACK : TransactionState::COMMITTED;
 			} else {
@@ -248,11 +253,10 @@ void MetaTransaction::Rollback() {
 		}
 		try {
 			auto &transaction = transaction_ref.transaction;
-			if (transaction_ref.IsShared()) {
-				auto result = transaction.Cast<DuckTransaction>().FinalizeShared(context, transaction_manager,
-				                                                                 /*caller_voted_rollback=*/true);
-				if (result.error.HasError()) {
-					error.Merge(result.error);
+			if (transaction.IsDuckTransaction()) {
+				auto finalize_error = transaction.Cast<DuckTransaction>().Finalize(context, /*vote_rollback=*/true);
+				if (finalize_error.HasError()) {
+					error.Merge(finalize_error);
 				}
 			} else {
 				transaction_manager.RollbackTransaction(transaction);

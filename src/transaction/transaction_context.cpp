@@ -214,26 +214,29 @@ void TransactionContext::JoinTransaction(const string &transaction_id) {
 		    "(no active transaction, database not yet touched, finalized, or not a DuckDB database)",
 		    transaction_id, db_name);
 	}
-	// Acquire the foreign DuckTransaction's statement lock BEFORE touching its state. This
-	// blocks until any owner query in flight on this transaction completes. With BeginQuery
-	// holding the same lock for the duration of every query, no other connection can be
-	// mutating the transaction's LocalStorage / UndoBuffer / active_query while we import.
-	unique_lock<mutex> foreign_guard;
-	try {
-		foreign_guard = claim.transaction->LockStatement();
-	} catch (...) {
-		claim.transaction->CancelParticipation(context);
-		throw;
-	}
-	try {
-		current_transaction->ImportTransaction(*claim.database, *claim.transaction);
-	} catch (...) {
-		claim.transaction->CancelParticipation(context);
-		throw;
-	}
-	// Stash the lock on the active query so it stays held for the rest of this statement and
-	// is released at end-of-query along with the BeginQuery-acquired guards.
-	context.RegisterSharedStatementGuard(std::move(foreign_guard));
+	// RAII undo: if anything between here and the end of this function throws, the bumped
+	// participant_count from TryClaimParticipant is rolled back via CancelParticipation. On
+	// success, we Release() so the count remains held by the live TransactionReference. We
+	// deliberately do NOT acquire the foreign DuckTransaction's statement_lock here:
+	// ImportTransaction touches only THIS MetaTransaction's own maps (no foreign DT mutation),
+	// and the participant's first BeginQuery on the shared transaction will serialize via
+	// statement_lock against the owner naturally. Acquiring the foreign lock here under our
+	// own meta_lock creates a cross-connection lock-order inversion (TSan-detected).
+	struct ParticipantGuard {
+		DuckTransaction *txn;
+		ClientContext &ctx;
+		~ParticipantGuard() {
+			if (txn) {
+				txn->CancelParticipation(ctx);
+			}
+		}
+		void Release() {
+			txn = nullptr;
+		}
+	};
+	ParticipantGuard guard {claim.transaction, context};
+	current_transaction->ImportTransaction(*claim.database, *claim.transaction);
+	guard.Release();
 }
 
 void TransactionContext::SetActiveQuery(transaction_t query_number) {

@@ -35,7 +35,7 @@ DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext 
                                  transaction_t transaction_id, idx_t catalog_version_p)
     : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
       catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
-      storage(make_uniq<LocalStorage>(context_p, *this)) {
+      storage(make_uniq<LocalStorage>(context_p, *this)), statement_lock(make_shared_ptr<mutex>()) {
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -80,45 +80,42 @@ void DuckTransaction::CancelParticipation(ClientContext &context) {
 	}
 }
 
-SharedFinalizeResult DuckTransaction::FinalizeShared(ClientContext &context, TransactionManager &manager,
-                                                     bool caller_voted_rollback) {
-	SharedFinalizeResult result;
-	// Eager-fail-on-doom: if anyone has already requested rollback, this caller's COMMIT must
-	// fail even though the underlying transaction may not be finalized yet (last detacher
-	// will roll back at the storage layer).
+ErrorData DuckTransaction::Finalize(ClientContext &context, bool vote_rollback) {
+	ErrorData error;
+	// Eager-fail-on-doom: if anyone has already requested rollback, a non-rolling-back caller's
+	// COMMIT must fail even though the underlying transaction may not be finalized yet (the
+	// last detacher will roll back at the storage layer).
 	bool already_doomed = rollback_requested.load();
-	if (already_doomed && !caller_voted_rollback) {
-		result.error = ErrorData(ExceptionType::TRANSACTION,
-		                         "Cannot COMMIT shared transaction: another connection has rolled back. "
-		                         "The transaction will be rolled back when the last participant detaches.");
+	if (already_doomed && !vote_rollback) {
+		error = ErrorData(ExceptionType::TRANSACTION,
+		                  "Cannot COMMIT shared transaction: another connection has rolled back. "
+		                  "The transaction will be rolled back when the last participant detaches.");
 	}
-	bool effective_rollback = caller_voted_rollback || result.error.HasError();
-	result.was_last_detacher = Detach(effective_rollback);
-	result.committed = !effective_rollback;
-	if (!result.was_last_detacher) {
-		return result;
+	bool effective_rollback = vote_rollback || error.HasError();
+	bool was_last_detacher = Detach(effective_rollback);
+	if (!was_last_detacher) {
+		return error;
 	}
 	// We are the last detacher and own storage-layer finalization.
 	try {
 		if (rollback_requested.load()) {
 			manager.RollbackTransaction(*this);
-			result.committed = false;
 		} else {
 			auto storage_error = manager.CommitTransaction(context, *this);
 			if (storage_error.HasError()) {
-				result.error.Merge(storage_error);
-				result.committed = false;
+				error.Merge(storage_error);
 			}
 		}
 	} catch (std::exception &ex) {
-		result.error.Merge(ErrorData(ex));
-		result.committed = false;
+		error.Merge(ErrorData(ex));
 	}
-	return result;
+	return error;
 }
 
-unique_lock<mutex> DuckTransaction::LockStatement() {
-	return unique_lock<mutex>(statement_lock);
+StatementGuard DuckTransaction::LockStatement() {
+	auto keeper = statement_lock;
+	unique_lock<mutex> guard(*keeper);
+	return StatementGuard(std::move(keeper), std::move(guard));
 }
 
 DuckTransaction &DuckTransaction::Get(ClientContext &context, AttachedDatabase &db) {

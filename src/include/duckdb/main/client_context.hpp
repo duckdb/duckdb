@@ -244,19 +244,6 @@ public:
 
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
-	//! Register a held statement-lock guard with the currently-active query so it is released
-	//! at end of query. Used by SET TRANSACTION SNAPSHOT to extend the BeginQuery-time lock
-	//! set with a newly-imported foreign DuckTransaction. Requires an active query.
-	void RegisterSharedStatementGuard(unique_lock<mutex> guard);
-	//! Drop every per-DuckTransaction statement guard held by the active query. Must be called
-	//! before any code path that may finalize the underlying DuckTransaction (explicit COMMIT /
-	//! ROLLBACK in PhysicalTransaction): finalization through TransactionManager destroys the
-	//! DuckTransaction, including its statement_lock mutex. The unique_lock destructors that run
-	//! when active_query is reset would then unlock freed memory. EndQueryInternal already does
-	//! this implicitly by resetting active_query before calling transaction.Commit/Rollback, so
-	//! this is only needed on the explicit-statement path. No-op when no active query.
-	void ReleaseSharedStatementGuards();
-
 private:
 	//! Parse statements and resolve pragmas from a query
 	vector<unique_ptr<SQLStatement>> ParseStatements(ClientContextLock &lock, const string &query);

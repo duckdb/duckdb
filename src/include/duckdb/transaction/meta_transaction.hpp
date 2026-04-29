@@ -44,12 +44,12 @@ struct TransactionReference {
 	Transaction &transaction;
 	//! True if this transaction was joined via JOIN TRANSACTION (the underlying DuckTransaction
 	//! is owned by another connection's MetaTransaction). Joined transactions detach via
-	//! DuckTransaction::FinalizeShared instead of going through TransactionManager::Commit /
+	//! DuckTransaction::Finalize instead of going through TransactionManager::Commit /
 	//! Rollback for this MetaTransaction.
 	bool is_joined;
 
 	//! Whether this reference's lifecycle is shared with other MetaTransactions and therefore
-	//! requires the FinalizeShared path. True when:
+	//! requires the participant-count finalize path. True when:
 	//!   - we joined it (foreign DuckTransaction we don't own), or
 	//!   - we own it but other participants are currently attached (IsShared), or
 	//!   - we own it but a previous detacher has already voted rollback (RollbackRequested),
