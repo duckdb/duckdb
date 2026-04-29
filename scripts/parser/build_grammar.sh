@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Run grammar inlining with and without argument
-GRAMMAR_FILE="scripts/inline_grammar.py"
+GRAMMAR_FILE="scripts/parser/inline_grammar.py"
 if [[ ! -f "$GRAMMAR_FILE" ]]; then
   echo "Error: $GRAMMAR_FILE not found"
   deactivate

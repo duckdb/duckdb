@@ -3,10 +3,10 @@ import re
 import sys
 from pathlib import Path
 
-GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
-TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
-FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
-FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
+GRAMMAR_DIR = Path("src/parser/peg/grammar/statements")
+TRANSFORMER_DIR = Path("src/parser/peg/transformer")
+FACTORY_REG_FILE = Path("src/parser/peg/transformer/peg_transformer_factory.cpp")
+FACTORY_HPP_FILE = Path("src/include/duckdb/parser/peg/transformer/peg_transformer.hpp")
 
 # Matches: RuleName <- ...
 GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
