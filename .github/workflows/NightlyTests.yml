@@ -644,7 +644,7 @@ jobs:
 
      - name: Test
        shell: bash
-       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+       run: python3 scripts/ci/run_tests.py --test-config=test/configs/hash_zero.json build/relassert/test/unittest
 
 
   bwc_build:
