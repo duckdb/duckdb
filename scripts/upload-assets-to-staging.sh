@@ -11,7 +11,7 @@ if [ -z "$1" ] || [ -z "$2" ]; then
     exit 1
 fi
 
-set -e
+set -eu -o pipefail
 
 # skip if repo is not in duckdb organization
 if [ "$GITHUB_REPOSITORY_OWNER" != "duckdb" ]; then
@@ -44,7 +44,6 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
   DRY_RUN_PARAM="--dry-run"
 fi
 
-
 TARGET=$(git log -1 --format=%h)
 
 if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
@@ -61,7 +60,7 @@ if ! command -v rclone >/dev/null 2>&1; then
   if command -v sudo >/dev/null 2>&1; then
     install_runner=(sudo bash)
   fi
-  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | "${install_runner[@]}"
+  curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
 fi
 
 set -x
