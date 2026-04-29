@@ -25,7 +25,7 @@ string CreateViewInfo::ToString() const {
 	if (!aliases.empty()) {
 		result += " (";
 		result += StringUtil::Join(aliases, aliases.size(), ", ",
-		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
+		                           [](const string &name) { return SQLIdentifier(name); });
 		result += ")";
 	}
 	if (binding_mode == CreateViewBindingMode::SKIP_BINDING) {

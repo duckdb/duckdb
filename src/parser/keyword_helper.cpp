@@ -67,4 +67,17 @@ string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool
 	return WriteQuoted(text, quote);
 }
 
+string SQLIdentifier::ToString(const string &identifier) {
+	if (!KeywordHelper::RequiresQuotes(identifier)) {
+		return identifier;
+	}
+	char quote = '"';
+	return string(1, quote) + KeywordHelper::EscapeQuotes(identifier, quote) + string(1, quote);
+}
+
+string SQLString::ToString(const string &literal) {
+	char quote = '\'';
+	return string(1, quote) + KeywordHelper::EscapeQuotes(literal, quote) + string(1, quote);
+}
+
 } // namespace duckdb

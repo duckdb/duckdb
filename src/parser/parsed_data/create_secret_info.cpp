@@ -45,10 +45,10 @@ string CreateSecretInfo::ToString() const {
 	}
 	result = GetCreatePrefix(create_type);
 	if (!name.empty()) {
-		result += " " + KeywordHelper::WriteOptionallyQuoted(name);
+		result += " " + SQLIdentifier(name);
 	}
 	if (!storage_type.empty()) {
-		result += " IN" + KeywordHelper::WriteOptionallyQuoted(storage_type);
+		result += " IN" + SQLIdentifier(storage_type);
 	}
 	string option_list;
 	if (provider) {

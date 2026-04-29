@@ -793,7 +793,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	input_data.get_next(&input_data, &prepared_array);
 
 	// Create the schema
-	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+	db.Query("CREATE SCHEMA " + SQLIdentifier(schema_name));
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
@@ -828,7 +828,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 
 	// Check we can query
 	auto schema_table =
-	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	    SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));

@@ -184,9 +184,9 @@ static string PragmaImportDatabase(ClientContext &context, const FunctionParamet
 
 static string PragmaCopyDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	string copy_stmt = "COPY FROM DATABASE ";
-	copy_stmt += KeywordHelper::WriteOptionallyQuoted(parameters.values[0].ToString());
+	copy_stmt += SQLIdentifier(parameters.values[0].ToString());
 	copy_stmt += " TO ";
-	copy_stmt += KeywordHelper::WriteOptionallyQuoted(parameters.values[1].ToString());
+	copy_stmt += SQLIdentifier(parameters.values[1].ToString());
 	string final_query;
 	final_query += copy_stmt + " (SCHEMA);\n";
 	final_query += copy_stmt + " (DATA);";

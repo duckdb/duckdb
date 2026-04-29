@@ -478,10 +478,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 
 	std::string query = "SELECT * FROM ";
 	if (catalog != nullptr && strlen(catalog) > 0) {
-		query += duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		query += duckdb::SQLIdentifier(catalog) + ".";
 	}
-	query += duckdb::KeywordHelper::WriteOptionallyQuoted(db_schema) + ".";
-	query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) + " LIMIT 0;";
+	query += duckdb::SQLIdentifier(db_schema) + ".";
+	query += duckdb::SQLIdentifier(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
 	if (success != ADBC_STATUS_OK) {
@@ -550,7 +550,7 @@ static AdbcStatusCode ConnectionSetOptionCurrentValue(duckdb::DuckDBAdbcConnecti
 		return ADBC_STATUS_INVALID_STATE;
 	}
 	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-	std::string query = sql_prefix + duckdb::KeywordHelper::WriteOptionallyQuoted(value);
+	std::string query = sql_prefix + duckdb::SQLIdentifier(value);
 	return ExecuteQuery(conn, query.c_str(), error);
 }
 
@@ -1193,15 +1193,15 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	// the table is automatically placed in the temp catalog.
 	if (!temporary) {
 		if (catalog) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) << ".";
+			create_table << duckdb::SQLIdentifier(catalog) << ".";
 		}
 		if (schema) {
-			create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+			create_table << duckdb::SQLIdentifier(schema) << ".";
 		}
 	}
-	create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) << " (";
+	create_table << duckdb::SQLIdentifier(table_name) << " (";
 	for (idx_t i = 0; i < types.size(); i++) {
-		create_table << duckdb::KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_table << duckdb::SQLIdentifier(names[i]);
 		create_table << " " << types[i].ToString();
 		if (i + 1 < types.size()) {
 			create_table << ", ";

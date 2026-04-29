@@ -34,7 +34,7 @@ string LoadInfo::ToString() const {
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
 		if (repo_is_alias) {
-			result += " FROM " + KeywordHelper::WriteOptionallyQuoted(repository);
+			result += " FROM " + SQLIdentifier(repository);
 		} else {
 			result += " FROM " + KeywordHelper::WriteQuoted(repository);
 		}

@@ -34,7 +34,7 @@ string AttachInfo::ToString() const {
 		result += KeywordHelper::WriteQuoted(path, '\'');
 	}
 	if (!name.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
+		result += " AS " + SQLIdentifier(name);
 	}
 	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;

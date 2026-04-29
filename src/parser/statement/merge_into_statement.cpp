@@ -72,7 +72,7 @@ string MergeIntoStatement::ToString() const {
 			auto column = returning_list[i]->ToString();
 			if (!returning_list[i]->GetAlias().empty()) {
 				column +=
-				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+				    StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
 			}
 			result += column;
 		}
@@ -114,7 +114,7 @@ string MergeIntoAction::ToString() const {
 				if (c > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(insert_columns[c]);
+				result += SQLIdentifier(insert_columns[c]);
 			}
 			result += ") ";
 		}
