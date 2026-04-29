@@ -226,7 +226,7 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 
 Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, const Expression &expr) {
 	DataChunk limit_chunk;
-	vector<LogicalType> types {expr.return_type};
+	vector<LogicalType> types {expr.GetReturnType()};
 	auto &allocator = Allocator::Get(context.client);
 	limit_chunk.Initialize(allocator, types);
 	ExpressionExecutor limit_executor(context.client, &expr);

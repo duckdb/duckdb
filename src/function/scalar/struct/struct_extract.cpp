@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	auto &child_type = arguments[0]->return_type;
+	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 		throw ParameterNotResolvedException();
 	}
 
-	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+	if (key_child->GetReturnType().id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
@@ -95,7 +95,7 @@ static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context
                                                           vector<unique_ptr<Expression>> &arguments,
                                                           bool struct_extract) {
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	auto &child_type = arguments[0]->return_type;
+	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}

@@ -23,8 +23,8 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	// Convert the conditions partitions and sorts
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.IsComparison());
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 
 		auto left_cond = cond.LeftReference()->Copy();
 		auto right_cond = cond.RightReference()->Copy();
@@ -913,7 +913,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	vector<LogicalType> prefix_types;
 	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
 		const auto &cond = op.conditions[i];
-		const auto &type = cond.GetLHS().return_type;
+		const auto &type = cond.GetLHS().GetReturnType();
 		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;

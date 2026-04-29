@@ -70,7 +70,7 @@ ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &ex
 			} else {
 				// hive partitioning column - cast the value to the target type
 				result_val = HivePartitioning::GetValue(context, partition_val.key, partition_val.value,
-				                                        bound_colref.return_type);
+				                                        bound_colref.GetReturnType());
 			}
 			expr = make_uniq<BoundConstantExpression>(std::move(result_val));
 		}

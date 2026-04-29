@@ -69,7 +69,6 @@ add_subdirectory(main)
 add_subdirectory(parallel)
 add_subdirectory(storage)
 add_subdirectory(transaction)
-add_subdirectory(verification)
 
 set(DUCKDB_LINK_LIBS
     duckdb_fsst

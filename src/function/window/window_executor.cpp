@@ -50,7 +50,7 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, cons
     : client(client), executor(executor), payload_count(payload_count), partition_mask(partition_mask),
       order_mask(order_mask) {
 	for (const auto &child : executor.wexpr.children) {
-		arg_types.emplace_back(child->return_type);
+		arg_types.emplace_back(child->GetReturnType());
 	}
 }
 

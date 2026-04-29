@@ -121,7 +121,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
-	D_ASSERT(result.GetType().id() == expressions[expr_idx]->return_type.id());
+	D_ASSERT(result.GetType().id() == expressions[expr_idx]->GetReturnType().id());
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -131,12 +131,12 @@ Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expressio
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(context, expr);
 
-	Vector result(expr.return_type);
+	Vector result(expr.GetReturnType());
 	executor.ExecuteExpression(result);
 
 	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
-	D_ASSERT(result_value.type().InternalType() == expr.return_type.InternalType());
+	D_ASSERT(result_value.type().InternalType() == expr.GetReturnType().InternalType());
 	return result_value;
 }
 
@@ -152,10 +152,10 @@ bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Express
 }
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type.id() == vector.GetType().id());
+	D_ASSERT(expr.GetReturnType().id() == vector.GetType().id());
 	vector.Verify(count);
-	if (expr.verification_stats) {
-		expr.verification_stats->Verify(vector, count);
+	if (expr.GetVerificationStats()) {
+		expr.GetVerificationStats()->Verify(vector, count);
 	}
 	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
 		Vector::DebugTransformToDictionary(vector, count);
@@ -244,10 +244,10 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	if (count == 0) {
 		return;
 	}
-	if (result.GetType().id() != expr.return_type.id()) {
+	if (result.GetType().id() != expr.GetReturnType().id()) {
 		throw InternalException(
 		    "ExpressionExecutor::Execute called with a result vector of type %s that does not match expression type %s",
-		    result.GetType(), expr.return_type);
+		    result.GetType(), expr.GetReturnType());
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_BETWEEN:
@@ -297,7 +297,7 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return 0;
 	}
 	D_ASSERT(true_sel || false_sel);
-	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case ExpressionClass::BOUND_BETWEEN:

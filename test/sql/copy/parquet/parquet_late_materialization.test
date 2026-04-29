@@ -46,6 +46,18 @@ explain SELECT i FROM test ORDER BY i LIMIT 2;
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
 
+# projection columns are all already required by the pushed-down filter
+query II
+explain SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+query I
+SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+4
+5
+
 # we cannot do this with volatile expressions
 query II
 explain SELECT * FROM (SELECT i + random() AS i, j, k, l FROM test) ORDER BY i LIMIT 2;

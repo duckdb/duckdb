@@ -142,7 +142,7 @@ public:
 		ExpressionExecutor executor(client);
 		executor.AddExpression(*wexpr.children[0]);
 		DataChunk result;
-		result.Initialize(client, {wexpr.children[0]->return_type});
+		result.Initialize(client, {wexpr.children[0]->GetReturnType()});
 		executor.Execute(input, result);
 
 		return result.GetValue(0, 0);
@@ -150,7 +150,7 @@ public:
 
 	WindowValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : wexpr(wexpr), vec(GetFirstValue(client, input, wexpr), count_t(STANDARD_VECTOR_SIZE)),
-	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.children[0]->return_type) {
+	      sel(STANDARD_VECTOR_SIZE), eval(client), arg(wexpr.children[0]->GetReturnType()) {
 		eval.AddExpression(*wexpr.children[0]);
 	}
 
@@ -190,7 +190,7 @@ unique_ptr<FunctionData> WindowValueExecutor::Bind(BindWindowFunctionInput &inpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->GetReturnType());
 
 	return nullptr;
 }
@@ -373,7 +373,7 @@ public:
 
 	static bool ComputeDefault(ClientContext &client, const BoundWindowExpression &wexpr, Value &result) {
 		if (wexpr.children.size() < 3) {
-			result = Value(wexpr.return_type);
+			result = Value(wexpr.GetReturnType());
 			return true;
 		}
 
@@ -382,11 +382,11 @@ public:
 			return false;
 		}
 		auto dflt_value = ExpressionExecutor::EvaluateScalar(client, *default_expr);
-		return dflt_value.DefaultTryCastAs(wexpr.return_type, result, nullptr, false);
+		return dflt_value.DefaultTryCastAs(wexpr.GetReturnType(), result, nullptr, false);
 	}
 
 	WindowLeadLagStreamingState(ClientContext &context, const BoundWindowExpression &wexpr)
-	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.return_type), temp(wexpr.return_type),
+	    : wexpr(wexpr), executor(context, *wexpr.children[0]), prev(wexpr.GetReturnType()), temp(wexpr.GetReturnType()),
 	      sel(STANDARD_VECTOR_SIZE) {
 		ComputeOffset(context, wexpr, offset);
 		ComputeDefault(context, wexpr, dflt);
@@ -821,7 +821,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 			result.Reference(prev);
 		} else {
 			auto &sel = sstate.sel;
-			Vector split(wexpr.children[0]->return_type);
+			Vector split(wexpr.children[0]->GetReturnType());
 			split.SetValue(0, prev.GetValue(0));
 			sel_t s = 0;
 			for (sel_t i = 0; i < count; ++i) {
@@ -937,7 +937,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 			VectorOperations::Copy(arg, result, count, 0, 0);
 		} else {
 			//	Copy the data as it may be a reference to the argument
-			Vector copy(wexpr.children[0]->return_type);
+			Vector copy(wexpr.children[0]->GetReturnType());
 			VectorOperations::Copy(arg, copy, count, 0, 0);
 			//	Overwrite the previous non-NULL value if the first one is NULL
 			if (!validity.RowIsValidUnsafe(0)) {
@@ -1054,7 +1054,7 @@ public:
 	}
 	WindowNthValueStreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
 	    : WindowValueStreamingState(client, input, wexpr) {
-		vec.SetValue(0, Value(wexpr.return_type));
+		vec.SetValue(0, Value(wexpr.GetReturnType()));
 		ComputeNthIndex(client, wexpr, nth_index);
 	}
 
@@ -1113,7 +1113,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	const auto &validity = unified.validity;
 
 	//	Split the result between NULLs and the Nth Value
-	Vector split(wexpr.children[0]->return_type, 2);
+	Vector split(wexpr.children[0]->GetReturnType(), 2);
 	sel_t s = 0;
 	split.SetValue(s, vec.GetValue(0));
 
@@ -1228,7 +1228,7 @@ struct WindowFillExecutor : public WindowValueExecutor {
 };
 
 template <class TO, class FROM>
-TO LossyFillCast(FROM val) {
+static TO LossyFillCast(FROM val) {
 	return LossyNumericCast<TO, FROM>(val);
 }
 
@@ -1396,7 +1396,7 @@ static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
 typedef bool (*fill_value_t)(idx_t i, WindowCursor &cursor);
 
 template <typename T>
-bool FillValueFunction(idx_t row_idx, WindowCursor &cursor) {
+static bool FillValueFunction(idx_t row_idx, WindowCursor &cursor) {
 	return !cursor.CellIsNull(0, row_idx) && Value::IsFinite(cursor.GetCell<T>(0, row_idx));
 }
 
@@ -1455,7 +1455,7 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 	const auto &arguments = input.GetArguments();
 
 	//	Check FILL arguments support subtraction
-	if (!IsFillType(arguments[0]->return_type)) {
+	if (!IsFillType(arguments[0]->GetReturnType())) {
 		throw BinderException("FILL argument must support subtraction");
 	}
 
@@ -1476,11 +1476,11 @@ unique_ptr<FunctionData> WindowFillExecutor::Bind(BindWindowFunctionInput &input
 		D_ASSERT(!orders.empty());
 		auto &order_expr = orders[0].expression;
 		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->return_type;
+		order_type = bound->GetReturnType();
 	} else {
 		auto &order_expr = arg_orders[0].expression;
 		auto &bound = BoundExpression::GetExpression(*order_expr);
-		order_type = bound->return_type;
+		order_type = bound->GetReturnType();
 	}
 	if (!IsFillType(order_type)) {
 		throw BinderException("FILL ordering must support subtraction");
@@ -1632,15 +1632,15 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	idx_t next_valid = DConstants::INVALID_INDEX;
 
 	const auto &wexpr = gfstate.executor.wexpr;
-	auto interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->return_type);
-	auto value_func = GetFillValueFunction(wexpr.children[0]->return_type);
+	auto interpolate_func = GetFillInterpolateFunction(wexpr.children[0]->GetReturnType());
+	auto value_func = GetFillValueFunction(wexpr.children[0]->GetReturnType());
 
 	//	Secondary sort - use the MSTs
 	if (gfstate.value_tree) {
 		//	Roughly what we need to do is find the previous and next non-null values
 		//	with non-null ordering values. This is essentially LEAD/LAG(IGNORE NULLS)
-		auto slope_func = GetFillSlopeFunction(wexpr.arg_orders[0].expression->return_type);
-		auto order_value_func = GetFillValueFunction(wexpr.arg_orders[0].expression->return_type);
+		auto slope_func = GetFillSlopeFunction(wexpr.arg_orders[0].expression->GetReturnType());
+		auto order_value_func = GetFillValueFunction(wexpr.arg_orders[0].expression->GetReturnType());
 		auto &frames = lfstate.frames;
 		frames.resize(1);
 		auto &frame = frames[0];
@@ -1751,8 +1751,8 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	auto valid_begin = FlatVector::GetData<const idx_t>(bounds.data[VALID_BEGIN]);
 	auto valid_end = FlatVector::GetData<const idx_t>(bounds.data[VALID_END]);
 	idx_t prev_partition = DConstants::INVALID_INDEX;
-	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->return_type);
-	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->return_type);
+	auto slope_func = GetFillSlopeFunction(wexpr.orders[0].expression->GetReturnType());
+	auto order_value_func = GetFillValueFunction(wexpr.orders[0].expression->GetReturnType());
 
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		//	Did we change partitions?

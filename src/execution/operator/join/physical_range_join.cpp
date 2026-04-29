@@ -25,7 +25,7 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(ExecutionContext &context,
 		const auto &expr = child ? cond.GetRHS() : cond.GetLHS();
 		executor.AddExpression(expr);
 
-		types.push_back(expr.return_type);
+		types.push_back(expr.GetReturnType());
 	}
 	auto &allocator = Allocator::Get(context.client);
 	keys.Initialize(allocator, types);
@@ -80,7 +80,7 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &client,
 	vector<LogicalType> input_types;
 	for (const auto &order_by : order_bys) {
 		auto order = order_by.Copy();
-		const auto type = order.expression->return_type;
+		const auto type = order.expression->GetReturnType();
 		input_types.emplace_back(type);
 		order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 		orders.emplace_back(std::move(order));
@@ -250,12 +250,12 @@ bool PhysicalRangeJoin::LessThan(const JoinCondition &a, const JoinCondition &b)
 	const auto a_left = a.GetLeftStats() ? a.GetLeftStats()->GetDistinctCount() : 0;
 	const auto a_right = a.GetRightStats() ? a.GetRightStats()->GetDistinctCount() : 0;
 	const auto a_min = MinValue(a_left, a_right);
-	const auto a_type = a.GetRHS().return_type.InternalType();
+	const auto a_type = a.GetRHS().GetReturnType().InternalType();
 
 	const auto b_left = b.GetLeftStats() ? b.GetLeftStats()->GetDistinctCount() : 0;
 	const auto b_right = b.GetRightStats() ? b.GetRightStats()->GetDistinctCount() : 0;
 	const auto b_min = MinValue(b_left, b_right);
-	const auto b_type = b.GetRHS().return_type.InternalType();
+	const auto b_type = b.GetRHS().GetReturnType().InternalType();
 
 	switch (a.GetComparisonType()) {
 	case ExpressionType::COMPARE_LESSTHAN:
