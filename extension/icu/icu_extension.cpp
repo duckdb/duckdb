@@ -225,7 +225,7 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 		return tz;
 	}
 
-	//	Map UTC±NN00 to Etc/UTC±N
+	//	Map UTC±NN00 to Etc/GMT±N
 	do {
 		if (tz_str.size() <= 4) {
 			break;
@@ -234,63 +234,34 @@ unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
 			break;
 		}
 
+		//	Parse the offset, allowing single digits
 		idx_t pos = 3;
-		const auto utc = tz_str[pos++];
+		int hh, mm, ss;
+		if (!Timestamp::TryParseUTCOffset(tz_str.data(), pos, tz_str.size(), hh, mm, ss, false)) {
+			break;
+		}
+		if (pos < tz_str.size() || mm || ss) {
+			break;
+		}
+
 		// Invert the sign (UTC and Etc use opposite sign conventions)
 		// https://en.wikipedia.org/wiki/Tz_database#Area
-		auto sign = utc;
-		if (utc == '+') {
-			sign = '-';
-			;
-		} else if (utc == '-') {
-			sign = '+';
-		} else {
-			break;
-		}
+		hh = -hh;
 
-		// Collect remaining characters (digits and colons)
-		string remainder;
-		for (; pos < tz_str.size(); ++pos) {
-			const auto ch = tz_str[pos];
-			if (ch != ':' && !StringUtil::CharacterIsDigit(ch)) {
-				break;
-			}
-			remainder += ch;
-		}
-		if (pos < tz_str.size()) {
-			break;
-		}
-
-		// Step 1: Strip leading zeros
-		idx_t start = 0;
-		while (start < remainder.size() && remainder[start] == '0') {
-			++start;
-		}
-		remainder = remainder.substr(start);
-
-		// Step 2: Parse hours based on whether colon is present
-		string hours_str;
-		auto colon_idx = remainder.find(':');
-		if (colon_idx != string::npos) {
-			// Has colon: split by colon, part before colon is hours
-			hours_str = remainder.substr(0, colon_idx);
-		} else if (remainder.size() <= 2) {
-			// 1-2 digits: entire string is hours
-			hours_str = remainder;
-		} else {
-			// No colon, 3+ digits: HHMM format, last 2 are minutes, rest are hours
-			hours_str = remainder.substr(0, remainder.size() - 2);
-		}
-
-		// Build the mapped timezone string
+		// Build the mapped timezone string with single digit hour offsets
 		string mapped = "Etc/GMT";
-		if (hours_str.empty()) {
-			// Zero offset
-			mapped += "+0";
+		if (hh < 0) {
+			mapped += "-";
+			hh = -hh;
 		} else {
-			mapped += sign;
-			mapped += hours_str;
+			mapped += "+";
 		}
+		if (hh >= 10) {
+			mapped += UnsafeNumericCast<char>('0' + hh / 10);
+			hh %= 10;
+		}
+		mapped += UnsafeNumericCast<char>('0' + hh);
+
 		// Final sanity check
 		if (tz = GetKnownTimeZone(mapped)) {
 			tz_str = mapped;

@@ -227,7 +227,8 @@ public:
 	DUCKDB_API static time_t ToTimeT(timestamp_t);
 	DUCKDB_API static timestamp_t FromTimeT(time_t);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss,
+	                                         bool strict = true);
 
 	DUCKDB_API static string FormatError(const string &str);
 	DUCKDB_API static string FormatError(string_t str);
