@@ -579,7 +579,8 @@ static unique_ptr<Expression> ConstructMapExpression(ClientContext &context, Mul
                                                      ColumnMapResult &mapping, const LogicalType &global_column_type,
                                                      const LogicalType &local_column_type, bool is_trivially_mappable) {
 	unique_ptr<Expression> expr = make_uniq<BoundReferenceExpression>(local_column_type, local_idx.GetIndex());
-	const bool can_use_remap_struct = global_column_type.IsNested() &&
+	const bool can_use_remap_struct =
+	    global_column_type.IsNested() &&
 	    (mapping.column_map.IsNull() || mapping.column_map.type().id() == LogicalTypeId::STRUCT) &&
 	    !is_trivially_mappable && local_column_type.IsNested();
 	if (!can_use_remap_struct) {
