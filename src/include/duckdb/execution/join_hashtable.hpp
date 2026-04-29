@@ -47,16 +47,6 @@ private:
 	JoinHTScanState(const JoinHTScanState &) = delete;
 };
 
-//! Threshold constants gating small-build-side dictionary emission
-struct DictionaryEmissionActivation {
-	//! Caps the dict_arrays allocation; 8 MiB keeps them in L3 and bounds aux_next_ptrs
-	static constexpr idx_t MAX_BUILD_PAYLOAD_BYTES = 8ULL * 1024ULL * 1024ULL;
-	//! Below this, dictionary-emission setup is not amortized by probe-side savings
-	static constexpr idx_t MIN_PROBE_ROWS = 262144;
-	//! Below this ratio, per-row savings are unlikely to amortize the setup cost
-	static constexpr idx_t PROBE_BUILD_RATIO = 100;
-};
-
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
    The JoinHashTable concatenates incoming chunks inside a linked list of
@@ -250,10 +240,10 @@ public:
 	inline data_ptr_t GetNextPointer(data_ptr_t row_ptr) const {
 		if (USE_DICT_EMISSION) {
 			if (!chains_longer_than_one) {
-				// aux_next_ptrs is empty in this case
+				// aux_next_ptrs is unallocated in this case
 				return nullptr;
 			}
-			return aux_next_ptrs[Load<uint32_t>(row_ptr + pointer_offset)];
+			return aux_next_ptrs_data[Load<uint32_t>(row_ptr + pointer_offset)];
 		}
 		return cast_uint64_to_pointer(Load<uint64_t>(row_ptr + pointer_offset));
 	}
@@ -354,8 +344,10 @@ public:
 	bool use_dict_emission = false;
 	//! Pre-materialized columnar data, one entry per RHS output column
 	vector<buffer_ptr<DictionaryEntry>> dict_arrays;
-	//! Saved NEXT_PTR values, indexed by dict index; only populated when chains_longer_than_one
-	vector<data_ptr_t> aux_next_ptrs;
+	//! Saved NEXT_PTR values, indexed by dict index; only allocated when chains_longer_than_one
+	AllocatedData aux_next_ptrs;
+	//! Typed pointer into aux_next_ptrs; set by BuildDictionaryArrays alongside the allocation
+	data_ptr_t *aux_next_ptrs_data = nullptr;
 
 	//! Total bytes the dict_arrays allocation would cost for the given RHS output types
 	idx_t ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const;

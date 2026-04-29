@@ -2032,6 +2032,16 @@ void ProbeSpill::PrepareNextProbe() {
 //===--------------------------------------------------------------------===//
 // Small Build Side Dictionary Emission
 //===--------------------------------------------------------------------===//
+//! Threshold constants gating small-build-side dictionary emission
+struct DictionaryEmissionActivation {
+	//! Caps the dict_arrays allocation; 8 MiB keeps them in L3 and bounds aux_next_ptrs
+	static constexpr idx_t MAX_BUILD_PAYLOAD_BYTES = 8ULL * 1024ULL * 1024ULL;
+	//! Below this, dictionary-emission setup is not amortized by probe-side savings
+	static constexpr idx_t MIN_PROBE_ROWS = 262144;
+	//! Below this ratio, per-row savings are unlikely to amortize the setup cost
+	static constexpr idx_t PROBE_BUILD_RATIO = 100;
+};
+
 idx_t JoinHashTable::ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const {
 	idx_t payload_bytes_per_row = 0;
 	for (const auto &type : rhs_output_types) {
@@ -2137,9 +2147,10 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 
 	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
 	if (chains_longer_than_one) {
-		aux_next_ptrs.resize(build_count);
+		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
+		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
 		for (idx_t i = 0; i < build_count; i++) {
-			aux_next_ptrs[i] = LoadPointer(row_ptrs[i] + pointer_offset);
+			aux_next_ptrs_data[i] = LoadPointer(row_ptrs[i] + pointer_offset);
 		}
 	}
 
