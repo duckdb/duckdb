@@ -287,7 +287,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 				auto func = GetCatalogEntry(function.catalog, INVALID_SCHEMA, function_lookup,
 												OnEntryNotFound::RETURN_NULL);
 				// todo, loop through catalog entries
-				if (func && func->extension_name == extension_name) {
+				if (func && func->extension_name == extension_name && func->extension_alias == function.schema) {
 					function.schema = INVALID_SCHEMA;
 					return func;
 				}

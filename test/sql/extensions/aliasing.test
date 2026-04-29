@@ -2,6 +2,11 @@
 # description: Aliasing of extensions, and puts it in a separate extension schema
 # group: [extensions]
 
+# Note that this behavior is subject to change
+# When we register extensions in a separate extension schema
+
+# TODO, also test, what if schema == extension name??
+
 require skip_reload
 
 require allow_unsigned_extensions
@@ -15,7 +20,7 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_
 ----
 Alias 'demo' already exists for extension 'loadable_extension_demo'
 
-# unqualified call works when only one binary is loaded
+# unqualified call works
 query I
 SELECT bounded_max(1::BOUNDED(10))
 ----
@@ -46,7 +51,7 @@ Referenced column "xxx" was not found because the FROM clause is missing
 statement error
 SELECT copy.bounded_max(1::BOUNDED(10))
 ----
-some error
+Referenced column "copy" was not found because the FROM clause is missing
 
 # the original alias still routes to its own binary's function
 query I

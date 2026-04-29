@@ -1,22 +1,32 @@
 set(PARAMETERS "-warnings")
 
-build_loadable_extension_directory(
-  loadable_extension_demo
-  "CPP"
-  test/extension
-  "default-version"
-  ""
-  ${PARAMETERS}
-  loadable_extension_demo.cpp)
-
 #build_loadable_extension_directory(
 #  loadable_extension_demo
 #  "CPP"
-#  test/extension/copy
+#  test/extension
 #  "default-version"
 #  ""
 #  ${PARAMETERS}
-#  loadable_extension_demo_alt.cpp)
+#  loadable_extension_demo.cpp)
+
+build_loadable_extension_directory(
+  loadable_extension_demo
+  "CPP"
+  test/extension/copy
+  "default-version"
+  ""
+  ${PARAMETERS}
+  loadable_extension_demo_alt.cpp)
+#
+#set_target_properties(loadable_extension_demo_loadable_extension PROPERTIES
+#        OUTPUT_NAME "loadable_extension_demo"
+#        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test/extension/copy
+#)
+#
+set_target_properties(loadable_extension_demo_loadable_extension PROPERTIES
+        OUTPUT_NAME "loadable_extension_demo"
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/test/extension/copy
+)
 
 if(NOT WIN32 AND NOT SUN)
   add_definitions(-DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
