@@ -159,8 +159,8 @@ struct AllowCommunityExtensionsSetting {
 struct AllowDoubleExtensionLoadingSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allow_double_extension_loading";
-	static constexpr const char *Description =
-	    "Allow loading the same extension binary twice under different aliases, prefixing functions with the alias name";
+	static constexpr const char *Description = "Allow loading the same extension binary twice under different aliases, "
+	                                           "prefixing functions with the alias name";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr const char *DefaultValue = "false";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;

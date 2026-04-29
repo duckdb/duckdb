@@ -129,11 +129,11 @@ string ExtensionManager::GetActiveLoadPrefix() {
 // }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {
-
 	if (!options.alias.empty()) {
 		if (external_aliases.find(options.alias) != external_aliases.end()) {
 			auto original_extension_name = external_aliases[options.alias];
-			throw InvalidInputException("Alias '%s' already exists for extension '%s'", options.alias, original_extension_name);
+			throw InvalidInputException("Alias '%s' already exists for extension '%s'", options.alias,
+			                            original_extension_name);
 		}
 	}
 
