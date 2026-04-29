@@ -36,6 +36,7 @@ jobs:
           TARGET=$(git log -1 --format=%h)
           mkdir to_be_uploaded
           rclone copy \
+            --no-traverse \
             ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release/" \
             to_be_uploaded/
 
@@ -50,6 +51,7 @@ jobs:
        run: |
          python3 scripts/asset-upload-gha.py to_be_uploaded/*
          rclone copy \
+           --no-traverse \
            --header-upload "Content-Type: application/octet-stream" \
            to_be_uploaded/ \
            ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-install/${{ inputs.target_git_describe }}/"
