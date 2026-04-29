@@ -837,10 +837,9 @@ LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
 ColDefOrExpr <- ColDefAndExpr ('OR' ColDefAndExpr)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
-ColDefAndExpr <- ColDefNotExpr ('AND' ColDefNotExpr)*
+ColDefAndExpr <- IsDistinctFromExpression ('AND' IsDistinctFromExpression)*
 # LEVEL 3
 LogicalNotExpression <- 'NOT'* IsExpression
-ColDefNotExpr <- 'NOT'* IsDistinctFromExpression
 # LEVEL 4
 IsExpression <- IsDistinctFromExpression IsTest*
 IsTest <- IsLiteral / NotNull / IsNull
