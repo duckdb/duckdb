@@ -32,13 +32,29 @@ inline duckdb_re2::StringPiece CreateStringPiece(const string_t &input) {
 	return duckdb_re2::StringPiece(input.GetData(), input.GetSize());
 }
 
-inline string_t Extract(const string_t &input, StringHeap &heap, const RE2 &re, const duckdb_re2::StringPiece &rewrite,
-                        bool no_match_returns_input = false) {
-	string extracted;
-	if (!RE2::Extract(input.GetString(), re, rewrite, &extracted) && no_match_returns_input) {
-		return input;
+// Zero-copy slice of capture group `group_index` from `input`'s buffer; caller must call
+// StringVector::AddHeapReference(result, source) first. check_remainder_newline=true rejects
+// matches whose remainder contains `\n` (used after a trailing `.*$` has been stripped).
+inline string_t Extract(const string_t &input, const RE2 &re, int8_t group_index, bool no_match_returns_input,
+                        bool check_remainder_newline = false) {
+	if (group_index < 0 || group_index > re.NumberOfCapturingGroups()) {
+		return no_match_returns_input ? input : string_t(nullptr, 0);
 	}
-	return heap.AddString(extracted.c_str(), extracted.size());
+	duckdb_re2::StringPiece in_piece(input.GetData(), input.GetSize());
+	duckdb_re2::StringPiece submatch[10];
+	const int nsubmatch = group_index + 1;
+	if (re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::UNANCHORED, submatch, nsubmatch)) {
+		if (check_remainder_newline) {
+			const char *match_end = submatch[0].data() + submatch[0].size();
+			const char *input_end = in_piece.data() + in_piece.size();
+			const auto remainder = static_cast<size_t>(input_end - match_end);
+			if (std::memchr(match_end, '\n', remainder) != nullptr) {
+				return no_match_returns_input ? input : string_t(nullptr, 0);
+			}
+		}
+		return string_t(submatch[group_index].data(), UnsafeNumericCast<uint32_t>(submatch[group_index].size()));
+	}
+	return no_match_returns_input ? input : string_t(nullptr, 0);
 }
 
 } // namespace regexp_util
@@ -114,16 +130,17 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 struct RegexpExtractBindData : public RegexpBaseBindData {
 	RegexpExtractBindData();
 	RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                      string group_string, bool no_match_returns_input = false, bool trim_dotstar_dollar = false);
+	                      int8_t group_index, bool no_match_returns_input = false, bool trim_dotstar_dollar = false);
 
-	string group_string;
-	duckdb_re2::StringPiece rewrite;
+	// `regexp_extract` always extracts a single capture group. -1 represents "no group requested"
+	// (e.g. NULL group argument), which the runtime treats as a no-match (returns empty/input).
+	int8_t group_index = 0;
 	// On no match, return the input instead of an empty string (set via the `k` option, also used by
 	// the regexp_replace -> regexp_extract optimizer rewrite).
 	bool no_match_returns_input = false;
 	// Set only by the regexp_replace -> regexp_extract optimizer rewrite when it strips a trailing
-	// `.*$` from the pattern. The runtime fast path then rejects matches whose remainder contains a
-	// newline to preserve the original pattern's end-of-text semantics under default options.
+	// `.*$` from the pattern. The runtime then rejects matches whose remainder contains a newline
+	// to preserve the original pattern's end-of-text semantics under default options.
 	// Round-trips via the regexp_extract custom serialize callbacks.
 	bool trim_dotstar_dollar = false;
 
