@@ -5,8 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-# The trigonometric functions can result in -nan
-statement error
+# The trigonometric functions can result in -nan when IEEE floating point ops are enabled
+query I
 SELECT SIN(1e1000);
 ----
-<REGEX>:Out of Range Error.*for numeric function.*
+nan

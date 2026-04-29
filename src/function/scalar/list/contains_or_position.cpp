@@ -9,14 +9,13 @@ namespace duckdb {
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::SetNull(result, count_t(input.size()));
 		return;
 	}
 
 	auto target_count = input.size();
 	auto &input_list = input.data[0];
-	auto &list_child = ListVector::GetEntry(input_list);
+	auto &list_child = ListVector::GetChildMutable(input_list);
 	auto &target = input.data[1];
 
 	ListSearchOp<RETURN_TYPE, FIND_NULLS>(input_list, list_child, target, result, target_count);

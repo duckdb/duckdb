@@ -124,15 +124,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 			auto &tz_vec = input.data.back();
 			if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				if (ConstantVector::IsNull(tz_vec)) {
-					result.SetVectorType(VectorType::CONSTANT_VECTOR);
-					ConstantVector::SetNull(result, true);
-				} else {
-					SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-					VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
-					    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
-						    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
-					    });
+					throw InternalException("ICUMakeTimestamp called with constant NULL tz");
 				}
+				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
+				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
+				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
+					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
+				    });
 			} else {
 				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double, string_t>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss, string_t tz_id) {

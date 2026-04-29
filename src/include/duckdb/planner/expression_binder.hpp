@@ -32,6 +32,7 @@ class QueryNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
+class WindowFunctionCatalogEntry;
 class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
@@ -218,6 +219,7 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
@@ -225,6 +227,7 @@ protected:
 	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
+	virtual string UnsupportedWindowMessage();
 	virtual string UnsupportedUnnestMessage();
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);

@@ -25,6 +25,7 @@ class BlockManager;
 class ColumnData;
 class DatabaseInstance;
 class DataTable;
+class DuckTableEntry;
 class PartialBlockManager;
 struct DataTableInfo;
 class ExpressionExecutor;
@@ -47,6 +48,7 @@ struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
 class RowVersionManager;
+class CommitDropState;
 class ScanFilterInfo;
 class StorageCommitState;
 template <class T>
@@ -77,6 +79,7 @@ struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
+	vector<bool> keep_column_loaded;
 	bool reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
 	optional_idx write_count;
@@ -122,8 +125,12 @@ public:
 	                               ExpressionExecutor &executor, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
+	//! Accumulates this row group's on-disk blocks into the drop state.
+	void CommitDrop(CommitDropState &drop_state);
+	//! Accumulates the given column's on-disk blocks into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Drops every column's on-disk blocks and marks them as modified immediately.
 	void CommitDrop();
-	void CommitDropColumn(const idx_t column_index);
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
@@ -158,7 +165,8 @@ public:
 	void CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count);
 
 	//! Delete the given set of rows in the version manager
-	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count, idx_t row_group_start);
+	idx_t Delete(TransactionData transaction, DuckTableEntry &table_entry, row_t *row_ids, idx_t count,
+	             idx_t row_group_start);
 
 	static vector<RowGroupWriteData> WriteToDisk(RowGroupWriteInfo &info,
 	                                             const vector<const_reference<RowGroup>> &row_groups);
@@ -167,6 +175,9 @@ public:
 	RowGroupWriteData WriteToDisk(RowGroupWriteInfo &info) const;
 	//! Returns the number of committed rows (count - committed deletes)
 	idx_t GetCommittedRowCount();
+	//! Returns the number of rows visible to the given transaction
+	idx_t GetVisibleRowCount(TransactionData transaction);
+	bool CanReuseMetadata(RowGroupWriter &writer) const;
 	RowGroupWriteData WriteToDisk(RowGroupWriter &writer);
 	RowGroupPointer Checkpoint(RowGroupWriteData write_data, RowGroupWriter &writer, TableStatistics &global_stats,
 	                           idx_t row_group_start);
@@ -176,11 +187,11 @@ public:
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
-	void Update(TransactionData transaction, DataTable &data_table, DataChunk &updates, row_t *ids, idx_t offset,
+	void Update(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates, row_t *ids, idx_t offset,
 	            idx_t count, const vector<PhysicalIndex> &column_ids, idx_t row_group_start);
 	//! Update a single column; corresponds to DataTable::UpdateColumn
 	//! This method should only be called from the WAL
-	void UpdateColumn(TransactionData transaction, DataTable &data_table, DataChunk &updates, Vector &row_ids,
+	void UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates, Vector &row_ids,
 	                  idx_t offset, idx_t count, const vector<column_t> &column_path, idx_t row_group_start);
 
 	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
@@ -226,7 +237,10 @@ private:
 	ColumnData &GetColumn(const StorageIndex &c) const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 	void LoadRowIdColumnData() const;
+	void LoadRowNumberColumnData() const;
 	void SetCount(idx_t count);
+	bool ColumnIsLoaded(storage_t c) const;
+	void UnloadColumn(storage_t c);
 
 	bool HasUnloadedDeletes() const;
 
@@ -244,6 +258,10 @@ private:
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)
 	mutable atomic<bool> row_id_is_loaded;
+	//! The row number column data (mutable because `const` can lazy load)
+	mutable unique_ptr<ColumnData> row_number_column_data;
+	//! Whether or not `row_number_column_data` is loaded (mutable because `const` can lazy load)
+	mutable atomic<bool> row_number_is_loaded;
 	atomic<bool> has_changes;
 };
 

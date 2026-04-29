@@ -26,7 +26,7 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 
 	for (idx_t arg_idx = 1; arg_idx < func_args.size(); arg_idx++) {
 		auto &new_child = func_args[arg_idx];
-		new_entries.emplace(new_child->alias, arg_idx);
+		new_entries.emplace(new_child->GetAlias(), arg_idx);
 	}
 
 	// Assign the original child entries to the STRUCT.
@@ -53,12 +53,13 @@ static void StructUpdateFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw InvalidInputException("Missing required arguments for struct_update function.");
 	}
-	if (LogicalTypeId::STRUCT != arguments[0]->return_type.id()) {
+	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_update must be a STRUCT");
 	}
 	if (arguments.size() < 2) {
@@ -66,33 +67,33 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	}
 
 	child_list_t<LogicalType> new_children;
-	auto &existing_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
-	auto incomming_children = case_insensitive_tree_t<idx_t>();
+	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
-	// Validate incomming arguments and record names
+	// Validate incoming arguments and record names
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		auto &child = arguments[arg_idx];
-		if (child->alias.empty()) {
+		if (child->GetAlias().empty()) {
 			throw BinderException("Need named argument for struct update, e.g., a := b");
-		} else if (incomming_children.find(child->alias) != incomming_children.end()) {
-			throw InvalidInputException("Duplicate named argument provided for %s", child->alias.c_str());
+		} else if (incoming_children.find(child->GetAlias()) != incoming_children.end()) {
+			throw InvalidInputException("Duplicate named argument provided for %s", child->GetAlias().c_str());
 		}
-		incomming_children.emplace(child->alias, arg_idx);
+		incoming_children.emplace(child->GetAlias(), arg_idx);
 	}
 
 	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
 		auto &existing_child = existing_children[field_idx];
-		auto update = incomming_children.find(existing_child.first);
-		if (update == incomming_children.end()) {
+		auto update = incoming_children.find(existing_child.first);
+		if (update == incoming_children.end()) {
 			// No update provided for the named value
 			new_children.push_back(make_pair(existing_child.first, existing_child.second));
 		} else {
 			// Update the struct with the new data of the same name
 			auto arg_idx = update->second;
 			auto &new_child = arguments[arg_idx];
-			new_children.push_back(make_pair(new_child->alias, new_child->return_type));
+			new_children.push_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -101,7 +102,7 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
 			auto &child = arguments[arg_idx];
-			new_children.push_back(make_pair(child->alias, child->return_type));
+			new_children.push_back(make_pair(child->GetAlias(), child->GetReturnType()));
 		}
 	}
 
@@ -109,17 +110,17 @@ static unique_ptr<FunctionData> StructUpdateBind(ClientContext &context, ScalarF
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
-unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 
-	auto incomming_children = case_insensitive_tree_t<idx_t>();
+	auto incoming_children = case_insensitive_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.children.size(), true);
-	auto new_stats = StructStats::CreateUnknown(expr.return_type);
+	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
 
 	for (idx_t arg_idx = 1; arg_idx < expr.children.size(); arg_idx++) {
 		auto &new_child = expr.children[arg_idx];
-		incomming_children.emplace(new_child->alias, arg_idx);
+		incoming_children.emplace(new_child->GetAlias(), arg_idx);
 	}
 
 	auto existing_type = child_stats[0].GetType();
@@ -127,8 +128,8 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
 	for (idx_t field_idx = 0; field_idx < existing_count; field_idx++) {
 		auto &existing_child = existing_stats[field_idx];
-		auto update = incomming_children.find(StructType::GetChildName(existing_type, field_idx));
-		if (update == incomming_children.end()) {
+		auto update = incoming_children.find(StructType::GetChildName(existing_type, field_idx));
+		if (update == incoming_children.end()) {
 			StructStats::SetChildStats(new_stats, field_idx, existing_child);
 		} else {
 			auto arg_idx = update->second;
@@ -147,9 +148,9 @@ unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, FunctionSta
 }
 
 ScalarFunction StructUpdateFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, nullptr, StructUpdateStats);
+	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

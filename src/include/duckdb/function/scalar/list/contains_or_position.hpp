@@ -26,8 +26,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<RETURN_TYPE>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
 
 	idx_t total_matches = 0;
 
@@ -36,7 +35,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 		// The entire list is NULL, the result is also NULL.
 		if (!list_format.validity.RowIsValid(list_entry_idx)) {
-			result_validity.SetInvalid(row_idx);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -49,10 +48,10 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		if (finished || list_entries[list_entry_idx].length == 0) {
 			if (finished || return_pos) {
 				// Return NULL as the position.
-				result_validity.SetInvalid(row_idx);
+				result_data.WriteNull();
 			} else {
 				// Set 'contains' to false.
-				result_data[row_idx] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
@@ -61,6 +60,7 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 		const auto entry_offset = list_entries[list_entry_idx].offset;
 
 		bool found = false;
+		RETURN_TYPE found_value {};
 
 		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
 			const auto child_entry_idx = child_format.sel->get_index(list_idx);
@@ -72,19 +72,21 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 				found = true;
 				total_matches++;
 				if (return_pos) {
-					result_data[row_idx] = UnsafeNumericCast<int32_t>(1 + list_idx - entry_offset);
+					found_value = UnsafeNumericCast<int32_t>(1 + list_idx - entry_offset);
 				} else {
-					result_data[row_idx] = true;
+					found_value = RETURN_TYPE(true);
 				}
 			}
 		}
 
 		if (!found) {
 			if (return_pos) {
-				result_validity.SetInvalid(row_idx);
+				result_data.WriteNull();
 			} else {
-				result_data[row_idx] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
+		} else {
+			result_data.WriteValue(found_value);
 		}
 	}
 

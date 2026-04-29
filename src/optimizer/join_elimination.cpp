@@ -43,13 +43,13 @@ void JoinElimination::OptimizeChildren(LogicalOperator &op, optional_ptr<Logical
 			break;
 		}
 		column_binding_set_t distinct_group;
-		if (distinct.distinct_targets[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (distinct.distinct_targets[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
 		auto table_idx = distinct.distinct_targets[0]->Cast<BoundColumnRefExpression>().binding.table_index;
 		bool can_add = true;
 		for (auto &target : distinct.distinct_targets) {
-			if (target->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (target->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				can_add = false;
 				break;
 			}

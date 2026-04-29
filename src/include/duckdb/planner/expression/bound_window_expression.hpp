@@ -10,22 +10,26 @@
 
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
-class AggregateFunction;
+
+class BoundAggregateFunction;
+class BoundWindowFunction;
 
 class BoundWindowExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_WINDOW;
 
 public:
-	BoundWindowExpression(ExpressionType type, LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
-	                      unique_ptr<FunctionData> bind_info);
+	BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
+	                      unique_ptr<BoundWindowFunction> window, unique_ptr<FunctionData> bind_info);
 
 	//! The bound aggregate function
-	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<BoundAggregateFunction> aggregate;
+	//! The bound window function
+	unique_ptr<BoundWindowFunction> window;
 	//! The bound function info
 	unique_ptr<FunctionData> bind_info;
 	//! The child expressions of the main window function
@@ -50,9 +54,6 @@ public:
 
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
-	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<Expression> offset_expr;
-	unique_ptr<Expression> default_expr;
 
 	//! The set of argument ordering clauses
 	//! These are distinct from the frame ordering clauses e.g., the "x" in
@@ -84,5 +85,12 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	//! Remove LEAD/LAG offset/default
+	vector<unique_ptr<Expression>> SerializedChildren(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedOffset(Serializer &serializer) const;
+	unique_ptr<Expression> SerializedDefault(Serializer &serializer) const;
 };
+
 } // namespace duckdb

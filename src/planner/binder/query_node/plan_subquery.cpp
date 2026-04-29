@@ -42,7 +42,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		FunctionBinder function_binder(binder);
 		auto count_star =
 		    function_binder.BindAggregateFunction(count_star_fun, {}, nullptr, AggregateType::NON_DISTINCT);
-		auto idx_type = count_star->return_type;
+		auto idx_type = count_star->GetReturnType();
 		vector<unique_ptr<Expression>> aggregate_list;
 		aggregate_list.push_back(std::move(count_star));
 		auto aggregate_index = binder.GenerateTableIndex();
@@ -86,13 +86,13 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// we push an aggregate that returns the FIRST element
 		vector<unique_ptr<Expression>> expressions;
 		auto bound =
-		    make_uniq<BoundColumnRefExpression>(expr.return_type, ColumnBinding(table_idx, ProjectionIndex(0)));
+		    make_uniq<BoundColumnRefExpression>(expr.GetReturnType(), ColumnBinding(table_idx, ProjectionIndex(0)));
 		vector<unique_ptr<Expression>> first_children;
 		first_children.push_back(std::move(bound));
 
 		FunctionBinder function_binder(binder);
 		auto first_agg =
-		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.return_type),
+		    function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(expr.GetReturnType()),
 		                                          std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 
 		expressions.push_back(std::move(first_agg));
@@ -112,9 +112,9 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			// CASE WHEN count > 1 THEN error('Scalar subquery can only return a single row') ELSE first_agg END
 			auto proj_index = binder.GenerateTableIndex();
 
-			auto first_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[0]->return_type,
+			auto first_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[0]->GetReturnType(),
 			                                                     ColumnBinding(aggr_index, ProjectionIndex(0)));
-			auto count_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[1]->return_type,
+			auto count_ref = make_uniq<BoundColumnRefExpression>(plan->expressions[1]->GetReturnType(),
 			                                                     ColumnBinding(aggr_index, ProjectionIndex(1)));
 
 			auto constant_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
@@ -127,7 +127,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			          "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
 			          "previous behavior of returning a random row.")));
 			auto error_expr = function_binder.BindScalarFunction(ErrorFun::GetFunction(), std::move(error_children));
-			error_expr->return_type = first_ref->return_type;
+			error_expr->SetReturnType(first_ref->GetReturnType());
 			auto case_expr =
 			    make_uniq<BoundCaseExpression>(std::move(count_check), std::move(error_expr), std::move(first_ref));
 
@@ -149,7 +149,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
 		                                           ColumnBinding(aggr_index, ProjectionIndex(0)));
 	}
 	default: {
@@ -190,8 +190,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			JoinCondition cond(std::move(expr.children[0]), std::move(struct_expr), expr.comparison_type);
 
 			// push collations
-			ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), cond.GetLHS().return_type);
-			ExpressionBinder::PushCollation(binder.context, cond.RightReference(), cond.GetRHS().return_type);
+			ExpressionBinder::PushCollation(binder.context, cond.LeftReference(), cond.GetLHS().GetReturnType());
+			ExpressionBinder::PushCollation(binder.context, cond.RightReference(), cond.GetRHS().GetReturnType());
 
 			join->conditions.push_back(std::move(cond));
 		} else {
@@ -213,7 +213,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		root = std::move(join);
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
@@ -311,7 +311,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the data element returned by the join
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type, plan_column);
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(), plan_column);
 	}
 	case SubqueryType::EXISTS: {
 		// correlated EXISTS query
@@ -326,7 +326,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(plan));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	default: {
@@ -364,7 +364,7 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 		delim_join->AddChild(std::move(dependent_join));
 		root = std::move(delim_join);
 		// finally push the BoundColumnRefExpression referring to the marker
-		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.return_type,
+		return make_uniq<BoundColumnRefExpression>(expr.GetName(), expr.GetReturnType(),
 		                                           ColumnBinding(mark_index, ProjectionIndex(0)));
 	}
 	}
@@ -392,6 +392,11 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 	}
 }
 
+void RecursiveDependentJoinPlanner::Plan(Binder &binder, LogicalOperator &op) {
+	RecursiveDependentJoinPlanner planner(binder);
+	planner.VisitOperator(op);
+}
+
 unique_ptr<Expression> RecursiveDependentJoinPlanner::VisitReplace(BoundSubqueryExpression &expr,
                                                                    unique_ptr<Expression> *expr_ptr) {
 	return binder.PlanSubquery(expr, root);
@@ -417,8 +422,7 @@ unique_ptr<Expression> Binder::PlanSubquery(BoundSubqueryExpression &expr, uniqu
 	IncreaseDepth();
 	// finally, we recursively plan the nested subqueries (if there are any)
 	if (sub_binder->has_unplanned_dependent_joins) {
-		RecursiveDependentJoinPlanner plan(*this);
-		plan.VisitOperator(*root);
+		RecursiveDependentJoinPlanner::Plan(*this, *root);
 	}
 	return result_expression;
 }

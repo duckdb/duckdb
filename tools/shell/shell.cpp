@@ -1015,6 +1015,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
+			// Reset before bind; the `_` replacement scan sets it to true if it fires.
+			last_result_referenced = false;
 			auto rc = ExecuteStatement(std::move(statement));
 			if (rc != SuccessState::SUCCESS) {
 				return rc;
@@ -1530,7 +1532,7 @@ int shellDeleteFile(const char *zFilename) {
 ** memory used to hold the name of the temp file.
 */
 void ShellState::ClearTempFile() {
-	if (!zTempFile.empty()) {
+	if (zTempFile.empty()) {
 		return;
 	}
 	if (doXdgOpen) {
@@ -1548,26 +1550,22 @@ void ShellState::ClearTempFile() {
 void ShellState::NewTempFile(const char *zSuffix) {
 	ClearTempFile();
 	zTempFile = string();
-	if (zTempFile.empty()) {
-		/* If db is an in-memory database then the TEMPFILENAME file-control
-		** will not work and we will need to fallback to guessing */
-		const char *zTemp;
-		uint64_t r;
-		GenerateRandomBytes(sizeof(r), &r);
-		zTemp = getenv("TEMP");
-		if (zTemp == 0)
-			zTemp = getenv("TMP");
-		if (zTemp == 0) {
+	/* If db is an in-memory database then the TEMPFILENAME file-control
+	** will not work and we will need to fallback to guessing */
+	const char *zTemp;
+	uint64_t r;
+	GenerateRandomBytes(sizeof(r), &r);
+	zTemp = getenv("TEMP");
+	if (zTemp == 0)
+		zTemp = getenv("TMP");
+	if (zTemp == 0) {
 #ifdef _WIN32
-			zTemp = "\\tmp";
+		zTemp = "\\tmp";
 #else
-			zTemp = "/tmp";
+		zTemp = "/tmp";
 #endif
-		}
-		zTempFile = StringUtil::Format("%s/temp%llx.%s", zTemp, r, zSuffix);
-	} else {
-		zTempFile = StringUtil::Format("%z.%s", zTempFile, zSuffix);
 	}
+	zTempFile = StringUtil::Format("%s/temp%llx.%s", zTemp, r, zSuffix);
 	if (zTempFile.empty()) {
 		PrintF(PrintOutput::STDERR, "out of memory\n");
 		ShellState::Exit(1);
@@ -2019,7 +2017,7 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	} else {
 		out = OpenOutputFile(zFile.c_str(), bTxtMode);
 		if (!out) {
-			if (zFile == "off") {
+			if (zFile != "off") {
 				PrintF(PrintOutput::STDERR, "Error: cannot write to \"%s\"\n", zFile.c_str());
 			}
 			out = stdout;
@@ -3349,6 +3347,11 @@ int RunShell(int argc, const char **argv) {
 			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
+#if !defined(_WIN32) && !defined(WIN32)
+	signal(SIGINT, SIG_IGN);
+#else
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
+#endif
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();

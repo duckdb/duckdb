@@ -13,168 +13,217 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/size.hpp"
 
 namespace duckdb {
 
 class BufferHandle;
+struct LogicalType;
+struct ResizeInfo;
+struct UnifiedVectorFormat;
 class VectorBuffer;
 class Vector;
+struct ValidityMask;
+struct SelCache;
 
 enum class VectorBufferType : uint8_t {
-	STANDARD_BUFFER,     // standard buffer, holds a single array of data
-	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
-	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
-	STRING_BUFFER,       // string buffer, holds a string heap
-	FSST_BUFFER,         // fsst compressed string buffer, holds a string heap, fsst symbol table and a string count
-	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
-	LIST_BUFFER,         // list buffer, holds a single flatvector child
-	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
-	OPAQUE_BUFFER,       // opaque buffer, can be created for example by the parquet reader
-	ARRAY_BUFFER,        // array buffer, holds a single flatvector child
-	SHREDDED_BUFFER      // holds data for a shredded variant vector
+	STANDARD_BUFFER,   // VectorType::FLAT/CONSTANT - Fixed-Size Type - Holds a single array of data
+	STRING_BUFFER,     // VectorType::FLAT/CONSTANT - String          - Holds string_t array and StringHeap
+	STRUCT_BUFFER,     // VectorType::FLAT/CONSTANT - Struct          - Holds struct child vectors
+	LIST_BUFFER,       // VectorType::FLAT/CONSTANT - List            - Holds list_entry_t array and list child vector
+	ARRAY_BUFFER,      // VectorType::FLAT/CONSTANT - Array           - Holds array child vector
+	DICTIONARY_BUFFER, // VectorType::DICTIONARY    - Any             - Holds SelectionVector and dict child vector
+	FSST_BUFFER,       // VectorType::FSST          - String          - Holds string_t array, StringHeap and FSST table
+	SHREDDED_BUFFER,   // VectorType::SHREDDED      - Variant         - Holds shredded variant
+	SEQUENCE_BUFFER    // VectorType::SEQUENCE      - Any             - Holds linear numeric sequence (start, increment)
 };
 
-enum class VectorAuxiliaryDataType : uint8_t {
-	ARROW_AUXILIARY // Holds Arrow Chunks that this vector depends on
-};
+enum class VectorAppendMode { ALLOW_RESIZE, ERROR_ON_NO_SPACE };
 
-struct VectorAuxiliaryData {
-	explicit VectorAuxiliaryData(VectorAuxiliaryDataType type_p)
-	    : type(type_p) {
+struct AuxiliaryDataHolder {
+	virtual ~AuxiliaryDataHolder() = default;
 
-	      };
-	VectorAuxiliaryDataType type;
-
-	virtual ~VectorAuxiliaryData() {
-	}
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
-		}
-		return reinterpret_cast<TARGET &>(*this);
-	}
-
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (type != TARGET::TYPE) {
-			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
-		}
-		return reinterpret_cast<const TARGET &>(*this);
+	virtual idx_t GetAllocationSize() const {
+		return 0;
 	}
 };
 
-//! The VectorBuffer is a class used by the vector to hold its data
-class VectorBuffer {
-public:
-	explicit VectorBuffer(VectorBufferType type) : buffer_type(type), data_ptr(nullptr) {
-	}
-	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr) {
-		if (data_size > 0) {
-			allocated_data = Allocator::DefaultAllocator().Allocate(data_size);
-			data_ptr = allocated_data.get();
-		}
-	}
-	explicit VectorBuffer(data_ptr_t data_ptr_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p) {
-	}
-	explicit VectorBuffer(AllocatedData &&data_p)
-	    : buffer_type(VectorBufferType::STANDARD_BUFFER), allocated_data(std::move(data_p)) {
-		data_ptr = allocated_data.get();
-	}
-	virtual ~VectorBuffer() {
-	}
-	VectorBuffer() {
-	}
-
-public:
-	data_ptr_t GetData() {
-		return data_ptr;
-	}
-
-	void SetData(AllocatedData &&new_data) {
-		allocated_data = std::move(new_data);
-		data_ptr = allocated_data.get();
-	}
-
-	void SetData(data_ptr_t data) {
-		data_ptr = data;
-		allocated_data.Reset();
-	}
-
-	VectorAuxiliaryData *GetAuxiliaryData() {
-		return aux_data.get();
-	}
-
-	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
-		aux_data = std::move(aux_data_p);
-	}
-
-	void MoveAuxiliaryData(VectorBuffer &source_buffer) {
-		SetAuxiliaryData(std::move(source_buffer.aux_data));
-	}
-
-	virtual optional_ptr<Allocator> GetAllocator() const {
-		return allocated_data.GetAllocator();
-	}
-
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
-	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
-
-	inline VectorBufferType GetBufferType() const {
-		return buffer_type;
-	}
-
-	inline VectorAuxiliaryDataType GetAuxiliaryDataType() const {
-		return aux_data->type;
-	}
-
-protected:
-	VectorBufferType buffer_type;
-	unique_ptr<VectorAuxiliaryData> aux_data;
-	data_ptr_t data_ptr;
-	AllocatedData allocated_data;
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
+struct AuxiliaryDataSet {
+	vector<unique_ptr<AuxiliaryDataHolder>> data;
 };
 
-//! The ManagedVectorBuffer holds a buffer handle
-class ManagedVectorBuffer : public VectorBuffer {
+class PinnedBufferHolder : public AuxiliaryDataHolder {
 public:
-	explicit ManagedVectorBuffer(BufferHandle handle);
-	~ManagedVectorBuffer() override;
+	explicit PinnedBufferHolder(BufferHandle handle);
+	~PinnedBufferHolder() override;
 
 private:
 	BufferHandle handle;
 };
 
-//! The DictionaryBuffer holds a selection vector
-class ShreddedVectorBuffer : public VectorBuffer {
+class AuxiliaryDataSetHolder : public AuxiliaryDataHolder {
 public:
-	explicit ShreddedVectorBuffer(Vector &shredded_data);
-	~ShreddedVectorBuffer() override;
-
-public:
-	Vector &GetChild() {
-		return *shredded_data;
+	explicit AuxiliaryDataSetHolder(buffer_ptr<AuxiliaryDataSet> buffer) : auxiliary_data(std::move(buffer)) {
 	}
 
 private:
-	unique_ptr<Vector> shredded_data;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
 };
+
+class VectorBufferHolder : public AuxiliaryDataHolder {
+public:
+	explicit VectorBufferHolder(buffer_ptr<VectorBuffer> buffer_p) : buffer(std::move(buffer_p)) {
+	}
+
+private:
+	buffer_ptr<VectorBuffer> buffer;
+};
+
+//! The VectorBuffer is a class used by the vector to hold its data
+class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
+public:
+	explicit VectorBuffer(VectorType vector_type, VectorBufferType type) : vector_type(vector_type), buffer_type(type) {
+	}
+	virtual ~VectorBuffer() {
+	}
+
+public:
+	virtual data_ptr_t GetData() {
+		return nullptr;
+	}
+	virtual idx_t Capacity() const {
+		throw InternalException("VectorBuffer does not have a capacity");
+	}
+	virtual void ResetCapacity(idx_t capacity) {
+		throw InternalException("VectorBuffer does not have a capacity");
+	}
+	virtual ValidityMask &GetValidityMask() {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
+	}
+	virtual const ValidityMask &GetValidityMask() const {
+		throw InternalException("VectorBuffer does not have a ValidityMask");
+	}
+	//! FIXME: should be removed
+	bool HasSize() const {
+		return v_size.IsValid();
+	}
+	idx_t Size() const {
+		return v_size.GetIndex();
+	}
+	void SetVectorSize(idx_t new_size);
+
+	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
+		if (!auxiliary_data) {
+			auxiliary_data = make_buffer<AuxiliaryDataSet>();
+		}
+		auxiliary_data->data.push_back(std::move(aux_data_p));
+	}
+	const buffer_ptr<AuxiliaryDataSet> &GetAuxiliaryData() const {
+		return auxiliary_data;
+	}
+	virtual void ClearAuxiliaryData() {
+		auxiliary_data.reset();
+	}
+
+	virtual optional_ptr<Allocator> GetAllocator() const {
+		return nullptr;
+	}
+
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type,
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
+	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
+	                                                     capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
+
+	inline VectorType GetVectorType() const {
+		return vector_type;
+	}
+	virtual void SetVectorType(VectorType vector_type);
+	//! Set only this buffer's vector type without propagating to children (for struct/array buffers)
+	void SetVectorTypeOnly(VectorType new_vector_type) {
+		vector_type = new_vector_type;
+	}
+
+	inline VectorBufferType GetBufferType() const {
+		return buffer_type;
+	}
+
+public:
+	//! Returns the actual size to reserve (a power-of-two)
+	static idx_t GetReserveSize(idx_t required_capacity);
+
+	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
+	//! Returns a new buffer, or nullptr if already flat
+	virtual buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const;
+	//! Flatten the vector buffer, converting it to a FLAT_VECTOR
+	//! The selection vector maps output indices to source indices in this buffer
+	buffer_ptr<VectorBuffer> FlattenSlice(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	//! Returns the total (uncompressed) data size
+	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
+	//! Returns the total amount of bytes allocated by the vector buffer
+	virtual idx_t GetAllocationSize() const;
+	virtual void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+	//! Get the value at the given index directly from the buffer's data
+	virtual Value GetValue(const LogicalType &type, idx_t index) const;
+	//! Set the value at the given index (flat/constant vectors only)
+	virtual void SetValue(const LogicalType &type, idx_t index, const Value &val);
+	//! Resize if the vector does not have enough capacity, or throw an error, depending on VectorAppendMode
+	void Reserve(idx_t required_capacity, VectorAppendMode append_mode);
+	//! Append a value to the vector (flat / constant vectors only)
+	void AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode);
+	//! Append a vector to this buffer, sliced by the source_sel
+	void Append(const Vector &source, const SelectionVector &sel, idx_t append_size, VectorAppendMode append_mode);
+	//! Copy data from another vector into this vectors' buffer
+	void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	          idx_t target_offset, idx_t copy_count);
+	//! Produce a string representation of buffer contents (debug only)
+	virtual string ToString(const LogicalType &type, idx_t count) const;
+	virtual string ToString(const LogicalType &type) const;
+	//! Slice the buffer with a selection vector, returning a new buffer
+	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, const SelectionVector &sel, idx_t count);
+	//! Slice the buffer with an offset range, returning a new buffer
+	buffer_ptr<VectorBuffer> Slice(const LogicalType &type, idx_t offset, idx_t end);
+	//! Slice the buffer with a selection vector, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type,
+	                                                const SelectionVector &sel, idx_t count);
+	//! Create a UnifiedVectorFormat from the buffer's data
+	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
+	//! Resize the buffer's data allocation
+	virtual void Resize(idx_t current_size, idx_t new_size);
+
+protected:
+	//! Slice a constant vector with a specific count
+	buffer_ptr<VectorBuffer> ConstantSlice(const LogicalType &type, count_t count);
+	//! Slice a constant vector with a specific count
+	virtual buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count);
+	//! Slice the buffer with a selection vector, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count);
+	//! Slice the buffer with an offset range, returning a new buffer
+	virtual buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end);
+	//! Copy data from another vector into this vectors' buffer
+	virtual void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
+	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);
+	virtual buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
+	                                                      idx_t count) const;
+
+protected:
+	VectorType vector_type;
+	VectorBufferType buffer_type;
+	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
+	//! FIXME: optional_idx only temporarily...
+	optional_idx v_size;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 } // namespace duckdb

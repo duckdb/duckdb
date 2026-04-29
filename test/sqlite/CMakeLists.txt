@@ -8,6 +8,6 @@ set(SQLITE_TEST_RUNNER_SOURCES
     sqllogic_parser.cpp test_sqllogictest.cpp sqllogic_test_logger.cpp)
 
 add_library_unity(test_sqlite OBJECT ${SQLITE_TEST_RUNNER_SOURCES})
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlite>
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sqlite>
     PARENT_SCOPE)

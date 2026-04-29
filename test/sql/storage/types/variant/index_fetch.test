@@ -15,7 +15,7 @@ SELECT v FROM tbl WHERE i=42;
 # Now test the same with a persistent db, checkpointed (shredded VARIANT)
 
 statement ok
-ATTACH '__TEST_DIR__/variant_index_fetch.db' as db2 (STORAGE_VERSION 'v1.5.0');
+ATTACH '{TEST_DIR}/variant_index_fetch.db' as db2 (STORAGE_VERSION 'v1.5.0');
 
 statement ok
 USE db2;
@@ -35,7 +35,7 @@ SELECT v FROM tbl WHERE i=42;
 {'a': 42, 'b': 2}
 
 statement ok
-pragma verify_fetch_row;
+SET debug_force_fetch_row=true;
 
 query I
 select v from tbl WHERE i < 10

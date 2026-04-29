@@ -1,10 +1,25 @@
 #include "writer/enum_column_writer.hpp"
+
+#include <utility>
+
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
 
 namespace duckdb {
+class Vector;
+
 using duckdb_parquet::Encoding;
 
 class EnumWriterPageState : public ColumnWriterPageState {
@@ -29,7 +44,7 @@ unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
 template <class T>
 void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start,
                                          idx_t chunk_end, EnumWriterPageState &page_state) {
-	auto &mask = FlatVector::Validity(input_column);
+	auto &mask = FlatVector::ValidityMutable(input_column);
 	auto *ptr = FlatVector::GetData<T>(input_column);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {

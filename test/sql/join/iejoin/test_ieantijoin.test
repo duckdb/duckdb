@@ -105,7 +105,7 @@ physical_plan	<REGEX>:.*IE_JOIN.*
 foreach prefer false true
 
 statement ok
-SET prefer_range_joins=${prefer}
+SET prefer_range_joins={prefer}
 
 query III
 SELECT l.id, l.start, l.stop
@@ -247,7 +247,7 @@ physical_plan	<REGEX>:.*IE_JOIN.*
 foreach prefer false true
 
 statement ok
-SET prefer_range_joins=${prefer}
+SET prefer_range_joins={prefer}
 
 query IIIII
 FROM wide_ranges l

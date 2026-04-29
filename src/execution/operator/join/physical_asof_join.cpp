@@ -22,8 +22,8 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(PhysicalPlan &physical_plan, LogicalCompariso
 	// Convert the conditions partitions and sorts
 	for (auto &cond : conditions) {
 		D_ASSERT(cond.IsComparison());
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 
 		auto left_cond = cond.LeftReference()->Copy();
 		auto right_cond = cond.RightReference()->Copy();
@@ -238,7 +238,7 @@ private:
 		using BLOCK_ITERATOR = block_iterator_t<ExternalBlockIteratorState, SORT_KEY>;
 		BLOCK_ITERATOR itr(block_state, chunk_idx, 0);
 
-		const auto sort_keys = FlatVector::GetData<SORT_KEY *>(sort_key_pointers);
+		const auto sort_keys = FlatVector::GetDataMutable<SORT_KEY *>(sort_key_pointers);
 		const auto result_count = NextSize();
 		for (idx_t i = 0; i < result_count; ++i) {
 			const auto idx = block_state.GetIndex(chunk_idx, i);
@@ -912,7 +912,7 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &client, const PhysicalAsOfJoin &
 	vector<LogicalType> prefix_types;
 	for (idx_t i = 0; i < op.conditions.size() - 1; ++i) {
 		const auto &cond = op.conditions[i];
-		const auto &type = cond.GetLHS().return_type;
+		const auto &type = cond.GetLHS().GetReturnType();
 		prefix_types.emplace_back(type);
 		SortKeyPrefixComparisonColumn col;
 		col.size = DConstants::INVALID_INDEX;
@@ -1177,7 +1177,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		// Skip to the range containing the match
 		if (match_pos >= rhs_scanner->Scanned()) {
 			if (rhs_match_count) {
-				rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+				rhs_input.Append(rhs_payload, rhs_match_sel, rhs_match_count);
 				rhs_match_count = 0;
 			}
 			rhs_payload.Reset();
@@ -1188,7 +1188,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		const auto source_offset = match_pos - rhs_scanner->Base();
 		rhs_match_sel.set_index(rhs_match_count++, source_offset);
 	}
-	rhs_input.Append(rhs_payload, false, &rhs_match_sel, rhs_match_count);
+	rhs_input.Append(rhs_payload, rhs_match_sel, rhs_match_count);
 
 	//	Slice the left payload into the result
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
@@ -1623,8 +1623,7 @@ void AsOfLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChunk
 		const auto &op = gsource.op;
 		const idx_t left_column_count = op.children[0].get().GetTypes().size();
 		for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[col_idx], true);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(result_count));
 		}
 		for (idx_t col_idx = 0; col_idx < op.right_projection_map.size(); ++col_idx) {
 			const auto rhs_idx = op.right_projection_map[col_idx];

@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4329.test
+# description: fuzzer generated csv files shouldn't crash
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('{DATA_DIR}/csv/afl/4329/case_1.csv', escape='\', buffer_size=42, skip=42, strict_mode=false);
+----
+Maximum line size of 42 bytes exceeded

@@ -14,11 +14,11 @@ namespace duckdb {
 
 static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	Value v(args.data[0].GetType().ToString());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
 static unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
-	auto &return_type = input.children[0]->return_type;
+	auto &return_type = input.children[0]->GetReturnType();
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type
 		return nullptr;
@@ -41,20 +41,21 @@ ScalarFunction TypeOfFun::GetFunction() {
 
 static void GetTypeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto v = Value::TYPE(args.data[0].GetType());
-	result.Reference(v);
+	result.Reference(v, count_t(args.size()));
 }
 
-static unique_ptr<FunctionData> BindGetTypeFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindGetTypeFunction(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments[0]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
 static unique_ptr<Expression> BindGetTypeFunctionExpression(FunctionBindExpressionInput &input) {
-	auto &return_type = input.children[0]->return_type;
+	auto &return_type = input.children[0]->GetReturnType();
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type
 		return nullptr;
@@ -82,7 +83,7 @@ static unique_ptr<Expression> BindMakeTypeFunctionExpression(FunctionBindExpress
 
 	// Evaluate all arguments to constant values
 	for (auto &child : input.children) {
-		string name = child->alias;
+		string name = child->GetAlias();
 		if (!child->IsFoldable()) {
 			throw BinderException("make_type function arguments must be constant expressions");
 		}
@@ -123,7 +124,7 @@ ScalarFunction MakeTypeFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR}, LogicalType::TYPE(), MakeTypeFunction);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetBindExpressionCallback(BindMakeTypeFunctionExpression);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

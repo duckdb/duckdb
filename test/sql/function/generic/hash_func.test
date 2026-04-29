@@ -7,7 +7,7 @@
 foreach datatype ANY HASH POINTER
 
 statement error
-SELECT HASH(NULL::${datatype});
+SELECT HASH(NULL::{datatype});
 ----
 
 endloop
@@ -17,7 +17,7 @@ endloop
 foreach datatype <alltypes> CHAR BLOB DATE TIME TIMETZ TIMESTAMP TIMESTAMPTZ DECIMAL(16,4) UUID
 
 query I
-SELECT HASH(NULL::${datatype});
+SELECT HASH(NULL::{datatype});
 ----
 13787848793156543929
 

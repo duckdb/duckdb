@@ -1,28 +1,49 @@
 #include "parquet_writer.hpp"
 
-#include "duckdb.hpp"
-#include "mbedtls_wrapper.hpp"
+#include <functional>
+#include <limits>
+#include <vector>
+
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
-#include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "writer/variant_column_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/types/column/column_data_collection_iterators.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/geometry.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_geometry.hpp"
+#include "thrift/TBase.h"
+#include "thrift/protocol/TCompactProtocol.h"
+#include "thrift/protocol/TProtocol.h"
+#include "thrift/protocol/TVirtualProtocol.h"
+#include "thrift/transport/TTransport.h"
 
 namespace duckdb {
 
@@ -418,7 +439,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
                              int64_t compression_level_p, ParquetVersion parquet_version,
                              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96_p,
-                             TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p)
+                             TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p, vector<bool> not_null_columns_p)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
@@ -428,7 +449,8 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       write_timestamp_as_int96(write_timestamp_as_int96_p),
-      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), total_written(0), num_row_groups(0) {
+      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), not_null_columns(std::move(not_null_columns_p)),
+      total_written(0), num_row_groups(0) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -473,9 +495,10 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	D_ASSERT(sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		vector<string> path_in_schema;
+		const bool can_have_nulls = not_null_columns.empty() || !not_null_columns[i];
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, path_in_schema, sql_types[i],
 		                                                             unique_names[i], allow_geometry, &field_ids,
-		                                                             &shredding_types));
+		                                                             &shredding_types, 0, 1, can_have_nulls));
 	}
 }
 

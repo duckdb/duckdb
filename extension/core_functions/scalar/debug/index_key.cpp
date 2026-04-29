@@ -74,7 +74,8 @@ static TableDescription EvaluateTableDescription(ClientContext &context, const E
 		throw BinderException("index_key: path parameter must evaluate to a STRUCT");
 	}
 
-	return ExtractTableDescription(StructType::GetChildTypes(expr.return_type), StructValue::GetChildren(input_struct));
+	return ExtractTableDescription(StructType::GetChildTypes(expr.GetReturnType()),
+	                               StructValue::GetChildren(input_struct));
 }
 
 static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
@@ -132,8 +133,10 @@ struct IndexKeyBindData : public FunctionData {
 	vector<LogicalType> key_types;
 };
 
-static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
@@ -170,16 +173,16 @@ static unique_ptr<FunctionData> IndexKeyBind(ClientContext &context, ScalarFunct
 		                      index_name, key_types.size(), num_key_args);
 	}
 
-	// Set bound_function.arguments to actual types for proper casting.
+	// Set bound_function.GetArguments() to actual types for proper casting.
 	// Note: In case this is ever a bottleneck for testing purposes -- currently, we retain the first two arguments
 	// for execution even though they are only required for binding. This requires us to create a key_chunk
 	// that only references the key columns during execution. We could erase the first two arguments here, but
 	// that also requires some (de)serialization boilerplate, so for now we don't do it.
-	bound_function.arguments.clear();
-	bound_function.arguments.push_back(arguments[0]->return_type);
-	bound_function.arguments.push_back(arguments[1]->return_type);
+	bound_function.GetArguments().clear();
+	bound_function.GetArguments().push_back(arguments[0]->GetReturnType());
+	bound_function.GetArguments().push_back(arguments[1]->GetReturnType());
 	for (auto &key_type : key_types) {
-		bound_function.arguments.push_back(key_type);
+		bound_function.GetArguments().push_back(key_type);
 	}
 
 	return make_uniq<IndexKeyBindData>(art, std::move(key_types));
@@ -190,9 +193,6 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &bind_data = func_expr.bind_info->Cast<IndexKeyBindData>();
 
 	idx_t count = args.size();
-
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
 
 	// Create a DataChunk referencing only the key columns (skip path and index_name).
 	DataChunk key_chunk;
@@ -207,12 +207,13 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 	ArenaAllocator allocator(Allocator::DefaultAllocator());
 	art.GenerateKeys<>(allocator, key_chunk, keys);
 
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		if (key.Empty()) {
-			result_validity.SetInvalid(i);
+			result_data.WriteNull();
 		} else {
-			result_data[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(key.data), key.len);
+			result_data.WriteValue(string_t(const_char_ptr_cast(key.data), key.len));
 		}
 	}
 	if (count == 1) {
@@ -226,7 +227,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 ScalarFunction IndexKeyFun::GetFunction() {
 	ScalarFunction fun("index_key", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::BLOB, IndexKeyFunction,
 	                   IndexKeyBind);
-	fun.varargs = LogicalTypeId::ANY;
+	fun.SetVarArgs(LogicalTypeId::ANY);
 	return fun;
 }
 

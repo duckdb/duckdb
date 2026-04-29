@@ -2,93 +2,125 @@
 # description: Test parsing of CREATE TRIGGER statements
 # group: [trigger]
 
-require autocomplete
+require noforcestorage
 
-statement ok
-call enable_peg_parser();
 
-# Parsing succeeds but bind/execution will fail since catalog support is not yet implemented
+# Parsing succeeds - bind fails because tables do not exist
 
-# Basic AFTER INSERT trigger
+# Basic AFTER INSERT trigger - table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # Basic BEFORE DELETE trigger
 statement error
 CREATE TRIGGER my_trigger BEFORE DELETE ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # INSTEAD OF trigger
 statement error
 CREATE TRIGGER my_trigger INSTEAD OF INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # AFTER UPDATE trigger
 statement error
 CREATE TRIGGER my_trigger AFTER UPDATE ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# AFTER UPDATE OF specific columns
+# AFTER UPDATE OF specific columns - table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER UPDATE OF col1, col2 ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # FOR EACH ROW
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH ROW INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# FOR EACH STATEMENT
+# FOR EACH STATEMENT - table check happens first
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table FOR EACH STATEMENT INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # IF NOT EXISTS
 statement error
 CREATE TRIGGER IF NOT EXISTS my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
-# Schema-qualified trigger name
+# Schema-qualified trigger name is not allowed (triggers inherit schema from the table)
 statement error
 CREATE TRIGGER my_schema.my_trigger AFTER INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+<REGEX>:.*yntax error.*
 
-# Schema-qualified table name
+# Schema-qualified table name - schema may not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_schema.my_table INSERT INTO log_table VALUES (1);
 ----
-CREATE TRIGGER is not yet supported
+schema "my_schema" does not exist
 
-# DELETE as trigger body
+# DELETE as trigger body - my_table does not exist
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table DELETE FROM other_table WHERE id = 1;
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # UPDATE as trigger body
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT ON my_table UPDATE other_table SET col = 1;
 ----
-CREATE TRIGGER is not yet supported
+Table with name my_table does not exist
 
 # Syntax errors - missing ON keyword
 statement error
 CREATE TRIGGER my_trigger AFTER INSERT my_table INSERT INTO log_table VALUES (1);
 ----
-syntax error
+yntax error
 
 # Syntax errors - missing timing
 statement error
 CREATE TRIGGER my_trigger INSERT ON my_table INSERT INTO log_table VALUES (1);
 ----
-syntax error
+yntax error
+
+# CREATE TRIGGER on a view is rejected - triggers require a base table
+statement ok
+CREATE TABLE base_tbl (id INTEGER);
+
+statement ok
+CREATE VIEW base_view AS SELECT * FROM base_tbl;
+
+statement error
+CREATE TRIGGER trg_on_view AFTER INSERT ON base_view FOR EACH STATEMENT
+    INSERT INTO base_tbl VALUES (1);
+----
+CREATE TRIGGER requires a base table, not a view or subquery
+
+# CREATE TRIGGER on a non-DuckDB table is rejected
+require sqlite_scanner
+
+statement ok
+LOAD sqlite_scanner;
+
+statement ok
+ATTACH ':memory:' AS sqlite_db (TYPE SQLITE);
+
+statement ok
+CREATE TABLE sqlite_db.my_ext_table (id INTEGER);
+
+statement ok
+CREATE TABLE sqlite_db.my_ext_audit (msg VARCHAR);
+
+statement error
+CREATE TRIGGER trg_on_sqlite AFTER INSERT ON sqlite_db.my_ext_table FOR EACH STATEMENT
+    INSERT INTO sqlite_db.my_ext_audit VALUES ('inserted');
+----
+Triggers are not supported for this table type

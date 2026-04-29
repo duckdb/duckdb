@@ -62,12 +62,12 @@ public:
 	}
 
 	template <class T>
-	static string_t FormatSigned(T value, Vector &vector) {
+	static string_t FormatSigned(T value, StringHeap &heap) {
 		typedef typename MakeUnsigned<T>::type unsigned_t;
 		int8_t sign = -(value < 0);
 		unsigned_t unsigned_value = unsigned_t(value ^ T(sign)) + unsigned_t(AbsValue(sign));
 		auto length = UnsafeNumericCast<idx_t>(UnsignedLength<unsigned_t>(unsigned_value) + AbsValue(sign));
-		string_t result = StringVector::EmptyString(vector, length);
+		string_t result = heap.EmptyString(length);
 		auto dataptr = result.GetDataWriteable();
 		auto endptr = dataptr + length;
 		endptr = FormatUnsigned(unsigned_value, endptr);
@@ -105,7 +105,7 @@ template <>
 std::string NumericHelper::ToString(uhugeint_t value);
 
 template <>
-string_t NumericHelper::FormatSigned(hugeint_t value, Vector &vector);
+string_t NumericHelper::FormatSigned(hugeint_t value, StringHeap &heap);
 
 struct DecimalToString {
 	template <class SIGNED>
@@ -132,7 +132,7 @@ struct DecimalToString {
 		using UNSIGNED = typename MakeUnsigned<SIGNED>::type;
 		char *end = dst + len;
 		if (value < 0) {
-			value = -value;
+			value = static_cast<SIGNED>(-value);
 			*dst = '-';
 		}
 		if (scale == 0) {
@@ -162,9 +162,9 @@ struct DecimalToString {
 	}
 
 	template <class SIGNED>
-	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
+	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, StringHeap &heap) {
 		int len = DecimalLength<SIGNED>(value, width, scale);
-		string_t result = StringVector::EmptyString(vector, NumericCast<size_t>(len));
+		string_t result = heap.EmptyString(NumericCast<size_t>(len));
 		FormatDecimal<SIGNED>(value, width, scale, result.GetDataWriteable(), UnsafeNumericCast<idx_t>(len));
 		result.Finalize();
 		return result;
@@ -175,15 +175,15 @@ template <>
 int DecimalToString::DecimalLength(hugeint_t value, uint8_t width, uint8_t scale);
 
 template <>
-string_t DecimalToString::Format(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector);
+string_t DecimalToString::Format(hugeint_t value, uint8_t width, uint8_t scale, StringHeap &heap);
 
 template <>
 void DecimalToString::FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, idx_t len);
 
 struct UhugeintToStringCast {
-	static string_t Format(uhugeint_t value, Vector &vector) {
+	static string_t Format(uhugeint_t value, StringHeap &heap) {
 		std::string str = value.ToString();
-		string_t result = StringVector::EmptyString(vector, str.length());
+		string_t result = heap.EmptyString(str.length());
 		auto data = result.GetDataWriteable();
 
 		memcpy(data, str.data(), str.length()); // NOLINT: null-termination not required

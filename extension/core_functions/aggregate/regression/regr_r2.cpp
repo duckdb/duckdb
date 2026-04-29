@@ -43,17 +43,11 @@ struct RegrR2Operation {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		auto var_pop_x = state.var_pop_x.count > 1 ? (state.var_pop_x.dsquared / state.var_pop_x.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop_x)) {
-			throw OutOfRangeException("VARPOP(X) is out of range!");
-		}
 		if (var_pop_x == 0) {
 			finalize_data.ReturnNull();
 			return;
 		}
 		auto var_pop_y = state.var_pop_y.count > 1 ? (state.var_pop_y.dsquared / state.var_pop_y.count) : 0;
-		if (!Value::DoubleIsFinite(var_pop_y)) {
-			throw OutOfRangeException("VARPOP(Y) is out of range!");
-		}
 		if (var_pop_y == 0) {
 			target = 1;
 			return;

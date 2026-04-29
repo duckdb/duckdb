@@ -34,16 +34,16 @@ void InitializeOffsets(DataChunk &offsets, idx_t count) {
 static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVector &keys_selvec, idx_t &selvec_size,
                                OrderedOwningStringMap<uint32_t> &dictionary) {
 	auto &keys = VariantVector::GetKeys(result);
-	auto keys_data = ListVector::GetData(keys);
+	auto keys_data = FlatVector::GetDataMutable<list_entry_t>(keys);
 
 	auto &children = VariantVector::GetChildren(result);
-	auto children_data = ListVector::GetData(children);
+	auto children_data = FlatVector::GetDataMutable<list_entry_t>(children);
 
 	auto &values = VariantVector::GetValues(result);
-	auto values_data = ListVector::GetData(values);
+	auto values_data = FlatVector::GetDataMutable<list_entry_t>(values);
 
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
 
 	idx_t keys_offset = 0;
 	idx_t children_offset = 0;
@@ -127,11 +127,9 @@ struct VariantLocalData : FunctionLocalState {
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			unshredded_entry.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(unshredded_entry, true);
+			ConstantVector::SetNull(unshredded_entry, count_t(new_capacity));
 		}
-		unshredded_child.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(unshredded_child, true);
+		ConstantVector::SetNull(unshredded_child, count_t(new_capacity));
 	}
 
 	Vector &GetShreddedVector(idx_t req_capacity) {
@@ -180,8 +178,8 @@ static void ShreddedVectorReference(Vector &source, Vector &result, idx_t count)
 		if (source.GetVectorType() != VectorType::FLAT_VECTOR) {
 			source.Flatten(count);
 		}
-		FlatVector::Validity(result) = FlatVector::Validity(source);
-		FlatVector::Validity(typed_value) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
+		FlatVector::ValidityMutable(typed_value) = FlatVector::Validity(source);
 		// now recurse into the children of both
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(typed_value);
@@ -204,7 +202,7 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
 	auto &shredded_child = top_shredded[1];
 	ShreddedVectorReference(source, shredded_child, count);
-	result.Shred(shredded_vector);
+	result.Shred(shredded_vector, count);
 	return true;
 }
 
@@ -236,10 +234,10 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	                   count);
 	offsets.SetCardinality(count);
 	auto &keys = VariantVector::GetKeys(result);
-	auto &keys_entry = ListVector::GetEntry(keys);
+	auto &keys_entry = ListVector::GetChildMutable(keys);
 
 	//! Initialize the dictionary
-	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringBuffer(keys_entry).GetStringAllocator());
+	OrderedOwningStringMap<uint32_t> dictionary(StringVector::GetStringAllocator(keys_entry));
 	SelectionVector keys_selvec;
 	ToVariantSourceData source_data(source, count);
 
@@ -266,7 +264,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 	//! Finalize the 'data'
 	auto &blob = VariantVector::GetData(result);
-	auto blob_data = FlatVector::GetData<string_t>(blob);
+	auto blob_data = FlatVector::GetDataMutable<string_t>(blob);
 	auto blob_offsets = OffsetData::GetBlob(offsets);
 	for (idx_t i = 0; i < count; i++) {
 		auto size = blob_offsets[i];

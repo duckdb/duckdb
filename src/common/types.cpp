@@ -500,7 +500,7 @@ string LogicalType::ToString() const {
 		}
 
 		auto &expr = UnboundType::GetTypeExpression(*this);
-		if (expr->type != ExpressionType::TYPE) {
+		if (expr->GetExpressionType() != ExpressionType::TYPE) {
 			return "(" + expr->ToString() + ")";
 		} else {
 			return expr->ToString();
@@ -717,6 +717,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);
@@ -804,7 +805,7 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		// Nonsense values to ensure initialization
 		width = 255u;
 		scale = 255u;
-		// FIXME(carlo): This should be probably a throw, requires checkign the various call-sites
+		// FIXME(carlo): This should be probably a throw, requires checking the various call-sites
 		return false;
 	}
 	return true;
@@ -2047,7 +2048,7 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 }
 
 static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
-	if (expr.type != ExpressionType::TYPE) {
+	if (expr.GetExpressionType() != ExpressionType::TYPE) {
 		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
 	}
 	const auto &type_expr = expr.Cast<TypeExpression>();

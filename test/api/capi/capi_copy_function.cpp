@@ -569,7 +569,7 @@ TEST_CASE("Test Copy Functions in C API", "[capi]") {
 	    "COPY my_table FROM '%s8.txt' (FORMAT MY_COPY, MIN_SIZE 0, MAX_SIZE 10000, UNKNOWN 5)", file_path));
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->ErrorMessage(),
-	                             "'UNKNOWN' is not a supported option for copy function 'my_copy'"));
+	                             "'unknown' is not a supported option for copy function 'my_copy'"));
 
 	// Read with missing option
 	result =

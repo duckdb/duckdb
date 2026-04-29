@@ -115,7 +115,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         name: Download extensions
         with:
           pattern: extensions-${{ inputs.duckdb_ref }}*
@@ -128,12 +128,14 @@ jobs:
       - name: Merge into single repository
         shell: bash
         run: |
-          mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}
           shopt -s nullglob
-          for platform_dir in /tmp/repository_generation/*/*/*; do
-            platform="$(basename "$platform_dir")"
-            mkdir -p /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
-            cp -r "$platform_dir"/. /tmp/merged_repository/${{ inputs.duckdb_ref }}/"$platform"
+          for version_dir in /tmp/repository_generation/*/*/*; do
+            version="$(basename "$version_dir")"
+            for platform_dir in "$version_dir"/*; do
+              platform="$(basename "$platform_dir")"
+              mkdir -p /tmp/merged_repository/"$version"/"$platform"
+              cp -r "$platform_dir"/. /tmp/merged_repository/"$version"/"$platform"
+            done
           done
           tree /tmp/merged_repository
 
@@ -160,7 +162,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp
@@ -179,5 +181,5 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          pip install awscli
+          python3 scripts/ci/retry.py -- pip install awscli
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging

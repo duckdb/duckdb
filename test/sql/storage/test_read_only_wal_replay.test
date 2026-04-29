@@ -9,7 +9,7 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown;
 
 statement ok
-ATTACH '__TEST_DIR__/read_only_wal_replay.db' AS db;
+ATTACH '{TEST_DIR}/read_only_wal_replay.db' AS db;
 
 statement ok
 CREATE TABLE db.my_tbl(i INTEGER PRIMARY KEY);
@@ -21,7 +21,7 @@ statement ok
 DETACH db;
 
 statement ok
-ATTACH '__TEST_DIR__/read_only_wal_replay.db' AS db (READ_ONLY)
+ATTACH '{TEST_DIR}/read_only_wal_replay.db' AS db (READ_ONLY)
 
 statement ok
 DETACH db

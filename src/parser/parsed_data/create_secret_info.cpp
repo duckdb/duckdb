@@ -35,4 +35,45 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateSecretInfo::ToString() const {
+	string result;
+	string create_type;
+	if (persist_type == SecretPersistType::PERSISTENT) {
+		create_type = "PERSISTENT SECRET";
+	} else {
+		create_type = "SECRET";
+	}
+	result = GetCreatePrefix(create_type);
+	if (!name.empty()) {
+		result += " " + KeywordHelper::WriteOptionallyQuoted(name);
+	}
+	if (!storage_type.empty()) {
+		result += " IN" + KeywordHelper::WriteOptionallyQuoted(storage_type);
+	}
+	string option_list;
+	if (provider) {
+		option_list += "PROVIDER " + provider->ToString();
+	}
+	if (type) {
+		if (!option_list.empty()) {
+			option_list += ", ";
+		}
+		option_list += "TYPE " + type->ToString();
+	}
+	if (scope) {
+		if (!option_list.empty()) {
+			option_list += ", ";
+		}
+		option_list += "SCOPE " + scope->ToString();
+	}
+	for (auto &opt : options) {
+		if (!option_list.empty()) {
+			option_list += ", ";
+		}
+		option_list += opt.first + " " + opt.second->ToString();
+	}
+	result += "(" + option_list + ")";
+	return result;
+}
+
 } // namespace duckdb

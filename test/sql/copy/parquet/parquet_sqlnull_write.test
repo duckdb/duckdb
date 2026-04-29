@@ -24,10 +24,10 @@ NullType()
 # Test combining a SQLNULL parquet file with a typed parquet file using union_by_name
 # The SQLNULL type should be resolved to VARCHAR from the typed file
 statement ok
-COPY (SELECT 1 AS id, 'hello' AS val) TO '__TEST_DIR__/typed_val.parquet' (FORMAT PARQUET);
+COPY (SELECT 1 AS id, 'hello' AS val) TO '{TEST_DIR}/typed_val.parquet' (FORMAT PARQUET);
 
 query II rowsort
-SELECT * FROM read_parquet(['{DATA_DIR}/parquet-testing/null_type_column.parquet', '__TEST_DIR__/typed_val.parquet'], union_by_name=true);
+SELECT * FROM read_parquet(['{DATA_DIR}/parquet-testing/null_type_column.parquet', '{TEST_DIR}/typed_val.parquet'], union_by_name=true);
 ----
 1	NULL
 1	hello

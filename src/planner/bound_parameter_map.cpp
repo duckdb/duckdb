@@ -65,7 +65,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 		rebind = true;
 	}
 
-	bound_expr->return_type = identifier_type;
+	bound_expr->SetReturnType(identifier_type);
 	return bound_expr;
 }
 

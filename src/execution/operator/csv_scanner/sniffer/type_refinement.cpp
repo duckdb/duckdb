@@ -86,7 +86,6 @@ void CSVSniffer::RefineTypes() {
 		}
 		// reset parse chunk for the next iteration
 		parse_chunk.Reset();
-		parse_chunk.SetCapacity(CSVReaderOptions::sniff_size);
 	}
 	detected_types.clear();
 	// set sql types

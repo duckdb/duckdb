@@ -2,12 +2,14 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 
 #include <math.h>
 
@@ -447,31 +449,31 @@ RelationStats RelationStatisticsHelper::ExtractEmptyResultStats(LogicalEmptyResu
 idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const TableFilter &filter,
                                                    BaseStatistics &base_stats) {
 	auto cardinality_after_filters = cardinality;
-	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-		for (auto &child_filter : and_filter.child_filters) {
+	auto expr_filter = ExpressionFilter::FromTableFilter(filter, base_stats.GetType());
+	auto &expr = *expr_filter->expr;
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		auto &conj = expr.Cast<BoundConjunctionExpression>();
+		for (auto &child : conj.children) {
+			ExpressionFilter child_filter(child->Copy());
 			cardinality_after_filters =
-			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, *child_filter, base_stats));
+			    MinValue(cardinality_after_filters, InspectTableFilter(cardinality, child_filter, base_stats));
 		}
 		return cardinality_after_filters;
 	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &comparison_filter = filter.Cast<ConstantFilter>();
-		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
-			return cardinality_after_filters;
-		}
-		auto column_count = base_stats.GetDistinctCount();
-		// column_count = 0 when there is no column count (i.e parquet scans)
-		if (column_count > 0) {
-			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-			cardinality_after_filters = (cardinality + column_count - 1) / column_count;
-		}
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 		return cardinality_after_filters;
 	}
-	default:
+	auto &comparison = expr.Cast<BoundComparisonExpression>();
+	if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 		return cardinality_after_filters;
 	}
+	auto column_count = base_stats.GetDistinctCount();
+	// column_count = 0 when there is no column count (i.e parquet scans)
+	if (column_count > 0) {
+		// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
+		cardinality_after_filters = (cardinality + column_count - 1) / column_count;
+	}
+	return cardinality_after_filters;
 }
 
 // TODO: Currently only simple AND filters are pushed into table scans.

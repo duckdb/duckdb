@@ -7,9 +7,9 @@ namespace {
 
 struct EscapeOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE &input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		auto escaped_pattern = RE2::QuoteMeta(input.GetString());
-		return StringVector::AddString(result, escaped_pattern);
+		return heap.AddString(escaped_pattern);
 	}
 };
 

@@ -384,42 +384,42 @@ foreach type <numeric>
 
 # Constant single integer column distinct
 query T
-SELECT {'x': 1::${type}}::VARIANT IS NOT DISTINCT FROM {'x': 2::${type}}
+SELECT {'x': 1::{type}}::VARIANT IS NOT DISTINCT FROM {'x': 2::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}}::VARIANT IS NOT DISTINCT FROM {'x': 1::${type}}
+SELECT {'x': 1::{type}}::VARIANT IS NOT DISTINCT FROM {'x': 1::{type}}
 ----
 true
 
 query T
-SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 1::${type}}
+SELECT NULL::VARIANT IS NOT DISTINCT FROM {'x': 1::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM {'x': 2::${type}}
+SELECT {'x': 1::{type}}::VARIANT IS DISTINCT FROM {'x': 2::{type}}
 ----
 true
 
 query T
-SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM {'x': 1::${type}}
+SELECT {'x': 1::{type}}::VARIANT IS DISTINCT FROM {'x': 1::{type}}
 ----
 false
 
 query T
-SELECT {'x': 1::${type}}::VARIANT IS DISTINCT FROM NULL
+SELECT {'x': 1::{type}}::VARIANT IS DISTINCT FROM NULL
 ----
 true
 
 statement ok
 CREATE OR REPLACE VIEW struct_int AS SELECT COLUMNS(*)::VARIANT FROM (VALUES
-	({'x': 1::${type}}, {'x': 1::${type}}),
-	({'x': 1::${type}}, {'x': 2::${type}}),
-	({'x': 2::${type}}, {'x': 1::${type}}),
-	(NULL, {'x': 1::${type}}),
-	({'x': 2::${type}}, NULL),
+	({'x': 1::{type}}, {'x': 1::{type}}),
+	({'x': 1::{type}}, {'x': 2::{type}}),
+	({'x': 2::{type}}, {'x': 1::{type}}),
+	(NULL, {'x': 1::{type}}),
+	({'x': 2::{type}}, NULL),
 	(NULL, NULL)
 	) tbl(l, r);
 

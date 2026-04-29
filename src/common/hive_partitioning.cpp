@@ -70,7 +70,7 @@ ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &ex
 			} else {
 				// hive partitioning column - cast the value to the target type
 				result_val = HivePartitioning::GetValue(context, partition_val.key, partition_val.value,
-				                                        bound_colref.return_type);
+				                                        bound_colref.GetReturnType());
 			}
 			expr = make_uniq<BoundConstantExpression>(std::move(result_val));
 		}
@@ -87,6 +87,10 @@ string HivePartitioning::Escape(const string &input) {
 
 string HivePartitioning::Unescape(const string &input) {
 	return StringUtil::URLDecode(input);
+}
+
+bool HivePartitioning::IsNull(const string &input) {
+	return StringUtil::CIEquals(input, "NULL") || input == "__HIVE_DEFAULT_PARTITION__";
 }
 
 // matches hive partitions in file name. For example:
@@ -127,7 +131,7 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
 	// Handle nulls
-	if (StringUtil::CIEquals(str_val, "NULL") || str_val == "__HIVE_DEFAULT_PARTITION__") {
+	if (IsNull(str_val)) {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
@@ -243,7 +247,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 		auto &key = keys[i];
 		auto entry = entries[i];
 		if (entry.IsValid()) {
-			key.values[col_idx] = GetHiveKeyValue(entry.value, type);
+			key.values[col_idx] = GetHiveKeyValue(entry.GetValue(), type);
 		} else {
 			key.values[col_idx] = GetHiveKeyNullValue(type);
 		}
@@ -328,7 +332,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	const auto partition_indices = FlatVector::GetDataMutable<idx_t>(state.partition_indices);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		key.hash = hashes[i];

@@ -37,19 +37,19 @@ BEGIN
 
 onlyif threadid=0
 statement ok
-INSERT INTO lineitem FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/lineitem.tbl.u${i}.parquet')
+INSERT INTO lineitem FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/lineitem.tbl.u{i}.parquet')
 
 onlyif threadid=0
 statement ok
-INSERT INTO orders FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/orders.tbl.u${i}.parquet')
+INSERT INTO orders FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/orders.tbl.u{i}.parquet')
 
 onlyif threadid=0
 statement ok
-DELETE FROM orders WHERE o_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.${i}.parquet'))
+DELETE FROM orders WHERE o_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.{i}.parquet'))
 
 onlyif threadid=0
 statement ok
-DELETE FROM lineitem WHERE l_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.${i}.parquet'))
+DELETE FROM lineitem WHERE l_orderkey IN (SELECT column0 FROM read_parquet('/Users/myth/Programs/duckdb-tpch-power-test/gen/sf100/delete.{i}.parquet'))
 
 onlyif threadid=0
 statement ok
@@ -62,7 +62,7 @@ loop qnr 1 22
 
 skipif threadid=0
 statement ok
-PRAGMA tpch(${qnr})
+PRAGMA tpch({qnr})
 
 endloop
 

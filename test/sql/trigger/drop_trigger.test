@@ -1,0 +1,168 @@
+# name: test/sql/trigger/drop_trigger.test
+# description: Test DROP TRIGGER removes from catalog
+# group: [trigger]
+
+# Setup
+statement ok
+CREATE TABLE t1 (id INTEGER, data VARCHAR);
+
+statement ok
+CREATE TABLE log_table (id INTEGER);
+
+# Create a trigger to drop
+statement ok
+CREATE TRIGGER my_trigger AFTER INSERT ON t1 INSERT INTO log_table VALUES (1);
+
+# Verify trigger exists
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'my_trigger' AND table_name = 't1';
+----
+1
+
+# Drop the trigger
+statement ok
+DROP TRIGGER my_trigger ON t1;
+
+# Verify trigger is gone
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'my_trigger' AND table_name = 't1';
+----
+0
+
+# DROP IF EXISTS on non-existent trigger should not error
+statement ok
+DROP TRIGGER IF EXISTS my_trigger ON t1;
+
+# DROP without IF EXISTS on non-existent trigger should error
+statement error
+DROP TRIGGER my_trigger ON t1;
+----
+does not exist
+
+# --- Drop one trigger, keep the other ---
+statement ok
+CREATE TRIGGER keep_trigger BEFORE DELETE ON t1 INSERT INTO log_table VALUES (2);
+
+statement ok
+CREATE TRIGGER drop_me AFTER UPDATE ON t1 INSERT INTO log_table VALUES (3);
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE table_name = 't1';
+----
+2
+
+statement ok
+DROP TRIGGER drop_me ON t1;
+
+query TT
+SELECT trigger_name, table_name FROM duckdb_triggers() WHERE table_name = 't1';
+----
+keep_trigger	t1
+
+# --- Drop trigger on schema-qualified table ---
+statement ok
+CREATE SCHEMA my_schema;
+
+statement ok
+CREATE TABLE my_schema.t2 (id INTEGER);
+
+statement ok
+CREATE TRIGGER schema_trigger AFTER INSERT ON my_schema.t2 INSERT INTO log_table VALUES (10);
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'schema_trigger';
+----
+1
+
+statement ok
+DROP TRIGGER schema_trigger ON my_schema.t2;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'schema_trigger';
+----
+0
+
+# --- Same trigger name on different tables: drop only one ---
+statement ok
+CREATE TABLE a (x INTEGER);
+
+statement ok
+CREATE TABLE b (x INTEGER);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON a INSERT INTO log_table VALUES (1);
+
+statement ok
+CREATE TRIGGER same_name AFTER INSERT ON b INSERT INTO log_table VALUES (2);
+
+statement ok
+DROP TRIGGER same_name ON a;
+
+# Trigger on b should still exist
+query TT
+SELECT trigger_name, table_name FROM duckdb_triggers() WHERE trigger_name = 'same_name';
+----
+same_name	b
+
+# Drop the remaining one
+statement ok
+DROP TRIGGER same_name ON b;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'same_name';
+----
+0
+
+# --- Drop trigger on catalog-qualified table (3-part name) ---
+statement ok
+ATTACH ':memory:' AS mydb;
+
+statement ok
+CREATE TABLE mydb.main.cat_table (id INTEGER);
+
+statement ok
+CREATE TABLE mydb.main.cat_log (id INTEGER);
+
+statement ok
+CREATE TRIGGER cat_trigger AFTER INSERT ON mydb.main.cat_table INSERT INTO mydb.main.cat_log VALUES (1);
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'cat_trigger' AND database_name = 'mydb';
+----
+1
+
+statement ok
+DROP TRIGGER cat_trigger ON mydb.main.cat_table;
+
+query I
+SELECT COUNT(*) FROM duckdb_triggers() WHERE trigger_name = 'cat_trigger' AND database_name = 'mydb';
+----
+0
+
+statement ok
+DROP TABLE mydb.main.cat_table;
+
+statement ok
+DROP TABLE mydb.main.cat_log;
+
+statement ok
+DETACH mydb;
+
+# Cleanup
+statement ok
+DROP TABLE t1 CASCADE;
+
+statement ok
+DROP TABLE log_table;
+
+statement ok
+DROP TABLE my_schema.t2 CASCADE;
+
+statement ok
+DROP SCHEMA my_schema CASCADE;
+
+statement ok
+DROP TABLE a;
+
+statement ok
+DROP TABLE b;

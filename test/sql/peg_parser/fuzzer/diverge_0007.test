@@ -1,0 +1,13 @@
+# name: test/sql/peg_parser/fuzzer/diverge_0007.test
+# description: PEG should reject (currently accepts): Not implemented Error: Unimplemented explain type: entry
+# group: [fuzzer]
+
+statement error
+EXPLAIN ( entry ) RESET SESSION item
+----
+Not implemented Error: Unimplemented explain type: entry
+
+statement error
+EXPLAIN ( t , s , t ) LOAD XMLCONCAT
+----
+Not implemented Error: Unimplemented explain type: t

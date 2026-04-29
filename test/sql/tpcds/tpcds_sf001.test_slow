@@ -28,7 +28,7 @@ SELECT COUNT(*) FROM catalog_page
 query T
 SELECT COUNT(*) FROM catalog_returns
 ----
-1358
+1377
 
 query T
 SELECT COUNT(*) FROM catalog_sales
@@ -98,7 +98,7 @@ SELECT COUNT(*) FROM store
 query T
 SELECT COUNT(*) FROM store_returns
 ----
-2810
+2829
 
 query T
 SELECT COUNT(*) FROM store_sales
@@ -123,7 +123,7 @@ SELECT COUNT(*) FROM web_page
 query T
 SELECT COUNT(*) FROM web_returns
 ----
-679
+685
 
 query T
 SELECT COUNT(*) FROM web_sales
@@ -138,18 +138,18 @@ SELECT COUNT(*) FROM web_site
 loop i 1 9
 
 query I
-PRAGMA tpcds(${i})
+PRAGMA tpcds({i})
 ----
-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0{i}.csv
 
 endloop
 
 loop i 10 100
 
 query I
-PRAGMA tpcds(${i})
+PRAGMA tpcds({i})
 ----
-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/{i}.csv
 
 endloop
 
