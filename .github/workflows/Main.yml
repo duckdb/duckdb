@@ -1249,7 +1249,7 @@ jobs:
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
-      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: python3 scripts/ci/run_tests.py --workers 1 --batch-size 1 --test-command "valgrind {binary} {flags} -f {test_list}" ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  threadsan:
     name: Thread Sanitizer
@@ -1419,7 +1419,7 @@ jobs:
       if: success() || failure()
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
+        python3 scripts/ci/run_tests.py --test-config=test/configs/vacuum_rebuild_indexes_force_storage.json ./build/release/test/unittest
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()

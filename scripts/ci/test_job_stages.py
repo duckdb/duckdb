@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import shlex
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,73 @@ from scripts.ci import job_stages
 
 
 class JobStagesTest(unittest.TestCase):
+    UNITTEST_TOKEN_RE = re.compile(r"(?:\./)?[\w./-]*unittest(?:\.exe)?$")
+
+    def _workflow_paths(self) -> list[Path]:
+        return sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
+
+    def _extract_run_commands(self, workflow_text: str) -> list[tuple[int, str]]:
+        commands: list[tuple[int, str]] = []
+        lines = workflow_text.splitlines()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            match = re.match(r"^(\s*)run:\s*(.*)$", line)
+            if not match:
+                i += 1
+                continue
+
+            indent = len(match.group(1))
+            value = match.group(2).strip()
+            line_no = i + 1
+
+            if value in {"|", ">"}:
+                block_lines: list[str] = []
+                i += 1
+                while i < len(lines):
+                    block_line = lines[i]
+                    if not block_line.strip():
+                        block_lines.append("")
+                        i += 1
+                        continue
+
+                    block_indent = len(block_line) - len(block_line.lstrip(" "))
+                    if block_indent <= indent:
+                        break
+                    block_lines.append(block_line[indent + 2 :] if len(block_line) > indent + 2 else "")
+                    i += 1
+
+                commands.append((line_no, "\n".join(block_lines)))
+                continue
+
+            commands.append((line_no, value))
+            i += 1
+
+        return commands
+
+    def _has_direct_unittest_invocation(self, command: str) -> bool:
+        command_parts = re.split(r"\n|&&|\|\||;", command)
+        for raw_part in command_parts:
+            part = raw_part.strip()
+            if not part:
+                continue
+            try:
+                tokens = shlex.split(part)
+            except ValueError:
+                tokens = part.split()
+            if not tokens:
+                continue
+
+            idx = 0
+            while idx < len(tokens) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", tokens[idx]):
+                idx += 1
+            if idx >= len(tokens):
+                continue
+
+            if self.UNITTEST_TOKEN_RE.match(tokens[idx]):
+                return True
+        return False
+
     def _compute_job_selection(
         self,
         event_name: str,
@@ -211,6 +279,25 @@ class JobStagesTest(unittest.TestCase):
             extra_in_summary,
             f"summary.needs references unknown jobs: {sorted(extra_in_summary)}",
         )
+
+    def test_workflow_unittest_commands_use_run_tests_py(self):
+        violations: list[str] = []
+
+        for workflow_path in self._workflow_paths():
+            workflow_text = workflow_path.read_text(encoding="utf-8")
+            for line_no, command in self._extract_run_commands(workflow_text):
+                if not self._has_direct_unittest_invocation(command):
+                    continue
+                if "scripts/ci/run_tests.py" in command:
+                    continue
+                snippet = " ".join(command.strip().split())
+                if len(snippet) > 180:
+                    snippet = snippet[:177] + "..."
+                violations.append(f"{workflow_path.relative_to(REPO_ROOT)}:{line_no}: {snippet}")
+
+        if violations:
+            formatted = "\n\n".join(f"- {entry}" for entry in violations)
+            self.fail("workflow `run:` commands using `unittest` must use scripts/ci/run_tests.py:\n\n" + formatted)
 
 
 if __name__ == "__main__":
