@@ -1,0 +1,24 @@
+# name: test/test.test
+# group: [test]
+
+require parquet
+
+statement ok
+SET GLOBAL force_parallel_union_all TO true;
+
+statement ok
+create or replace table t as
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2026-02.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2026-01.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-01.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-02.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-03.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-04.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-05.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-06.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-07.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-08.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-09.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-10.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-11.parquet') union all by name
+    select * from read_parquet('/Users/dinos/Downloads/yellow_trip/yellow_tripdata_2025-12.parquet');

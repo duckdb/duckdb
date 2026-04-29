@@ -642,6 +642,13 @@
         "custom_implementation": true
     },
     {
+        "name": "force_parallel_union_all",
+        "description": "Force UNION ALL branches to execute in parallel. Can substantially increase memory usage.",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "force_variant_shredding",
         "description": "Forces the VARIANT shredding that happens at checkpoint to use the provided schema for the shredding.",
         "type": "VARCHAR",
@@ -881,13 +888,6 @@
         "on_callbacks": [
             "set"
         ]
-    },
-    {
-        "name": "parallel_union_all",
-        "description": "Allow UNION ALL branches to execute in parallel. Can substantially increase memory usage.",
-        "type": "BOOLEAN",
-        "default_scope": "global",
-        "default_value": "false"
     },
     {
         "name": "partitioned_write_flush_threshold",
