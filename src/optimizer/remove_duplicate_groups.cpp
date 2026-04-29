@@ -91,7 +91,7 @@ void CollectGroupRemovals(const LogicalAggregate &aggr, vector<GroupRemoval> &re
 		if (base_it == first_occurrence.end()) {
 			continue;
 		}
-		if (!BaseTypeAllowsCollapse(groups[base_it->second.GetIndex()]->return_type)) {
+		if (!BaseTypeAllowsCollapse(groups[base_it->second.GetIndex()]->GetReturnType())) {
 			continue;
 		}
 		removals.push_back({group_idx, base_it->second, nullptr});
@@ -167,11 +167,11 @@ BuildDerivedProjection(LogicalAggregate &aggr, idx_t num_original_groups, idx_t 
 	for (auto orig : ProjectionIndex::GetIndexes(num_original_groups)) {
 		auto post = group_binding_map.at(ColumnBinding(original_group_index, orig));
 		select_list.emplace_back(
-		    make_uniq<BoundColumnRefExpression>(aggr.groups[post.column_index]->return_type, post));
+		    make_uniq<BoundColumnRefExpression>(aggr.groups[post.column_index]->GetReturnType(), post));
 		derived_remap.emplace(ColumnBinding(original_group_index, orig), ColumnBinding(new_proj_idx, orig));
 	}
 	for (auto k : ProjectionIndex::GetIndexes(num_aggregate_outputs)) {
-		select_list.emplace_back(make_uniq<BoundColumnRefExpression>(aggr.expressions[k.GetIndex()]->return_type,
+		select_list.emplace_back(make_uniq<BoundColumnRefExpression>(aggr.expressions[k.GetIndex()]->GetReturnType(),
 		                                                             ColumnBinding(original_aggregate_index, k)));
 		derived_remap.emplace(ColumnBinding(original_aggregate_index, k),
 		                      ColumnBinding(new_proj_idx, ProjectionIndex(num_original_groups + k.GetIndex())));
