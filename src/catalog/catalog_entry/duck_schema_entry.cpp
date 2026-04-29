@@ -180,7 +180,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
 	if (transaction.db) {
-		auto prefix = ExtensionManager::Get(*transaction.db).GetActiveLoadPrefix();
+		auto prefix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
 		if (!prefix.empty()) {
 			info.name = "_" + prefix + "__" + info.name;
 			info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
@@ -247,7 +247,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	if (transaction.db && !ExtensionManager::Get(*transaction.db).GetActiveLoadPrefix().empty()) {
+	if (transaction.db && !ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix().empty()) {
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	}
 	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, *this, info);
@@ -291,7 +291,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCoordinateSystem(CatalogTransa
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTableFunction(CatalogTransaction transaction,
                                                                 CreateTableFunctionInfo &info) {
 	if (transaction.db) {
-		auto prefix = ExtensionManager::Get(*transaction.db).GetActiveLoadPrefix();
+		auto prefix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
 		if (!prefix.empty()) {
 			info.name = "_" + prefix + "__" + info.name;
 			info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;

@@ -60,9 +60,9 @@ public:
 	DUCKDB_API void AddExternalExtensionAlias(const string &alias, const string &extension_name);
 	DUCKDB_API string GetExternalExtensionName(const string &alias);
 
-	DUCKDB_API void SetActiveLoadPrefix(const string &prefix);
-	DUCKDB_API void ClearActiveLoadPrefix();
-	DUCKDB_API string GetActiveLoadPrefix();
+	DUCKDB_API void SetExtensionLoadPrefix(const string &prefix);
+	DUCKDB_API void ClearExtensionLoadPrefix();
+	DUCKDB_API string GetExtensionLoadPrefix();
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
@@ -72,7 +72,7 @@ private:
 	mutex lock;
 	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
 	unordered_map<string, string> external_aliases;
-	string active_load_prefix;
+	string extension_load_prefix;
 };
 
 } // namespace duckdb

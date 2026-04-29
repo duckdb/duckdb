@@ -11,7 +11,7 @@ ExtensionInfo::ExtensionInfo() : is_loaded(false) {
 
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	if (prefix_functions_with_alias) {
-		ExtensionManager::Get(db).ClearActiveLoadPrefix();
+		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
@@ -35,7 +35,7 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 
 void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 	if (prefix_functions_with_alias) {
-		ExtensionManager::Get(db).ClearActiveLoadPrefix();
+		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnExtensionLoadFail(db, extension_name, error);
@@ -109,19 +109,19 @@ string ExtensionManager::GetExternalExtensionName(const string &alias) {
 	return entry->second;
 }
 
-void ExtensionManager::SetActiveLoadPrefix(const string &prefix) {
+void ExtensionManager::SetExtensionLoadPrefix(const string &prefix) {
 	lock_guard<mutex> guard(lock);
-	active_load_prefix = prefix;
+	extension_load_prefix = prefix;
 }
 
-void ExtensionManager::ClearActiveLoadPrefix() {
+void ExtensionManager::ClearExtensionLoadPrefix() {
 	lock_guard<mutex> guard(lock);
-	active_load_prefix.clear();
+	extension_load_prefix.clear();
 }
 
-string ExtensionManager::GetActiveLoadPrefix() {
+string ExtensionManager::GetExtensionLoadPrefix() {
 	lock_guard<mutex> guard(lock);
-	return active_load_prefix;
+	return extension_load_prefix;
 }
 
 // bool ExtensionManager::GetExtensionEntry() {
@@ -147,7 +147,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 
 	auto entry = loaded_extensions_info.end();
 
-	if (options.extension_name.empty()) {
+	if (options.alias.empty()) {
 		// no alias given, we look if the extension is already loaded
 		entry = loaded_extensions_info.find(extension_name);
 	}
