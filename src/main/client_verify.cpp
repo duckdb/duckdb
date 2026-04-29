@@ -1,7 +1,6 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-#include "duckdb/verification/statement_verifier.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/box_renderer_context.hpp"
@@ -16,24 +15,62 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
 
 namespace duckdb {
 
-static void ThrowIfExceptionIsInternal(StatementVerifier &verifier) {
-	if (!verifier.materialized_result) {
-		return;
+struct PreparedStatementVerification {
+	PreparedStatementVerification() {
 	}
-	auto &result = *verifier.materialized_result;
-	if (!result.HasError()) {
-		return;
-	}
-	auto &error = result.GetErrorObject();
-	if (error.Type() == ExceptionType::INTERNAL) {
-		error.Throw();
-	}
+
+	void ConvertConstants(QueryNode &node);
+	void ConvertConstants(unique_ptr<ParsedExpression> &child);
+
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> values;
+};
+
+void PreparedStatementVerification::ConvertConstants(QueryNode &node) {
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 }
 
-void ClientContext::StatementVerification(unique_ptr<SQLStatement> &statement) {
+void PreparedStatementVerification::ConvertConstants(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		// constant: extract the constant value
+		auto alias = expr->GetAlias();
+		expr->ClearAlias();
+		// check if the value already exists
+		idx_t index = values.size();
+		auto identifier = std::to_string(index + 1);
+		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+			return pair.second->Equals(*expr.get());
+		};
+		auto result = std::find_if(values.begin(), values.end(), predicate);
+		if (result == values.end()) {
+			// If it doesn't exist yet, add it
+			values[identifier] = std::move(expr);
+		} else {
+			identifier = result->first;
+		}
+
+		// replace it with an expression
+		auto parameter = make_uniq<ParameterExpression>();
+		parameter->identifier = identifier;
+		parameter->SetAlias(alias);
+		expr = std::move(parameter);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr,
+	                                            [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+}
+
+void ClientContext::StatementVerification(ClientContextLock &lock, const string &query,
+                                          unique_ptr<SQLStatement> &statement,
+                                          PendingQueryParameters query_parameters) {
 	auto verification = Settings::Get<DebugVerifyStatementSetting>(*this);
 	if (verification == DebugStatementVerification::COPY_STATEMENT) {
 		if (statement->type == StatementType::LOGICAL_PLAN_STATEMENT) {
@@ -134,151 +171,86 @@ void ClientContext::StatementVerification(unique_ptr<SQLStatement> &statement) {
 		default:
 			throw InternalException("Unsupported type for serialization verification");
 		}
-	}
-}
-
-ErrorData ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-                                     PendingQueryParameters query_parameters) {
-	D_ASSERT(statement->type == StatementType::SELECT_STATEMENT);
-	// Aggressive query verification
-
-	auto parameters = query_parameters.parameters;
-	query_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-	query_parameters.query_parameters.memory_type = QueryResultMemoryType::IN_MEMORY;
-
-	// The purpose of this function is to test correctness of otherwise hard to test features:
-	// Copy() of statements and expressions
-	// Serialize()/Deserialize() of expressions
-	// Hash() of expressions
-	// Equality() of statements and expressions
-	// ToString() of statements and expressions
-	// Correctness of plans both with and without optimizers
-
-	const auto &stmt = *statement;
-	vector<unique_ptr<StatementVerifier>> statement_verifiers;
-	unique_ptr<StatementVerifier> prepared_statement_verifier;
-
-	// Base Statement verifiers: these are the verifiers we enable for regular builds
-	if (config.query_verification_enabled) {
-		// FIXME: Prepared parameter verifier is broken for queries with parameters
-		if (!parameters || parameters->empty()) {
-			prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt, parameters);
+	} else if (verification == DebugStatementVerification::PREPARED_STATEMENT) {
+		if (statement->type != StatementType::SELECT_STATEMENT) {
+			// only supported for SELECT (for now?)
+			return;
 		}
-	}
-
-	auto original = make_uniq<StatementVerifier>(std::move(statement), parameters);
-	for (auto &verifier : statement_verifiers) {
-		original->CheckExpressions(*verifier);
-	}
-	original->CheckExpressions();
-
-	// See below
-	auto statement_copy_for_explain = stmt.Copy();
-
-	// Save settings
-	bool optimizer_enabled = config.enable_optimizer;
-	bool profiling_is_enabled = config.enable_profiler;
-
-	// Disable profiling if it is enabled
-	if (profiling_is_enabled) {
-		config.enable_profiler = false;
-	}
-
-	// Execute the original statement
-	bool any_failed = original->Run(*this, query,
-	                                [&](const string &q, unique_ptr<SQLStatement> s,
-	                                    optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-		                                return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
-	                                });
-	// Execute the verifiers
-	for (auto &verifier : statement_verifiers) {
-		bool failed = verifier->Run(*this, query,
-		                            [&](const string &q, unique_ptr<SQLStatement> s,
-		                                optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			                            return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
-		                            });
-		any_failed = any_failed || failed;
-	}
-
-	if (!any_failed && prepared_statement_verifier) {
-		// If none failed, we execute the prepared statement verifier
-		bool failed = prepared_statement_verifier->Run(
-		    *this, query,
-		    [&](const string &q, unique_ptr<SQLStatement> s,
-		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
-		    });
-		if (!failed) {
-			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
-			statement_verifiers.push_back(std::move(prepared_statement_verifier));
-		} else {
-			// If it does fail, let's make sure it's not an internal exception
-			ThrowIfExceptionIsInternal(*prepared_statement_verifier);
+		if (!statement->named_param_map.empty()) {
+			// not supported for statements that already take parameters
+			return;
 		}
-	} else {
-		if (ValidChecker::IsInvalidated(*db)) {
-			return original->materialized_result->GetErrorObject();
+		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+			// not supported for statements that already have parameters
+			return;
 		}
-		if (transaction.HasActiveTransaction() && ValidChecker::IsInvalidated(ActiveTransaction())) {
-			return original->materialized_result->GetErrorObject();
+		auto &select_stmt = statement->Cast<SelectStatement>();
+		auto node = select_stmt.node->Copy();
+
+		// convert constants in the query node to parameters
+		// i.e. turn SELECT 'hello', 42 into SELECT ?, ?
+		PreparedStatementVerification prep_verifier;
+		prep_verifier.ConvertConstants(*node);
+
+		// create the prepared select
+		// i.e. PREPARE p AS SELECT ?, ?
+		auto prepare_base = make_uniq<SelectStatement>();
+		prepare_base->node = std::move(node);
+		for (auto &kv : prep_verifier.values) {
+			prepare_base->named_param_map[kv.first] = 0;
 		}
-	}
 
-	// Restore config setting
-	config.enable_optimizer = optimizer_enabled;
+		// create the PREPARE and EXECUTE statements
+		string name = "__duckdb_verification_prepared_statement_" + UUID::ToString(UUID::GenerateRandomUUID());
+		auto prepare = make_uniq<PrepareStatement>();
+		prepare->name = name;
+		prepare->statement = std::move(prepare_base);
 
-	// Check explain, only if q does not already contain EXPLAIN
-	if (original->materialized_result->success) {
+		// execute the PREPARE
+		ErrorData error;
+		try {
+			auto prepare_result = RunStatementInternal(lock, string(), std::move(prepare), query_parameters);
+			if (prepare_result->HasError()) {
+				error = prepare_result->GetErrorObject();
+			}
+		} catch (std::exception &ex) {
+			error = ErrorData(ex);
+		}
+		if (error.HasError()) {
+			// FIXME: this is extremely lenient...
+			if (error.Type() == ExceptionType::INTERNAL) {
+				error.Throw("Failed prepare during verify: ");
+			}
+			return;
+		}
+
+		// create and return the EXECUTE statement
+		// i.e. EXECUTE p('hello', 42)
+		auto execute = make_uniq<ExecuteStatement>();
+		execute->name = name;
+		execute->named_values = std::move(prep_verifier.values);
+
+		statement = std::move(execute);
+	} else if (verification == DebugStatementVerification::EXPLAIN_STATEMENT) {
+		if (statement->type == StatementType::EXPLAIN_STATEMENT) {
+			// don't explain explain...
+			return;
+		}
+		if (!statement->named_param_map.empty()) {
+			// not supported for statements that already take parameters
+			return;
+		}
+		if (query_parameters.parameters && !query_parameters.parameters->empty()) {
+			// not supported for statements that already have parameters
+			return;
+		}
 		auto explain_q = "EXPLAIN " + query;
-		auto original_named_param_map = statement_copy_for_explain->named_param_map;
-		auto explain_stmt = make_uniq<ExplainStatement>(std::move(statement_copy_for_explain));
-		explain_stmt->named_param_map = original_named_param_map;
-
-		auto explain_statement_verifier =
-		    StatementVerifier::Create(VerificationType::EXPLAIN, *explain_stmt, parameters);
-		const auto explain_failed = explain_statement_verifier->Run(
-		    *this, explain_q,
-		    [&](const string &q, unique_ptr<SQLStatement> s,
-		        optional_ptr<case_insensitive_map_t<BoundParameterData>> params) {
-			    return RunStatementInternal(lock, q, std::move(s), query_parameters, false);
-		    });
-
-		if (explain_failed) { // LCOV_EXCL_START
-			const auto &explain_error = explain_statement_verifier->materialized_result->error;
-			return ErrorData(explain_error.Type(), StringUtil::Format("Query succeeded but EXPLAIN failed with: %s",
-			                                                          explain_error.RawMessage()));
-		} // LCOV_EXCL_STOP
-
-#ifdef DUCKDB_VERIFY_BOX_RENDERER
-		// this is pretty slow, so disabled by default
-		// test the box renderer on the result
-		// we mostly care that this does not crash
-		RandomEngine random;
-		BoxRendererConfig config;
-		// test with a random width
-		config.max_width = random.NextRandomInteger() % 500;
-		BoxRenderer renderer(config);
-		auto pinned_result_set = original->materialized_result->Pin();
-		ClientBoxRendererContext render_context(*this);
-		renderer.ToString(render_context, original->materialized_result->names, pinned_result_set->collection);
-#endif
-	}
-
-	// Restore profiler setting
-	if (profiling_is_enabled) {
-		config.enable_profiler = true;
-	}
-
-	// Now compare the results
-	// The results of all runs should be identical
-	for (auto &verifier : statement_verifiers) {
-		auto result = original->CompareResults(*verifier);
-		if (!result.empty()) {
-			return ErrorData(result);
+		auto explain_stmt = make_uniq<ExplainStatement>(statement->Copy());
+		auto explain_result = RunStatementInternal(lock, explain_q, std::move(explain_stmt), query_parameters);
+		if (explain_result->HasError()) {
+			explain_result->ThrowError();
 		}
 	}
-
-	return ErrorData();
 }
 
 } // namespace duckdb

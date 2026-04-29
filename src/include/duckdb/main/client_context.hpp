@@ -254,11 +254,8 @@ private:
 
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
-	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
-	//! true.
-	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                      PendingQueryParameters parameters);
-	void StatementVerification(unique_ptr<SQLStatement> &statement);
+	void StatementVerification(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> &statement,
+	                           PendingQueryParameters query_parameters);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.

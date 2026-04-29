@@ -933,25 +933,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, const PendingQueryParameters &parameters) {
 	if (statement) {
-		StatementVerification(statement);
-		if (config.query_verification_enabled && statement->type == StatementType::SELECT_STATEMENT) {
-			// query verification is enabled
-			// create a copy of the statement, and use the copy
-			// this way we verify that the copy correctly copies all properties
-			auto copied_statement = statement->Copy();
-			// in case this is a select query, we verify the original statement
-			ErrorData error;
-			try {
-				error = VerifyQuery(lock, query, std::move(statement), parameters);
-			} catch (std::exception &ex) {
-				error = ErrorData(ex);
-			}
-			if (error.HasError()) {
-				// error in verifying query
-				return ErrorResult<PendingQueryResult>(std::move(error), query);
-			}
-			statement = std::move(copied_statement);
-		}
+		StatementVerification(lock, query, statement, parameters);
 	}
 	return PendingStatementOrPreparedStatement(lock, query, std::move(statement), prepared, parameters);
 }

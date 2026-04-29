@@ -516,8 +516,6 @@ enum class VectorBufferType : uint8_t;
 
 enum class VectorType : uint8_t;
 
-enum class VerificationType : uint8_t;
-
 enum class VerifyExistenceType : uint8_t;
 
 enum class VertexType : uint8_t;
@@ -1258,9 +1256,6 @@ const char* EnumUtil::ToChars<VectorBufferType>(VectorBufferType value);
 
 template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
-
-template<>
-const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
 
 template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
@@ -2009,9 +2004,6 @@ VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
-
-template<>
-VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);
