@@ -1534,7 +1534,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					const auto &permutation = adaptive_filter.GetPermutation();
 					bool first_group = false;
 					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-						if (state.filter_eliminated_all_rows[permutation[i - 1]] && !first_group) {
+						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]] && !first_group) {
 							trans.FinalizeRegistration();
 							first_group = true;
 						}
