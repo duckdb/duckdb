@@ -266,7 +266,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
-		RemoveDuplicateGroups remove;
+		RemoveDuplicateGroups remove(*this);
 		remove.VisitOperator(*plan);
 	});
 

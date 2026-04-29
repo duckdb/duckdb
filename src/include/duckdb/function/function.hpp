@@ -135,7 +135,7 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
@@ -148,8 +148,13 @@ protected:
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;
+	//! Return type of the function
+	LogicalType return_type;
 
 public:
+	DUCKDB_API string ToString() const;
+	DUCKDB_API hash_t Hash() const;
+
 	vector<LogicalType> &GetArguments() {
 		return arguments;
 	}
@@ -174,23 +179,68 @@ public:
 		varargs = std::move(varargs_p);
 	}
 
-	DUCKDB_API virtual string ToString() const;
-
 	DUCKDB_API bool HasVarArgs() const;
+
+	void SetReturnType(LogicalType return_type_p) {
+		return_type = std::move(return_type_p);
+	}
+	const LogicalType &GetReturnType() const {
+		return return_type;
+	}
+	LogicalType &GetReturnType() {
+		return return_type;
+	}
 };
 
-class SimpleNamedParameterFunction : public SimpleFunction {
+class SimpleNamedParameterFunction : public Function {
 public:
 	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
 	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleNamedParameterFunction() override;
 
+	//! The set of arguments of the function
+	vector<LogicalType> arguments;
+	//! The set of original arguments of the function - only set if Function::EraseArgument is called
+	//! Used for (de)serialization purposes
+	vector<LogicalType> original_arguments;
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
+	//! arguments
+	LogicalType varargs;
+
 	//! The named parameters of the function
 	named_parameter_type_map_t named_parameters;
 
 public:
-	DUCKDB_API string ToString() const override;
+	DUCKDB_API virtual string ToString() const;
 	DUCKDB_API bool HasNamedParameters() const;
+
+	vector<LogicalType> &GetArguments() {
+		return arguments;
+	}
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<LogicalType> &GetOriginalArguments() {
+		return original_arguments;
+	}
+	const vector<LogicalType> &GetOriginalArguments() const {
+		return original_arguments;
+	}
+
+	const LogicalType &GetVarArgs() const {
+		return varargs;
+	}
+	LogicalType &GetVarArgs() {
+		return varargs;
+	}
+	// TODO: Dont expose mutable accessor
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
+	}
+	bool HasVarArgs() const {
+		return varargs.id() != LogicalTypeId::INVALID;
+	}
 };
 
 class FunctionProperties {
@@ -205,33 +255,6 @@ public:
 
 	bool operator==(const FunctionProperties &rhs) const;
 	bool operator!=(const FunctionProperties &rhs) const;
-};
-
-class BaseScalarFunction : public SimpleFunction {
-public:
-	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
-	DUCKDB_API ~BaseScalarFunction() override;
-
-public:
-	void SetReturnType(LogicalType return_type_p) {
-		return_type = std::move(return_type_p);
-	}
-	const LogicalType &GetReturnType() const {
-		return return_type;
-	}
-	LogicalType &GetReturnType() {
-		return return_type;
-	}
-
-protected:
-	//! Return type of the function
-	LogicalType return_type;
-
-public:
-	DUCKDB_API hash_t Hash() const;
-
-	DUCKDB_API string ToString() const override;
 };
 
 } // namespace duckdb

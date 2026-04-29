@@ -536,7 +536,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void SerializeStructFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                                    const ScalarFunction &function) {
+	                                    const BoundScalarFunction &function) {
 		D_ASSERT(bind_data);
 		auto &info = bind_data->Cast<BindStructData>();
 		serializer.WriteProperty(100, "tz_setting", info.tz_setting);
@@ -545,7 +545,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static duckdb::unique_ptr<FunctionData> DeserializeStructFunction(Deserializer &deserializer,
-	                                                                  ScalarFunction &bound_function) {
+	                                                                  BoundScalarFunction &bound_function) {
 		auto tz_setting = deserializer.ReadProperty<string>(100, "tz_setting");
 		auto cal_setting = deserializer.ReadProperty<string>(101, "cal_setting");
 		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(102, "part_codes");

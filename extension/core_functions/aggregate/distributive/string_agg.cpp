@@ -146,12 +146,12 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 }
 
 void StringAggSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                        const AggregateFunction &function) {
+                        const BoundAggregateFunction &function) {
 	auto bind_data = bind_data_p->Cast<StringAggBindData>();
 	serializer.WriteProperty(100, "separator", bind_data.sep);
 }
 
-unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, AggregateFunction &bound_function) {
+unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundAggregateFunction &bound_function) {
 	auto sep = deserializer.ReadProperty<string>(100, "separator");
 	return make_uniq<StringAggBindData>(std::move(sep));
 }

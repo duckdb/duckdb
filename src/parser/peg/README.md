@@ -146,8 +146,6 @@ After modifying `.gram` files or keyword lists, regenerate the inlined grammar f
 ./scripts/build_peg_grammar.sh
 ```
 
-**Prerequisites**: A Python virtual environment at `.venv` in the repository root.
-
 This script runs `extension/autocomplete/inline_grammar.py` twice:
 
 1. **`--grammar-file`**: Combines all `.gram` files and keyword lists into a single `inlined_grammar.gram` (useful for debugging).

@@ -1,5 +1,6 @@
 #include "duckdb/common/sorting/sort.hpp"
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
@@ -160,7 +161,7 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
+	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
 	      partition_size(0) {
 	}
 

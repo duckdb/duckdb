@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -149,7 +150,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
 	auto stats = PropagateExpression(*expr, expr);
-	if (ClientConfig::GetConfig(context).query_verification_enabled && stats) {
+	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
 		expr->verification_stats = stats->ToUnique();
 	}
 	return stats;

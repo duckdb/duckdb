@@ -200,8 +200,8 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 	//  Determine the function type.
 	LogicalType sql_type;
-	unique_ptr<AggregateFunction> aggregate;
-	unique_ptr<WindowFunction> window_func;
+	unique_ptr<BoundAggregateFunction> aggregate;
+	unique_ptr<BoundWindowFunction> window_func;
 	unique_ptr<FunctionData> bind_info;
 	if (entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		auto &func = entry->Cast<AggregateFunctionCatalogEntry>();
@@ -224,7 +224,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
-		aggregate = make_uniq<AggregateFunction>(window_bound_aggregate->function);
+		aggregate = make_uniq<BoundAggregateFunction>(window_bound_aggregate->function);
 		bind_info = std::move(window_bound_aggregate->bind_info);
 		children = std::move(window_bound_aggregate->children);
 		sql_type = window_bound_aggregate->return_type;
