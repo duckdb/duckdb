@@ -57,11 +57,16 @@ if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
 fi
 
 if ! command -v rclone >/dev/null 2>&1; then
-  curl https://rclone.org/install.sh | sudo bash
+  install_runner=(bash)
+  if command -v sudo >/dev/null 2>&1; then
+    install_runner=(sudo bash)
+  fi
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | "${install_runner[@]}"
 fi
 
 set -x
 
 rclone $DRY_RUN_PARAM copy \
-  "${@:2}" \
+  --files-from <(printf '%s\n' "${@:2}") \
+  . \
   ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"

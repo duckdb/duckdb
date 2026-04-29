@@ -24,7 +24,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: python3 scripts/ci/retry.py -- bash -lc 'curl https://rclone.org/install.sh | sudo bash'
+       run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
 
      - name: Download from staging bucket
        shell: bash
