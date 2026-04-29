@@ -178,10 +178,7 @@ SourceResultType PhysicalPositionalScan::GetDataInternal(ExecutionContext &conte
 		col_offset += scanner->CopyData(context, output, count, col_offset);
 	}
 
-	output.SetCardinality(count);
-	for (idx_t i = 0; i < output.ColumnCount(); i++) {
-		FlatVector::SetSize(output.data[i], count_t(count));
-	}
+	output.SetChildCardinality(count);
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 

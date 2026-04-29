@@ -645,9 +645,7 @@ public:
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
-				for (idx_t i = 0; i < output.ColumnCount(); i++) {
-					FlatVector::SetSize(output.data[i], count_t(output.size()));
-				}
+				output.SetChildCardinality(output.size());
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block

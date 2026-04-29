@@ -342,10 +342,7 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 			lstate.recursion_nodes.pop_back(); // Array/object is done, remove
 		}
 	}
-	output.SetCardinality(result.count);
-	for (idx_t i = 0; i < output.ColumnCount(); i++) {
-		FlatVector::SetSize(output.data[i], count_t(result.count));
-	}
+	output.SetChildCardinality(result.count);
 
 	// Set constant virtual columns ("json", "root", and "empty")
 	if (gstate.json_column_index.IsValid()) {

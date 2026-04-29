@@ -131,10 +131,7 @@ void PositionalJoinGlobalState::Execute(DataChunk &input, DataChunk &output) {
 	Refill();
 	CopyData(output, count, col_offset);
 
-	output.SetCardinality(count);
-	for (idx_t i = col_offset; i < output.ColumnCount(); ++i) {
-		FlatVector::SetSize(output.data[i], count_t(count));
-	}
+	output.SetChildCardinality(count);
 }
 
 OperatorResultType PhysicalPositionalJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -170,10 +167,7 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 
 	//	RHS still has data, so copy it
 	CopyData(output, count, col_offset);
-	output.SetCardinality(count);
-	for (idx_t i = col_offset; i < output.ColumnCount(); ++i) {
-		FlatVector::SetSize(output.data[i], count_t(count));
-	}
+	output.SetChildCardinality(count);
 }
 
 SourceResultType PhysicalPositionalJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,

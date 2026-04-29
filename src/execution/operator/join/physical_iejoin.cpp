@@ -599,10 +599,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 				;
 			} else {
 				scan_count = valid - table_idx;
-				scanned.SetCardinality(scan_count);
-				for (idx_t i = 0; i < scanned.ColumnCount(); i++) {
-					FlatVector::SetSize(scanned.data[i], count_t(scan_count));
-				}
+				scanned.SetChildCardinality(scan_count);
 			}
 		}
 		if (scan_count == 0) {

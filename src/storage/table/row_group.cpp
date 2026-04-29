@@ -814,14 +814,7 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;
 		}
-		result.SetCardinality(count);
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto &vec = result.data[i];
-			if (vec.HasSize() && vec.size() == count) {
-				continue;
-			}
-			FlatVector::SetSize(vec, count_t(count));
-		}
+		result.SetChildCardinality(count);
 		state.vector_index++;
 		break;
 	}

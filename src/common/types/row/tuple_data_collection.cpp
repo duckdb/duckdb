@@ -739,10 +739,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	ResetCachedCastVectors(chunk_state, column_ids);
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
 	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
-	result.SetCardinality(chunk.count);
-	for (idx_t i = 0; i < result.ColumnCount(); i++) {
-		FlatVector::SetSize(result.data[i], count_t(chunk.count));
-	}
+	result.SetChildCardinality(chunk.count);
 }
 
 void TupleDataCollection::ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids) {

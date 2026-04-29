@@ -1189,9 +1189,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
 		}
-		for (idx_t i = 0; i < insert_chunk.ColumnCount(); i++) {
-			FlatVector::SetSize(insert_chunk.data[i], count_t(insert_chunk.size()));
-		}
+		insert_chunk.SetChildCardinality(insert_chunk.size());
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
 			if (iterator.IsBoundarySet()) {

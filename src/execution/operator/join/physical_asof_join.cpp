@@ -1203,10 +1203,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 		auto &target = chunk.data[lhs_payload.ColumnCount() + col_idx];
 		target.Reference(source);
 	}
-	chunk.SetCardinality(lhs_match_count);
-	for (idx_t i = 0; i < chunk.ColumnCount(); ++i) {
-		FlatVector::SetSize(chunk.data[i], count_t(lhs_match_count));
-	}
+	chunk.SetChildCardinality(lhs_match_count);
 
 	//	Update the match masks for the rows we ended up with
 	left_outer.Reset();

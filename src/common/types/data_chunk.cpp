@@ -128,6 +128,13 @@ void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
 }
 
+void DataChunk::SetChildCardinality(idx_t count_p) {
+	this->count = count_p;
+	for (auto &v : data) {
+		FlatVector::SetSize(v, count_p);
+	}
+}
+
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {

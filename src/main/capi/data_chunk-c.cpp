@@ -101,14 +101,11 @@ void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size) {
 		return;
 	}
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
-	dchunk->SetCardinality(size);
-	// CAPI users typically populate vectors via raw pointers which do not track v_size; mark the
-	// vectors as having the same size as the chunk so the verifier accepts them
-	for (idx_t i = 0; i < dchunk->ColumnCount(); i++) {
-		auto vec_type = dchunk->data[i].GetVectorType();
-		if (vec_type == duckdb::VectorType::FLAT_VECTOR || vec_type == duckdb::VectorType::CONSTANT_VECTOR) {
-			duckdb::FlatVector::SetSize(dchunk->data[i], duckdb::count_t(size));
-		}
+	try {
+		dchunk->SetChildCardinality(size);
+	} catch (...) {
+		// we cannot return exceptions here...
+		D_ASSERT(false);
 	}
 }
 
