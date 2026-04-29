@@ -1,0 +1,16 @@
+name: Label Member Pull Requests
+on:
+  pull_request:
+    types:
+      - opened
+
+jobs:
+  label:
+    if: contains(fromJson('["MEMBER","OWNER","COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-slim
+    steps:
+      - name: Add Member label
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.pull_request.number }} --add-label "Member"
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
