@@ -7,6 +7,12 @@
 
 # TODO, also test, what if schema == extension name??
 
+# Behavior: with aliasing; you load can reload the extension under a different alias
+# the extension will be registered under name of the alias
+# the alias will be used further on
+# if the extension is already loaded twice,
+
+
 require skip_reload
 
 require allow_unsigned_extensions
@@ -58,3 +64,8 @@ query I
 SELECT demo.bounded_max(1::BOUNDED(10))
 ----
 10
+
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo2
+----
+
