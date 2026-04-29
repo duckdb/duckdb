@@ -50,6 +50,10 @@ bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {
 	return IsKeyword(text);
 }
 
+string KeywordHelper::EscapeQuotes(const string &text, char quote) {
+	return StringUtil::Replace(text, string(1, quote), string(2, quote));
+}
+
 string KeywordHelper::WriteQuotedAndEscaped(const string &text, char quote) {
 	string result;
 	result.reserve(text.size() + 2);

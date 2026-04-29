@@ -20,6 +20,10 @@ public:
 
 	static KeywordCategory KeywordCategoryType(const string &text);
 
+	[[deprecated("This function has been deprecated due to it having confusing syntax, use SQLString instead for "
+	             "literals, or SQLIdentifier/SQLQuotedIdentifier for identifiers")]] static string
+	EscapeQuotes(const string &text, char quote = '"');
+
 	//! Returns true if the given string needs to be quoted when written as an identifier
 	static bool RequiresQuotes(const string &text, bool allow_caps = true);
 
