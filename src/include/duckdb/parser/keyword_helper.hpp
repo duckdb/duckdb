@@ -26,10 +26,14 @@ public:
 	static bool RequiresQuotes(const string &text, bool allow_caps = true);
 
 	//! Writes a string that is quoted
-	static string WriteQuoted(const string &text, char quote = '\'');
+	[[deprecated("This function has been deprecated due to it having confusing syntax, use SQLString instead for "
+	             "literals, or SQLIdentifier/SQLQuotedIdentifier for identifiers")]] static string
+	WriteQuoted(const string &text, char quote = '\'');
 
 	//! Writes a string that is optionally quoted + escaped so it can be used as an identifier
-	static string WriteOptionallyQuoted(const string &text, char quote = '"', bool allow_caps = true);
+	[[deprecated("This function has been deprecated due to it having confusing syntax, use "
+	             "SQLIdentifier/SQLQuotedIdentifier instead for identifiers, or SQLString for literals")]] static string
+	WriteOptionallyQuoted(const string &text, char quote = '"', bool allow_caps = true);
 };
 
 } // namespace duckdb
