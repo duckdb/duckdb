@@ -16,6 +16,7 @@
 #include <mutex>
 
 namespace duckdb {
+class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
@@ -218,9 +219,6 @@ private:
 	friend struct PEGMatcherCache;
 	optional_ptr<Matcher> root;
 };
-
-// Forward declaration -- full type needed only in matcher.cpp
-class PEGTransformerFactory;
 
 //! Per-database cache holder for the compiled PEG root matcher and transformer factory.
 //! Both are always invalidated together, so they share one mutex and one Invalidate() call.
