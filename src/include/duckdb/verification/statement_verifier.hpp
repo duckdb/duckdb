@@ -14,17 +14,7 @@
 
 namespace duckdb {
 
-enum class VerificationType : uint8_t {
-	ORIGINAL,
-	UNOPTIMIZED,
-	NO_OPERATOR_CACHING,
-	PREPARED,
-	EXTERNAL,
-	EXPLAIN,
-	FETCH_ROW_AS_SCAN,
-
-	INVALID
-};
+enum class VerificationType : uint8_t { ORIGINAL, PREPARED, EXPLAIN, INVALID };
 
 class StatementVerifier {
 public:
@@ -53,22 +43,6 @@ public:
 public:
 	virtual bool RequireEquality() const {
 		return true;
-	}
-
-	virtual bool DisableOptimizer() const {
-		return false;
-	}
-
-	virtual bool DisableOperatorCaching() const {
-		return false;
-	}
-
-	virtual bool ForceExternal() const {
-		return false;
-	}
-
-	virtual bool ForceFetchRow() const {
-		return false;
 	}
 
 public:

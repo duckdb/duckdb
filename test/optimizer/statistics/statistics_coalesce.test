@@ -99,9 +99,6 @@ SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
 statement ok
 PRAGMA disable_verification
 
-statement ok
-PRAGMA disable_verify_fetch_row;
-
 # COALESCE without statistics.
 
 statement ok

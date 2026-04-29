@@ -1373,11 +1373,29 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
 
-    - name: test/configs/verify_fetch_row.json
+    - name: test/configs/disable_optimizer.json
       if: success() || failure()
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
+
+    - name: test/configs/force_external.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
+
+    - name: test/configs/verify_stats.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+
+    - name: test/configs/disable_caching_operators.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
 
     - name: test/configs/wal_verification.json
       if: success() || failure()

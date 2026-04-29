@@ -463,7 +463,14 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		}
 	}
 
-	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
+	bool optimize = config.enable_optimizer;
+	if (Settings::Get<DebugDisableOptimizerSetting>(*this)) {
+		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
+		if (logical_plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
+			optimize = false;
+		}
+	}
+	if (optimize && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricType::ALL_OPTIMIZERS);
 		Optimizer optimizer(*logical_planner.binder, *this);
 		logical_plan = optimizer.Optimize(std::move(logical_plan));

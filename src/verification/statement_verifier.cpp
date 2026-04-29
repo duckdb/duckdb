@@ -7,11 +7,7 @@
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/verification/external_statement_verifier.hpp"
 #include "duckdb/verification/prepared_statement_verifier.hpp"
-#include "duckdb/verification/unoptimized_statement_verifier.hpp"
-#include "duckdb/verification/no_operator_caching_verifier.hpp"
-#include "duckdb/verification/fetch_row_verifier.hpp"
 #include "duckdb/verification/explain_statement_verifier.hpp"
 
 namespace duckdb {
@@ -48,18 +44,10 @@ unique_ptr<StatementVerifier>
 StatementVerifier::Create(VerificationType type, const SQLStatement &statement_p,
                           optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 	switch (type) {
-	case VerificationType::UNOPTIMIZED:
-		return UnoptimizedStatementVerifier::Create(statement_p, parameters);
-	case VerificationType::NO_OPERATOR_CACHING:
-		return NoOperatorCachingVerifier::Create(statement_p, parameters);
 	case VerificationType::PREPARED:
 		return PreparedStatementVerifier::Create(statement_p, parameters);
-	case VerificationType::EXTERNAL:
-		return ExternalStatementVerifier::Create(statement_p, parameters);
 	case VerificationType::EXPLAIN:
 		return ExplainStatementVerifier::Create(statement_p, parameters);
-	case VerificationType::FETCH_ROW_AS_SCAN:
-		return FetchRowVerifier::Create(statement_p, parameters);
 	case VerificationType::INVALID:
 	default:
 		throw InternalException("Invalid statement verification type!");
@@ -124,10 +112,6 @@ bool StatementVerifier::Run(
 	bool failed = false;
 
 	context.interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
-	context.config.enable_optimizer = !DisableOptimizer();
-	context.config.enable_caching_operators = !DisableOperatorCaching();
-	context.config.force_external = ForceExternal();
-	context.config.force_fetch_row = ForceFetchRow();
 	try {
 		auto result = run(query, std::move(statement), parameters);
 		if (result->HasError()) {
