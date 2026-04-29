@@ -51,7 +51,16 @@ if(CMAKE_EXPORT_COMPILE_COMMANDS AND UNIX)
   )
 endif()
 
-set(CMAKE_CXX_STANDARD "17" CACHE STRING "C++ standard to enforce")
+if(DEFINED CMAKE_CXX_STANDARD)
+  set(_duckdb_allowed_cxx_std 17 20 23 26)
+  if(NOT CMAKE_CXX_STANDARD IN_LIST _duckdb_allowed_cxx_std)
+    message(FATAL_ERROR
+      "DuckDB requires C++17 or higher; got CMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}. "
+      "Pass -DCMAKE_CXX_STANDARD=17 (or higher), or unset it to use the default.")
+  endif()
+endif()
+
+set(CMAKE_CXX_STANDARD 17 CACHE STRING "Default C++ standard (minimum 17)")                                                                                                             
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -94,10 +103,18 @@ endif()
 
 if (DUCKDB_LINKER)
   set(DUCKDB_LINKER_FLAG "-fuse-ld=${DUCKDB_LINKER}")
+  set(DUCKDB_LINKER_MESSAGE "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
   set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_LINKER_FLAG}")
-  message(STATUS "Using linker from DUCKDB_LINKER=${DUCKDB_LINKER}")
+  if(CMAKE_BUILD_TYPE STREQUAL "Release" AND DUCKDB_LINKER STREQUAL "mold")
+    set(DUCKDB_MOLD_FLAGS "-Wl,--icf=safe")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${DUCKDB_MOLD_FLAGS}")
+    set(DUCKDB_LINKER_MESSAGE "${DUCKDB_LINKER_MESSAGE} with (${DUCKDB_MOLD_FLAGS})")
+  endif()
+  message(STATUS "${DUCKDB_LINKER_MESSAGE}")
 endif()
 
 

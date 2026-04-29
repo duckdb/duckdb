@@ -2,9 +2,6 @@
 # group: [auto]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create view v as select * from read_csv_auto('{DATA_DIR}/csv/who.csv.gz');
 
 query IIIIII

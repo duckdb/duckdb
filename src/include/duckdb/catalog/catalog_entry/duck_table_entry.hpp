@@ -64,10 +64,9 @@ public:
 	//! Returns the virtual columns for this table
 	virtual_column_map_t GetVirtualColumns() const override;
 
-	//! Create a trigger on this table
-	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info);
-	//! Scan all triggers on this table
-	void ScanTriggers(CatalogTransaction transaction, const std::function<void(CatalogEntry &)> &callback);
+	optional_ptr<CatalogEntry> CreateTrigger(CatalogTransaction transaction, CreateTriggerInfo &info) override;
+	void ScanTriggers(CatalogTransaction transaction,
+	                  const std::function<void(CatalogEntry &)> &callback) const override;
 	//! Scan all triggers without a transaction (used by checkpoint writer)
 	void ScanTriggersNonTransactional(const std::function<void(CatalogEntry &)> &callback);
 	//! Drop a trigger by name

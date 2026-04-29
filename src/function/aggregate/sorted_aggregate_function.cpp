@@ -28,7 +28,7 @@ struct SortedAggregateBindData : public FunctionData {
 		//	Describe the arguments.
 		for (const auto &child : children) {
 			buffered_cols.emplace_back(buffered_cols.size());
-			buffered_types.emplace_back(child->return_type);
+			buffered_types.emplace_back(child->GetReturnType());
 
 			//	Column 0 in the sort data is the group number
 			scan_cols.emplace_back(buffered_cols.size());
@@ -45,7 +45,7 @@ struct SortedAggregateBindData : public FunctionData {
 		for (idx_t ord_idx = 0; ord_idx < order_bys.size(); ++ord_idx) {
 			auto order = order_bys[ord_idx].Copy();
 			bool matched = false;
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 
 			for (idx_t arg_idx = 0; arg_idx < children.size(); ++arg_idx) {
 				auto &child = children[arg_idx];
@@ -704,7 +704,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	vector<LogicalType> arguments;
 	arguments.reserve(children.size());
 	for (const auto &child : children) {
-		arguments.emplace_back(child->return_type);
+		arguments.emplace_back(child->GetReturnType());
 	}
 
 	// Replace the aggregate with the wrapper
@@ -719,7 +719,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	expr.function = std::move(ordered_aggregate);
+	expr.function = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
 }
@@ -761,7 +761,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	vector<LogicalType> arguments;
 	arguments.reserve(children.size());
 	for (const auto &child : children) {
-		arguments.emplace_back(child->return_type);
+		arguments.emplace_back(child->GetReturnType());
 	}
 
 	// Replace the aggregate with the wrapper
@@ -775,7 +775,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
-	aggregate = std::move(ordered_aggregate);
+	aggregate = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
 	expr.arg_orders.clear();
 }

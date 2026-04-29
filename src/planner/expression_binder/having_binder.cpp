@@ -85,7 +85,7 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 	}
 
 	// Return a GROUP BY column reference expression.
-	auto return_type = expr.expression->return_type;
+	auto return_type = expr.expression->GetReturnType();
 	auto group_idx = ColumnBinding::PushExpression(node.groups.group_expressions, std::move(expr.expression));
 	auto column_binding = ColumnBinding(node.group_index, group_idx);
 	auto group_ref = make_uniq<BoundColumnRefExpression>(return_type, column_binding);

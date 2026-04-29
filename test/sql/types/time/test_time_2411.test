@@ -3,9 +3,6 @@
 # group: [time]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE times(i TIME)
 
 statement ok

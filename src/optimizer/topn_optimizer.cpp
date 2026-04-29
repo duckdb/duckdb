@@ -67,7 +67,7 @@ bool TopN::CanOptimize(LogicalOperator &op, optional_ptr<ClientContext> context)
 void TopN::PushdownDynamicFilters(LogicalTopN &op) {
 	// pushdown dynamic filters through the Top-N operator
 	bool nulls_first = op.orders[0].null_order == OrderByNullType::NULLS_FIRST;
-	auto &type = op.orders[0].expression->return_type;
+	auto &type = op.orders[0].expression->GetReturnType();
 	if (!TypeIsNumeric(type.InternalType()) && type.id() != LogicalTypeId::VARCHAR) {
 		// only supported for numeric and varchar types
 		return;

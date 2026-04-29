@@ -18,6 +18,7 @@ namespace duckdb {
 
 class BufferManager;
 class InterruptState;
+class BoundAggregateFunction;
 
 //! A half-open range of frame boundary values _relative to the current row_
 //! This is why they are signed values.
@@ -54,7 +55,7 @@ struct WindowPartitionInput {
 
 class BindAggregateFunctionInput {
 public:
-	BindAggregateFunctionInput(ClientContext &context_p, AggregateFunction &bound_function_p,
+	BindAggregateFunctionInput(ClientContext &context_p, BoundAggregateFunction &bound_function_p,
 	                           vector<unique_ptr<Expression>> &arguments_p)
 	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p) {
 	}
@@ -62,7 +63,7 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
-	AggregateFunction &GetBoundFunction() const {
+	BoundAggregateFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	vector<unique_ptr<Expression>> &GetArguments() const {
@@ -71,7 +72,7 @@ public:
 
 private:
 	ClientContext &context;
-	AggregateFunction &bound_function;
+	BoundAggregateFunction &bound_function;
 	vector<unique_ptr<Expression>> &arguments;
 };
 
@@ -120,8 +121,9 @@ typedef void (*aggregate_wininit_t)(AggregateInputData &aggr_input_data, const W
                                     data_ptr_t g_state);
 
 typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                      const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
+                                      const BoundAggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer,
+                                                            BoundAggregateFunction &function);
 
 typedef LogicalType (*aggregate_get_state_type_t)(const AggregateFunction &function);
 
@@ -147,7 +149,58 @@ enum class AggregateDestructorType {
 	LEGACY
 };
 
-class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
+class AggregateFunctionCallbacks {
+public:
+	//! The hashed aggregate state sizing function
+	aggregate_size_t state_size = nullptr;
+	//! The hashed aggregate state initialization function
+	aggregate_initialize_t initialize = nullptr;
+	//! The hashed aggregate update state function (may be null, if window is set)
+	aggregate_update_t update = nullptr;
+	//! The hashed aggregate combine states function (may be null, if window is set)
+	aggregate_combine_t combine = nullptr;
+	//! The hashed aggregate finalization function (may be null, if window is set)
+	aggregate_finalize_t finalize = nullptr;
+	//! The simple aggregate update function (may be null)
+	aggregate_simple_update_t simple_update = nullptr;
+	//! The windowed aggregate custom function (may be null)
+	aggregate_window_t window = nullptr;
+	//! The windowed aggregate custom initialization function (may be null)
+	aggregate_wininit_t window_init = nullptr;
+	//! Batched windowed aggregate function (may be null; preferred when set)
+	aggregate_window_batch_t window_batch = nullptr;
+
+	//! The bind function (may be null)
+	bind_aggregate_function_t bind = nullptr;
+
+	//! The destructor method (may be null)
+	aggregate_destructor_t destructor = nullptr;
+
+	//! The statistics propagation function (may be null)
+	aggregate_statistics_t statistics = nullptr;
+
+	aggregate_serialize_t serialize = nullptr;
+
+	aggregate_deserialize_t deserialize = nullptr;
+
+	aggregate_get_state_type_t get_state_type = nullptr;
+
+	bool operator==(const AggregateFunctionCallbacks &rhs) const;
+	bool operator!=(const AggregateFunctionCallbacks &rhs) const;
+};
+
+class AggregateFunctionProperties : public FunctionProperties {
+public:
+	//! Whether or not the aggregate is order dependent
+	AggregateOrderDependent order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
+	//! Whether or not the aggregate is affect by distinct modifiers
+	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+
+	bool operator==(const AggregateFunctionProperties &rhs) const;
+	bool operator!=(const AggregateFunctionProperties &rhs) const;
+};
+
+class AggregateFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
@@ -157,12 +210,21 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID), null_handling),
-	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : SimpleFunction(name, arguments, return_type) {
+		properties.null_handling = null_handling;
+
+		callbacks.state_size = state_size;
+		callbacks.initialize = initialize;
+		callbacks.update = update;
+		callbacks.combine = combine;
+		callbacks.finalize = finalize;
+		callbacks.simple_update = simple_update;
+		callbacks.window = window;
+		callbacks.bind = bind;
+		callbacks.destructor = destructor;
+		callbacks.statistics = statistics;
+		callbacks.serialize = serialize;
+		callbacks.deserialize = deserialize;
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -172,12 +234,19 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID)),
-	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : SimpleFunction(name, arguments, return_type) {
+		callbacks.state_size = state_size;
+		callbacks.initialize = initialize;
+		callbacks.update = update;
+		callbacks.combine = combine;
+		callbacks.finalize = finalize;
+		callbacks.simple_update = simple_update;
+		callbacks.bind = bind;
+		callbacks.destructor = destructor;
+		callbacks.statistics = statistics;
+		callbacks.window = window;
+		callbacks.serialize = serialize;
+		callbacks.deserialize = deserialize;
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -210,118 +279,101 @@ public:
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                  aggregate_statistics_t statistics = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
-	                         LogicalType(LogicalTypeId::INVALID)),
-	      state_size(state_size), initialize(initialize), update(nullptr), combine(nullptr), finalize(nullptr),
-	      simple_update(nullptr), window(window), window_init(window_init), bind(bind), destructor(destructor),
-	      statistics(statistics), serialize(serialize), deserialize(deserialize),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+	    : SimpleFunction(name, arguments, return_type) {
+		callbacks.state_size = state_size;
+		callbacks.initialize = initialize;
+		callbacks.window = window;
+		callbacks.window_init = window_init;
+		callbacks.bind = bind;
+		callbacks.destructor = destructor;
+		callbacks.statistics = statistics;
+		callbacks.serialize = serialize;
+		callbacks.deserialize = deserialize;
 	}
 
 	// clang-format off
-	bool HasBindCallback() const { return bind != nullptr; }
-	bind_aggregate_function_t GetBindCallback() const { return bind; }
-	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
-	unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
-	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
-		BindAggregateFunctionInput bind_input(context, *this, arguments);
-		return Bind(bind_input);
-	}
+	bool HasBindCallback() const { return callbacks.bind != nullptr; }
+	bind_aggregate_function_t GetBindCallback() const { return callbacks.bind; }
+	void SetBindCallback(bind_aggregate_function_t callback) { callbacks.bind = callback; }
 
-	bool HasStateInitCallback() const { return initialize != nullptr; }
-	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
-	void SetStateInitCallback(aggregate_initialize_t callback) { initialize = callback; }
+	unique_ptr<BoundAggregateExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
-	bool HasStateSizeCallback() const { return state_size != nullptr; }
-	aggregate_size_t GetStateSizeCallback() const { return state_size; }
-	void SetStateSizeCallback(aggregate_size_t callback) { state_size = callback; }
+	bool HasStateInitCallback() const { return callbacks.initialize != nullptr; }
+	aggregate_initialize_t GetStateInitCallback() const { return callbacks.initialize; }
+	void SetStateInitCallback(aggregate_initialize_t callback) { callbacks.initialize = callback; }
 
-	bool HasStateDestructorCallback() const { return destructor != nullptr; }
-	aggregate_destructor_t GetStateDestructorCallback() const { return destructor; }
-	void SetStateDestructorCallback(aggregate_destructor_t callback) { destructor = callback; }
+	bool HasStateSizeCallback() const { return callbacks.state_size != nullptr; }
+	aggregate_size_t GetStateSizeCallback() const { return callbacks.state_size; }
+	void SetStateSizeCallback(aggregate_size_t callback) { callbacks.state_size = callback; }
 
-	bool HasStateUpdateCallback() const { return update != nullptr; }
-	aggregate_update_t GetStateUpdateCallback() const { return update; }
-	void SetStateUpdateCallback(aggregate_update_t callback) { update = callback; }
+	bool HasStateDestructorCallback() const { return callbacks.destructor != nullptr; }
+	aggregate_destructor_t GetStateDestructorCallback() const { return callbacks.destructor; }
+	void SetStateDestructorCallback(aggregate_destructor_t callback) { callbacks.destructor = callback; }
 
-	bool HasStateSimpleUpdateCallback() const { return simple_update != nullptr; }
-	aggregate_simple_update_t GetStateSimpleUpdateCallback() const { return simple_update; }
-	void SetStateSimpleUpdateCallback(aggregate_simple_update_t callback) { simple_update = callback; }
+	bool HasStateUpdateCallback() const { return callbacks.update != nullptr; }
+	aggregate_update_t GetStateUpdateCallback() const { return callbacks.update; }
+	void SetStateUpdateCallback(aggregate_update_t callback) { callbacks.update = callback; }
 
-	void SetStateCombineCallback(aggregate_combine_t callback) { combine = callback; }
-	aggregate_combine_t GetStateCombineCallback() const { return combine; }
-	bool HasStateCombineCallback() const { return combine != nullptr; }
+	bool HasStateSimpleUpdateCallback() const { return callbacks.simple_update != nullptr; }
+	aggregate_simple_update_t GetStateSimpleUpdateCallback() const { return callbacks.simple_update; }
+	void SetStateSimpleUpdateCallback(aggregate_simple_update_t callback) { callbacks.simple_update = callback; }
 
-	void SetStateFinalizeCallback(aggregate_finalize_t callback) { finalize = callback; }
-	aggregate_finalize_t GetStateFinalizeCallback() const { return finalize; }
-	bool HasStateFinalizeCallback() const { return finalize != nullptr; }
+	void SetStateCombineCallback(aggregate_combine_t callback) { callbacks.combine = callback; }
+	aggregate_combine_t GetStateCombineCallback() const { return callbacks.combine; }
+	bool HasStateCombineCallback() const { return callbacks.combine != nullptr; }
 
-	bool HasWindowCallback() const { return window != nullptr; }
-	aggregate_window_t GetWindowCallback() const { return window; }
-	void SetWindowCallback(aggregate_window_t callback) { window = callback; }
+	void SetStateFinalizeCallback(aggregate_finalize_t callback) { callbacks.finalize = callback; }
+	aggregate_finalize_t GetStateFinalizeCallback() const { return callbacks.finalize; }
+	bool HasStateFinalizeCallback() const { return callbacks.finalize != nullptr; }
 
-	void SetWindowInitCallback(aggregate_wininit_t callback) { window_init = callback; }
-	aggregate_wininit_t GetWindowInitCallback() const { return window_init; }
-	bool HasWindowInitCallback() const { return window_init != nullptr; }
+	bool HasWindowCallback() const { return callbacks.window != nullptr; }
+	aggregate_window_t GetWindowCallback() const { return callbacks.window; }
+	void SetWindowCallback(aggregate_window_t callback) { callbacks.window = callback; }
+
+	void SetWindowInitCallback(aggregate_wininit_t callback) { callbacks.window_init = callback; }
+	aggregate_wininit_t GetWindowInitCallback() const { return callbacks.window_init; }
+	bool HasWindowInitCallback() const { return callbacks.window_init != nullptr; }
 
 	//! Batched window callback — takes precedence over the per-row window
 	//! callback when set. See aggregate_window_batch_t for semantics.
-	bool HasWindowBatchCallback() const { return window_batch != nullptr; }
-	aggregate_window_batch_t GetWindowBatchCallback() const { return window_batch; }
-	void SetWindowBatchCallback(aggregate_window_batch_t callback) { window_batch = callback; }
+	bool HasWindowBatchCallback() const { return callbacks.window_batch != nullptr; }
+	aggregate_window_batch_t GetWindowBatchCallback() const { return callbacks.window_batch; }
+	void SetWindowBatchCallback(aggregate_window_batch_t callback) { callbacks.window_batch = callback; }
 
-	bool HasStatisticsCallback() const { return statistics != nullptr; }
-	aggregate_statistics_t GetStatisticsCallback() const { return statistics; }
-	void SetStatisticsCallback(aggregate_statistics_t callback) { statistics = callback; }
+	bool HasStatisticsCallback() const { return callbacks.statistics != nullptr; }
+	aggregate_statistics_t GetStatisticsCallback() const { return callbacks.statistics; }
+	void SetStatisticsCallback(aggregate_statistics_t callback) { callbacks.statistics = callback; }
 
-	bool HasSerializationCallbacks() const { return serialize != nullptr && deserialize != nullptr; }
-	void SetSerializeCallback(aggregate_serialize_t callback) { serialize = callback; }
-	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
-	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
-	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
+	bool HasSerializationCallbacks() const { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
+	void SetSerializeCallback(aggregate_serialize_t callback) { callbacks.serialize = callback; }
+	void SetDeserializeCallback(aggregate_deserialize_t callback) { callbacks.deserialize = callback; }
+	aggregate_serialize_t GetSerializeCallback() const { return callbacks.serialize; }
+	aggregate_deserialize_t GetDeserializeCallback() const { return callbacks.deserialize; }
 	// clang-format on
 
 protected:
-	//! The hashed aggregate state sizing function
-	aggregate_size_t state_size;
-	//! The hashed aggregate state initialization function
-	aggregate_initialize_t initialize;
-	//! The hashed aggregate update state function (may be null, if window is set)
-	aggregate_update_t update;
-	//! The hashed aggregate combine states function (may be null, if window is set)
-	aggregate_combine_t combine;
-	//! The hashed aggregate finalization function (may be null, if window is set)
-	aggregate_finalize_t finalize;
-	//! The simple aggregate update function (may be null)
-	aggregate_simple_update_t simple_update;
-	//! The windowed aggregate custom function (may be null)
-	aggregate_window_t window;
-	//! The windowed aggregate custom initialization function (may be null)
-	aggregate_wininit_t window_init = nullptr;
-	//! Batched windowed aggregate function (may be null; preferred when set)
-	aggregate_window_batch_t window_batch = nullptr;
-
-	//! The bind function (may be null)
-	bind_aggregate_function_t bind;
-	//! The destructor method (may be null)
-	aggregate_destructor_t destructor;
-
-	//! The statistics propagation function (may be null)
-	aggregate_statistics_t statistics;
-
-	aggregate_serialize_t serialize;
-	aggregate_deserialize_t deserialize;
-
-	//! Whether or not the aggregate is order dependent
-	AggregateOrderDependent order_dependent;
-	//! Whether or not the aggregate is affect by distinct modifiers
-	AggregateDistinctDependent distinct_dependent;
-
-	aggregate_get_state_type_t get_state_type = nullptr;
+	AggregateFunctionCallbacks callbacks;
+	AggregateFunctionProperties properties;
 
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
+
+public:
+	// clang-format off
+	FunctionStability GetStability() const { return properties.stability; }
+	void SetStability(FunctionStability stability_p) { properties.stability = stability_p; }
+	FunctionNullHandling GetNullHandling() const { return properties.null_handling; }
+	void SetNullHandling(FunctionNullHandling null_handling_p) { properties.null_handling = null_handling_p; }
+	FunctionErrors GetErrorMode() const { return properties.errors; }
+	void SetErrorMode(FunctionErrors errors_p) { properties.errors = errors_p; }
+	FunctionCollationHandling GetCollationHandling() const { return properties.collation_handling; }
+	void SetCollationHandling(FunctionCollationHandling collation_handling_p) { properties.collation_handling = collation_handling_p; }
+
+	//! Set this functions error-mode as fallible (can throw runtime errors)
+	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
+	//! Set this functions stability as volatile (can not be cached per row)
+	void SetVolatile() { properties.stability = FunctionStability::VOLATILE; }
+	// clang-format on
 
 public:
 	bool HasExtraFunctionInfo() const {
@@ -343,33 +395,33 @@ public:
 	}
 
 	AggregateOrderDependent GetOrderDependent() const {
-		return order_dependent;
+		return properties.order_dependent;
 	}
 	void SetOrderDependent(AggregateOrderDependent value) {
-		order_dependent = value;
+		properties.order_dependent = value;
 	}
 	AggregateDistinctDependent GetDistinctDependent() const {
-		return distinct_dependent;
+		return properties.distinct_dependent;
 	}
 	void SetDistinctDependent(AggregateDistinctDependent value) {
-		distinct_dependent = value;
+		properties.distinct_dependent = value;
 	}
 
 	bool HasGetStateTypeCallback() const {
-		return get_state_type != nullptr;
+		return callbacks.get_state_type != nullptr;
 	}
 	aggregate_get_state_type_t GetStateTypeCallback() const {
-		return get_state_type;
+		return callbacks.get_state_type;
 	}
 
 	AggregateFunction &SetStructStateExport(aggregate_get_state_type_t get_state_type_callback) {
-		get_state_type = get_state_type_callback;
+		callbacks.get_state_type = get_state_type_callback;
 		return *this;
 	}
 
 	LogicalType GetStateType() const {
-		D_ASSERT(get_state_type);
-		const auto result = get_state_type(*this);
+		D_ASSERT(callbacks.get_state_type);
+		const auto result = callbacks.get_state_type(*this);
 		// The underlying type of the AggregateState should be a struct
 		D_ASSERT(result.id() == LogicalTypeId::STRUCT);
 		return result;
@@ -377,18 +429,17 @@ public:
 
 public:
 	bool operator==(const AggregateFunction &rhs) const {
-		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
-		       combine == rhs.combine && finalize == rhs.finalize && window == rhs.window;
+		return callbacks == rhs.callbacks;
 	}
 	bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
 	}
 
 	bool CanAggregate() const {
-		return update || combine || finalize;
+		return callbacks.update || callbacks.combine || callbacks.finalize;
 	}
 	bool CanWindow() const {
-		return window;
+		return callbacks.window;
 	}
 
 public:
@@ -417,7 +468,7 @@ public:
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
 		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
-		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
+		aggregate.callbacks.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
 	}
 
@@ -513,6 +564,13 @@ public:
 	template <class STATE, class OP>
 	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
+	}
+};
+
+class BoundAggregateFunction : public AggregateFunction {
+public:
+	BoundAggregateFunction(const AggregateFunction &function) // NOLINT: allow implicit conversion
+	    : AggregateFunction(function) {
 	}
 };
 

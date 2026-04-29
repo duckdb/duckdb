@@ -358,7 +358,8 @@ unique_ptr<FunctionData> LikeBindFunction(BindScalarFunctionInput &input) {
 	// pattern is the second argument. If its constant, we can already prepare the pattern and store it for later.
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(arg->return_type).empty()) {
+		if (arg->GetReturnType().id() == LogicalTypeId::VARCHAR &&
+		    !StringType::GetCollation(arg->GetReturnType()).empty()) {
 			return nullptr;
 		}
 	}

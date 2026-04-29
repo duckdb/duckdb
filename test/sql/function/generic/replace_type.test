@@ -2,9 +2,6 @@
 # description: Test replace_type function
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # start off with mirrorring all cast_to_type tests as these functions are so similar
 query I
 SELECT replace_type('  42', NULL::VARCHAR, NULL::INT)

@@ -386,19 +386,19 @@ ReaderInitializeType MultiFileReader::CreateMapping(
 	                     virtual_columns, bind_data.mapping);
 }
 
-string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
-                                 idx_t expr_idx, string &first_message) {
-	if (expr.type != ExpressionType::OPERATOR_CAST) {
+static string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr,
+                                        BaseFileReader &reader, idx_t expr_idx, string &first_message) {
+	if (expr.GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 		// not a cast
 		return string();
 	}
 	auto &cast_expr = expr.Cast<BoundCastExpression>();
-	if (cast_expr.child->type != ExpressionType::BOUND_REF) {
+	if (cast_expr.child->GetExpressionType() != ExpressionType::BOUND_REF) {
 		return string();
 	}
 	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();
-	auto &source_type = ref.return_type;
-	auto &target_type = cast_expr.return_type;
+	auto &source_type = ref.GetReturnType();
+	auto &target_type = cast_expr.GetReturnType();
 	auto &columns = reader.GetColumns();
 	auto local_col_id = reader.column_indexes[ref.index].GetPrimaryIndex();
 	auto &local_col = columns[local_col_id];

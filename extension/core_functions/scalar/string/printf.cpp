@@ -22,11 +22,11 @@ struct FMTFormat {
 	}
 };
 
-unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
+static unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (idx_t i = 1; i < arguments.size(); i++) {
-		switch (arguments[i]->return_type.id()) {
+		switch (arguments[i]->GetReturnType().id()) {
 		case LogicalTypeId::BOOLEAN:
 			bound_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
 			break;
@@ -88,8 +88,8 @@ struct StringConstructArgument {
 };
 
 template <class T, class OP = StandardConstructArgument, class CTX>
-void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
-                      vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
+static void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
+                             vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
 	auto result = input.Values<T>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &args = result_args[i];

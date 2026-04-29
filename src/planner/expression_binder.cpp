@@ -344,17 +344,17 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		if (!binder.can_contain_nulls) {
 			// SQL NULL type is only used internally in the binder
 			// cast to INTEGER if we encounter it outside of the binder
-			if (ContainsNullType(result->return_type)) {
-				auto exchanged_type = ExchangeNullType(result->return_type);
+			if (ContainsNullType(result->GetReturnType())) {
+				auto exchanged_type = ExchangeNullType(result->GetReturnType());
 				result = BoundCastExpression::AddCastToType(context, std::move(result), exchanged_type);
 			}
 		}
-		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (result->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 	if (result_type) {
-		*result_type = result->return_type;
+		*result_type = result->GetReturnType();
 	}
 	return result;
 }

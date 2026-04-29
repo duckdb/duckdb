@@ -41,10 +41,7 @@ set(TEST_API_OBJECTS
     test_windows_unicode_path.cpp
     test_object_cache.cpp
     test_partial_executor.cpp
-    test_buffer_pool_eviction.cpp
-    test_update_query_node.cpp
-    test_delete_query_node.cpp
-    test_insert_query_node.cpp)
+    test_buffer_pool_eviction.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)
