@@ -13,14 +13,41 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "re2/stringpiece.h"
 #include "utf8proc_wrapper.hpp"
+
+#include <cstring>
 
 namespace duckdb {
 
 using regexp_util::CreateStringPiece;
-using regexp_util::Extract;
 using regexp_util::ParseRegexOptions;
 using regexp_util::TryParseConstantPattern;
+
+// Zero-copy slice of capture group `group_index` from `input`'s buffer; caller must call
+// StringVector::AddHeapReference(result, source) first. check_remainder_newline=true rejects
+// matches whose remainder contains `\n` (used after RegexExtractBind has stripped a trailing `.*$`).
+static inline string_t ExtractCaptureGroup(const string_t &input, const RE2 &re, int8_t group_index,
+                                           bool no_match_returns_input, bool check_remainder_newline) {
+	if (group_index < 0 || group_index > re.NumberOfCapturingGroups()) {
+		return no_match_returns_input ? input : string_t(nullptr, 0);
+	}
+	duckdb_re2::StringPiece in_piece(input.GetData(), input.GetSize());
+	duckdb_re2::StringPiece submatch[10];
+	const int nsubmatch = group_index + 1;
+	if (re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::UNANCHORED, submatch, nsubmatch)) {
+		if (check_remainder_newline) {
+			const char *match_end = submatch[0].data() + submatch[0].size();
+			const char *input_end = in_piece.data() + in_piece.size();
+			const auto remainder = static_cast<size_t>(input_end - match_end);
+			if (std::memchr(match_end, '\n', remainder) != nullptr) {
+				return no_match_returns_input ? input : string_t(nullptr, 0);
+			}
+		}
+		return string_t(submatch[group_index].data(), UnsafeNumericCast<uint32_t>(submatch[group_index].size()));
+	}
+	return no_match_returns_input ? input : string_t(nullptr, 0);
+}
 
 static bool RegexOptionsEquals(const duckdb_re2::RE2::Options &opt_a, const duckdb_re2::RE2::Options &opt_b) {
 	return opt_a.case_sensitive() == opt_b.case_sensitive();
@@ -248,13 +275,15 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		const auto &re = lstate.constant_pattern;
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return Extract(input, re, info.group_index, info.no_match_returns_input, check_remainder_newline);
+			return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input,
+			                           check_remainder_newline);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
-			    return Extract(input, re, info.group_index, info.no_match_returns_input, check_remainder_newline);
+			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input,
+			                               check_remainder_newline);
 		    });
 	}
 }

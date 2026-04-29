@@ -13,7 +13,6 @@
 namespace duckdb {
 
 using regexp_util::CreateStringPiece;
-using regexp_util::Extract;
 using regexp_util::ParseRegexOptions;
 using regexp_util::TryParseConstantPattern;
 
