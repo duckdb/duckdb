@@ -568,6 +568,13 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context,
                                                   unique_ptr<BufferedFileHandle> prefetched_handle) {
 	auto flags = GetFileFlags(false);
 
+	// Close the read-only fd inside the prefetched wrapper (if any) BEFORE opening
+	// our own handle. Two simultaneous opens of the same file violate Windows'
+	// default share mode. The in-memory buffer is preserved for CopyBufferFrom.
+	if (prefetched_handle) {
+		prefetched_handle->CloseHandle();
+	}
+
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
 	auto raw_handle = fs.OpenFile(path, flags);

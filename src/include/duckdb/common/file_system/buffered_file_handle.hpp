@@ -18,7 +18,7 @@ class QueryContext;
 //! Wraps a FileHandle with an optional prefetch range. Reads fully covered by
 //! the realized buffer are served from memory; others pass through to the inner
 //! handle. Read-only — writes go via ExtractInnerFileHandle.
-//! v1: single hint slot. BufferedFileHandleState machine: EMPTY → HINT → REALIZED.
+//! v1: single hint slot. BufferedFileHandleState machine: EMPTY → HINT → REALIZED → NO_HANDLE.
 class BufferedFileHandle : public BaseFileHandle {
 public:
 	DUCKDB_API explicit BufferedFileHandle(unique_ptr<FileHandle> inner);
@@ -31,6 +31,7 @@ public:
 	DUCKDB_API void RegisterPrefetch(idx_t offset, idx_t size);
 
 	//! Copy the realized buffer from another wrapper (pending hints are not copied).
+	//! Source may be REALIZED or NO_HANDLE — both have a valid in-memory buffer.
 	DUCKDB_API void CopyBufferFrom(const BufferedFileHandle &other);
 
 	//! Positional read; serves from the buffer when fully covered, else forwards
@@ -45,8 +46,13 @@ public:
 	//! Take ownership of the inner handle; the wrapper is drained afterwards.
 	DUCKDB_API unique_ptr<FileHandle> ExtractInnerFileHandle();
 
+	//! Close the inner file handle while preserving the in-memory buffer.
+	//! Requires REALIZED state. After this, the wrapper is in NO_HANDLE state —
+	//! valid only as a CopyBufferFrom source or for destruction.
+	DUCKDB_API void CloseHandle();
+
 private:
-	enum class BufferedFileHandleState : uint8_t { EMPTY, HINT, REALIZED };
+	enum class BufferedFileHandleState : uint8_t { EMPTY, HINT, REALIZED, NO_HANDLE };
 
 	unique_ptr<FileHandle> inner;
 	BufferedFileHandleState state = BufferedFileHandleState::EMPTY;

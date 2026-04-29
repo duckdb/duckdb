@@ -14,7 +14,9 @@ BufferedFileHandle::BufferedFileHandle(unique_ptr<FileHandle> inner_p) : inner(s
 BufferedFileHandle::~BufferedFileHandle() = default;
 
 void BufferedFileHandle::CopyBufferFrom(const BufferedFileHandle &other) {
-	if (other.state != BufferedFileHandleState::REALIZED) {
+	const bool has_buffer = (other.state == BufferedFileHandleState::REALIZED ||
+	                         other.state == BufferedFileHandleState::NO_HANDLE);
+	if (!has_buffer) {
 		state = BufferedFileHandleState::EMPTY;
 		range_offset = 0;
 		range_size = 0;
@@ -29,6 +31,7 @@ void BufferedFileHandle::CopyBufferFrom(const BufferedFileHandle &other) {
 }
 
 void BufferedFileHandle::RegisterPrefetch(idx_t offset, idx_t size) {
+	D_ASSERT(state != BufferedFileHandleState::NO_HANDLE);
 	D_ASSERT(inner);
 	// Idempotent: if we already realized this exact range, do nothing.
 	// This makes repeated CheckMagicBytes-style calls a no-op on the wire.
@@ -48,6 +51,7 @@ void BufferedFileHandle::RegisterPrefetch(idx_t offset, idx_t size) {
 }
 
 idx_t BufferedFileHandle::ReadIntoBuffer(QueryContext context, void *out, idx_t nr_bytes, idx_t location) {
+	D_ASSERT(state != BufferedFileHandleState::NO_HANDLE);
 	D_ASSERT(inner);
 
 	if (state == BufferedFileHandleState::REALIZED) {
@@ -90,21 +94,31 @@ idx_t BufferedFileHandle::Read(void *out, idx_t nr_bytes, idx_t location) {
 }
 
 idx_t BufferedFileHandle::GetFileSize() {
+	D_ASSERT(state != BufferedFileHandleState::NO_HANDLE);
 	D_ASSERT(inner);
 	return inner->GetFileSize();
 }
 
 string BufferedFileHandle::GetPath() const {
+	D_ASSERT(state != BufferedFileHandleState::NO_HANDLE);
 	D_ASSERT(inner);
 	return inner->GetPath();
 }
 
 unique_ptr<FileHandle> BufferedFileHandle::ExtractInnerFileHandle() {
+	D_ASSERT(state != BufferedFileHandleState::NO_HANDLE);
 	buffer.reset();
 	state = BufferedFileHandleState::EMPTY;
 	range_offset = 0;
 	range_size = 0;
 	return std::move(inner);
+}
+
+void BufferedFileHandle::CloseHandle() {
+	D_ASSERT(state == BufferedFileHandleState::REALIZED);
+	D_ASSERT(inner);
+	inner.reset();
+	state = BufferedFileHandleState::NO_HANDLE;
 }
 
 } // namespace duckdb
