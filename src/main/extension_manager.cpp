@@ -10,7 +10,7 @@ ExtensionInfo::ExtensionInfo() : is_loaded(false) {
 }
 
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
-	if (prefix_functions_with_alias) {
+	if (suffix_functions_with_alias) {
 		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
 	info.is_loaded = true;
@@ -34,7 +34,7 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 }
 
 void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
-	if (prefix_functions_with_alias) {
+	if (suffix_functions_with_alias) {
 		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
@@ -51,7 +51,7 @@ ExtensionManager &ExtensionManager::Get(DatabaseInstance &db) {
 }
 
 ExtensionManager &ExtensionManager::Get(ClientContext &context) {
-	return ExtensionManager::Get(DatabaseInstance::GetDatabase(context));
+	return Get(DatabaseInstance::GetDatabase(context));
 }
 
 optional_ptr<ExtensionInfo> ExtensionManager::GetExtensionInfo(const string &name) {
@@ -177,17 +177,17 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
 	auto result = make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, extension_name,
-	                                             options.prefix_functions_with_alias);
+	                                             options.suffix_functions_with_alias);
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
-	// When prefix_functions_with_alias is set, allow re-running the init even if already loaded
+	// When suffix_functions_with_alias is set, allow re-running the init even if already loaded
 	// pseudocode:
 	// if original extension name already loaded
-	// then we want to set the prefix functions with alias
+	// then we want to set the suffix of all functions with alias
 	// otherwise, just keep the normal name
 
-	if (info->is_loaded && !options.prefix_functions_with_alias) {
+	if (info->is_loaded && !options.suffix_functions_with_alias) {
 		return nullptr;
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {

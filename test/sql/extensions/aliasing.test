@@ -53,7 +53,7 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_ext
 
 # we generate a new name to be able to load the second extension
 query I
-SELECT _second_copy__loadable_extension_demo_double()
+SELECT loadable_extension_demo_double_second_copy()
 ----
 Hello from the loadable_extension_demo_double binary!
 

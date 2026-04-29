@@ -29,9 +29,9 @@ public:
 class ExtensionActiveLoad {
 public:
 	ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &info, string extension_name_p, string alias_p,
-	                    bool prefix_functions_with_alias_p = false)
+	                    bool suffix_functions_with_alias_p = false)
 	    : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)),
-	      alias(std::move(alias_p)), prefix_functions_with_alias(prefix_functions_with_alias_p) {};
+	      alias(std::move(alias_p)), suffix_functions_with_alias(suffix_functions_with_alias_p) {};
 
 	~ExtensionActiveLoad() = default;
 
@@ -40,7 +40,7 @@ public:
 	ExtensionInfo &info;
 	string extension_name;
 	string alias;
-	bool prefix_functions_with_alias = false;
+	bool suffix_functions_with_alias = false;
 
 public:
 	void FinishLoad(ExtensionInstallInfo &install_info);

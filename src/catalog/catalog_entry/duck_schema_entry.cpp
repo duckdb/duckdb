@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/main/settings.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"
@@ -179,13 +180,16 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
+	// this is only for testing double extension loading
 	if (transaction.db) {
-		auto prefix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
-		if (!prefix.empty()) {
-			info.name = "_" + prefix + "__" + info.name;
-			info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+		if (Settings::Get<AllowDoubleExtensionLoadingSetting>(*transaction.db)) {
+			auto suffix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
+			if (!suffix.empty()) {
+				info.name = info.name + "_" + suffix;
+			}
 		}
 	}
+
 	if (info.on_conflict == OnCreateConflict::ALTER_ON_CONFLICT) {
 		// check if the original entry exists
 		auto &catalog_set = GetCatalogSet(info.type);
@@ -247,9 +251,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	if (transaction.db && !ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix().empty()) {
-		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	}
 	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, *this, info);
 	return AddEntry(transaction, std::move(type_entry), info.on_conflict);
 }
@@ -290,13 +291,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCoordinateSystem(CatalogTransa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTableFunction(CatalogTransaction transaction,
                                                                 CreateTableFunctionInfo &info) {
-	if (transaction.db) {
-		auto prefix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
-		if (!prefix.empty()) {
-			info.name = "_" + prefix + "__" + info.name;
-			info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-		}
-	}
 	auto table_function = make_uniq<TableFunctionCatalogEntry>(catalog, *this, info);
 	table_function->internal = info.internal;
 	return AddEntry(transaction, std::move(table_function), info.on_conflict);
