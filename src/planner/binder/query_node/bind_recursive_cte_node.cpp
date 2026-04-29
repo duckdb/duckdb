@@ -176,8 +176,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			// Found a matching function, bind it as an aggregate
 			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-			auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
-			                                                       nullptr, AggregateType::NON_DISTINCT);
+			auto aggregate = function_binder.BindAggregateFunction(best_function, std::move(bound_children), nullptr,
+			                                                       AggregateType::NON_DISTINCT);
 
 			if (payload_references.find(aggregate_idx) != payload_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
