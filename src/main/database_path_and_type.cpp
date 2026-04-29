@@ -1,5 +1,6 @@
 #include "duckdb/main/database_path_and_type.hpp"
 
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/storage/magic_bytes.hpp"
 #include "duckdb/function/replacement_scan.hpp"
@@ -16,9 +17,10 @@ void DBPathAndType::ExtractExtensionPrefix(string &path, string &db_type) {
 	}
 }
 
-void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, string &db_type) {
+void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string &path, string &db_type,
+                                    unique_ptr<BufferedFileHandle> *out_handle) {
 	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path);
+	auto file_type = MagicBytes::CheckMagicBytes(context, fs, path, out_handle);
 	db_type = string();
 	switch (file_type) {
 	case DataFileType::SQLITE_FILE:
@@ -39,7 +41,8 @@ void DBPathAndType::CheckMagicBytes(QueryContext context, FileSystem &fs, string
 	}
 }
 
-void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type) {
+void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db_type,
+                                        unique_ptr<BufferedFileHandle> *out_handle) {
 	if (!db_type.empty()) {
 		// database type specified explicitly - no need to check
 		return;
@@ -51,7 +54,7 @@ void DBPathAndType::ResolveDatabaseType(FileSystem &fs, string &path, string &db
 		return;
 	}
 	// check database type by reading the magic bytes of a file
-	DBPathAndType::CheckMagicBytes(QueryContext(), fs, path, db_type);
+	DBPathAndType::CheckMagicBytes(QueryContext(), fs, path, db_type, out_handle);
 }
 
 } // namespace duckdb

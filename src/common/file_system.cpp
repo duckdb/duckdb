@@ -785,6 +785,10 @@ void FileHandle::Read(QueryContext context, void *buffer, idx_t nr_bytes, idx_t 
 	file_system.Read(*this, buffer, UnsafeNumericCast<int64_t>(nr_bytes), location);
 }
 
+void FileHandle::ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
+	Read(context, buffer, nr_bytes, location);
+}
+
 void FileHandle::Write(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) {
 	if (context.GetClientContext() != nullptr) {
 		context.GetClientContext()->client_data->profiler->AddToCounter(MetricType::TOTAL_BYTES_WRITTEN, nr_bytes);

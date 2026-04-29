@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/config.hpp"
@@ -81,7 +82,7 @@ public:
 private:
 	void Initialize(const char *path, DBConfig *config);
 	void LoadExtensionSettings();
-	void CreateMainDatabase();
+	void CreateMainDatabase(unique_ptr<BufferedFileHandle> prefetched_handle = nullptr);
 
 	void Configure(DBConfig &config, const char *path);
 

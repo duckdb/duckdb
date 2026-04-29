@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
@@ -60,7 +61,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(QueryContext context);
+	void Initialize(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle = nullptr);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() const {
@@ -148,7 +149,7 @@ public:
 	}
 
 protected:
-	virtual void LoadDatabase(QueryContext context) = 0;
+	virtual void LoadDatabase(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle) = 0;
 
 protected:
 	//! The attached database managed by this storage manager.
@@ -211,7 +212,7 @@ public:
 	void Destroy() override;
 
 protected:
-	void LoadDatabase(QueryContext context) override;
+	void LoadDatabase(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle) override;
 
 	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
 };

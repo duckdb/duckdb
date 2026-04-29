@@ -13,6 +13,7 @@
 
 namespace duckdb {
 
+class BaseFileHandle;
 class BlockAllocator;
 class BlockManager;
 class QueryContext;
@@ -45,7 +46,8 @@ public:
 
 public:
 	//! Read into the FileBuffer from the location.
-	void Read(QueryContext context, FileHandle &handle, uint64_t location);
+	//! Accepts any BaseFileHandle (FileHandle, BufferedFileHandle, ...).
+	void Read(QueryContext context, BaseFileHandle &handle, uint64_t location);
 	//! Write the FileBuffer to the location.
 	void Write(QueryContext context, FileHandle &handle, const uint64_t location);
 

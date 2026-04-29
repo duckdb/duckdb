@@ -192,14 +192,14 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeTag(ser, canary_tag, encryption_enabled);
 }
 
-void MainHeader::CheckMagicBytes(QueryContext context, FileHandle &handle) {
+void MainHeader::CheckMagicBytes(QueryContext context, BaseFileHandle &handle) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
-		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
 	}
-	handle.Read(context, magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
+	handle.ReadIntoBuffer(context, magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
-		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.GetPath());
 	}
 }
 
@@ -564,20 +564,36 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
+void SingleFileBlockManager::LoadExistingDatabase(QueryContext context,
+                                                  unique_ptr<BufferedFileHandle> prefetched_handle) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
 	auto &fs = FileSystem::Get(db);
-	handle = fs.OpenFile(path, flags);
-	if (!handle) {
+	auto raw_handle = fs.OpenFile(path, flags);
+	if (!raw_handle) {
 		// this can only happen in read-only mode - as that is when we set FILE_FLAGS_NULL_IF_NOT_EXISTS
 		throw IOException("Cannot open database \"%s\" in read-only mode: database does not exist", path);
 	}
 
-	MainHeader::CheckMagicBytes(context, *handle);
+	// Wrap in a BufferedFileHandle for the header phase. Two paths:
+	// - prefetched_handle set (init went through MagicBytes::CheckMagicBytes):
+	//   copy the buffered bytes across; reads below hit memory.
+	// - prefetched_handle null (e.g. `duckdb:URL` prefix skipped magic-bytes
+	//   resolution): register a prefetch hint so the first header read fetches
+	//   the whole 12 KiB in one shot; the rest are buffer hits.
+	// Either way, the four header reads collapse into a single wire read.
+	static constexpr const idx_t HEADER_PREFETCH_SIZE = 12288;
+	auto buffered = make_uniq<BufferedFileHandle>(std::move(raw_handle));
+	if (prefetched_handle) {
+		buffered->CopyBufferFrom(*prefetched_handle);
+	} else {
+		buffered->RegisterPrefetch(0, HEADER_PREFETCH_SIZE);
+	}
+
+	MainHeader::CheckMagicBytes(context, *buffered);
 	// otherwise, we check the metadata of the file
-	ReadAndChecksum(context, header_buffer, 0, true);
+	ReadAndChecksum(context, header_buffer, 0, true, *buffered);
 
 	uint64_t delta = 0;
 	if (GetBlockHeaderSize() > DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
@@ -647,12 +663,17 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 
 	// read the database headers from disk
 	DatabaseHeader h1;
-	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE, false, *buffered);
 	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
-	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL, false, *buffered);
 	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
+
+	// header phase done — release the buffer wrapper, install the raw handle
+	// for the rest of the class to use.
+	handle = buffered->ExtractInnerFileHandle();
+	buffered.reset();
 
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -714,11 +735,11 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 }
 
 void SingleFileBlockManager::ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location,
-                                             bool skip_block_header) const {
-	// read the buffer from disk
-	block.Read(context, *handle, location);
+                                             bool skip_block_header, BaseFileHandle &source) const {
+	// read the buffer via the supplied handle (BufferedFileHandle hits its
+	// in-memory buffer for prefetched ranges; FileHandle goes straight to disk)
+	block.Read(context, source, location);
 
-	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
@@ -1121,7 +1142,7 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(context, block, GetBlockLocation(block.id));
+	ReadAndChecksum(context, block, GetBlockLocation(block.id), false, *handle);
 }
 
 void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {

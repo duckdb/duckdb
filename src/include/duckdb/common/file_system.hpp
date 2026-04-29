@@ -71,7 +71,17 @@ struct FileMetadata {
 	unordered_map<string, Value> extended_file_info;
 };
 
-struct FileHandle {
+//! Polymorphic base shared by FileHandle and BufferedFileHandle.
+class BaseFileHandle {
+public:
+	DUCKDB_API virtual ~BaseFileHandle() = default;
+
+	DUCKDB_API virtual void ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) = 0;
+	DUCKDB_API virtual idx_t GetFileSize() = 0;
+	DUCKDB_API virtual string GetPath() const = 0;
+};
+
+struct FileHandle : public BaseFileHandle {
 public:
 	DUCKDB_API FileHandle(FileSystem &file_system, string path, FileOpenFlags flags);
 	FileHandle(const FileHandle &) = delete;
@@ -102,8 +112,9 @@ public:
 	DUCKDB_API bool CanSeek();
 	DUCKDB_API bool IsPipe();
 	DUCKDB_API bool OnDiskFile();
-	DUCKDB_API idx_t GetFileSize();
+	DUCKDB_API idx_t GetFileSize() override;
 	DUCKDB_API FileType GetType();
+	DUCKDB_API void ReadIntoBuffer(QueryContext context, void *buffer, idx_t nr_bytes, idx_t location) override;
 	DUCKDB_API FileMetadata Stats();
 
 	DUCKDB_API void TryAddLogger(FileOpener &opener);
@@ -111,7 +122,7 @@ public:
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
-	string GetPath() const {
+	string GetPath() const override {
 		return path;
 	}
 

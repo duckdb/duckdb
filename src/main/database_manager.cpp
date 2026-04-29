@@ -100,7 +100,8 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
-                                                             AttachOptions &options) {
+                                                             AttachOptions &options,
+                                                             unique_ptr<BufferedFileHandle> prefetched_handle) {
 	string extension = "";
 	if (FileSystem::IsRemoteFile(info.path, extension)) {
 		if (options.access_mode == AccessMode::AUTOMATIC) {
@@ -171,7 +172,7 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 		}
 	}
 	auto &config = DBConfig::GetConfig(context);
-	GetDatabaseType(context, info, config, options);
+	GetDatabaseType(context, info, config, options, &prefetched_handle);
 	if (!options.db_type.empty()) {
 		// we only need to prevent duplicate opening of DuckDB files
 		// if this is not a DuckDB file but e.g. a CSV or Parquet file, we don't need to do this duplicate protection
@@ -198,9 +199,9 @@ shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &cont
 	//! Initialize the database.
 	if (options.is_main_database) {
 		attached_db->SetInitialDatabase();
-		attached_db->Initialize(context);
+		attached_db->Initialize(context, std::move(prefetched_handle));
 	} else {
-		attached_db->Initialize(context);
+		attached_db->Initialize(context, std::move(prefetched_handle));
 		if (!options.default_table.name.empty()) {
 			attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 		}
@@ -352,7 +353,7 @@ vector<string> DatabaseManager::GetAttachedDatabasePaths() {
 }
 
 void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config,
-                                      AttachOptions &options) {
+                                      AttachOptions &options, unique_ptr<BufferedFileHandle> *out_handle) {
 	// Test if the database is a DuckDB database file.
 	if (StringUtil::CIEquals(options.db_type, "duckdb")) {
 		options.db_type = "";
@@ -362,7 +363,7 @@ void DatabaseManager::GetDatabaseType(ClientContext &context, AttachInfo &info, 
 	// Try to extract the database type from the path.
 	if (options.db_type.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
-		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type);
+		DBPathAndType::CheckMagicBytes(context, fs, info.path, options.db_type, out_handle);
 	}
 
 	if (options.db_type.empty()) {

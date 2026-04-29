@@ -10,6 +10,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
@@ -50,7 +51,8 @@ public:
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const string &name);
 	shared_ptr<AttachedDatabase> GetDatabase(const string &name);
 	//! Attach a new database
-	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
+	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options,
+	                                            unique_ptr<BufferedFileHandle> prefetched_handle = nullptr);
 
 	//! Detach an existing database
 	void DetachDatabase(ClientContext &context, const string &name, OnEntryNotFound if_not_found);
@@ -70,7 +72,8 @@ public:
 	//! Returns the database type. This might require checking the header of the file, in which case the file handle is
 	//! necessary. We can only grab the file handle, if it is not yet held, even for uncommitted changes. Thus, we have
 	//! to lock for this operation.
-	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options);
+	void GetDatabaseType(ClientContext &context, AttachInfo &info, const DBConfig &config, AttachOptions &options,
+	                     unique_ptr<BufferedFileHandle> *out_handle = nullptr);
 	//! Scans the catalog set and adds each committed database entry, and each database entry of the current
 	//! transaction, to a vector holding AttachedDatabase references
 	vector<shared_ptr<AttachedDatabase>> GetDatabases(ClientContext &context,
