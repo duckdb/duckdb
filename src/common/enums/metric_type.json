@@ -36,7 +36,7 @@
       {
         "name": "CUMULATIVE_ROW_GROUPS_SCANNED",
         "enum_value": 101,
-        "description": "Cumulative number of row groups scanned by the query",
+        "description": "Total number of row groups scanned by all table scan operators in the query. This is the sum of OPERATOR_ROW_GROUPS_SCANNED across the operator tree; repeated scans of the same table are counted once per scan operator.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false,
@@ -46,7 +46,7 @@
       {
         "name": "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN",
         "enum_value": 102,
-        "description": "Cumulative number of row groups that could have been scanned by the query",
+        "description": "Total number of row groups available to all table scan operators in the query. This is the sum of OPERATOR_ROW_GROUPS_TOTAL across the operator tree; repeated scans of the same table are counted once per scan operator.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false,
@@ -345,7 +345,7 @@
       {
         "name": "OPERATOR_ROW_GROUPS_SCANNED",
         "enum_value": 99,
-        "description": "Number of row groups scanned by this table scan operator",
+        "description": "Number of row groups scanned by this table scan operator. Non-table-scan operators report 0 for this metric.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false
@@ -353,7 +353,7 @@
       {
         "name": "OPERATOR_ROW_GROUPS_TOTAL",
         "enum_value": 100,
-        "description": "Total number of row groups visible to this table scan operator",
+        "description": "Total number of row groups available to this table scan operator. Non-table-scan operators report 0 for this metric.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false
