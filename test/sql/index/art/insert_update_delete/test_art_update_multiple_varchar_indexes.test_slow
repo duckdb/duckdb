@@ -1,0 +1,34 @@
+# name: test/sql/index/art/insert_update_delete/test_art_update_multiple_varchar_indexes.test_slow
+# description: Test updating multiple varchar ART indexes in one transaction
+# group: [insert_update_delete]
+
+statement ok
+CREATE TABLE q (
+    r VARCHAR PRIMARY KEY,
+    s VARCHAR,
+    t VARCHAR
+);
+
+statement ok
+CREATE INDEX i_s ON q(s);
+
+statement ok
+CREATE INDEX i_t ON q(t);
+
+statement ok
+INSERT INTO q SELECT
+    md5(i::VARCHAR),
+    'a' || (i % 1000)::VARCHAR,
+    'b' || (i % 137)::VARCHAR
+FROM range(250000) q(i);
+
+statement ok
+BEGIN;
+
+statement ok
+UPDATE q SET
+    s = s || 'c',
+    t = t || 'c';
+
+statement ok
+COMMIT;
