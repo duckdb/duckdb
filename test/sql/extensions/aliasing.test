@@ -12,11 +12,6 @@
 # the alias will be used further on
 # if the extension is already loaded twice,
 
-query I
-SELECT * from duckdb_functions();
-----
-10
-
 require skip_reload
 
 require allow_unsigned_extensions
@@ -35,11 +30,6 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_
 ----
 Alias 'demo' already exists for extension 'loadable_extension_demo'
 
-# query I
-# SELECT * from duckdb_functions();
-# ----
-# 10
-
 # unqualified call works
 query I
 SELECT bounded_max(1::BOUNDED(10))
@@ -55,11 +45,13 @@ SELECT loadable_extension_demo_double()
 ----
 Hello from the loadable_extension_demo_double binary!
 
+# this enables to register functions with differnt func names if same extension is loaded
 require double_extension_loading
 
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' AS second_copy
 
+# we generate a new name to be able to load the second extension
 query I
 SELECT _second_copy__loadable_extension_demo_double()
 ----
@@ -69,3 +61,15 @@ query I
 SELECT loadable_extension_demo_double()
 ----
 Hello from the loadable_extension_demo_double binary!
+
+query II
+select extension_name, loaded from duckdb_extensions() where extension_name = 'demo' or extension_name = 'copy' or extension_name = 'second_copy';
+----
+copy	true
+demo	true
+second_copy	true
+
+# ONCE the PEG parser issue is fixed
+# we can check functions with
+# query I
+# SELECT * from duckdb_functions() where extension_name = LIKE ....;
