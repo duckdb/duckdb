@@ -285,13 +285,13 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 }
 
 // General-purpose Row Number Window Builder
-static unique_ptr<LogicalWindow> CreateRowNumberWindow(unique_ptr<LogicalOperator> child, TableIndex table_index,
+static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_ptr<LogicalOperator> child,
+                                                       TableIndex table_index,
                                                        vector<unique_ptr<Expression>> partitions = {},
                                                        vector<BoundOrderByNode> orders = {}) {
 	auto window = make_uniq<LogicalWindow>(table_index);
-	auto rn_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-	auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn_func), nullptr);
 
+	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
 	row_number->partitions = std::move(partitions);
 	row_number->orders = std::move(orders);
 	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
@@ -325,7 +325,7 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
 		// and perform all duplicate elimination on that row number instead
 		const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
-		op.children[0] = CreateRowNumberWindow(std::move(op.children[0]), op_col.binding.table_index);
+		op.children[0] = CreateRowNumberWindow(binder, std::move(op.children[0]), op_col.binding.table_index);
 	}
 	return state;
 }
@@ -721,7 +721,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 		partitions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
 	}
 
-	auto window = CreateRowNumberWindow(std::move(child), window_index, std::move(partitions),
+	auto window = CreateRowNumberWindow(binder, std::move(child), window_index, std::move(partitions),
 	                                    order_by ? std::move(order_by->orders) : vector<BoundOrderByNode>());
 
 	auto filter = make_uniq<LogicalFilter>();

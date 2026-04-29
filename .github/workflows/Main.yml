@@ -1249,7 +1249,7 @@ jobs:
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
-      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: python3 scripts/ci/run_tests.py --workers 1 --batch-size 1 --test-command "valgrind {binary} {flags} -f {test_list}" ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  threadsan:
     name: Thread Sanitizer
@@ -1325,6 +1325,48 @@ jobs:
         rm -rf build/release
         tar -xzf build/release-artifact.tar.gz -C build
 
+    - name: test/configs/verify_statement_copy.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_copy.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_to_string.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_to_string.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_explain.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_explain.json ./build/release/test/unittest
+
+    - name: test/configs/verify_statement_prepare.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
+
+    - name: test/configs/verify_serializer.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_serializer.json ./build/release/test/unittest
+
+    - name: test/configs/verify_stats.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+
+    - name: test/configs/verify_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_serialization.json ./build/release/test/unittest
+
     - name: test/configs/force_storage.json
       if: success() || failure()
       shell: bash
@@ -1349,11 +1391,29 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/block_verification.json ./build/release/test/unittest
 
+    - name: test/configs/disable_optimizer.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
+
+    - name: test/configs/force_external.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
+
     - name: test/configs/verify_fetch_row.json
       if: success() || failure()
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
+
+    - name: test/configs/disable_caching_operators.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/disable_caching_operators.json ./build/release/test/unittest
 
     - name: test/configs/wal_verification.json
       if: success() || failure()
@@ -1365,7 +1425,7 @@ jobs:
       if: success() || failure()
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
+        python3 scripts/ci/run_tests.py --test-config=test/configs/vacuum_rebuild_indexes_force_storage.json ./build/release/test/unittest
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
@@ -1390,12 +1450,6 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/enable_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification.json ./build/release/test/unittest
 
     - name: test/configs/block_allocator_100mib.json
       if: success() || failure()

@@ -2,9 +2,6 @@
 # description: regex replace test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # standard replace
 query T
 SELECT regexp_replace('foobarbaz', 'b..', 'X')

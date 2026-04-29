@@ -2,9 +2,6 @@
 # description: Test constant or null
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT constant_or_null(1, NULL), constant_or_null(1, 10)
 ----

@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create or replace table orders(ordered_at int);
 
 statement ok

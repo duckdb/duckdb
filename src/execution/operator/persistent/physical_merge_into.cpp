@@ -86,7 +86,7 @@ public:
 				state.insert_executor = make_uniq<ExpressionExecutor>(context.client, action->expressions);
 				vector<LogicalType> insert_types;
 				for (auto &expr : action->expressions) {
-					insert_types.push_back(expr->return_type);
+					insert_types.push_back(expr->GetReturnType());
 				}
 				state.insert_chunk = make_uniq<DataChunk>();
 				state.insert_chunk->Initialize(context.client, insert_types);

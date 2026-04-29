@@ -3,9 +3,6 @@
 # group: [show_select]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(c1 INTEGER PRIMARY KEY, c2 INT NOT NULL, c3 INT DEFAULT 42, c4 INT UNIQUE, c5 INT);
 
 statement ok

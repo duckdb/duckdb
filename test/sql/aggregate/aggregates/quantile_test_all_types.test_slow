@@ -3,9 +3,6 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table all_types as from test_all_types()
 
 # date is not tested here because the extreme date values overflow timestamps

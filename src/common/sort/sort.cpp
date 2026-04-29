@@ -1,5 +1,6 @@
 #include "duckdb/common/sorting/sort.hpp"
 
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
@@ -32,7 +33,7 @@ Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, con
 
 		// Avoid having unnamed structs fields (otherwise we get a parser exception while binding)
 		const auto col_name = StringUtil::Format("c%llu", col_idx);
-		auto col_type = order.expression->return_type;
+		auto col_type = order.expression->GetReturnType();
 		decode_child_list.emplace_back(col_name, col_type);
 		col_type = TypeVisitor::VisitReplace(col_type, [](const LogicalType &type) {
 			if (type.id() != LogicalTypeId::STRUCT) {
@@ -56,13 +57,13 @@ Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, con
 		throw InternalException("Unable to bind create_sort_key in Sort::Sort");
 	}
 
-	switch (create_sort_key->return_type.id()) {
+	switch (create_sort_key->GetReturnType().id()) {
 	case LogicalTypeId::BIGINT:
 		decode_children.insert(decode_children.begin(),
 		                       make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, static_cast<storage_t>(0)));
 		break;
 	default:
-		D_ASSERT(create_sort_key->return_type.id() == LogicalTypeId::BLOB);
+		D_ASSERT(create_sort_key->GetReturnType().id() == LogicalTypeId::BLOB);
 		decode_children.insert(decode_children.begin(),
 		                       make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
 	}
@@ -73,7 +74,7 @@ Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, con
 	}
 
 	// A bit hacky, but this way we make sure that the output does contain the unnamed structs again
-	decode_sort_key->return_type = LogicalType::STRUCT(std::move(decode_child_list));
+	decode_sort_key->SetReturnType(LogicalType::STRUCT(std::move(decode_child_list)));
 
 	// For convenience, we fill the projection map if it is empty
 	if (projection_map.empty()) {
@@ -122,7 +123,7 @@ Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, con
 	          });
 
 	// Finally, initialize the key layout (now that we know whether we have a payload)
-	key_layout->Initialize(orders, create_sort_key->return_type, !payload_types.empty());
+	key_layout->Initialize(orders, create_sort_key->GetReturnType(), !payload_types.empty());
 }
 
 //===--------------------------------------------------------------------===//
@@ -132,7 +133,7 @@ class SortLocalSinkState : public LocalSinkState {
 public:
 	SortLocalSinkState(const Sort &sort, ClientContext &context)
 	    : maximum_run_size(0), external(false), key_executor(context, *sort.create_sort_key) {
-		key.Initialize(context, {sort.create_sort_key->return_type});
+		key.Initialize(context, {sort.create_sort_key->GetReturnType()});
 		payload.Initialize(context, sort.payload_layout->GetTypes());
 	}
 
@@ -160,7 +161,7 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
+	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
 	      partition_size(0) {
 	}
 
@@ -451,8 +452,9 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	vector<LogicalType> types;
 	types.resize(output_projection_columns.size());
 	for (auto &opc : output_projection_columns) {
-		const auto &type = opc.is_payload ? payload_layout->GetTypes()[opc.layout_col_idx]
-		                                  : StructType::GetChildType(decode_sort_key->return_type, opc.layout_col_idx);
+		const auto &type = opc.is_payload
+		                       ? payload_layout->GetTypes()[opc.layout_col_idx]
+		                       : StructType::GetChildType(decode_sort_key->GetReturnType(), opc.layout_col_idx);
 		types[opc.output_col_idx] = type;
 	}
 
