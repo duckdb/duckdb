@@ -1,5 +1,5 @@
 # name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics.test_slow
-# description: Test OPERATOR_ROW_GROUPS_SCANNED and OPERATOR_ROW_GROUPS_TOTAL metrics
+# description: Test OPERATOR_ROW_GROUPS_SCANNED and OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN metrics
 # group: [profiling]
 
 require json
@@ -35,7 +35,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t;
@@ -52,7 +52,7 @@ WITH RECURSIVE ops AS (
 )
 SELECT op.operator_type,
        op.operator_row_groups_scanned AS scanned,
-       op.operator_row_groups_total AS total
+       op.operator_total_row_groups_to_scan AS total
 FROM ops;
 
 statement ok
@@ -80,7 +80,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t WHERE i < 100;
@@ -110,7 +110,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t WHERE i = 5;
@@ -140,7 +140,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM empty_t;
@@ -167,7 +167,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM small_t;
@@ -194,7 +194,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t;
@@ -224,7 +224,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t;
@@ -251,7 +251,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t WHERE i < 100;
@@ -278,7 +278,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t JOIN small_t USING (i);
@@ -313,7 +313,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM t a, t b WHERE a.i < 100 AND b.i < 100;
@@ -394,7 +394,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM mixed_t WHERE i < 5000100;
@@ -430,7 +430,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM persistent_local_rg;
@@ -466,7 +466,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM local_t;

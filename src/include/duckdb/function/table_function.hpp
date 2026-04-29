@@ -17,6 +17,7 @@
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/storage/table/row_group_reorderer.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/function/partition_stats.hpp"
@@ -320,11 +321,11 @@ typedef double (*table_function_progress_t)(ClientContext &context, const Functi
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
-typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
-                                               LocalTableFunctionState &local_state);
-typedef idx_t (*table_function_row_groups_scanned_t)(GlobalTableFunctionState &global_state,
-                                                     LocalTableFunctionState &local_state);
-typedef idx_t (*table_function_total_row_groups_to_scan_t)(ClientContext &context, const FunctionData *bind_data);
+typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
+                                             GlobalTableFunctionState &global_state,
+                                             LocalTableFunctionState &local_state,
+                                             const profiler_settings_t &requested_metrics,
+                                             profiler_metrics_t &metrics);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
@@ -439,12 +440,8 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows scanned by this table scan operator
-	table_function_rows_scanned_t rows_scanned;
-	//! (Optional) returns the number of row groups scanned by this table scan operator
-	table_function_row_groups_scanned_t row_groups_scanned;
-	//! (Optional) returns the total number of row groups available to this table scan operator
-	table_function_total_row_groups_to_scan_t total_row_groups_to_scan;
+	//! (Optional) returns profiling metrics for this table scan operator
+	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;

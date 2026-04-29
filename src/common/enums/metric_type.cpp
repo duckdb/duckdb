@@ -26,8 +26,8 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::OPERATOR_NAME,
 		MetricType::OPERATOR_ROWS_SCANNED,
 		MetricType::OPERATOR_ROW_GROUPS_SCANNED,
-		MetricType::OPERATOR_ROW_GROUPS_TOTAL,
 		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::OPERATOR_TYPE,
 		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
 		MetricType::OPTIMIZER_COLUMN_LIFETIME,
@@ -261,8 +261,8 @@ profiler_settings_t MetricsUtils::GetOperatorMetrics() {
 		MetricType::OPERATOR_NAME,
 		MetricType::OPERATOR_ROWS_SCANNED,
 		MetricType::OPERATOR_ROW_GROUPS_SCANNED,
-		MetricType::OPERATOR_ROW_GROUPS_TOTAL,
 		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::OPERATOR_TYPE,
 	};
 }
@@ -273,8 +273,8 @@ bool MetricsUtils::IsOperatorMetric(MetricType type) {
 	case MetricType::OPERATOR_NAME:
 	case MetricType::OPERATOR_ROWS_SCANNED:
 	case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
-	case MetricType::OPERATOR_ROW_GROUPS_TOTAL:
 	case MetricType::OPERATOR_TIMING:
+	case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::OPERATOR_TYPE:
 		return true;
 	default:

@@ -71,7 +71,7 @@ void ProfilingInfo::Expand(profiler_settings_t &settings, const MetricType metri
 		settings.insert(MetricType::OPERATOR_ROW_GROUPS_SCANNED);
 		return;
 	case MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN:
-		settings.insert(MetricType::OPERATOR_ROW_GROUPS_TOTAL);
+		settings.insert(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN);
 		return;
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
 	case MetricType::ALL_OPTIMIZERS: {

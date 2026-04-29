@@ -420,29 +420,14 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalS
 	return function.dynamic_to_string(input);
 }
 
-optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.rows_scanned) {
-		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.rows_scanned(*gstate.global_state, *state.local_state);
+void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
+                                   const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics) const {
+	if (!function.get_metrics) {
+		return;
 	}
-	return optional_idx();
-}
-
-optional_idx PhysicalTableScan::GetRowGroupsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.row_groups_scanned) {
-		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.row_groups_scanned(*gstate.global_state, *state.local_state);
-	}
-	return optional_idx();
-}
-
-optional_idx PhysicalTableScan::GetTotalRowGroupsToScan(ClientContext &context) const {
-	if (function.total_row_groups_to_scan && bind_data) {
-		return function.total_row_groups_to_scan(context, bind_data.get());
-	}
-	return optional_idx();
+	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	function.get_metrics(context, bind_data.get(), *gstate.global_state, *state.local_state, requested_metrics, metrics);
 }
 
 } // namespace duckdb

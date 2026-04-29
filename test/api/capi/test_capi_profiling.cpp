@@ -45,7 +45,7 @@ void RetrieveMetrics(duckdb_profiling_info info, duckdb::map<string, double> &cu
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_CARDINALITY));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROWS_SCANNED));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROW_GROUPS_SCANNED));
-			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_ROW_GROUPS_TOTAL));
+			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TIMING));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_NAME));
 			REQUIRE(key_str != EnumUtil::ToString(MetricType::OPERATOR_TYPE));

@@ -35,7 +35,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_ROW_GROUPS_TOTAL": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
 
 statement ok
 SELECT count(*) FROM local_pruned a, persistent_only b WHERE a.i < 100 AND b.i < 100;
@@ -52,7 +52,7 @@ WITH RECURSIVE ops AS (
 )
 SELECT op.operator_type,
        op.operator_row_groups_scanned AS scanned,
-       op.operator_row_groups_total AS total
+       op.operator_total_row_groups_to_scan AS total
 FROM ops;
 
 query III

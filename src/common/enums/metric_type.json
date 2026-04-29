@@ -46,12 +46,12 @@
       {
         "name": "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN",
         "enum_value": 102,
-        "description": "Total number of row groups available to all table scan operators in the query. This is the sum of OPERATOR_ROW_GROUPS_TOTAL across the operator tree; repeated scans of the same table are counted once per scan operator.",
+        "description": "Total number of row groups available to all table scan operators in the query. This is the sum of OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN across the operator tree; repeated scans of the same table are counted once per scan operator.",
         "type": "uint64",
         "unit": "absolute",
         "is_default": false,
         "collection_method": "cumulative",
-        "child": "OPERATOR_ROW_GROUPS_TOTAL"
+        "child": "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN"
       },
       {
         "name": "EXTRA_INFO",
@@ -351,7 +351,7 @@
         "is_default": false
       },
       {
-        "name": "OPERATOR_ROW_GROUPS_TOTAL",
+        "name": "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN",
         "enum_value": 100,
         "description": "Total number of row groups available to this table scan operator. Non-table-scan operators report 0 for this metric.",
         "type": "uint64",

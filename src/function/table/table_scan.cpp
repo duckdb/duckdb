@@ -819,20 +819,22 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
-idx_t TableScanRowsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
+void TableScanGetMetrics(ClientContext &context, const FunctionData *bind_data_p, GlobalTableFunctionState &gstate_p,
+                         LocalTableFunctionState &local_state, const profiler_settings_t &requested_metrics,
+                         profiler_metrics_t &metrics) {
 	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
-	return gstate.TableScanRowsScanned(local_state);
-}
-
-idx_t TableScanRowGroupsScanned(GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state) {
-	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
-	return gstate.TableScanRowGroupsScanned(local_state);
-}
-
-idx_t TableScanTotalRowGroupsToScan(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	auto &storage = bind_data.table.Cast<DuckTableEntry>().GetStorage();
-	return storage.GetRowGroupCountWithLocalStorage(context);
+	if (requested_metrics.find(MetricType::OPERATOR_ROWS_SCANNED) != requested_metrics.end()) {
+		metrics[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(gstate.TableScanRowsScanned(local_state));
+	}
+	if (requested_metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED) != requested_metrics.end()) {
+		metrics[MetricType::OPERATOR_ROW_GROUPS_SCANNED] = Value::UBIGINT(gstate.TableScanRowGroupsScanned(local_state));
+	}
+	if (bind_data_p && requested_metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) != requested_metrics.end()) {
+		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+		auto &storage = bind_data.table.Cast<DuckTableEntry>().GetStorage();
+		metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] =
+		    Value::UBIGINT(storage.GetRowGroupCountWithLocalStorage(context));
+	}
 }
 
 InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput &input) {
@@ -911,9 +913,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.statistics_extended = TableScanStatistics;
 	scan_function.dependency = TableScanDependency;
 	scan_function.cardinality = TableScanCardinality;
-	scan_function.rows_scanned = TableScanRowsScanned;
-	scan_function.row_groups_scanned = TableScanRowGroupsScanned;
-	scan_function.total_row_groups_to_scan = TableScanTotalRowGroupsToScan;
+	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
 	scan_function.table_scan_progress = TableScanProgress;
