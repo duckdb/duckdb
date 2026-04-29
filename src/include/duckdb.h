@@ -4356,6 +4356,17 @@ The result must be destroyed with `duckdb_destroy_value`.
 DUCKDB_C_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *name);
 
 /*!
+Returns whether a named parameter with the given name was provided to the function.
+
+This can be used to differentiate between an omitted named parameter and one that was set to `NULL`.
+
+* @param info The info object
+* @param name The name of the parameter
+* @return True if the named parameter was provided, false otherwise.
+*/
+DUCKDB_C_API bool duckdb_bind_has_named_parameter(duckdb_bind_info info, const char *name);
+
+/*!
 Sets the user-provided bind data in the bind object of the table function.
 This object can be retrieved again during execution.
 

@@ -184,11 +184,17 @@ void my_named_bind(duckdb_bind_info info) {
 
 	auto nparam = duckdb_bind_get_named_parameter(info, "my_parameter");
 	if (nparam) {
+		REQUIRE(duckdb_bind_has_named_parameter(info, "my_parameter"));
 		my_bind_data->multiplier = duckdb_get_int64(nparam);
 	} else {
+		REQUIRE(!duckdb_bind_has_named_parameter(info, "my_parameter"));
 		my_bind_data->multiplier = 1;
 	}
 	duckdb_destroy_value(&nparam);
+
+	REQUIRE(!duckdb_bind_has_named_parameter(info, "unknown_parameter"));
+	REQUIRE(!duckdb_bind_has_named_parameter(info, nullptr));
+	REQUIRE(!duckdb_bind_has_named_parameter(nullptr, "my_parameter"));
 
 	duckdb_bind_set_bind_data(info, my_bind_data, free);
 }

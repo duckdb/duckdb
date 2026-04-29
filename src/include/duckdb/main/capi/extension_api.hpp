@@ -656,6 +656,7 @@ typedef struct {
 	// New functions around table function binding
 
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+	bool (*duckdb_bind_has_named_parameter)(duckdb_bind_info info, const char *name);
 	// New value functions that are added
 
 	duckdb_value (*duckdb_create_map_value)(duckdb_logical_type map_type, duckdb_value *keys, duckdb_value *values,
@@ -1216,6 +1217,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_table_description_get_column_count = duckdb_table_description_get_column_count;
 	result.duckdb_table_description_get_column_type = duckdb_table_description_get_column_type;
 	result.duckdb_table_function_get_client_context = duckdb_table_function_get_client_context;
+	result.duckdb_bind_has_named_parameter = duckdb_bind_has_named_parameter;
 	result.duckdb_create_map_value = duckdb_create_map_value;
 	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_create_time_ns = duckdb_create_time_ns;

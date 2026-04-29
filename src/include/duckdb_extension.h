@@ -759,6 +759,7 @@ typedef struct {
 // New functions around table function binding
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_table_function_get_client_context)(duckdb_bind_info info, duckdb_client_context *out_context);
+	bool (*duckdb_bind_has_named_parameter)(duckdb_bind_info info, const char *name);
 #endif
 
 // New value functions that are added
@@ -1370,6 +1371,7 @@ typedef struct {
 
 // Version unstable_new_table_function_functions
 #define duckdb_table_function_get_client_context duckdb_ext_api.duckdb_table_function_get_client_context
+#define duckdb_bind_has_named_parameter          duckdb_ext_api.duckdb_bind_has_named_parameter
 
 // Version unstable_new_value_functions
 #define duckdb_create_time_ns     duckdb_ext_api.duckdb_create_time_ns
