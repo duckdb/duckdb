@@ -664,21 +664,18 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	}
 	auto aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 
-	BoundAggregateFunction bound_aggr(aggr);
+	// FIXME: this is really hacky
+	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
+	vector<unique_ptr<Expression>> args;
+	args.reserve(state_type.bound_argument_types.size());
+	for (auto &arg_type : state_type.bound_argument_types) {
+		args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
+	}
 
-	if (bound_aggr.GetBindCallback()) {
-		// FIXME: this is really hacky
-		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
-		vector<unique_ptr<Expression>> args;
-		args.reserve(state_type.bound_argument_types.size());
-		for (auto &arg_type : state_type.bound_argument_types) {
-			args.push_back(make_uniq<BoundConstantExpression>(Value(arg_type)));
-		}
+	auto [bound_aggr, bind_info] = function_binder.ResolveFunction(aggr, args);
 
-		auto bind_info = function_binder.ResolveFunction(bound_aggr, args);
-		if (bind_info) {
-			throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
-		}
+	if (bind_info) {
+		throw BinderException("Aggregate function with bind info not supported yet in aggregate state export");
 	}
 
 	if (bound_aggr.GetReturnType() != state_type.return_type ||

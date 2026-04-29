@@ -14,9 +14,8 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	FunctionBinder func_binder(context);
 	vector<OrderByNode> orders;
 	vector<OrderByNode> arg_orders;
-	AggregateType aggr_type = AggregateType::NON_DISTINCT;
 
-	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders, aggr_type);
+	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
 }
 
 } // namespace duckdb

@@ -188,9 +188,8 @@ public:
 			// No, then just rebind the function
 			try {
 				FunctionBinder binder(context);
-				FUNC bound_function(function);
 
-				auto bound_data = binder.ResolveFunction(bound_function, children);
+				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
 
 				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
 					bound_function.SetReturnType(std::move(return_type));

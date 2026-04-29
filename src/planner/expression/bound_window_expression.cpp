@@ -333,10 +333,11 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 
 		auto win_func = func.functions.GetFunctionByOffset(best.GetIndex());
 
-		BoundWindowFunction bound_win_func(win_func);
-		result->bind_info = function_binder.ResolveFunction(bound_win_func, result->children);
+		auto [bound_func, bind_info] = function_binder.ResolveFunction(win_func, result->children);
+
+		result->bind_info = std::move(bind_info);
 		result->type = expression_type;
-		result->window = make_uniq<BoundWindowFunction>(std::move(bound_win_func));
+		result->window = make_uniq<BoundWindowFunction>(std::move(bound_func));
 	}
 
 	return std::move(result);
