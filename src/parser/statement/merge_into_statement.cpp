@@ -71,8 +71,7 @@ string MergeIntoStatement::ToString() const {
 			}
 			auto column = returning_list[i]->ToString();
 			if (!returning_list[i]->GetAlias().empty()) {
-				column +=
-				    StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
+				column += StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
 			}
 			result += column;
 		}

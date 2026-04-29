@@ -827,8 +827,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	}
 
 	// Check we can query
-	auto schema_table =
-	    SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
+	auto schema_table = SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));

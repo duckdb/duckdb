@@ -71,6 +71,10 @@ string SQLIdentifier::ToString(const string &identifier) {
 	if (!KeywordHelper::RequiresQuotes(identifier)) {
 		return identifier;
 	}
+	return SQLQuotedIdentifier::ToString(identifier);
+}
+
+string SQLQuotedIdentifier::ToString(const string &identifier) {
 	char quote = '"';
 	return string(1, quote) + KeywordHelper::EscapeQuotes(identifier, quote) + string(1, quote);
 }

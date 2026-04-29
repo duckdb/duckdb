@@ -36,7 +36,7 @@ string LoadInfo::ToString() const {
 		if (repo_is_alias) {
 			result += " FROM " + SQLIdentifier(repository);
 		} else {
-			result += " FROM " + KeywordHelper::WriteQuoted(repository);
+			result += " FROM " + SQLString(repository);
 		}
 	}
 

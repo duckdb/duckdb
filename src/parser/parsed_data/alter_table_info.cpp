@@ -706,7 +706,7 @@ string SetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry.first, '\'') + "=" + entry.second->ToString();
+		result += SQLString(entry.first) + "=" + entry.second->ToString();
 		i++;
 	}
 	result += ")";
@@ -743,7 +743,7 @@ string ResetTableOptionsInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteQuoted(entry, '\'');
+		result += SQLString(entry);
 		i++;
 	}
 	result += ")";

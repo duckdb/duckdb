@@ -93,7 +93,7 @@ string TypeExpression::ToString() const {
 		// Built-in type name
 		result += type_name;
 	} else {
-		result += KeywordHelper::WriteOptionallyQuoted(type_name, '"', true);
+		result += SQLIdentifier(type_name);
 	}
 
 	if (!params.empty()) {

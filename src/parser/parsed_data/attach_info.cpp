@@ -31,7 +31,7 @@ string AttachInfo::ToString() const {
 	if (parsed_path) {
 		result += parsed_path->ToString();
 	} else {
-		result += KeywordHelper::WriteQuoted(path, '\'');
+		result += SQLString(path);
 	}
 	if (!name.empty()) {
 		result += " AS " + SQLIdentifier(name);

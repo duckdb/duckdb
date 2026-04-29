@@ -2115,8 +2115,7 @@ AdbcStatusCode StatementSetOptionDouble(struct AdbcStatement *statement, const c
 
 std::string createFilter(const char *input) {
 	if (input) {
-		auto quoted = duckdb::KeywordHelper::WriteQuoted(input, '\'');
-		return quoted;
+		return duckdb::SQLString::ToString(input);
 	}
 	return "'%'";
 }

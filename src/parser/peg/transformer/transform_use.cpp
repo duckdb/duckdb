@@ -13,8 +13,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 	if (IsInvalidSchema(qn.schema)) {
 		value_str = SQLIdentifier::ToString(qn.name);
 	} else {
-		value_str =
-		    SQLIdentifier(qn.schema) + "." + SQLIdentifier(qn.name);
+		value_str = SQLIdentifier(qn.schema) + "." + SQLIdentifier(qn.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
