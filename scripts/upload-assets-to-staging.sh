@@ -39,9 +39,9 @@ if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
 fi
 
 # dryrun if AWS key is not set
-if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
   echo "No access key available"
-  DRY_RUN_PARAM="--dry-run"
+  exit 0
 fi
 
 TARGET=$(git log -1 --format=%h)
@@ -70,9 +70,19 @@ if ! command -v rclone >/dev/null 2>&1; then
   esac
 fi
 
-set -x
+files_from="$(mktemp "${TMPDIR:-/tmp}/duckdb-staging-files.XXXXXX")"
+cleanup() {
+  rm -f "$files_from"
+}
+trap cleanup EXIT
+printf '%s\n' "${@:2}" > "$files_from"
+
+rclone_remote=":s3,provider=AWS,endpoint=${AWS_ENDPOINT_URL},access_key_id=${AWS_ACCESS_KEY_ID},secret_access_key=${AWS_SECRET_ACCESS_KEY}"
+if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
+  rclone_remote="${rclone_remote},session_token=${AWS_SESSION_TOKEN}"
+fi
 
 rclone $DRY_RUN_PARAM copy \
-  --files-from <(printf '%s\n' "${@:2}") \
+  --files-from "$files_from" \
   . \
-  ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
+  "${rclone_remote}:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
