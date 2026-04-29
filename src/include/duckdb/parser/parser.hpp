@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-struct PEGMatcherCache;
+struct ParserCache;
 class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
@@ -83,9 +83,9 @@ public:
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
-	PEGMatcherCache &GetCache();
+	ParserCache &GetCache();
 
 	ParserOptions options;
-	unique_ptr<PEGMatcherCache> local_cache;
+	unique_ptr<ParserCache> local_cache;
 };
 } // namespace duckdb

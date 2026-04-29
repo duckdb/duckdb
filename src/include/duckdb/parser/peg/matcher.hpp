@@ -216,13 +216,13 @@ struct PEGMatcher {
 	}
 
 private:
-	friend struct PEGMatcherCache;
+	friend struct ParserCache;
 	optional_ptr<Matcher> root;
 };
 
 //! Per-database cache holder for the compiled PEG root matcher and transformer factory.
 //! Both are always invalidated together, so they share one mutex and one Invalidate() call.
-struct PEGMatcherCache {
+struct ParserCache {
 	shared_ptr<PEGMatcher> GetMatcher();
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();

@@ -1445,7 +1445,7 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
-shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
+shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (matcher) {
@@ -1471,7 +1471,7 @@ shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
 	return matcher;
 }
 
-shared_ptr<PEGTransformerFactory> PEGMatcherCache::GetTransformerFactory() {
+shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (transformer_factory) {
@@ -1486,7 +1486,7 @@ shared_ptr<PEGTransformerFactory> PEGMatcherCache::GetTransformerFactory() {
 	return transformer_factory;
 }
 
-void PEGMatcherCache::Invalidate() {
+void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;

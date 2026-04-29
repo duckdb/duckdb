@@ -23,12 +23,12 @@ Parser::Parser(ParserOptions options_p) : options(options_p) {
 
 Parser::~Parser() = default;
 
-PEGMatcherCache &Parser::GetCache() {
-	if (options.peg_matcher_cache) {
-		return *options.peg_matcher_cache;
+ParserCache &Parser::GetCache() {
+	if (options.parser_cache) {
+		return *options.parser_cache;
 	}
 	if (!local_cache) {
-		local_cache = make_uniq<PEGMatcherCache>();
+		local_cache = make_uniq<ParserCache>();
 	}
 	return *local_cache;
 }

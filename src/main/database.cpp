@@ -75,11 +75,11 @@ DBConfig::~DBConfig() {
 DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	config.is_user_config = false;
 	create_api_v1 = nullptr;
-	peg_matcher_cache = make_uniq<PEGMatcherCache>();
+	parser_cache = make_uniq<ParserCache>();
 }
 
-PEGMatcherCache &DatabaseInstance::GetPEGMatcherCache() {
-	return *peg_matcher_cache;
+ParserCache &DatabaseInstance::GetParserCache() {
+	return *parser_cache;
 }
 
 DatabaseInstance::~DatabaseInstance() {
