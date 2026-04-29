@@ -1361,19 +1361,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
 	InitialCleanup(lock);
 
 #ifdef DEBUG
-	string query;
 	// run the ToString method of any relation we run, mostly to ensure it doesn't crash
 	relation->ToString();
 	relation->GetAlias();
-	if (relation->IsReadOnly()) {
-		// verify read only statements by running a select statement
-		auto select = make_uniq<SelectStatement>();
-		select->node = relation->GetQueryNode();
-		PendingQueryParameters parameters;
-		parameters.query_parameters = query_parameters;
-		parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
-		RunStatementInternal(lock, query, std::move(select), parameters);
-	}
 #endif
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
