@@ -332,16 +332,16 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	}
 
 	const auto hashes = FlatVector::GetData<hash_t>(hashes_v);
-	const auto partition_indices = FlatVector::GetDataMutable<idx_t>(state.partition_indices);
+	auto partition_indices = FlatVector::Writer<idx_t>(state.partition_indices, count);
 	for (idx_t i = 0; i < count; i++) {
 		auto &key = keys[i];
 		key.hash = hashes[i];
 		auto lookup = local_partition_map.find(key);
 		if (lookup == local_partition_map.end()) {
 			idx_t new_partition_id = RegisterNewPartition(key, state);
-			partition_indices[i] = new_partition_id;
+			partition_indices.WriteValue(new_partition_id);
 		} else {
-			partition_indices[i] = lookup->second;
+			partition_indices.WriteValue(lookup->second);
 		}
 	}
 }

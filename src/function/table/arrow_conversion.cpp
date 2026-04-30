@@ -129,12 +129,13 @@ static ArrowListOffsetData ConvertArrowListOffsetsTemplated(Vector &vector, Arro
 	idx_t cur_offset = 0;
 	auto offsets = ArrowBufferData<BUFFER_TYPE>(array, 1) + effective_offset;
 	start_offset = offsets[0];
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(vector);
+	auto list_data = FlatVector::Writer<list_entry_t>(vector, size);
 	for (idx_t i = 0; i < size; i++) {
-		auto &le = list_data[i];
+		list_entry_t le;
 		le.offset = cur_offset;
 		le.length = offsets[i + 1] - offsets[i];
 		cur_offset += le.length;
+		list_data.WriteValue(le);
 	}
 	list_size = offsets[size];
 	list_size -= start_offset;

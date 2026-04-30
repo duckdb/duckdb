@@ -164,10 +164,10 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		hashes_v.Flatten(count);
 	} else {
 		hashes_v.Flatten(count);
-		auto salts = FlatVector::GetDataMutable<hash_t>(salt_v);
+		auto salts = FlatVector::Writer<hash_t>(salt_v, count);
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
-			salts[i] = ht_entry_t::ExtractSalt(hashes[i]);
+			salts.WriteValue(ht_entry_t::ExtractSalt(hashes[i]));
 			hashes[i] &= bitmask;
 		}
 	}
@@ -267,16 +267,12 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
-		UnifiedVectorFormat hashes_unified_v;
-		hashes_v.ToUnifiedFormat(count, hashes_unified_v);
-
-		auto hashes_unified = UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v);
-		auto hashes_dense = FlatVector::GetDataMutable<idx_t>(state.hashes_dense_v);
+		auto hashes_unified = hashes_v.Values<hash_t>(count);
+		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
 
 		for (idx_t i = 0; i < count; i++) {
 			const auto row_index = row_sel->get_index(i);
-			const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
-			hashes_dense[i] = hashes_unified[uvf_index];
+			hashes_dense.WriteValue(hashes_unified[row_index].GetValue());
 		}
 	} else {
 		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
@@ -313,14 +309,14 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		const auto ht_offsets_and_salts = FlatVector::GetData<idx_t>(state.ht_offsets_and_salts_v);
-		const auto hashes_dense = FlatVector::GetDataMutable<hash_t>(state.hashes_dense_v);
+		auto hashes_dense = FlatVector::Writer<hash_t>(state.hashes_dense_v, keys_no_match_count);
 
 		// For all the non-matches, increment the offset to continue probing but keep the salt intact
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
 			const auto row_index = state.keys_no_match_sel.get_index(i);
 			auto ht_offset_and_salt = ht_offsets_and_salts[row_index];
 			IncrementAndWrap(ht_offset_and_salt, ht.bitmask | ht_entry_t::SALT_MASK);
-			hashes_dense[i] = ht_offset_and_salt; // populate dense again
+			hashes_dense.WriteValue(ht_offset_and_salt); // populate dense again
 		}
 
 		// in the next iteration, we have a selection vector with the keys that do not match

@@ -100,17 +100,17 @@ struct ComputePartitionIndicesFunctor {
 			const auto &source_sel = *format.sel;
 
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
-			const auto target = FlatVector::GetDataMutable<hash_t>(partition_indices);
+			auto target = FlatVector::Writer<hash_t>(partition_indices, append_count);
 
 			if (source_sel.IsSet()) {
 				for (idx_t i = 0; i < append_count; i++) {
 					const auto source_idx = source_sel.get_index(append_sel[i]);
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
+					target.WriteValue(CONSTANTS::ApplyMask(source_data[source_idx]));
 				}
 			} else {
 				for (idx_t i = 0; i < append_count; i++) {
 					const auto source_idx = append_sel[i];
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
+					target.WriteValue(CONSTANTS::ApplyMask(source_data[source_idx]));
 				}
 			}
 		}

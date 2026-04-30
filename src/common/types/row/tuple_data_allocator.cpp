@@ -146,10 +146,11 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	}
 
 	// We can do the fast path append!
-	auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
+	auto row_locations =
+	    FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_offset + append_count, append_offset);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
 	for (idx_t i = 0; i < append_count; i++) {
-		row_locations[append_offset + i] = base_row_ptr + i * row_width;
+		row_locations.WriteValue(base_row_ptr + i * row_width);
 	}
 
 	// Increment counts and sizes
