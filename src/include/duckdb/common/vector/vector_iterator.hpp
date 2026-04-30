@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+//! Tag type for struct vector writers with a fixed set of child types
+template <class... Args>
+struct FlatStruct {};
+
 class VectorValidityIterator {
 public:
 	VectorValidityIterator(const Vector &vector, idx_t count) : count(count) {
