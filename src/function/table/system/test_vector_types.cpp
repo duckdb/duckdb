@@ -132,6 +132,7 @@ struct TestVectorFlat {
 				for (idx_t i = 0; i < cardinality; i++) {
 					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
+				FlatVector::SetSize(result->data[c], count_t(cardinality));
 			}
 			result->SetCardinality(cardinality);
 			info.entries.push_back(std::move(result));
@@ -221,6 +222,7 @@ struct TestVectorSequence {
 				return;
 			}
 			GenerateVector(info, info.types[c], result->data[c]);
+			FlatVector::SetSize(result->data[c], count_t(SEQ_CARDINALITY));
 		}
 		result->SetCardinality(SEQ_CARDINALITY);
 #if STANDARD_VECTOR_SIZE > 2
