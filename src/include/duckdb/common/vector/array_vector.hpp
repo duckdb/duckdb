@@ -22,6 +22,7 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	void SetVectorSize(idx_t new_size) override;
 	idx_t Capacity() const override {
 		return capacity;
 	}

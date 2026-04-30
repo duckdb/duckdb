@@ -47,6 +47,13 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
+void VectorStructBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	for (auto &child : children) {
+		FlatVector::SetSize(child, new_size);
+	}
+}
+
 void VectorStructBuffer::ResetCapacity(idx_t capacity_p) {
 	this->capacity = capacity_p;
 	validity.Reset(capacity);
