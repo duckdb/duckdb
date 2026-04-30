@@ -93,13 +93,16 @@ struct ParquetReaderPrefetchConfig {
 };
 
 struct ParquetScanFilter {
-	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
+	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter,
+	                  bool column_is_filter_only);
 	~ParquetScanFilter();
 	ParquetScanFilter(ParquetScanFilter &&) = default;
 
 	ProjectionIndex filter_idx;
 	TableFilter &filter;
 	unique_ptr<TableFilterState> filter_state;
+	//! True when the column is not in the projected output.
+	bool column_is_filter_only;
 };
 
 struct ParquetReaderScanState {
@@ -128,6 +131,8 @@ public:
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
+	//! Per-filter always-true flags for the current row group.
+	vector<bool> filter_always_true;
 
 	//! (optional) pointer to the PhysicalOperator for logging
 	optional_ptr<const PhysicalOperator> op;

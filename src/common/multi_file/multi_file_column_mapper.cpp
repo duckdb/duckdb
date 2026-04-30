@@ -1183,6 +1183,21 @@ ReaderInitializeType MultiFileColumnMapper::CreateMapping(MultiFileColumnMapping
 
 	reader_data.reader->filters = CreateFilters(remaining_filters, result);
 
+	// translate reader.projection_ids from global to file-local space; constant-mapped globals (virtual / missing)
+	// have no local slot and are dropped — they don't appear in reader.column_ids.
+	auto &reader_projection_ids = reader_data.reader->projection_ids;
+	if (!reader_projection_ids.empty()) {
+		vector<idx_t> local_projection_ids;
+		local_projection_ids.reserve(reader_projection_ids.size());
+		for (auto global_idx : reader_projection_ids) {
+			auto it = result.global_to_local.find(MultiFileGlobalIndex(global_idx));
+			if (it != result.global_to_local.end()) {
+				local_projection_ids.push_back(it->second.mapping.index.GetIndex());
+			}
+		}
+		reader_projection_ids = std::move(local_projection_ids);
+	}
+
 	// for any remaining casts - push them as expressions
 	return ReaderInitializeType::INITIALIZED;
 }
