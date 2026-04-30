@@ -36,9 +36,6 @@ idx_t VectorArrayBuffer::GetChildSize() const {
 void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
 	VectorBuffer::SetVectorSize(new_size);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// for constant arrays only the first array_size elements of the child are used
-		// (see VectorArrayBuffer::Verify) - and the child buffer may be shared via Vector::Ref
-		// so do not size the child to new_size * array_size which can exceed the child's capacity
 		return;
 	}
 	FlatVector::SetSize(*child, new_size * array_size);

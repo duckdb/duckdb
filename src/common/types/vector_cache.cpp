@@ -54,14 +54,7 @@ public:
 		buffer->ClearAuxiliaryData();
 		result.SetBuffer(buffer_ptr<VectorBuffer>(buffer));
 		result.BufferMutable().ResetCapacity(capacity);
-		// use SetVectorTypeOnly to avoid propagating to children
-		// for nested types (struct/array/list) children may have stale incompatible buffers
-		// from a previous execution - they will be reset individually below
 		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
-		// reset the children FIRST so any external buffer references they pick up during
-		// prior execution (e.g. via Vector::Reference) are dropped before we resize the
-		// parent buffer - otherwise the new size propagation in VectorStructBuffer/
-		// VectorArrayBuffer::SetVectorSize would clobber sizes on those external buffers
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// reinitialize the VectorListBuffer
