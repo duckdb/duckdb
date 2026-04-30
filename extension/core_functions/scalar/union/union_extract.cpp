@@ -42,27 +42,29 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	result.Verify(args.size());
 }
 
-unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction &bound_function,
-                                          vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	D_ASSERT(bound_function.GetArguments().size() == 2);
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	if (arguments[0]->return_type.id() != LogicalTypeId::UNION) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::UNION) {
 		throw BinderException("union_extract can only take a union parameter");
 	}
-	idx_t union_member_count = UnionType::GetMemberCount(arguments[0]->return_type);
+	idx_t union_member_count = UnionType::GetMemberCount(arguments[0]->GetReturnType());
 	if (union_member_count == 0) {
 		throw InternalException("Can't extract something from an empty union");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 
 	auto &key_child = arguments[1];
 	if (key_child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
 
-	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+	if (key_child->GetReturnType().id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for union_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
@@ -78,11 +80,11 @@ unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction
 	bool found_key = false;
 
 	for (size_t i = 0; i < union_member_count; i++) {
-		auto &member_name = UnionType::GetMemberName(arguments[0]->return_type, i);
+		auto &member_name = UnionType::GetMemberName(arguments[0]->GetReturnType(), i);
 		if (StringUtil::Lower(member_name) == key) {
 			found_key = true;
 			key_index = i;
-			return_type = UnionType::GetMemberType(arguments[0]->return_type, i);
+			return_type = UnionType::GetMemberType(arguments[0]->GetReturnType(), i);
 			break;
 		}
 	}
@@ -91,7 +93,7 @@ unique_ptr<FunctionData> UnionExtractBind(ClientContext &context, ScalarFunction
 		vector<string> candidates;
 		candidates.reserve(union_member_count);
 		for (idx_t i = 0; i < union_member_count; i++) {
-			candidates.push_back(UnionType::GetMemberName(arguments[0]->return_type, i));
+			candidates.push_back(UnionType::GetMemberName(arguments[0]->GetReturnType(), i));
 		}
 		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");

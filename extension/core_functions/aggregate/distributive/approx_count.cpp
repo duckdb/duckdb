@@ -68,8 +68,8 @@ void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, id
 		if (!input_validity.IsValid(i)) {
 			continue;
 		}
-		auto agg_state = states[i].value;
-		const auto hash = hashes[i].value;
+		auto agg_state = states[i].GetValue();
+		const auto hash = hashes[i].GetValue();
 		agg_state->hll.InsertElement(hash);
 	}
 }

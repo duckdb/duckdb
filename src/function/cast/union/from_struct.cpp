@@ -58,9 +58,9 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	for (idx_t i = 0; i < source_children.size(); i++) {
 		auto &result_child_vector = target_children[i];
 		auto &source_child_vector = source_children[i];
-		CastParameters child_parameters(parameters, cast_data.child_cast_info[i].cast_data, lstate.local_states[i]);
+		CastParameters child_parameters(parameters, cast_data.child_cast_info[i].GetCastData(), lstate.local_states[i]);
 		auto converted =
-		    cast_data.child_cast_info[i].function(source_child_vector, result_child_vector, count, child_parameters);
+		    cast_data.child_cast_info[i].Cast(source_child_vector, result_child_vector, count, child_parameters);
 		(void)converted;
 		D_ASSERT(converted);
 		// we flatten the child because we use FlatVector::SetNull below and we may get non-flat from source/cast

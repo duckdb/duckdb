@@ -33,7 +33,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	case ExpressionClass::DEFAULT:
 		return BindResult(BinderException::Unsupported(expr, "SELECT clause cannot contain DEFAULT clause"));
 	case ExpressionClass::WINDOW:
-		return BindWindow(expr.Cast<WindowExpression>(), depth);
+		return BindWindowExpression(expr.Cast<WindowExpression>(), depth);
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
 	}
@@ -101,7 +101,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		const auto return_type = node.aggregates[aggr_index]->return_type;
+		const auto return_type = node.aggregates[aggr_index]->GetReturnType();
 		auto uncollated_first_expression = make_uniq<BoundColumnRefExpression>(
 		    expr.GetName(), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 
@@ -115,7 +115,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		// otherwise you can return the "first" of the uncollated expression.
 		auto &group = node.groups.group_expressions[group_index];
 		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
-		    expr.GetName(), group->return_type, ColumnBinding(node.group_index, group_index), depth);
+		    expr.GetName(), group->GetReturnType(), ColumnBinding(node.group_index, group_index), depth);
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
@@ -127,7 +127,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		return BindResult(std::move(case_expr));
 	} else {
 		auto &group = node.groups.group_expressions[group_index];
-		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->GetReturnType(),
 		                                                      ColumnBinding(node.group_index, group_index), depth));
 	}
 }

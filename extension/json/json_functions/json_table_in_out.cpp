@@ -155,7 +155,8 @@ template <class T>
 struct JSONTableInOutResultVector {
 	explicit JSONTableInOutResultVector(DataChunk &output, const optional_idx &output_column_index)
 	    : enabled(output_column_index.IsValid()), vector(output.data[enabled ? output_column_index.GetIndex() : 0]),
-	      data(enabled ? FlatVector::GetData<T>(vector) : nullptr), validity(FlatVector::Validity(vector)) {
+	      data(enabled ? FlatVector::GetDataMutable<T>(vector) : nullptr),
+	      validity(FlatVector::ValidityMutable(vector)) {
 	}
 	const bool enabled;
 	Vector &vector;
@@ -269,7 +270,7 @@ static void InitializeLocalState(JSONTableInOutLocalState &lstate, DataChunk &in
 	if (ConstantVector::IsNull(input_vector)) {
 		return;
 	}
-	const auto &input_data = FlatVector::GetData<string_t>(input_vector)[0];
+	const auto &input_data = ConstantVector::GetData<string_t>(input_vector)[0];
 	lstate.doc = JSONCommon::ReadDocument(input_data, JSONCommon::READ_FLAG, lstate.alc);
 	const auto root = JSONCommon::GetUnsafe(lstate.doc->root, lstate.path.c_str(), lstate.len);
 
@@ -356,11 +357,11 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 	if (gstate.root_column_index.IsValid()) {
 		auto &root_vector = output.data[gstate.root_column_index.GetIndex()];
 		root_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		FlatVector::GetData<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
+		ConstantVector::GetData<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
 	}
 	if (gstate.empty_column_idex.IsValid()) {
 		auto &empty_vector = output.data[gstate.empty_column_idex.GetIndex()];
-		ConstantVector::SetNull(empty_vector);
+		ConstantVector::SetNull(empty_vector, count_t(result.count));
 	}
 
 	if (output.size() == 0) {

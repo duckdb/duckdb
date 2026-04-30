@@ -45,7 +45,7 @@ struct TopNScanState {
 
 struct TopNBoundaryValue {
 	explicit TopNBoundaryValue(const PhysicalTopN &op)
-	    : op(op), boundary_vector(op.orders[0].expression->return_type),
+	    : op(op), boundary_vector(op.orders[0].expression->GetReturnType()),
 	      boundary_modifiers(op.orders[0].type, op.orders[0].null_order) {
 	}
 
@@ -174,7 +174,7 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
 		auto &expr = order.expression;
-		sort_types.push_back(expr->return_type);
+		sort_types.push_back(expr->GetReturnType());
 		executor.AddExpression(*expr);
 		modifiers.emplace_back(order.type, order.null_order);
 	}
@@ -237,7 +237,7 @@ void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
@@ -262,7 +262,7 @@ void TopNHeap::AddLargeHeap(DataChunk &input, Vector &sort_keys_vec) {
 	}
 
 	// copy over the input rows to the payload chunk
-	heap_data.Append(input, true, &matching_sel, match_count);
+	heap_data.Append(input, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 }
 
 bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, TopNBoundaryValue &global_boundary) {
@@ -398,13 +398,13 @@ void TopNHeap::Combine(TopNHeap &other) {
 		matching_sel.set_index(match_count++, other_entry.index);
 		if (match_count >= STANDARD_VECTOR_SIZE) {
 			// flush
-			heap_data.Append(other.heap_data, true, &matching_sel, match_count);
+			heap_data.Append(other.heap_data, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 			match_count = 0;
 		}
 	}
 	if (match_count > 0) {
 		// flush
-		heap_data.Append(other.heap_data, true, &matching_sel, match_count);
+		heap_data.Append(other.heap_data, matching_sel, match_count, VectorAppendMode::ALLOW_RESIZE);
 		match_count = 0;
 	}
 	Reduce();
@@ -460,7 +460,7 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk, idx_t &pos) {
 	if (pos >= state.scan_order.size()) {
 		return;
 	}
-	SelectionVector sel(state.scan_order.data() + pos);
+	SelectionVector sel(state.scan_order.data() + pos, state.scan_order.size() - pos);
 	idx_t count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.scan_order.size() - pos);
 	pos += STANDARD_VECTOR_SIZE;
 

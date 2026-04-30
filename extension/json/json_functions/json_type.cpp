@@ -19,19 +19,25 @@ static void ManyTypeFunction(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::VARCHAR, UnaryTypeFunction, nullptr, nullptr, nullptr,
+	set.AddFunction(ScalarFunction({input_type}, LogicalType::VARCHAR, UnaryTypeFunction, nullptr, nullptr,
 	                               JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, BinaryTypeFunction,
-	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
 	                               LogicalType::LIST(LogicalType::VARCHAR), ManyTypeFunction,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JSONReadManyFunctionData::Bind, nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
 	GetTypeFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.GetArguments().size() == 1 && func.GetArguments()[0].IsJSONType()) {
+			continue;
+		}
+		func.SetFallible();
+	}
 	return set;
 }
 

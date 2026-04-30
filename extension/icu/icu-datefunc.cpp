@@ -66,9 +66,8 @@ unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
 	return make_uniq<BindData>(*this);
 }
 
-unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
-	return make_uniq<BindData>(context);
+unique_ptr<FunctionData> ICUDateFunc::Bind(BindScalarFunctionInput &input) {
+	return make_uniq<BindData>(input.GetClientContext());
 }
 
 bool ICUDateFunc::TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {

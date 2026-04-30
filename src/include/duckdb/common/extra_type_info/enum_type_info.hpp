@@ -32,7 +32,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 
 	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &deserializer, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
-		auto strings = FlatVector::Writer<string_t>(values_insert_order, size);
+		auto strings = FlatVector::ScatterWriter<string_t>(values_insert_order);
 
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			if (i >= size) {

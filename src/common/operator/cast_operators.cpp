@@ -43,8 +43,8 @@ ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, Phys
 		if (parameters->cast_source && parameters->cast_target) {
 			auto &source_expr = *parameters->cast_source;
 			auto &target_expr = *parameters->cast_target;
-			return ConversionException(query_location,
-			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+			return ConversionException(
+			    query_location, UnimplementedCastMessage(source_expr.GetReturnType(), target_expr.GetReturnType()));
 		}
 	}
 	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
@@ -1491,8 +1491,9 @@ bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, CastPara
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-		                          GetTypeId<hugeint_t>());
+		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<hugeint_t>()),
+		                             parameters);
+		return false;
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
@@ -1503,8 +1504,9 @@ bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, CastPar
 	D_ASSERT(input.GetSize() > 1);
 
 	if (input.GetSize() - 1 > sizeof(uhugeint_t)) {
-		throw ConversionException(parameters.query_location, "Bitstring doesn't fit inside of %s",
-		                          GetTypeId<uhugeint_t>());
+		HandleCastError::AssignError("Bitstring doesn't fit inside of " + TypeIdToString(GetTypeId<uhugeint_t>()),
+		                             parameters);
+		return false;
 	}
 	Bit::BitToNumeric(input, result);
 	return (true);
@@ -1601,7 +1603,9 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict);
+	// Pass the query location of the cast source if available.
+	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
 }
 
 //===--------------------------------------------------------------------===//
@@ -2102,23 +2106,23 @@ bool TryCastToDecimalCommaSeparated::Operation(string_t input, hugeint_t &result
 }
 
 template <>
-string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int16_t>(input, width, scale, result);
+string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, StringHeap &heap) {
+	return DecimalToString::Format<int16_t>(input, width, scale, heap);
 }
 
 template <>
-string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int32_t>(input, width, scale, result);
+string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, StringHeap &heap) {
+	return DecimalToString::Format<int32_t>(input, width, scale, heap);
 }
 
 template <>
-string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int64_t>(input, width, scale, result);
+string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, StringHeap &heap) {
+	return DecimalToString::Format<int64_t>(input, width, scale, heap);
 }
 
 template <>
-string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<hugeint_t>(input, width, scale, result);
+string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, StringHeap &heap) {
+	return DecimalToString::Format<hugeint_t>(input, width, scale, heap);
 }
 
 //===--------------------------------------------------------------------===//
@@ -2924,7 +2928,7 @@ void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
-		// Fast path, integer is representable exaclty as a float/double
+		// Fast path, integer is representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}

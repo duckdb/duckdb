@@ -48,7 +48,7 @@ static void StripNullsFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static void GetStripNullsFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
 	set.AddFunction(ScalarFunction("json_strip_nulls", {json}, LogicalType::JSON(), StripNullsFunction, nullptr,
-	                               nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               nullptr, JSONFunctionLocalState::Init));
 }
 
 ScalarFunctionSet JSONFunctions::GetStripNullsFunction() {

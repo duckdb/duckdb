@@ -8,6 +8,11 @@
 
 namespace duckdb {
 
+bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
+	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
+	       collation_handling == rhs.collation_handling;
+}
+
 FunctionData::~FunctionData() {
 }
 
@@ -41,15 +46,17 @@ Function::Function(string name_p) : name(std::move(name_p)) {
 Function::~Function() {
 }
 
-SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
-    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
+SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
+                               LogicalType varargs_p)
+    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)),
+      return_type(std::move(return_type)) {
 }
 
 SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -58,7 +65,7 @@ bool SimpleFunction::HasVarArgs() const {
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
                                                            LogicalType varargs_p)
-    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)) {
+    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
 }
 
 SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
@@ -72,21 +79,6 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 	return !named_parameters.empty();
 }
 
-BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       FunctionStability stability, LogicalType varargs_p,
-                                       FunctionNullHandling null_handling, FunctionErrors errors)
-    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling), errors(errors),
-      collation_handling(FunctionCollationHandling::PROPAGATE_COLLATIONS) {
-}
-
-BaseScalarFunction::~BaseScalarFunction() {
-}
-
-string BaseScalarFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
-}
-
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {
 	RegisterTableScanFunctions();
@@ -96,7 +88,6 @@ void BuiltinFunctions::Initialize() {
 	RegisterArrowFunctions();
 
 	RegisterPragmaFunctions();
-	RegisterWindowFunctions();
 
 	RegisterCopyFunctions();
 
@@ -108,7 +99,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterExtensionOverloads();
 }
 
-hash_t BaseScalarFunction::Hash() const {
+hash_t SimpleFunction::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &arg : arguments) {
 		hash = duckdb::CombineHash(hash, arg.Hash());
@@ -167,13 +158,13 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                              idx_t argument_index) {
-	if (bound_function.original_arguments.empty()) {
-		bound_function.original_arguments = bound_function.arguments;
+	if (bound_function.GetOriginalArguments().empty()) {
+		bound_function.GetOriginalArguments() = bound_function.GetArguments();
 	}
-	D_ASSERT(arguments.size() == bound_function.arguments.size());
+	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
 	D_ASSERT(argument_index < arguments.size());
 	arguments.erase_at(argument_index);
-	bound_function.arguments.erase_at(argument_index);
+	bound_function.GetArguments().erase_at(argument_index);
 }
 
 } // namespace duckdb

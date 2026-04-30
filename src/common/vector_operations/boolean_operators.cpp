@@ -22,6 +22,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// operation on two constants, result is constant vector
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
 		auto ldata = ConstantVector::GetData<uint8_t>(left);
 		auto rdata = ConstantVector::GetData<uint8_t>(right);
 		auto result_data = ConstantVector::GetData<bool>(result);
@@ -29,7 +30,7 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 		bool is_null = OP::Operation(*ldata > 0, *rdata > 0, ConstantVector::IsNull(left),
 		                             ConstantVector::IsNull(right), *result_data);
 		if (is_null) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 		return;
 	}
@@ -39,13 +40,13 @@ void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result, idx_t
 	auto right_data = right.Values<uint8_t>(count);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<bool>(result, count);
+	auto result_data = FlatVector::ScatterWriter<bool>(result);
 	if (left_data.CanHaveNull() || right_data.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto left_entry = left_data[i];
 			auto right_entry = right_data[i];
-			bool is_null = OP::Operation(left_entry.value > 0, right_entry.value > 0, !left_entry.IsValid(),
-			                             !right_entry.IsValid(), result_data[i]);
+			bool is_null = OP::Operation(left_entry.GetValueUnsafe() > 0, right_entry.GetValueUnsafe() > 0,
+			                             !left_entry.IsValid(), !right_entry.IsValid(), result_data[i]);
 			if (is_null) {
 				result_data.SetInvalid(i);
 			}

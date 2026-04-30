@@ -26,7 +26,7 @@ SELECT
 	c0::TIME::TIMETZ AS tz,
 FROM single;
 ----
-12:34:56+08	12:34:56	12:34:56+00
+12:34:56+08	12:34:56	12:34:56+08
 
 query IIII
 SELECT 
@@ -37,3 +37,49 @@ SELECT
 FROM single;
 ----
 1	0	1	0
+
+# TIME -> TIMETZ should pick up the session timezone offset
+# (issue #22235): VARCHAR -> TIMETZ and TIME -> TIMETZ must agree.
+statement ok
+SET TimeZone='America/Phoenix';
+
+query I
+SELECT '01:00:00'::TIMETZ AS ttz
+----
+01:00:00-07
+
+query I
+SELECT '01:00:00+02'::TIMETZ AS ttz
+----
+01:00:00+02
+
+query I
+SELECT '01:00:00'::TIME::TIMETZ AS ttz
+----
+01:00:00-07
+
+statement ok
+SET TimeZone='Asia/Kolkata';
+
+query I
+SELECT '00:00:00'::TIMETZ AS ttz
+----
+00:00:00+05:30
+
+query I
+SELECT '00:00:00'::TIME::TIMETZ AS ttz
+----
+00:00:00+05:30
+
+query I
+SELECT ('00:00:00'::TIMETZ = '00:00:00'::TIME::TIMETZ) AS same
+----
+true
+
+statement ok
+SET TimeZone='UTC';
+
+query I
+SELECT '00:00:00'::TIME::TIMETZ AS ttz
+----
+00:00:00+00

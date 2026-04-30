@@ -151,39 +151,39 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
-		switch (expr.return_type.InternalType()) {
+		switch (expr.GetReturnType().InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
-			    PROPAGATE::template Operation<int8_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int8_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT16:
 			potential_overflow =
-			    PROPAGATE::template Operation<int16_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int16_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT32:
 			potential_overflow =
-			    PROPAGATE::template Operation<int32_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int32_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT64:
 			potential_overflow =
-			    PROPAGATE::template Operation<int64_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		default:
 			return nullptr;
 		}
 	}
 	if (potential_overflow) {
-		new_min = Value(expr.return_type);
-		new_max = Value(expr.return_type);
+		new_min = Value(expr.GetReturnType());
+		new_max = Value(expr.GetReturnType());
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType()));
+		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
-	auto result = NumericStats::CreateEmpty(expr.return_type);
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
 	NumericStats::SetMax(result, new_max);
 	result.CombineValidity(lstats, rstats);
@@ -191,20 +191,22 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 }
 
 template <bool IS_MODULO = false>
-unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &context, ScalarFunction &bound_function,
-                                                            vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	// get the max width and scale of the input arguments
 	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
 		uint8_t width, scale;
-		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal.", arguments[i]->return_type.ToString());
+			throw InternalException("Could not convert type %s to a decimal.",
+			                        arguments[i]->GetReturnType().ToString());
 		}
 		max_width = MaxValue<uint8_t>(width, max_width);
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
@@ -232,13 +234,13 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &conte
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		// first check if the cast is necessary
 		// if the argument has a matching scale and internal type as the output type, no casting is necessary
-		auto &argument_type = arguments[i]->return_type;
+		auto &argument_type = arguments[i]->GetReturnType();
 		uint8_t width, scale;
 		argument_type.GetDecimalProperties(width, scale);
 		if (scale == DecimalType::GetScale(result_type) && argument_type.InternalType() == result_type.InternalType()) {
-			bound_function.arguments[i] = argument_type;
+			bound_function.GetArguments()[i] = argument_type;
 		} else {
-			bound_function.arguments[i] = result_type;
+			bound_function.GetArguments()[i] = result_type;
 		}
 	}
 	bound_function.SetReturnType(result_type);
@@ -246,9 +248,10 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(ClientContext &conte
 }
 
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindDecimalArithmetic(context, bound_function, arguments);
+unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+
+	auto bind_data = BindDecimalArithmetic(input);
 
 	// now select the physical function to execute
 	auto &result_type = bound_function.GetReturnType();
@@ -270,16 +273,16 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 }
 
 void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                const ScalarFunction &function) {
+                                const BoundScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
-	serializer.WriteProperty(102, "arguments", function.arguments);
+	serializer.WriteProperty(102, "arguments", function.GetArguments());
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, BoundScalarFunction &bound_function) {
 	//	// re-change the function pointers
 	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
@@ -291,17 +294,19 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	}
 	bound_function.SetStatisticsCallback(nullptr); // TODO we likely dont want to do stats prop again
 	bound_function.SetReturnType(return_type);
-	bound_function.arguments = arguments;
+	bound_function.GetArguments() = arguments;
 
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 	bind_data->check_overflow = check_overflow;
 	return std::move(bind_data);
 }
 
-unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
-                                        vector<unique_ptr<Expression>> &arguments) {
-	bound_function.SetReturnType(arguments[0]->return_type);
-	bound_function.arguments[0] = arguments[0]->return_type;
+unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
@@ -316,7 +321,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	}
 }
 
-void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(args.data[0], args.data[1], result, args.size(),
 	                                                      [&](bignum_t a, bignum_t b) {
@@ -326,7 +331,7 @@ void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
 	                                                      });
 }
 
-void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	BinaryExecutor::Execute<bignum_t, bignum_t, string_t>(
 	    args.data[0], args.data[1], result, args.size(), [&](bignum_t a, bignum_t b) {
@@ -339,7 +344,7 @@ void BignumSubtract(DataChunk &args, ExpressionState &state, Vector &result) {
 	    });
 }
 
-void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
+static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<bignum_t, string_t>(args.data[0], result, args.size(), [&](bignum_t a) {
 		const BignumIntermediate lhs(a);
@@ -359,7 +364,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()),
-			                        nullptr, nullptr,
+			                        nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
 			return function;
@@ -557,11 +562,13 @@ struct DecimalNegateBindData : public FunctionData {
 	LogicalTypeId bound_type;
 };
 
-unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<DecimalNegateBindData>();
 
-	auto &decimal_type = arguments[0]->return_type;
+	auto &decimal_type = arguments[0]->GetReturnType();
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
@@ -578,13 +585,15 @@ unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunctio
 		    ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT));
 	}
 	decimal_type.Verify();
-	bound_function.arguments[0] = decimal_type;
+	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
 	return nullptr;
 }
 
-unique_ptr<FunctionData> IntegerNegateBind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	D_ASSERT(arguments.size() == 1);
 	if (arguments[0]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return nullptr;
@@ -593,7 +602,7 @@ unique_ptr<FunctionData> IntegerNegateBind(ClientContext &context, ScalarFunctio
 	if (const_expr.value.IsNull()) {
 		return nullptr;
 	}
-	auto &type = bound_function.arguments[0];
+	auto &type = bound_function.GetArguments()[0];
 	// only need to promote if the constant exactly equals the type's minimum value
 	if (const_expr.value != Value::MinimumValue(type)) {
 		return nullptr;
@@ -615,7 +624,7 @@ unique_ptr<FunctionData> IntegerNegateBind(ClientContext &context, ScalarFunctio
 	default:
 		return nullptr;
 	}
-	bound_function.arguments[0] = promoted_type;
+	bound_function.GetArguments()[0] = promoted_type;
 	bound_function.SetReturnType(promoted_type);
 	bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<NegateOperator>(promoted_type));
 	return nullptr;
@@ -637,7 +646,7 @@ struct NegatePropagateStatistics {
 	}
 };
 
-unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
@@ -646,32 +655,32 @@ unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, Function
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMinMax(istats)) {
-		switch (expr.return_type.InternalType()) {
+		switch (expr.GetReturnType().InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
-			    NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);
+			    NegatePropagateStatistics::Operation<int8_t>(expr.GetReturnType(), istats, new_min, new_max);
 			break;
 		case PhysicalType::INT16:
 			potential_overflow =
-			    NegatePropagateStatistics::Operation<int16_t>(expr.return_type, istats, new_min, new_max);
+			    NegatePropagateStatistics::Operation<int16_t>(expr.GetReturnType(), istats, new_min, new_max);
 			break;
 		case PhysicalType::INT32:
 			potential_overflow =
-			    NegatePropagateStatistics::Operation<int32_t>(expr.return_type, istats, new_min, new_max);
+			    NegatePropagateStatistics::Operation<int32_t>(expr.GetReturnType(), istats, new_min, new_max);
 			break;
 		case PhysicalType::INT64:
 			potential_overflow =
-			    NegatePropagateStatistics::Operation<int64_t>(expr.return_type, istats, new_min, new_max);
+			    NegatePropagateStatistics::Operation<int64_t>(expr.GetReturnType(), istats, new_min, new_max);
 			break;
 		default:
 			return nullptr;
 		}
 	}
 	if (potential_overflow) {
-		new_min = Value(expr.return_type);
-		new_max = Value(expr.return_type);
+		new_min = Value(expr.GetReturnType());
+		new_max = Value(expr.GetReturnType());
 	}
-	auto stats = NumericStats::CreateEmpty(expr.return_type);
+	auto stats = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(stats, new_min);
 	NumericStats::SetMax(stats, new_max);
 	stats.CopyValidity(istats);
@@ -684,7 +693,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		func.SetFallible();
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
+		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, NegateBindStatistics);
 		return func;
 	} else if (type.id() == LogicalTypeId::BIGNUM) {
 		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
@@ -692,7 +701,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
-		                    IntegerNegateBind, nullptr, NegateBindStatistics);
+		                    IntegerNegateBind, NegateBindStatistics);
 		func.SetFallible();
 		return func;
 	}
@@ -711,7 +720,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, left_type,
-			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
+			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
 			return function;
@@ -869,20 +878,23 @@ struct MultiplyPropagateStatistics {
 	}
 };
 
-unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunction &bound_function,
-                                             vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
 	auto bind_data = make_uniq<DecimalArithmeticBindData>();
 
 	uint8_t result_width = 0, result_scale = 0;
 	uint8_t max_width = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
 		uint8_t width, scale;
-		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+			throw InternalException("Could not convert type %s to a decimal?",
+			                        arguments[i]->GetReturnType().ToString());
 		}
 		if (width > max_width) {
 			max_width = width;
@@ -911,16 +923,16 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 	// since our scale is the summation of our input scales, we do not need to cast to the result scale
 	// however, we might need to cast to the correct internal type
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		auto &argument_type = arguments[i]->return_type;
+		auto &argument_type = arguments[i]->GetReturnType();
 		if (argument_type.InternalType() == result_type.InternalType()) {
-			bound_function.arguments[i] = argument_type;
+			bound_function.GetArguments()[i] = argument_type;
 		} else {
 			uint8_t width, scale;
 			if (!argument_type.GetDecimalProperties(width, scale)) {
 				scale = 0;
 			}
 
-			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
+			bound_function.GetArguments()[i] = LogicalType::DECIMAL(result_width, scale);
 		}
 	}
 	result_type.Verify();
@@ -953,8 +965,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 		} else if (TypeIsIntegral(type.InternalType())) {
 			multiply.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
-			    nullptr, nullptr,
-			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
+			    nullptr, PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
 			multiply.AddFunction(
 			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
@@ -1104,8 +1115,10 @@ scalar_function_t GetBinaryFunctionIgnoreZero(PhysicalType type) {
 }
 
 template <class OP>
-unique_ptr<FunctionData> BindBinaryFloatingPoint(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+
 	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
@@ -1151,13 +1164,13 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 // % [modulo]
 //===--------------------------------------------------------------------===//
 template <class OP>
-static unique_ptr<FunctionData> BindDecimalModulo(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindDecimalArithmetic<true>(context, bound_function, arguments);
+static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto bind_data = BindDecimalArithmetic<true>(input);
 	// now select the physical function to execute
 	if (bind_data->check_overflow) {
 		// fallback to DOUBLE if the decimal type is not guaranteed to fit within the max decimal width
-		for (auto &arg : bound_function.arguments) {
+		for (auto &arg : bound_function.GetArguments()) {
 			arg = LogicalType::DOUBLE;
 		}
 		bound_function.SetReturnType(LogicalType::DOUBLE);

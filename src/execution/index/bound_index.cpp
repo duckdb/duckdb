@@ -21,8 +21,8 @@ BoundIndex::BoundIndex(const string &name, const string &index_type, IndexConstr
     : Index(column_ids, table_io_manager, db), name(name), index_type(index_type),
       index_constraint_type(index_constraint_type) {
 	for (auto &expr : unbound_expressions_p) {
-		types.push_back(expr->return_type.InternalType());
-		logical_types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType().InternalType());
+		logical_types.push_back(expr->GetReturnType());
 		unbound_expressions.emplace_back(expr->Copy());
 		bound_expressions.push_back(BindExpression(expr->Copy()));
 		executor.AddExpression(*bound_expressions.back());
@@ -58,10 +58,10 @@ void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, Confl
 	throw NotImplementedException("this implementation of VerifyConstraint does not exist.");
 }
 
-void BoundIndex::CommitDrop() {
+void BoundIndex::ResetStorage() {
 	IndexLock index_lock;
 	InitializeLock(index_lock);
-	CommitDrop(index_lock);
+	ResetStorage(index_lock);
 }
 
 idx_t BoundIndex::TryDelete(DataChunk &entries, Vector &row_identifiers, optional_ptr<SelectionVector> deleted_sel,
@@ -147,8 +147,8 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &bound_colref, unique_ptr<Expression> &expr) {
-		    expr =
-		        make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+		    expr = make_uniq<BoundReferenceExpression>(expr->GetReturnType(),
+		                                               column_ids[bound_colref.binding.column_index]);
 	    });
 	return root_expr;
 }

@@ -1,0 +1,212 @@
+# name: test/sql/join/inner/test_prefix_range_filter_pushdown_strinline.test
+# description: String-specific prefix range filter plan checks
+# group: [inner]
+
+require strinline
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE probe_varchar AS
+SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 11)::INTEGER AS g
+FROM range(0, 100000) t(i);
+
+statement ok
+CREATE OR REPLACE TABLE build_varchar AS
+SELECT lpad(i::VARCHAR, 8, '0') AS k, (i % 7)::INTEGER AS g
+FROM range(0, 30000) t(i);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_varchar p
+JOIN build_varchar b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string (k VARCHAR, g INTEGER, id INTEGER);
+
+statement ok
+INSERT INTO prf_probe_string VALUES
+	('', 0, 1),
+	('a', 0, 2),
+	('ab', 1, 3),
+	('abc', 0, 4),
+	('abcd', 0, 5),
+	('abcd0', 0, 6),
+	('abcd9', 1, 7),
+	('abce', 0, 8),
+	('zzzz', 0, 9),
+	(NULL, 0, 10);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string (k VARCHAR, g INTEGER, payload INTEGER);
+
+statement ok
+INSERT INTO prf_build_string VALUES
+	('', 0, 100),
+	('a', 0, 101),
+	('ab', 0, 102),
+	('abc', 0, 103),
+	('abcd', 0, 104),
+	('abcd1', 0, 105),
+	('abcf', 0, 106),
+	(NULL, 0, 107),
+	('abcd2', 1, 108);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string p
+JOIN prf_build_string b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF.*\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long AS
+SELECT * FROM (VALUES
+	('aaab_long_probe_0001', 0, 1),
+	('aaac_long_probe_0002', 0, 2),
+	('aaad_long_probe_0003', 1, 3),
+	('zzzz_long_probe_9999', 0, 4),
+	(NULL, 0, 5)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long AS
+SELECT * FROM (VALUES
+	('aaab_long_build_1001', 0, 100),
+	('aaac_long_build_1002', 0, 101),
+	('aaad_long_build_1003', 0, 102),
+	('aaaz_long_build_1999', 0, 103),
+	(NULL, 0, 104)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long p
+JOIN prf_build_string_long b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN PRF.*\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long_single AS
+SELECT * FROM (VALUES
+	('aaab_long_single_value_0001', 0, 1),
+	('aaab_long_single_value_0001', 1, 2),
+	('zzzz_long_single_value_9999', 0, 3),
+	(NULL, 0, 4)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long_single AS
+SELECT * FROM (VALUES
+	('aaab_long_single_value_0001', 0, 200),
+	('aaab_long_single_value_0001', 1, 201),
+	(NULL, 0, 202)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long_single p
+JOIN prf_build_string_long_single b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF.*\(k\).*
+
+statement ok
+CREATE OR REPLACE TABLE prf_probe_string_long_same_prefix AS
+SELECT * FROM (VALUES
+	('aaaa_probe_suffix_0001', 0, 1),
+	('aaaa_probe_suffix_0002', 1, 2),
+	('zzzz_probe_suffix_9999', 0, 3),
+	(NULL, 0, 4)
+) AS t(k, g, id);
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_long_same_prefix AS
+SELECT * FROM (VALUES
+	('aaaa_build_suffix_1001', 0, 300),
+	('aaaa_build_suffix_2002', 0, 301),
+	('aaaa_build_suffix_3003', 1, 302),
+	(NULL, 0, 303)
+) AS t(k, g, payload);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_probe_string_long_same_prefix p
+JOIN prf_build_string_long_same_prefix b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<!REGEX>:.*IN PRF.*\(k\).*
+
+statement ok
+ATTACH '{TEST_DIR}/prf_string_nul_stats.db' AS prf_string_nul_stats (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE OR REPLACE TABLE prf_string_nul_stats.prf_probe_string_nul_stats (
+	id INTEGER NOT NULL,
+	k VARCHAR NOT NULL,
+	g INTEGER NOT NULL
+);
+
+statement ok
+INSERT INTO prf_string_nul_stats.prf_probe_string_nul_stats
+SELECT i AS id,
+	   CASE
+		   WHEN i < 2048 THEN 'aa' || lpad(i::VARCHAR, 8, '0')
+		   ELSE 'ab' || chr(0) || 'd'
+	   END AS k,
+	   CASE
+		   WHEN i < 2048 THEN 0
+		   ELSE 2
+	   END AS g
+FROM range(4096) t(i);
+
+statement ok
+CHECKPOINT prf_string_nul_stats;
+
+statement ok
+CREATE OR REPLACE TABLE prf_build_string_nul_stats (
+	k VARCHAR,
+	g INTEGER,
+	payload INTEGER
+);
+
+statement ok
+INSERT INTO prf_build_string_nul_stats VALUES
+	('ab' || chr(0) || 'd', 1, 300),
+	('ab' || chr(0) || 'x', 1, 301);
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM prf_string_nul_stats.prf_probe_string_nul_stats p
+JOIN prf_build_string_nul_stats b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+analyzed_plan	<REGEX>:.*IN.*PRF.*\(k\).*
+
+query I
+SELECT count(*)
+FROM prf_string_nul_stats.prf_probe_string_nul_stats p
+JOIN prf_build_string_nul_stats b
+  ON p.k = b.k
+ AND p.g >= b.g;
+----
+2048
+

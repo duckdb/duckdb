@@ -296,8 +296,8 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
-			col.ChangeGeneratedExpressionType(bound_expression->return_type);
-			col.SetType(bound_expression->return_type);
+			col.ChangeGeneratedExpressionType(bound_expression->GetReturnType());
+			col.SetType(bound_expression->GetReturnType());
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());
@@ -631,18 +631,18 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		base.columns.SetAllowDuplicates(true);
 		if (!target_col_names.empty()) {
 			if (target_col_names.size() > sql_types.size()) {
-				throw BinderException("Target table has more colum names than query result.");
+				throw BinderException("Target table has more column names than query result.");
 			} else if (target_col_names.size() < sql_types.size()) {
 				// filled the target_col_names with the name of query names
 				for (idx_t i = target_col_names.size(); i < sql_types.size(); i++) {
 					target_col_names.push_back(names[i]);
 				}
 			}
-			ColumnList new_colums;
+			ColumnList new_columns;
 			for (idx_t i = 0; i < target_col_names.size(); i++) {
-				new_colums.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+				new_columns.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
 			}
-			base.columns = std::move(new_colums);
+			base.columns = std::move(new_columns);
 		} else {
 			for (idx_t i = 0; i < names.size(); i++) {
 				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));

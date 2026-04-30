@@ -1,0 +1,41 @@
+# name: test/sql/attach/attach_row_group_size_decreasing.test
+# description: Tests writing to a database file with decreasing row group sizes.
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '{TEST_DIR}/attach_row_group_size_decreasing.db' as test (ROW_GROUP_SIZE 4096);
+
+statement ok
+CREATE TABLE test.data (key BIGINT PRIMARY KEY);
+
+statement ok
+INSERT INTO test.data SELECT * FROM range(8190);
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('test.data');
+----
+2
+
+statement ok
+DETACH test;
+
+# Now we re-attach, but with a smaller row group size
+statement ok
+ATTACH '{TEST_DIR}/attach_row_group_size_decreasing.db' as test (ROW_GROUP_SIZE 2048);
+
+# Make sure that a _new_ row group is written (the last row group contains > 2048 rows)
+statement ok
+INSERT INTO test.data VALUES(8190), (8191);
+
+query II
+SELECT row_group_id, SUM(count) FROM pragma_storage_info('test.data') where segment_type != 'VALIDITY' GROUP BY (row_group_id) ORDER BY row_group_id;
+----
+0	4096
+1	4094
+2	2
+
+statement ok
+DETACH test;

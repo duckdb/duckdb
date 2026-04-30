@@ -15,6 +15,7 @@
 #include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
+class StringHeap;
 
 struct bignum_t {
 	string_t data;

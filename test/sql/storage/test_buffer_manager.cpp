@@ -7,6 +7,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -256,6 +257,47 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	}
 	blocks.clear();
 	CHECK(buffer_manager.GetUsedMemory() == 0);
+}
+
+TEST_CASE("Test evicted_data not double-decremented for variable-sized blocks", "[storage][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	config->SetOptionByName("default_block_size", Value::UBIGINT(DEFAULT_BLOCK_ALLOC_SIZE));
+	config->options.maximum_threads = 1;
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+	Connection con(db);
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+
+	idx_t variable_block_size = 424242;
+	auto alloc_size = BufferManager::GetAllocSize(variable_block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size)));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA temp_directory='" + TestCreatePath("eviction_tracking_temp") + "'"));
+
+	shared_ptr<BlockHandle> block_a = nullptr;
+	shared_ptr<BlockHandle> block_b = nullptr;
+	{
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false);
+		block_a = pin.GetBlockHandle();
+	}
+	{
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false);
+		block_b = pin.GetBlockHandle();
+	}
+
+	// Read block_a back from disk.
+	{ auto pin = buffer_manager.Pin(block_a); }
+
+	// Destroy both handles, so remaining temp files are cleaned up.
+	block_a.reset();
+	block_b.reset();
+
+	// For now there should be no blocks on disk, and evicted_data must be 0.
+	for (auto &entry : buffer_manager.GetMemoryUsageInfo()) {
+		if (entry.tag == MemoryTag::EXTENSION) {
+			CHECK(entry.evicted_data == 0);
+		}
+	}
 }
 
 TEST_CASE("Test buffer allocator", "[storage][.]") {

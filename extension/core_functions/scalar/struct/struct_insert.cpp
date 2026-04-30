@@ -30,12 +30,13 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 	}
 }
 
-static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> StructInsertBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw InvalidInputException("Missing required arguments for struct_insert function.");
 	}
-	if (LogicalTypeId::STRUCT != arguments[0]->return_type.id()) {
+	if (LogicalTypeId::STRUCT != arguments[0]->GetReturnType().id()) {
 		throw InvalidInputException("The first argument to struct_insert must be a STRUCT");
 	}
 	if (arguments.size() < 2) {
@@ -44,7 +45,7 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 
 	case_insensitive_set_t name_collision_set;
 	child_list_t<LogicalType> new_children;
-	auto &existing_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &existing_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 
 	for (idx_t i = 0; i < existing_children.size(); i++) {
 		auto &child = existing_children[i];
@@ -62,7 +63,7 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 			throw BinderException("Duplicate struct entry name \"%s\"", child->GetAlias());
 		}
 		name_collision_set.insert(child->GetAlias());
-		new_children.push_back(make_pair(child->GetAlias(), arguments[i]->return_type));
+		new_children.push_back(make_pair(child->GetAlias(), arguments[i]->GetReturnType()));
 	}
 
 	bound_function.SetReturnType(LogicalType::STRUCT(new_children));
@@ -72,7 +73,7 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto new_stats = StructStats::CreateUnknown(expr.return_type);
+	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
 
 	auto existing_count = StructType::GetChildCount(child_stats[0].GetType());
 	auto existing_stats = StructStats::GetChildStats(child_stats[0]);
@@ -80,7 +81,7 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 		StructStats::SetChildStats(new_stats, i, existing_stats[i]);
 	}
 
-	auto new_count = StructType::GetChildCount(expr.return_type);
+	auto new_count = StructType::GetChildCount(expr.GetReturnType());
 	auto offset = new_count - child_stats.size();
 	for (idx_t i = 1; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(new_stats, offset + i, child_stats[i]);
@@ -89,9 +90,9 @@ static unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, Func
 }
 
 ScalarFunction StructInsertFun::GetFunction() {
-	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr, StructInsertStats);
+	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, StructInsertStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

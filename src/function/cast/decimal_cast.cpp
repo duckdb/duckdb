@@ -225,20 +225,20 @@ static bool DecimalDecimalCastSwitch(Vector &source, Vector &result, idx_t count
 	}
 }
 
-struct DecimalCastInput {
-	DecimalCastInput(Vector &result_p, uint8_t width_p, uint8_t scale_p)
-	    : result(result_p), width(width_p), scale(scale_p) {
+struct DecimalStringCastInput {
+	DecimalStringCastInput(Vector &result_p, uint8_t width_p, uint8_t scale_p)
+	    : heap(StringVector::GetStringHeap(result_p)), width(width_p), scale(scale_p) {
 	}
 
-	Vector &result;
+	StringHeap &heap;
 	uint8_t width;
 	uint8_t scale;
 };
 
 struct StringCastFromDecimalOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DecimalCastInput &data) {
-		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data.width, data.scale, data.result);
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DecimalStringCastInput &data) {
+		return StringCastFromDecimal::Operation<INPUT_TYPE>(input, data.width, data.scale, data.heap);
 	}
 };
 
@@ -247,7 +247,7 @@ static bool DecimalToStringCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &source_type = source.GetType();
 	auto width = DecimalType::GetWidth(source_type);
 	auto scale = DecimalType::GetScale(source_type);
-	DecimalCastInput input(result, width, scale);
+	DecimalStringCastInput input(result, width, scale);
 
 	UnaryExecutor::GenericExecute<SRC, string_t, StringCastFromDecimalOperator>(source, result, count, input);
 	return true;

@@ -64,7 +64,7 @@ struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteLoop(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
+	                               const SelectionVector *__restrict sel_vector, const ValidityMask &mask,
 	                               ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
 #ifdef DEBUG
 		// ldata may point to a compressed dictionary buffer which can be smaller than ldata + count
@@ -98,7 +98,8 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
+	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,
+	                               bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (mask.CanHaveNull()) {
@@ -149,11 +150,12 @@ private:
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
@@ -164,11 +166,11 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 		case VectorType::FLAT_VECTOR: {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
 			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR: {
@@ -185,13 +187,14 @@ private:
 					auto &dictionary_values = DictionaryVector::Child(input);
 					if (dictionary_values.GetVectorType() == VectorType::FLAT_VECTOR) {
 						// execute the function over the dictionary
-						auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+						auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 						auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
 						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
 						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
-						    FlatVector::Validity(result), data, adds_nulls);
+						    FlatVector::ValidityMutable(result), data, adds_nulls);
 						// slice the result with the original offsets
 						auto &offsets = DictionaryVector::SelVector(input);
+						FlatVector::SetSize(result, dict_size.GetIndex());
 						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
 						break;
 					}
@@ -205,11 +208,11 @@ private:
 			input.ToUnifiedFormat(count, vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		}

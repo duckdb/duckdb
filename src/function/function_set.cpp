@@ -44,12 +44,12 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
 		for (auto &func : functions) {
-			if (arguments.size() >= func.arguments.size()) {
+			if (arguments.size() >= func.GetArguments().size()) {
 				continue;
 			}
 			bool is_prefix = true;
 			for (idx_t k = 0; k < arguments.size(); k++) {
-				if (arguments[k].id() != func.arguments[k].id()) {
+				if (arguments[k].id() != func.GetArguments()[k].id()) {
 					is_prefix = false;
 					break;
 				}
@@ -72,6 +72,17 @@ WindowFunctionSet::WindowFunctionSet(string name) : FunctionSet(std::move(name))
 
 WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move(fun.name)) {
 	functions.push_back(std::move(fun));
+}
+
+WindowFunction WindowFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+	ErrorData error;
+	FunctionBinder binder(context);
+	auto index = binder.BindFunction(name, *this, arguments, error);
+	if (!index.IsValid()) {
+		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+		                        error.Message());
+	}
+	return GetFunctionByOffset(index.GetIndex());
 }
 
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {

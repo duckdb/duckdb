@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -114,7 +115,7 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 
 	const bool has_initial = function_child_types.size() == 3;
 	auto &bound_lambda_expr = bind_lambda_result.expression->Cast<BoundLambdaExpression>();
-	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->return_type;
+	const auto &lambda_return_type = bound_lambda_expr.lambda_expr->GetReturnType();
 
 	auto list_child_type = function_child_types[0];
 	if (list_child_type.id() != LogicalTypeId::SQLNULL && list_child_type.id() != LogicalTypeId::UNKNOWN) {
@@ -158,9 +159,9 @@ ListReduceRebindResult MaybeRebindListReduceLambda(ClientContext &context, idx_t
 		// Avoid repeated rebinds for DECIMAL type widening by forcing the lambda return type to the chosen
 		// accumulator type when decimals are involved.
 		if (TypeContainsDecimal(accumulator_type) ||
-		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->return_type)) {
-			if (rebound_lambda_expr.lambda_expr->return_type != accumulator_type) {
-				const auto old_return_type = rebound_lambda_expr.lambda_expr->return_type;
+		    TypeContainsDecimal(rebound_lambda_expr.lambda_expr->GetReturnType())) {
+			if (rebound_lambda_expr.lambda_expr->GetReturnType() != accumulator_type) {
+				const auto old_return_type = rebound_lambda_expr.lambda_expr->GetReturnType();
 				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(rebound_lambda_expr.lambda_expr),
 				                                                    accumulator_type);
 				if (!cast_expr) {
@@ -208,7 +209,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	const string msg = "Deprecated lambda arrow (->) detected. Please transition to the new lambda syntax, "
 	                   "i.e.., lambda x, i: x + i, before DuckDB's next release.\n"
 	                   "Use SET lambda_syntax='ENABLE_SINGLE_ARROW' to revert to the deprecated behavior.\n"
-	                   "For more information, see https://duckdb.org/docs/stable/sql/functions/lambda.html.";
+	                   "For more information, see https://duckdb.org/docs/current/sql/functions/lambda.html.";
 
 	BindResult lambda_bind_result;
 	ErrorData error;
@@ -322,11 +323,17 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	auto func = BindAndQualifyFunction(function, true);
 
-	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
-	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {
-		throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
-		                            "applicable to aggregate functions.",
-		                            function.function_name, CatalogTypeToString(func->type));
+	switch (func->type) {
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		break;
+	default:
+		if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
+			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
+			                            "applicable to window and aggregate functions.",
+			                            function.function_name, CatalogTypeToString(func->type));
+		}
+		break;
 	}
 
 	switch (func->type) {
@@ -341,9 +348,14 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::MACRO_ENTRY:
 		// macro function
 		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
-	default:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		// aggregate function
 		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
+	case CatalogType::WINDOW_FUNCTION_ENTRY:
+		// window function
+		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
+	default:
+		throw InvalidInputException("Unsupported catalog type when binding function");
 	}
 }
 
@@ -422,14 +434,15 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		}
 
 		const auto &child = BoundExpression::GetExpression(*function.children[i]);
-		function_child_types.push_back(child->return_type);
+		function_child_types.push_back(child->GetReturnType());
 	}
 
 	// get the logical type of the children of the list
 	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx]);
-	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::ARRAY &&
-	    list_child->return_type.id() != LogicalTypeId::SQLNULL &&
-	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
+	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
+	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
+	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
+	    list_child->GetReturnType().id() != LogicalTypeId::UNKNOWN) {
 		return BindResult("Invalid LIST argument during lambda function binding!");
 	}
 
@@ -552,6 +565,10 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
+BindResult ExpressionBinder::BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth) {
+	return BindUnsupportedExpression(expr, depth, UnsupportedWindowMessage());
+}
+
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }
@@ -561,6 +578,10 @@ void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding
 
 string ExpressionBinder::UnsupportedAggregateMessage() {
 	return "Aggregate functions are not supported here";
+}
+
+string ExpressionBinder::UnsupportedWindowMessage() {
+	return "Window functions are not supported here";
 }
 
 string ExpressionBinder::UnsupportedUnnestMessage() {

@@ -1,31 +1,22 @@
 #include "parquet_extension.hpp"
 
-#include "duckdb.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include <stdint.h>
+#include <string>
+#include <vector>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "parquet_geometry.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_metadata.hpp"
-#include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_shredding.hpp"
-#include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
-
-#include <fstream>
-#include <iostream>
-#include <numeric>
-#include <string>
-#include <vector>
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
@@ -36,28 +27,54 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
-#include "duckdb/common/primitive_dictionary.hpp"
-#include "duckdb/logging/log_manager.hpp"
-#include "duckdb/main/settings.hpp"
 #include "parquet_multi_file_info.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_scan_states.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/tableref.hpp"
+#include "duckdb/planner/expression.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/storage_info.hpp"
+#include "parquet_field_id.hpp"
+#include "parquet_types.h"
 
 namespace duckdb {
+class ClientContext;
+class DataChunk;
+class PhysicalOperator;
 
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
@@ -90,6 +107,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ShreddingType shredding_types;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+	//! Per-column NOT NULL flags
+	vector<bool> not_null_columns;
 
 	//! Which encodings to include when writing
 	ParquetVersion parquet_version = ParquetVersion::V1;
@@ -331,7 +350,22 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
+
 	return std::move(bind_data);
+}
+
+static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
+	auto &parquet_bind = input.bind_data.Cast<ParquetWriteBindData>();
+	auto count = parquet_bind.sql_types.size();
+	if (input.column_stats.size() != count) {
+		return;
+	}
+	parquet_bind.not_null_columns.assign(count, false);
+	for (idx_t i = 0; i < count; i++) {
+		if (input.column_stats[i] && !input.column_stats[i]->CanHaveNull()) {
+			parquet_bind.not_null_columns[i] = true;
+		}
+	}
 }
 
 static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -347,7 +381,7 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
 	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
-	    parquet_bind.timestamp_is_adjusted_to_utc);
+	    parquet_bind.timestamp_is_adjusted_to_utc, parquet_bind.not_null_columns);
 	return std::move(global_state);
 }
 
@@ -633,6 +667,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.timestamp_is_adjusted_to_utc);
 	serializer.WritePropertyWithDefault(119, "write_timestamp_as_int96", bind_data.write_timestamp_as_int96,
 	                                    default_value.write_timestamp_as_int96);
+	serializer.WritePropertyWithDefault<vector<bool>>(120, "not_null_columns", bind_data.not_null_columns,
+	                                                  default_value.not_null_columns);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -671,6 +707,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 	data->write_timestamp_as_int96 = deserializer.ReadPropertyWithExplicitDefault(
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
+	data->not_null_columns =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
 
 	return std::move(data);
 }
@@ -796,7 +834,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-		const auto &type = expr->return_type;
+		const auto &type = expr->GetReturnType();
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
@@ -890,6 +928,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;
 	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;

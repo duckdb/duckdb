@@ -138,7 +138,7 @@ void StringUtil::Trim(string &str) {
 	StringUtil::RTrim(str);
 }
 
-bool StringUtil::StartsWith(string str, string prefix) {
+bool StringUtil::StartsWith(const string &str, const string &prefix) {
 	if (prefix.size() > str.size()) {
 		return false;
 	}
