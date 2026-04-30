@@ -296,15 +296,18 @@ LogicalType ParquetPrefetchLogType::GetLogType() {
 	    {"file_path", LogicalType::VARCHAR},
 	    {"row_group_id", LogicalType::BIGINT},
 	    {"fully_filtered", LogicalType::BOOLEAN},
+	    {"strategy", LogicalType::VARCHAR},
 	};
 	return LogicalType::STRUCT(child_list);
 }
 
-string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered) {
+string ParquetPrefetchLogType::ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
+                                                   const char *strategy) {
 	child_list_t<Value> child_list = {
 	    {"file_path", Value(file_path)},
 	    {"row_group_id", Value::BIGINT(static_cast<int64_t>(row_group_id))},
 	    {"fully_filtered", Value::BOOLEAN(fully_filtered)},
+	    {"strategy", strategy ? Value(strategy) : Value(LogicalType::VARCHAR)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

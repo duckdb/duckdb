@@ -18,7 +18,7 @@ COPY (
             WHEN i % 100 = 50 THEN 51
             ELSE i % 100
         END AS c
-    FROM RANGE(6144) t(i)
+    FROM RANGE(12288) t(i)
 ) TO '{TEST_DIR}/rgo.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
 
 statement ok
@@ -30,15 +30,18 @@ FROM read_parquet('{TEST_DIR}/rgo.parquet')
 WHERE a > 5
     AND b > 15
 
-query IT
-SELECT row_group_id, fully_filtered
+query ITT
+SELECT row_group_id, fully_filtered, strategy
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	false
-1	false
-2	false
+0	false	column_wise_lazy
+1	false	whole_group
+2	false	whole_group
+3	false	whole_group
+4	false	whole_group
+5	false	whole_group
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -48,12 +51,15 @@ SELECT count(*)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
 WHERE c = 50
 
-query IT
-SELECT row_group_id, fully_filtered
+query ITT
+SELECT row_group_id, fully_filtered, strategy
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true
-1	true
-2	true
+0	true	column_wise_lazy
+1	true	column_wise_lazy
+2	true	column_wise_lazy
+3	true	column_wise_lazy
+4	true	column_wise_lazy
+5	true	column_wise_lazy
