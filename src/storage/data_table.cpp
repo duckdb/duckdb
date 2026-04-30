@@ -1859,8 +1859,9 @@ void DataTable::CommitDropTable(CommitDropState &drop_state) {
 //===--------------------------------------------------------------------===//
 // Column Segment Info
 //===--------------------------------------------------------------------===//
-vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context, bool only_loaded_segments) {
-	return row_groups->GetColumnSegmentInfo(context, only_loaded_segments);
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo(const QueryContext &context,
+                                                          ColumnSegmentInfoScanType scan_type) {
+	return row_groups->GetColumnSegmentInfo(context, scan_type);
 }
 
 //===--------------------------------------------------------------------===//

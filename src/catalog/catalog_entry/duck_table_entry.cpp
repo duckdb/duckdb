@@ -1358,8 +1358,9 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
-vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context, bool only_loaded_segments) {
-	return storage->GetColumnSegmentInfo(context, only_loaded_segments);
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo(const QueryContext &context,
+                                                               ColumnSegmentInfoScanType scan_type) {
+	return storage->GetColumnSegmentInfo(context, scan_type);
 }
 
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {

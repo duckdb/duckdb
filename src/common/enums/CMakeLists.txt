@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_common_enums
   OBJECT
   catalog_type.cpp
+  column_segment_info_scan_type.cpp
   compression_type.cpp
   date_part_specifier.cpp
   expression_type.cpp

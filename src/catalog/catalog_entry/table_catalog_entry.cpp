@@ -299,7 +299,7 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 }
 
 vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context,
-                                                                  bool only_loaded_segments) {
+                                                                  ColumnSegmentInfoScanType scan_type) {
 	return {};
 }
 
