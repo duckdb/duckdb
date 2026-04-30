@@ -131,43 +131,15 @@ inline string_t udf_varchar(string_t a, string_t b, string_t c) {
  */
 template <typename TYPE>
 static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	input.Flatten();
-	switch (GetTypeId<TYPE>()) {
-	case PhysicalType::VARCHAR: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
-		auto ldata = FlatVector::GetData<string_t>(input.data[0]);
-		auto &validity = FlatVector::Validity(input.data[0]);
-
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[0]));
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!validity.RowIsValid(i)) {
-				continue;
-			}
-			auto input_length = ldata[i].GetSize();
-			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetData(), input_length);
-			target.Finalize();
-			result_data[i] = target;
+	auto input_data = input.data[0].Values<string_t>(input.size());
+	auto result_data = FlatVector::Writer<string_t>(result, input.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(input_val.GetValue());
 		}
-		break;
-	}
-	default: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
-		auto ldata = FlatVector::GetData<TYPE>(input.data[0]);
-		auto mask = FlatVector::Validity(input.data[0]);
-		FlatVector::SetValidity(result, mask);
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!mask.RowIsValid(i)) {
-				continue;
-			}
-			result_data[i] = ldata[i];
-		}
-	}
 	}
 }
 
@@ -176,43 +148,15 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
  */
 template <typename TYPE>
 static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	input.Flatten();
-	switch (GetTypeId<TYPE>()) {
-	case PhysicalType::VARCHAR: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
-		auto ldata = FlatVector::GetData<string_t>(input.data[1]);
-		auto &validity = FlatVector::Validity(input.data[0]);
-
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[1]));
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!validity.RowIsValid(i)) {
-				continue;
-			}
-			auto input_length = ldata[i].GetSize();
-			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetData(), input_length);
-			target.Finalize();
-			result_data[i] = target;
+	auto input_data = input.data[1].Values<string_t>(input.size());
+	auto result_data = FlatVector::Writer<string_t>(result, input.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(input_val.GetValue());
 		}
-		break;
-	}
-	default: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
-		auto ldata = FlatVector::GetData<TYPE>(input.data[1]);
-		auto &mask = FlatVector::Validity(input.data[1]);
-		FlatVector::SetValidity(result, mask);
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!mask.RowIsValid(i)) {
-				continue;
-			}
-			result_data[i] = ldata[i];
-		}
-	}
 	}
 }
 
@@ -221,43 +165,15 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
  */
 template <typename TYPE>
 static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vector &result) {
-	input.Flatten();
-	switch (GetTypeId<TYPE>()) {
-	case PhysicalType::VARCHAR: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
-		auto ldata = FlatVector::GetData<string_t>(input.data[2]);
-		auto &validity = FlatVector::Validity(input.data[0]);
-
-		FlatVector::SetValidity(result, FlatVector::Validity(input.data[2]));
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!validity.RowIsValid(i)) {
-				continue;
-			}
-			auto input_length = ldata[i].GetSize();
-			string_t target = StringVector::EmptyString(result, input_length);
-			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetData(), input_length);
-			target.Finalize();
-			result_data[i] = target;
+	auto input_data = input.data[2].Values<string_t>(input.size());
+	auto result_data = FlatVector::Writer<string_t>(result, input.size());
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(input_val.GetValue());
 		}
-		break;
-	}
-	default: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_data = FlatVector::GetDataMutable<TYPE>(result);
-		auto ldata = FlatVector::GetData<TYPE>(input.data[2]);
-		auto &mask = FlatVector::Validity(input.data[2]);
-		FlatVector::SetValidity(result, mask);
-
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (!mask.RowIsValid(i)) {
-				continue;
-			}
-			result_data[i] = ldata[i];
-		}
-	}
 	}
 }
 
