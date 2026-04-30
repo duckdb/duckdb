@@ -363,7 +363,7 @@ struct ArrowBool8 {
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			if (entry.IsValid()) {
-				result_data.WriteValue(entry.GetValue());
+				result_data.WriteValue(static_cast<int8_t>(entry.GetValue()));
 			} else {
 				result_data.WriteNull();
 			}

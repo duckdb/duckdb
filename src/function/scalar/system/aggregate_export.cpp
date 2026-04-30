@@ -445,6 +445,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 #ifdef DEBUG
 	if (layout.is_struct) {
+		auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 		VerifyStructStateRoundtrip(layout, input.data[0], input.size(), state_data, state_vec_ptr, result, bind_data,
 		                           aggr_input_data);
 	}

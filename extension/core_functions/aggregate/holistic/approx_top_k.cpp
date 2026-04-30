@@ -357,12 +357,11 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
-	auto list_entries = FlatVector::Writer<list_entry_t>(result, count);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, offset + count, offset);
 	auto &child_data = ListVector::GetChildMutable(result);
 
 	idx_t current_offset = old_len;
 	for (idx_t i = 0; i < count; i++) {
-		const auto rid = i + offset;
 		auto &state = states[i].GetValue()->GetState();
 		if (state.values.empty()) {
 			list_entries.WriteNull();
