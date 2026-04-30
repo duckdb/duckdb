@@ -13,10 +13,6 @@ void UDFWrapper::RegisterFunction(string name, vector<LogicalType> args, Logical
 	scalar_function.SetVarArgs(std::move(varargs));
 	scalar_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	CreateScalarFunctionInfo info(scalar_function);
-	// is this ok??? ignore on conflict?
-	// then we will have a problem right, because the function can replace core functions...
-
-	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info.schema = DEFAULT_SCHEMA;
 	context.RegisterFunction(info);
 }

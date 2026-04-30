@@ -54,8 +54,6 @@ public:
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
 	string extension_name;
-	//! The name of the extension alias (if any)
-	string extension_alias;
 	//! Timestamp at which the catalog entry was created
 	atomic<transaction_t> timestamp;
 	//! (optional) comment on this entry

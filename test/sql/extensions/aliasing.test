@@ -5,12 +5,9 @@
 # Note that this behavior is subject to change
 # When we register extensions in a separate extension schema
 
-# TODO, also test, what if schema == extension name??
-
 # Behavior: with aliasing; you load can reload the extension under a different alias
 # the extension will be registered under name of the alias
-# the alias will be used further on
-# if the extension is already loaded twice,
+# for now, we use "name mangling" to enable loading the same extension twice
 
 require skip_reload
 
