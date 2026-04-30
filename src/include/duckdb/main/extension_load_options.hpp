@@ -15,7 +15,6 @@ namespace duckdb {
 struct ExtensionLoadOptions {
 	string extension_name;
 	string alias = "";
-	bool suffix_alias = false;
 };
 
 } // namespace duckdb

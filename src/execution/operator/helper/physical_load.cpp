@@ -43,7 +43,6 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		ExtensionLoadOptions options;
 		options.extension_name = info->filename;
 		options.alias = info->alias;
-		options.suffix_alias = Settings::Get<AllowDoubleExtensionLoadingSetting>(context.client);
 		ExtensionHelper::LoadExternalExtension(context.client, options);
 	}
 

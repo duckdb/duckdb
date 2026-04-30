@@ -639,9 +639,6 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 			                  init_fun_name);
 		}
 
-		if (info.suffix_alias && !info.alias.empty()) {
-			ExtensionManager::Get(db).SetExtensionLoadPrefix(info.alias);
-		}
 		try {
 			ExtensionLoader loader(info);
 			(*init_fun)(loader);

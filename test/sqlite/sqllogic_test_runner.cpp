@@ -31,7 +31,6 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	bool autoload_known_extensions = false;
 	bool autoinstall_known_extensions = false;
 	config->SetOptionByName("allow_unsigned_extensions", true);
-	config->SetOptionByName("allow_double_extension_loading", false);
 	local_extension_repo = "";
 	autoinstall_is_checked = false;
 
@@ -569,12 +568,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "skip_reload") {
 		skip_reload = true;
-		return RequireResult::PRESENT;
-	}
-
-	if (param == "double_extension_loading") {
-		DBConfig::GetConfig(*con->context->db)
-		    .SetOptionByName(AllowDoubleExtensionLoadingSetting::Name, Value::BOOLEAN(true));
 		return RequireResult::PRESENT;
 	}
 

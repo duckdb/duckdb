@@ -5,9 +5,8 @@
 # Note that this behavior is subject to change
 # When we register extensions in a separate extension schema
 
-# Behavior: with aliasing; you load can reload the extension under a different alias
-# the extension will be registered under name of the alias
-# for now, we use "name mangling" to enable loading the same extension twice
+# Behavior: with aliasing; you load can reload extensions with identical names under a different alias
+# for now, this means that their function names need to differ
 
 require skip_reload
 
@@ -19,7 +18,7 @@ LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension'
 statement error
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo2
 ----
-Extension
+Initialization function
 
 # duplicate alias is rejected
 statement error
@@ -33,38 +32,30 @@ SELECT bounded_max(1::BOUNDED(10))
 ----
 10
 
-# load an entirely different binary that shares the same extension name but has different functions
+# load a new extension
 statement ok
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' AS copy
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' AS double
 
 query I
-SELECT loadable_extension_demo_double()
+SELECT loadable_extension_demo_double_4()
 ----
 Hello from the loadable_extension_demo_double binary!
 
-# this enables to register functions with differnt func names if same extension is loaded
-require double_extension_loading
-
 statement ok
-LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' AS second_copy
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo_double.duckdb_extension' AS second
 
 # we generate a new name to be able to load the second extension
 query I
-SELECT loadable_extension_demo_double_second_copy()
-----
-Hello from the loadable_extension_demo_double binary!
-
-query I
-SELECT loadable_extension_demo_double()
+SELECT loadable_extension_demo_double_5()
 ----
 Hello from the loadable_extension_demo_double binary!
 
 query II
-select extension_name, loaded from duckdb_extensions() where extension_name = 'demo' or extension_name = 'copy' or extension_name = 'second_copy';
+select extension_name, loaded from duckdb_extensions() where extension_name = 'demo' or extension_name = 'double' or extension_name = 'second';
 ----
-copy	true
 demo	true
-second_copy	true
+double	true
+second	true
 
 # ONCE the PEG parser issue is fixed
 # we can check functions with
