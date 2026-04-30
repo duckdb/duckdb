@@ -2678,6 +2678,20 @@ qualified_column_map_t<string> PEGTransformerFactory::TransformSingleRenameEntry
 pair<QualifiedColumnName, string> PEGTransformerFactory::TransformRenameEntry(PEGTransformer &transformer,
                                                                               ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<pair<QualifiedColumnName, string>>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+pair<QualifiedColumnName, string> PEGTransformerFactory::TransformColonRenameEntry(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto column_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
+	auto alias = list_pr.Child<IdentifierParseResult>(2).identifier;
+	return make_pair(column_name, alias);
+}
+
+pair<QualifiedColumnName, string> PEGTransformerFactory::TransformRenameEntryAs(PEGTransformer &transformer,
+                                                                                ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto column_name = transformer.Transform<QualifiedColumnName>(list_pr.GetChild(0));
 	auto alias = list_pr.Child<IdentifierParseResult>(2).identifier;
 	return make_pair(column_name, alias);

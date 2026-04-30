@@ -896,6 +896,10 @@ private:
 	                                                                 ParseResult &parse_result);
 	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
+	static pair<QualifiedColumnName, string> TransformColonRenameEntry(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static pair<QualifiedColumnName, string> TransformRenameEntryAs(PEGTransformer &transformer,
+	                                                                ParseResult &parse_result);
 	static bool TransformIgnoreOrRespectNulls(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// import.gram

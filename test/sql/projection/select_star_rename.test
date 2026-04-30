@@ -77,6 +77,36 @@ SELECT new_col FROM (SELECT * RENAME (i1.i AS new_col) FROM integers i1 FULL OUT
 ----
 1
 
+# colon alias: single without parens
+query I
+SELECT renamed_col FROM (SELECT * RENAME i: renamed_col FROM integers)
+----
+1
+
+# colon alias: single with parens
+query I
+SELECT renamed_col FROM (SELECT * RENAME (i: renamed_col) FROM integers)
+----
+1
+
+# colon alias: qualified column
+query I
+SELECT renamed_col FROM (SELECT * RENAME integers.i: renamed_col FROM integers)
+----
+1
+
+# colon alias: multiple in list
+query II
+SELECT r1, r2 FROM (SELECT * RENAME (i: r1, j: r2) FROM integers)
+----
+1	2
+
+# colon alias: mixed with AS
+query II
+SELECT r1, r2 FROM (SELECT * RENAME (i: r1, j AS r2) FROM integers)
+----
+1	2
+
 # conflict with exclude
 statement error
 SELECT * EXCLUDE (i) RENAME (i AS renamed_col) FROM integers

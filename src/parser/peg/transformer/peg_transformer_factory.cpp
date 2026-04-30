@@ -649,6 +649,8 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformRenameEntryList);
 	REGISTER_TRANSFORM(TransformSingleRenameEntry);
 	REGISTER_TRANSFORM(TransformRenameEntry);
+	REGISTER_TRANSFORM(TransformColonRenameEntry);
+	REGISTER_TRANSFORM(TransformRenameEntryAs);
 
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
 }

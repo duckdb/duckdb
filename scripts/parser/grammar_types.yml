@@ -871,6 +871,8 @@ overrides:
   RenameEntryList: "qualified_column_map_t<string>"
   SingleRenameEntry: "qualified_column_map_t<string>"
   RenameEntry: "pair<QualifiedColumnName, string>"
+  ColonRenameEntry: "pair<QualifiedColumnName, string>"
+  RenameEntryAs: "pair<QualifiedColumnName, string>"
   # insert.gram
   OrAction: "OnConflictAction"
   OnConflictTarget: "OnConflictExpressionTarget"
