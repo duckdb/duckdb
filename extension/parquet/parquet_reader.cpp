@@ -1513,7 +1513,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			if (filters && state.row_groups_executed > 0) {
 				if (static_cast<double>(state.row_groups_with_matches) /
 				        static_cast<double>(state.row_groups_executed) >
-				    ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO) {
+				    ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
 					filters_look_unselective = true;
 				}
 			}
@@ -1529,10 +1529,12 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					state.current_group_prefetched = true;
 				}
 				state.current_group_strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
-				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+				auto &group = GetGroup(state);
 				vector<string> all_cols;
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					all_cols.push_back(root_reader.GetChildReader(column_ids[MultiFileLocalIndex(i)]).Schema().name);
+				all_cols.reserve(group.columns.size());
+				for (auto &column_chunk : group.columns) {
+					auto &path = column_chunk.meta_data.path_in_schema;
+					all_cols.push_back(path.empty() ? string() : StringUtil::Join(path, "."));
 				}
 				state.current_group_prefetch_groups.push_back(std::move(all_cols));
 			} else {

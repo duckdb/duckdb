@@ -141,9 +141,9 @@ WHERE file_path LIKE '%rgo2.parquet'
 ORDER BY row_group_id
 ----
 0	false	prefetch_filters	[[g], [a, b, c]]
-1	false	whole_group	[[g, a, b, c]]
-2	false	whole_group	[[g, a, b, c]]
-3	true	whole_group	[[g, a, b, c]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	true	whole_group	[[a, b, c, g]]
 4	true	prefetch_filters	[[g], [a, b, c]]
 5	true	prefetch_filters	[[g], [a, b, c]]
 
@@ -188,4 +188,4 @@ ORDER BY row_group_id
 8	false	prefetch_filters	[[g], [a, b, c]]
 9	false	prefetch_filters	[[g], [a, b, c]]
 10	false	prefetch_filters	[[g], [a, b, c]]
-11	false	whole_group	[[g, a, b, c]]
+11	false	whole_group	[[a, b, c, g]]

@@ -91,14 +91,14 @@ struct ParquetReaderPrefetchConfig {
 	//! Percentage of data in a row group span that should be scanned for enabling whole group prefetch
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 	//! How many row groups need to produce at least one surviving row (from filtering)
-	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO = 0.9;
+	static constexpr double PREFETCH_FILTER_MINIMUM_MATCH_RATIO = 0.9;
 };
 
 enum class ParquetPrefetchStrategy : uint8_t {
 	NONE,
-	WHOLE_GROUP,      //! whole shebang
-	PREFETCH_FILTERS, //! Used when we have fully selective filters
-	COLUMN_WISE_EAGER //! Used when we have projections but no filters
+	WHOLE_GROUP,      //! Prefetches the whole group
+	PREFETCH_FILTERS, //! Used when we have fully selective filters, so they are prefetched earlier
+	COLUMN_WISE_EAGER //! Used when we have projections and optional only filters
 };
 
 const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);
