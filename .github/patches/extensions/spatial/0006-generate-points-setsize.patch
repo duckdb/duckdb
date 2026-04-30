@@ -3,10 +3,10 @@ index 6dfb537..bbcd18a 100644
 --- a/src/spatial/modules/main/spatial_functions_table.cpp
 +++ b/src/spatial/modules/main/spatial_functions_table.cpp
 @@ -96,6 +96,7 @@ struct ST_GeneratePoints {
- 
+
  			state.current_idx++;
  		}
 +		FlatVector::SetSize(output.data[0], count_t(chunk_size));
  		output.SetCardinality(chunk_size);
  	}
- 
+
