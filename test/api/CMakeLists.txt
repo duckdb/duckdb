@@ -7,7 +7,6 @@ if(${DISABLE_THREADS})
 endif()
 
 add_subdirectory(capi)
-add_subdirectory(udf_function)
 
 set(TEST_API_OBJECTS
     test_api.cpp
