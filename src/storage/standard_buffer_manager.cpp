@@ -20,7 +20,7 @@ namespace duckdb {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
 	auto &buffer = block.GetMemory().GetBuffer(lock);
-	memset(buffer->buffer, 0xa5, buffer->size); // 0xa5 is default memory in debug mode
+	memset(buffer->GetDataMutable(), 0xa5, buffer->Size()); // 0xa5 is default memory in debug mode
 }
 
 static void WriteGarbageIntoBuffer(BlockHandle &block) {
@@ -388,7 +388,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 		replacement_buffer =
 		    make_uniq<FileBuffer>(block_allocator, buffer->GetBufferType(), alloc_size, block_header_size);
 	}
-	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
+	memcpy(replacement_buffer->GetDataMutable(), buffer->GetData(), buffer->Size());
 	WriteGarbageIntoBuffer(lock, *handle);
 	buffer = std::move(replacement_buffer);
 #endif
