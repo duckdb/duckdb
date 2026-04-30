@@ -772,7 +772,7 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Read the data into a buffer handle.
 			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
-			auto data_ptr = buffer_handle.Ptr();
+			auto data_ptr = buffer_handle.GetDataMutable();
 
 			list.ReadElement<bool>(data_ptr, data_info.allocation_sizes[j]);
 

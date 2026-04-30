@@ -287,11 +287,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 	};
 
 	struct OriginTernaryOperator {
-		static inline timestamp_t Operation(interval_t bucket_width, timestamp_t ts, timestamp_t origin,
-		                                    ValidityMask &mask, idx_t idx, TZCalendar &calendar) {
+		static inline optional<timestamp_t> Operation(interval_t bucket_width, timestamp_t ts, timestamp_t origin,
+		                                              TZCalendar &calendar) {
 			if (!Value::IsFinite(origin)) {
-				mask.SetInvalid(idx);
-				return timestamp_t(0);
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
@@ -522,11 +521,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 					    });
 					break;
 				case BucketWidthType::UNCLASSIFIED:
-					TernaryExecutor::ExecuteWithNulls<interval_t, timestamp_t, timestamp_t, timestamp_t>(
+					TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-					    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin, ValidityMask &mask,
-					        idx_t idx) {
-						    return OriginTernaryOperator::Operation(bucket_width, ts, origin, mask, idx, calendar);
+					    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) -> optional<timestamp_t> {
+						    return OriginTernaryOperator::Operation(bucket_width, ts, origin, calendar);
 					    });
 					break;
 				default:
@@ -534,10 +532,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 				}
 			}
 		} else {
-			TernaryExecutor::ExecuteWithNulls<interval_t, timestamp_t, timestamp_t, timestamp_t>(
+			TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 			    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-			    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin, ValidityMask &mask, idx_t idx) {
-				    return OriginTernaryOperator::Operation(bucket_width, ts, origin, mask, idx, calendar);
+			    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) -> optional<timestamp_t> {
+				    return OriginTernaryOperator::Operation(bucket_width, ts, origin, calendar);
 			    });
 		}
 	}

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
@@ -25,14 +26,16 @@ namespace duckdb {
 struct VariadicLambdaWrapper {
 	template <class FUN, class RESULT_TYPE, class... ARGS>
 	static inline RESULT_TYPE Operation(FUN &fun, ValidityMask &mask, idx_t idx, ARGS... args) {
-		return fun(args...);
-	}
-};
-
-struct VariadicLambdaWrapperWithNulls {
-	template <class FUN, class RESULT_TYPE, class... ARGS>
-	static inline RESULT_TYPE Operation(FUN &fun, ValidityMask &mask, idx_t idx, ARGS... args) {
-		return fun(args..., mask, idx);
+		if constexpr (std::is_same<decltype(fun(args...)), optional<RESULT_TYPE>>::value) {
+			auto result = fun(args...);
+			if (!result.has_value()) {
+				mask.SetInvalid(idx);
+				return RESULT_TYPE();
+			}
+			return result.value();
+		} else {
+			return fun(args...);
+		}
 	}
 };
 
@@ -235,15 +238,6 @@ public:
 		bool dummy = false;
 		ExecuteImplWithIndices<RESULT_TYPE, VariadicStandardOperatorWrapper<OP>, bool, ARGS...>(
 		    inputs, result, count, dummy, std::index_sequence_for<ARGS...> {});
-	}
-
-	//-------------------------------------------------------------------
-	// ExecuteWithNulls: lambda receives (args..., ValidityMask&, idx_t)
-	//-------------------------------------------------------------------
-	template <class RESULT_TYPE, class... ARGS, class FUN>
-	static void ExecuteWithNulls(std::array<VectorRef, sizeof...(ARGS)> inputs, Vector &result, idx_t count, FUN fun) {
-		ExecuteImplWithIndices<RESULT_TYPE, VariadicLambdaWrapperWithNulls, FUN, ARGS...>(
-		    inputs, result, count, fun, std::index_sequence_for<ARGS...> {});
 	}
 
 	//-------------------------------------------------------------------

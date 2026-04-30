@@ -93,7 +93,7 @@ static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file
 	return should_prefetch && can_prefetch;
 }
 
-static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
+static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path, idx_t file_size,
                                const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
                                bool &footer_encrypted) {
 	if (memcmp(buffer + 4, "PAR1", 4) == 0) {

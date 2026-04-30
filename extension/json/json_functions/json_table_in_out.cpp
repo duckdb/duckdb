@@ -193,7 +193,12 @@ struct JSONTableInOutResult {
 			type.data[count] = JSONCommon::ValTypeToStringT(val);
 		}
 		if (atom.enabled) {
-			atom.data[count] = JSONCommon::JSONValue(val, lstate.alc, atom.vector, atom.validity, count);
+			auto atom_result = JSONCommon::JSONValue(val, lstate.alc, atom.vector);
+			if (atom_result.has_value()) {
+				atom.data[count] = atom_result.value();
+			} else {
+				atom.validity.SetInvalid(count);
+			}
 		}
 		if (id.enabled) {
 			id.data[count] = NumericCast<idx_t>(val - lstate.doc->root);

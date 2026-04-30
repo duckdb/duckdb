@@ -39,7 +39,7 @@ void DictionaryCompressionCompressState::CreateEmptySegment() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
-	current_end_ptr = current_handle.Ptr() + current_dictionary.end;
+	current_end_ptr = current_handle.GetDataMutable() + current_dictionary.end;
 }
 
 void DictionaryCompressionCompressState::Verify() {
@@ -131,7 +131,7 @@ idx_t DictionaryCompressionCompressState::Finalize() {
 	                  index_buffer_size + current_dictionary.size;
 
 	// calculate ptr and offsets
-	auto base_ptr = handle.Ptr();
+	auto base_ptr = handle.GetDataMutable();
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(base_ptr);
 	auto compressed_selection_buffer_offset = DictionaryCompression::DICTIONARY_HEADER_SIZE;
 	auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
