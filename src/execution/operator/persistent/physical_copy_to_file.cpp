@@ -399,8 +399,11 @@ public:
 	void InitializeFlush() DUCKDB_REQUIRES(lock);
 	void FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) DUCKDB_REQUIRES(state.lock);
 
-	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values);
-	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values);
+	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values) DUCKDB_EXCLUDES(active_writes_lock);
+	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values)
+	    DUCKDB_EXCLUDES(active_writes_lock);
+	unique_ptr<GlobalFileState> CreatePartitionFileStateLocked(const vector<Value> &values)
+	    DUCKDB_REQUIRES(active_writes_lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
@@ -1207,7 +1210,7 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 	}
 
 	auto info = make_uniq<PartitionWriteInfo>();
-	info->file_state = CreatePartitionFileState(values);
+	info->file_state = CreatePartitionFileStateLocked(values);
 	auto &result = *info;
 
 	info->active_writes = 1;
@@ -1218,31 +1221,33 @@ PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
-	idx_t offset = 0;
-	{
-		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		// check if we need to close any writers before we can continue
-		if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
-			// we need to! try to close writers
-			for (auto &entry : active_writes) {
-				if (entry.second->active_writes == 0) {
-					// we can evict this entry - evict the partition
-					copy_gstate.FinalizeFileState(std::move(entry.second->file_state));
-					++previous_partitions[entry.first];
-					active_writes.erase(entry.first);
-					break;
-				}
-			}
-		}
+	annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
+	return CreatePartitionFileStateLocked(values);
+}
 
-		if (op.hive_file_pattern) {
-			auto prev_offset = previous_partitions.find(values);
-			if (prev_offset != previous_partitions.end()) {
-				offset = prev_offset->second;
+unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateLocked(const vector<Value> &values) {
+	idx_t offset = 0;
+	// check if we need to close any writers before we can continue
+	if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
+		// we need to! try to close writers
+		for (auto &entry : active_writes) {
+			if (entry.second->active_writes == 0) {
+				// we can evict this entry - evict the partition
+				copy_gstate.FinalizeFileState(std::move(entry.second->file_state));
+				++previous_partitions[entry.first];
+				active_writes.erase(entry.first);
+				break;
 			}
-		} else {
-			offset = global_offset++;
 		}
+	}
+
+	if (op.hive_file_pattern) {
+		auto prev_offset = previous_partitions.find(values);
+		if (prev_offset != previous_partitions.end()) {
+			offset = prev_offset->second;
+		}
+	} else {
+		offset = global_offset++;
 	}
 
 	// Access global state under lock
