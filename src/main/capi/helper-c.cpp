@@ -232,6 +232,7 @@ idx_t GetCTypeSize(const duckdb_type type) {
 	case DUCKDB_TYPE_TIMESTAMP_S:
 	case DUCKDB_TYPE_TIMESTAMP_MS:
 	case DUCKDB_TYPE_TIMESTAMP_NS:
+	case DUCKDB_TYPE_TIMESTAMP_TZ_NS:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
