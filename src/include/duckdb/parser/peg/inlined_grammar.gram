@@ -742,8 +742,8 @@ ExcludeName <- DottedIdentifier / ColIdOrString
 ReplaceList <- 'REPLACE' ReplaceEntries
 ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
 ReplaceEntrySingle <- ReplaceEntry
-ReplaceEntryList <- Parens(List(ReplaceEntry))
-ReplaceEntry <- Expression 'AS' ColumnReference
+ReplaceEntryList <- Parens(List(AliasedExpression))
+ReplaceEntry <- AliasedExpression
 RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)
 RenameEntryList <- Parens(List(RenameEntry))
 SingleRenameEntry <- RenameEntry
@@ -790,7 +790,7 @@ MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
 MapStructField <- Expression ':' Expression
 
-GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression)?)
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
 QuestionMarkNumberedParameter <- '?' NumberLiteral

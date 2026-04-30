@@ -2595,11 +2595,15 @@ PEGTransformerFactory::TransformReplaceEntryList(PEGTransformer &transformer, Pa
 	auto entry_list = ExtractParseResultsFromList(extract_parens);
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> entry_map;
 	for (auto entry : entry_list) {
-		auto replace_entry = transformer.Transform<pair<string, unique_ptr<ParsedExpression>>>(entry);
-		if (entry_map.find(replace_entry.first) != entry_map.end()) {
-			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_entry.first);
+		auto replace_entry = transformer.Transform<unique_ptr<ParsedExpression>>(entry);
+		auto replace_alias = replace_entry->GetAlias();
+		if (replace_alias.empty()) {
+			throw ParserException("All REPLACE entries must have an alias");
 		}
-		entry_map.insert(std::move(replace_entry));
+		if (entry_map.find(replace_alias) != entry_map.end()) {
+			throw ParserException("Duplicate entry \"%s\" in REPLACE list", replace_alias);
+		}
+		entry_map.insert({replace_alias, std::move(replace_entry)});
 	}
 	return entry_map;
 }
@@ -2608,13 +2612,11 @@ pair<string, unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformRepla
                                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
-	auto column_reference = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	if (column_reference->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-		throw InternalException("Expected a column reference in the replace entry");
+	auto expr_alias = expr->GetAlias();
+	if (expr_alias.empty()) {
+		throw ParserException("Expected an alias for REPLACE expression");
 	}
-	auto &col_ref = column_reference->Cast<ColumnRefExpression>();
-	auto column_name = col_ref.GetColumnName();
-	return make_pair(column_name, std::move(expr));
+	return make_pair(expr_alias, std::move(expr));
 }
 
 ExpressionType PEGTransformerFactory::TransformIsDistinctFromOp(PEGTransformer &transformer,
