@@ -10,16 +10,16 @@ ExtensionInfo::ExtensionInfo() : is_loaded(false) {
 }
 
 void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
-	if (suffix_functions_with_alias) {
+	if (suffix_alias) {
 		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
+
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
-
 	string final_extension_name = extension_name;
+
 	if (!alias.empty()) {
 		final_extension_name = alias;
-		ExtensionManager::Get(db).AddExternalExtensionAlias(alias, extension_name);
 	}
 
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
@@ -27,14 +27,20 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	}
 
 	if (!alias.empty()) {
-		DUCKDB_LOG_INFO(db, final_extension_name);
+		auto &extension_manager = ExtensionManager::Get(db);
+		if (suffix_alias && !extension_manager.GetExtensionLoadPrefix().empty()) {
+			// clear prefix for name mangling (if any)
+			extension_manager.ClearExtensionLoadPrefix();
+		}
+		extension_manager.AddExternalExtensionAliasInternal(alias, extension_name);
+		DUCKDB_LOG_INFO(db, alias);
 	}
 
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
 void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
-	if (suffix_functions_with_alias) {
+	if (suffix_alias) {
 		ExtensionManager::Get(db).ClearExtensionLoadPrefix();
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
@@ -109,9 +115,13 @@ string ExtensionManager::GetExternalExtensionName(const string &alias) {
 	return entry->second;
 }
 
+void ExtensionManager::SetExtensionLoadPrefixInternal(const string &prefix) {
+	extension_load_prefix = StringUtil::Lower(prefix);
+}
+
 void ExtensionManager::SetExtensionLoadPrefix(const string &prefix) {
 	lock_guard<mutex> guard(lock);
-	extension_load_prefix = prefix;
+	SetExtensionLoadPrefixInternal(prefix);
 }
 
 void ExtensionManager::ClearExtensionLoadPrefix() {
@@ -142,24 +152,37 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	string original_extension_name = extension_name;
 
 	unique_lock<mutex> extension_list_lock(lock);
-
 	optional_ptr<ExtensionInfo> info;
-
 	auto entry = loaded_extensions_info.end();
 
 	if (options.alias.empty()) {
-		// no alias given, we look if the extension is already loaded
+		// no alias given, we look if the extension is already loaded by using the original name
 		entry = loaded_extensions_info.find(extension_name);
 	}
 
-	// no entry found
 	if (entry == loaded_extensions_info.end()) {
 		// we don't have an entry yet - create one
 		auto extension_info = make_uniq<ExtensionInfo>();
+		extension_info->orig_ext_name = original_extension_name;
 		info = extension_info.get();
+
 		if (!options.alias.empty()) {
 			// if aliasing is used, we need to register the alias instead of extension name
 			extension_name = options.alias;
+			info->alias = extension_name;
+
+			// loop through all loaded extensions, and see if the original name corresponds
+			for (auto &ext_info : loaded_extensions_info) {
+				if (ext_info.second->orig_ext_name == original_extension_name) {
+					if (!options.suffix_alias) {
+						throw InvalidInputException(
+						    "Extension '%s' already exists and double extension loading is not enabled. You can enable "
+						    "double loading by setting double_extension_loading to true.",
+						    original_extension_name);
+					}
+					SetExtensionLoadPrefixInternal(options.alias);
+				}
+			}
 		}
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
 
@@ -176,18 +199,18 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
-	auto result = make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, extension_name,
-	                                             options.suffix_functions_with_alias);
+	auto result =
+	    make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, extension_name, options.suffix_alias);
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
-	// When suffix_functions_with_alias is set, allow re-running the init even if already loaded
+	// When suffix_alias is set, allow re-running the init even if already loaded
 	// pseudocode:
 	// if original extension name already loaded
 	// then we want to set the suffix of all functions with alias
 	// otherwise, just keep the normal name
 
-	if (info->is_loaded && !options.suffix_functions_with_alias) {
+	if (info->is_loaded && !options.suffix_alias) {
 		return nullptr;
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {

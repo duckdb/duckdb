@@ -573,6 +573,8 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "double_extension_loading") {
+		DBConfig::GetConfig(*con->context->db)
+		    .SetOptionByName(AllowDoubleExtensionLoadingSetting::Name, Value::BOOLEAN(true));
 		return RequireResult::PRESENT;
 	}
 
