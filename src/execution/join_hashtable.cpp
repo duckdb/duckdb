@@ -2043,6 +2043,7 @@ struct DictionaryEmissionActivation {
 };
 
 idx_t JoinHashTable::ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const {
+	// the size of variable-size strings isn't counted here because they are already stored in the TupleDataCollection
 	idx_t payload_bytes_per_row = 0;
 	for (const auto &type : rhs_output_types) {
 		payload_bytes_per_row += GetTypeIdSize(type.InternalType());
