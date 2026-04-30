@@ -180,8 +180,9 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-	// this is only for testing double extension loadingl
+
 	if (transaction.db) {
+		// this is only for testing double extension loading
 		auto name_mangling = Settings::Get<AllowDoubleExtensionLoadingSetting>(*transaction.db);
 		auto suffix = ExtensionManager::Get(*transaction.db).GetExtensionLoadPrefix();
 		if (name_mangling && !suffix.empty()) {

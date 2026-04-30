@@ -202,20 +202,13 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	auto result =
 	    make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, extension_name, options.suffix_alias);
 
-	// we now have a lock for loading the extension
-	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
-	// When suffix_alias is set, allow re-running the init even if already loaded
-	// pseudocode:
-	// if original extension name already loaded
-	// then we want to set the suffix of all functions with alias
-	// otherwise, just keep the normal name
-
 	if (info->is_loaded && !options.suffix_alias) {
 		return nullptr;
 	}
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnBeginExtensionLoad(db, extension_name);
 	}
+
 	// extension is not loaded yet and we are in charge of loading it - return
 	return result;
 }
