@@ -1,5 +1,5 @@
 diff --git a/test/sql/copy/invalid_option.test b/test/sql/copy/invalid_option.test
-index 2d1da31..3fe4eb2 100644
+index 14daccb..0d3e1e6 100644
 --- a/test/sql/copy/invalid_option.test
 +++ b/test/sql/copy/invalid_option.test
 @@ -8,7 +8,7 @@ COPY (

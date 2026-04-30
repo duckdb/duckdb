@@ -50,7 +50,7 @@ public:
 unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type.id() != LogicalTypeId::BOOLEAN) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
 	if (!arguments[0]->IsFoldable()) {

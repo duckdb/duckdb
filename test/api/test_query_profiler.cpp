@@ -12,7 +12,6 @@ TEST_CASE("Test query profiler", "[api]") {
 	Connection con(db);
 	string output;
 
-	con.EnableQueryVerification();
 	con.EnableProfiling();
 	// don't pollute the console with profiler info.
 	con.context->config.emit_profiler_output = false;
@@ -37,7 +36,6 @@ TEST_CASE("Test query profiler, no query in the profiling output.", "[api]") {
 	Connection con(db);
 	string output;
 
-	con.EnableQueryVerification();
 	con.EnableProfiling();
 	// don't pollute the console with profiler info.
 	con.context->config.emit_profiler_output = false;
@@ -63,7 +61,6 @@ TEST_CASE("Test latency when interrupting query", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	con.EnableQueryVerification();
 	con.EnableProfiling();
 
 	con.context->config.emit_profiler_output = false;

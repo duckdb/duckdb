@@ -712,7 +712,7 @@ public:
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
 
-		auto data = segment_handle.Ptr() + segment.GetBlockOffset();
+		auto data = segment_handle.GetDataMutable() + segment.GetBlockOffset();
 		idx_t offset = 0;
 
 		segment_count = segment.count.load();
@@ -792,13 +792,13 @@ public:
 		idx_t ptr_offset = 0;
 		if (metadata.block_id == INVALID_BLOCK) {
 			// Data lives on the segment's page
-			handle_start = segment_handle.Ptr();
+			handle_start = segment_handle.GetDataMutable();
 			ptr_offset += segment_block_offset;
 		} else {
 			// Data lives on an extra page, have to load the block first
 			auto block = LoadPage(metadata.block_id);
 			auto data_handle = buffer_manager.Pin(block);
-			handle_start = data_handle.Ptr();
+			handle_start = data_handle.GetDataMutable();
 			scan_state.buffer_handles.push_back(std::move(data_handle));
 		}
 
@@ -850,7 +850,7 @@ public:
 		// Load the next page
 		auto block = LoadPage(next_id);
 		auto handle = buffer_manager.Pin(block);
-		auto ptr = handle.Ptr();
+		auto ptr = handle.GetDataMutable();
 		scan_state.buffer_handles.push_back(std::move(handle));
 		scan_state.current_buffer_ptr = ptr;
 

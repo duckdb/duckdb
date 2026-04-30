@@ -74,7 +74,7 @@ static void CheckEnumParameter(const Expression &expr) {
 static unique_ptr<FunctionData> BindEnumFunction(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
-	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
 	return nullptr;
@@ -84,11 +84,11 @@ static unique_ptr<FunctionData> BindEnumCodeFunction(BindScalarFunctionInput &in
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
-	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
 
-	auto phy_type = EnumType::GetPhysicalType(arguments[0]->return_type);
+	auto phy_type = EnumType::GetPhysicalType(arguments[0]->GetReturnType());
 	switch (phy_type) {
 	case PhysicalType::UINT8:
 		bound_function.SetReturnType(LogicalType(LogicalTypeId::UTINYINT));
@@ -113,18 +113,21 @@ static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(BindScalarFunction
 	auto &arguments = input.GetArguments();
 	CheckEnumParameter(*arguments[0]);
 	CheckEnumParameter(*arguments[1]);
-	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::ENUM &&
+	    arguments[0]->GetReturnType() != LogicalType::SQLNULL) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
-	if (arguments[1]->return_type.id() != LogicalTypeId::ENUM && arguments[1]->return_type != LogicalType::SQLNULL) {
+	if (arguments[1]->GetReturnType().id() != LogicalTypeId::ENUM &&
+	    arguments[1]->GetReturnType() != LogicalType::SQLNULL) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
-	if (arguments[0]->return_type == LogicalType::SQLNULL && arguments[1]->return_type == LogicalType::SQLNULL) {
+	if (arguments[0]->GetReturnType() == LogicalType::SQLNULL &&
+	    arguments[1]->GetReturnType() == LogicalType::SQLNULL) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
-	if (arguments[0]->return_type.id() == LogicalTypeId::ENUM &&
-	    arguments[1]->return_type.id() == LogicalTypeId::ENUM &&
-	    arguments[0]->return_type != arguments[1]->return_type) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::ENUM &&
+	    arguments[1]->GetReturnType().id() == LogicalTypeId::ENUM &&
+	    arguments[0]->GetReturnType() != arguments[1]->GetReturnType()) {
 		throw BinderException("The parameters need to link to ONLY one enum OR be NULL ");
 	}
 	return nullptr;

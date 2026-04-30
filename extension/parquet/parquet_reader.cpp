@@ -93,7 +93,7 @@ static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file
 	return should_prefetch && can_prefetch;
 }
 
-static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
+static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path, idx_t file_size,
                                const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
                                bool &footer_encrypted) {
 	if (memcmp(buffer + 4, "PAR1", 4) == 0) {
@@ -1172,14 +1172,14 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		// Handle comparison expressions (from ConstantFilter conversion)
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comp = expr.Cast<BoundComparisonExpression>();
-			if (comp.right->type == ExpressionType::VALUE_CONSTANT) {
+			if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &constant = comp.right->Cast<BoundConstantExpression>();
 				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
 					auto &min_value = pq_col_stats.min_value;
 					auto &max_value = pq_col_stats.max_value;
 					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-					                                 comp.type, StringValue::Get(constant.value));
+					                                 comp.GetExpressionType(), StringValue::Get(constant.value));
 				}
 			}
 		}
@@ -1362,7 +1362,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		if (it != expression_map.end()) {
 			auto &expression = it->second;
 			auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
-			    column_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION));
+			    column_reader->Schema(), expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
 			auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader), expression->Copy(),
 			                                                     std::move(expr_schema));
 			state.column_readers[i] = std::move(expr_reader);
@@ -1410,13 +1410,20 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_chunk = row_group.columns[primary_index];
 
-		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
-		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
-		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
-			const auto &stats = column_chunk.meta_data.statistics;
-			return stats.is_min_value_exact && stats.is_max_value_exact;
+		if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
+			return false;
 		}
-		return false;
+		const auto &col_stats = column_chunk.meta_data.statistics;
+		if (col_stats.__isset.is_min_value_exact && col_stats.__isset.is_max_value_exact) {
+			return col_stats.is_min_value_exact && col_stats.is_max_value_exact;
+		}
+		// Pre-PARQUET-2352 (Oct 2023) the spec required min/max, when present, to be the exact
+		// min/max; in practice some writers truncated long binary values, and PARQUET-2352 added
+		// is_*_value_exact so readers could detect that. Fixed-width physical types are not
+		// subject to such truncation, so when the flag is missing we mirror arrow-rs
+		// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
+		const auto t = column_chunk.meta_data.type;
+		return t != Type::BYTE_ARRAY && t != Type::FIXED_LEN_BYTE_ARRAY;
 	}
 };
 
@@ -1638,6 +1645,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		}
 	}
 
+	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
 	return SourceResultType::HAVE_MORE_OUTPUT;

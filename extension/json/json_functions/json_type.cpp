@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static inline string_t GetType(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &mask, idx_t idx) {
+static inline optional<string_t> GetType(yyjson_val *val, yyjson_alc *, Vector &) {
 	return JSONCommon::ValTypeToStringT(val);
 }
 

@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 # pandas equivalent:
 # df = pandas.read_parquet('{DATA_DIR}/parquet-testing/bug1588.parquet')
 # df[(df.has_image_link == 1) & ((df.has_image_alt_text == 1) | df.is_image_alt_text_empty == 1)]

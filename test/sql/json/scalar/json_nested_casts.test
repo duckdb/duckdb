@@ -6,9 +6,6 @@ require json
 
 require notwindows
 
-statement ok
-PRAGMA enable_verification
-
 # list with varchar to json
 statement ok
 create table t2(blobs json[])

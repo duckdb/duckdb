@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			}
 			name_collision_set.insert(alias);
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->return_type));
+		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons
@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto struct_stats = StructStats::CreateUnknown(expr.return_type);
+	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(struct_stats, i, child_stats[i]);
 	}

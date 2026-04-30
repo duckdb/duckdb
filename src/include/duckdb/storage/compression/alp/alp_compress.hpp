@@ -64,7 +64,7 @@ public:
 	bool HasEnoughSpace(idx_t vector_size) {
 		//! If [start of block + used space + required space] is more than whats left (current position
 		//! of metadata pointer - the size of a new metadata pointer)
-		if ((handle.Ptr() + AlignValue(UsedSpace() + vector_size)) >=
+		if ((handle.GetDataMutable() + AlignValue(UsedSpace() + vector_size)) >=
 		    (metadata_ptr - AlpConstants::METADATA_POINTER_SIZE)) {
 			return false;
 		}
@@ -87,9 +87,9 @@ public:
 		handle = buffer_manager.Pin(current_segment->block);
 
 		// The pointer to the start of the compressed data.
-		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
+		data_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
 		// The pointer to the start of the metadata.
-		metadata_ptr = handle.Ptr() + current_segment->GetBlockOffset() + info.GetBlockSize();
+		metadata_ptr = handle.GetDataMutable() + current_segment->GetBlockOffset() + info.GetBlockSize();
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 
@@ -206,7 +206,7 @@ public:
 
 	void FlushSegment() {
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
-		auto dataptr = handle.Ptr();
+		auto dataptr = handle.GetDataMutable();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
 

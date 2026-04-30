@@ -256,14 +256,16 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len, bool use_offset, 
 	return result;
 }
 
-bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss) {
+bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss, bool strict) {
+	hh = 0;
 	mm = 0;
 	ss = 0;
 	idx_t curpos = pos;
 	// parse the next 3 characters
-	if (curpos + 3 > len) {
+	const idx_t minlen = strict ? 2 : 1;
+	if (curpos + minlen + 1 > len) {
 		// no characters left to parse
-		return false;
+		return strict ? false : true;
 	}
 	char sign_char = str[curpos];
 	if (sign_char != '+' && sign_char != '-') {
@@ -271,15 +273,20 @@ bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &h
 		return false;
 	}
 	curpos++;
-	if (!StringUtil::CharacterIsDigit(str[curpos]) || !StringUtil::CharacterIsDigit(str[curpos + 1])) {
-		// expected +HH or -HH
+	if (!StringUtil::CharacterIsDigit(str[curpos])) {
+		// expected H
 		return false;
 	}
-	hh = (str[curpos] - '0') * 10 + (str[curpos + 1] - '0');
+	hh = (str[curpos++] - '0');
+	if (StringUtil::CharacterIsDigit(str[curpos])) {
+		hh = hh * 10 + +(str[curpos++] - '0');
+	} else if (strict) {
+		// expected HH
+		return false;
+	}
 	if (sign_char == '-') {
 		hh = -hh;
 	}
-	curpos += 2;
 
 	// optional minute specifier: expected either "MM" or ":MM"
 	if (curpos >= len) {
@@ -291,18 +298,22 @@ bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &h
 	if (colons_used) {
 		curpos++;
 	}
-	if (curpos + 2 > len || !StringUtil::CharacterIsDigit(str[curpos]) ||
-	    !StringUtil::CharacterIsDigit(str[curpos + 1])) {
+	if (curpos + minlen > len || !StringUtil::CharacterIsDigit(str[curpos])) {
 		// no MM specifier
 		pos = curpos;
-		return true;
+		return colons_used ? false : true;
 	}
 	// we have an MM specifier: parse it
-	mm = (str[curpos] - '0') * 10 + (str[curpos + 1] - '0');
+	mm = (str[curpos++] - '0');
+	if (StringUtil::CharacterIsDigit(str[curpos])) {
+		mm = mm * 10 + +(str[curpos++] - '0');
+	} else if (strict) {
+		// expected MM
+		return false;
+	}
 	if (sign_char == '-') {
 		mm = -mm;
 	}
-	curpos += 2;
 
 	// optional seconds specifier: must be ":SS"
 	if (curpos >= len || !colons_used || (str[curpos] != ':')) {
@@ -312,18 +323,23 @@ bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &h
 	}
 	// Skip colon and read seconds
 	curpos++;
-	if (curpos + 2 > len || !StringUtil::CharacterIsDigit(str[curpos]) ||
-	    !StringUtil::CharacterIsDigit(str[curpos + 1])) {
+	if (curpos + minlen > len || !StringUtil::CharacterIsDigit(str[curpos])) {
 		// no SS specifier
 		pos = curpos;
-		return true;
+		return colons_used ? false : true;
 	}
 	// we have an SS specifier: parse it
-	ss = (str[curpos] - '0') * 10 + (str[curpos + 1] - '0');
+	ss = (str[curpos++] - '0');
+	if (StringUtil::CharacterIsDigit(str[curpos])) {
+		ss = ss * 10 + +(str[curpos++] - '0');
+	} else if (strict) {
+		// expected SS
+		return false;
+	}
 	if (sign_char == '-') {
 		ss = -ss;
 	}
-	pos = curpos + 2;
+	pos = curpos;
 
 	return true;
 }

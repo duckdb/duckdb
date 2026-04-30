@@ -17,13 +17,14 @@ class VectorStructBuffer : public VectorBuffer {
 public:
 	explicit VectorStructBuffer(const LogicalType &struct_type, capacity_t capacity = capacity_t(STANDARD_VECTOR_SIZE));
 	VectorStructBuffer(vector<Vector> children, capacity_t capacity);
-	VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count);
+	VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, count_t count);
 	~VectorStructBuffer() override;
 
 public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	void SetVectorSize(idx_t new_size) override;
 	idx_t Capacity() const override {
 		return capacity;
 	}

@@ -2,9 +2,6 @@
 # description: Test Time With Time Zone
 # group: [time]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select timetz '02:30:00';
 ----

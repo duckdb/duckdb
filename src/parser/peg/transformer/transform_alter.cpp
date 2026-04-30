@@ -32,11 +32,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	auto null_column = column_entry.Copy();
 	null_column.SetDefaultValue(make_uniq<ConstantExpression>(ConstantExpression(Value(nullptr))));
 	auto alter_entry_data = add_column.GetAlterEntryData();
-	return unique_ptr<SQLStatement>(std::move(TransformAndMaterializeAlter(
-	    alter_entry_data,
-	    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
-	                             result->info->if_not_found == OnEntryNotFound::RETURN_NULL),
-	    column_entry.GetName(), column_entry.DefaultValue().Copy())));
+	return unique_ptr<SQLStatement>(std::move(
+	    TransformAndMaterializeAlter(alter_entry_data,
+	                                 make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
+	                                                          add_column.if_column_not_exists),
+	                                 column_entry.GetName(), column_entry.DefaultValue().Copy())));
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterOptions(PEGTransformer &transformer,
