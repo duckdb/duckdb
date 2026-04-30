@@ -31,6 +31,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/planner/trigger_body_transformer.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
@@ -582,8 +583,6 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	return new_binder;
 }
 
-static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
-
 unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
                                                           vector<unique_ptr<ParsedExpression>> &returning_list,
                                                           TableCatalogEntry &table, TriggerEventType event_type) {
@@ -625,6 +624,9 @@ BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<Pa
 	auto &trigger = triggers[0].get();
 	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
 	trig_cte->query_node = trigger.trigger_action->Copy();
+	if (trigger.for_each == TriggerForEach::ROW) {
+		TransformTriggerBody(*trig_cte->query_node, trigger.event_type);
+	}
 	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
 	trig_cte->is_trigger_generated = true;
 

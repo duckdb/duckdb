@@ -26,7 +26,11 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/trigger_body_transformer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -505,8 +509,11 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
-	if (create_trigger_info.for_each == TriggerForEach::ROW) {
-		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	if (create_trigger_info.for_each == TriggerForEach::ROW &&
+	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
+		throw NotImplementedException(
+		    "FOR EACH ROW triggers are only supported for AFTER INSERT events; "
+		    "AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented");
 	}
 
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
@@ -520,12 +527,27 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 
 	// Validate the trigger body using an isolated binder (own GlobalBinderState).
 	// Set up trigger_expanded_tables to match runtime behavior.
-	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	// Set up trigger_creation_table to detect recursive triggers during the validation.
 	auto validation_binder = Binder::CreateBinder(context);
 	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
 	validation_binder->global_binder_state->trigger_creation_table = &table;
 	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
+
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		TransformTriggerBody(*body_copy, create_trigger_info.event_type);
+
+		auto base_select = make_uniq<SelectNode>();
+		base_select->select_list.push_back(make_uniq<StarExpression>());
+		auto table_ref = make_uniq<BaseTableRef>();
+		table_ref->table_name = table.name;
+		table_ref->schema_name = table.schema.name;
+		table_ref->catalog_name = table.catalog.GetName();
+		base_select->from_table = std::move(table_ref);
+		auto base_cte = make_uniq<CommonTableExpressionInfo>();
+		base_cte->query_node = std::move(base_select);
+		body_copy->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
+	}
 	validation_binder->Bind(*body_copy);
 
 	// Add table dependency

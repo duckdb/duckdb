@@ -1,0 +1,192 @@
+# name: test/sql/trigger/trigger_for_each_row_insert.test
+# description: Test FOR EACH ROW AFTER INSERT triggers with INSERT bodies
+# group: [trigger]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE t (id INTEGER, val VARCHAR);
+
+statement ok
+CREATE TABLE audit (tid INTEGER, msg VARCHAR);
+
+# ============================================================
+# NEW.col reference in VALUES body
+# ============================================================
+
+statement ok
+CREATE TRIGGER trg_new_col AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (NEW.id, 'inserted');
+
+# Single row insert
+statement ok
+INSERT INTO t VALUES (1, 'a');
+
+query II rowsort
+SELECT * FROM audit;
+----
+1	inserted
+
+# Multi-row insert - fires once per row
+statement ok
+INSERT INTO t VALUES (2, 'b'), (3, 'c');
+
+query II rowsort
+SELECT * FROM audit;
+----
+1	inserted
+2	inserted
+3	inserted
+
+statement ok
+DROP TRIGGER trg_new_col ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+# Multiple NEW.col references
+statement ok
+CREATE TRIGGER trg_multi_col AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (NEW.id, NEW.val);
+
+statement ok
+INSERT INTO t VALUES (10, 'hello'), (20, 'world');
+
+query II rowsort
+SELECT * FROM audit;
+----
+10	hello
+20	world
+
+statement ok
+DROP TRIGGER trg_multi_col ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+# SELECT body with FROM new (explicit table reference)
+statement ok
+CREATE TRIGGER trg_from_new AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit SELECT id, 'from_new' FROM new;
+
+statement ok
+INSERT INTO t VALUES (5, 'x'), (6, 'y');
+
+query II rowsort
+SELECT * FROM audit;
+----
+5	from_new
+6	from_new
+
+statement ok
+DROP TRIGGER trg_from_new ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+# Constant VALUES body (no NEW reference) - fires once per row
+statement ok
+CREATE TRIGGER trg_const AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (0, 'fired');
+
+statement ok
+INSERT INTO t VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+query II rowsort
+SELECT * FROM audit;
+----
+0	fired
+0	fired
+0	fired
+
+statement ok
+DROP TRIGGER trg_const ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+# SELECT body with explicit FROM new
+statement ok
+CREATE TRIGGER trg_no_from AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit SELECT NEW.id, 'no_from' FROM new;
+
+statement ok
+INSERT INTO t VALUES (7, 'p'), (8, 'q');
+
+query II rowsort
+SELECT * FROM audit;
+----
+7	no_from
+8	no_from
+
+statement ok
+DROP TRIGGER trg_no_from ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+# Blocked cases - fail at CREATE TRIGGER time
+
+# AFTER UPDATE FOR EACH ROW not yet supported
+statement error
+CREATE TRIGGER trg_upd_row AFTER UPDATE ON t FOR EACH ROW
+    INSERT INTO audit VALUES (NEW.id, 'updated');
+----
+Not implemented Error: FOR EACH ROW triggers are only supported for AFTER INSERT events; AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented
+
+# AFTER DELETE FOR EACH ROW not yet supported
+statement error
+CREATE TRIGGER trg_del_row AFTER DELETE ON t FOR EACH ROW
+    INSERT INTO audit VALUES (0, 'deleted');
+----
+Not implemented Error: FOR EACH ROW triggers are only supported for AFTER INSERT events; AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented
+
+# OLD references not yet supported
+statement error
+CREATE TRIGGER trg_old AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (OLD.id, 'old');
+----
+Not implemented Error: OLD references in FOR EACH ROW trigger bodies are not yet supported
+
+# Multi-row VALUES not yet supported
+statement error
+CREATE TRIGGER trg_multivals AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit VALUES (1, 'a'), (2, 'b');
+----
+Not implemented Error: Multi-row VALUES in FOR EACH ROW trigger bodies are not yet supported
+
+# Non-INSERT body not yet supported - UPDATE body
+statement error
+CREATE TRIGGER trg_update_body AFTER INSERT ON t FOR EACH ROW
+    UPDATE audit SET msg = 'x' WHERE tid = NEW.id;
+----
+Not implemented Error: FOR EACH ROW trigger bodies must be INSERT statements; UPDATE/DELETE bodies are not yet supported
+
+# Non-INSERT body not yet supported - DELETE body
+statement error
+CREATE TRIGGER trg_delete_body AFTER INSERT ON t FOR EACH ROW
+    DELETE FROM audit WHERE tid = NEW.id;
+----
+Not implemented Error: FOR EACH ROW trigger bodies must be INSERT statements; UPDATE/DELETE bodies are not yet supported
+
+# UNION/INTERSECT body not yet supported (inner node is SetOperationNode, not SelectNode)
+statement error
+CREATE TRIGGER trg_union_body AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit SELECT NEW.id, 'a' FROM new UNION ALL SELECT NEW.id, 'b' FROM new;
+----
+Not implemented Error: FOR EACH ROW trigger bodies only support a single SELECT or VALUES clause; UNION, INTERSECT, and EXCEPT are not supported
