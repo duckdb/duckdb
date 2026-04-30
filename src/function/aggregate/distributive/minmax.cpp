@@ -26,7 +26,7 @@ struct MinMaxState {
 };
 
 template <class OP>
-static AggregateFunction GetUnaryAggregate(LogicalType type) {
+static AggregateFunction GetUnaryAggregate(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		return AggregateFunction::UnaryAggregate<MinMaxState<int8_t>, int8_t, int8_t, OP>(type, type);
@@ -398,9 +398,9 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
-AggregateFunction GetMinMaxOperator(string name) {
-	return AggregateFunction(std::move(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+AggregateFunction GetMinMaxOperator(const string &name) {
+	return AggregateFunction(name, {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                         nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
 } // namespace
@@ -432,7 +432,7 @@ public:
 		is_initialized = true;
 	}
 
-	static const T &GetValue(const T &val) {
+	static T GetValue(T val) {
 		return val;
 	}
 };

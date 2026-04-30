@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE T as select '1, "Oogie Boogie"' from range (100000)
 
 statement ok

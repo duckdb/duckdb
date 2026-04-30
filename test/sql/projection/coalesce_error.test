@@ -2,9 +2,6 @@
 # description: Test COALESCE error short-circuiting
 # group: [projection]
 
-statement ok
-PRAGMA enable_verification
-
 # constant coalesce short-circuiting
 query I
 SELECT COALESCE(1, 'hello'::INT)

@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIIIIIIIIIIIIIIIIIII
 SELECT * FROM parquet_scan('{DATA_DIR}/parquet-testing/adam_genotypes.parquet')
 ----

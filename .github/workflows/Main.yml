@@ -269,15 +269,15 @@ jobs:
           git diff --exit-code
           echo "::endgroup::"
 
- linux-debug:
-    name: Linux Debug
+ linux-relassert:
+    name: Linux Relassert
     # This tests release build while enabling slow verifiers (masked by #ifdef DEBUG) and sanitizers
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug') }}
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert') }}
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: gcc
-      CXX: g++
+      CC: clang-20
+      CXX: clang++-20
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -301,6 +301,17 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
+    - name: Fix ASan runtime
+      shell: bash
+      run: |
+        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
+        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
+        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
+        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
+          sudo mkdir -p "${asan_static_dir}"
+          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
+        fi
+
     - uses: ./.github/actions/ccache-action
       with:
         save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -312,22 +323,23 @@ jobs:
     - name: Build DuckDB
       uses: duckdb/duckdb-ci/build-duckdb@main
       with:
+        build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
         test: make smoke T="--changed-tests=${{ runner.temp }}/changed_tests.txt"
         bundle: make relassert-artifact
-        upload-name: linux-debug-relassert-build
+        upload-name: linux-relassert-build
         upload-path: build/relassert-artifact.tar.gz
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
     - name: Output version info
       run: ./build/relassert/duckdb -c "PRAGMA version;"
 
- linux-debug-tests:
-    name: Linux Debug Tests
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-debug-tests') }}
+ linux-relassert-tests:
+    name: Linux Relassert Tests
+    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-relassert-tests') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
 
     steps:
@@ -340,7 +352,7 @@ jobs:
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-debug-relassert-build
+        name: linux-relassert-build
         path: build
 
     - name: Extract relassert build artifact
@@ -364,7 +376,7 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
       - linux-release
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
@@ -422,6 +434,8 @@ jobs:
    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
    needs: prepare
    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+   env:
+     CLANGD_BINARY: clangd-20
 
    steps:
      - name: "Checkout"
@@ -434,8 +448,6 @@ jobs:
      - name: Install
        run: |
          python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
          python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
          python3 scripts/ci/retry.py -- make install-clangd-tidy
 
@@ -454,7 +466,7 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
       - linux-release
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
@@ -471,7 +483,7 @@ jobs:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'wasm-eh') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       GEN: make
@@ -549,6 +561,16 @@ jobs:
     - name: Symbol Checks
       run: make -j4 --output-sync=target symbol-checks
 
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
+
  linux-release-tests:
     name: Linux Release Tests
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-tests') }}
@@ -602,12 +624,12 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install pytest
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
-        python3 -m pip install --break-system-packages pytest
+        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -851,37 +873,13 @@ jobs:
         julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
         ./format_check.sh
 
- upload-libduckdb-src:
-    name: Upload libduckdb-src.zip
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'upload-libduckdb-src') }}
-    needs:
-      - prepare
-      - linux-release-cli
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ needs.prepare.outputs.git_sha }}
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        zip -j libduckdb-src.zip src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip
-
  swift:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'swift') }}
     uses: ./.github/workflows/Swift.yml
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     with:
       git_ref: ${{ needs.prepare.outputs.git_sha }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_14_arm64 }}
@@ -892,7 +890,7 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
       git_ref: ${{ needs.prepare.outputs.git_sha }}
@@ -1145,7 +1143,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
@@ -1182,7 +1180,7 @@ jobs:
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     env:
       CC: gcc
       CXX: g++
@@ -1214,10 +1212,10 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -1249,22 +1247,22 @@ jobs:
     - name: Test
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       shell: bash
-      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: python3 scripts/ci/run_tests.py --workers 1 --batch-size 1 --test-command "valgrind {binary} {flags} -f {test_list}" ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  threadsan:
     name: Thread Sanitizer
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'threadsan') }}
     needs:
       - prepare
-      - linux-debug
+      - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
@@ -1349,6 +1347,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/verify_statement_prepare.json ./build/release/test/unittest
 
+    - name: test/configs/verify_serializer.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_serializer.json ./build/release/test/unittest
+
     - name: test/configs/verify_stats.json
       if: success() || failure()
       shell: bash
@@ -1397,11 +1401,11 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/force_external.json ./build/release/test/unittest
 
-    - name: test/configs/verify_stats.json
+    - name: test/configs/verify_fetch_row.json
       if: success() || failure()
       shell: bash
       run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_stats.json ./build/release/test/unittest
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_fetch_row.json ./build/release/test/unittest
 
     - name: test/configs/disable_caching_operators.json
       if: success() || failure()
@@ -1419,7 +1423,7 @@ jobs:
       if: success() || failure()
       shell: bash
       run: |
-        ./build/release/test/unittest --test-config test/configs/vacuum_rebuild_indexes_force_storage.json
+        python3 scripts/ci/run_tests.py --test-config=test/configs/vacuum_rebuild_indexes_force_storage.json ./build/release/test/unittest
 
     - name: test/configs/prefetch_all_parquet_files.json
       if: success() || failure()
@@ -1444,12 +1448,6 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
-
-    - name: test/configs/enable_verification.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification.json ./build/release/test/unittest
 
     - name: test/configs/block_allocator_100mib.json
       if: success() || failure()
@@ -1529,8 +1527,8 @@ jobs:
     runs-on: ubuntu-slim
     needs:
       - prepare
-      - linux-debug
-      - linux-debug-tests
+      - linux-relassert
+      - linux-relassert-tests
       - regression
       - tidy-check
       - check-clangd-tidy
@@ -1541,7 +1539,6 @@ jobs:
       - linux-release-cli
       - linux-musl-release-cli
       - main_julia
-      - upload-libduckdb-src
       - swift
       - windows
       - osx

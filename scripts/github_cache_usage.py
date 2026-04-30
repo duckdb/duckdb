@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 MAIN = {
-    "linux-debug",
+    "linux-relassert",
     "linux-configs",
     "vector-sizes",
     "valgrind",
@@ -47,7 +47,7 @@ NIGHTLYTESTS = {
     "extension-updating",
     "regression-test-memory-safety",
     "vector-and-block-sizes",
-    "linux-debug-configs",
+    "linux-relassert-configs",
     "force-blocking-sink-source",
     "storage-initialization",
 }

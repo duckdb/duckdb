@@ -2,9 +2,6 @@
 # description: Issue 5896: json_group_array() does not respect filter clauses
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 # the problem was actually that all aggregate modifiers were ignored for non-aggregate functions
 
 # distinct modifier

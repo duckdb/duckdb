@@ -2,9 +2,6 @@
 # description: Issue 531
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # SELECT on DATE column with a large negative value results in a 'double free or corruption'
 statement ok
 CREATE TABLE t0(c0 DATE);

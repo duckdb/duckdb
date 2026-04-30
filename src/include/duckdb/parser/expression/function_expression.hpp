@@ -88,12 +88,12 @@ public:
 		// standard function call
 		string result;
 		if (!catalog.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+			result += SQLIdentifier(catalog) + ".";
 		}
 		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+			result += SQLIdentifier(schema) + ".";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(function_name);
+		result += SQLIdentifier(function_name);
 		result += "(";
 		if (distinct) {
 			result += "DISTINCT ";

@@ -32,12 +32,6 @@
       "paths": [
         "test/sql/window/test_ignore_nulls.test"
       ]
-    },
-    {
-      "reason": "FIXME: new parser precedence issue",
-      "paths": [
-      "test/sql/function/uuid/test_uuid.test"
-      ]
     }
   ]
 }

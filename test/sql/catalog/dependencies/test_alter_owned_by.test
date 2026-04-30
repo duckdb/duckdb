@@ -4,7 +4,7 @@
 require skip_reload
 
 statement ok
-PRAGMA verify_serializer
+SET debug_verify_serializer=true;
 
 ##TEST: If the table is dropped, then the sequence is also droppped
 statement ok

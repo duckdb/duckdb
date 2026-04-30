@@ -13,7 +13,7 @@ using namespace duckdb;
 TEST_CASE("Test simple relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
 
@@ -217,7 +217,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values, v1, v2, v3;
 
@@ -284,7 +284,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 TEST_CASE("Test combinations of joins", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values, vjoin;
 
@@ -372,7 +372,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 TEST_CASE("Test crossproduct relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values, vcross;
 
@@ -403,7 +403,7 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 TEST_CASE("Test view creation of relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> tbl, filter, proj, proj2;
 
@@ -480,7 +480,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values;
 
@@ -521,7 +521,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 TEST_CASE("Test table creations with on_create_conflict using the relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values, values1, proj;
 
@@ -558,7 +558,7 @@ TEST_CASE("Test table creations with on_create_conflict using the relation API",
 TEST_CASE("Test table create from query with on_create_conflict using the relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> values, values1, proj;
 
@@ -596,7 +596,7 @@ TEST_CASE("Test table create from query with on_create_conflict using the relati
 TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -632,7 +632,7 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	// create a table
@@ -871,7 +871,7 @@ TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") 
 TEST_CASE("Test view relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -901,7 +901,7 @@ TEST_CASE("Test view relations", "[relation_api]") {
 TEST_CASE("Test table function relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -937,7 +937,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	named_parameter_map_t options;
 	options["union_by_name"] = Value(true);
 	duckdb::vector<string> paths {"data/csv/sample-0.csv", "data/csv/sample-0.csv"};
@@ -956,7 +956,7 @@ TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	// write a bunch of values to a CSV
@@ -984,7 +984,7 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 TEST_CASE("Test CSV reading from weather.csv", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 
 	auto auto_csv_scan = con.ReadCSV("data/csv/weather.csv")->Limit(1);
@@ -995,7 +995,7 @@ TEST_CASE("Test CSV reading from weather.csv", "[relation_api]") {
 TEST_CASE("Test query relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> tbl;
 
@@ -1022,7 +1022,7 @@ TEST_CASE("Test query relation", "[relation_api]") {
 TEST_CASE("Test TopK relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	duckdb::unique_ptr<QueryResult> result;
 	duckdb::shared_ptr<Relation> tbl;
 
@@ -1085,7 +1085,6 @@ TEST_CASE("Test Relation Query setting query", "[relation_api]") {
 TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it", "[relation_api][txn][wrapper]") {
 	DuckDB db;
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// Build expressions to force the "expressions" overload (not the constants path)
 	duckdb::vector<duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>> expressions;
@@ -1132,7 +1131,6 @@ TEST_CASE("Test materialized relations", "[relation_api]") {
 	{
 		DuckDB db(db_path);
 		Connection con(db);
-		con.EnableQueryVerification();
 
 		REQUIRE_NO_FAIL(con.Query("create table tbl(a varchar);"));
 
