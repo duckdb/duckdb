@@ -724,7 +724,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)\n"
 	"RenameEntryList <- Parens(List(RenameEntry))\n"
 	"SingleRenameEntry <- RenameEntry\n"
-	"RenameEntry <- ExcludeName 'AS' Identifier\n"
+	"RenameEntry <- ExcludeName 'AS'? Identifier\n"
 	"SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference\n"
 	"CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'\n"
 	"CaseWhenThen <- 'WHEN' Expression 'THEN' Expression\n"

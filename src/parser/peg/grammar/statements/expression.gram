@@ -38,7 +38,7 @@ ReplaceEntry <- AliasedExpression
 RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)
 RenameEntryList <- Parens(List(RenameEntry))
 SingleRenameEntry <- RenameEntry
-RenameEntry <- ExcludeName 'AS' Identifier
+RenameEntry <- ExcludeName 'AS'? Identifier
 SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
 CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
