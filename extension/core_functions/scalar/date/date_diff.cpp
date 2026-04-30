@@ -353,12 +353,11 @@ int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate) {
 
 struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
-	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+	static inline optional<TR> Operation(TS part, TA startdate, TB enddate) {
 		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
-			mask.SetInvalid(idx);
-			return TR();
+			return {};
 		}
 	}
 };
@@ -434,9 +433,8 @@ void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
 		DateDiffBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
 	} else {
-		TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
-		    part_arg, start_arg, end_arg, result, args.size(),
-		    DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
+		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, start_arg, end_arg, result, args.size(),
+		                                                  DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
 
