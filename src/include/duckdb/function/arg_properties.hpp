@@ -26,14 +26,20 @@ enum class Monotonicity : uint8_t {
 struct ArgProperties {
 	Monotonicity monotonicity = Monotonicity::UNKNOWN;
 
-	//! Default is non-strict (NON_DECREASING / NON_INCREASING) — the conservative claim.
-	//! Pass `true` only when distinct inputs are guaranteed to map to distinct outputs.
-	ArgProperties &Increasing(bool strict = false) {
-		monotonicity = strict ? Monotonicity::STRICTLY_INCREASING : Monotonicity::NON_DECREASING;
+	ArgProperties &StrictlyIncreasing() {
+		monotonicity = Monotonicity::STRICTLY_INCREASING;
 		return *this;
 	}
-	ArgProperties &Decreasing(bool strict = false) {
-		monotonicity = strict ? Monotonicity::STRICTLY_DECREASING : Monotonicity::NON_INCREASING;
+	ArgProperties &NonDecreasing() {
+		monotonicity = Monotonicity::NON_DECREASING;
+		return *this;
+	}
+	ArgProperties &StrictlyDecreasing() {
+		monotonicity = Monotonicity::STRICTLY_DECREASING;
+		return *this;
+	}
+	ArgProperties &NonIncreasing() {
+		monotonicity = Monotonicity::NON_INCREASING;
 		return *this;
 	}
 	ArgProperties &Constant() {

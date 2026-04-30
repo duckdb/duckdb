@@ -56,7 +56,7 @@ void TimeTZSortKeyFunction(DataChunk &input, ExpressionState &state, Vector &res
 ScalarFunction ToTimestampFun::GetFunction() {
 	// to_timestamp is an alias from Postgres that converts the time in seconds to a timestamp
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ, EpochSecFunction);
-	func.SetUnaryArgProperties(ArgProperties().Increasing());
+	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return func;
 }
 

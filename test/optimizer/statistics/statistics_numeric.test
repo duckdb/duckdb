@@ -145,3 +145,34 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(year(dt)) s FROM inf_dates LIMIT 1)
 ----
 NULL	NULL
+
+# i: [-10, -1] with a NULL; x: [0.0, 1.0] finite; x_nan: NaN present (stats max = NaN)
+statement ok
+CREATE TABLE mixed(i INTEGER, x DOUBLE, x_nan DOUBLE);
+
+statement ok
+INSERT INTO mixed VALUES (-10, 0.0, 0.0), (-1, 1.0, 'nan'::DOUBLE), (NULL, NULL, NULL);
+
+# nullable input: null flag propagates but bounds are still derived
+query II
+SELECT s.min, s.max FROM (SELECT STATS(-i) s FROM mixed LIMIT 1)
+----
+1	10
+
+# impossible filter still folds even though input column has nulls
+query II
+EXPLAIN SELECT count(*) FROM mixed WHERE -i < 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# NaN in column: corner eval returns NaN, is_unusable fires, no bounds derived
+query II
+SELECT s.min, s.max FROM (SELECT STATS(exp(x_nan)) s FROM mixed LIMIT 1)
+----
+NULL	NULL
+
+# finite column: exp bounds propagate correctly
+query II
+SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
+----
+1.0	2.718281828459045

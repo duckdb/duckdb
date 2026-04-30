@@ -31,9 +31,6 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	if (func.function.GetStability() != FunctionStability::CONSISTENT) {
 		return nullptr;
 	}
-	if (func.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		return nullptr;
-	}
 	if (BaseStatistics::GetStatsType(func.GetReturnType()) != StatisticsType::NUMERIC_STATS ||
 	    func.GetReturnType().InternalType() == PhysicalType::BOOL) {
 		return nullptr;
@@ -41,7 +38,8 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 
 	vector<Value> lo_args(func.children.size());
 	vector<Value> hi_args(func.children.size());
-	bool any_input_can_have_null = false;
+	// SPECIAL_HANDLING means the function may produce nulls on non-null inputs (e.g. try_cast).
+	bool output_can_have_null = (func.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	for (idx_t i = 0; i < func.children.size(); i++) {
 		auto &child = *func.children[i];
@@ -60,7 +58,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 
 		auto m = props.monotonicity;
 		if (cs.CanHaveNull()) {
-			any_input_can_have_null = true;
+			output_can_have_null = true;
 		}
 		if (cs.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(cs)) {
 			return nullptr;
@@ -92,8 +90,9 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
 		return nullptr;
 	}
-	// NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity));
-	// the function may still be monotonic on its finite domain, but no bounds derivable here.
+	// NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity)).
+	// NaN is excluded even though DuckDB orders it above all other values: negate(NaN) = NaN, which
+	// would violate NON_INCREASING if NaN were treated as a valid corner. Bail instead.
 	const auto is_unusable = [](const Value &v) {
 		if (v.IsNull()) {
 			return true;
@@ -110,12 +109,9 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	if (is_unusable(out_lo) || is_unusable(out_hi)) {
 		return nullptr;
 	}
-	// Ordering violation indicates the annotation is wrong (function isn't actually monotonic in
-	// the direction claimed). Assert in debug builds so this surfaces during testing; bail in
-	// release builds so a misannotation can't propagate unsound stats.
-	D_ASSERT(!(out_hi < out_lo));
 	if (out_hi < out_lo) {
-		return nullptr;
+		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
+		                        func.function.name);
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());
@@ -123,7 +119,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	NumericStats::SetMax(result, out_hi);
 
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
-	if (any_input_can_have_null) {
+	if (output_can_have_null) {
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result.ToUnique();

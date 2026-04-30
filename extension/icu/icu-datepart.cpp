@@ -661,13 +661,13 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	// across the BC/AD flip; leave them unannotated. era/century/millennium/isoyear are signed.
 
 	//	BIGINTs
-	ICUDatePart::AddUnaryPartCodeFunctions("era", loader, LogicalType::BIGINT, ArgProperties().Increasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("era", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("year", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("month", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("day", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("decade", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("century", loader, LogicalType::BIGINT, ArgProperties().Increasing());
-	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader, LogicalType::BIGINT, ArgProperties().Increasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("century", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("second", loader);
@@ -678,7 +678,7 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions("week", loader); //  Note that WeekOperator is ISO-8601, not US
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader, LogicalType::BIGINT, ArgProperties().Increasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", loader);
@@ -689,7 +689,7 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 
 	//  register combinations
 	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT,
-	                                       ArgProperties().Increasing()); //  ISO year and week
+	                                       ArgProperties().NonDecreasing()); //  ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", loader);

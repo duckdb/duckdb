@@ -317,7 +317,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	auto fn = type.id() == LogicalTypeId::DECIMAL
 	              ? ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind)
 	              : ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
-	fn.SetUnaryArgProperties(ArgProperties().Increasing(true));
+	fn.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return fn;
 }
 
@@ -353,7 +353,7 @@ static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
-	const auto inc = ArgProperties().Increasing(true);
+	const auto inc = ArgProperties().StrictlyIncreasing();
 	const auto unset = ArgProperties();
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
@@ -652,22 +652,22 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		ScalarFunction func("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
 		func.SetFallible();
-		func.SetUnaryArgProperties(ArgProperties().Decreasing(true));
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
 		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind);
-		func.SetUnaryArgProperties(ArgProperties().Decreasing(true));
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::BIGNUM) {
 		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
-		func.SetUnaryArgProperties(ArgProperties().Decreasing(true));
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
 		                    IntegerNegateBind);
 		func.SetFallible();
-		func.SetUnaryArgProperties(ArgProperties().Decreasing(true));
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	}
 }
@@ -681,7 +681,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
 			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
@@ -689,14 +689,14 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		}
 	}
@@ -704,7 +704,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	switch (left_type.id()) {
 	case LogicalTypeId::BIGNUM: {
 		ScalarFunction function("-", {left_type, right_type}, left_type, BignumSubtract);
-		function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+		function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 		return function;
 	}
 	case LogicalTypeId::DATE:
@@ -712,14 +712,14 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
 			                        ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 
 		} else if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::DATE,
 			                        ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::TIMESTAMP,
@@ -727,7 +727,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetFallible();
 			// Monotonic in DATE only; INTERVAL ordering uses 30-day months but DATE arithmetic uses
 			// calendar months so monotonicity in the INTERVAL arg is broken (see OperatorAddFun).
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties()});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
 			return function;
 		}
 		break;
@@ -737,7 +737,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::INTERVAL,
 			    ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function(
@@ -745,7 +745,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 			function.SetFallible();
 			// Monotonic in TIMESTAMP only; see DATE - INTERVAL above.
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties()});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
 			return function;
 		}
 		break;
@@ -755,7 +755,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::INTERVAL,
 			    ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
 			function.SetFallible();
-			function.SetArgProperties({ArgProperties().Increasing(true), ArgProperties().Decreasing(true)});
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		}
 		break;

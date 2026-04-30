@@ -428,7 +428,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
-	ceil.SetUnaryArgProperties(ArgProperties().Increasing());
+	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return ceil;
 }
 
@@ -484,7 +484,7 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
-	floor.SetUnaryArgProperties(ArgProperties().Increasing());
+	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return floor;
 }
 
@@ -753,7 +753,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		trunc.AddFunction(ScalarFunction({type}, type, trunc_func, bind_func));
 		trunc.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, trunc_prec_func, bind_prec_func));
 	}
-	trunc.SetUnaryArgProperties(ArgProperties().Increasing());
+	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return trunc;
 }
 
@@ -945,7 +945,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
 	}
-	round.SetUnaryArgProperties(ArgProperties().Increasing());
+	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
 }
 
@@ -966,7 +966,7 @@ struct ExpOperator {
 ScalarFunction ExpFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
-	func.SetUnaryArgProperties(ArgProperties().Increasing(true));
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return func;
 }
 
@@ -1034,7 +1034,7 @@ struct CbRtOperator {
 ScalarFunction CbrtFun::GetFunction() {
 	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
 	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
-	func.SetUnaryArgProperties(ArgProperties().Increasing(true));
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return func;
 }
 
