@@ -1550,39 +1550,39 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			for (auto &block_id : per_column_metadata_blocks[column_idx]) {
 				reused_column_blocks.emplace_back(block_id, 0);
 			}
-		} else {
-			// write new metadata for this column
-			auto &state = write_data.states[column_idx];
-			D_ASSERT(state);
-
-			// track blocks written for this column
-			vector<MetaBlockPointer> col_written_blocks;
-			writer.StartWritingColumns(col_written_blocks);
-
-			auto &data_writer = writer.GetPayloadWriter();
-			auto pointer = writer.GetMetaBlockPointer();
-
-			row_group_pointer.data_pointers.push_back(pointer);
-
-			auto persistent_data = state->ToPersistentData();
-			IncrementSegmentStart(persistent_data, row_group_start);
-
-			BinarySerializer serializer(data_writer, serialization_options);
-			serializer.Begin();
-			persistent_data.Serialize(serializer);
-			serializer.End();
-
-			writer.FinishWritingColumns();
-
-			// collect per-column extra blocks (excluding the start block)
-			vector<idx_t> col_extra_blocks;
-			for (auto &written_ptr : col_written_blocks) {
-				if (written_ptr.block_pointer != pointer.block_pointer) {
-					col_extra_blocks.push_back(written_ptr.block_pointer);
-				}
-			}
-			row_group_pointer.per_column_metadata_blocks.push_back(std::move(col_extra_blocks));
+			continue;
 		}
+		// write new metadata for this column
+		auto &state = write_data.states[column_idx];
+		D_ASSERT(state);
+
+		// track blocks written for this column
+		vector<MetaBlockPointer> col_written_blocks;
+		writer.StartWritingColumns(col_written_blocks);
+
+		auto &data_writer = writer.GetPayloadWriter();
+		auto pointer = writer.GetMetaBlockPointer();
+
+		row_group_pointer.data_pointers.push_back(pointer);
+
+		auto persistent_data = state->ToPersistentData();
+		IncrementSegmentStart(persistent_data, row_group_start);
+
+		BinarySerializer serializer(data_writer, serialization_options);
+		serializer.Begin();
+		persistent_data.Serialize(serializer);
+		serializer.End();
+
+		writer.FinishWritingColumns();
+
+		// collect per-column extra blocks (excluding the start block)
+		vector<idx_t> col_extra_blocks;
+		for (auto &written_ptr : col_written_blocks) {
+			if (written_ptr.block_pointer != pointer.block_pointer) {
+				col_extra_blocks.push_back(written_ptr.block_pointer);
+			}
+		}
+		row_group_pointer.per_column_metadata_blocks.push_back(std::move(col_extra_blocks));
 	}
 
 	if (metadata_manager) {
