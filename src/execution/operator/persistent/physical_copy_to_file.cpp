@@ -416,6 +416,10 @@ public:
 	ClientContext &context;
 	CopyToFileGlobalState &copy_gstate;
 
+	//! Which columns/types to write to the file
+	vector<column_t> write_columns;
+	vector<LogicalType> write_types;
+
 	//! Partition/sort strategy with PhysicalOperator-like interface
 	const unique_ptr<const SortStrategy> sort_strategy;
 
@@ -702,21 +706,12 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 	collection->Seek(task.begin_idx, scan_state, scan_chunk);
 	D_ASSERT(task.begin_idx >= scan_state.current_row_index);
 
-	// Compute which columns to write out and then initialize the write chunk TODO: do this once in PartitionedCopy
-	vector<column_t> write_columns;
-	vector<LogicalType> write_types;
-	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
-	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
-		if (op.write_partition_columns || part_col_set.find(col_idx) == part_col_set.end()) {
-			write_columns.push_back(col_idx);
-			write_types.push_back(collection->Types()[col_idx]);
-		}
-	}
+	// Initialize the write chunk
 	DataChunk write_chunk;
-	write_chunk.Initialize(partitioned_copy.context, write_types);
+	write_chunk.Initialize(partitioned_copy.context, partitioned_copy.write_types);
 
 	// Initialize the append
-	auto batch = make_uniq<ColumnDataCollection>(partitioned_copy.context, write_types);
+	auto batch = make_uniq<ColumnDataCollection>(partitioned_copy.context, partitioned_copy.write_types);
 	ColumnDataAppendState append_state;
 	batch->InitializeAppend(append_state);
 
@@ -733,7 +728,7 @@ void PartitionedCopyHashGroup::Batch(const PartitionedCopyTask &task) {
 			}
 		}
 
-		write_chunk.ReferenceColumns(scan_chunk, write_columns);
+		write_chunk.ReferenceColumns(scan_chunk, partitioned_copy.write_columns);
 		batch->Append(append_state, write_chunk);
 		collection->Scan(scan_state, scan_chunk);
 	}
@@ -934,6 +929,13 @@ PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &
                                  CopyToFileGlobalState &copy_gstate_p)
     : op(op_p), context(context_p), copy_gstate(copy_gstate_p), sort_strategy(ConstructSortStrategy()), flushing(false),
       locals(0), combined(0), finalized(false) {
+	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
+	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
+		if (op.write_partition_columns || part_col_set.find(col_idx) == part_col_set.end()) {
+			write_columns.push_back(col_idx);
+			write_types.push_back(op.expected_types[col_idx]);
+		}
+	}
 }
 
 unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
