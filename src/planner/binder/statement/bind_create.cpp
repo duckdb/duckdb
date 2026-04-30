@@ -537,6 +537,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
 		TransformTriggerBody(*body_copy, create_trigger_info.event_type);
 
+		// Inject a dummy __duckdb_trigger_base CTE so the binder can validate the transformed body
 		auto base_select = make_uniq<SelectNode>();
 		base_select->select_list.push_back(make_uniq<StarExpression>());
 		auto table_ref = make_uniq<BaseTableRef>();
