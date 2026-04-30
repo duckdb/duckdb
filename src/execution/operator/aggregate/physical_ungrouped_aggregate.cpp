@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
@@ -654,6 +655,7 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
 		aggregate.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
 		                                              result.data[column_offset + aggr_idx], 1, 0);
+		FlatVector::SetSize(result.data[column_offset + aggr_idx], count_t(1));
 	}
 }
 

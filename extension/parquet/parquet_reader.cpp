@@ -1413,13 +1413,20 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_chunk = row_group.columns[primary_index];
 
-		if (column_chunk.__isset.meta_data && column_chunk.meta_data.__isset.statistics &&
-		    column_chunk.meta_data.statistics.__isset.is_min_value_exact &&
-		    column_chunk.meta_data.statistics.__isset.is_max_value_exact) {
-			const auto &stats = column_chunk.meta_data.statistics;
-			return stats.is_min_value_exact && stats.is_max_value_exact;
+		if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
+			return false;
 		}
-		return false;
+		const auto &col_stats = column_chunk.meta_data.statistics;
+		if (col_stats.__isset.is_min_value_exact && col_stats.__isset.is_max_value_exact) {
+			return col_stats.is_min_value_exact && col_stats.is_max_value_exact;
+		}
+		// Pre-PARQUET-2352 (Oct 2023) the spec required min/max, when present, to be the exact
+		// min/max; in practice some writers truncated long binary values, and PARQUET-2352 added
+		// is_*_value_exact so readers could detect that. Fixed-width physical types are not
+		// subject to such truncation, so when the flag is missing we mirror arrow-rs
+		// (parquet/src/file/statistics.rs ValueStatistics::new) and treat them as exact.
+		const auto t = column_chunk.meta_data.type;
+		return t != Type::BYTE_ARRAY && t != Type::FIXED_LEN_BYTE_ARRAY;
 	}
 };
 
@@ -1641,6 +1648,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		}
 	}
 
+	result.SetChildCardinality(result.size());
 	rows_read += scan_count;
 	state.offset_in_group += scan_count;
 	return SourceResultType::HAVE_MORE_OUTPUT;

@@ -766,7 +766,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"MapExpression <- 'MAP' MapStructExpression\n"
 	"MapStructExpression <- '{' List(MapStructField)? '}'\n"
 	"MapStructField <- Expression ':' Expression\n"
-	"GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))\n"
+	"GroupingExpression <- GroupingOrGroupingId Parens(List(Expression)?)\n"
 	"GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'\n"
 	"Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter\n"
 	"QuestionMarkNumberedParameter <- '?' NumberLiteral\n"

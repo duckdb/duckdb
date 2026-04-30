@@ -3,8 +3,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector_operations/senary_executor.hpp"
-#include "duckdb/common/vector_operations/septenary_executor.hpp"
+#include "duckdb/common/vector_operations/variadic_executor.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -115,25 +114,25 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		auto calendar = calendar_ptr.get();
 
 		// Three cases: no TZ, constant TZ, variable TZ
-		if (input.ColumnCount() == SenaryExecutor::NCOLS) {
-			SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(
+		if (input.ColumnCount() == 6) {
+			VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
 			    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 				    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
 			    });
 		} else {
-			D_ASSERT(input.ColumnCount() == SeptenaryExecutor::NCOLS);
+			D_ASSERT(input.ColumnCount() == 7);
 			auto &tz_vec = input.data.back();
 			if (tz_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 				if (ConstantVector::IsNull(tz_vec)) {
 					throw InternalException("ICUMakeTimestamp called with constant NULL tz");
 				}
 				SetTimeZone(calendar, *ConstantVector::GetData<string_t>(tz_vec));
-				SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(
+				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss) {
 					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);
 				    });
 			} else {
-				SeptenaryExecutor::Execute<T, T, T, T, T, double, string_t, timestamp_t>(
+				VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double, string_t>(
 				    input, result, [&](T yyyy, T mm, T dd, T hr, T mn, double ss, string_t tz_id) {
 					    SetTimeZone(calendar, tz_id);
 					    return Operation<T>(calendar, yyyy, mm, dd, hr, mn, ss);

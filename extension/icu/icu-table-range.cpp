@@ -226,6 +226,7 @@ struct ICUTableRange {
 				state.initialized_row = false;
 				continue;
 			}
+			FlatVector::SetSize(output.data[0], count_t(size));
 			output.SetCardinality(size);
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}

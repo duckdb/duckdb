@@ -491,7 +491,7 @@ string LogicalType::ToString() const {
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += KeywordHelper::WriteQuoted(EnumType::GetString(*this, i).GetString(), '\'');
+			ret += SQLString(EnumType::GetString(*this, i).GetString());
 		}
 		ret += ")";
 		return ret;
@@ -528,7 +528,7 @@ string LogicalType::ToString() const {
 			return "GEOMETRY";
 		}
 		auto &crs = GeoType::GetCRS(*this);
-		auto crs_text = KeywordHelper::WriteQuoted(crs.GetDefinition(), '\'');
+		auto crs_text = SQLString(crs.GetDefinition());
 		return StringUtil::Format("GEOMETRY(%s)", crs_text);
 	}
 	default:

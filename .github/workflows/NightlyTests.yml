@@ -55,7 +55,6 @@ jobs:
          python-version: '3.12'
 
      - name: Install Ninja
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -91,10 +90,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -175,7 +171,6 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install
-      shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -219,10 +214,7 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -334,7 +326,6 @@ jobs:
           path: duckdb-httpfs
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: actions/setup-python@v6
@@ -402,11 +393,7 @@ jobs:
          python-version: '3.12'
 
      - name: Install
-       shell: bash
-       run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
-        python3 scripts/ci/retry.py -- pip install requests
+       run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
 
@@ -470,7 +457,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -512,7 +498,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -629,7 +614,6 @@ jobs:
          fetch-depth: 0
 
      - name: Install
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -655,8 +639,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      - name: Install
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - name: Setup ccache
         uses: ./.github/actions/ccache-action

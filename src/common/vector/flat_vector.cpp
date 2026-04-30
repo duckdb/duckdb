@@ -7,7 +7,7 @@
 
 namespace duckdb {
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
 	if (capacity > 0) {
 		if (type_size == 0) {
@@ -18,23 +18,20 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capa
 		// resize the validity
 		validity.Resize(capacity);
 	}
-	v_size = 0ULL;
 }
 StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
       type_size(type_size_p), capacity(count) {
-	SetVectorSize(count);
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
       type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
 	if (count > capacity) {
 		throw InternalException("Count is out of range for capacity");
 	}
-	SetVectorSize(count);
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {

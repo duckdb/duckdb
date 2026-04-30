@@ -31,10 +31,10 @@ string AttachInfo::ToString() const {
 	if (parsed_path) {
 		result += parsed_path->ToString();
 	} else {
-		result += KeywordHelper::WriteQuoted(path, '\'');
+		result += SQLString(path);
 	}
 	if (!name.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
+		result += " AS " + SQLIdentifier(name);
 	}
 	if (!parsed_options.empty() || !options.empty()) {
 		vector<string> stringified;

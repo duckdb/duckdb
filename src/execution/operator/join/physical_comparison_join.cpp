@@ -138,6 +138,7 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 			for (idx_t i = 0; i < result.size(); i++) {
 				mark_data.WriteValue(false);
 			}
+			FlatVector::SetSize(mark_vector, result.size());
 		} else {
 			FlatVector::ValidityMutable(mark_vector).SetAllInvalid(result.size());
 			FlatVector::SetSize(mark_vector, result.size());

@@ -69,17 +69,10 @@ rm $ext.append
 
 set -e
 
-# Abort if AWS key is not set
-if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-    echo "No AWS key found, skipping.."
-    rm "$ext.compressed"
-    exit 0
-fi
-
 if ! command -v rclone >/dev/null 2>&1; then
     case "$(uname -s)" in
       MINGW*|MSYS*|CYGWIN*)
-        choco install rclone -y
+        choco install rclone -y --limit-output --no-progress
         ;;
       *)
         install_runner=(bash)
@@ -97,6 +90,17 @@ if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   DRY_RUN_PARAM=""
 fi
 
+# Abort if credentials are not set
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+    echo "Missing AWS credentials: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required"
+    rm "$ext.compressed"
+    if [ "$DRY_RUN_PARAM" == "" ]; then
+      exit 1
+    else
+      exit 0
+    fi
+fi
+
 dest_extension="gz"
 extra_upload_args=()
 if [[ $4 == wasm* ]]; then
@@ -109,11 +113,26 @@ fi
 
 upload_extension() {
   local destination="$1"
+  local s3_provider="${S3_PROVIDER:-AWS}"
+  if [[ "${AWS_ENDPOINT_URL}" == *"r2.cloudflarestorage.com"* ]]; then
+    s3_provider="Cloudflare"
+  fi
+  local rclone_s3_args=(
+    --s3-provider "${s3_provider}"
+    --s3-endpoint "${AWS_ENDPOINT_URL}"
+  )
+
+  set -x
   rclone $DRY_RUN_PARAM copyto \
-    --s3-acl public-read \
+    --no-traverse \
+    --ignore-times \
+    --ignore-checksum \
+    --s3-no-check-bucket \
+    --s3-no-head \
+    "${rclone_s3_args[@]}" \
     "${extra_upload_args[@]}" \
     "$ext.compressed" \
-    ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:${destination}"
+    ":s3,env_auth=true:${destination}"
 }
 
 # upload versioned version
