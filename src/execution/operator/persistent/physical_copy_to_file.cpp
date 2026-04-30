@@ -252,6 +252,11 @@ struct PartitionWriteInfo {
 	idx_t active_writes = 0;
 };
 
+struct CreatePartitionFileStateResult {
+	unique_ptr<GlobalFileState> file_state;
+	vector<unique_ptr<GlobalFileState>> files_to_finalize;
+};
+
 struct PartitionedCopyBatchState {
 	vector<Value> values;
 	optional_ptr<PartitionWriteInfo> write_info;
@@ -408,8 +413,9 @@ public:
 	PartitionWriteInfo &GetPartitionWriteInfo(const vector<Value> &values) DUCKDB_EXCLUDES(active_writes_lock);
 	unique_ptr<GlobalFileState> CreatePartitionFileState(const vector<Value> &values)
 	    DUCKDB_EXCLUDES(active_writes_lock);
-	unique_ptr<GlobalFileState> CreatePartitionFileStateLocked(const vector<Value> &values)
+	CreatePartitionFileStateResult CreatePartitionFileStateLocked(const vector<Value> &values)
 	    DUCKDB_REQUIRES(active_writes_lock);
+	void FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) DUCKDB_EXCLUDES(active_writes_lock);
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
@@ -444,8 +450,7 @@ public:
 	shared_ptr<PartitionedCopyState> sinking_state DUCKDB_GUARDED_BY(lock);
 	shared_ptr<PartitionedCopyState> flushing_state DUCKDB_GUARDED_BY(lock);
 
-	//! Fine-grained lock for partition write tracking. May be held while acquiring CopyToFileGlobalState::lock.
-	//! Do not acquire active_writes_lock while holding CopyToFileGlobalState::lock.
+	//! Fine-grained lock for partition write tracking
 	mutable annotated_mutex active_writes_lock;
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_writes DUCKDB_GUARDED_BY(active_writes_lock);
@@ -1201,50 +1206,68 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 		should_finalize_writes = finalized && !sinking_state;
 	}
 	if (should_finalize_writes) {
-		annotated_lock_guard<annotated_mutex> aw_guard(active_writes_lock);
-		for (auto &entry : active_writes) {
-			copy_gstate.FinalizeFileState(std::move(entry.second->file_state));
+		vector<unique_ptr<GlobalFileState>> files_to_finalize;
+		{
+			annotated_lock_guard<annotated_mutex> aw_guard(active_writes_lock);
+			for (auto &entry : active_writes) {
+				files_to_finalize.push_back(std::move(entry.second->file_state));
+			}
+			active_writes.clear();
 		}
+		FinalizeFileStates(std::move(files_to_finalize));
 	}
 }
 
 PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &values) {
-	annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-	// check if we have already started writing this partition
-	auto active_write_entry = active_writes.find(values);
-	if (active_write_entry != active_writes.end()) {
-		// we have - continue writing in this partition
-		active_write_entry->second->active_writes++;
-		return *active_write_entry->second;
+	PartitionWriteInfo *result;
+	vector<unique_ptr<GlobalFileState>> files_to_finalize;
+	{
+		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
+		// check if we have already started writing this partition
+		auto active_write_entry = active_writes.find(values);
+		if (active_write_entry != active_writes.end()) {
+			// we have - continue writing in this partition
+			active_write_entry->second->active_writes++;
+			result = active_write_entry->second.get();
+		} else {
+			auto info = make_uniq<PartitionWriteInfo>();
+			auto create_result = CreatePartitionFileStateLocked(values);
+			info->file_state = std::move(create_result.file_state);
+			files_to_finalize = std::move(create_result.files_to_finalize);
+			result = info.get();
+
+			info->active_writes = 1;
+			// store in active write map
+			active_writes.insert(make_pair(values, std::move(info)));
+		}
 	}
 
-	auto info = make_uniq<PartitionWriteInfo>();
-	info->file_state = CreatePartitionFileStateLocked(values);
-	auto &result = *info;
-
-	info->active_writes = 1;
-	// store in active write map
-	active_writes.insert(make_pair(values, std::move(info)));
-
-	return result;
+	FinalizeFileStates(std::move(files_to_finalize));
+	return *result;
 }
 
 unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vector<Value> &values) {
-	annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-	return CreatePartitionFileStateLocked(values);
+	CreatePartitionFileStateResult result;
+	{
+		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
+		result = CreatePartitionFileStateLocked(values);
+	}
+	FinalizeFileStates(std::move(result.files_to_finalize));
+	return std::move(result.file_state);
 }
 
-unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateLocked(const vector<Value> &values) {
+CreatePartitionFileStateResult PartitionedCopy::CreatePartitionFileStateLocked(const vector<Value> &values) {
+	CreatePartitionFileStateResult result;
 	idx_t offset = 0;
 	// check if we need to close any writers before we can continue
 	if (active_writes.size() >= Settings::Get<PartitionedWriteMaxOpenFilesSetting>(context)) {
 		// we need to! try to close writers
-		for (auto &entry : active_writes) {
-			if (entry.second->active_writes == 0) {
+		for (auto it = active_writes.begin(); it != active_writes.end(); ++it) {
+			if (it->second->active_writes == 0) {
 				// we can evict this entry - evict the partition
-				copy_gstate.FinalizeFileState(std::move(entry.second->file_state));
-				++previous_partitions[entry.first];
-				active_writes.erase(entry.first);
+				result.files_to_finalize.push_back(std::move(it->second->file_state));
+				++previous_partitions[it->first];
+				active_writes.erase(it);
 				break;
 			}
 		}
@@ -1277,7 +1300,16 @@ unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateLocked(cons
 		}
 	}
 	// Initialize write
-	return copy_gstate.CreateFileState(full_path, values);
+	result.file_state = copy_gstate.CreateFileState(full_path, values);
+	return result;
+}
+
+void PartitionedCopy::FinalizeFileStates(vector<unique_ptr<GlobalFileState>> files_to_finalize) {
+	for (auto &file_state : files_to_finalize) {
+		if (file_state) {
+			copy_gstate.FinalizeFileState(std::move(file_state));
+		}
+	}
 }
 
 string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &values) {
