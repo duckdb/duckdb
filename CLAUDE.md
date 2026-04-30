@@ -242,6 +242,7 @@ DUCKDB_EXTENSIONS='json;icu' make
 - Use `const` references for non-trivial objects
 - Use C++11 range-based for loops when possible
 - Always use braces for if statements and loops
+- Never use `const_cast`
 
 ### Naming Conventions
 - **Files**: `snake_case` (e.g., `abstract_operator.cpp`)
