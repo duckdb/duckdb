@@ -36,7 +36,7 @@ ARTConflictType ARTBuilder::Build() {
 			}
 
 			reference<Node> ref(entry.node);
-			auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
+			auto count = UnsafeNumericCast<idx_t>(start.len - prefix_depth);
 			Prefix::New(art, ref, start, prefix_depth, count);
 
 			// Inline the row ID.

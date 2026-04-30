@@ -3,9 +3,6 @@
 # group: [nodes]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers AS SELECT range a, 1 AS b, 1 AS c FROM range(1024)
 
 statement ok
@@ -102,7 +99,7 @@ DROP TABLE integers
 
 # test insertion after matching prefixes
 
-load __TEST_DIR__/test_index.db
+load {TEST_DIR}/test_index.db
 
 statement ok
 CREATE TABLE tbl_leaf_cov (id INTEGER);
@@ -135,7 +132,7 @@ CREATE INDEX idx_point ON tbl_grow_shrink(id_point);
 loop i 0 29
 
 statement ok
-INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, ${i});
+INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, {i});
 
 query I
 SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
@@ -148,7 +145,7 @@ SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_gro
 2
 
 query I
-SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = {i};
 ----
 1
 
@@ -165,7 +162,7 @@ SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_gro
 2
 
 query I
-SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = {i};
 ----
 1
 
@@ -210,7 +207,7 @@ SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_gro
 2
 
 query I
-SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = {i};
 ----
 1
 

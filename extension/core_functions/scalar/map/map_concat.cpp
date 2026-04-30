@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -36,7 +37,7 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
 		// All inputs are NULL, just return NULL
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		validity.SetInvalid(0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
@@ -50,13 +51,11 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		auto &map = args.data[i];
 		map.ToUnifiedFormat(count, map_formats[i]);
 	}
-	auto result_data = FlatVector::GetData<list_entry_t>(result);
-
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		// Loop through all the maps per list
 		// we cant do better because all the entries of the child vector have to be contiguous
 		// so we cant start the next row before we have finished the one before it
-		auto &result_entry = result_data[i];
 		vector<MapKeyIndexPair> index_to_map;
 		vector<Value> keys_list;
 		bool all_null = true;
@@ -94,8 +93,7 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			}
 		}
 
-		result_entry.offset = ListVector::GetListSize(result);
-		result_entry.length = keys_list.size();
+		result_data.WriteValue(list_entry_t(ListVector::GetListSize(result), keys_list.size()));
 		if (all_null) {
 			D_ASSERT(keys_list.empty() && index_to_map.empty());
 			FlatVector::SetNull(result, i, true);
@@ -116,11 +114,6 @@ void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			ListVector::PushBack(result, list_entry);
 		}
 	}
-
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
 }
 
 bool IsEmptyMap(const LogicalType &map) {
@@ -130,16 +123,17 @@ bool IsEmptyMap(const LogicalType &map) {
 	return key_type.id() == LogicalType::SQLNULL && value_type.id() == LogicalType::SQLNULL;
 }
 
-unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &bound_function,
-                                       vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	auto arg_count = arguments.size();
 	if (arg_count < 2) {
 		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
 	}
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		// Prepared statement
-		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+		bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 		return nullptr;
 	}
@@ -150,10 +144,10 @@ unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &b
 	// Check and verify that all the maps are of the same type
 	for (idx_t i = 0; i < arg_count; i++) {
 		auto &arg = arguments[i];
-		auto &map = arg->return_type;
+		auto &map = arg->GetReturnType();
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
-			bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+			bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 			bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 			return nullptr;
 		}
@@ -192,7 +186,7 @@ ScalarFunction MapConcatFun::GetFunction() {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	return fun;
 }
 

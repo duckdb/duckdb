@@ -11,9 +11,6 @@ SET Calendar = 'gregorian';
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
-statement ok
-PRAGMA enable_verification
-
 # Parse TZ
 query I
 select strptime('2022-03-05 17:59:17.877 CST', '%Y-%m-%d %H:%M:%S.%g %Z');
@@ -48,17 +45,17 @@ select strptime('2022-03-05 17:59:17.123456789 CST', '%Y-%m-%d %H:%M:%S.%n %Z');
 foreach func strptime try_strptime
 
 query I
-select ${func}('infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
+select {func}('infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 infinity
 
 query I
-select ${func}('-infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
+select {func}('-infinity', '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 -infinity
 
 query I
-select ${func}('epoch', '%Y-%m-%d %H:%M:%S.%g %Z');
+select {func}('epoch', '%Y-%m-%d %H:%M:%S.%g %Z');
 ----
 1969-12-31 16:00:00-08
 
@@ -235,7 +232,7 @@ foreach func strptime try_strptime
 
 # Full zone names
 query II
-SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT {func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -280,7 +277,7 @@ ORDER BY ALL
 
 # Abbreviations
 query II
-SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
+SELECT {func}('2022-03-05 17:59:17.877 ' || tz_name, '%Y-%m-%d %H:%M:%S.%g %Z') tstz, tz_name
 FROM abbrevs
 ORDER BY ALL
 ----
@@ -329,7 +326,7 @@ ORDER BY ALL
 
 # These should be TSTZs because there is an offset specified.
 query II
-SELECT ${func}('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
+SELECT {func}('2022-03-05 17:59:17.877 ' || utc_offset, '%Y-%m-%d %H:%M:%S.%g %z') tstz, utc_offset
 FROM offsets
 ORDER BY tstz
 ----
@@ -378,7 +375,7 @@ ORDER BY tstz
 
 # First fails
 query II
-SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, ['%m/%d/%Y  %H:%M:%S.%g %Z', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
+SELECT {func}('2022-03-05 17:59:17.877 ' || tz_name, ['%m/%d/%Y  %H:%M:%S.%g %Z', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -423,7 +420,7 @@ ORDER BY ALL
 
 # First has no TZ
 query II
-SELECT ${func}('2022-03-05 17:59:17.877 ' || tz_name, ['%Y-%m-%d %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
+SELECT {func}('2022-03-05 17:59:17.877 ' || tz_name, ['%Y-%m-%d %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g %Z']) tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----
@@ -468,7 +465,7 @@ ORDER BY ALL
 
 # Neither has TZ - should be TS not TSTZ
 query II
-SELECT ${func}('2022-03-05 17:59:17.877', ['%m/%d/%Y  %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g']) tstz, tz_name
+SELECT {func}('2022-03-05 17:59:17.877', ['%m/%d/%Y  %H:%M:%S.%g', '%Y-%m-%d %H:%M:%S.%g']) tstz, tz_name
 FROM zones
 ORDER BY ALL
 ----

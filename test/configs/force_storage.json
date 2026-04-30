@@ -31,6 +31,12 @@
       ]
     },
     {
+      "reason": "VARIANT storage requires a newer storage version than this configuration uses",
+      "paths": [
+        "test/sql/storage/types/variant/extension_types.test"
+      ]
+    },
+    {
       "reason": "Measures memory usage.",
       "paths": [
         "test/sql/delete/in_memory_bulk_delete.test_slow",
@@ -38,6 +44,30 @@
         "test/sql/index/art/vacuum/test_art_vacuum_strings.test_slow",
         "test/sql/index/art/vacuum/test_art_vacuum_integers.test_slow"
       ]
+    },
+    {
+      "reason": "Requires latest storage version.",
+      "paths": [
+        "test/geoparquet/mixed.test",
+        "test/parquet/variant/variant_comparison.test",
+        "test/parquet/variant/variant_json_copy.test",
+        "test/sql/storage/types/variant/index_fetch.test",
+        "test/sql/storage/types/variant/update.test",
+        "test/sql/types/geo/geometry_crs.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/sample/can_sample_from_ingested_files.test"
+      ]
+    },
+    {
+      "reason": "Trigger tests require v2.0.0 storage; force_storage uses default serialization version 1.",
+      "paths": [
+        "test/sql/trigger/create_trigger_catalog.test",
+        "test/sql/trigger/create_trigger_parse.test",
+        "test/sql/trigger/create_trigger_wal.test",
+        "test/sql/trigger/drop_trigger.test",
+        "test/sql/trigger/drop_trigger_wal.test"
+      ]
     }
+
   ]
 }

@@ -9,6 +9,7 @@
 #include "duckdb/common/arena_containers/arena_unordered_map.hpp"
 #include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ public:
 		return GetMap<TYPE>().empty();
 	}
 
-	void Insert(const idx_t original, const idx_t canonical) {
+	void Insert(const ProjectionIndex original, const ProjectionIndex canonical) {
 		D_ASSERT(to_canonical.find(original) == to_canonical.end());
 		D_ASSERT(restore_original.find(canonical) == restore_original.end());
 		to_canonical.emplace(make_pair(original, canonical));
@@ -40,21 +41,21 @@ public:
 	}
 
 	template <ConversionType TYPE>
-	idx_t Get(const idx_t index) const {
+	ProjectionIndex Get(const ProjectionIndex index) const {
 		D_ASSERT(!Empty<TYPE>());
 		return GetMap<TYPE>().at(index);
 	}
 
 private:
 	template <ConversionType TYPE>
-	const arena_unordered_map<idx_t, idx_t> &GetMap() const {
+	const arena_unordered_map<ProjectionIndex, ProjectionIndex> &GetMap() const {
 		return TYPE == ConversionType::TO_CANONICAL ? to_canonical : restore_original;
 	}
 
 private:
 	//! Map from original column index to canonical column index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical;
-	arena_unordered_map<idx_t, idx_t> restore_original;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> to_canonical;
+	arena_unordered_map<ProjectionIndex, ProjectionIndex> restore_original;
 };
 
 class PlanSignatureTableIndexMap {
@@ -65,7 +66,7 @@ public:
 	}
 
 public:
-	const arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> &GetMap() const {
+	const arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> &GetMap() const {
 		return table_index_map;
 	}
 
@@ -100,7 +101,7 @@ private:
 					if (it != to_canonical_table_index.end()) {
 						continue; // We've seen this table index before
 					}
-					const auto canonical = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size();
+					TableIndex canonical(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size());
 					D_ASSERT(to_canonical_table_index.find(original) == to_canonical_table_index.end());
 					D_ASSERT(restore_original_table_index.find(canonical) == restore_original_table_index.end());
 					to_canonical_table_index.emplace(make_pair(original, canonical));
@@ -147,7 +148,7 @@ private:
 			auto &aggr = op.Cast<LogicalAggregate>();
 			ConvertTableIndex<TYPE>(aggr.group_index, 0);
 			ConvertTableIndex<TYPE>(aggr.aggregate_index, 1);
-			if (aggr.groupings_index != DConstants::INVALID_INDEX) {
+			if (aggr.groupings_index.IsValid()) {
 				ConvertTableIndex<TYPE>(aggr.groupings_index, 2);
 			}
 			break;
@@ -223,14 +224,14 @@ private:
 	}
 
 	template <ConversionType TYPE>
-	void ConvertTableIndex(idx_t &table_index, const idx_t i) {
+	void ConvertTableIndex(TableIndex &table_index, const idx_t i) {
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
 			D_ASSERT(table_indices.size() == i);
 			D_ASSERT(table_index_map.find(table_index) == table_index_map.end());
 			table_index_map.emplace(table_index, PlanSignatureColumnIndexMap(allocator));
 			table_indices.emplace_back(table_index);
-			table_index = CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i;
+			table_index = TableIndex(CANONICAL_TABLE_INDEX_OFFSET + to_canonical_table_index.size() + i);
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			table_index = table_indices[i];
@@ -268,12 +269,12 @@ private:
 				auto &column_index_map = table_index_map.at(table_indices[0]);
 				if (projection_ids.empty()) {
 					for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-						const auto primary_index = column_ids[col_idx].GetPrimaryIndex();
-						column_index_map.Insert(col_idx, primary_index);
+						ProjectionIndex primary_index(column_ids[col_idx].GetPrimaryIndex());
+						column_index_map.Insert(ProjectionIndex(col_idx), primary_index);
 					}
 				} else {
 					for (const auto &proj_id : projection_ids) {
-						const auto primary_index = column_ids[proj_id].GetPrimaryIndex();
+						ProjectionIndex primary_index(column_ids[proj_id].GetPrimaryIndex());
 						column_index_map.Insert(proj_id, primary_index);
 					}
 				}
@@ -315,11 +316,11 @@ private:
 		});
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
-			for (auto &entry : get.table_filters.filters) {
-				if (entry.second->filter_type != TableFilterType::EXPRESSION_FILTER) {
+			for (auto &entry : get.table_filters) {
+				if (entry.Filter().filter_type != TableFilterType::EXPRESSION_FILTER) {
 					continue;
 				}
-				auto &expression_filter = entry.second->Cast<ExpressionFilter>();
+				auto &expression_filter = entry.Filter().Cast<ExpressionFilter>();
 				ConvertExpression<TYPE>(*expression_filter.expr, info_idx, can_materialize);
 			}
 		}
@@ -349,14 +350,14 @@ private:
 		// Replace default fields
 		switch (TYPE) {
 		case ConversionType::TO_CANONICAL:
-			expression_info.emplace_back(std::move(expr.alias), expr.query_location);
-			expr.alias.clear();
-			expr.query_location.SetInvalid();
+			expression_info.emplace_back(expr.GetAlias(), expr.GetQueryLocation());
+			expr.ClearAlias();
+			expr.SetQueryLocation(optional_idx());
 			break;
 		case ConversionType::RESTORE_ORIGINAL:
 			auto &info = expression_info[info_idx++];
-			expr.alias = std::move(info.first);
-			expr.query_location = info.second;
+			expr.SetAlias(std::move(info.first));
+			expr.SetQueryLocation(info.second);
 			break;
 		}
 		if (expr.IsVolatile()) {
@@ -372,19 +373,19 @@ private:
 	ArenaAllocator &allocator;
 
 	//! Map from original table index to column index map
-	arena_unordered_map<idx_t, PlanSignatureColumnIndexMap> table_index_map;
+	arena_unordered_map<TableIndex, PlanSignatureColumnIndexMap> table_index_map;
 
 	//! Temporary map from original table index to canonical table index (and reverse)
-	arena_unordered_map<idx_t, idx_t> to_canonical_table_index;
-	arena_unordered_map<idx_t, idx_t> restore_original_table_index;
+	arena_unordered_map<TableIndex, TableIndex> to_canonical_table_index;
+	arena_unordered_map<TableIndex, TableIndex> restore_original_table_index;
 	//! Temporary vector to store table indices
-	vector<idx_t> table_indices;
+	vector<TableIndex> table_indices;
 	//! Temporary vector to store projection maps
-	vector<vector<idx_t>> projection_maps;
+	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
 	vector<ColumnIndex> column_ids;
-	vector<idx_t> projection_ids;
+	vector<ProjectionIndex> projection_ids;
 	vector<pair<string, optional_idx>> expression_info;
 	vector<unique_ptr<LogicalOperator>> children;
 };
@@ -797,6 +798,28 @@ public:
 				col_names.emplace_back(StringUtil::Format("%s_col_%llu", cte_name, i + 1));
 			}
 			const auto &primary_subplan_bindings = primary_subplan.canonical_bindings;
+			column_binding_map_t<idx_t> primary_binding_index;
+			for (idx_t i = 0; i < primary_subplan_bindings.size(); i++) {
+				primary_binding_index.emplace(primary_subplan_bindings[i], i);
+			}
+			vector<vector<idx_t>> cte_column_indexes(subplan_info.subplans.size());
+			vector<bool> needs_projection(subplan_info.subplans.size(), false);
+			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
+				const auto &subplan = subplan_info.subplans[subplan_idx];
+				const auto &canonical_bindings = subplan.canonical_bindings;
+				cte_column_indexes[subplan_idx].reserve(canonical_bindings.size());
+				needs_projection[subplan_idx] = canonical_bindings.size() != types.size();
+				for (idx_t i = 0; i < canonical_bindings.size(); i++) {
+					const auto &cb = canonical_bindings[i];
+					const auto entry = primary_binding_index.find(cb);
+					D_ASSERT(entry != primary_binding_index.end()); // guaranteed by FilterSubplans
+					const auto cte_col_idx = entry->second;
+					// Types must match: same canonical binding = same base column = same type
+					D_ASSERT(subplan.op.get()->types[i] == types[cte_col_idx]);
+					cte_column_indexes[subplan_idx].push_back(cte_col_idx);
+					needs_projection[subplan_idx] = needs_projection[subplan_idx] || cte_col_idx != i;
+				}
+			}
 
 			// Create CTE refs and figure out column binding replacements
 			vector<unique_ptr<LogicalOperator>> cte_refs;
@@ -810,20 +833,13 @@ public:
 				}
 				const auto old_bindings = subplan.op.get()->GetColumnBindings();
 				auto new_bindings = cte_refs.back()->GetColumnBindings();
-				if (old_bindings.size() != new_bindings.size()) {
-					// Different number of output columns - project columns out
-					const auto &canonical_bindings = subplan.canonical_bindings;
+				if (needs_projection[subplan_idx]) {
+					// Preserve each subplan's original output order when it differs from the
+					// primary materialized CTE.
 					vector<unique_ptr<Expression>> select_list;
-					for (auto &cb : canonical_bindings) {
-						idx_t cte_col_idx = 0;
-						for (; cte_col_idx < primary_subplan_bindings.size(); cte_col_idx++) {
-							if (cb == primary_subplan_bindings[cte_col_idx]) {
-								break;
-							}
-						}
-						D_ASSERT(cte_col_idx < primary_subplan_bindings.size());
+					for (auto cte_col_idx : cte_column_indexes[subplan_idx]) {
 						select_list.emplace_back(make_uniq<BoundColumnRefExpression>(
-						    types[cte_col_idx], ColumnBinding(cte_ref_index, cte_col_idx)));
+						    types[cte_col_idx], ColumnBinding(cte_ref_index, ProjectionIndex(cte_col_idx))));
 					}
 
 					// Place the projection on top
@@ -841,9 +857,21 @@ public:
 
 			// Create the materialized CTE and replace the common subplans with references to it
 			auto &lowest_common_ancestor = subplan_info.lowest_common_ancestor.get();
-			auto cte = make_uniq<LogicalMaterializedCTE>(
-			    cte_name, cte_index, types.size(), std::move(primary_subplan.op.get()),
-			    std::move(lowest_common_ancestor), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+			const auto materialized_column_count = types.size();
+			auto materialized_subplan = std::move(primary_subplan.op.get());
+			auto remainder = std::move(lowest_common_ancestor);
+			vector<unique_ptr<Expression>> materialized_select_list;
+			const auto materialized_bindings = materialized_subplan->GetColumnBindings();
+			for (idx_t i = 0; i < materialized_bindings.size(); i++) {
+				materialized_select_list.emplace_back(
+				    make_uniq<BoundColumnRefExpression>(types[i], materialized_bindings[i]));
+			}
+			auto materialized_projection = make_uniq<LogicalProjection>(optimizer.binder.GenerateTableIndex(),
+			                                                            std::move(materialized_select_list));
+			materialized_projection->children.emplace_back(std::move(materialized_subplan));
+			auto cte = make_uniq<LogicalMaterializedCTE>(cte_name, cte_index, materialized_column_count,
+			                                             std::move(materialized_projection), std::move(remainder),
+			                                             CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 			for (idx_t subplan_idx = 0; subplan_idx < subplan_info.subplans.size(); subplan_idx++) {
 				const auto &subplan = subplan_info.subplans[subplan_idx];
 				subplan.op.get() = std::move(cte_refs[subplan_idx]);
@@ -863,7 +891,7 @@ public:
 				auto &rhs_child = current_op.get()->children[1];
 				if (rhs_child->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 					const auto child_table_index = rhs_child->Cast<LogicalMaterializedCTE>().table_index;
-					if (child_table_index >= min_cte_idx.GetIndex() && child_table_index < cte_index) {
+					if (child_table_index >= min_cte_idx && child_table_index < cte_index) {
 						auto tmp = std::move(rhs_child->children[1]);
 						rhs_child->children[1] = std::move(current_op.get());
 						current_op.get() = std::move(rhs_child);
@@ -1004,9 +1032,9 @@ private:
 	//! Mapping from subplan signature to subplan information
 	subplan_map_t subplans;
 	//! Mapping from original table index to canonical table index
-	unordered_map<idx_t, idx_t> to_canonical_table_index;
+	unordered_map<TableIndex, TableIndex> to_canonical_table_index;
 	//! Minimum CTE index created by this optimizer
-	optional_idx min_cte_idx;
+	TableIndex min_cte_idx;
 };
 
 //===--------------------------------------------------------------------===//

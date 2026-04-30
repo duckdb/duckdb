@@ -14,7 +14,10 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/projection_index.hpp"
+#include "duckdb/common/table_index.hpp"
 
 namespace duckdb {
 
@@ -183,6 +186,14 @@ struct is_atomic<std::atomic<T>> : std::true_type {
 	typedef T TYPE;
 };
 
+template <typename T>
+struct is_duckdb_optional : std::false_type {};
+
+template <typename T>
+struct is_duckdb_optional<optional<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
 // NOLINTEND
 
 struct SerializationDefaultValue {
@@ -336,6 +347,37 @@ struct SerializationDefaultValue {
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, optional_idx>::value, T>::type &value) {
 		return !value.IsValid();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_duckdb_optional<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_duckdb_optional<T>::value, T>::type &value) {
+		return !value.IsValid();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type GetDefault() {
+		return TableIndex(0);
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, TableIndex>::value, T>::type &value) {
+		return value.index == 0;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, ProjectionIndex>::value, T>::type GetDefault() {
+		return ProjectionIndex(0);
+	}
+
+	template <typename T = void>
+	static inline bool
+	IsDefault(const typename std::enable_if<std::is_same<T, ProjectionIndex>::value, T>::type &value) {
+		return value.GetIndexUnsafe() == 0;
 	}
 };
 

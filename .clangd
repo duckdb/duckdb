@@ -1,3 +1,11 @@
 CompileFlags:
-  CompilationDatabase: build/clangd
+  CompilationDatabase: .cache/clangd
   Add: -Wno-unqualified-std-cast-call
+
+# Keep this list in sync with tidy-check-diff exclusions in the Makefile.
+---
+If:
+  PathMatch: ^(tools|extension|test|benchmark|third_party|src/common/adbc|src/main/capi)/.*
+Diagnostics:
+  ClangTidy:
+    Remove: '*'

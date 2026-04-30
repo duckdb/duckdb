@@ -103,21 +103,20 @@ void TableIndexList::RemoveIndex(const string &name) {
 			if (!index.IsBound()) {
 				unbound_count--;
 			}
+			index.ResetStorage();
 			index_entries.erase_at(i);
 			return;
 		}
 	}
 }
 
-void TableIndexList::CommitDrop(const string &name) {
+unordered_set<string> TableIndexList::DistinctIndexTypes() const {
 	lock_guard<mutex> lock(index_entries_lock);
+	unordered_set<string> result;
 	for (auto &entry : index_entries) {
-		auto &index = *entry->index;
-		if (index.GetIndexName() == name) {
-			index.CommitDrop();
-			return;
-		}
+		result.insert(entry->index->GetIndexType());
 	}
+	return result;
 }
 
 bool TableIndexList::NameIsUnique(const string &name) {
@@ -206,7 +205,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 
 		// Add the table to the binder.
 		vector<ColumnIndex> dummy_column_ids;
-		binder->bind_context.AddBaseTable(0, string(), column_names, column_types, dummy_column_ids, table);
+		binder->bind_context.AddBaseTable(TableIndex(0), string(), column_names, column_types, dummy_column_ids, table);
 
 		// Create an IndexBinder to bind the index
 		IndexBinder idx_binder(*binder, context);
@@ -354,28 +353,34 @@ void TableIndexList::MergeCheckpointDeltas(transaction_t checkpoint_id) {
 		}
 		lock_guard<mutex> guard(entry->lock);
 		auto &bound_index = index.Cast<BoundIndex>();
-		auto &art = bound_index.Cast<ART>();
-
-		if (entry->removed_data_during_checkpoint) {
-			art.RemovalMerge(*entry->removed_data_during_checkpoint);
-		}
-		if (entry->added_data_during_checkpoint) {
-			// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
-			// this is necessary due to the way that data is inserted into indexes during transaction commit
-			// essentially we always FIRST insert data into the index, THEN remove data
-			// even if the data was logically removed first
-			// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
-			// we will FIRST insert 42, THEN delete 42 from the index
-			// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
-			auto error = art.InsertMerge(*entry->added_data_during_checkpoint, IndexAppendMode::INSERT_DUPLICATES);
-			if (error.HasError()) {
-				throw InternalException("Failed to append while merging checkpoint deltas - this "
-				                        "signifies a bug or broken index: %s",
-				                        error.Message());
+		if (entry->removed_data_during_checkpoint || entry->added_data_during_checkpoint) {
+			if (bound_index.GetIndexType() != ART::TYPE_NAME) {
+				throw InternalException("Concurrent changes made to a non-ART index");
 			}
+
+			auto &art = bound_index.Cast<ART>();
+
+			if (entry->removed_data_during_checkpoint) {
+				art.RemovalMerge(*entry->removed_data_during_checkpoint);
+			}
+			if (entry->added_data_during_checkpoint) {
+				// NOTE: we insert duplicates here (IndexAppendMode::INSERT_DUPLICATES)
+				// this is necessary due to the way that data is inserted into indexes during transaction commit
+				// essentially we always FIRST insert data into the index, THEN remove data
+				// even if the data was logically removed first
+				// i.e. if we have a transaction like: DELETE FROM tbl WHERE i=42; INSERT INTO tbl VALUES (42);
+				// we will FIRST insert 42, THEN delete 42 from the index
+				// We plan to change this in the future - see https://github.com/duckdblabs/duckdb-internal/issues/6886
+				auto error = art.InsertMerge(*entry->added_data_during_checkpoint, IndexAppendMode::INSERT_DUPLICATES);
+				if (error.HasError()) {
+					throw InternalException("Failed to append while merging checkpoint deltas - this "
+					                        "signifies a bug or broken index: %s",
+					                        error.Message());
+				}
+			}
+			entry->removed_data_during_checkpoint.reset();
+			entry->added_data_during_checkpoint.reset();
 		}
-		entry->removed_data_during_checkpoint.reset();
-		entry->added_data_during_checkpoint.reset();
 		entry->last_written_checkpoint = checkpoint_id;
 	}
 }

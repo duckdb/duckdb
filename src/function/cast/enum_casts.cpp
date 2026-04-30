@@ -85,13 +85,13 @@ static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParam
 	auto &cast_data = parameters.cast_data->Cast<EnumBoundCastData>();
 	auto result = make_uniq<EnumCastLocalState>();
 
-	if (cast_data.from_varchar_cast.init_local_state) {
-		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);
-		result->from_varchar_local = cast_data.from_varchar_cast.init_local_state(from_varchar_params);
+	if (cast_data.from_varchar_cast.HasInitLocalState()) {
+		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.GetCastData());
+		result->from_varchar_local = cast_data.from_varchar_cast.InitLocalState(from_varchar_params);
 	}
-	if (cast_data.to_varchar_cast.init_local_state) {
-		CastLocalStateParameters from_varchar_params(parameters, cast_data.to_varchar_cast.cast_data);
-		result->from_varchar_local = cast_data.to_varchar_cast.init_local_state(from_varchar_params);
+	if (cast_data.to_varchar_cast.HasInitLocalState()) {
+		CastLocalStateParameters to_varchar_params(parameters, cast_data.to_varchar_cast.GetCastData());
+		result->to_varchar_local = cast_data.to_varchar_cast.InitLocalState(to_varchar_params);
 	}
 	return std::move(result);
 }
@@ -103,19 +103,20 @@ static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParam
 	Vector varchar_cast(LogicalType::VARCHAR, count);
 
 	// cast to varchar
-	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.cast_data, lstate.to_varchar_local);
-	cast_data.to_varchar_cast.function(source, varchar_cast, count, to_varchar_params);
+	CastParameters to_varchar_params(parameters, cast_data.to_varchar_cast.GetCastData(), lstate.to_varchar_local);
+	cast_data.to_varchar_cast.Cast(source, varchar_cast, count, to_varchar_params);
 
 	// cast from varchar to the target
-	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data, lstate.from_varchar_local);
-	cast_data.from_varchar_cast.function(varchar_cast, result, count, from_varchar_params);
+	CastParameters from_varchar_params(parameters, cast_data.from_varchar_cast.GetCastData(),
+	                                   lstate.from_varchar_local);
+	cast_data.from_varchar_cast.Cast(varchar_cast, result, count, from_varchar_params);
 	return true;
 }
 
 BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto enum_physical_type = source.InternalType();
-	switch (target.id()) {
-	case LogicalTypeId::ENUM: {
+
+	if (target.id() == LogicalTypeId::ENUM) {
 		// This means they are both ENUMs, but of different types.
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
@@ -128,7 +129,7 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
-	case LogicalTypeId::VARCHAR:
+	if (target == LogicalType::VARCHAR) {
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
 			return EnumToVarcharCast<uint8_t>;
@@ -139,10 +140,9 @@ BoundCastInfo DefaultCasts::EnumCastSwitch(BindCastInput &input, const LogicalTy
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-	default: {
-		return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target), InitEnumCastLocalState);
 	}
-	}
+	// Otherwise, fall back to ANY cast
+	return BoundCastInfo(EnumToAnyCast, BindEnumCast(input, source, target), InitEnumCastLocalState);
 }
 
 } // namespace duckdb

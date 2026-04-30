@@ -17,8 +17,11 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/storage/data_table.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/path.hpp"
 
 namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
@@ -201,17 +204,23 @@ bool StorageManager::HasWAL() const {
 	return true;
 }
 
-bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options) {
-	unique_ptr<lock_guard<mutex>> guard;
+bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointOptions &options,
+                                        ActiveCheckpointWrapper &active_checkpoint) {
+	unique_lock<mutex> guard;
+	// Lock ordering: WAL lock -> transaction lock (in GetCheckpointTransaction)
 	if (!options.wal_lock) {
 		// not holding the WAL lock yet - grab it
 		guard = GetWALLock();
 	}
-	// while holding the WAL lock - get the last committed transaction from the transaction manager
-	// this is the commit we will be checkpointing on - everything in this commit will be written to the file
-	// any new commits made will be written to the next wal
-	auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
-	options.transaction_id = transaction_manager.GetNewCheckpointId();
+	if (active_checkpoint.HasCheckpointContext()) {
+		// While holding the WAL lock, if we have a context then start a checkpoint transaction.
+		// The start time of this transaction defines the visibility for checkpointing, any new commits are written
+		// to the next WAL.
+		active_checkpoint.GetCheckpointTransaction(options);
+	} else {
+		auto &transaction_manager = db.GetTransactionManager().Cast<DuckTransactionManager>();
+		options.transaction_id = transaction_manager.GetLastCommit();
+	}
 
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Start Checkpoint", options.transaction_id);
 	if (!wal) {
@@ -231,9 +240,6 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	wal->WriteCheckpoint(meta_block);
 	wal->Flush();
 
-	// We no longer need to hold on to the WAL blocks here. If the checkpoint fails, we throw a fatal exception and
-	// enter an inconsistent state. If it succeeds, then this WAL is no longer relevant.
-	wal->MarkBlocksInUseAsModified();
 	// close the main WAL
 	wal.reset();
 
@@ -252,7 +258,7 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 	return true;
 }
 
-void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
+void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	D_ASSERT(wal.get());
 
 	// "wal" points to the checkpoint WAL
@@ -283,24 +289,12 @@ void StorageManager::WALFinishCheckpoint(lock_guard<mutex> &) {
 	DUCKDB_LOG(db.GetDatabase(), TransactionLogType, db, "Finish Checkpoint");
 }
 
-unique_ptr<lock_guard<mutex>> StorageManager::GetWALLock() {
-	return make_uniq<lock_guard<mutex>>(wal_lock);
+unique_lock<mutex> StorageManager::GetWALLock() {
+	return unique_lock<mutex>(wal_lock);
 }
 
 string StorageManager::GetWALPath(const string &suffix) {
-	// we append the ".wal" **before** a question mark in case of GET parameters
-	// but only if we are not in a windows long path (which starts with \\?\)
-	std::size_t question_mark_pos = std::string::npos;
-	if (!StringUtil::StartsWith(path, "\\\\?\\")) {
-		question_mark_pos = path.find('?');
-	}
-	auto result = path;
-	if (question_mark_pos != std::string::npos) {
-		result.insert(question_mark_pos, suffix);
-	} else {
-		result += suffix;
-	}
-	return result;
+	return Path::AddSuffixToPath(path, suffix);
 }
 
 string StorageManager::GetCheckpointWALPath() {
@@ -576,7 +570,6 @@ public:
 	                     unique_ptr<PersistentCollectionData> row_group_data) override;
 	optional_ptr<PersistentCollectionData> GetRowGroupData(DataTable &table, idx_t start_index, idx_t &count) override;
 	bool HasRowGroupData() override;
-	unordered_set<block_id_t> &GetBlockIdsInUse() override;
 
 private:
 	idx_t initial_wal_size = 0;
@@ -584,7 +577,6 @@ private:
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
-	unordered_set<block_id_t> block_ids_in_use;
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
@@ -628,11 +620,6 @@ void SingleFileStorageCommitState::FlushCommit() {
 		return;
 	}
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
-	auto &block_manager = wal.GetStorageManager().GetBlockManager();
-	for (const block_id_t block_id : block_ids_in_use) {
-		block_manager.MarkBlockAsUsed(block_id);
-		wal.AddBlockInUse(block_id);
-	}
 	wal.Flush();
 	state = WALCommitState::FLUSHED;
 }
@@ -671,10 +658,6 @@ optional_ptr<PersistentCollectionData> SingleFileStorageCommitState::GetRowGroup
 
 bool SingleFileStorageCommitState::HasRowGroupData() {
 	return !optimistically_written_data.empty();
-}
-
-unordered_set<block_id_t> &SingleFileStorageCommitState::GetBlockIdsInUse() {
-	return block_ids_in_use;
 }
 
 unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(WriteAheadLog &wal) {

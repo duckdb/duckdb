@@ -2,9 +2,6 @@
 # description: Test null type
 # group: [types]
 
-statement ok
-pragma enable_verification
-
 query T
 create table null_table (i "null")
 
@@ -19,12 +16,12 @@ foreach type <integral> float double varchar
 
 # explicit cast
 statement error
-select 42::${type}::"null"
+select 42::{type}::"null"
 ----
 
 # implicit cast
 statement error
-insert into null_table values (42::${type})
+insert into null_table values (42::{type})
 ----
 
 endloop
@@ -45,13 +42,13 @@ NULL
 foreach type <integral> float double varchar
 
 query T
-select i::${type}[] from null_list
+select i::{type}[] from null_list
 ----
 NULL
 [NULL]
 
 statement error
-insert into null_list values ([42::${type}])
+insert into null_list values ([42::{type}])
 ----
 
 endloop
@@ -72,13 +69,13 @@ NULL
 foreach type <integral> float double varchar
 
 query T
-select i::struct(n ${type}) from null_struct
+select i::struct(n {type}) from null_struct
 ----
 NULL
 {'n': NULL}
 
 statement error
-insert into null_struct values ({n: 42::${type}})
+insert into null_struct values ({n: 42::{type}})
 ----
 
 endloop
@@ -95,7 +92,7 @@ insert into null_map values (null), (map([null], [null]))
 foreach type <integral> float double varchar
 
 statement error
-insert into null_map values (map([42::${type}], [7::${type}]))
+insert into null_map values (map([42::{type}], [7::{type}]))
 ----
 
 endloop

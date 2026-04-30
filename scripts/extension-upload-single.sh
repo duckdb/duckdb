@@ -29,21 +29,30 @@ else
 fi
 
 script_dir="$(dirname "$(readlink -f "$0")")"
+private_key_file=""
+
+cleanup() {
+  if [ -n "$private_key_file" ]; then
+    rm -f "$private_key_file"
+  fi
+}
+
+trap cleanup EXIT
 
 # calculate SHA256 hash of extension binary
 cat $ext > $ext.append
 
-( command -v truncate && truncate -s -256 $ext.append ) || ( command -v gtruncate && gtruncate -s -256 $ext.append ) || exit 1
+( command -v truncate >/dev/null 2>&1 && truncate -s -256 $ext.append ) || ( command -v gtruncate >/dev/null 2>&1 && gtruncate -s -256 $ext.append ) || exit 1
 
 # (Optionally) Sign binary
 if [ "$DUCKDB_EXTENSION_SIGNING_PK" != "" ]; then
-  echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+  private_key_file=$(mktemp "${TMPDIR:-/tmp}/duckdb-extension-signing.XXXXXX.pem")
+  echo "$DUCKDB_EXTENSION_SIGNING_PK" > "$private_key_file"
   $script_dir/compute-extension-hash.sh $ext.append > $ext.hash
-  openssl pkeyutl -sign -in $ext.hash -inkey private.pem -pkeyopt digest:sha256 -out $ext.sign
-  rm -f private.pem
+  openssl pkeyutl -sign -in $ext.hash -inkey "$private_key_file" -pkeyopt digest:sha256 -out $ext.sign
 else
   # Default to 256 zeros
-  dd if=/dev/zero of=$ext.sign bs=256 count=1
+  dd if=/dev/zero of=$ext.sign bs=256 count=1 status=none
 fi
 
 # append signature to extension binary
@@ -67,11 +76,45 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
     exit 0
 fi
 
+if ! command -v rclone >/dev/null 2>&1; then
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        choco install rclone -y
+        ;;
+      *)
+        install_runner=(bash)
+        if command -v sudo >/dev/null 2>&1; then
+          install_runner=(sudo bash)
+        fi
+        curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+        ;;
+    esac
+fi
+
 # Set dry run unless guard var is set
-DRY_RUN_PARAM="--dryrun"
+DRY_RUN_PARAM="--dry-run"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   DRY_RUN_PARAM=""
 fi
+
+dest_extension="gz"
+extra_upload_args=()
+if [[ $4 == wasm* ]]; then
+  dest_extension="wasm"
+  extra_upload_args=(
+    --header-upload "Content-Encoding: br"
+    --header-upload "Content-Type: application/wasm"
+  )
+fi
+
+upload_extension() {
+  local destination="$1"
+  rclone $DRY_RUN_PARAM copyto \
+    --s3-acl public-read \
+    "${extra_upload_args[@]}" \
+    "$ext.compressed" \
+    ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:${destination}"
+}
 
 # upload versioned version
 if [[ $7 = 'true' ]]; then
@@ -81,20 +124,12 @@ if [[ $7 = 'true' ]]; then
     exit 1
   fi
 
-  if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
-  else
-    aws s3 cp $ext.compressed s3://$5/$1/$2/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
-  fi
+  upload_extension "$5/$1/$2/$3/$4/$1.duckdb_extension.$dest_extension"
 fi
 
 # upload to latest version
 if [[ $6 = 'true' ]]; then
-  if [[ $4 == wasm* ]]; then
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.wasm $DRY_RUN_PARAM --acl public-read --content-encoding br --content-type="application/wasm"
-  else
-    aws s3 cp $ext.compressed s3://$5/$3/$4/$1.duckdb_extension.gz $DRY_RUN_PARAM --acl public-read
-  fi
+  upload_extension "$5/$3/$4/$1.duckdb_extension.$dest_extension"
 fi
 
 # clean up

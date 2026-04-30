@@ -23,7 +23,7 @@ namespace duckdb {
 
 #ifndef DUCKDB_QUOTE_DEFINE
 // Preprocessor trick to allow text to be converted to C-string / string
-// Expecte use is:
+// Expected use is:
 //	#ifdef SOME_DEFINE
 //	string str = DUCKDB_QUOTE_DEFINE(SOME_DEFINE)
 //	...do something with str
@@ -123,9 +123,9 @@ public:
 	DUCKDB_API static optional_idx Find(const string &haystack, const string &needle);
 
 	//! Returns true if the target string starts with the given prefix
-	DUCKDB_API static bool StartsWith(string str, string prefix);
+	DUCKDB_API static bool StartsWith(const string &str, const string &prefix);
 
-	//! Returns true if the target string <b>ends</b> with the given suffix.
+	//! Returns true if the target string ends with the given suffix
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
 
 	//! Repeat a string multiple times
@@ -138,7 +138,7 @@ public:
 	DUCKDB_API static vector<string> SplitWithParentheses(const string &str, char delimiter = ',', char par_open = '(',
 	                                                      char par_close = ')');
 
-	//! Split the input string allong a quote. Note that any escaping is NOT supported.
+	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
@@ -220,6 +220,9 @@ public:
 
 	//! Case insensitive equals (null-terminated strings)
 	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
+
+	//! Case insensitive starts-with
+	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
 
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);

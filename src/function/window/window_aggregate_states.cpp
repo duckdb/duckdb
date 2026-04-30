@@ -15,10 +15,9 @@ void WindowAggregateStates::Initialize(idx_t count) {
 	auto state_ptr = states.data();
 
 	statef = make_uniq<Vector>(LogicalType::POINTER, count);
-	auto state_f_data = FlatVector::GetData<data_ptr_t>(*statef);
-
+	auto state_f_data = FlatVector::Writer<data_ptr_t>(*statef, count);
 	for (idx_t i = 0; i < count; ++i, state_ptr += state_size) {
-		state_f_data[i] = state_ptr;
+		state_f_data.WriteValue(state_ptr);
 		aggr.function.GetStateInitCallback()(aggr.function, state_ptr);
 	}
 

@@ -5,16 +5,13 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 foreach type <numeric> DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
 
 statement ok
 DROP TABLE IF EXISTS exprtest
 
 statement ok
-CREATE TABLE exprtest (a ${type}, b ${type})
+CREATE TABLE exprtest (a {type}, b {type})
 
 statement ok
 INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, 0)
@@ -30,7 +27,7 @@ SELECT COALESCE(NULL)
 NULL
 
 query I
-SELECT COALESCE(42::${type})
+SELECT COALESCE(42::{type})
 ----
 42
 

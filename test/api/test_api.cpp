@@ -10,12 +10,11 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
+
 	con.SendQuery("--ups");
 	//! Should not crash
 	REQUIRE(1);
@@ -88,7 +87,7 @@ TEST_CASE("Test closing database during long running query", "[api]") {
 	conn->DisableProfiling();
 	// perform a long running query in the background (many cross products)
 	bool correct = true;
-	auto background_thread = thread(long_running_query, conn.get(), &correct);
+	auto background_thread = std::thread(long_running_query, conn.get(), &correct);
 	// wait a little bit
 	std::this_thread::sleep_for(std::chrono::milliseconds(100));
 	// destroy the database
@@ -171,9 +170,9 @@ TEST_CASE("Test parallel usage of single client", "[api][.]") {
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	bool correct[20];
-	thread threads[20];
+	std::thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query, conn.get(), correct, i);
+		threads[i] = std::thread(parallel_query, conn.get(), correct, i);
 	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
@@ -200,9 +199,9 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));
 
 	bool correct[20];
-	thread threads[20];
+	std::thread threads[20];
 	for (size_t i = 0; i < 20; i++) {
-		threads[i] = thread(parallel_query_with_new_connection, db.get(), correct, i);
+		threads[i] = std::thread(parallel_query_with_new_connection, db.get(), correct, i);
 	}
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
@@ -220,9 +219,6 @@ TEST_CASE("Test multiple result sets", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
-	con.DisableQueryVerification();
-	con.EnableQueryVerification();
 
 	con.ForceParallelism();
 
@@ -305,7 +301,6 @@ TEST_CASE("Test streaming API errors", "[api]") {
 TEST_CASE("Test fetch API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	duckdb::unique_ptr<QueryResult> result;
 
@@ -421,7 +416,6 @@ static void VerifyStreamResult(duckdb::unique_ptr<QueryResult> result) {
 TEST_CASE("Test fetch API with big results", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// create table that consists of multiple chunks
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -528,7 +522,6 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 TEST_CASE("Test connection API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// extract a plan node
 	REQUIRE_NOTHROW(con.ExtractPlan("SELECT 42"));
@@ -607,7 +600,6 @@ TEST_CASE("Issue #4583: Catch Insert/Update/Delete errors", "[api]") {
 	Connection con(db);
 	duckdb::unique_ptr<QueryResult> result;
 
-	con.EnableQueryVerification();
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t0 (c0 int);"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO t0 VALUES (1);"));
 
@@ -692,11 +684,22 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
 	DBConfig config;
 	config.SetOptionByName("enable_external_access", false);
-	auto path = TestCreatePath("external_access_test");
+	auto path = TestCreatePath("external_access_test.db");
 	DuckDB db(path, &config);
 	Connection con(db);
 
-	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db'"));
+}
+
+TEST_CASE("Test checkpointing initial database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.SetOptionByName("enable_external_access", false);
+	auto path = TestCreatePath("external_access_test.db");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 }
 
 TEST_CASE("Test insert returning in CPP API", "[api]") {
@@ -741,7 +744,7 @@ TEST_CASE("Test SqlStatement::ToString for UPDATE, INSERT, DELETE statements wit
 
 	sql = "INSERT INTO test (id) VALUES (1) RETURNING id AS inserted";
 	auto stmts = con.ExtractStatements(sql);
-	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id ) (VALUES (1)) RETURNING id AS inserted");
+	REQUIRE(stmts[0]->ToString() == "INSERT INTO test (id) (VALUES (1)) RETURNING id AS inserted");
 
 	sql = "UPDATE test SET id = 1 RETURNING id AS updated";
 	stmts = con.ExtractStatements(sql);
@@ -803,4 +806,66 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 
 	// Query result is no longer accessible
 	REQUIRE_THROWS(result->ToString());
+}
+
+TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible operations", "[api]") {
+	// Verify the three-state interrupt mechanism that prevents a completed COMMIT
+	// from being incorrectly reported as failed due to a late Interrupt() call.
+
+	DuckDB db;
+	Connection con(db);
+	auto &context = *con.context;
+
+	SECTION("Normal interrupt works") {
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		REQUIRE_THROWS(context.InterruptCheck());
+		context.ClearInterrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+	}
+
+	SECTION("SuppressInterrupts blocks subsequent Interrupt calls") {
+		context.SuppressInterrupts();
+		// Interrupt() uses CAS: NOT_INTERRUPTED -> INTERRUPTED
+		// Since state is SUPPRESSED, CAS fails and interrupt is discarded
+		context.Interrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("SuppressInterrupts overrides a pending interrupt") {
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		// SuppressInterrupts unconditionally stores SUPPRESSED,
+		// overriding the INTERRUPTED state
+		context.SuppressInterrupts();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("ClearInterrupt resets from SUPPRESSED to allow future interrupts") {
+		context.SuppressInterrupts();
+		context.ClearInterrupt();
+		// Now back to NOT_INTERRUPTED, Interrupt() should work again
+		context.Interrupt();
+		REQUIRE(context.IsInterrupted());
+		REQUIRE_THROWS(context.InterruptCheck());
+		context.ClearInterrupt();
+	}
+
+	SECTION("End-to-end: COMMIT suppresses interrupts") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE suppress_test (x INTEGER)"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		// After COMMIT, state should be SUPPRESSED — Interrupt() should be discarded
+		context.Interrupt();
+		REQUIRE(!context.IsInterrupted());
+		REQUIRE_NOTHROW(context.InterruptCheck());
+		// Cleanup
+		context.ClearInterrupt();
+		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
+	}
 }

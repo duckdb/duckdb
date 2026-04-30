@@ -6,8 +6,10 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> ListFilterBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
@@ -17,7 +19,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 
 	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
-	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
+	if (bound_lambda_expr.lambda_expr->GetReturnType() != LogicalType::BOOLEAN) {
 		auto cast_lambda_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
 		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
@@ -25,13 +27,14 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 
-	bound_function.SetReturnType(arguments[0]->return_type);
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
 	auto has_index = bound_lambda_expr.parameter_count == 2;
 	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
 static LogicalType ListFilterBindLambda(ClientContext &context, const vector<LogicalType> &function_child_types,
-                                        const idx_t parameter_idx) {
+                                        const idx_t parameter_idx,
+                                        optional_ptr<BindLambdaContext> bind_lambda_context) {
 	return LambdaFunctions::BindBinaryChildren(function_child_types, parameter_idx);
 }
 

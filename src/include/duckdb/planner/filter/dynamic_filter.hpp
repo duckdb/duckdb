@@ -12,15 +12,22 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+class Expression;
 
 struct DynamicFilterData {
+public:
+	DynamicFilterData(ExpressionType comparison_type, Value constant);
+
 	mutex lock;
-	unique_ptr<ConstantFilter> filter;
+	ExpressionType comparison_type;
+	Value constant;
 	atomic<bool> initialized = {false};
+
+	unique_ptr<Expression> ToExpression(const Expression &column) const;
 
 	void SetValue(Value val);
 	void Reset();

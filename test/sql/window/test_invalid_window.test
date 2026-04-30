@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)
 
 statement ok
@@ -61,11 +58,11 @@ ORDER BY i
 foreach invalid PARTITION RANGE ROWS GROUPS
 
 statement error
-SELECT array_agg(i) OVER (${invalid} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+SELECT array_agg(i) OVER ({invalid} ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 FROM generate_series(1,5) AS _(i)
-WINDOW ${invalid} AS (ORDER BY i);
+WINDOW {invalid} AS (ORDER BY i);
 ----
-syntax error at or near
+<REGEX>:(.*syntax error at or near.*|.*Parser Error: Invalid window name.*)
 
 endloop
 
@@ -75,7 +72,7 @@ foreach func lead lag ntile
 statement error
 SELECT 
 	i,
-	${func}(i ORDER BY i // 2, i) OVER (
+	{func}(i ORDER BY i // 2, i) OVER (
 		ORDER BY i // 2
 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
 		EXCLUDE TIES
@@ -106,7 +103,7 @@ foreach func row_number rank cume_dist
 statement error
 SELECT 
 	i,
-	${func}(ORDER BY i // 2, i) OVER (
+	{func}(ORDER BY i // 2, i) OVER (
 		ORDER BY i // 2
 		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
 		EXCLUDE TIES
@@ -119,7 +116,7 @@ EXCLUDE is not supported for the window function
 statement error
 SELECT 
 	i,
-	${func}(ORDER BY i // 2, i) OVER w AS f,
+	{func}(ORDER BY i // 2, i) OVER w AS f,
 FROM range(10) tbl(i)
 WINDOW w AS (
 	ORDER BY i // 2

@@ -3,9 +3,6 @@
 # group: [create]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER)
 
 statement ok
@@ -28,4 +25,4 @@ INSERT INTO integers VALUES (1, 2);
 statement error
 CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
 ----
-<REGEX>:.*Parser Error: syntax error.*
+<REGEX>:(.*Parser Error: syntax error.*|.*Parser Error: Cannot specify both OR REPLACE and IF NOT EXISTS within single create statement.*)

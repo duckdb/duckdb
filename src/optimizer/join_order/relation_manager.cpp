@@ -31,7 +31,7 @@ idx_t RelationManager::NumRelations() {
 void RelationManager::AddAggregateOrWindowRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                                    const RelationStats &stats, LogicalOperatorType op_type) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
-	auto relation_id = relations.size();
+	RelationIndex relation_id(relations.size());
 
 	auto op_bindings = op.GetColumnBindings();
 	for (auto &binding : op_bindings) {
@@ -50,7 +50,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
-	auto relation_id = relations.size();
+	RelationIndex relation_id(relations.size());
 
 	auto table_indexes = op.GetTableIndex();
 	bool is_mark = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
@@ -63,9 +63,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		// relation represents a non-reorderable relation, most likely a join relation
 		// Get the tables referenced in the non-reorderable relation and add them to the relation mapping
 		// This should all table references, even if there are nested non-reorderable joins.
-		unordered_set<idx_t> table_references;
+		unordered_set<TableIndex> table_references;
 		LogicalJoin::GetTableReferences(op, table_references);
-		D_ASSERT(table_references.size() > 0);
+		D_ASSERT(!table_references.empty());
 		for (auto &reference : table_references) {
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
@@ -80,7 +80,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	} else {
 		// Relations should never return more than 1 table index
 		D_ASSERT(table_indexes.size() == 1);
-		idx_t table_index = table_indexes.at(0);
+		auto table_index = table_indexes.at(0);
 		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
 		relation_mapping[table_index] = relation_id;
 	}
@@ -124,18 +124,19 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 
 bool ExpressionContainsColumnRef(const Expression &root_expr) {
 	bool contains_column_ref = false;
-	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
-	    root_expr, [&](const BoundColumnRefExpression &colref) {
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(root_expr,
+	                                                              [&](const BoundColumnRefExpression &colref) {
 	// Here you have a filter on a single column in a table. Return a binding for the column
 	// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
-		    (void)colref.depth;
-		    D_ASSERT(colref.depth == 0);
-		    D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		                                                              (void)colref.depth;
+		                                                              D_ASSERT(colref.depth == 0);
+		                                                              D_ASSERT(colref.binding.table_index.IsValid());
 #endif
-		    // map the base table index to the relation index used by the JoinOrderOptimizer
-		    contains_column_ref = true;
-	    });
+		                                                              // map the base table index to the relation index
+		                                                              // used by the JoinOrderOptimizer
+		                                                              contains_column_ref = true;
+	                                                              });
 	return contains_column_ref;
 }
 
@@ -341,7 +342,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 			no_cross_product_relations.insert(relations.size() - 1);
 			auto right_child_bindings = op->children[1]->GetColumnBindings();
 			for (auto &bindings : right_child_bindings) {
-				relation_mapping[bindings.table_index] = relations.size() - 1;
+				relation_mapping[bindings.table_index] = RelationIndex(relations.size() - 1);
 			}
 		} else {
 			can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
@@ -466,11 +467,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		op->children[0] = lhs_optimizer.Optimize(std::move(op->children[0]), &lhs_stats);
 
 		// create dummy aggregation for the duplicate elimination
-		auto dummy_aggr = make_uniq<LogicalAggregate>(DConstants::INVALID_INDEX - 1, DConstants::INVALID_INDEX,
+		auto dummy_aggr = make_uniq<LogicalAggregate>(TableIndex(DConstants::INVALID_INDEX - 1), TableIndex(),
 		                                              vector<unique_ptr<Expression>>());
 		dummy_aggr->grouping_sets.emplace_back();
 		for (auto &delim_col : delim_join.duplicate_eliminated_columns) {
-			dummy_aggr->grouping_sets.back().insert(dummy_aggr->groups.size());
+			dummy_aggr->grouping_sets.back().insert(ProjectionIndex(dummy_aggr->groups.size()));
 			dummy_aggr->groups.push_back(delim_col->Copy());
 		}
 		auto lhs_delim_stats = RelationStatisticsHelper::ExtractAggregationStats(*dummy_aggr, lhs_stats);
@@ -527,11 +528,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 }
 
-bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
+bool RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		D_ASSERT(colref.binding.table_index.IsValid());
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		if (expression.GetAlias() == "SUBQUERY" &&
 		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
@@ -559,21 +560,6 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 		}
 	});
 	return can_reorder;
-}
-
-//! Flatten a predicate into individual conjuncts
-static inline void FlattenConjunction(Expression &expr, vector<unique_ptr<Expression>> &result) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
-		auto &conj = expr.Cast<BoundConjunctionExpression>();
-		if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			for (auto &child : conj.children) {
-				FlattenConjunction(*child, result);
-			}
-			return;
-		}
-	}
-	// not an AND conjunction - add as is
-	result.push_back(expr.Copy());
 }
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
@@ -614,12 +600,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				optional_ptr<JoinRelationSet> right_set;
 				optional_ptr<JoinRelationSet> full_set;
 				// here we create a left_set that unions all relations from the left side of
-				// every expression and a right_set that unions all relations frmo the right side of a
+				// every expression and a right_set that unions all relations from the right side of a
 				// every expression (although this should always be 1).
 				for (auto &bound_expr : conjunction_expression->children) {
 					D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 					auto &comp = bound_expr->Cast<BoundComparisonExpression>();
-					unordered_set<idx_t> right_bindings, left_bindings;
+					unordered_set<RelationIndex> right_bindings, left_bindings;
 					ExtractBindings(*comp.right, right_bindings);
 					ExtractBindings(*comp.left, left_bindings);
 
@@ -665,7 +651,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 					if (filter_set.find(*expr) == filter_set.end()) {
 						filter_set.insert(*expr);
-						unordered_set<idx_t> bindings;
+						unordered_set<RelationIndex> bindings;
 						ExtractBindings(*expr, bindings);
 						auto &set = set_manager.GetJoinRelation(bindings);
 						auto filter_info =
@@ -682,7 +668,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 			for (auto &expression : f_op.expressions) {
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
-					unordered_set<idx_t> bindings;
+					unordered_set<RelationIndex> bindings;
 					ExtractBindings(*expression, bindings);
 					if (bindings.empty()) {
 						// the filter is on a column that is not in our relational map. (example: limit_rownum)

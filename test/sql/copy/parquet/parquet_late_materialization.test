@@ -5,13 +5,10 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
+COPY (SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i)) TO '{TEST_DIR}/late_materialization.parquet';
 
 statement ok
-COPY (SELECT i, i + 1 AS j, i + 2 AS k, -i AS l FROM range(10) t(i)) TO '__TEST_DIR__/late_materialization.parquet';
-
-statement ok
-CREATE VIEW test AS FROM '__TEST_DIR__/late_materialization.parquet';
+CREATE VIEW test AS FROM '{TEST_DIR}/late_materialization.parquet';
 
 statement ok
 SET explain_output='optimized_only'
@@ -45,6 +42,18 @@ query II
 explain SELECT i FROM test ORDER BY i LIMIT 2;
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+# projection columns are all already required by the pushed-down filter
+query II
+explain SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+query I
+SELECT j FROM test WHERE j > 3 ORDER BY i LIMIT 2;
+----
+4
+5
 
 # we cannot do this with volatile expressions
 query II
@@ -121,10 +130,10 @@ SELECT l FROM (
 
 # now with varchar columns
 statement ok
-COPY (SELECT i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, -i AS l FROM range(10) t(i)) TO '__TEST_DIR__/late_materialization_varchar.parquet';
+COPY (SELECT i, printf('%02d', i + 1) AS j, printf('%02d', i + 2) AS k, -i AS l FROM range(10) t(i)) TO '{TEST_DIR}/late_materialization_varchar.parquet';
 
 statement ok
-CREATE OR REPLACE VIEW test AS FROM '__TEST_DIR__/late_materialization_varchar.parquet';
+CREATE OR REPLACE VIEW test AS FROM '{TEST_DIR}/late_materialization_varchar.parquet';
 
 query IIII
 SELECT * FROM test ORDER BY j DESC LIMIT 2;

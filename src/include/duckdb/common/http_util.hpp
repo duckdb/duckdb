@@ -67,7 +67,14 @@ public:
 	}
 };
 
-enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
+enum class RequestType : uint8_t {
+	GET_REQUEST,
+	PUT_REQUEST,
+	HEAD_REQUEST,
+	DELETE_REQUEST,
+	POST_REQUEST,
+	OPTIONS_REQUEST
+};
 
 struct HTTPHeaders {
 	using header_map_t = case_insensitive_map_t<string>;
@@ -132,10 +139,6 @@ public:
 
 struct BaseRequest {
 	BaseRequest(RequestType type, const string &url, const HTTPHeaders &headers, HTTPParams &params);
-	BaseRequest(RequestType type, const string &endpoint_p, const string &path_p, const HTTPHeaders &headers,
-	            HTTPParams &params)
-	    : type(type), url(path), path(path_p), proto_host_port(endpoint_p), headers(headers), params(params) {
-	}
 
 	RequestType type;
 	const string &url;
@@ -176,12 +179,6 @@ struct GetRequestInfo : public BaseRequest {
 	    : BaseRequest(RequestType::GET_REQUEST, url, headers, params), content_handler(std::move(content_handler_p)),
 	      response_handler(std::move(response_handler_p)) {
 	}
-	GetRequestInfo(const string &endpoint, const string &path, const HTTPHeaders &headers, HTTPParams &params,
-	               std::function<bool(const HTTPResponse &response)> response_handler_p,
-	               std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler_p)
-	    : BaseRequest(RequestType::GET_REQUEST, endpoint, path, headers, params),
-	      content_handler(std::move(content_handler_p)), response_handler(std::move(response_handler_p)) {
-	}
 
 	std::function<bool(const_data_ptr_t data, idx_t data_length)> content_handler;
 	std::function<bool(const HTTPResponse &response)> response_handler;
@@ -211,6 +208,12 @@ struct DeleteRequestInfo : public BaseRequest {
 	}
 };
 
+struct OptionsRequestInfo : public BaseRequest {
+	OptionsRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params)
+	    : BaseRequest(RequestType::OPTIONS_REQUEST, path, headers, params) {
+	}
+};
+
 struct PostRequestInfo : public BaseRequest {
 	PostRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params, const_data_ptr_t buffer_in,
 	                idx_t buffer_in_len)
@@ -227,6 +230,9 @@ struct PostRequestInfo : public BaseRequest {
 
 class HTTPClient {
 public:
+	HTTPClient() = default;
+	explicit HTTPClient(const string &proto_host_port) : base_url(proto_host_port) {
+	}
 	virtual ~HTTPClient() = default;
 	virtual void Initialize(HTTPParams &http_params) = 0;
 
@@ -235,14 +241,27 @@ public:
 	virtual unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Post(PostRequestInfo &info) = 0;
+	virtual unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) = 0;
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
+
+	const string &GetBaseUrl() const {
+		return base_url;
+	}
+
+private:
+	//! The base URL (scheme + host + port) this client was created for
+	const string base_url;
 };
 
 class HTTPUtil {
 public:
+	HTTPUtil();
 	virtual ~HTTPUtil() = default;
+	// disable copy constructors
+	HTTPUtil(const HTTPUtil &other) = delete;
+	HTTPUtil &operator=(const HTTPUtil &) = delete;
 
 public:
 	static HTTPUtil &Get(DatabaseInstance &db);
@@ -255,6 +274,9 @@ public:
 	                                                    optional_ptr<FileOpenerInfo> info);
 
 	virtual unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port);
+
+	//! Close a client — implementations may cache it for reuse
+	virtual void CloseClient(unique_ptr<HTTPClient> &&client);
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);
 	unique_ptr<HTTPResponse> Request(BaseRequest &request, unique_ptr<HTTPClient> &client);

@@ -18,6 +18,7 @@
 
 namespace duckdb {
 struct bignum_t;
+struct ubigint_t;
 
 //! Returns the PhysicalType for the given type
 template <class T>
@@ -40,7 +41,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT16;
 	} else if (std::is_same<TYPE, uint32_t>()) {
 		return PhysicalType::UINT32;
-	} else if (std::is_same<TYPE, uint64_t>()) {
+	} else if (std::is_same<TYPE, uint64_t>() || std::is_same<TYPE, ubigint_t>()) {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<TYPE, idx_t>() || std::is_same<TYPE, const idx_t>()) {
 		return PhysicalType::UINT64;

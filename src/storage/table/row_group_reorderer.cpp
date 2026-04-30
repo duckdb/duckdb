@@ -14,6 +14,10 @@ struct RowGroupOffsetEntry {
 	unique_ptr<BaseStatistics> stats;
 };
 
+bool IsNullOnly(const BaseStatistics &stats) {
+	return !stats.CanHaveNoNull();
+}
+
 bool CompareValues(const Value &v1, const Value &v2, const OrderByStatistics order) {
 	return (order == OrderByStatistics::MAX && v1 < v2) || (order == OrderByStatistics::MIN && v1 > v2);
 }
@@ -88,10 +92,11 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 	}
 }
 
-template <typename It>
-It SkipOffsetPrunedRowGroups(It it, const idx_t row_group_offset) {
-	for (idx_t i = 0; i < row_group_offset; i++) {
+template <typename It, typename End>
+It SkipOffsetPrunedRowGroups(It it, End end, idx_t row_group_offset) {
+	while (row_group_offset > 0 && it != end) {
 		++it;
+		row_group_offset--;
 	}
 	return it;
 }
@@ -107,20 +112,23 @@ void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
                        const idx_t row_group_offset, const OrderType order_type, const OrderByColumnType column_type,
                        vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
 	const auto stat_type = order_type == OrderType::ASCENDING ? OrderByStatistics::MIN : OrderByStatistics::MAX;
-	ordered_row_groups.reserve(row_group_map.size());
-
-	Value previous_key;
 	if (order_type == OrderType::ASCENDING) {
-		auto it = SkipOffsetPrunedRowGroups(row_group_map.begin(), row_group_offset);
 		auto end = row_group_map.end();
+		auto it = SkipOffsetPrunedRowGroups(row_group_map.begin(), end, row_group_offset);
+		if (it == end) {
+			return;
+		}
 		if (row_limit.IsValid()) {
 			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
 		} else {
 			InsertAllRowGroups(it, end, ordered_row_groups);
 		}
 	} else {
-		auto it = SkipOffsetPrunedRowGroups(row_group_map.rbegin(), row_group_offset);
 		auto end = row_group_map.rend();
+		auto it = SkipOffsetPrunedRowGroups(row_group_map.rbegin(), end, row_group_offset);
+		if (it == end) {
+			return;
+		}
 		if (row_limit.IsValid()) {
 			AddRowGroups(row_group_map, it, end, ordered_row_groups, row_limit.GetIndex(), column_type, stat_type);
 		} else {
@@ -129,9 +137,19 @@ void SetRowGroupVector(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map,
 	}
 }
 
+void AppendRowGroups(const vector<reference<SegmentNode<RowGroup>>> &source, idx_t offset,
+                     vector<reference<SegmentNode<RowGroup>>> &target) {
+	for (idx_t i = offset; i < source.size(); i++) {
+		target.push_back(source[i]);
+	}
+}
+
 template <typename It, typename End>
 OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatistics order_by,
                                              const OrderByColumnType column_type, const idx_t row_offset) {
+	if (it == end) {
+		return {row_offset, 0, 0};
+	}
 	const auto opposite_stat_type =
 	    order_by == OrderByStatistics::MAX ? OrderByStatistics::MIN : OrderByStatistics::MAX;
 
@@ -153,14 +171,20 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 				break;
 			}
 			// Row groups do not overlap
-			auto &current_stats = it->second.stats;
-			if (!current_stats->CanHaveNull()) {
-				// This row group has exactly row_group.count valid values. We can exclude those
-				pruned_row_group_count++;
-				new_row_offset -= last_unresolved_entry->second.count;
+			auto &pruned_stats = last_unresolved_entry->second.stats;
+			if (pruned_stats->CanHaveNull()) {
+				// Offset pruning can only remove a contiguous prefix of row groups. Once the first unresolved
+				// row group might still contribute NULLs to the ordered prefix, we cannot prune past it.
+				return {new_row_offset, pruned_row_group_count, 0};
 			}
+			// This row group has exactly row_group.count valid values. We can exclude those.
+			pruned_row_group_count++;
+			new_row_offset -= last_unresolved_entry->second.count;
 
 			++last_unresolved_entry;
+			if (last_unresolved_entry == end) {
+				return {new_row_offset, pruned_row_group_count, 0};
+			}
 			auto &upcoming_stats = *last_unresolved_entry->second.stats;
 			last_unresolved_boundary = RowGroupReorderer::RetrieveStat(upcoming_stats, opposite_stat_type, column_type);
 		}
@@ -170,7 +194,7 @@ OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatis
 		}
 	}
 
-	return {new_row_offset, pruned_row_group_count};
+	return {new_row_offset, pruned_row_group_count, 0};
 }
 
 } // namespace
@@ -203,13 +227,17 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 	}
 	if (column_type == OrderByColumnType::STRING) {
+		if (!StringStats::HasMinMax(stats)) {
+			// Row group is all nulls or has incomplete stats - stats are meaningless for ordering
+			return Value();
+		}
 		switch (order_by) {
 		case OrderByStatistics::MIN:
-			return StringStats::Min(stats);
+			return Value::BLOB_RAW(StringStats::Min(stats));
 		case OrderByStatistics::MAX:
-			return StringStats::Max(stats);
+			return Value::BLOB_RAW(StringStats::Max(stats));
 		default:
-			throw InternalException("Unsupported OrderByStatistics for numeric");
+			throw InternalException("Unsupported OrderByStatistics for string");
 		}
 	}
 	throw InternalException("Unsupported OrderByColumnType");
@@ -218,31 +246,68 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 OffsetPruningResult RowGroupReorderer::GetOffsetAfterPruning(const OrderByStatistics order_by,
                                                              const OrderByColumnType column_type,
                                                              const OrderType order_type,
+                                                             const OrderByNullType null_order,
                                                              const StorageIndex &storage_index, const idx_t row_offset,
                                                              vector<PartitionStatistics> &stats) {
 	multimap<Value, RowGroupOffsetEntry> ordered_row_groups;
+	idx_t new_row_offset = row_offset;
+	idx_t leading_null_group_offset = 0;
+	bool encountered_maybe_null_group = false;
 
 	for (auto &partition_stats : stats) {
 		if (partition_stats.count_type == CountType::COUNT_APPROXIMATE || !partition_stats.partition_row_group) {
-			return {row_offset, 0};
+			return {row_offset, 0, 0};
 		}
 
 		auto column_stats = partition_stats.partition_row_group->GetColumnStatistics(storage_index);
+		if (null_order == OrderByNullType::NULLS_FIRST && IsNullOnly(*column_stats)) {
+			if (new_row_offset < partition_stats.count) {
+				return {new_row_offset, 0, leading_null_group_offset};
+			}
+			new_row_offset -= partition_stats.count;
+			leading_null_group_offset++;
+			continue;
+		}
 		Value comparison_value = RetrieveStat(*column_stats, order_by, column_type);
 		if (comparison_value.IsNull()) {
-			return {row_offset, 0};
+			if (null_order == OrderByNullType::NULLS_LAST && IsNullOnly(*column_stats)) {
+				// With NULLS_LAST, null-stats row groups are scanned after all non-null row groups.
+				// They fall outside the offset range being pruned here, so skip them.
+				continue;
+			}
+			// The row group might still contribute ordered values, but we cannot position it safely.
+			if (null_order == OrderByNullType::NULLS_FIRST) {
+				encountered_maybe_null_group = true;
+				continue;
+			}
+			return {new_row_offset, 0, leading_null_group_offset};
+		}
+		if (null_order == OrderByNullType::NULLS_FIRST && column_stats->CanHaveNull()) {
+			// Groups that might contain NULLs are scanned before definitely non-null groups with NULLS_FIRST.
+			// Without exact NULL counts, they block further offset pruning into the non-null region.
+			encountered_maybe_null_group = true;
+			continue;
 		}
 		auto entry = RowGroupOffsetEntry {partition_stats.count, std::move(column_stats)};
 		ordered_row_groups.emplace(comparison_value, std::move(entry));
 	}
+	if (null_order == OrderByNullType::NULLS_FIRST && encountered_maybe_null_group) {
+		return {new_row_offset, 0, leading_null_group_offset};
+	}
 
 	switch (order_type) {
-	case OrderType::ASCENDING:
-		return FindOffsetPrunableChunks(ordered_row_groups.begin(), ordered_row_groups.end(), order_by, column_type,
-		                                row_offset);
-	case OrderType::DESCENDING:
-		return FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by, column_type,
-		                                row_offset);
+	case OrderType::ASCENDING: {
+		auto result = FindOffsetPrunableChunks(ordered_row_groups.begin(), ordered_row_groups.end(), order_by,
+		                                       column_type, new_row_offset);
+		result.leading_null_group_offset = leading_null_group_offset;
+		return result;
+	}
+	case OrderType::DESCENDING: {
+		auto result = FindOffsetPrunableChunks(ordered_row_groups.rbegin(), ordered_row_groups.rend(), order_by,
+		                                       column_type, new_row_offset);
+		result.leading_null_group_offset = leading_null_group_offset;
+		return result;
+	}
 	default:
 		throw InternalException("Unsupported order type in GetOffsetAfterPruning");
 	}
@@ -258,30 +323,40 @@ optional_ptr<SegmentNode<RowGroup>> RowGroupReorderer::GetRootSegment(RowGroupSe
 
 	initialized = true;
 
-	vector<reference<SegmentNode<RowGroup>>> remaining_row_groups;
+	vector<reference<SegmentNode<RowGroup>>> null_only_groups;
+	vector<reference<SegmentNode<RowGroup>>> ambiguous_groups;
 	multimap<Value, RowGroupSegmentNodeEntry> row_group_map;
 	for (auto &row_group : row_groups.SegmentNodes()) {
 		auto stats = row_group.GetNode().GetStatistics(options.column_idx);
+		if (IsNullOnly(*stats)) {
+			null_only_groups.push_back(row_group);
+			continue;
+		}
 		Value comparison_value = RetrieveStat(*stats, options.order_by, options.column_type);
-		if (comparison_value.IsNull()) {
-			// no stats for this row group - push to remaining
-			remaining_row_groups.push_back(row_group);
+		if (comparison_value.IsNull() || (options.null_order == OrderByNullType::NULLS_FIRST && stats->CanHaveNull())) {
+			// No trustworthy ordering statistics, or the row group might still contribute NULLs that must be scanned
+			// before definitely non-null groups with NULLS_FIRST.
+			ambiguous_groups.push_back(row_group);
 			continue;
 		}
 		auto entry = RowGroupSegmentNodeEntry {row_group, std::move(stats)};
 		row_group_map.emplace(comparison_value, std::move(entry));
 	}
 
-	if (row_group_map.empty()) {
-		return nullptr;
+	if (options.null_order == OrderByNullType::NULLS_FIRST) {
+		AppendRowGroups(null_only_groups, options.leading_null_group_offset, ordered_row_groups);
+		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
+		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
+		                  options.column_type, ordered_row_groups);
+	} else {
+		SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
+		                  options.column_type, ordered_row_groups);
+		AppendRowGroups(ambiguous_groups, 0, ordered_row_groups);
+		AppendRowGroups(null_only_groups, 0, ordered_row_groups);
 	}
 
-	D_ASSERT(row_group_map.size() > options.row_group_offset);
-	SetRowGroupVector(row_group_map, options.row_limit, options.row_group_offset, options.order_type,
-	                  options.column_type, ordered_row_groups);
-	// push any remaining row groups
-	for (auto &remaining_row_group : remaining_row_groups) {
-		ordered_row_groups.push_back(remaining_row_group);
+	if (ordered_row_groups.empty()) {
+		return nullptr;
 	}
 
 	return ordered_row_groups[0].get();

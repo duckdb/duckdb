@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # aliases
 query T
 select from_json('42', '"UBIGINT"')
@@ -170,52 +167,52 @@ select json_transform('{"a": {"duck": 42, "goose": 7}}', '{"a": "JSON"}')
 foreach type <integral>
 
 query T
-select json_transform('42', '"${type}"')
+select json_transform('42', '"{type}"')
 ----
 42
 
 query T
-select json_transform('42.42', '"${type}"')
+select json_transform('42.42', '"{type}"')
 ----
 42
 
 query T
-select json_transform('"42"', '"${type}"')
+select json_transform('"42"', '"{type}"')
 ----
 42
 
 query T
-select json_transform('true', '"${type}"')
+select json_transform('true', '"{type}"')
 ----
 1
 
 query T
-select json_transform('false', '"${type}"')
+select json_transform('false', '"{type}"')
 ----
 0
 
 query T
-select json_transform('[]', '"${type}"')
+select json_transform('[]', '"{type}"')
 ----
 NULL
 
 query T
-select json_transform('{}', '"${type}"')
+select json_transform('{}', '"{type}"')
 ----
 NULL
 
 statement error
-select json_transform_strict('[]', '"${type}"')
+select json_transform_strict('[]', '"{type}"')
 ----
 <REGEX>:.*Invalid Input Error.*Failed to cast value to numerical.*
 
 statement error
-select json_transform_strict('{}', '"${type}"')
+select json_transform_strict('{}', '"{type}"')
 ----
 <REGEX>:.*Invalid Input Error.*Failed to cast value to numerical.*
 
 query T
-select json_transform('null', '"${type}"')
+select json_transform('null', '"{type}"')
 ----
 NULL
 

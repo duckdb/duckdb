@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/fixed_size_list_data.hpp"
 
@@ -21,7 +22,7 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input,
 	append_data.AppendValidity(format, from, to);
 	input.Flatten(input_size);
 	auto array_size = ArrayType::GetSize(input.GetType());
-	auto &child_vector = ArrayVector::GetEntry(input);
+	auto &child_vector = ArrayVector::GetChildMutable(input);
 	auto &child_data = *append_data.child_data[0];
 	child_data.append_vector(child_data, child_vector, from * array_size, to * array_size, size * array_size);
 	append_data.row_count += size;

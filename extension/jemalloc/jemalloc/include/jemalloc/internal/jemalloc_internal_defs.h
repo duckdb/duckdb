@@ -42,8 +42,12 @@
 #elif defined(__x86_64__) || defined(__i386__)
     #define CPU_SPINWAIT __asm__ volatile("pause")
     #define HAVE_CPU_SPINWAIT 1
-#elif defined(__powerpc64__) || defined(__PPC64__)
-    #define CPU_SPINWAIT __asm__ volatile("or 27,27,27")
+#elif defined(__powerpc64__) || defined(__PPC64__) || defined(__POWERPC__)
+    #ifdef __APPLE__
+        #define CPU_SPINWAIT __asm__ volatile("or r27,r27,r27")
+    #else
+        #define CPU_SPINWAIT __asm__ volatile("or 27,27,27")
+    #endif
     #define HAVE_CPU_SPINWAIT 1
 #else
     #define CPU_SPINWAIT
@@ -201,7 +205,7 @@
 /* #undef JEMALLOC_EXPERIMENTAL_SMALLOCX_API */
 
 /* JEMALLOC_PROF enables allocation profiling. */
-/* #undef JEMALLOC_PROF */
+#define JEMALLOC_PROF
 
 /* Use libunwind for profile backtracing if defined. */
 /* #undef JEMALLOC_PROF_LIBUNWIND */
@@ -210,7 +214,7 @@
 /* #undef JEMALLOC_PROF_LIBGCC */
 
 /* Use gcc intrinsics for profile backtracing if defined. */
-/* #undef JEMALLOC_PROF_GCC */
+#define JEMALLOC_PROF_GCC
 
 /* JEMALLOC_PAGEID enabled page id */
 /* #undef JEMALLOC_PAGEID */

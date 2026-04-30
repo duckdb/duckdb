@@ -55,7 +55,7 @@
 #endif
 
 // Load the generated header file containing our list of extension headers
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 #include "duckdb/main/extension/generated_extension_loader.hpp"
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
@@ -126,6 +126,8 @@ static const DefaultExtension internal_extensions[] = {
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
     {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
+    {"vortex", "Adds support for reading and writing files using the Vortex file format", false},
+    {"lance", "Adds support for querying Lance datasets", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -246,8 +248,11 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
 		}
-		ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
-		return true;
+		if (Settings::Get<AutoloadKnownExtensionsSetting>(instance)) {
+			ExtensionHelper::LoadExternalExtension(instance, fs, extension_name);
+			return true;
+		}
+		return false;
 	} catch (...) {
 		return false;
 	}
@@ -416,6 +421,7 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 }
 
+// typos:off
 static const char *const public_keys[] = {
     R"(
 -----BEGIN PUBLIC KEY-----
@@ -849,6 +855,7 @@ k9EbTcRNnxCvab/oqjvgyRuSmIES00v8jZOGQZQUpw02RN6yCBeX2i8GPsGjj/T9
 -----END PUBLIC KEY-----
 )", nullptr};
 
+// typos:on
 const vector<string> ExtensionHelper::GetPublicKeys(bool allow_community_extensions) {
 	vector<string> keys;
 	for (idx_t i = 0; public_keys[i]; i++) {

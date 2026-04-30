@@ -38,13 +38,14 @@ public:
 	}
 };
 
-static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, ScalarFunction &bound_function,
-                                                      vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
 	if (arguments.empty()) {
 		throw BinderException("json_serialize_plan takes at least one argument");
 	}
 
-	if (arguments[0]->return_type != LogicalType::VARCHAR) {
+	if (arguments[0]->GetReturnType() != LogicalType::VARCHAR) {
 		throw InvalidTypeException("json_serialize_plan first argument must be a VARCHAR");
 	}
 
@@ -65,27 +66,27 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(ClientContext &context, Sc
 		}
 		auto &alias = arg->GetAlias();
 		if (alias == "skip_null") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_null' argument must be a boolean");
 			}
 			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "skip_empty") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "skip_default") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
 			}
 			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "format") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
 			}
 			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "optimize") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'optimize' argument must be a boolean");
 			}
 			optimize = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
@@ -122,6 +123,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 	}
 	auto &context = state.GetContext();
 
+	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<string_t, string_t>(inputs, result, args.size(), [&](string_t input) {
 		auto doc = JSONCommon::CreateDocument(alc);
 		auto result_obj = yyjson_mut_obj(doc);
@@ -172,7 +174,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				    "Failed to serialize json, perhaps the query contains invalid utf8 characters?");
 			}
 
-			return StringVector::AddString(result, data, len);
+			return heap.AddString(data, len);
 
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -191,7 +193,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 			                                      info.format ? JSONCommon::WRITE_PRETTY_FLAG : JSONCommon::WRITE_FLAG,
 			                                      alc, &len_size_t, nullptr);
 			idx_t len = len_size_t;
-			return StringVector::AddString(result, data, len);
+			return heap.AddString(data, len);
 		}
 	});
 }
@@ -200,23 +202,22 @@ ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 	ScalarFunctionSet set("json_serialize_plan");
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::JSON(), JsonSerializePlanFunction,
-	                               JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	                               JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
+	                               JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
 	                               LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init));
+	                               JSONFunctionLocalState::Init));
 
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN}, LogicalType::JSON(),
-	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr, JSONFunctionLocalState::Init));
+	    JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction(
 	    {LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN, LogicalType::BOOLEAN},
-	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, nullptr,
-	    JSONFunctionLocalState::Init));
+	    LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr, JSONFunctionLocalState::Init));
 	return set;
 }
 

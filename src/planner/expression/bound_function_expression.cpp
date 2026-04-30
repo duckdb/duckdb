@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)),
@@ -110,7 +110,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 
-	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::Deserialize<BoundScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 	auto function_return_type = entry.first.GetReturnType();
 
@@ -119,13 +119,13 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	if (entry.first.HasBindExpressionCallback()) {
 		// bind the function expression
 		auto &context = deserializer.Get<ClientContext &>();
-		auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
+		auto bind_input = FunctionBindExpressionInput(context, entry.first, entry.second, children);
 		// replace the function expression with the bound expression
 		auto bound_expression = entry.first.GetBindExpressionCallback()(bind_input);
 		if (bound_expression) {
 			return bound_expression;
 		}
-		// Otherwise, fall thorugh and continue on normally
+		// Otherwise, fall through and continue on normally
 	}
 	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));

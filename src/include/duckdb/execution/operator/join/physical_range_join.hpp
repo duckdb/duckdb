@@ -76,7 +76,7 @@ public:
 			return sorted->key_data->GetLayout().GetSortKeyType();
 		}
 
-		void IntializeMatches();
+		void InitializeMatches();
 
 		//! Combine local states
 		void Combine(ExecutionContext &context, LocalSortedTable &ltable);
@@ -144,7 +144,7 @@ public:
 	                  idx_t estimated_cardinality, unique_ptr<JoinFilterPushdownInfo> pushdown_info);
 
 	// Projection mappings
-	using ProjectionMapping = vector<column_t>;
+	using ProjectionMapping = vector<idx_t>;
 	ProjectionMapping left_projection_map;
 	ProjectionMapping right_projection_map;
 

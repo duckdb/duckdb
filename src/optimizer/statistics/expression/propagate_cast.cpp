@@ -141,6 +141,20 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		}
 		break;
 	}
+	case LogicalTypeId::TIME_TZ: {
+		// Casts to TIMETZ from TIME or TIMESTAMPTZ are session-TimeZone dependent
+		// (the ICU extension overrides them at execution time) but Value::DefaultTryCastAs
+		// uses the static, UTC-only operator, so propagated min/max would diverge from
+		// runtime values. See issue #22235.
+		switch (source.id()) {
+		case LogicalTypeId::TIME:
+		case LogicalTypeId::TIMESTAMP_TZ:
+			return false;
+		default:
+			break;
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -191,7 +205,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	if (!child_stats) {
 		return nullptr;
 	}
-	auto result_stats = TryPropagateCast(*child_stats, cast.child->return_type, cast.return_type);
+	auto result_stats = TryPropagateCast(*child_stats, cast.child->GetReturnType(), cast.GetReturnType());
 	if (cast.try_cast && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}

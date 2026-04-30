@@ -2,10 +2,7 @@
 # group: [copy_database]
 
 statement ok
-pragma enable_verification;
-
-statement ok
-attach '__TEST_DIR__/backup.db';
+attach '{TEST_DIR}/backup.db';
 
 ## Only specifying a sequence name
 
@@ -36,7 +33,7 @@ select * from backup.tbl;
 query I
 select currval('backup.main.seq');
 ----
-3
+2
 
 statement ok
 drop sequence backup.main.seq cascade;
@@ -102,5 +99,6 @@ copy from database memory to backup;
 statement ok
 drop sequence memory.backup.seq cascade;
 
-statement ok
-drop sequence backup.backup.seq cascade;
+query IIIIIIIIIIIIIIII
+from duckdb_sequences()
+----

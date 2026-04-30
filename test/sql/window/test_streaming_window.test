@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
 statement ok
@@ -46,10 +43,11 @@ SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND C
 physical_plan	<REGEX>:.*STREAMING_WINDOW.*
 
 # Test each of the streaming window functions
+# row_number() over() is rewritten by the window_rewriter optimizer to use a virtual column
 query TT
 explain select row_number() over (), i, j from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TTT
 select row_number() over (), i, j from integers
@@ -58,6 +56,18 @@ select row_number() over (), i, j from integers
 2	2	1
 3	1	2
 4	1	NULL
+
+# streaming window is still used when there are filters
+query TT
+explain select row_number() over (), i, j from integers where i>1
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select row_number() over (), i, j from integers where i>1
+----
+1	2	2
+2	2	1
 
 query TT
 explain select rank() over (), i, j from integers

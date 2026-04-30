@@ -233,8 +233,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		if (aggr.children.size() < ordered_set_agg) {
 			for (auto &order : aggr.order_bys->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
-				types.push_back(child->return_type);
-				arguments.push_back(child->return_type);
+				types.push_back(child->GetReturnType());
+				arguments.push_back(child->GetReturnType());
 				if (order_sensitive) {
 					children.push_back(child->Copy());
 				} else {
@@ -249,8 +249,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
-		types.push_back(child->return_type);
-		arguments.push_back(child->return_type);
+		types.push_back(child->GetReturnType());
+		arguments.push_back(child->GetReturnType());
 		children.push_back(std::move(child));
 	}
 
@@ -278,7 +278,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
-			PushCollation(context, order_expr, order_expr->return_type);
+			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);
 			const auto null_order = config.ResolveNullOrder(context, sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
@@ -306,22 +306,23 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
-	idx_t aggr_index;
+	ProjectionIndex aggr_index;
 	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
-		aggr_index = node.aggregates.size();
-		node.aggregate_map[*aggregate] = aggr_index;
-		node.aggregates.push_back(std::move(aggregate));
+		auto &aggr_ref = *aggregate;
+		aggr_index = ColumnBinding::PushExpression(node.aggregates, std::move(aggregate));
+		node.aggregate_map[aggr_ref] = aggr_index;
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;
 	}
+	auto &bound_aggr = *node.aggregates[aggr_index];
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_uniq<BoundColumnRefExpression>(
-	    aggr.GetAlias().empty() ? node.aggregates[aggr_index]->ToString() : aggr.GetAlias(),
-	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
+	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
+	                                                  bound_aggr.GetReturnType(),
+	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));
 }

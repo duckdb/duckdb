@@ -1,7 +1,27 @@
 #include "writer/primitive_column_writer.hpp"
+
+#include <functional>
+#include <utility>
+#include <vector>
+
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "parquet_column_schema.hpp"
+#include "parquet_geometry.hpp"
 
 namespace duckdb {
 using duckdb_parquet::Encoding;
@@ -46,7 +66,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
-	auto &validity = FlatVector::Validity(vector);
+	auto &validity = FlatVector::ValidityMutable(vector);
 	HandleRepeatLevels(state, parent, count);
 	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
@@ -55,7 +75,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	col_chunk.meta_data.num_values += NumericCast<int64_t>(vcount);
 
 	const bool check_parent_empty = parent && !parent->is_empty.empty();
-	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&
+	if (!check_parent_empty && validity.CannotHaveNull() && TypeIsConstantSize(vector.GetType().InternalType()) &&
 	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
 	        MAX_UNCOMPRESSED_PAGE_SIZE) {
 		// Fast path: fixed-size type, all valid, and it fits on the current page
@@ -139,12 +159,18 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 void PrimitiveColumnWriter::WriteLevels(Allocator &allocator, WriteStream &temp_writer,
                                         const unsafe_vector<uint16_t> &levels, idx_t max_value, idx_t offset,
                                         idx_t count, optional_idx null_count) {
+	// For definition levels: the column is REQUIRED, nothing to encode.
+	// For repetition levels: the column is not repeated, every value appears exactly once, nothing to encode.
+	if (max_value == 0) {
+		return;
+	}
+
 	if (levels.empty() || count == 0) {
 		return;
 	}
 
 	// write the levels using the RLE-BP encoding
-	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidthFromMaxValue(max_value);
 	RleBpEncoder rle_encoder(bit_width);
 
 	// have to write to an intermediate stream first because we need to know the size
@@ -217,7 +243,7 @@ void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
 	D_ASSERT(hdr.uncompressed_page_size > 0);
 	D_ASSERT(hdr.compressed_page_size > 0);
 
-	if (write_info.compressed_buf) {
+	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
@@ -420,7 +446,7 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	             write_info.compressed_buf);
 	hdr.compressed_page_size = UnsafeNumericCast<int32_t>(write_info.compressed_size);
 
-	if (write_info.compressed_buf) {
+	if (write_info.compressed_buf.IsSet()) {
 		// if the data has been compressed, we no longer need the uncompressed data
 		D_ASSERT(write_info.compressed_buf.get() == write_info.compressed_data);
 		write_info.temp_writer.reset();
@@ -443,7 +469,7 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	auto allow_geometry = schema.allow_geometry;
 
 	duckdb_parquet::SchemaElement schema_element;
-	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type);
+	schema_element.type = ParquetWriter::DuckDBTypeToParquetType(type, writer.WriteTimestampAsInt96());
 	schema_element.repetition_type = repetition_type;
 	schema_element.__isset.num_children = false;
 	schema_element.__isset.type = true;
@@ -451,9 +477,10 @@ idx_t PrimitiveColumnWriter::FinalizeSchema(vector<duckdb_parquet::SchemaElement
 	schema_element.name = name;
 	if (field_id.IsValid()) {
 		schema_element.__isset.field_id = true;
-		schema_element.field_id = field_id.GetIndex();
+		schema_element.field_id = NumericCast<int32_t>(field_id.GetIndex());
 	}
-	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext());
+	ParquetWriter::SetSchemaProperties(type, schema_element, allow_geometry, writer.GetContext(),
+	                                   writer.WriteTimestampAsInt96(), writer.TimestampIsAdjustedToUTC());
 	schemas.push_back(std::move(schema_element));
 
 	D_ASSERT(child_writers.empty());

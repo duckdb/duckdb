@@ -84,6 +84,8 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'copy_functions',
     'catalog_interface',
     'logging',
+    'geometry_helpers',
+    'variant_helpers',
 ]
 
 # The file that forms the base for the header generation

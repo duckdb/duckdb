@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
@@ -40,135 +37,135 @@ loop topn 1 3
 
 # min/max
 query II
-EXPLAIN SELECT * FROM window_fun('tbl', ['grp'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # arg_min/max, no struct_pack
 query II
-EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # arg_min/max with struct_pack
 query II
-EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # min/max and nulls
 query II
-EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # arg_min/max, no struct_pack and nulls
 query II
-EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # arg_min/max with struct_pack and nulls
 query II
-EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # window function with join and one-sided projections
 query II
-EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 # window function with join and one-sided projections + join column
 query II
-EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '{sort_order}', {topn})
 ----
 logical_opt	<REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
 
 # window function with join and two-sided projections
 query II
-EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'y'], '${sort_order}', ${topn})
+EXPLAIN SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'y'], '{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*rowid = rowid.*AGGREGATE.*
 
 # test lateral join
 query II
-EXPLAIN SELECT * FROM lateral_join('${sort_order}', ${topn})
+EXPLAIN SELECT * FROM lateral_join('{sort_order}', {topn})
 ----
 logical_opt	<!REGEX>:.*FILTER.*WINDOW.*
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_1 AS SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_1 AS SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_2 AS SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_2 AS SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_3 AS SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_3 AS SELECT * FROM window_fun('tbl', ['grp', 'a'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_4 AS SELECT * FROM window_fun('tbl', ['a', 'b'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_4 AS SELECT * FROM window_fun('tbl', ['a', 'b'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_5 AS SELECT * FROM window_fun('tbl', ['a'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_5 AS SELECT * FROM window_fun('tbl', ['a'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_6 AS SELECT * FROM lateral_join('${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_6 AS SELECT * FROM lateral_join('{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_7 AS SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_7 AS SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_8 AS SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_8 AS SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_9 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_9 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '{sort_order}', {topn})
 
 statement ok
-CREATE TABLE ${sort_order}${topn}_10 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+CREATE TABLE {sort_order}{topn}_10 AS SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '{sort_order}', {topn})
 
 statement ok
 SET disabled_optimizers = 'top_n_window_elimination'
 
 query IIII
-SELECT * FROM ${sort_order}${topn}_1 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_1 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 
 query IIII
-SELECT * FROM ${sort_order}${topn}_2 EXCEPT SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_2 EXCEPT SELECT * FROM window_fun('tbl', ['b', 'a', 'grp'], '{sort_order}', {topn})
 ----
 
 query III
-SELECT * FROM ${sort_order}${topn}_3 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_3 EXCEPT SELECT * FROM window_fun('tbl', ['grp', 'a'], '{sort_order}', {topn})
 ----
 
 query III
-SELECT * FROM ${sort_order}${topn}_4 EXCEPT SELECT * FROM window_fun('tbl', ['a', 'b'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_4 EXCEPT SELECT * FROM window_fun('tbl', ['a', 'b'], '{sort_order}', {topn})
 ----
 
 query II
-SELECT * FROM ${sort_order}${topn}_5 EXCEPT SELECT * FROM window_fun('tbl', ['a'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_5 EXCEPT SELECT * FROM window_fun('tbl', ['a'], '{sort_order}', {topn})
 ----
 
 query III
-SELECT * FROM ${sort_order}${topn}_6 EXCEPT SELECT * FROM lateral_join('${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_6 EXCEPT SELECT * FROM lateral_join('{sort_order}', {topn})
 ----
 
 query III
-SELECT * FROM ${sort_order}${topn}_7 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_7 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['a', 'grp'], '{sort_order}', {topn})
 ----
 
 query IIII
-SELECT * FROM ${sort_order}${topn}_8 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_8 EXCEPT SELECT * FROM window_fun('tbl_with_null', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 
 query IIII
-SELECT * FROM ${sort_order}${topn}_9 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_9 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b'], '{sort_order}', {topn})
 ----
 
 query IIIII
-SELECT * FROM ${sort_order}${topn}_10 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '${sort_order}', ${topn})
+SELECT * FROM {sort_order}{topn}_10 EXCEPT SELECT * FROM window_fun('tbl JOIN tbl2 ON grp = x', ['grp', 'a', 'b', 'x'], '{sort_order}', {topn})
 ----
 
 statement ok
@@ -318,3 +315,95 @@ SELECT * FROM a, LATERAL (SELECT *, a_id AS id_dup FROM b ORDER BY array_distanc
 [1.0, 2.0, 3.0]	1	[1.0, 2.0, 3.0]	a	1
 [4.0, 5.0, 6.0]	2	[4.0, 5.0, 6.0]	b	2
 
+statement ok
+CREATE TABLE t(a INT, b INT, c VARCHAR);
+
+statement ok
+INSERT INTO t VALUES (1, 100, 'x'), (2, 200, 'y');
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+) sub
+GROUP BY c
+ORDER BY ALL
+----
+x	100.0
+y	200.0
+
+query II
+SELECT c, avg(b)
+FROM (
+    SELECT *, row_number() OVER (PARTITION BY a, c ORDER BY b DESC) AS rn
+    FROM t
+) sub
+WHERE rn = 1
+GROUP BY c
+ORDER BY ALL;
+----
+x	100.0
+y	200.0
+
+query II
+WITH sub AS (
+    SELECT * FROM t
+    QUALIFY row_number() OVER (PARTITION BY a, c ORDER BY b DESC) = 1
+)
+SELECT c, avg(b) FROM sub GROUP BY c ORDER BY ALL;
+----
+x	100.0
+y	200.0
+
+# Left projection map corruption issue #21650
+statement ok
+CREATE TABLE s (s1 VARCHAR)
+
+statement ok
+CREATE TABLE e (e1 VARCHAR, e2 VARCHAR, e3 VARCHAR)
+
+statement ok
+SELECT *
+FROM s b1
+JOIN (
+	SELECT *, row_number() OVER (PARTITION BY b2.s1 ORDER BY e1.e1) rn
+	FROM s b2
+	JOIN e e1 ON b2.s1 = e1.e2
+) e2 ON b1.s1 = e2.s1
+WHERE e2.rn = 1;
+
+# Late Materialization with cast in join issue #21604
+statement ok
+CREATE TABLE t1 (c VARCHAR, c1 VARCHAR, c2 VARCHAR, c3 VARCHAR)
+
+statement ok
+CREATE TABLE t2 (a BIGINT, a1 VARCHAR, a2 VARCHAR)
+
+statement ok
+WITH ct1 AS (
+	SELECT * FROM t1
+)
+SELECT *
+FROM ct1 b
+JOIN (
+	SELECT c, a1, a2, row_number() OVER (PARTITION BY b.c ORDER BY e.a1) rn
+	FROM ct1 b
+	JOIN t2 e ON b.c = e.a
+) e ON b.c = e.c
+WHERE e.rn = 1;
+
+statement ok
+CREATE TABLE except_test (id INT, ord INT, grp INT);
+
+statement ok
+INSERT INTO except_test VALUES (1, 1, 1);
+
+query II
+SELECT sub.id, sub.ord
+FROM (SELECT id, ord, grp, row_number() OVER (ORDER BY ord) AS rn FROM except_test) sub
+JOIN (VALUES (1)) t2(grp) ON t2.grp = sub.grp
+WHERE sub.rn = 1
+EXCEPT
+SELECT id, ord FROM (SELECT id, ord, row_number() OVER (ORDER BY ord) AS rn FROM except_test) WHERE rn = 1;
+----

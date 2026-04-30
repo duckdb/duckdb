@@ -1,8 +1,22 @@
 #include "zstd_file_system.hpp"
 
+#include <exception>
+#include <utility>
+
 #include "zstd.h"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/shared_ptr_ipp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/logging/logger.hpp"
 
 namespace duckdb {
+
+namespace {
 
 struct ZstdStreamWrapper : public StreamWrapper {
 	~ZstdStreamWrapper() override;
@@ -45,7 +59,7 @@ ZstdStreamWrapper::~ZstdStreamWrapper() {
 }
 
 void ZstdStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(!zstd_stream_ptr && !zstd_compress_ptr);
 	this->file = &file;
 	this->writing = write;
 	if (write) {
@@ -166,7 +180,11 @@ void ZstdStreamWrapper::Close() {
 	zstd_compress_ptr = nullptr;
 }
 
-class ZStdFile : public CompressedFile {
+struct ZStdFileSystemHolder {
+	ZStdFileSystem zstd_fs;
+};
+
+class ZStdFile : private ZStdFileSystemHolder, public CompressedFile {
 public:
 	ZStdFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(zstd_fs, std::move(child_handle_p), path) {
@@ -176,9 +194,9 @@ public:
 	FileCompressionType GetFileCompressionType() override {
 		return FileCompressionType::ZSTD;
 	}
-
-	ZStdFileSystem zstd_fs;
 };
+
+} // namespace
 
 unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(QueryContext context, unique_ptr<FileHandle> handle,
                                                           bool write) {

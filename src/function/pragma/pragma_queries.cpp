@@ -16,8 +16,7 @@
 namespace duckdb {
 
 static string PragmaTableInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);",
-	                          KeywordHelper::WriteQuoted(parameters.values[0].ToString(), '\''));
+	return StringUtil::Format("SELECT * FROM pragma_table_info(%s);", SQLString(parameters.values[0].ToString()));
 }
 
 string PragmaShowTables(const string &database, const string &schema) {
@@ -111,10 +110,6 @@ static string PragmaShowDatabases(ClientContext &context, const FunctionParamete
 string PragmaShowVariables() {
 	return "SELECT * FROM duckdb_variables() ORDER BY name";
 }
-static string PragmaAllProfiling(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_last_profiling_output() JOIN pragma_detailed_profiling_output() ON "
-	       "(pragma_last_profiling_output.operator_id);";
-}
 
 static string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_database_list;";
@@ -133,7 +128,7 @@ static string PragmaFunctionsQuery(ClientContext &context, const FunctionParamet
 }
 
 string PragmaShow(const string &table_name) {
-	return StringUtil::Format("SELECT * FROM pragma_show(%s);", KeywordHelper::WriteQuoted(table_name, '\''));
+	return StringUtil::Format("SELECT * FROM pragma_show(%s);", SQLString(table_name));
 }
 
 static string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
@@ -188,9 +183,9 @@ static string PragmaImportDatabase(ClientContext &context, const FunctionParamet
 
 static string PragmaCopyDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	string copy_stmt = "COPY FROM DATABASE ";
-	copy_stmt += KeywordHelper::WriteOptionallyQuoted(parameters.values[0].ToString());
+	copy_stmt += SQLIdentifier(parameters.values[0].ToString());
 	copy_stmt += " TO ";
-	copy_stmt += KeywordHelper::WriteOptionallyQuoted(parameters.values[1].ToString());
+	copy_stmt += SQLIdentifier(parameters.values[1].ToString());
 	string final_query;
 	final_query += copy_stmt + " (SCHEMA);\n";
 	final_query += copy_stmt + " (DATA);";
@@ -231,7 +226,6 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
 	set.AddFunction(
 	    PragmaFunction::PragmaCall("copy_database", PragmaCopyDatabase, {LogicalType::VARCHAR, LogicalType::VARCHAR}));
-	set.AddFunction(PragmaFunction::PragmaStatement("all_profiling_output", PragmaAllProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("user_agent", PragmaUserAgent));
 }
 

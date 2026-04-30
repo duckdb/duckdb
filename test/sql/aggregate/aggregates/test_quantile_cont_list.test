@@ -6,10 +6,7 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 # scalar quantiles
 statement ok
@@ -52,7 +49,7 @@ SELECT quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles
 foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
 
 query I
-SELECT quantile_cont(d::${type}, [0.25, 0.5, 0.75])
+SELECT quantile_cont(d::{type}, [0.25, 0.5, 0.75])
 FROM range(0,100) tbl(d)
 ----
 [24.7, 49.5, 74.2]

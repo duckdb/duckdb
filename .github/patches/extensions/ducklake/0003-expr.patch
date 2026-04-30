@@ -1,0 +1,182 @@
+diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
+index 290183e2..0eeb8d52 100644
+--- a/src/functions/ducklake_flush_inlined_data.cpp
++++ b/src/functions/ducklake_flush_inlined_data.cpp
+@@ -698,7 +698,7 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ 	sum_args.push_back(make_uniq<BoundColumnRefExpression>(child->types[2], child_bindings[2]));
+ 
+ 	// Pick the right sum overload
+-	auto sum_func = sum_entry.functions.GetFunctionByArguments(context, {sum_args[0]->return_type});
++	auto sum_func = sum_entry.functions.GetFunctionByArguments(context, {sum_args[0]->GetReturnType()});
+ 	FunctionBinder function_binder(context);
+ 	auto sum_aggregate =
+ 	    function_binder.BindAggregateFunction(sum_func,            // The SUM(BIGINT) -> HUGEINT function
+diff --git a/src/storage/ducklake_field_data.cpp b/src/storage/ducklake_field_data.cpp
+index 66737af6..81b7c5ae 100644
+--- a/src/storage/ducklake_field_data.cpp
++++ b/src/storage/ducklake_field_data.cpp
+@@ -59,7 +59,7 @@ static Value ExtractInitialValue(optional_ptr<const ParsedExpression> initial_ex
+ 	if (!initial_expr) {
+ 		return Value(type);
+ 	}
+-	if (initial_expr->type != ExpressionType::VALUE_CONSTANT) {
++	if (initial_expr->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+ 		if (!add_column) {
+ 			return Value(type);
+ 		}
+@@ -330,7 +330,7 @@ shared_ptr<DuckLakeFieldData> DuckLakeFieldData::SetDefault(const DuckLakeFieldD
+ 	auto result = make_shared_ptr<DuckLakeFieldData>();
+ 	auto new_default =
+ 	    new_col.HasDefaultValue() ? optional_ptr<const ParsedExpression>(new_col.DefaultValue()) : nullptr;
+-	if (new_default && new_default->type != ExpressionType::VALUE_CONSTANT && add_column) {
++	if (new_default && new_default->GetExpressionType() != ExpressionType::VALUE_CONSTANT && add_column) {
+ 		throw NotImplementedException("We cannot add a column with a non-literal default value. Add the column and "
+ 		                              "then explicitly set the default for new values using \"ALTER ... SET DEFAULT\"");
+ 	}
+diff --git a/src/storage/ducklake_insert.cpp b/src/storage/ducklake_insert.cpp
+index ed0a6ffd..eaa5537d 100644
+--- a/src/storage/ducklake_insert.cpp
++++ b/src/storage/ducklake_insert.cpp
+@@ -475,7 +475,7 @@ static void GeneratePartitionExpressions(ClientContext &context, DuckLakeCopyInp
+ 		auto expr = GetPartitionExpression(context, copy_input, field);
+ 		copy_options.names.push_back(GetPartitionExpressionName(copy_input, field, names));
+ 		names.insert(copy_options.names.back());
+-		copy_options.expected_types.push_back(expr->return_type);
++		copy_options.expected_types.push_back(expr->GetReturnType());
+ 		copy_options.projection_list.push_back(std::move(expr));
+ 	}
+ }
+@@ -613,7 +613,7 @@ static void GenerateProjection(ClientContext &context, PhysicalPlanGenerator &pl
+ 	// push the projection
+ 	vector<LogicalType> types;
+ 	for (auto &expr : expressions) {
+-		types.push_back(expr->return_type);
++		types.push_back(expr->GetReturnType());
+ 	}
+ 	auto &proj =
+ 	    planner.Make<PhysicalProjection>(std::move(types), std::move(expressions), plan->estimated_cardinality);
+diff --git a/src/storage/ducklake_merge_into.cpp b/src/storage/ducklake_merge_into.cpp
+index e7dfc462..1099072f 100644
+--- a/src/storage/ducklake_merge_into.cpp
++++ b/src/storage/ducklake_merge_into.cpp
+@@ -175,7 +175,7 @@ unique_ptr<LocalSinkState> DuckLakeMergeInsert::GetLocalSinkState(ExecutionConte
+ 		result->expression_executor = make_uniq<ExpressionExecutor>(context.client, extra_projections);
+ 		vector<LogicalType> insert_types;
+ 		for (auto &expr : result->expression_executor->expressions) {
+-			insert_types.push_back(expr->return_type);
++			insert_types.push_back(expr->GetReturnType());
+ 		}
+ 		result->chunk.Initialize(context.client, insert_types);
+ 	}
+diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
+index cb38892c..583b97af 100644
+--- a/src/storage/ducklake_metadata_manager.cpp
++++ b/src/storage/ducklake_metadata_manager.cpp
+@@ -1955,10 +1955,10 @@ string DuckLakeMetadataManager::WriteNewSchemas(const vector<DuckLakeSchemaInfo>
+ }
+ 
+ string GetExpressionType(ParsedExpression &expression) {
+-	switch (expression.type) {
++	switch (expression.GetExpressionType()) {
+ 	case ExpressionType::OPERATOR_CAST: {
+ 		auto &cast_expression = expression.Cast<CastExpression>();
+-		if (cast_expression.child->type == ExpressionType::VALUE_CONSTANT) {
++		if (cast_expression.child->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+ 			return "literal";
+ 		}
+ 		return "expression";
+diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
+index 7d6f67c8..811fd68b 100644
+--- a/src/storage/ducklake_table_entry.cpp
++++ b/src/storage/ducklake_table_entry.cpp
+@@ -419,7 +419,7 @@ void DuckLakeTableEntry::ValidateSortExpressionColumns(DuckLakeTableEntry &table
+ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpression &expr) {
+ 	string column_name;
+ 	DuckLakeTransformType transform_type;
+-	switch (expr.type) {
++	switch (expr.GetExpressionType()) {
+ 	case ExpressionType::COLUMN_REF: {
+ 		auto &colref = expr.Cast<ColumnRefExpression>();
+ 		column_name = GetPartitionColumnName(colref);
+@@ -441,7 +441,7 @@ DuckLakePartitionField GetPartitionField(DuckLakeTableEntry &table, ParsedExpres
+ 			throw NotImplementedException(
+ 			    "Unsupported partition function %s - only year, month, day, hour are supported", name);
+ 		}
+-		if (function.children.size() != 1 || function.children[0]->type != ExpressionType::COLUMN_REF) {
++		if (function.children.size() != 1 || function.children[0]->GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 			throw NotImplementedException("Expected %s(column), but got %s", name, expr.ToString());
+ 		}
+ 		auto &colref = function.children[0]->Cast<ColumnRefExpression>();
+@@ -611,7 +611,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 		Value default_value;
+ 		if (info.new_column.HasDefaultValue()) {
+ 			auto &default_expr = info.new_column.DefaultValue();
+-			if (default_expr.type == ExpressionType::VALUE_CONSTANT) {
++			if (default_expr.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+ 				auto &constant_expr = default_expr.Cast<ConstantExpression>();
+ 				default_value = constant_expr.value.DefaultCastAs(new_col.Type());
+ 			}
+@@ -770,11 +770,11 @@ bool TypePromotionIsAllowed(const LogicalType &source, const LogicalType &target
+ }
+ 
+ bool IsSimpleCast(const ParsedExpression &expr) {
+-	if (expr.type != ExpressionType::OPERATOR_CAST) {
++	if (expr.GetExpressionType() != ExpressionType::OPERATOR_CAST) {
+ 		return false;
+ 	}
+ 	auto &cast = expr.Cast<CastExpression>();
+-	if (cast.child->type != ExpressionType::COLUMN_REF) {
++	if (cast.child->GetExpressionType() != ExpressionType::COLUMN_REF) {
+ 		return false;
+ 	}
+ 	return true;
+@@ -963,7 +963,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ static void ExtractDefaultValue(const DuckLakeColumnData &col_data, DuckLakeColumnInfo &info) {
+ 	info.initial_default = col_data.initial_default;
+ 	if (col_data.default_value) {
+-		if (col_data.default_value->type == ExpressionType::VALUE_CONSTANT) {
++		if (col_data.default_value->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+ 			auto &constant_value = col_data.default_value->Cast<ConstantExpression>();
+ 			info.default_value = constant_value.value;
+ 			info.default_value_type = "literal";
+diff --git a/src/storage/ducklake_update.cpp b/src/storage/ducklake_update.cpp
+index 13c10de5..7e6d1451 100644
+--- a/src/storage/ducklake_update.cpp
++++ b/src/storage/ducklake_update.cpp
+@@ -93,7 +93,7 @@ unique_ptr<LocalSinkState> DuckLakeUpdate::GetLocalSinkState(ExecutionContext &c
+ 	vector<LogicalType> expression_types;
+ 	result->expression_executor = make_uniq<ExpressionExecutor>(context.client, expressions);
+ 	for (auto &expr : result->expression_executor->expressions) {
+-		expression_types.push_back(expr->return_type);
++		expression_types.push_back(expr->GetReturnType());
+ 	}
+ 
+ 	for (auto &type : expression_types) {
+@@ -343,7 +343,7 @@ PhysicalOperator &DuckLakeCatalog::PlanUpdate(ClientContext &context, PhysicalPl
+ 		throw BinderException("RETURNING clause not yet supported for updates of a DuckLake table");
+ 	}
+ 	for (auto &expr : op.expressions) {
+-		if (expr->type == ExpressionType::VALUE_DEFAULT) {
++		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+ 			throw BinderException("SET DEFAULT is not yet supported for updates of a DuckLake table");
+ 		}
+ 	}
+@@ -388,15 +388,15 @@ PhysicalOperator &DuckLakeCatalog::PlanUpdate(ClientContext &context, PhysicalPl
+ 				D_ASSERT(col_idx.IsValid());
+ 				auto &child_expression = expressions[col_idx.GetIndex()]->Cast<BoundReferenceExpression>();
+ 				auto column_reference =
+-				    make_uniq<BoundReferenceExpression>(child_expression.return_type, child_expression.index);
++				    make_uniq<BoundReferenceExpression>(child_expression.GetReturnType(), child_expression.index);
+ 				expressions.push_back(GetPartitionExpressionForUpdate(context, std::move(column_reference), field));
+ 			}
+ 		}
+ 	}
+ 
+ 	for (auto &expr : expressions) {
+-		if (DuckLakeTypes::RequiresCast(expr->return_type)) {
+-			auto target_type = DuckLakeTypes::GetCastedType(expr->return_type);
++		if (DuckLakeTypes::RequiresCast(expr->GetReturnType())) {
++			auto target_type = DuckLakeTypes::GetCastedType(expr->GetReturnType());
+ 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), std::move(target_type));
+ 		}
+ 	}

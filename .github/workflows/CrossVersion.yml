@@ -14,6 +14,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**'
       - '!.github/workflows/CrossVersion.yml'
@@ -42,23 +43,21 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja file
-
-      - uses: ./.github/actions/ccache-action
+        run: python3 scripts/ci/retry.py -- brew install ninja file
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -67,10 +66,10 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/ci/run_tests.py --test-flags="--force-storage --test-temp-dir my_local_folder" ./build/release/test/unittest || true
           rm -rf my_local_folder/hive
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: files-osx-${{ matrix.version }}
           path: |
@@ -96,73 +95,73 @@ jobs:
 
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
       - name: Install Ninja
-        run: brew install ninja
+        run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.0.0
           path: osx_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.1.3
           path: osx_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.2.2
           path: osx_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.3.2
           path: osx_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.4-andium
           path: osx_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-main
           path: osx_main
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.0.0
           path: linux_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.1.3
           path: linux_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.2.2
           path: linux_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.3.2
           path: linux_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.4-andium
           path: linux_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-main
           path: linux_main
@@ -172,8 +171,25 @@ jobs:
         run: |
           touch report
           for folder in linux_main linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_3_2 linux_v1_4-andium linux_v1_2 osx_v1_0_0 osx_v1_1_3 osx_main osx_v1_4-andium osx_v1_2_2 osx_v1_3_2 osx_v1_2; do
-            for filename in $folder/*; do
-              touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
+            for filename in "$folder"/*; do
+              if touch "$filename.wal" &&
+                cp "$filename.wal" a.db.wal 2>/dev/null &&
+                cp "$filename" a.db 2>/dev/null; then
+                if ! ./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out; then
+                  if ! grep "but it is not a valid DuckDB database file!" out 2>/dev/null; then
+                    echo "--> $filename"
+                    cat out
+                    echo
+                    if grep -i "internal error" out; then
+                      {
+                        echo "--> $filename"
+                        cat out
+                        echo
+                      } >> report
+                    fi
+                  fi
+                fi
+              fi
               rm -f b.db a.db b.db.wal a.db.wal
             done
           done
@@ -198,24 +214,24 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ matrix.version }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
@@ -224,10 +240,10 @@ jobs:
       - name: Unit Test
         shell: bash
         run: |
-          ./build/release/test/unittest --force-storage --test-temp-dir my_local_folder || true
+          python3 scripts/ci/run_tests.py --test-flags="--force-storage --test-temp-dir my_local_folder" ./build/release/test/unittest || true
           rm -rf my_local_folder/hive
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: files-linux-${{ matrix.version }}
           path: |
@@ -251,7 +267,7 @@ jobs:
       GEN: ninja
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ matrix.version }}
@@ -268,69 +284,69 @@ jobs:
           remove_folders: /opt/az /opt/ghc /opt/google /opt/hostedtoolcache /opt/microsoft /usr/lib/firefox /usr/lib/jvm /usr/local/.ghcup /usr/local/julia* /usr/local/lib/android /usr/local/share/boost /usr/local/share/chromium /usr/local/share/powershell /usr/share/dotnet /usr/share/swift /var/lib/apt/lists/*
 
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
       - name: Build
         shell: bash
-        run: make
+        run: python3 scripts/ci/retry.py -- make
 
       - name: Print platform
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.0.0
           path: osx_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.1.3
           path: osx_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.2.2
           path: osx_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.3.2
           path: osx_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-v1.4-andium
           path: osx_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-osx-main
           path: osx_main
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.0.0
           path: linux_v1_0_0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.1.3
           path: linux_v1_1_3
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.2.2
           path: linux_v1_2_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.3.2
           path: linux_v1_3_2
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-v1.4-andium
           path: linux_v1_4-andium
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: files-linux-main
           path: linux_main
@@ -340,8 +356,25 @@ jobs:
         run: |
           touch report
           for folder in osx_v1_0_0 osx_v1_1_3 osx_main osx_v1_3_2 osx_v1_4-andium linux_main linux_v1_3_2 linux_v1_4-andium linux_v1_0_0 linux_v1_1_3 linux_v1_2_2 linux_v1_2 osx_v1_2_2 osx_v1_2; do
-            for filename in $folder/*; do
-              touch $filename.wal && cp $filename.wal a.db.wal 2>/dev/null && cp $filename a.db 2>/dev/null && (./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out || (grep "but it is not a valid DuckDB database file!" out 2>/dev/null || ( echo "--> " $filename && cat out && echo "" && (grep -i "internal error" out && echo "--> " $filename >> report && cat out >> report && echo "" >> report)))) || true
+            for filename in "$folder"/*; do
+              if touch "$filename.wal" &&
+                cp "$filename.wal" a.db.wal 2>/dev/null &&
+                cp "$filename" a.db 2>/dev/null; then
+                if ! ./build/release/duckdb a.db -c "ATTACH 'b.db'; COPY FROM DATABASE a TO b;" 2>out; then
+                  if ! grep "but it is not a valid DuckDB database file!" out 2>/dev/null; then
+                    echo "--> $filename"
+                    cat out
+                    echo
+                    if grep -i "internal error" out; then
+                      {
+                        echo "--> $filename"
+                        cat out
+                        echo
+                      } >> report
+                    fi
+                  fi
+                fi
+              fi
               rm -f b.db a.db b.db.wal a.db.wal
             done
           done

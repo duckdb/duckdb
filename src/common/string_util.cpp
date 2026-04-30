@@ -138,7 +138,7 @@ void StringUtil::Trim(string &str) {
 	StringUtil::RTrim(str);
 }
 
-bool StringUtil::StartsWith(string str, string prefix) {
+bool StringUtil::StartsWith(const string &str, const string &prefix) {
 	if (prefix.size() > str.size()) {
 		return false;
 	}
@@ -459,6 +459,13 @@ bool StringUtil::CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l
 
 bool StringUtil::CIEquals(const string &l1, const string &l2) {
 	return CIEquals(l1.c_str(), l1.size(), l2.c_str(), l2.size());
+}
+
+bool StringUtil::CIStartsWith(const string &str, const string &prefix) {
+	if (prefix.size() > str.size()) {
+		return false;
+	}
+	return CIEquals(str.c_str(), prefix.size(), prefix.c_str(), prefix.size());
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {

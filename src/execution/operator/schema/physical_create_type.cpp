@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -37,32 +39,29 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		throw InvalidInputException("Attempted to create ENUM of size %llu, which exceeds the maximum size of %llu",
 		                            total_row_count, NumericLimits<uint32_t>::Maximum());
 	}
-	UnifiedVectorFormat sdata;
-	chunk.data[0].ToUnifiedFormat(chunk.size(), sdata);
-
 	if (total_row_count > gstate.capacity) {
 		// We must resize our result vector
 		gstate.result.Resize(gstate.capacity, gstate.capacity * 2);
 		gstate.capacity *= 2;
 	}
 
-	auto src_ptr = UnifiedVectorFormat::GetData<string_t>(sdata);
-	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
+	auto entries = chunk.data[0].Values<string_t>(chunk.size());
+	auto result_data = FlatVector::ScatterWriter<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
-		idx_t idx = sdata.sel->get_index(i);
-		if (!sdata.validity.RowIsValid(idx)) {
+		auto vec_entry = entries[i];
+		if (!vec_entry.IsValid()) {
 			continue;
 		}
-		auto str = src_ptr[idx];
-		auto entry = gstate.found_strings.find(src_ptr[idx]);
-		if (entry != gstate.found_strings.end()) {
+		auto str = vec_entry.GetValue();
+		auto found = gstate.found_strings.find(str);
+		if (found != gstate.found_strings.end()) {
 			// entry was already found - skip
 			continue;
 		}
-		auto owned_string = StringVector::AddStringOrBlob(gstate.result, str.GetData(), str.GetSize());
-		gstate.found_strings.insert(owned_string);
-		result_ptr[gstate.size++] = owned_string;
+		result_data[gstate.size] = str;
+		gstate.found_strings.insert(result_data[gstate.size]);
+		gstate.size++;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }

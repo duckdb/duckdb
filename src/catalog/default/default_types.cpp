@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -170,7 +172,7 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 	}
 
 	Vector enum_vector(LogicalType::VARCHAR, NumericCast<idx_t>(arguments.size()));
-	auto string_data = FlatVector::GetData<string_t>(enum_vector);
+	auto string_data = FlatVector::Writer<string_t>(enum_vector, arguments.size());
 
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		auto &arg = arguments[arg_idx];
@@ -187,7 +189,7 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 			throw BinderException("ENUM type arguments cannot be NULL (argument %d is NULL)", arg_idx + 1);
 		}
 
-		string_data[arg_idx] = StringVector::AddString(enum_vector, StringValue::Get(arg.GetValue()));
+		string_data.WriteValue(string_t(StringValue::Get(arg.GetValue())));
 	}
 
 	return LogicalType::ENUM(enum_vector, NumericCast<idx_t>(arguments.size()));

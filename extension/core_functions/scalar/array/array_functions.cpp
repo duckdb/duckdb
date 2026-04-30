@@ -1,39 +1,42 @@
+#include "duckdb/common/vector/array_vector.hpp"
 #include "core_functions/scalar/array_functions.hpp"
 #include "core_functions/array_kernels.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, ScalarFunction &bound_function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
-	const auto &lhs_type = arguments[0]->return_type;
-	const auto &rhs_type = arguments[1]->return_type;
+static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	const auto &lhs_type = arguments[0]->GetReturnType();
+	const auto &rhs_type = arguments[1]->GetReturnType();
 
 	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
-		bound_function.arguments[0] = rhs_type;
-		bound_function.arguments[1] = lhs_type;
+		bound_function.GetArguments()[0] = rhs_type;
+		bound_function.GetArguments()[1] = lhs_type;
 		bound_function.SetReturnType(LogicalType::UNKNOWN);
 		return nullptr;
 	}
 
-	bound_function.arguments[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
-	bound_function.arguments[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
+	bound_function.GetArguments()[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
+	bound_function.GetArguments()[1] = rhs_type.IsUnknown() ? lhs_type : rhs_type;
 
-	if (bound_function.arguments[0].id() != LogicalTypeId::ARRAY ||
-	    bound_function.arguments[1].id() != LogicalTypeId::ARRAY) {
+	if (bound_function.GetArguments()[0].id() != LogicalTypeId::ARRAY ||
+	    bound_function.GetArguments()[1].id() != LogicalTypeId::ARRAY) {
 		throw InvalidInputException(
 		    StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.name));
 	}
 
-	const auto lhs_size = ArrayType::GetSize(bound_function.arguments[0]);
-	const auto rhs_size = ArrayType::GetSize(bound_function.arguments[1]);
+	const auto lhs_size = ArrayType::GetSize(bound_function.GetArguments()[0]);
+	const auto rhs_size = ArrayType::GetSize(bound_function.GetArguments()[1]);
 
 	if (lhs_size != rhs_size) {
 		throw BinderException("%s: Array arguments must be of the same size", bound_function.name);
 	}
 
-	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.arguments[0]);
-	const auto &rhs_element_type = ArrayType::GetChildType(bound_function.arguments[1]);
+	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[0]);
+	const auto &rhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[1]);
 
 	// Resolve common type
 	LogicalType common_type;
@@ -48,8 +51,8 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(ClientContext &context, S
 	}
 
 	// The important part is just that we resolve the size of the input arrays
-	bound_function.arguments[0] = LogicalType::ARRAY(common_type, lhs_size);
-	bound_function.arguments[1] = LogicalType::ARRAY(common_type, rhs_size);
+	bound_function.GetArguments()[0] = LogicalType::ARRAY(common_type, lhs_size);
+	bound_function.GetArguments()[1] = LogicalType::ARRAY(common_type, rhs_size);
 
 	return nullptr;
 }
@@ -87,9 +90,9 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 	const auto &func_name = expr.function.name;
 
 	const auto count = args.size();
-	auto &lhs_child = ArrayVector::GetEntry(args.data[0]);
-	auto &rhs_child = ArrayVector::GetEntry(args.data[1]);
-	auto &res_child = ArrayVector::GetEntry(result);
+	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
+	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
+	auto &res_child = ArrayVector::GetChildMutable(result);
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
 	const auto &rhs_child_validity = FlatVector::Validity(rhs_child);
@@ -102,7 +105,7 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(res_child);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(res_child);
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto lhs_idx = lhs_format.sel->get_index(i);
@@ -149,8 +152,8 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	const auto &func_name = expr.function.name;
 
 	const auto count = args.size();
-	auto &lhs_child = ArrayVector::GetEntry(args.data[0]);
-	auto &rhs_child = ArrayVector::GetEntry(args.data[1]);
+	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
+	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
 	const auto &rhs_child_validity = FlatVector::Validity(rhs_child);
@@ -163,7 +166,7 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
-	auto res_data = FlatVector::GetData<TYPE>(result);
+	auto res_data = FlatVector::GetDataMutable<TYPE>(result);
 
 	const auto array_size = ArrayType::GetSize(args.data[0].GetType());
 	D_ASSERT(array_size == ArrayType::GetSize(args.data[1].GetType()));

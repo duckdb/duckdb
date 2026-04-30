@@ -66,7 +66,7 @@ struct StandardLeastGreatest {
 	}
 
 	static void FinalizeResult(idx_t rows, bool result_has_value[], Vector &result, ExpressionState &) {
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < rows; i++) {
 			if (!result_has_value[i]) {
 				result_mask.SetInvalid(i);
@@ -97,7 +97,7 @@ struct SortKeyLeastGreatest {
 	static void FinalizeResult(idx_t rows, bool result_has_value[], Vector &result, ExpressionState &state) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<LeastGreatestSortKeyState>();
 		auto result_keys = FlatVector::GetData<string_t>(lstate.intermediate);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < rows; i++) {
 			if (!result_has_value[i]) {
 				result_mask.SetInvalid(i);
@@ -130,7 +130,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		}
 	}
 
-	auto result_data = FlatVector::GetData<T>(result_vector);
+	auto result_data = FlatVector::ScatterWriter<T>(result_vector);
 	bool result_has_value[STANDARD_VECTOR_SIZE] {false};
 	// perform the operation column-by-column
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -140,17 +140,15 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		UnifiedVectorFormat vdata;
-		input.data[col_idx].ToUnifiedFormat(input.size(), vdata);
+		auto entries = input.data[col_idx].template Values<T>(input.size());
 
-		auto input_data = UnifiedVectorFormat::GetData<T>(vdata);
-		if (!vdata.validity.AllValid()) {
+		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-				if (vdata.validity.RowIsValid(vindex)) {
+				auto entry = entries[i];
+				if (entry.IsValid()) {
 					// not a null entry: perform the operation and add to new set
-					auto ivalue = input_data[vindex];
+					auto ivalue = entry.GetValue();
 					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 						result_has_value[i] = true;
 						result_data[i] = ivalue;
@@ -160,9 +158,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		} else {
 			// no new null entries: only need to perform the operation
 			for (idx_t i = 0; i < input.size(); i++) {
-				auto vindex = vdata.sel->get_index(i);
-
-				auto ivalue = input_data[vindex];
+				auto ivalue = entries.GetValueUnsafe(i);
 				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
 					result_has_value[i] = true;
 					result_data[i] = ivalue;
@@ -175,8 +171,10 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 template <class LEAST_GREATER_OP>
-unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
@@ -230,8 +228,8 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	bound_function.arguments[0] = child_type;
-	bound_function.varargs = child_type;
+	bound_function.GetArguments()[0] = child_type;
+	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(child_type);
 	return nullptr;
 }
@@ -239,8 +237,7 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
 	return ScalarFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, nullptr, nullptr,
-	                      nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
-	                      FunctionNullHandling::SPECIAL_HANDLING);
+	                      LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>

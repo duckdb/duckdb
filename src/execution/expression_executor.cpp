@@ -120,7 +120,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
-	D_ASSERT(result.GetType().id() == expressions[expr_idx]->return_type.id());
+	D_ASSERT(result.GetType().id() == expressions[expr_idx]->GetReturnType().id());
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 }
 
@@ -130,12 +130,12 @@ Value ExpressionExecutor::EvaluateScalar(ClientContext &context, const Expressio
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(context, expr);
 
-	Vector result(expr.return_type);
+	Vector result(expr.GetReturnType());
 	executor.ExecuteExpression(result);
 
 	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
-	D_ASSERT(result_value.type().InternalType() == expr.return_type.InternalType());
+	D_ASSERT(result_value.type().InternalType() == expr.GetReturnType().InternalType());
 	return result_value;
 }
 
@@ -151,10 +151,10 @@ bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Express
 }
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type.id() == vector.GetType().id());
+	D_ASSERT(expr.GetReturnType().id() == vector.GetType().id());
 	vector.Verify(count);
-	if (expr.verification_stats) {
-		expr.verification_stats->Verify(vector, count);
+	if (expr.GetVerificationStats()) {
+		expr.GetVerificationStats()->Verify(vector, count);
 	}
 	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
 		Vector::DebugTransformToDictionary(vector, count);
@@ -163,7 +163,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		if (TypeVisitor::Contains(vector.GetType(), [](const LogicalType &type) {
 			    if (type.IsJSONType() || type.id() == LogicalTypeId::VARIANT || type.id() == LogicalTypeId::UNION ||
 			        type.id() == LogicalTypeId::ENUM || type.id() == LogicalTypeId::LEGACY_AGGREGATE_STATE ||
-			        type.id() == LogicalTypeId::AGGREGATE_STATE) {
+			        type.id() == LogicalTypeId::AGGREGATE_STATE || type.id() == LogicalTypeId::TYPE) {
 				    return true;
 			    }
 			    if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
@@ -174,7 +174,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			return;
 		}
 
-		Vector intermediate(LogicalType::VARIANT(), true, false, count);
+		Vector intermediate(LogicalType::VARIANT(), count);
 
 		//! First cast to VARIANT
 		if (HasContext()) {
@@ -185,7 +185,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		intermediate.Verify(count);
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
-		Vector result(vector.GetType(), true, false, count);
+		Vector result(vector.GetType(), count);
 		//! Then cast back into the original type
 		if (HasContext()) {
 			VectorOperations::Cast(GetContext(), intermediate, result, count, true);
@@ -235,7 +235,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
 		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
-			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+			D_ASSERT(FlatVector::ValidityMutable(result).CheckAllValid(count));
 		}
 	}
 #endif
@@ -243,10 +243,10 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	if (count == 0) {
 		return;
 	}
-	if (result.GetType().id() != expr.return_type.id()) {
+	if (result.GetType().id() != expr.GetReturnType().id()) {
 		throw InternalException(
 		    "ExpressionExecutor::Execute called with a result vector of type %s that does not match expression type %s",
-		    result.GetType(), expr.return_type);
+		    result.GetType(), expr.GetReturnType());
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_BETWEEN:
@@ -291,7 +291,7 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return 0;
 	}
 	D_ASSERT(true_sel || false_sel);
-	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case ExpressionClass::BOUND_BETWEEN:
@@ -301,6 +301,8 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+	case ExpressionClass::BOUND_FUNCTION:
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
@@ -353,7 +355,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast(intermediate_bools));
+	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast(intermediate_bools), STANDARD_VECTOR_SIZE);
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;
@@ -362,7 +364,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();
 	}
-	if (!idata.validity.AllValid()) {
+	if (idata.validity.CanHaveNull()) {
 		return DefaultSelectSwitch<false>(idata, sel, count, true_sel, false_sel);
 	} else {
 		return DefaultSelectSwitch<true>(idata, sel, count, true_sel, false_sel);

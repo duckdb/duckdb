@@ -3,6 +3,10 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
@@ -14,6 +18,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/list.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -26,6 +31,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
 
@@ -81,14 +87,14 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());
-	case StatementType::INSERT_STATEMENT:
-		return BindWithCTE(statement.Cast<InsertStatement>());
 	case StatementType::COPY_STATEMENT:
 		return Bind(statement.Cast<CopyStatement>(), CopyToType::COPY_TO_FILE);
+	case StatementType::INSERT_STATEMENT:
+		return Bind(statement.Cast<InsertStatement>());
 	case StatementType::DELETE_STATEMENT:
-		return BindWithCTE(statement.Cast<DeleteStatement>());
+		return Bind(statement.Cast<DeleteStatement>());
 	case StatementType::UPDATE_STATEMENT:
-		return BindWithCTE(statement.Cast<UpdateStatement>());
+		return Bind(statement.Cast<UpdateStatement>());
 	case StatementType::RELATION_STATEMENT:
 		return Bind(statement.Cast<RelationStatement>());
 	case StatementType::CREATE_STATEMENT:
@@ -223,8 +229,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 	bound_views.insert(view);
 }
 
-idx_t Binder::GenerateTableIndex() {
-	return global_binder_state->bound_tables++;
+TableIndex Binder::GenerateTableIndex() {
+	return TableIndex(global_binder_state->bound_tables++);
 }
 
 StatementProperties &Binder::GetStatementProperties() {
@@ -505,7 +511,7 @@ void Binder::BindDeleteIndexColumns(TableCatalogEntry &table, LogicalGet &get, v
 }
 
 BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
-                                     const string &alias, idx_t update_table_index,
+                                     const string &alias, TableIndex update_table_index,
                                      unique_ptr<LogicalOperator> child_operator, virtual_column_map_t virtual_columns) {
 	vector<LogicalType> types;
 	vector<string> names;
@@ -574,6 +580,68 @@ shared_ptr<Binder> Binder::CreateBinderWithSearchPath(const string &catalog_name
 	}
 	new_binder->entry_retriever.SetSearchPath(std::move(search_path));
 	return new_binder;
+}
+
+static constexpr const char *TRIGGER_BASE_CTE_NAME = "__duckdb_trigger_base";
+
+unique_ptr<BoundStatement> Binder::TryExpandAfterTriggers(QueryNode &node,
+                                                          vector<unique_ptr<ParsedExpression>> &returning_list,
+                                                          TableCatalogEntry &table, TriggerEventType event_type) {
+	auto &expanded_tables = global_binder_state->trigger_expanded_tables;
+	if (expanded_tables.find(table) != expanded_tables.end()) {
+		if (global_binder_state->trigger_creation_table == &table) {
+			throw NotImplementedException("Recursive trigger chains are not yet supported (trigger cycle detected "
+			                              "through trigger \"%s\" on table \"%s\")",
+			                              global_binder_state->trigger_creation_name, table.name);
+		}
+		return nullptr;
+	}
+	auto triggers = table.GetTriggersForEvent(table.ParentCatalog().GetCatalogTransaction(context),
+	                                          TriggerTiming::AFTER, event_type);
+	if (triggers.empty()) {
+		return nullptr;
+	}
+	if (!returning_list.empty()) {
+		throw NotImplementedException("RETURNING is not yet supported on tables with AFTER triggers");
+	}
+	expanded_tables.insert(table);
+	return make_uniq<BoundStatement>(ExpandAfterTriggers(node, returning_list, triggers));
+}
+
+BoundStatement Binder::ExpandAfterTriggers(QueryNode &node, vector<unique_ptr<ParsedExpression>> &returning_list,
+                                           const vector<const_reference<TriggerCatalogEntry>> &triggers) {
+	// multiple triggers per table are not yet supported
+	D_ASSERT(triggers.size() == 1);
+
+	D_ASSERT(returning_list.empty());
+	returning_list.push_back(make_uniq<StarExpression>());
+
+	auto base_cte = make_uniq<CommonTableExpressionInfo>();
+	base_cte->query_node = node.Copy();
+	base_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	base_cte->is_trigger_generated = true;
+
+	// Unreferenced DML CTE
+	auto &trigger = triggers[0].get();
+	auto trig_cte = make_uniq<CommonTableExpressionInfo>();
+	trig_cte->query_node = trigger.trigger_action->Copy();
+	trig_cte->materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
+	trig_cte->is_trigger_generated = true;
+
+	// count(*) over the base CTE gives CHANGED_ROWS ("N rows affected") to the client
+	auto outer = make_uniq<SelectNode>();
+	outer->select_list.push_back(make_uniq<FunctionExpression>("count_star", vector<unique_ptr<ParsedExpression>>()));
+	auto from_ref = make_uniq<BaseTableRef>();
+	from_ref->table_name = TRIGGER_BASE_CTE_NAME;
+	outer->from_table = std::move(from_ref);
+	outer->cte_map.map[TRIGGER_BASE_CTE_NAME] = std::move(base_cte);
+	outer->cte_map.map["__duckdb_trigger_1"] = std::move(trig_cte);
+
+	auto bound = Bind(*outer);
+	auto &properties = GetStatementProperties();
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
+	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	return bound;
 }
 
 } // namespace duckdb

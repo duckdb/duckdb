@@ -4,6 +4,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 
@@ -128,6 +129,9 @@ void TableStatistics::InitializeAddConstraint(TableStatistics &parent) {
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
+	if (parent.table_sample) {
+		table_sample = std::move(parent.table_sample);
+	}
 }
 
 void TableStatistics::MergeStats(TableStatistics &other) {
@@ -140,7 +144,7 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 			D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
 			this_reservoir.Merge(std::move(other.table_sample));
 		}
-		// if no other.table sample, do nothig
+		// if no other.table sample, do nothing
 	} else {
 		if (other.table_sample) {
 			auto &other_reservoir = other.table_sample->Cast<ReservoirSample>();

@@ -2,6 +2,12 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/planner/filter/bloom_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/prefix_range_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -23,7 +29,7 @@ unique_ptr<SegmentScanState> ConstantInitScan(const QueryContext &context, Colum
 void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
-		auto &mask = FlatVector::Validity(result);
+		auto &mask = FlatVector::ValidityMutable(result);
 		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
 		}
@@ -34,7 +40,7 @@ template <class T>
 void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	auto constant_value = NumericStats::GetMin<T>(nstats);
 	for (idx_t i = 0; i < count; i++) {
 		data[start_idx + i] = constant_value;
@@ -60,8 +66,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 	if (stats.CanHaveNull()) {
 		if (result.GetType().InternalType() == PhysicalType::STRUCT ||
 		    result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
+			ConstantVector::SetNull(result, count_t(scan_count));
 		} else {
 			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
@@ -73,7 +78,7 @@ template <class T>
 void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &nstats = segment.stats.statistics;
 
-	auto data = FlatVector::GetData<T>(result);
+	auto data = FlatVector::GetDataMutable<T>(result);
 	data[0] = NumericStats::GetMin<T>(nstats);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 }
@@ -148,21 +153,11 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		}
 		break;
 	}
-	case TableFilterType::CONSTANT_COMPARISON:
-		filters_nulls = true;
-		break;
-	case TableFilterType::IS_NULL:
-		filters_valid_values = true;
-		break;
-	case TableFilterType::IS_NOT_NULL:
-		filters_nulls = true;
-		break;
 	case TableFilterType::EXPRESSION_FILTER: {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		Value val(type);
-		//! If the expression evaluates to true, containing only a NULL vector, it *must* be an IS NULL filter
-		filters_nulls = !expr_filter.EvaluateWithConstant(state.executor, val);
+		filters_nulls = !expr_filter.EvaluateWithConstant(*state.executor, val);
 		filters_valid_values = false;
 		break;
 	}
@@ -171,7 +166,8 @@ void ConstantFun::FiltersNullValues(const LogicalType &type, const TableFilter &
 		filters_nulls = bf.FiltersNullValues();
 		break;
 	}
-	case TableFilterType::PERFECT_HASH_JOIN_FILTER: {
+	case TableFilterType::PERFECT_HASH_JOIN_FILTER:
+	case TableFilterType::PREFIX_RANGE_FILTER: {
 		filters_nulls = true;
 		break;
 	}

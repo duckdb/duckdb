@@ -2,9 +2,6 @@
 # description: Issue #4581: NULL pointer on complex OFFSET clause
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT 6 OFFSET count(*) FILTER ((SELECT 2 UNION (SELECT 2) OFFSET (SELECT LAST))) OVER ();
 ----

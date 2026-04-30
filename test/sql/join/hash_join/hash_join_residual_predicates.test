@@ -2,9 +2,6 @@
 # description: Test hash join with residual predicates (non-pushdown conditions in ON clause)
 # group: [hash_join]
 
-statement ok
-PRAGMA enable_verification
-
 require tpch
 
 statement ok

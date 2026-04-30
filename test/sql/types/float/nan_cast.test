@@ -2,9 +2,6 @@
 # description: Test casting of NaN and inf values
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 # to integer/decimal casts
 foreach source_type FLOAT DOUBLE
 
@@ -13,11 +10,11 @@ foreach target_type <integral> DECIMAL(4,1) DECIMAL(9,1) DECIMAL(18,1) DECIMAL(3
 foreach val nan inf -inf
 
 statement ok
-SELECT '${val}'::${source_type}
+SELECT '{val}'::{source_type}
 
 # cannot cast nan, inf or -inf to these types
 statement error
-SELECT '${val}'::${source_type}::${target_type}
+SELECT '{val}'::{source_type}::{target_type}
 ----
 
 endloop
@@ -32,17 +29,17 @@ foreach source_type FLOAT DOUBLE VARCHAR
 foreach target_type FLOAT DOUBLE VARCHAR
 
 query I
-SELECT 'nan'::${source_type}::${target_type}
+SELECT 'nan'::{source_type}::{target_type}
 ----
 nan
 
 query I
-SELECT 'inf'::${source_type}::${target_type}
+SELECT 'inf'::{source_type}::{target_type}
 ----
 inf
 
 query I
-SELECT '-inf'::${source_type}::${target_type}
+SELECT '-inf'::{source_type}::{target_type}
 ----
 -inf
 

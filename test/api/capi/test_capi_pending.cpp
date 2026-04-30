@@ -2,7 +2,6 @@
 #include "duckdb.h"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Test pending statements in C API", "[capi]") {
 	CAPITester tester;

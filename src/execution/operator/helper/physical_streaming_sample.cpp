@@ -82,6 +82,7 @@ OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, D
 InsertionOrderPreservingMap<string> PhysicalStreamingSample::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Sample Method"] = EnumUtil::ToString(sample_options->method) + ": " + to_string(100 * percentage) + "%";
+	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }
 

@@ -137,7 +137,61 @@ def test_bail_off_continues_after_error(shell):
     )
 
     result = test.run()
-    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+    result.check_stderr("Parser Error: syntax error at or near")
+    assert "reached here" in str(result.stdout)
+
+def test_bail_on_missing_init(shell):
+    test = (
+        ShellTest(shell, ['-init', '___thisfiledoesnotexist'])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("___thisfiledoesnotexist")
+    assert "reached here" not in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;"], indirect=True)
+def test_bail_within_init(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-init', generated_file.as_posix()])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" not in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;\nselect 'reached here'"], indirect=True)
+def test_bail_within_read(shell, generated_file):
+    test = (
+        ShellTest(shell)
+        .statement(".read \"" + generated_file.as_posix() + "\"")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" not in str(result.stdout)
+@pytest.mark.parametrize('generated_file', [".bail off\nselec 42;"], indirect=True)
+def test_explicit_bail_within_init(shell, generated_file):
+    test = (
+        ShellTest(shell, ['-init', generated_file.as_posix()])
+        .statement("select 'reached here'")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
+    assert "reached here" in str(result.stdout)
+
+@pytest.mark.parametrize('generated_file', ["selec 42;\nselect 'reached here'"], indirect=True)
+def test_explicit_bail_within_read(shell, generated_file):
+    test = (
+        ShellTest(shell)
+        .statement(".bail off")
+        .statement(".read \"" + generated_file.as_posix() + "\"")
+    )
+
+    result = test.run()
+    result.check_stderr("selec")
     assert "reached here" in str(result.stdout)
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
@@ -205,7 +259,7 @@ def test_invalid_sql(shell):
     test = ShellTest(shell).statement("invalid command;")
     result = test.run()
     assert result.status_code == 1
-    result.check_stderr("Parser Error: syntax error at or near \"invalid\"")
+    result.check_stderr("Parser Error: syntax error at or near")
 
 @pytest.mark.parametrize("alias", ["exit", "quit"])
 def test_exit(shell, alias):
@@ -555,6 +609,14 @@ def test_jsonlines(shell):
     result = test.run()
     result.check_stdout('{"42":42,"43":43}')
 
+def test_jsonlines_cmdline(shell):
+    test = (
+        ShellTest(shell, ['-jsonlines'])
+        .statement("SELECT 42,43;")
+    )
+    result = test.run()
+    result.check_stdout('{"42":42,"43":43}')
+
 def test_nested_jsonlines(shell):
     test = (
         ShellTest(shell)
@@ -618,6 +680,45 @@ def test_once(shell, random_filepath):
     result = test.run()
     result.stdout = open(random_filepath, 'rb').read()
     result.check_stdout(b'43')
+
+def test_output_off_no_error(shell):
+    # .output off should suppress output without printing an error to stderr
+    test = (
+        ShellTest(shell)
+        .statement(".output off")
+    )
+    result = test.run()
+    assert "Error" not in result.stderr
+
+def test_output_invalid_path_error(shell, tmp_path):
+    # .output to an invalid path should print an error to stderr
+    invalid_path = (tmp_path / "nonexistent_dir" / "file.txt").as_posix()
+    test = (
+        ShellTest(shell)
+        .statement(f".output {invalid_path}")
+    )
+    result = test.run()
+    result.check_stderr("Error: cannot write to")
+
+def test_once_temp_file_cleanup(shell, tmp_path):
+    # Verify that temp files created by .once are cleaned up
+    # when a new temp file is created via NewTempFile -> ClearTempFile
+    filepath1 = tmp_path / "first.txt"
+    filepath2 = tmp_path / "second.txt"
+    test = (
+        ShellTest(shell)
+        .statement(f".once {filepath1.as_posix()}")
+        .statement("SELECT 'first'")
+        .statement(f".once {filepath2.as_posix()}")
+        .statement("SELECT 'second'")
+        .statement(".output stdout")
+        .statement("SELECT 'done'")
+    )
+    result = test.run()
+    result.check_stdout("done")
+    assert filepath2.exists()
+    result.stdout = open(filepath2, 'rb').read()
+    result.check_stdout(b'second')
 
 @pytest.mark.parametrize("dot_command", [
     ".mode ascii",

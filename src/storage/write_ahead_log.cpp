@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -333,6 +335,10 @@ void WriteAheadLog::WriteSequenceValue(SequenceValue val) {
 	serializer.WriteProperty(102, "name", sequence.name);
 	serializer.WriteProperty(103, "usage_count", val.usage_count);
 	serializer.WriteProperty(104, "counter", val.counter);
+	// we only support writing last_value from version 2.0.0 onwards
+	if (storage_manager.GetStorageVersion() >= 8) {
+		serializer.WriteProperty(105, "last_value", val.entry->GetData().last_value);
+	}
 	serializer.End();
 }
 
@@ -431,6 +437,23 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 }
 
 //===--------------------------------------------------------------------===//
+// TRIGGERS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::CREATE_TRIGGER);
+	serializer.WriteProperty(101, "trigger", &entry);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteDropTrigger(const TriggerCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::DROP_TRIGGER);
+	serializer.WriteProperty(101, "schema", entry.schema.name);
+	serializer.WriteProperty(102, "name", entry.name);
+	serializer.WriteProperty(103, "table", entry.base_table->table_name);
+	serializer.End();
+}
+
+//===--------------------------------------------------------------------===//
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
@@ -480,6 +503,12 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	WriteAheadLogSerializer serializer(*this, WALType::ROW_GROUP_DATA);
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
+
+	// mark written blocks as checkpointed
+	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
+	for (auto &block_id : data.GetBlockIds()) {
+		block_manager.MarkBlockAsCheckpointed(block_id);
+	}
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
@@ -549,13 +578,6 @@ void WriteAheadLog::Flush() {
 
 void WriteAheadLog::IncrementWALEntriesCount() {
 	storage_manager.IncrementWALEntriesCount();
-}
-
-void WriteAheadLog::MarkBlocksInUseAsModified() {
-	auto &block_manager = storage_manager.GetBlockManager();
-	for (const block_id_t block_id : blocks_in_use) {
-		block_manager.MarkBlockAsModified(block_id);
-	}
 }
 
 } // namespace duckdb

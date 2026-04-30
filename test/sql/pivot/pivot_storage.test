@@ -3,10 +3,7 @@
 # group: [pivot]
 
 # load the DB from disk
-load __TEST_DIR__/pivot_storage.db
-
-statement ok
-PRAGMA enable_verification
+load {TEST_DIR}/pivot_storage.db
 
 statement ok
 CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);

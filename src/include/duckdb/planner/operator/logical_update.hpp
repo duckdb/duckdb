@@ -27,7 +27,7 @@ public:
 	//! The base table to update
 	TableCatalogEntry &table;
 	//! projection index
-	idx_t table_index;
+	TableIndex table_index;
 	//! if returning option is used, return the update chunk
 	bool return_chunk;
 	vector<PhysicalIndex> columns;
@@ -44,6 +44,8 @@ public:
 
 	DUCKDB_API static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
 	                                        LogicalUpdate &update, physical_index_set_t &bound_columns);
+
+	static void RewriteInPlaceUpdates(LogicalOperator &update_op);
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

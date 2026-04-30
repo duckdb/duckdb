@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table students (course VARCHAR, type VARCHAR);
 
 statement ok
@@ -131,7 +128,7 @@ Math	Masters	1
 statement error
 select course, count(*) from students group by rollup () order by 1, 2;
 ----
-Parser Error: syntax error at or near ")"
+<REGEX>:(.*Parser Error.*syntax error at or near.*|.*Parser Error.*CUBE or ROLLUP column list cannot be empty.*)
 
 statement error
 select course, count(*) from students group by rollup (rollup (course)) order by 1, 2;

@@ -56,6 +56,9 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("is_bound");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -91,59 +94,69 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 
 		for (idx_t c = 0; c < data.column_ids.size(); c++) {
 			auto column_id = data.column_ids[c].GetPrimaryIndex();
+			auto &col_vector = output.data[c];
 			switch (column_id) {
 			case 0:
 				// database_name, VARCHAR
-				output.SetValue(c, count, view.catalog.GetName());
+				col_vector.Append(Value(view.catalog.GetName()));
 				break;
 			case 1:
 				// database_oid, BIGINT
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
+				col_vector.Append(Value::BIGINT(NumericCast<int64_t>(view.catalog.GetOid())));
 				break;
 			case 2:
 				// schema_name, LogicalType::VARCHAR
-				output.SetValue(c, count, Value(view.schema.name));
+				col_vector.Append(Value(view.schema.name));
 				break;
 			case 3:
 				// schema_oid, LogicalType::BIGINT
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.schema.oid)));
+				col_vector.Append(Value::BIGINT(NumericCast<int64_t>(view.schema.oid)));
 				break;
 			case 4:
 				// view_name, LogicalType::VARCHAR
-				output.SetValue(c, count, Value(view.name));
+				col_vector.Append(Value(view.name));
 				break;
 			case 5:
 				// view_oid, LogicalType::BIGINT
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(view.oid)));
+				col_vector.Append(Value::BIGINT(NumericCast<int64_t>(view.oid)));
 				break;
 			case 6:
-				// comment, LogicalType::VARCHARs
-				output.SetValue(c, count, Value(view.comment));
+				// comment, LogicalType::VARCHAR
+				col_vector.Append(Value(view.comment));
 				break;
 			case 7:
 				// tags, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)
-				output.SetValue(c, count, Value::MAP(view.tags));
+				col_vector.Append(Value::MAP(view.tags));
 				break;
 			case 8:
 				// internal, LogicalType::BOOLEAN
-				output.SetValue(c, count, Value::BOOLEAN(view.internal));
+				col_vector.Append(Value::BOOLEAN(view.internal));
 				break;
 			case 9:
 				// temporary, LogicalType::BOOLEAN
-				output.SetValue(c, count, Value::BOOLEAN(view.temporary));
+				col_vector.Append(Value::BOOLEAN(view.temporary));
 				break;
 			case 10: {
 				// column_count, LogicalType::BIGINT
 				// make sure the view is bound so we know the columns it emits
-				view.BindView(context);
 				auto columns = view.GetColumnInfo();
-				output.SetValue(c, count, Value::BIGINT(NumericCast<int64_t>(columns->types.size())));
+				Value column_count;
+				if (columns) {
+					column_count = Value::BIGINT(NumericCast<int64_t>(columns->types.size()));
+				}
+				col_vector.Append(column_count);
 				break;
 			}
 			case 11:
 				// sql, LogicalType::VARCHAR
-				output.SetValue(c, count, Value(view.ToSQL()));
+				col_vector.Append(Value(view.ToSQL()));
 				break;
+			case 12: {
+				// is_bound, LogicalType::BOOLEAN
+				auto columns = view.GetColumnInfo();
+				col_vector.Append(Value::BOOLEAN(columns.get()));
+				break;
+			}
 			default:
 				throw InternalException("Unsupported column index for duckdb_views");
 			}

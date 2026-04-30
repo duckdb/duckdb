@@ -901,7 +901,7 @@ public:
 	}
 
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
-		if (!skip_buffer) {
+		if (!skip_buffer.IsSet()) {
 			skip_buffer = Allocator::DefaultAllocator().Allocate(duckdb_zstd::ZSTD_DStreamOutSize());
 		}
 
@@ -934,9 +934,9 @@ public:
 		for (idx_t i = 0; i < count; i++) {
 			uncompressed_length += string_lengths[i];
 		}
-		auto &buffer = StringVector::GetStringBuffer(result);
-		auto uncompressed_data = buffer.AllocateShrinkableBuffer(uncompressed_length);
-		auto string_data = FlatVector::GetData<string_t>(result);
+		auto &allocator = StringVector::GetStringAllocator(result);
+		auto uncompressed_data = StringVector::AllocateShrinkableBuffer(allocator, uncompressed_length);
+		auto string_data = FlatVector::GetDataMutable<string_t>(result);
 
 		DecompressString(scan_state, uncompressed_data, uncompressed_length);
 

@@ -767,7 +767,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
 	if (options.storage_version.IsValid()) {
-		// storage version specified explicity - use requested storage version
+		// storage version specified explicitly - use requested storage version
 		auto requested_compat_version = options.storage_version.GetIndex();
 		if (requested_compat_version < header.serialization_compatibility) {
 			throw InvalidInputException(
@@ -864,7 +864,7 @@ block_id_t SingleFileBlockManager::PeekFreeBlockId() {
 	}
 }
 
-void SingleFileBlockManager::MarkBlockACheckpointed(block_id_t block_id) {
+void SingleFileBlockManager::MarkBlockAsCheckpointed(block_id_t block_id) {
 	lock_guard<mutex> lock(single_file_block_lock);
 	D_ASSERT(block_id >= 0);
 	newly_used_blocks.erase(block_id);
@@ -1181,11 +1181,17 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	auto block_size = metadata_manager.GetMetadataBlockSize() - sizeof(idx_t);
 	idx_t allocated_size = 0;
 	while (true) {
-		auto free_list_count =
-		    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+		idx_t free_list_count;
+		idx_t multi_use_blocks_count;
+		{
+			lock_guard<mutex> guard(single_file_block_lock);
+			free_list_count =
+			    free_list.size() + modified_blocks.size() + free_blocks_in_use.size() + newly_used_blocks.size();
+			multi_use_blocks_count = multi_use_blocks.size();
+		}
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * free_list_count;
 		auto multi_use_blocks_size =
-		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks_count;
 		auto metadata_blocks =
 		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(idx_t)) * GetMetadataManager().BlockCount();
 		auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
@@ -1364,11 +1370,15 @@ void SingleFileBlockManager::TrimFreeBlocks(const set<block_id_t> &blocks) {
 	if (!DBConfig::Get(db).options.trim_free_blocks) {
 		return;
 	}
+	lock_guard<mutex> lock(single_file_block_lock);
 	for (auto itr = blocks.begin(); itr != blocks.end(); ++itr) {
+		if (!free_list.count(*itr)) {
+			continue;
+		}
 		block_id_t first = *itr;
 		block_id_t last = first;
 		// Find end of contiguous range.
-		for (++itr; itr != blocks.end() && (*itr == last + 1); ++itr) {
+		for (++itr; itr != blocks.end() && (*itr == last + 1) && free_list.count(*itr); ++itr) {
 			last = *itr;
 		}
 		// We are now one too far.

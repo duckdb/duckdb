@@ -35,7 +35,7 @@ loop i 0 30
 
 skipif threadid=0
 statement ok
-PRAGMA tpch((${threadid} + ${i}) % 22 + 1)
+PRAGMA tpch(({threadid} + {i}) % 22 + 1)
 
 endloop
 
@@ -46,18 +46,18 @@ endloop
 loop i 1 9
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q0{i}.csv
 
 endloop
 
 loop i 10 23
 
 query I
-PRAGMA tpch(${i})
+PRAGMA tpch({i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf1/q{i}.csv
 
 endloop
 

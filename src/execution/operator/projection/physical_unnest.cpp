@@ -1,3 +1,6 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
 #include "duckdb/common/uhugeint.hpp"
@@ -19,7 +22,7 @@ public:
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->GetExpressionType() == ExpressionType::BOUND_UNNEST);
 			auto &bue = exp->Cast<BoundUnnestExpression>();
-			list_data_types.push_back(bue.child->return_type);
+			list_data_types.push_back(bue.child->GetReturnType());
 			executor.AddExpression(*bue.child.get());
 
 			unnest_sels.emplace_back(STANDARD_VECTOR_SIZE);
@@ -95,7 +98,7 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 			child_vector.ToUnifiedFormat(0, list_child_data[col_idx]);
 		} else {
 			auto list_size = ListVector::GetListSize(list_vector);
-			auto &child_vector = ListVector::GetEntry(list_vector);
+			auto &child_vector = ListVector::GetChild(list_vector);
 			child_vector.ToUnifiedFormat(list_size, list_child_data[col_idx]);
 		}
 	}
@@ -220,7 +223,8 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 				if (unnest_list_count == 1) {
 					// everything belongs to the same row - we can do a constant reference
-					ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], initial_row, input.size());
+					ConstantVector::Reference(chunk.data[col_idx], count_t(result_length), input.data[col_idx],
+					                          initial_row, input.size());
 				} else {
 					// input values come from different rows - we need to slice
 					chunk.data[col_idx].Slice(input.data[col_idx], state.input_sel, result_length);
@@ -236,11 +240,10 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			    ListVector::GetListSize(list_vector) == 0) {
 				// UNNEST(NULL) or UNNEST([])
 				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
-				result_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result_vector, true);
+				ConstantVector::SetNull(result_vector, count_t(result_length));
 				continue;
 			}
-			auto &child_vector = ListVector::GetEntry(list_vector);
+			auto &child_vector = ListVector::GetChild(list_vector);
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten

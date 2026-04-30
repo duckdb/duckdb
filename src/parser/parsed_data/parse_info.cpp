@@ -27,6 +27,8 @@ string ParseInfo::TypeToString(CatalogType type) {
 		return "MACRO TABLE";
 	case CatalogType::SECRET_ENTRY:
 		return "SECRET";
+	case CatalogType::TRIGGER_ENTRY:
+		return "TRIGGER";
 	default:
 		throw InternalException("ParseInfo::TypeToString for CatalogType with type: %s not implemented",
 		                        EnumUtil::ToString(type));
@@ -36,14 +38,14 @@ string ParseInfo::TypeToString(CatalogType type) {
 string ParseInfo::QualifierToString(const string &catalog, const string &schema, const string &name) {
 	string result;
 	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		result += SQLIdentifier(catalog) + ".";
 		if (!schema.empty()) {
-			result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+			result += SQLIdentifier(schema) + ".";
 		}
 	} else if (!schema.empty() && schema != DEFAULT_SCHEMA) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(name);
+	result += SQLIdentifier(name);
 	return result;
 }
 

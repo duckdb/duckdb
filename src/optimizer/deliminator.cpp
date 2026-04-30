@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
@@ -117,8 +118,15 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
-		for (const auto &filter : get.table_filters.filters) {
-			if (filter.second->filter_type != TableFilterType::IS_NOT_NULL) {
+		for (const auto &entry : get.table_filters) {
+			auto &filter = entry.Filter();
+			if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+				return true;
+			}
+			auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "Deliminator::HasSelection");
+			auto &expr = *expr_filter.expr;
+			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
+			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
 				return true;
 			}
 		}
@@ -438,8 +446,8 @@ void Deliminator::TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join) {
 	}
 
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++) {
-		if (std::find(join_bindings.begin(), join_bindings.end(), ColumnBinding(aggr.group_index, group_idx)) ==
-		    join_bindings.end()) {
+		if (std::find(join_bindings.begin(), join_bindings.end(),
+		              ColumnBinding(aggr.group_index, ProjectionIndex(group_idx))) == join_bindings.end()) {
 			return;
 		}
 	}

@@ -5,6 +5,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -22,6 +24,26 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+static bool IsDirectNullCheckFilter(const TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::EXPRESSION_FILTER: {
+		auto &expr = filter.Cast<ExpressionFilter>().expr;
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
+			return false;
+		}
+		auto &op = expr->Cast<BoundOperatorExpression>();
+		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		    op.children.size() != 1) {
+			return false;
+		}
+		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
+	}
+	default:
+		return false;
+	}
+}
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
@@ -284,14 +306,14 @@ void ColumnData::FetchUpdateRow(TransactionData transaction, row_t row_id, Vecto
 	updates->FetchRow(transaction, NumericCast<idx_t>(row_id), result, result_idx);
 }
 
-void ColumnData::UpdateInternal(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                                 Vector &update_vector, row_t *row_ids, idx_t update_count, Vector &base_vector,
                                 idx_t row_group_start) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_uniq<UpdateSegment>(*this);
 	}
-	updates->Update(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	updates->Update(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	                row_group_start);
 }
 
@@ -393,7 +415,11 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
-		prune_result = filter.CheckStatistics(state.current->GetNode().stats.statistics);
+		auto &segment_stats =
+		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
+		        ? state.child_states[0].current->GetNode().stats.statistics
+		        : state.current->GetNode().stats.statistics;
+		prune_result = filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -587,22 +613,22 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 	return fetch_count;
 }
 
-void ColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_vector,
-                        row_t *row_ids, idx_t update_count, idx_t row_group_start) {
+void ColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
+                        Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	Vector base_vector(type);
 	ColumnScanState state(nullptr);
 	FetchUpdateData(state, row_ids, base_vector, row_group_start);
 
-	UpdateInternal(transaction, data_table, column_index, update_vector, row_ids, update_count, base_vector,
+	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	               row_group_start);
 }
 
-void ColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table, const vector<column_t> &column_path,
-                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth,
-                              idx_t row_group_start) {
+void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
+                              const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
+                              idx_t update_count, idx_t depth, idx_t row_group_start) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, data_table, column_path[0], update_vector, row_ids, update_count, row_group_start);
+	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
@@ -999,6 +1025,32 @@ bool PersistentCollectionData::HasUpdates() const {
 		}
 	}
 	return false;
+}
+
+static void TraverseBlocksRecursive(const PersistentColumnData &col_data, vector<block_id_t> &result) {
+	for (auto &pointer : col_data.pointers) {
+		auto block_id = pointer.block_pointer.block_id;
+		if (block_id != INVALID_BLOCK) {
+			result.push_back(block_id);
+		}
+		if (pointer.segment_state) {
+			for (auto &block : pointer.segment_state->blocks) {
+				result.push_back(block);
+			}
+		}
+	}
+	for (auto &child_column : col_data.child_columns) {
+		TraverseBlocksRecursive(child_column, result);
+	}
+}
+vector<block_id_t> PersistentCollectionData::GetBlockIds() const {
+	vector<block_id_t> result;
+	for (auto &group : row_group_data) {
+		for (auto &col_data : group.column_data) {
+			TraverseBlocksRecursive(col_data, result);
+		}
+	}
+	return result;
 }
 
 void ExtraPersistentColumnData::Serialize(Serializer &serializer) const {

@@ -15,6 +15,7 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -77,6 +78,9 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		return false;
 	}
 	auto column_stats = stats.partition_row_group->GetColumnStatistics(storage_index);
+	if (!column_stats) {
+		return false;
+	}
 	if (!stats.partition_row_group->MinMaxIsExact(*column_stats, storage_index)) {
 		return false;
 	}
@@ -87,8 +91,7 @@ bool TryGetValueFromStats(const PartitionStatistics &stats, const StorageIndex &
 		}
 	} else {
 		D_ASSERT(column_stats->GetStatsType() == StatisticsType::STRING_STATS);
-		if (StringStats::Min(*column_stats) > StringStats::Max(*column_stats)) {
-			// No min/max statistics availabe
+		if (!StringStats::HasMinMax(*column_stats)) {
 			return false;
 		}
 	}
@@ -121,12 +124,13 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		}
 		const string &fun_name = aggr_expr.function.name;
 		if (fun_name == "min" || fun_name == "max") {
-			if (aggr_expr.children.size() != 1 || aggr_expr.children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (aggr_expr.children.size() != 1 ||
+			    aggr_expr.children[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				return;
 			}
 			const auto &col_ref = aggr_expr.children[0]->Cast<BoundColumnRefExpression>();
 			min_max_bindings.push_back(col_ref.binding);
-			auto comparator = GetComparator(fun_name, col_ref.return_type);
+			auto comparator = GetComparator(fun_name, col_ref.GetReturnType());
 			if (!comparator) {
 				// Type has no min max statistics
 				return;
@@ -144,11 +148,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	reference<LogicalOperator> child_ref = *aggr.children[0];
 	while (child_ref.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
 		for (auto &binding : min_max_bindings) {
-			auto &expr = child_ref.get().expressions[binding.column_index];
-			if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+			auto &proj = child_ref.get().Cast<LogicalProjection>();
+			auto &expr = proj.GetExpression(binding);
+			if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				return;
 			}
-			binding = expr->Cast<BoundColumnRefExpression>().binding;
+			binding = expr.Cast<BoundColumnRefExpression>().binding;
 		}
 		child_ref = *child_ref.get().children[0];
 	}
@@ -178,7 +183,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<StorageIndex> min_max_storage_indexes(min_max_bindings.size());
 	for (idx_t i = 0; i < min_max_bindings.size(); i++) {
 		auto &binding = min_max_bindings[i];
-		auto &column_index = get.GetColumnIds()[binding.column_index];
+		auto &column_index = get.GetColumnIndex(binding);
 		if (!get.TryGetStorageIndex(column_index, min_max_storage_indexes[i])) {
 			//! Can't get a storage index for this column, so it doesn't have stats we can use
 			//! This happens when we're dealing with a generated column for example
@@ -189,12 +194,12 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 	vector<LogicalType> types;
 	vector<unique_ptr<Expression>> agg_results;
 	// we can keep execute eager aggregate if all partitions could be either filtered entirely or remained entirely
-	if (!get.table_filters.filters.empty()) {
-		map<StorageIndex, reference<unique_ptr<TableFilter>>> filter_storage_index_map;
-		for (auto &entry : get.table_filters.filters) {
-			auto col_idx = entry.first;
-			auto &filter = entry.second;
-			auto column_index = ColumnIndex(col_idx);
+	if (get.table_filters.HasFilters()) {
+		map<StorageIndex, reference<TableFilter>> filter_storage_index_map;
+		for (auto &entry : get.table_filters) {
+			auto filter_idx = entry.GetIndex();
+			auto &filter = entry.Filter();
+			auto &column_index = get.GetColumnIndex(filter_idx);
 			StorageIndex storage_index;
 			if (!get.TryGetStorageIndex(column_index, storage_index)) {
 				return;
@@ -218,7 +223,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
-				auto col_filter_result = filter.get()->CheckStatistics(*column_stats);
+				auto col_filter_result = filter.get().CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
@@ -316,7 +321,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 			stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 			continue;
 		}
-		ColumnBinding group_binding(aggr.group_index, group_idx);
+		ColumnBinding group_binding(aggr.group_index, ProjectionIndex(group_idx));
 		statistics_map[group_binding] = std::move(stats);
 	}
 
@@ -346,7 +351,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 		if (!stats) {
 			continue;
 		}
-		ColumnBinding aggregate_binding(aggr.aggregate_index, aggregate_idx);
+		ColumnBinding aggregate_binding(aggr.aggregate_index, ProjectionIndex(aggregate_idx));
 		statistics_map[aggregate_binding] = std::move(stats);
 	}
 

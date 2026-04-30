@@ -5,21 +5,18 @@
 # FIXME - during checkpoint recovery we no longer bind so we no longer have dependency information
 require skip_reload
 
-statement ok
-PRAGMA enable_verification
-
 foreach fun nextval currval
 
 statement ok
 CREATE SEQUENCE seq;
 
 statement ok
-CREATE TABLE t1(c1 INT, CHECK(${fun}('seq')));
+CREATE TABLE t1(c1 INT, CHECK({fun}('seq')));
 
 statement error
 DROP SEQUENCE seq;
 ----
-<REGEX>:Dependency Error.*table "t1" depends on index "seq".*
+<REGEX>:Dependency Error.*table "t1" depends on sequence "seq".*
 
 statement ok
 DROP SEQUENCE seq CASCADE;

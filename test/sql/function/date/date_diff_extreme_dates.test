@@ -1,0 +1,47 @@
+# name: test/sql/function/date/date_diff_extreme_dates.test
+# description: Test datediff with extreme date ranges that previously overflowed
+# group: [date]
+
+# Bug fix: datediff('week') used int32 subtraction of date.days which overflowed
+# for dates spanning the full int32 range, producing 0 instead of ~613 million
+query I
+SELECT datediff('week', DATE '-5877641-06-25', DATE '5881580-07-10');
+----
+613566756
+
+# Week diff should be consistent with day diff
+query I
+SELECT datediff('day', DATE '-5877641-06-25', DATE '5881580-07-10');
+----
+4294967292
+
+# Verify: day_diff / 7 = week_diff (integer division)
+query I
+SELECT datediff('day', DATE '-5877641-06-25', DATE '5881580-07-10') / 7;
+----
+613566756
+
+# Negative direction should also work
+query I
+SELECT datediff('week', DATE '5881580-07-10', DATE '-5877641-06-25');
+----
+-613566756
+
+# Bug fix: datediff('microsecond') for dates used unchecked int64 subtraction
+# which silently overflowed and returned a negative number for a positive range
+statement error
+SELECT datediff('microsecond', DATE '-290000-01-01', DATE '290000-01-01');
+----
+Overflow
+
+# Microseconds should work for smaller date ranges
+query I
+SELECT datediff('microsecond', DATE '2000-01-01', DATE '2000-01-02');
+----
+86400000000
+
+# Negative direction for microseconds
+query I
+SELECT datediff('microsecond', DATE '2000-01-02', DATE '2000-01-01');
+----
+-86400000000

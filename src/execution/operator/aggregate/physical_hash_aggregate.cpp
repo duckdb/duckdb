@@ -90,7 +90,7 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	vector<LogicalType> types(highest_index + 1, LogicalType::SQLNULL);
 	for (auto &group : groups) {
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
-		types[bound_ref.index] = bound_ref.return_type;
+		types[bound_ref.index] = bound_ref.GetReturnType();
 	}
 	return types;
 }
@@ -129,7 +129,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
                                              vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
-                                             vector<unsafe_vector<idx_t>> grouping_functions_p,
+                                             vector<unsafe_vector<ProjectionIndex>> grouping_functions_p,
                                              idx_t estimated_cardinality, TupleDataValidityType group_validity,
                                              TupleDataValidityType distinct_validity)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
@@ -139,7 +139,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	if (grouping_sets.empty()) {
 		GroupingSet set;
 		for (idx_t i = 0; i < group_count; i++) {
-			set.insert(i);
+			set.insert(ProjectionIndex(i));
 		}
 		grouping_sets.push_back(std::move(set));
 	}
@@ -202,10 +202,10 @@ public:
 		for (auto &aggr : op.grouped_aggregate_data.aggregates) {
 			auto &aggregate = aggr->Cast<BoundAggregateExpression>();
 			for (auto &child : aggregate.children) {
-				payload_types.push_back(child->return_type);
+				payload_types.push_back(child->GetReturnType());
 			}
 			if (aggregate.filter) {
-				filter_types.push_back(aggregate.filter->return_type);
+				filter_types.push_back(aggregate.filter->GetReturnType());
 			}
 		}
 		payload_types.reserve(payload_types.size() + filter_types.size());

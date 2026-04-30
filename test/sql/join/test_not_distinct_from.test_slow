@@ -5,19 +5,16 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-create table tbl_1 (a ${type}, b ${type})
+create table tbl_1 (a {type}, b {type})
 
 statement ok
 insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
 
 statement ok
-create table tbl_2 (b ${type})
+create table tbl_2 (b {type})
 
 statement ok
 insert into tbl_2 values (1),(2),(NULL)

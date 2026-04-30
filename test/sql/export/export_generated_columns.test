@@ -8,9 +8,6 @@ statement ok
 pragma storage_compatibility_version='v1.1.0'
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 BEGIN TRANSACTION
 
 # Create a macro that the generated column uses
@@ -39,13 +36,13 @@ ALTER TABLE tbl DROP COLUMN x;
 <REGEX>:.*Catalog Error.*column is a dependency.*
 
 statement ok
-EXPORT DATABASE '__TEST_DIR__/export_generated_columns' (FORMAT CSV);
+EXPORT DATABASE '{TEST_DIR}/export_generated_columns' (FORMAT CSV);
 
 statement ok
 ROLLBACK
 
 statement ok
-IMPORT DATABASE '__TEST_DIR__/export_generated_columns'
+IMPORT DATABASE '{TEST_DIR}/export_generated_columns'
 
 # We can get the data we exported just now
 query II

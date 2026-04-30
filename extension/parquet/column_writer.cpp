@@ -1,40 +1,49 @@
 #include "column_writer.hpp"
 
-#include "duckdb.hpp"
-#include "parquet_geometry.hpp"
-#include "parquet_rle_bp_decoder.hpp"
-#include "parquet_bss_encoder.hpp"
-#include "parquet_statistics.hpp"
+#include <cmath>
+#include <limits>
+#include <type_traits>
+#include <unordered_map>
+#include <utility>
+
 #include "parquet_writer.hpp"
 #include "writer/array_column_writer.hpp"
 #include "writer/boolean_column_writer.hpp"
 #include "writer/decimal_column_writer.hpp"
 #include "writer/enum_column_writer.hpp"
 #include "writer/list_column_writer.hpp"
-#include "writer/primitive_column_writer.hpp"
 #include "writer/struct_column_writer.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "writer/templated_column_writer.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
-#include "duckdb/common/string_map_set.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/types/time.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-
 #include "brotli/encode.h"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "snappy.h"
 #include "zstd.h"
-
-#include <cmath>
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/types/datetime.hpp"
+#include "duckdb/common/types/double_na_equal.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/uhugeint.hpp"
+#include "miniz.hpp"
+#include "parquet_field_id.hpp"
+#include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
+#include "parquet_types.h"
+#include "writer/parquet_write_operators.hpp"
+#include "writer/parquet_write_stats.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct GeometryStatsData;
 
 using namespace duckdb_parquet; // NOLINT
 using namespace duckdb_miniz;   // NOLINT
@@ -189,8 +198,8 @@ void ColumnWriter::HandleRepeatLevels(ColumnWriterState &state, ColumnWriterStat
 	if (state.repetition_levels.size() >= parent->repetition_levels.size()) {
 		return;
 	}
-	state.repetition_levels.insert(state.repetition_levels.end(),
-	                               parent->repetition_levels.begin() + state.repetition_levels.size(),
+	auto repetition_offset = NumericCast<ptrdiff_t>(state.repetition_levels.size());
+	state.repetition_levels.insert(state.repetition_levels.end(), parent->repetition_levels.begin() + repetition_offset,
 	                               parent->repetition_levels.end());
 }
 
@@ -225,7 +234,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	}
 
 	// no parent: set definition levels only from this validity mask
-	if (validity.AllValid()) {
+	if (validity.CannotHaveNull()) {
 		state.definition_levels.insert(state.definition_levels.end(), count, define_value);
 	} else {
 		for (idx_t i = 0; i < count; i++) {
@@ -249,6 +258,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
                                                              optional_ptr<const ChildFieldIDs> field_ids,
                                                              optional_ptr<const ShreddingType> shredding_types,
                                                              idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
+	const bool parquet_write_timestamp_as_int96 = writer.WriteTimestampAsInt96();
 	path_in_schema.push_back(name);
 
 	if (!can_have_nulls) {
@@ -424,9 +434,19 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
+		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+		if (parquet_write_timestamp_as_int96) {
+			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampInt96Operator>>(
+			    writer, std::move(schema), std::move(path_in_schema));
+		}
+		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_MS:
+		if (parquet_write_timestamp_as_int96) {
+			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampMSInt96Operator>>(
+			    writer, std::move(schema), std::move(path_in_schema));
+		}
 		return make_uniq<StandardColumnWriter<int64_t, int64_t>>(writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::TIME_TZ:
 		return make_uniq<StandardColumnWriter<dtime_tz_t, int64_t, ParquetTimeTZOperator>>(writer, std::move(schema),
@@ -438,9 +458,17 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(writer, std::move(schema),
 		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_NS:
+		if (parquet_write_timestamp_as_int96) {
+			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampNSInt96Operator>>(
+			    writer, std::move(schema), std::move(path_in_schema));
+		}
 		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampNSOperator>>(writer, std::move(schema),
 		                                                                                     std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_SEC:
+		if (parquet_write_timestamp_as_int96) {
+			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampSInt96Operator>>(
+			    writer, std::move(schema), std::move(path_in_schema));
+		}
 		return make_uniq<StandardColumnWriter<int64_t, int64_t, ParquetTimestampSOperator>>(writer, std::move(schema),
 		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::UTINYINT:
@@ -490,6 +518,9 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		    writer, std::move(schema), std::move(path_in_schema));
 	case LogicalTypeId::ENUM:
 		return make_uniq<EnumColumnWriter>(writer, std::move(schema), std::move(path_in_schema));
+	case LogicalTypeId::SQLNULL:
+		// All values are NULL - use INT32 as physical type (values are never read, only definition levels matter)
+		return make_uniq<StandardColumnWriter<int32_t, int32_t>>(writer, std::move(schema), std::move(path_in_schema));
 	default:
 		throw InternalException("Unsupported type \"%s\" in Parquet writer", type.ToString());
 	}

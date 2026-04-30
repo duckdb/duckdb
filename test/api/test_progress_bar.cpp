@@ -10,7 +10,6 @@
 #include <thread>
 
 using namespace duckdb;
-using namespace std;
 
 class TestProgressBar {
 	class TestFailure {
@@ -61,7 +60,7 @@ public:
 			if (new_percentage > 100) {
 				error.SetError([new_percentage]() { REQUIRE(new_percentage <= 100); });
 			}
-			cur_rows_read = query_progress.GetRowsProcesseed();
+			cur_rows_read = query_progress.GetRowsProcessed();
 			total_cardinality = query_progress.GetTotalRowsToProcess();
 			if (cur_rows_read > total_cardinality) {
 				error.SetError([cur_rows_read, total_cardinality]() { REQUIRE(cur_rows_read <= total_cardinality); });

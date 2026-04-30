@@ -3,10 +3,7 @@
 # group: [storage]
 
 # load the DB from disk
-load __TEST_DIR__/commit_abort.db
-
-statement ok
-PRAGMA enable_verification
+load {TEST_DIR}/commit_abort.db
 
 statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
@@ -52,9 +49,6 @@ SELECT * FROM test ORDER BY a, b, c
 14	11	bla
 
 restart
-
-statement ok
-PRAGMA enable_verification
 
 query III
 SELECT * FROM test ORDER BY a, b, c

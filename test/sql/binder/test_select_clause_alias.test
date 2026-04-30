@@ -3,9 +3,6 @@
 # group: [binder]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER);
 
 statement ok
@@ -62,3 +59,37 @@ select
     (select sum(order_amount) from orders where date_trunc('month', order_date) = month) as revenue;
 ----
 This is not yet supported
+
+
+# Testing the alias functionality of try
+query II
+select
+    split(from0, ' ') as expr_parts,
+    case
+        try(expr_parts[6][1]::int)
+        when 1                
+        then 'NOT'
+    end as dayname,
+from (select '1 2 3 1 2 3 4 5 6' as from0);
+----
+[1, 2, 3, 1, 2, 3, 4, 5, 6]	NULL
+
+
+query II
+select
+    split('1 2 3', ' ') as expr_parts,
+    try(expr_parts[1]::int) as try_val;
+----
+[1, 2, 3]	1
+
+
+query II
+select
+    split('1 2 x', ' ') as expr_parts,
+    case
+        when try(expr_parts[3]::int) is null
+        then 'invalid'
+        else 'valid'
+    end as check_val;
+----
+[1, 2, x]	invalid

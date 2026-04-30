@@ -410,7 +410,7 @@ void Bit::SetBitInternal(bitstring_t &bit_string, idx_t n, idx_t new_value) {
 	D_ASSERT(idx < bit_string.GetSize());
 	auto shift_byte = UnsafeNumericCast<uint8_t>(1 << (7 - (n % 8)));
 	if (new_value == 0) {
-		shift_byte = ~shift_byte;
+		shift_byte = static_cast<uint8_t>(~shift_byte);
 		buf[idx] &= shift_byte;
 	} else {
 		buf[idx] |= shift_byte;
@@ -506,7 +506,7 @@ void Bit::BitwiseNot(const bitstring_t &input, bitstring_t &result) {
 
 	result_buf[0] = buf[0];
 	for (idx_t i = 1; i < input.GetSize(); i++) {
-		result_buf[i] = ~buf[i];
+		result_buf[i] = static_cast<uint8_t>(~buf[i]);
 	}
 	Bit::Finalize(result);
 }

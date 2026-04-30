@@ -45,7 +45,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 	}
 
-	if (!get.table_filters.filters.empty() || !get.function.filter_pushdown) {
+	if (get.table_filters.HasFilters() || !get.function.filter_pushdown) {
 		// the table function does not support filter pushdown: push a LogicalFilter on top
 		return FinishPushdown(std::move(op));
 	}
@@ -80,7 +80,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		// Allow pushing down filters that can throw only if there is a single expression
 		// For now, do not push down single expressions with IN either. Later we can change InClauseRewriter to handle
 		// this case
-		if (expr.CanThrow() && (expr.type == ExpressionType::COMPARE_IN || filters.size() > 1)) {
+		if (expr.CanThrow() && (expr.GetExpressionType() == ExpressionType::COMPARE_IN || filters.size() > 1)) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);

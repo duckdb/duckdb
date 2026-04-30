@@ -11,6 +11,8 @@
 
 namespace duckdb {
 
+namespace {
+
 /*
 
   0      2 bytes  magic header  0x1f, 0x8b (\037 \213)
@@ -54,7 +56,7 @@ namespace duckdb {
 
  */
 
-static idx_t GZipConsumeString(QueryContext context, FileHandle &input) {
+idx_t GZipConsumeString(QueryContext context, FileHandle &input) {
 	idx_t size = 1; // terminator
 	char buffer[1];
 	while (input.Read(context, buffer, 1) == 1) {
@@ -110,7 +112,7 @@ MiniZStreamWrapper::~MiniZStreamWrapper() {
 }
 
 void MiniZStreamWrapper::Initialize(QueryContext context, CompressedFile &file, bool write) {
-	Close();
+	D_ASSERT(mz_stream_ptr == nullptr);
 	this->file = &file;
 	mz_stream_ptr = make_uniq<duckdb_miniz::mz_stream>();
 	memset(mz_stream_ptr.get(), 0, sizeof(duckdb_miniz::mz_stream));
@@ -307,7 +309,11 @@ void MiniZStreamWrapper::Close() {
 	file = nullptr;
 }
 
-class GZipFile : public CompressedFile {
+struct GZipFileSystemHolder {
+	GZipFileSystem gzip_fs;
+};
+
+class GZipFile : private GZipFileSystemHolder, public CompressedFile {
 public:
 	GZipFile(QueryContext context, unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
 	    : CompressedFile(gzip_fs, std::move(child_handle_p), path) {
@@ -316,8 +322,9 @@ public:
 	FileCompressionType GetFileCompressionType() override {
 		return FileCompressionType::GZIP;
 	}
-	GZipFileSystem gzip_fs;
 };
+
+} // namespace
 
 void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count, optional_ptr<CompressedFile> source_file) {
 	// include the filename in the error message if known

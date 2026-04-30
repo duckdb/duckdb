@@ -2,16 +2,13 @@
 # group: [function]
 
 statement ok
-ATTACH '__TEST_DIR__/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
+ATTACH '{TEST_DIR}/macro_default_arg.db' (STORAGE_VERSION 'v1.0.0');
 
 statement ok
 USE macro_default_arg
 
 statement ok
 set enable_macro_dependencies=true
-
-statement ok
-pragma enable_verification;
 
 statement ok
 CREATE MACRO f(x := NULL) AS x+1;

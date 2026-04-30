@@ -3,9 +3,6 @@
 # group: [date]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE dates(d DATE, s VARCHAR);
 
 statement ok
@@ -104,14 +101,14 @@ foreach temporal TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
 foreach datepart day doy dow isodow julian
 
 query I
-select date_trunc('${datepart}', '2022-08-15 07:52:55'::${temporal});
+select date_trunc('{datepart}', '2022-08-15 07:52:55'::{temporal});
 ----
 2022-08-15 00:00:00
 
 endloop
 
 query I
-select date_trunc('hour', '2022-08-15 07:52:55'::${temporal});
+select date_trunc('hour', '2022-08-15 07:52:55'::{temporal});
 ----
 2022-08-15 07:00:00
 
@@ -303,7 +300,7 @@ SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(date_trunc('da
 foreach daypart millennium century decade year quarter month week day
 
 query IIII
-SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(date_trunc('${daypart}', d)) s FROM timestamps LIMIT 1);
+SELECT s.min, s.max, s.has_null, s.has_no_null FROM (SELECT stats(date_trunc('{daypart}', d)) s FROM timestamps LIMIT 1);
 ----
 -infinity	infinity	false	true
 

@@ -8,16 +8,13 @@ require tpch
 # We need httpfs to do encrypted writes
 require httpfs
 
-statement ok
-PRAGMA enable_verification
-
 statement error
-ATTACH '__TEST_DIR__/encrypted_invalid.duckdb' AS encrypted_invalid (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0', debug_encryption_version 'v1');
+ATTACH '{TEST_DIR}/encrypted_invalid.duckdb' AS encrypted_invalid (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0', debug_encryption_version 'v1');
 ----
 Explicit provided STORAGE_VERSION ("v1.4.0") is not compatible with 'debug_encryption_version = v1' (storage >= v1.5.0)
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');
+ATTACH '{TEST_DIR}/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', STORAGE_VERSION 'v1.4.0');
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_storage_version'
@@ -25,7 +22,7 @@ SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encr
 v1.4.0+
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
+ATTACH '{TEST_DIR}/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v0'
@@ -33,7 +30,7 @@ SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encr
 v1.5.0+
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
+ATTACH '{TEST_DIR}/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encrypted_v1'
@@ -41,12 +38,12 @@ SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='encr
 v1.5.0+
 
 statement error
-ATTACH '__TEST_DIR__/encrypted_error.duckdb' AS encrypted_error (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v2');
+ATTACH '{TEST_DIR}/encrypted_error.duckdb' AS encrypted_error (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v2');
 ----
 Not implemented Error: No encryption version higher then v1 is supported yet in this DuckDB version
 
 statement ok
-ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+ATTACH '{TEST_DIR}/unencrypted.duckdb' as unencrypted;
 
 statement ok
 USE unencrypted;
@@ -64,7 +61,7 @@ statement ok
 COPY FROM DATABASE unencrypted to encrypted_v1;
 
 statement ok
-ATTACH '__TEST_DIR__/not_relevant.duckdb' AS other;
+ATTACH '{TEST_DIR}/not_relevant.duckdb' AS other;
 
 statement ok
 USE other;
@@ -84,13 +81,13 @@ DETACH encrypted_v1
 # the setting of debug_encryption_version gets overridden
 # if the (de)serialized encryption version differs
 statement ok
-ATTACH '__TEST_DIR__/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
+ATTACH '{TEST_DIR}/encrypted_storage.duckdb' AS encrypted_storage_version (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v1');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
+ATTACH '{TEST_DIR}/encrypted_v0_1.duckdb' AS encrypted_v1 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
+ATTACH '{TEST_DIR}/encrypted_v0_0.duckdb' AS encrypted_v0 (ENCRYPTION_KEY 'asdf', debug_encryption_version 'v0');
 
 
 query I

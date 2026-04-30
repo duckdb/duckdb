@@ -6,13 +6,10 @@ mode skip
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 foreach i 1 2 6
 
 statement error
-select * from parquet_scan('{DATA_DIR}/parquet-testing/afl/${i}.parquet')
+select * from parquet_scan('{DATA_DIR}/parquet-testing/afl/{i}.parquet')
 ----
 Invalid dictionary page header
 

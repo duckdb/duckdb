@@ -1,11 +1,44 @@
+#include <stdint.h>
+#include <algorithm>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/struct_column_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+
+namespace duckdb_apache {
+namespace thrift {
+namespace protocol {
+class TProtocol;
+} // namespace protocol
+} // namespace thrift
+} // namespace duckdb_apache
+namespace duckdb_parquet {
+class ColumnChunk;
+} // namespace duckdb_parquet
 
 namespace duckdb {
+class ParquetReader;
+class ThriftFileTransport;
+struct ParquetColumnSchema;
 
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+StructColumnReader::StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
     : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
@@ -28,13 +61,16 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
 	}
 }
 
-idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	if (pending_skips > 0) {
 		throw InternalException("StructColumnReader cannot have pending skips");
 	}
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
@@ -43,14 +79,14 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 	optional_idx read_count;
 	for (idx_t i = 0; i < child_readers.size(); i++) {
 		auto &child = child_readers[i];
-		auto &target_vector = *struct_entries[i];
+		auto &target_vector = struct_entries[i];
 		if (!child) {
 			// if we are not scanning this vector - set it to NULL
-			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(target_vector, true);
+			ConstantVector::SetNull(target_vector, count_t(num_values));
 			continue;
 		}
-		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
+		auto child_num_values = child->Read(child_input, target_vector);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;
 		} else if (read_count.GetIndex() != child_num_values) {
@@ -61,7 +97,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		read_count = num_values;
 	}
 	// set the validity mask for this level
-	auto &validity = FlatVector::Validity(result);
+	auto &validity = FlatVector::ValidityMutable(result);
 	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
 		if (define_out[i] < MaxDefine()) {
 			validity.SetInvalid(i);

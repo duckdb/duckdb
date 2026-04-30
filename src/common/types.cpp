@@ -252,14 +252,20 @@ const vector<LogicalType> LogicalType::Real() {
 
 const vector<LogicalType> LogicalType::AllTypes() {
 	vector<LogicalType> types = {
-	    LogicalType::BOOLEAN,  LogicalType::TINYINT,      LogicalType::SMALLINT,  LogicalType::INTEGER,
-	    LogicalType::BIGINT,   LogicalType::DATE,         LogicalType::TIMESTAMP, LogicalType::DOUBLE,
-	    LogicalType::FLOAT,    LogicalType::VARCHAR,      LogicalType::BLOB,      LogicalType::BIT,
-	    LogicalType::BIGNUM,   LogicalType::INTERVAL,     LogicalType::HUGEINT,   LogicalTypeId::DECIMAL,
-	    LogicalType::UTINYINT, LogicalType::USMALLINT,    LogicalType::UINTEGER,  LogicalType::UBIGINT,
-	    LogicalType::UHUGEINT, LogicalType::TIME,         LogicalTypeId::LIST,    LogicalTypeId::STRUCT,
-	    LogicalType::TIME_TZ,  LogicalType::TIMESTAMP_TZ, LogicalTypeId::MAP,     LogicalTypeId::UNION,
-	    LogicalType::UUID,     LogicalTypeId::ARRAY};
+	    LogicalTypeId::BOOLEAN,   LogicalTypeId::TINYINT,       LogicalTypeId::SMALLINT,
+	    LogicalTypeId::INTEGER,   LogicalTypeId::BIGINT,        LogicalTypeId::DATE,
+	    LogicalTypeId::TIME,      LogicalTypeId::TIMESTAMP_SEC, LogicalTypeId::TIMESTAMP_MS,
+	    LogicalTypeId::TIMESTAMP, LogicalTypeId::TIMESTAMP_NS,  LogicalTypeId::DECIMAL,
+	    LogicalTypeId::FLOAT,     LogicalTypeId::DOUBLE,        LogicalTypeId::CHAR,
+	    LogicalTypeId::VARCHAR,   LogicalTypeId::BLOB,          LogicalTypeId::INTERVAL,
+	    LogicalTypeId::UTINYINT,  LogicalTypeId::USMALLINT,     LogicalTypeId::UINTEGER,
+	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIME_TZ,
+	    LogicalTypeId::TIME_NS,   LogicalTypeId::BIT,           LogicalTypeId::BIGNUM,
+	    LogicalTypeId::UHUGEINT,  LogicalTypeId::HUGEINT,       LogicalTypeId::UUID,
+	    LogicalTypeId::GEOMETRY,  LogicalTypeId::STRUCT,        LogicalTypeId::LIST,
+	    LogicalTypeId::MAP,       LogicalTypeId::ENUM,          LogicalTypeId::UNION,
+	    LogicalTypeId::ARRAY,     LogicalTypeId::VARIANT,
+	};
 	return types;
 }
 
@@ -483,7 +489,7 @@ string LogicalType::ToString() const {
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += KeywordHelper::WriteQuoted(EnumType::GetString(*this, i).GetString(), '\'');
+			ret += SQLString(EnumType::GetString(*this, i).GetString());
 		}
 		ret += ")";
 		return ret;
@@ -494,7 +500,7 @@ string LogicalType::ToString() const {
 		}
 
 		auto &expr = UnboundType::GetTypeExpression(*this);
-		if (expr->type != ExpressionType::TYPE) {
+		if (expr->GetExpressionType() != ExpressionType::TYPE) {
 			return "(" + expr->ToString() + ")";
 		} else {
 			return expr->ToString();
@@ -520,7 +526,7 @@ string LogicalType::ToString() const {
 			return "GEOMETRY";
 		}
 		auto &crs = GeoType::GetCRS(*this);
-		auto crs_text = KeywordHelper::WriteQuoted(crs.GetDefinition(), '\'');
+		auto crs_text = SQLString(crs.GetDefinition());
 		return StringUtil::Format("GEOMETRY(%s)", crs_text);
 	}
 	default:
@@ -711,6 +717,7 @@ bool LogicalType::SupportsRegularUpdate() const {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
+	case LogicalTypeId::GEOMETRY: // If geometry is shredded, its parts (lists/structs) can't be regularly updated.
 		return false;
 	case LogicalTypeId::STRUCT: {
 		auto &child_types = StructType::GetChildTypes(*this);
@@ -798,7 +805,7 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		// Nonsense values to ensure initialization
 		width = 255u;
 		scale = 255u;
-		// FIXME(carlo): This should be probably a throw, requires checkign the various call-sites
+		// FIXME(carlo): This should be probably a throw, requires checking the various call-sites
 		return false;
 	}
 	return true;
@@ -1136,7 +1143,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 }
 
 template <class OP>
-bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+static bool TryGetMaxLogicalTypeInternal(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// we always prefer aliased types
 	if (!left.GetAlias().empty()) {
 		result = left;
@@ -2041,7 +2048,7 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 }
 
 static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
-	if (expr.type != ExpressionType::TYPE) {
+	if (expr.GetExpressionType() != ExpressionType::TYPE) {
 		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
 	}
 	const auto &type_expr = expr.Cast<TypeExpression>();

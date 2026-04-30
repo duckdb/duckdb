@@ -20,12 +20,12 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_FUNCTION;
 
 public:
-	BoundFunctionExpression(LogicalType return_type, ScalarFunction bound_function,
+	BoundFunctionExpression(LogicalType return_type, BoundScalarFunction bound_function,
 	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,
 	                        bool is_operator = false);
 
 	//! The bound function expression
-	ScalarFunction function;
+	BoundScalarFunction function;
 	//! List of child-expressions of the function
 	vector<unique_ptr<Expression>> children;
 	//! The bound function data (if any)

@@ -5,9 +5,6 @@
 require parquet
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE decimals(
 	dec4 DECIMAL(4,1),
 	dec9 DECIMAL(9,2),
@@ -37,16 +34,16 @@ INSERT INTO decimals VALUES (
 );
 
 statement ok
-COPY decimals TO '__TEST_DIR__/decimals.parquet';
+COPY decimals TO '{TEST_DIR}/decimals.parquet';
 
 query IIII nosort decimal_scan
 SELECT * FROM decimals;
 
 query IIII nosort decimal_scan
-SELECT * FROM '__TEST_DIR__/decimals.parquet';
+SELECT * FROM '{TEST_DIR}/decimals.parquet';
 
 query IIII
-SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/decimals.parquet');
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('{TEST_DIR}/decimals.parquet');
 ----
 -999.9	999.9	-999.9	999.9
 -9999999.99	9999999.99	-9999999.99	9999999.99
@@ -58,21 +55,21 @@ statement ok
 DELETE FROM decimals WHERE dec4<-42 OR dec4>42
 
 statement ok
-COPY decimals TO '__TEST_DIR__/decimals.parquet';
+COPY decimals TO '{TEST_DIR}/decimals.parquet';
 
 foreach dec_column dec4 dec9 dec18 dec38
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=42
+SELECT * FROM '{TEST_DIR}/decimals.parquet' WHERE {dec_column}=42
 ----
 42	42	42	42
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=-43
+SELECT * FROM '{TEST_DIR}/decimals.parquet' WHERE {dec_column}=-43
 ----
 
 query IIII
-SELECT * FROM '__TEST_DIR__/decimals.parquet' WHERE ${dec_column}=43
+SELECT * FROM '{TEST_DIR}/decimals.parquet' WHERE {dec_column}=43
 ----
 
 endloop
@@ -82,6 +79,6 @@ statement ok
 PRAGMA disable_verification
 
 query IIIIIIII
-SELECT sdec4.min, sdec4.max, sdec9.min, sdec9.max, sdec18.min, sdec18.max, sdec38.min, sdec38.max FROM (SELECT stats(dec4) sdec4, stats(dec9) sdec9, stats(dec18) sdec18, stats(dec38) sdec38 FROM '__TEST_DIR__/decimals.parquet' LIMIT 1)
+SELECT sdec4.min, sdec4.max, sdec9.min, sdec9.max, sdec18.min, sdec18.max, sdec38.min, sdec38.max FROM (SELECT stats(dec4) sdec4, stats(dec9) sdec9, stats(dec18) sdec18, stats(dec38) sdec38 FROM '{TEST_DIR}/decimals.parquet' LIMIT 1)
 ----
 -42.0	42.0	-42.00	42.00	-42.000	42.000	-42.0000	42.0000

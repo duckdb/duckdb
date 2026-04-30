@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, idx_t table_index,
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index,
                                            vector<LogicalType> types, bool union_all, PhysicalOperator &top,
                                            PhysicalOperator &bottom, idx_t estimated_cardinality)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
@@ -42,7 +42,7 @@ public:
 			auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
 			for (auto &child_expr : bound_aggr_expr.children) {
 				executor.AddExpression(*child_expr);
-				aggr_input_types.push_back(child_expr->return_type);
+				aggr_input_types.push_back(child_expr->GetReturnType());
 			}
 			payload_aggregates_ptr.push_back(&bound_aggr_expr);
 		}
@@ -82,7 +82,8 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set, bool reference) {
+static void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set,
+                          bool reference) {
 	idx_t chunk_index = 0;
 	// Populate the group_chunk
 	for (auto &group_idx : idx_set) {
@@ -346,7 +347,7 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
-	result["Table Index"] = StringUtil::Format("%llu", table_index);
+	result["Table Index"] = StringUtil::Format("%llu", table_index.index);
 	SetEstimatedCardinality(result, estimated_cardinality);
 	return result;
 }

@@ -12,7 +12,7 @@ namespace duckdb {
 template <bool LTRIM, bool RTRIM>
 struct TrimOperator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+	static RESULT_TYPE Operation(INPUT_TYPE input, StringHeap &heap) {
 		auto data = input.GetData();
 		auto size = input.GetSize();
 
@@ -50,7 +50,7 @@ struct TrimOperator {
 		}
 
 		// Copy the trimmed string
-		auto target = StringVector::EmptyString(result, end - begin);
+		auto target = heap.EmptyString(end - begin);
 		auto output = target.GetDataWriteable();
 		memcpy(output, data + begin, end - begin);
 

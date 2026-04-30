@@ -21,8 +21,8 @@
 #include "duckdb/common/optionally_owned_ptr.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/common/insertion_order_preserving_map.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
 
 namespace duckdb {
 
@@ -205,6 +205,19 @@ protected:
 		}
 	}
 
+	// DuckDB Optional
+	template <typename T>
+	void WriteValue(const optional<T> &opt) {
+		if (!opt.IsValid()) {
+			OnNullableBegin(false);
+			OnNullableEnd();
+		} else {
+			OnNullableBegin(true);
+			WriteValue(opt.GetValue());
+			OnNullableEnd();
+		}
+	}
+
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {
@@ -370,6 +383,12 @@ protected:
 	}
 	void WriteValue(PhysicalIndex value) {
 		WriteValue(value.index);
+	}
+	void WriteValue(TableIndex value) {
+		WriteValue(value.index);
+	}
+	void WriteValue(ProjectionIndex value) {
+		WriteValue(value.GetIndexUnsafe());
 	}
 	void WriteValue(optional_idx value) {
 		WriteValue(value.IsValid() ? value.GetIndex() : DConstants::INVALID_INDEX);

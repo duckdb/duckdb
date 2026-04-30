@@ -6,31 +6,28 @@ require json
 require parquet
 
 statement ok
-PRAGMA enable_verification;
+COPY (SELECT * FROM range(0, 10) as r(i)) TO '{TEST_DIR}/range.parquet' (FORMAT 'parquet');
 
 statement ok
-COPY (SELECT * FROM range(0, 10) as r(i)) TO '__TEST_DIR__/range.parquet' (FORMAT 'parquet');
-
-statement ok
-COPY (SELECT * FROM range(0, 10) as r(i)) TO '__TEST_DIR__/range2.parquet' (FORMAT 'parquet');
+COPY (SELECT * FROM range(0, 10) as r(i)) TO '{TEST_DIR}/range2.parquet' (FORMAT 'parquet');
 
 statement ok
 PRAGMA enable_profiling = 'json';
 
 statement ok
-PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
 
 statement ok
 PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}';
 
 statement ok
-SELECT * FROM '__TEST_DIR__/range.parquet' order by all;
+SELECT * FROM '{TEST_DIR}/range.parquet' order by all;
 
 statement ok
 pragma disable_profiling;
 
 statement ok
-CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
 
 statement ok
 SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;

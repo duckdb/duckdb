@@ -4,23 +4,15 @@
 
 require tpch
 
-require autocomplete
-
 require skip_reload
 
 require no_extension_autoloading "FIXME: to be reviewed whether this can be lifted"
-
-# statement ok
-# PRAGMA enable_verification
 
 statement ok
 CREATE TABLE integers (i bigint);
 
 statement ok
 INSERT INTO integers values (1), (2), (3);
-
-statement ok
-set allow_parser_override_extension=strict_when_supported;
 
 query I
 DELETE FROM integers WHERE i%2 AND i<157353;

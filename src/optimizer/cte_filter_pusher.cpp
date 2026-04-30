@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -39,7 +40,7 @@ unique_ptr<LogicalOperator> CTEFilterPusher::Optimize(unique_ptr<LogicalOperator
 void CTEFilterPusher::FindCandidates(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 		// We encountered a new CTE, add it to the map
-		auto key = to_string(op.Cast<LogicalMaterializedCTE>().table_index);
+		auto key = to_string(op.Cast<LogicalMaterializedCTE>().table_index.index);
 		auto value = make_uniq<MaterializedCTEInfo>(op);
 
 		cte_info_map.insert(key, std::move(value));
@@ -47,7 +48,7 @@ void CTEFilterPusher::FindCandidates(LogicalOperator &op) {
 	           op.children[0]->type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		// We encountered a filtered CTE ref, update the according CTE info
 		auto &cte_ref = op.children[0]->Cast<LogicalCTERef>();
-		auto it = cte_info_map.find(to_string(cte_ref.cte_index));
+		auto it = cte_info_map.find(to_string(cte_ref.cte_index.index));
 		if (it != cte_info_map.end()) {
 			it->second->filters.push_back(op);
 		}
@@ -55,7 +56,7 @@ void CTEFilterPusher::FindCandidates(LogicalOperator &op) {
 	} else if (op.type == LogicalOperatorType::LOGICAL_CTE_REF) {
 		// We encountered a CTE ref without a filter on top, so we can't do the optimization
 		auto &cte_ref = op.Cast<LogicalCTERef>();
-		auto it = cte_info_map.find(to_string(cte_ref.cte_index));
+		auto it = cte_info_map.find(to_string(cte_ref.cte_index.index));
 		if (it != cte_info_map.end()) {
 			it->second->all_cte_refs_are_filtered = false;
 		}
@@ -108,11 +109,18 @@ void CTEFilterPusher::PushFilterIntoCTE(MaterializedCTEInfo &info) {
 		}
 	}
 
-	// Add the filter on top of the CTE definition and push it down
+	// Add the filter on top of the CTE definition and split the predicates
 	auto new_cte = make_uniq_base<LogicalOperator, LogicalFilter>(std::move(outer_expr));
+	LogicalFilter::SplitPredicates(new_cte->Cast<LogicalFilter>().expressions);
+
+	// Rewrite the operator expressions before adding the child op (children should be rewritten already)
+	optimizer.rewriter.VisitOperator(*new_cte);
 	new_cte->children.push_back(std::move(info.materialized_cte.children[0]));
+
+	// Push down the filter
 	FilterPushdown pushdown(optimizer);
 	new_cte = pushdown.Rewrite(std::move(new_cte));
+
 	info.materialized_cte.children[0] = std::move(new_cte);
 }
 

@@ -57,6 +57,7 @@ struct StorageManagerOptions {
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
 class SingleFileBlockManager : public BlockManager {
+public:
 	//! The location in the file where the block writing starts
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
@@ -83,7 +84,7 @@ public:
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as included in a checkpoint
-	void MarkBlockACheckpointed(block_id_t block_id) override;
+	void MarkBlockAsCheckpointed(block_id_t block_id) override;
 	//! Mark a block as used (no longer re-writeable)
 	void MarkBlockAsUsed(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)

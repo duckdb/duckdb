@@ -2,9 +2,6 @@
 # description: Test constant intervals
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # interval constants with different representations
 query I
 SELECT interval 2 days;
@@ -498,7 +495,7 @@ foreach type BIGINT INTEGER
 foreach func to_millennia to_centuries to_decades to_years to_quarters to_months to_weeks to_days
 
 statement ok
-select ${func}(84::${type});
+select {func}(84::{type});
 
 endloop
 

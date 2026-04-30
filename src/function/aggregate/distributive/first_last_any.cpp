@@ -178,7 +178,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		if (assign_count == count) {
 			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
 		} else {
-			SelectionVector sel(assign_sel);
+			SelectionVector sel(assign_sel, STANDARD_VECTOR_SIZE);
 			Vector sliced_input(input, sel, assign_count);
 			CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		}
@@ -209,17 +209,19 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		}
 	}
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
-		function.arguments[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
+		auto &function = input.GetBoundFunction();
+		auto &arguments = input.GetArguments();
+
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 };
 
 LogicalType GetFirstStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
-	LogicalType value_type = function.arguments[0];
+	LogicalType value_type = function.GetArguments()[0];
 	child_types.emplace_back("value", value_type);
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 	child_types.emplace_back("is_null", LogicalType::BOOLEAN);
@@ -290,7 +292,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::DECIMAL) {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
-		function.arguments[0] = type;
+		function.GetArguments()[0] = type;
 		function.SetReturnType(type);
 		return function;
 	}
@@ -348,9 +350,11 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 }
 
 template <bool LAST, bool SKIP_NULLS>
-unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
-                                          vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
+unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	auto decimal_type = arguments[0]->GetReturnType();
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
@@ -368,18 +372,16 @@ AggregateFunction GetFirstOperator(const LogicalType &type) {
 }
 
 template <bool LAST, bool SKIP_NULLS>
-unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &function,
-                                   vector<unique_ptr<Expression>> &arguments) {
-	auto input_type = arguments[0]->return_type;
+unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	auto input_type = arguments[0]->GetReturnType();
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	if (function.HasBindCallback()) {
-		return function.GetBindCallback()(context, function, arguments);
-	} else {
-		return nullptr;
-	}
+	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>

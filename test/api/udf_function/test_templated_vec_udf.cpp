@@ -3,13 +3,11 @@
 #include "udf_functions_to_test.hpp"
 
 using namespace duckdb;
-using namespace std;
 
 TEST_CASE("Vectorized UDF functions using templates", "[coverage][.]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
 	// The types supported by the templated CreateVectorizedFunction

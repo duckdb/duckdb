@@ -32,6 +32,7 @@ class QueryNode;
 
 class ScalarFunctionCatalogEntry;
 class AggregateFunctionCatalogEntry;
+class WindowFunctionCatalogEntry;
 class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
@@ -185,7 +186,8 @@ protected:
 	BindResult BindExpression(TypeExpression &expr, idx_t depth);
 
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const vector<LogicalType> &function_child_types,
-	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);
+	                          optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          optional_ptr<BindLambdaContext> bind_lambda_context);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
@@ -194,10 +196,12 @@ protected:
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   BoundLambdaExpression &bound_lambda_expr,
 	                                   const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                                   const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                                   const vector<LogicalType> &function_child_types);
 
 	void CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
 	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          const optional_ptr<BindLambdaContext> bind_lambda_context,
 	                          const vector<LogicalType> &function_child_types);
 
 	virtual unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
@@ -215,6 +219,7 @@ protected:
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindWindow(FunctionExpression &expr, WindowFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
@@ -222,6 +227,7 @@ protected:
 	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
 	virtual string UnsupportedAggregateMessage();
+	virtual string UnsupportedWindowMessage();
 	virtual string UnsupportedUnnestMessage();
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);

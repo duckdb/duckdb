@@ -38,7 +38,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		return nullptr;
 	}
 	D_ASSERT(root);
-	auto in_type = expr.children[0]->return_type;
+	auto in_type = expr.children[0]->GetReturnType();
 	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
@@ -87,9 +87,8 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			// error while evaluating scalar
 			return nullptr;
 		}
-		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);
-		chunk.SetValue(0, index, value);
+		chunk.data[0].Append(value);
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);
@@ -108,7 +107,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	join->AddChild(std::move(chunk_scan));
 	// create the JOIN condition
 	JoinCondition cond(std::move(expr.children[0]),
-	                   make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0)),
+	                   make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, ProjectionIndex(0))),
 	                   ExpressionType::COMPARE_EQUAL);
 	join->conditions.push_back(std::move(cond));
 	root = std::move(join);
@@ -120,15 +119,15 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			auto child_bindings = root->GetColumnBindings();
 			for (idx_t i = 0; i < child_bindings.size(); i++) {
 				if (child_bindings[i].table_index != mark_index) {
-					filter.projection_map.push_back(i);
+					filter.projection_map.emplace_back(i);
 				}
 			}
 		}
 	}
 
 	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-	unique_ptr<Expression> result =
-	    make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(mark_index, 0));
+	unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN,
+	                                                                    ColumnBinding(mark_index, ProjectionIndex(0)));
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);

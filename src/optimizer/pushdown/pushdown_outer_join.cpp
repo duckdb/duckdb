@@ -80,7 +80,7 @@ static bool ExprIsFunctionOnlyOf(const Expression &expr, const expression_set_t 
 
 	ExpressionIterator::EnumerateExpression(expr_to_check, [&](unique_ptr<Expression> &sub_expr) {
 		if (args.find(*sub_expr) != args.end()) {
-			auto null_value = make_uniq<BoundConstantExpression>(Value(sub_expr->return_type));
+			auto null_value = make_uniq<BoundConstantExpression>(Value(sub_expr->GetReturnType()));
 			sub_expr = std::move(null_value);
 		}
 	});
@@ -172,8 +172,8 @@ PushDownFiltersOnCoalescedEqualJoinKeys(vector<unique_ptr<Filter>> &filters, vec
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownOuterJoin(unique_ptr<LogicalOperator> op,
-                                                              unordered_set<idx_t> &left_bindings,
-                                                              unordered_set<idx_t> &right_bindings) {
+                                                              unordered_set<TableIndex> &left_bindings,
+                                                              unordered_set<TableIndex> &right_bindings) {
 	if (op->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return FinishPushdown(std::move(op));
 	}

@@ -49,6 +49,13 @@ void ArrowOutputVersionSetting::OnSet(SettingCallbackInfo &info, Value &paramete
 }
 
 //===----------------------------------------------------------------------===//
+// Checkpoint On Detach
+//===----------------------------------------------------------------------===//
+void CheckpointOnDetachSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<CheckpointOnDetach>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -71,27 +78,17 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 }
 
 //===----------------------------------------------------------------------===//
-// Debug Force External
-//===----------------------------------------------------------------------===//
-void DebugForceExternalSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto &config = ClientConfig::GetConfig(context);
-	config.force_external = input.GetValue<bool>();
-}
-
-void DebugForceExternalSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
-}
-
-Value DebugForceExternalSetting::GetSetting(const ClientContext &context) {
-	auto &config = ClientConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_external);
-}
-
-//===----------------------------------------------------------------------===//
 // Debug Physical Table Scan Execution Strategy
 //===----------------------------------------------------------------------===//
 void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	EnumUtil::FromString<PhysicalTableScanExecutionStrategy>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Debug Verify Statement
+//===----------------------------------------------------------------------===//
+void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	EnumUtil::FromString<DebugStatementVerification>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

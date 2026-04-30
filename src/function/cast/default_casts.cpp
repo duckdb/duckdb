@@ -1,3 +1,7 @@
+#include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 
 #include "duckdb/common/likely.hpp"
@@ -41,7 +45,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
                                   optional_ptr<const Expression> cast_source, optional_idx error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
-		column = " when casting from source column " + cast_source->alias;
+		column = " when casting from source column " + cast_source->GetAlias();
 	}
 	if (!error_message_ptr) {
 		throw ConversionException(error_location, error_message + column);
@@ -58,8 +62,7 @@ bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return success;
 }
 
@@ -87,13 +90,17 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 	D_ASSERT(source_entries.size() == result_entries.size());
 
 	for (idx_t i = 0; i < source_entries.size(); i++) {
-		result_entries[i]->Reference(*source_entries[i]);
+		result_entries[i].Reference(source_entries[i]);
 	}
 
 	source.Flatten(count);
-	FlatVector::Validity(result) = FlatVector::Validity(source);
+	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
 	result.Verify(count);
 	return true;
+}
+
+bool BoundCastInfo::IsNopCast() const {
+	return function == DefaultCasts::NopCast;
 }
 
 static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
@@ -101,20 +108,19 @@ static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType 
 
 	LogicalType dummy_struct = LogicalType::STRUCT(AggregateStateType::GetChildTypes(source));
 	auto cast_info = input.GetCastFunction(dummy_struct, target);
-	if (cast_info.function == DefaultCasts::NopCast) {
+	if (cast_info.IsNopCast()) {
 		// 1. `NopCast` cannot be used since it expects the types to be the same.
 		// 2. `ReinterpretCast` cannot be used since it's blocked for nested types.
 		// 3. We don't want to use `StructToStructCast` in this case as it introduces more complexity while we know
 		// that we don't have casting to perform
-		cast_info.function = AggregateStateToStructReinterpret;
+		cast_info.SetFunction(AggregateStateToStructReinterpret);
 	}
 	return cast_info;
 }
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::SetNull(result, true);
+	ConstantVector::SetNull(result, count_t(count));
 	return true;
 }
 

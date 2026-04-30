@@ -1,3 +1,5 @@
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp" // VariableReturnBindData
@@ -23,26 +25,26 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 	// We would use result.Reference(input) also for this case,
 	// but that function asserts that the logical types are the same
 	for (idx_t i = 0; i < input_children.size(); i++) {
-		result_children[i]->Reference(*input_children[i]);
+		result_children[i].Reference(input_children[i]);
 	}
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		const bool is_null = ConstantVector::IsNull(input);
-		ConstantVector::SetNull(result, is_null);
+		if (ConstantVector::IsNull(input)) {
+			ConstantVector::SetNull(result, count_t(count));
+		}
 	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		// set only the struct buffer's type - do not propagate to children
+		// since children reference external vectors (input children) that may have incompatible buffer types
+		result.BufferMutable().SetVectorTypeOnly(VectorType::FLAT_VECTOR);
 
 		// Make result validity to mirror input's nulls
-		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		auto validity_entries = input.Validity(count);
 
-		if (!input_data.validity.AllValid()) {
-			auto &validity = FlatVector::Validity(result);
+		if (validity_entries.CanHaveNull()) {
+			auto &validity = FlatVector::ValidityMutable(result);
 
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = input_data.sel->get_index(i);
-				if (!input_data.validity.RowIsValid(idx)) {
+				if (!validity_entries.IsValid(i)) {
 					validity.SetInvalid(i);
 				}
 			}
@@ -51,20 +53,21 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 // Ensure input is a STRUCT, set return type to an unnamed STRUCT with same child types
-static unique_ptr<FunctionData> StructValuesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
-	const auto arg_type = arguments[0]->return_type;
+static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	const auto arg_type = arguments[0]->GetReturnType();
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	// Since the type of the argument we declared of in `GetFunction` doesn't contain the inner STRUCT type,
 	// we should take it from the arguments
-	bound_function.arguments[0] = arg_type;
+	bound_function.GetArguments()[0] = arg_type;
 
 	// Build unnamed children list using only types, with empty names
 	child_list_t<LogicalType> unnamed_children;
-	auto &children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	unnamed_children.reserve(children.size());
 	for (auto &child : children) {
 		unnamed_children.emplace_back("", child.second);
