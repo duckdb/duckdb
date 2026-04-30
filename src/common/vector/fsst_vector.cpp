@@ -115,9 +115,4 @@ void FSSTVector::SetCount(Vector &vector, idx_t count) {
 	fsst_string_buffer.SetCount(count);
 }
 
-idx_t FSSTVector::GetCount(const Vector &vector) {
-	auto &fsst_string_buffer = GetFSSTBuffer(vector);
-	return fsst_string_buffer.GetCount();
-}
-
 } // namespace duckdb

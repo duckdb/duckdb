@@ -14,7 +14,7 @@ namespace duckdb {
 
 class ShreddedVectorBuffer : public VectorBuffer {
 public:
-	explicit ShreddedVectorBuffer(Vector &shredded_data, idx_t count);
+	explicit ShreddedVectorBuffer(Vector &shredded_data, count_t count);
 	~ShreddedVectorBuffer() override;
 
 public:

@@ -1024,6 +1024,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 		idx_t layout_col = entry.second;
 		auto &target_vector = residual_state->eval_chunk.data[col_with_offset];
 		GatherResult(target_vector, match_sel, match_count, layout_col);
+		FlatVector::SetSize(target_vector, count_t(match_count));
 	}
 
 	SelectionVector &selected_sel = residual_state->selected_sel;
@@ -1174,6 +1175,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 						const auto output_col_idx = ht.output_columns[i];
 						D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
+						FlatVector::SetSize(vector, count_t(result_count));
 					}
 
 					AdvancePointers();
@@ -1202,6 +1204,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 			const auto output_col_idx = ht.output_columns[i];
 			D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 			GatherResult(vector, base_count, output_col_idx);
+			FlatVector::SetSize(vector, count_t(base_count));
 		}
 	}
 }
@@ -1329,6 +1332,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
 
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
@@ -1441,6 +1445,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 				mask.SetValid(i);
 			}
 		}
+		FlatVector::SetSize(result_vector, count_t(probe_data.size()));
 	}
 	finished = true;
 }
@@ -1520,6 +1525,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, count_t(probe_data.size()));
 	}
 	result.SetCardinality(probe_data.size());
 
@@ -1587,6 +1593,7 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, count_t(probe_size));
 	}
 
 	// single pass - done
@@ -1654,6 +1661,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 		const auto output_col_idx = output_columns[i];
 		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
 		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
+		FlatVector::SetSize(vector, count_t(found_entries));
 	}
 }
 
