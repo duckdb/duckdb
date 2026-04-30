@@ -58,7 +58,7 @@ fi
 if ! command -v rclone >/dev/null 2>&1; then
   case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
-      python3 scripts/ci/retry.py -- choco install rclone -y
+      python3 scripts/ci/retry.py -- choco install rclone -y --limit-output --no-progress
       ;;
     *)
       install_runner=(bash)
@@ -77,13 +77,18 @@ cleanup() {
 trap cleanup EXIT
 printf '%s\n' "${@:2}" > "$files_from"
 
-rclone_remote=":s3,provider=AWS,endpoint=${AWS_ENDPOINT_URL:-},access_key_id=${AWS_ACCESS_KEY_ID:-},secret_access_key=${AWS_SECRET_ACCESS_KEY:-}"
-if [ -n "${AWS_SESSION_TOKEN:-}" ]; then
-  rclone_remote="${rclone_remote},session_token=${AWS_SESSION_TOKEN}"
-fi
+rclone_s3_args=(
+  --s3-provider "${S3_PROVIDER:-AWS}"
+  --s3-endpoint "${AWS_ENDPOINT_URL:-}"
+  --s3-access-key-id "${AWS_ACCESS_KEY_ID:-}"
+  --s3-secret-access-key "${AWS_SECRET_ACCESS_KEY:-}"
+)
+
+set -x
 
 rclone $DRY_RUN_PARAM copy \
   --no-traverse \
+  "${rclone_s3_args[@]}" \
   --files-from "$files_from" \
   . \
-  "${rclone_remote}:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"
+  ":s3:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"

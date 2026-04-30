@@ -79,7 +79,7 @@ fi
 if ! command -v rclone >/dev/null 2>&1; then
     case "$(uname -s)" in
       MINGW*|MSYS*|CYGWIN*)
-        choco install rclone -y
+        choco install rclone -y --limit-output --no-progress
         ;;
       *)
         install_runner=(bash)
@@ -109,11 +109,21 @@ fi
 
 upload_extension() {
   local destination="$1"
+  local rclone_s3_args=(
+    --s3-provider "${S3_PROVIDER:-AWS}"
+    --s3-endpoint "${AWS_ENDPOINT_URL}"
+    --s3-access-key-id "${AWS_ACCESS_KEY_ID}"
+    --s3-secret-access-key "${AWS_SECRET_ACCESS_KEY}"
+  )
+
+  set -x
   rclone $DRY_RUN_PARAM copyto \
+    --no-traverse \
     --s3-acl public-read \
+    "${rclone_s3_args[@]}" \
     "${extra_upload_args[@]}" \
     "$ext.compressed" \
-    ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:${destination}"
+    ":s3:${destination}"
 }
 
 # upload versioned version
