@@ -1,8 +1,26 @@
 #include "duckdb/storage/table/per_column_metadata_blocks.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
 static constexpr idx_t COLUMN_INDEX_BIT = idx_t(1) << 63;
+
+void PerColumnMetadataBlock::Serialize(Serializer &serializer) const {
+	idx_t packed = index;
+	if (is_column_index) {
+		packed |= COLUMN_INDEX_BIT;
+	}
+	serializer.WritePropertyWithDefault<idx_t>(100, "packed", packed);
+}
+
+PerColumnMetadataBlock PerColumnMetadataBlock::Deserialize(Deserializer &deserializer) {
+	auto packed = deserializer.ReadPropertyWithDefault<idx_t>(100, "packed");
+	PerColumnMetadataBlock result;
+	result.is_column_index = (packed & COLUMN_INDEX_BIT) != 0;
+	result.index = packed & ~COLUMN_INDEX_BIT;
+	return result;
+}
 
 vector<idx_t> PerColumnMetadataBlocks::GetBlocksForColumn(idx_t col_idx) const {
 	vector<idx_t> result;

@@ -1673,7 +1673,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
 	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault(106, "per_column_metadata_blocks", pointer.has_per_column_metadata_blocks);
+		serializer.WritePropertyWithDefault(106, "has_per_column_metadata_blocks",
+		                                    pointer.has_per_column_metadata_blocks);
 		serializer.WriteProperty(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
 	} else if (serializer.ShouldSerialize(6)) {
 		if (!pointer.has_metadata_blocks && pointer.has_per_column_metadata_blocks) {
