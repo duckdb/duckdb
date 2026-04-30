@@ -548,7 +548,7 @@ static ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDe
 	if (global_column.children.empty()) {
 		// not a struct - map the column directly
 		result.column_map = Value(local_column.name);
-		result.column_index = make_uniq<ColumnIndex>(global_index.CopyWithIndex(local_idx.GetIndex()));
+		result.column_index = make_uniq<ColumnIndex>(global_index.RemapRootIndex(local_idx.GetIndex()));
 		result.mapping = std::move(mapping);
 		result.local_column = local_column;
 		return result;
@@ -676,7 +676,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				expressions.push_back(std::move(expr));
 
 				MultiFileLocalColumnId local_id(reader.columns.size());
-				auto local_index = global_id.CopyWithIndex(local_id.GetId());
+				auto local_index = global_id.RemapRootIndex(local_id.GetId());
 
 				// add the virtual column to the reader
 				reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
@@ -703,7 +703,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 				ThrowColumnNotFoundError(global_column.name);
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
-			auto local_index = global_id.CopyWithIndex(local_id.GetId());
+			auto local_index = global_id.RemapRootIndex(local_id.GetId());
 			auto &local_type = local_columns[local_id.GetId()].type;
 			auto &global_type = global_column.type;
 			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx.GetIndex());
