@@ -141,9 +141,11 @@ public:
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
 	unique_ptr<GlobalFileState> CreateFileState(string output_path = string()) DUCKDB_REQUIRES(lock);
 	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
-	void FinalizeFileState(unique_ptr<GlobalFileState> file_state);
+	unique_ptr<GlobalFileState> FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) DUCKDB_REQUIRES(lock);
+	void FinalizeFileState(unique_ptr<GlobalFileState> file_state) DUCKDB_EXCLUDES(lock);
 
-	void TryFinalizeOwnedFileState();
+	unique_ptr<GlobalFileState> TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
+	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
 
 public:
 	const PhysicalCopyToFile &op;
@@ -161,7 +163,7 @@ public:
 	//! Therefore, we must delay deciding which file to flush; otherwise, parallel writes overshoot
 	//! All Prepare are done against this state
 	atomic<optional_ptr<GlobalFileState>> prepare_global_state;
-	unique_ptr<GlobalFileState> prepare_global_state_owned;
+	unique_ptr<GlobalFileState> prepare_global_state_owned DUCKDB_GUARDED_BY(lock);
 
 	//! The (current) global state
 	unique_ptr<GlobalFileState> global_state;
@@ -438,7 +440,8 @@ public:
 	shared_ptr<PartitionedCopyState> sinking_state DUCKDB_GUARDED_BY(lock);
 	shared_ptr<PartitionedCopyState> flushing_state DUCKDB_GUARDED_BY(lock);
 
-	//! Fine-grained lock for partition write tracking (leaf lock — never held while acquiring lock)
+	//! Fine-grained lock for partition write tracking. May be held while acquiring CopyToFileGlobalState::lock.
+	//! Do not acquire active_writes_lock while holding CopyToFileGlobalState::lock.
 	mutable annotated_mutex active_writes_lock;
 	//! The active writes per partition (for partitioned write)
 	vector_of_value_map_t<unique_ptr<PartitionWriteInfo>> active_writes DUCKDB_GUARDED_BY(active_writes_lock);
@@ -1423,18 +1426,40 @@ optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_n
 	return result;
 }
 
-void CopyToFileGlobalState::FinalizeFileState(unique_ptr<GlobalFileState> file_state) {
+unique_ptr<GlobalFileState> CopyToFileGlobalState::FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) {
 	if (RefersToSameObject(*prepare_global_state.load().get(), *file_state)) {
 		prepare_global_state_owned = std::move(file_state);
+		return nullptr;
 	} else {
+		return file_state;
+	}
+}
+
+void CopyToFileGlobalState::FinalizeFileState(unique_ptr<GlobalFileState> file_state) {
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		file_state = FinalizeFileStateLocked(std::move(file_state));
+	}
+	if (file_state) {
 		op.function.copy_to_finalize(context, *op.bind_data, *file_state->data);
 	}
 }
 
-void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
+unique_ptr<GlobalFileState> CopyToFileGlobalState::TryFinalizeOwnedFileStateLocked() {
 	if (prepare_global_state_owned) {
-		op.function.copy_to_finalize(context, *op.bind_data, *prepare_global_state_owned->data);
-		prepare_global_state_owned.reset();
+		return std::move(prepare_global_state_owned);
+	}
+	return nullptr;
+}
+
+void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
+	unique_ptr<GlobalFileState> file_state;
+	{
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		file_state = TryFinalizeOwnedFileStateLocked();
+	}
+	if (file_state) {
+		op.function.copy_to_finalize(context, *op.bind_data, *file_state->data);
 	}
 }
 
