@@ -2,6 +2,7 @@
 #include "duckdb/parser/peg/matcher.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -200,7 +201,7 @@ shared_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(ClientCont
 	return attached_database;
 }
 
-void DatabaseInstance::CreateMainDatabase() {
+void DatabaseInstance::CreateMainDatabase(unique_ptr<BufferedFileHandle> prefetched_handle) {
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
@@ -209,7 +210,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	con.BeginTransaction();
 	AttachOptions options(config.options);
 	options.is_main_database = true;
-	db_manager->AttachDatabase(*con.context, info, options);
+	db_manager->AttachDatabase(*con.context, info, options, std::move(prefetched_handle));
 	con.Commit();
 }
 
@@ -310,7 +311,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// resolve the type of the database we are opening
 	auto &fs = FileSystem::GetFileSystem(*this);
-	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type);
+	unique_ptr<BufferedFileHandle> prefetched_handle;
+	DBPathAndType::ResolveDatabaseType(fs, config.options.database_path, config.options.database_type,
+	                                   &prefetched_handle);
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
@@ -329,7 +332,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	LoadExtensionSettings();
 
 	if (!db_manager->HasDefaultDatabase()) {
-		CreateMainDatabase();
+		CreateMainDatabase(std::move(prefetched_handle));
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise

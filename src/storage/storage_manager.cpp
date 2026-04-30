@@ -321,14 +321,14 @@ inline void ClearUserKey(shared_ptr<string> const &encryption_key) {
 	}
 }
 
-void StorageManager::Initialize(QueryContext context) {
+void StorageManager::Initialize(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle) {
 	bool in_memory = InMemory();
 	if (in_memory && read_only) {
 		throw CatalogException("Cannot launch in-memory database in read-only mode!");
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
-	LoadDatabase(context);
+	LoadDatabase(context, std::move(prefetched_handle));
 
 	if (storage_options.encryption) {
 		ClearUserKey(storage_options.user_key);
@@ -363,7 +363,7 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
     : StorageManager(db, std::move(path), options) {
 }
 
-void SingleFileStorageManager::LoadDatabase(QueryContext context) {
+void SingleFileStorageManager::LoadDatabase(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle) {
 	if (InMemory()) {
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
@@ -473,7 +473,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase(context);
+		sf_block_manager->LoadExistingDatabase(context, std::move(prefetched_handle));
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 

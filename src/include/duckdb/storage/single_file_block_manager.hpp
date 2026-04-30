@@ -11,6 +11,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
@@ -69,8 +70,9 @@ public:
 	//! Creates a new database.
 	void CreateNewDatabase(QueryContext context);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
-	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(QueryContext context);
+	//! to detect inconsistencies with the file header. If `prefetched_handle` is set, its
+	//! buffered prefix is reused to satisfy the header reads (avoids redundant remote I/O).
+	void LoadExistingDatabase(QueryContext context, unique_ptr<BufferedFileHandle> prefetched_handle = nullptr);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -148,8 +150,11 @@ private:
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
-	void ReadAndChecksum(QueryContext context, FileBuffer &handle, uint64_t location,
-	                     bool skip_block_header = false) const;
+	//! Reads via the supplied BaseFileHandle. Pass `*handle` (the member) for
+	//! steady-state reads, or a local BufferedFileHandle during init so its
+	//! buffer hits land. Always 5-arg, no implicit-source overload.
+	void ReadAndChecksum(QueryContext context, FileBuffer &block, uint64_t location, bool skip_block_header,
+	                     BaseFileHandle &source) const;
 	void ChecksumAndWrite(QueryContext context, FileBuffer &handle, uint64_t location,
 	                      bool skip_block_header = false) const;
 

@@ -232,14 +232,15 @@ void AttachedDatabase::InvokeCloseIfLastReference(shared_ptr<AttachedDatabase> &
 	attached_db.reset();
 }
 
-void AttachedDatabase::Initialize(optional_ptr<ClientContext> context) {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context,
+                                  unique_ptr<BufferedFileHandle> prefetched_handle) {
 	if (IsSystem()) {
 		catalog->Initialize(context, true);
 	} else {
 		catalog->Initialize(context, false);
 	}
 	if (storage) {
-		storage->Initialize(context);
+		storage->Initialize(context, std::move(prefetched_handle));
 	}
 }
 

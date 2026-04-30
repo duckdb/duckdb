@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_system/buffered_file_handle.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
 
@@ -94,7 +95,8 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(optional_ptr<ClientContext> context = nullptr);
+	void Initialize(optional_ptr<ClientContext> context = nullptr,
+	                unique_ptr<BufferedFileHandle> prefetched_handle = nullptr);
 	void FinalizeLoad(optional_ptr<ClientContext> context);
 	//! Close the database before shutting it down.
 	void Close(const DatabaseCloseAction action);

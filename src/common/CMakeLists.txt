@@ -35,6 +35,7 @@ add_library_unity(
   bind_helpers.cpp
   box_renderer.cpp
   box_renderer_context.cpp
+  buffered_file_handle.cpp
   client_box_renderer_context.cpp
   column_data_collection_render_interface.cpp
   cgroups.cpp
