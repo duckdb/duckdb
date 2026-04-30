@@ -254,6 +254,7 @@ private:
 	                                               RowGroupWriteData &write_data);
 
 	bool HasUnloadedDeletes() const;
+	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
 	mutable mutex row_group_lock;

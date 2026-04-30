@@ -427,6 +427,30 @@ static bool SupportsPerColumnWrites(RowGroupCollection &collection) {
 	return version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version;
 }
 
+unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count) {
+	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
+	if (owned_version_info) {
+		row_group->SetVersionInfo(owned_version_info);
+	}
+	row_group->deletes_pointers = deletes_pointers;
+	row_group->deletes_is_loaded = deletes_is_loaded.load();
+	bool has_column_pointers = column_pointers.size() == columns.size();
+	bool has_per_column_blocks = per_column_metadata_blocks.size() == columns.size();
+	row_group->columns.resize(new_column_count);
+	if (is_loaded) {
+		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
+	}
+	if (has_column_pointers) {
+		row_group->column_pointers.resize(new_column_count);
+	}
+	if (has_per_column_blocks) {
+		row_group->per_column_metadata_blocks.resize(new_column_count);
+	}
+	row_group->has_metadata_blocks = false;
+	row_group->has_changes = true;
+	return row_group;
+}
+
 unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, const LogicalType &target_type,
                                          idx_t changed_idx, ExpressionExecutor &executor,
                                          CollectionScanState &scan_state, SegmentNode<RowGroup> &node,
@@ -467,26 +491,8 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		GetColumns();
 	}
 	unique_lock<mutex> lock(row_group_lock);
-	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	if (owned_version_info) {
-		row_group->SetVersionInfo(owned_version_info);
-	}
-	row_group->deletes_pointers = deletes_pointers;
-	row_group->deletes_is_loaded = deletes_is_loaded.load();
-	bool has_column_pointers = column_pointers.size() == columns.size();
-	bool has_per_column_blocks = per_column_metadata_blocks.size() == columns.size();
-	row_group->columns.resize(columns.size());
-	if (is_loaded) {
-		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[columns.size()]);
-	}
-	if (has_column_pointers) {
-		row_group->column_pointers.resize(columns.size());
-	}
-	if (has_per_column_blocks) {
-		row_group->per_column_metadata_blocks.resize(columns.size());
-	}
-	row_group->has_metadata_blocks = false;
+	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size());
+	// copy existing columns, but swap out the one at changed_idx
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (i == changed_idx) {
 			row_group->columns[i] = std::move(column_data);
@@ -499,10 +505,10 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 			if (row_group->is_loaded) {
 				row_group->is_loaded[i] = is_loaded[i].load();
 			}
-			if (has_column_pointers) {
+			if (!row_group->column_pointers.empty()) {
 				row_group->column_pointers[i] = column_pointers[i];
 			}
-			if (has_per_column_blocks) {
+			if (!row_group->per_column_metadata_blocks.empty()) {
 				row_group->per_column_metadata_blocks[i] = per_column_metadata_blocks[i];
 			}
 		}
@@ -541,37 +547,17 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	}
 
 	unique_lock<mutex> lock(row_group_lock);
-	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	if (owned_version_info) {
-		row_group->SetVersionInfo(owned_version_info);
-	}
-	row_group->deletes_pointers = deletes_pointers;
-	row_group->deletes_is_loaded = deletes_is_loaded.load();
-	idx_t new_column_count = columns.size() + 1;
-	row_group->columns.resize(new_column_count);
-	if (is_loaded) {
-		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
-	}
-	bool has_column_pointers = column_pointers.size() == columns.size();
-	bool has_per_column_blocks = per_column_metadata_blocks.size() == columns.size();
-	if (has_column_pointers) {
-		row_group->column_pointers.resize(new_column_count);
-	}
-	if (has_per_column_blocks) {
-		row_group->per_column_metadata_blocks.resize(new_column_count);
-	}
-	row_group->has_metadata_blocks = false;
+	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size() + 1);
 	// copy existing columns
 	for (idx_t i = 0; i < columns.size(); i++) {
 		row_group->columns[i] = columns[i];
 		if (row_group->is_loaded) {
 			row_group->is_loaded[i] = is_loaded[i].load();
 		}
-		if (has_column_pointers) {
+		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[i] = column_pointers[i];
 		}
-		if (has_per_column_blocks) {
+		if (!row_group->per_column_metadata_blocks.empty()) {
 			row_group->per_column_metadata_blocks[i] = per_column_metadata_blocks[i];
 		}
 	}
@@ -580,7 +566,6 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	if (row_group->is_loaded) {
 		row_group->is_loaded[columns.size()] = true;
 	}
-	row_group->has_changes = true;
 	lock.unlock();
 	row_group->Verify();
 	return row_group;
@@ -597,27 +582,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 		GetColumns();
 	}
 	unique_lock<mutex> lock(row_group_lock);
-	// set up the row_group based on this row_group
-	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	if (owned_version_info) {
-		row_group->SetVersionInfo(owned_version_info);
-	}
-	row_group->deletes_pointers = deletes_pointers;
-	row_group->deletes_is_loaded = deletes_is_loaded.load();
-	idx_t new_column_count = columns.size() - 1;
-	row_group->columns.resize(new_column_count);
-	if (is_loaded) {
-		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
-	}
-	bool has_column_pointers = column_pointers.size() == columns.size();
-	bool has_per_column_blocks = per_column_metadata_blocks.size() == columns.size();
-	if (has_column_pointers) {
-		row_group->column_pointers.resize(new_column_count);
-	}
-	if (has_per_column_blocks) {
-		row_group->per_column_metadata_blocks.resize(new_column_count);
-	}
-	row_group->has_metadata_blocks = false;
+	auto row_group = CreateNewRowGroupCopy(new_collection, columns.size() - 1);
 	// copy over all columns except for the removed one
 	idx_t target_idx = 0;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -628,15 +593,14 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 		if (row_group->is_loaded) {
 			row_group->is_loaded[target_idx] = is_loaded[i].load();
 		}
-		if (has_column_pointers) {
+		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[target_idx] = column_pointers[i];
 		}
-		if (has_per_column_blocks) {
+		if (!row_group->per_column_metadata_blocks.empty()) {
 			row_group->per_column_metadata_blocks[target_idx] = per_column_metadata_blocks[i];
 		}
 		target_idx++;
 	}
-	row_group->has_changes = true;
 	lock.unlock();
 	row_group->Verify();
 	return row_group;
