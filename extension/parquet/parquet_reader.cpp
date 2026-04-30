@@ -67,6 +67,21 @@
 
 namespace duckdb {
 
+const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
+	switch (strategy) {
+	case ParquetPrefetchStrategy::WHOLE_GROUP:
+		return "whole_group";
+	case ParquetPrefetchStrategy::PREFETCH_FILTERS:
+		return "prefetch_filters";
+	case ParquetPrefetchStrategy::COLUMN_WISE_EAGER:
+		return "column_wise_eager";
+	case ParquetPrefetchStrategy::NONE:
+		return "none";
+	default:
+		throw InternalException("Invalid ParquetPrefetchStrategy for ParquetPrefetchStrategyToString()");
+	}
+}
+
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::FieldRepetitionType;
@@ -1450,7 +1465,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		if (state.current_group_filter_ran && state.current_group > 0) {
 			const bool fully_filtered = !state.current_group_had_match;
 			DUCKDB_LOG(context, ParquetPrefetchLogType, file.path, state.group_idx_list[state.current_group - 1],
-			           fully_filtered, state.current_group_strategy, state.current_group_prefetch_groups);
+			           fully_filtered, ParquetPrefetchStrategyToString(state.current_group_strategy),
+			           state.current_group_prefetch_groups);
 		}
 		state.FinalizeRowGroupSelectivity();
 
@@ -1512,7 +1528,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 					state.current_group_prefetched = true;
 				}
-				state.current_group_strategy = "whole_group";
+				state.current_group_strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
 				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 				vector<string> all_cols;
 				for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1543,13 +1559,13 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (filters && !state.scan_filters.empty()) {
 					auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
 					const auto &permutation = adaptive_filter.GetPermutation();
-					bool first_group = false;
+					bool did_split = false;
 					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]] && !first_group) {
+						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]] && !did_split) {
 							trans.FinalizeRegistration();
 							state.current_group_prefetch_groups.push_back(std::move(current_batch));
 							current_batch.clear();
-							first_group = true;
+							did_split = true;
 						}
 						auto &scan_filter = state.scan_filters[permutation[i]];
 						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
@@ -1583,7 +1599,8 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (!lazy_fetch) {
 					trans.PrefetchRegistered();
 				}
-				state.current_group_strategy = lazy_fetch ? "prefetch_filters" : "column_wise_eager";
+				state.current_group_strategy =
+				    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
 			}
 		}
 		result.Reset();

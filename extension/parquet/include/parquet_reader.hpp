@@ -94,6 +94,15 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_MATCH_RATIO = 0.9;
 };
 
+enum class ParquetPrefetchStrategy : uint8_t {
+	NONE,
+	WHOLE_GROUP,      //! whole shebang
+	PREFETCH_FILTERS, //! Used when we have fully selective filters
+	COLUMN_WISE_EAGER //! Used when we have projections but no filters
+};
+
+const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);
+
 struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
 	~ParquetScanFilter();
@@ -124,7 +133,7 @@ struct ParquetReaderScanState {
 
 	bool current_group_filter_ran = false;
 	bool current_group_had_match = false;
-	const char *current_group_strategy = nullptr;
+	ParquetPrefetchStrategy current_group_strategy = ParquetPrefetchStrategy::NONE;
 	vector<vector<string>> current_group_prefetch_groups;
 
 	idx_t row_groups_executed = 0;
@@ -139,7 +148,7 @@ struct ParquetReaderScanState {
 		}
 		current_group_filter_ran = false;
 		current_group_had_match = false;
-		current_group_strategy = nullptr;
+		current_group_strategy = ParquetPrefetchStrategy::NONE;
 		current_group_prefetch_groups.clear();
 	}
 
@@ -147,7 +156,7 @@ struct ParquetReaderScanState {
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
 	//! Table filter list
 	vector<ParquetScanFilter> scan_filters;
-	//! We set it true if the filter was the last filter to eliminate all rows
+	//! true once the filter at this index has driven the surviving row count to zero
 	vector<bool> filter_eliminated_all_rows;
 
 	//! (optional) pointer to the PhysicalOperator for logging
