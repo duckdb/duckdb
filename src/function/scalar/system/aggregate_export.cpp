@@ -898,7 +898,9 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
 	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
 
-	return make_uniq<BoundAggregateExpression>(export_function, std::move(child_aggregate->children),
+	BoundAggregateFunction bound_func(export_function);
+
+	return make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(child_aggregate->children),
 	                                           std::move(child_aggregate->filter), std::move(export_bind_data),
 	                                           child_aggregate->aggr_type);
 }

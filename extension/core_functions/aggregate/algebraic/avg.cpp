@@ -290,7 +290,7 @@ unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
-	function = GetAverageAggregate(decimal_type.InternalType());
+	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
 	function.name = "avg";
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DOUBLE);

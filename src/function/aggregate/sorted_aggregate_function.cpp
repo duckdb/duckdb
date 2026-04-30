@@ -732,7 +732,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    SortedAggregateFunction::WindowBatch);
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
-	expr.function = ordered_aggregate;
+	expr.function.ReplaceImplementation(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
 }
@@ -789,7 +789,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    SortedAggregateFunction::WindowBatch);
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
-	aggregate = ordered_aggregate;
+	aggregate.ReplaceImplementation(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
 	expr.arg_orders.clear();
 }

@@ -367,7 +367,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 			throw BinderException(string("Fail to find corresponding function for collation min/max: ") +
 			                      error.Message());
 		}
-		function = func_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+		function.ReplaceImplementation(func_entry.functions.GetFunctionByOffset(best_function.GetIndex()));
 
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));

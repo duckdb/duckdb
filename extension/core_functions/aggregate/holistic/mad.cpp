@@ -328,7 +328,8 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
+	auto impl = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(impl);
 	function.name = "mad";
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return BindMAD(input);

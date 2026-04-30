@@ -359,6 +359,22 @@ protected:
 	shared_ptr<AggregateFunctionInfo> function_info;
 
 public:
+	AggregateFunctionProperties &GetProperties() {
+		return properties;
+	}
+	const AggregateFunctionProperties &GetProperties() const {
+		return properties;
+	}
+	AggregateFunctionCallbacks &GetCallbacks() {
+		return callbacks;
+	}
+	const AggregateFunctionCallbacks &GetCallbacks() const {
+		return callbacks;
+	}
+	shared_ptr<AggregateFunctionInfo> GetFunctionInfo() const {
+		return function_info;
+	}
+
 	// clang-format off
 	FunctionStability GetStability() const { return properties.stability; }
 	void SetStability(FunctionStability stability_p) { properties.stability = stability_p; }
@@ -569,9 +585,9 @@ public:
 
 class BoundAggregateFunction : public AggregateFunction {
 public:
-	BoundAggregateFunction(const AggregateFunction &function) // NOLINT: allow implicit conversion
-	    : AggregateFunction(function) {
-	}
+	explicit BoundAggregateFunction(const AggregateFunction &function);
+
+	void ReplaceImplementation(const AggregateFunction &function);
 };
 
 } // namespace duckdb

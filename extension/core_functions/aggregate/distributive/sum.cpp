@@ -183,7 +183,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			return nullptr;
 		}
 		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		expr.function = GetSumAggregateNoOverflow(internal_type);
+		expr.function.ReplaceImplementation(GetSumAggregateNoOverflow(internal_type));
 	}
 	return nullptr;
 }
@@ -235,7 +235,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto decimal_type = arguments[0]->GetReturnType();
-	function = GetSumAggregate(decimal_type.InternalType());
+	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
 	function.name = "sum";
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
