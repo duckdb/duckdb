@@ -11,6 +11,12 @@
       "paths": [
         "test/sql/attach/attach_filepath_roundtrip.test"
       ]
+    },
+    {
+      "reason": "Autoloading means errors will differ",
+      "paths": [
+        "test/sql/secrets/secret_autoloading_errors.test"
+      ]
     }
   ]
 }

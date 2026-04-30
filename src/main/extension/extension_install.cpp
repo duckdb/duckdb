@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -411,11 +412,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
                                                            optional_ptr<ClientContext> context) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
-		auto fs = FileSystem::CreateLocal();
-		if (fs->FileExists(local_extension_path + ".info")) {
+		auto &fs = FileSystem::GetLocal(db);
+		if (fs.FileExists(local_extension_path + ".info")) {
 			try {
 				install_info =
-				    ExtensionInstallInfo::TryReadInfoFile(*fs, local_extension_path + ".info", extension_name);
+				    ExtensionInstallInfo::TryReadInfoFile(fs, local_extension_path + ".info", extension_name);
 			} catch (...) {
 				if (!options.force_install) {
 					// We are going to rewrite the file anyhow, so this is fine
@@ -488,8 +489,8 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	}
 
 	QueryContext query_context(context);
-	auto fs = FileSystem::CreateLocal();
-	WriteExtensionFiles(query_context, *fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
+	auto &fs = FileSystem::GetLocal(db);
+	WriteExtensionFiles(query_context, fs, temp_path, local_extension_path, (void *)decompressed_body.data(),
 	                    decompressed_body.size(), info, db.config);
 
 	return make_uniq<ExtensionInstallInfo>(info);
@@ -589,15 +590,15 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 
 	// Install extension from local, direct url
 	if (ExtensionHelper::IsFullPath(extension) && !IsHTTP(extension)) {
-		LocalFileSystem local_fs;
+		auto &local_fs = FileSystem::GetLocal(db);
 		return DirectInstallExtension(db, local_fs, extension, temp_path, extension, local_extension_path, options,
 		                              context);
 	}
 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (options.repository && !IsHTTP(options.repository->path)) {
-		LocalFileSystem local_fs;
-		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
+		auto &local_fs = FileSystem::GetLocal(db);
+		return InstallFromRepository(db, local_fs, extension, extension_name, temp_path, local_extension_path, options,
 		                             context);
 	}
 

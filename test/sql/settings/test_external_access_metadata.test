@@ -1,0 +1,21 @@
+# name: test/sql/settings/test_external_access_metadata.test
+# description: Test that metadata queries fail when external access is disabled
+# group: [settings]
+
+require skip_reload
+
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+SET enable_external_access=false;
+
+statement error
+SELECT * FROM duckdb_secrets();
+----
+file system operations are disabled by configuration
+
+statement error
+SELECT * FROM duckdb_extensions();
+----
+file system operations are disabled by configuration
