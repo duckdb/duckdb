@@ -54,7 +54,7 @@ public:
 					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
 					if (SET_NULL_IF_NOT_FOUND && !val) {
-						return {};
+						return nullopt;
 					} else {
 						return fun(val, alc, result);
 					}
@@ -107,7 +107,7 @@ public:
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 				    auto val = JSONCommon::Get(doc->root, path, args.data[1].GetType().IsIntegral());
 				    if (SET_NULL_IF_NOT_FOUND && !val) {
-					    return {};
+					    return nullopt;
 				    } else {
 					    return fun(val, alc, result);
 				    }

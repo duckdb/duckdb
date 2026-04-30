@@ -27,7 +27,7 @@ struct DateSub {
 			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 				return OP::template Operation<TA, TB, TR>(startdate, enddate);
 			} else {
-				return {};
+				return nullopt;
 			}
 		});
 	}
@@ -356,7 +356,7 @@ struct DateSubTernaryOperator {
 		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
-			return {};
+			return nullopt;
 		}
 	}
 };

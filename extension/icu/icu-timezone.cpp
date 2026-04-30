@@ -429,7 +429,7 @@ bool ICUToTimeTZ::CastToTimeTZ(Vector &source, Vector &result, idx_t count, Cast
 		                                                if (ToTimeTZ(calendar.get(), input, output)) {
 			                                                return output;
 		                                                } else {
-			                                                return {};
+			                                                return nullopt;
 		                                                }
 	                                                });
 	return true;

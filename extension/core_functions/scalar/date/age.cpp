@@ -23,7 +23,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 		                                                if (Timestamp::IsFinite(input)) {
 			                                                return Interval::GetAge(current_date, input);
 		                                                } else {
-			                                                return {};
+			                                                return nullopt;
 		                                                }
 	                                                });
 }
@@ -37,7 +37,7 @@ static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result
 		    if (Timestamp::IsFinite(input1) && Timestamp::IsFinite(input2)) {
 			    return Interval::GetAge(input1, input2);
 		    } else {
-			    return {};
+			    return nullopt;
 		    }
 	    });
 }

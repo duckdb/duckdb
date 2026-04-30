@@ -19,7 +19,7 @@ static bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParame
 				HandleCastError::AssignError(CastExceptionText<SRC_TYPE, RES_TYPE>(value), vector_cast_data.parameters);
 				vector_cast_data.all_converted = false;
 			}
-			return {};
+			return nullopt;
 		} else {
 			return UnsafeNumericCast<RES_TYPE>(key);
 		}

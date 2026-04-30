@@ -292,7 +292,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		static inline optional<timestamp_t> Operation(interval_t bucket_width, timestamp_t ts, timestamp_t origin,
 		                                              TZCalendar &calendar) {
 			if (!Value::IsFinite(origin)) {
-				return {};
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {

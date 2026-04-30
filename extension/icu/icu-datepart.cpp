@@ -294,7 +294,7 @@ struct ICUDatePart : public ICUDateFunc {
 				                                                const auto micros = SetTime(calendar, input);
 				                                                return info.adapters[0](calendar, micros);
 			                                                } else {
-				                                                return {};
+				                                                return nullopt;
 			                                                }
 		                                                });
 	}
@@ -319,7 +319,7 @@ struct ICUDatePart : public ICUDateFunc {
 				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
 				    return adapter(calendar, micros);
 			    } else {
-				    return {};
+				    return nullopt;
 			    }
 		    });
 	}
