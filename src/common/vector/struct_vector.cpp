@@ -49,7 +49,7 @@ VectorStructBuffer::~VectorStructBuffer() {
 
 void VectorStructBuffer::SetVectorSize(idx_t new_size) {
 	VectorBuffer::SetVectorSize(new_size);
-	for(auto &child : children) {
+	for (auto &child : children) {
 		FlatVector::SetSize(child, new_size);
 	}
 }
