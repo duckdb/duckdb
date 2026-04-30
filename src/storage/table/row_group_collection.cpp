@@ -21,6 +21,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/common/serialization_compatibility.hpp"
 #include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
@@ -1687,6 +1688,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (full_metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
 				throw InternalException("Column start pointers changed during full metadata reuse");
 			}
+
+			if (SupportsPerColumnWrites() && pointer_copy.per_column_metadata_blocks.empty()) {
+				throw InternalException("Checkpointing should always remember per column metadata blocks");
+			}
+
 			if (!pointer_copy.per_column_metadata_blocks.empty() &&
 			    pointer_copy.per_column_metadata_blocks.size() != pointer_copy.data_pointers.size()) {
 				throw InternalException("per_column_metadata_blocks size mismatch with data_pointers");
@@ -1978,6 +1984,11 @@ vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo(const QueryCo
 		row_group.GetColumnSegmentInfo(context, node.GetIndex(), result, scan_type);
 	}
 	return result;
+}
+
+bool RowGroupCollection::SupportsPerColumnWrites() {
+	auto version = SerializationCompatibility::FromDatabase(GetAttached());
+	return version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version;
 }
 
 //===--------------------------------------------------------------------===//

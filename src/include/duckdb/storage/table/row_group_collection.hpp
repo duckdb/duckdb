@@ -138,6 +138,7 @@ public:
 	vector<ColumnSegmentInfo>
 	GetColumnSegmentInfo(const QueryContext &context,
 	                     ColumnSegmentInfoScanType scan_type = ColumnSegmentInfoScanType::ALL) const;
+	bool SupportsPerColumnWrites();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,

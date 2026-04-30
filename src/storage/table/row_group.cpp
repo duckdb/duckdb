@@ -422,11 +422,6 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 	return true;
 }
 
-static bool SupportsPerColumnWrites(RowGroupCollection &collection) {
-	auto version = SerializationCompatibility::FromDatabase(collection.GetAttached());
-	return version.serialization_version >= SerializationCompatibility::FromString("v2.0.0").serialization_version;
-}
-
 unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count) {
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
 	if (owned_version_info) {
@@ -484,7 +479,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 		column_data->Append(append_state, append_vector, scan_chunk.size());
 	}
 
-	auto supports_per_column_writes = SupportsPerColumnWrites(new_collection);
+	auto supports_per_column_writes = new_collection.SupportsPerColumnWrites();
 	if (!supports_per_column_writes) {
 		// ensure all columns are loaded, as checkpointing will need to load them anyway, and it's better to fail-fast
 		// in case these don't fit in memory here
@@ -540,7 +535,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		}
 	}
 
-	if (!SupportsPerColumnWrites(new_collection)) {
+	if (!new_collection.SupportsPerColumnWrites()) {
 		// ensure all columns are loaded, as checkpointing will need to load them anyway, and it's better to fail-fast
 		// in case these don't fit in memory here
 		GetColumns();
@@ -576,7 +571,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 
 	D_ASSERT(removed_column < columns.size());
 
-	if (!SupportsPerColumnWrites(new_collection)) {
+	if (!new_collection.SupportsPerColumnWrites()) {
 		// ensure all columns are loaded, as checkpointing will need to load them anyway, and it's better to fail-fast
 		// in case these don't fit in memory here
 		GetColumns();
@@ -1383,7 +1378,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		RowGroupWriteData result;
 		result.fully_reuse_existing_metadata_blocks = true;
 		result.existing_extra_metadata_blocks = GetOrComputeExtraMetadataBlocks();
-		if (per_column_metadata_blocks.empty() && SupportsPerColumnWrites(GetCollection())) {
+		if (per_column_metadata_blocks.empty() && GetCollection().SupportsPerColumnWrites()) {
 			// compute per-column blocks to speed up future checkpoints with partial column reuse
 			result.existing_per_column_metadata_blocks = ComputePerColumnMetadataBlocks(/* contiguous_layout */ true);
 		} else {
@@ -1394,7 +1389,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	// determine which columns can be reused
 	bool partial_reuse =
-	    can_reuse_metadata && !per_column_metadata_blocks.empty() && SupportsPerColumnWrites(GetCollection());
+	    can_reuse_metadata && !per_column_metadata_blocks.empty() && GetCollection().SupportsPerColumnWrites();
 	auto &compression_types = writer.GetCompressionTypes();
 	RowGroupWriteData result;
 	if (partial_reuse) {
@@ -1693,7 +1688,7 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
-	if (serializer.ShouldSerialize(6)) {
+	if (serializer.ShouldSerialize(6) && !serializer.ShouldSerialize(8)) {
 		serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_metadata_blocks);
 		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
 	}
@@ -1712,6 +1707,17 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.extra_metadata_blocks = deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "extra_metadata_blocks");
 	result.per_column_metadata_blocks =
 	    deserializer.ReadPropertyWithDefault<vector<vector<idx_t>>>(106, "per_column_metadata_blocks");
+	if (!result.per_column_metadata_blocks.empty()) {
+		D_ASSERT(!result.has_metadata_blocks);
+		unordered_set<idx_t> extra_blocks_set;
+		for (auto &col_blocks : result.per_column_metadata_blocks) {
+			for (auto &block_id : col_blocks) {
+				extra_blocks_set.insert(block_id);
+			}
+		}
+		result.has_metadata_blocks = true;
+		result.extra_metadata_blocks = {extra_blocks_set.begin(), extra_blocks_set.end()};
+	}
 	return result;
 }
 
