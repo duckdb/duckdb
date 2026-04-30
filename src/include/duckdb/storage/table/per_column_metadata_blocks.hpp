@@ -13,9 +13,15 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 struct PerColumnMetadataBlock {
 	bool is_column_index : 1;
 	idx_t index : 63;
+
+	void Serialize(Serializer &serializer) const;
+	static PerColumnMetadataBlock Deserialize(Deserializer &source);
 };
 
 class PerColumnMetadataBlocks {
@@ -35,12 +41,6 @@ public:
 		}
 	}
 
-	//! Pack into a flat vector of idx_t for serialization (high bit = tag, lower 63 bits = index)
-	vector<idx_t> Serialize() const;
-	//! Unpack from a flat vector of idx_t
-	static PerColumnMetadataBlocks Deserialize(const vector<idx_t> &packed);
-
-private:
 	vector<PerColumnMetadataBlock> data;
 };
 

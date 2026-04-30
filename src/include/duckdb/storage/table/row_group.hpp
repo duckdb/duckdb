@@ -84,6 +84,7 @@ struct RowGroupWriteData {
 	vector<bool> keep_column_loaded;
 	bool fully_reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
+	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks existing_per_column_metadata_blocks;
 	optional_idx write_count;
 	//! Per-column reuse flags for partial column checkpoint
@@ -116,11 +117,8 @@ public:
 	RowGroupCollection &GetCollection() const {
 		return collection.get();
 	}
-	//! Returns the list of meta block pointers used by the columns
-	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
 	//! Compute per-column metadata blocks by reading column metadata from disk
-	//! If contiguous_layout is true, uses linked-list shortcut for non-last columns
-	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks(bool contiguous_layout) const;
+	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks() const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 

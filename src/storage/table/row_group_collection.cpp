@@ -1682,8 +1682,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 
 		if (debug_verify_blocks) {
-			if (!pointer_copy.has_metadata_blocks) {
+			if (!pointer_copy.has_metadata_blocks && !pointer.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
+			}
+			if (full_metadata_reuse || !pointer.has_per_column_metadata_blocks) {
+				throw InternalException("Checkpointing should always remember per column metadata blocks");
 			}
 			if (full_metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
 				throw InternalException("Column start pointers changed during full metadata reuse");
@@ -1719,27 +1722,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				}
 			}
 
-			// Verify extra_metadata_blocks is the union of per_column_metadata_blocks (minus data_pointers)
-			if (pointer_copy.has_per_column_metadata_blocks) {
-				set<idx_t> data_pointer_block_ids;
-				for (auto &dp : pointer_copy.data_pointers) {
-					data_pointer_block_ids.insert(dp.block_pointer);
-				}
-				set<idx_t> per_column_union;
-				pointer_copy.per_column_metadata_blocks.ForEachBlock([&](idx_t block_id) {
-					if (data_pointer_block_ids.find(block_id) == data_pointer_block_ids.end()) {
-						per_column_union.insert(block_id);
-					}
-				});
-				set<idx_t> extra_set(pointer_copy.extra_metadata_blocks.begin(),
-				                     pointer_copy.extra_metadata_blocks.end());
-				if (per_column_union != extra_set) {
-					throw InternalException("extra_metadata_blocks does not match union of per_column_metadata_blocks: "
-					                        "extra has %llu blocks, per-column union has %llu blocks",
-					                        extra_set.size(), per_column_union.size());
-				}
-			}
-
 			// Verify blocks are cleared for partial column reuse
 			if (partial_reuse) {
 				for (idx_t col_idx = 0; col_idx < pointer_copy.data_pointers.size(); col_idx++) {
@@ -1768,24 +1750,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				all_metadata_blocks.emplace_back(block, 0);
 			}
 
-			// Verify that we can load the metadata correctly again
-			vector<MetaBlockPointer> all_quick_read_blocks;
-			for (auto &ptr : row_group.GetColumnStartPointers()) {
-				all_quick_read_blocks.emplace_back(ptr);
-				if (full_metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
-					throw InternalException("Found column start block that was not cleared");
-				}
-			}
-			auto extra_metadata_blocks = row_group.GetOrComputeExtraMetadataBlocks(/* force_compute: */ true);
-			for (auto &ptr : extra_metadata_blocks) {
-				auto block_pointer = MetaBlockPointer(ptr, 0);
-				all_quick_read_blocks.emplace_back(block_pointer);
-				if (full_metadata_reuse && !block_manager.GetMetadataManager().BlockHasBeenCleared(block_pointer)) {
-					throw InternalException("Found extra metadata block that was not cleared");
-				}
-			}
-
-			// Deserialize all columns to check if the quick read via GetOrComputeExtraMetadataBlocks was correct
+			// Deserialize all columns to check if what's on disk matches our metadata
 			vector<MetaBlockPointer> all_full_read_blocks;
 			auto column_start_pointers = row_group.GetColumnStartPointers();
 			auto &types = row_group.GetCollection().GetTypes();
@@ -1800,23 +1765,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			for (auto &ptr : all_written_blocks) {
 				all_written_block_ids.insert(ptr.block_pointer);
 			}
-			set<idx_t> all_quick_read_block_ids;
-			for (auto &ptr : all_quick_read_blocks) {
-				all_quick_read_block_ids.insert(ptr.block_pointer);
-			}
 			set<idx_t> all_full_read_block_ids;
 			for (auto &ptr : all_full_read_blocks) {
 				all_full_read_block_ids.insert(ptr.block_pointer);
 			}
-			if (all_written_block_ids != all_quick_read_block_ids ||
-			    all_quick_read_block_ids != all_full_read_block_ids) {
+			if (all_written_block_ids != all_full_read_block_ids) {
 				std::stringstream oss;
 				oss << "\nWritten: ";
 				for (auto &block : all_written_blocks) {
-					oss << block << ", ";
-				}
-				oss << "\nQuick read: ";
-				for (auto &block : all_quick_read_blocks) {
 					oss << block << ", ";
 				}
 				oss << "\nFull read: ";

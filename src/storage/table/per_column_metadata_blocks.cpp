@@ -35,29 +35,4 @@ void PerColumnMetadataBlocks::AddColumn(idx_t col_idx, const vector<idx_t> &bloc
 	}
 }
 
-vector<idx_t> PerColumnMetadataBlocks::Serialize() const {
-	vector<idx_t> result;
-	result.reserve(data.size());
-	for (auto &entry : data) {
-		idx_t packed = entry.index;
-		if (entry.is_column_index) {
-			packed |= COLUMN_INDEX_BIT;
-		}
-		result.push_back(packed);
-	}
-	return result;
-}
-
-PerColumnMetadataBlocks PerColumnMetadataBlocks::Deserialize(const vector<idx_t> &packed) {
-	PerColumnMetadataBlocks result;
-	result.data.reserve(packed.size());
-	for (auto &val : packed) {
-		PerColumnMetadataBlock entry;
-		entry.is_column_index = (val & COLUMN_INDEX_BIT) != 0;
-		entry.index = val & ~COLUMN_INDEX_BIT;
-		result.data.push_back(entry);
-	}
-	return result;
-}
-
 } // namespace duckdb
