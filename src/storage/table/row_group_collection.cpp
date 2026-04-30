@@ -1689,17 +1689,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException("Column start pointers changed during full metadata reuse");
 			}
 
-			if (SupportsPerColumnWrites() && pointer_copy.per_column_metadata_blocks.empty()) {
+			if (SupportsPerColumnWrites() && !pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember per column metadata blocks");
 			}
 
-			if (!pointer_copy.per_column_metadata_blocks.empty() &&
-			    pointer_copy.per_column_metadata_blocks.size() != pointer_copy.data_pointers.size()) {
-				throw InternalException("per_column_metadata_blocks size mismatch with data_pointers");
-			}
-
 			// Verify per_column_metadata_blocks matches full deserialization
-			if (!pointer_copy.per_column_metadata_blocks.empty()) {
+			if (pointer_copy.has_per_column_metadata_blocks) {
 				const auto &column_start_ptrs = row_group.GetColumnStartPointers();
 				auto &col_types = row_group.GetCollection().GetTypes();
 				auto &mm = row_group.GetCollection().GetMetadataManager();
@@ -1714,8 +1709,8 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 							deserialized_extra.insert(ptr.block_pointer);
 						}
 					}
-					set<idx_t> stored_extra(pointer_copy.per_column_metadata_blocks[i].begin(),
-					                        pointer_copy.per_column_metadata_blocks[i].end());
+					auto stored_blocks = pointer_copy.per_column_metadata_blocks.GetBlocksForColumn(i);
+					set<idx_t> stored_extra(stored_blocks.begin(), stored_blocks.end());
 					if (deserialized_extra != stored_extra) {
 						throw InternalException("per_column_metadata_blocks mismatch for column %llu: "
 						                        "stored %llu blocks, deserialized %llu blocks",
@@ -1725,19 +1720,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 
 			// Verify extra_metadata_blocks is the union of per_column_metadata_blocks (minus data_pointers)
-			if (!pointer_copy.per_column_metadata_blocks.empty()) {
+			if (pointer_copy.has_per_column_metadata_blocks) {
 				set<idx_t> data_pointer_block_ids;
 				for (auto &dp : pointer_copy.data_pointers) {
 					data_pointer_block_ids.insert(dp.block_pointer);
 				}
 				set<idx_t> per_column_union;
-				for (auto &col_blocks : pointer_copy.per_column_metadata_blocks) {
-					for (auto &block_id : col_blocks) {
-						if (data_pointer_block_ids.find(block_id) == data_pointer_block_ids.end()) {
-							per_column_union.insert(block_id);
-						}
+				pointer_copy.per_column_metadata_blocks.ForEachBlock([&](idx_t block_id) {
+					if (data_pointer_block_ids.find(block_id) == data_pointer_block_ids.end()) {
+						per_column_union.insert(block_id);
 					}
-				}
+				});
 				set<idx_t> extra_set(pointer_copy.extra_metadata_blocks.begin(),
 				                     pointer_copy.extra_metadata_blocks.end());
 				if (per_column_union != extra_set) {
@@ -1757,7 +1750,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 					if (!block_manager.GetMetadataManager().BlockHasBeenCleared(pointer_copy.data_pointers[col_idx])) {
 						throw InternalException("Partial reuse: column %llu start block was not cleared", col_idx);
 					}
-					for (auto &block_id : pointer_copy.per_column_metadata_blocks[col_idx]) {
+					for (auto &block_id : pointer_copy.per_column_metadata_blocks.GetBlocksForColumn(col_idx)) {
 						auto block_ptr = MetaBlockPointer(block_id, 0);
 						if (!block_manager.GetMetadataManager().BlockHasBeenCleared(block_ptr)) {
 							throw InternalException("Partial reuse: column %llu extra block %llu was not cleared",

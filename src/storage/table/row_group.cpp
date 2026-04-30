@@ -56,6 +56,7 @@ RowGroup::RowGroup(RowGroupCollection &collection_p, RowGroupPointer pointer)
 	this->deletes_pointers = std::move(pointer.deletes_pointers);
 	this->has_metadata_blocks = pointer.has_metadata_blocks;
 	this->extra_metadata_blocks = std::move(pointer.extra_metadata_blocks);
+	this->has_per_column_metadata_blocks = pointer.has_per_column_metadata_blocks;
 	this->per_column_metadata_blocks = std::move(pointer.per_column_metadata_blocks);
 
 	Verify();
@@ -430,7 +431,6 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 	row_group->deletes_pointers = deletes_pointers;
 	row_group->deletes_is_loaded = deletes_is_loaded.load();
 	bool has_column_pointers = column_pointers.size() == columns.size();
-	bool has_per_column_blocks = per_column_metadata_blocks.size() == columns.size();
 	row_group->columns.resize(new_column_count);
 	if (is_loaded) {
 		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
@@ -438,9 +438,7 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 	if (has_column_pointers) {
 		row_group->column_pointers.resize(new_column_count);
 	}
-	if (has_per_column_blocks) {
-		row_group->per_column_metadata_blocks.resize(new_column_count);
-	}
+	row_group->has_per_column_metadata_blocks = has_per_column_metadata_blocks;
 	row_group->has_metadata_blocks = false;
 	row_group->has_changes = true;
 	return row_group;
@@ -503,8 +501,8 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 			if (!row_group->column_pointers.empty()) {
 				row_group->column_pointers[i] = column_pointers[i];
 			}
-			if (!row_group->per_column_metadata_blocks.empty()) {
-				row_group->per_column_metadata_blocks[i] = per_column_metadata_blocks[i];
+			if (has_per_column_metadata_blocks) {
+				row_group->per_column_metadata_blocks.AddColumn(i, per_column_metadata_blocks.GetBlocksForColumn(i));
 			}
 		}
 	}
@@ -552,8 +550,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[i] = column_pointers[i];
 		}
-		if (!row_group->per_column_metadata_blocks.empty()) {
-			row_group->per_column_metadata_blocks[i] = per_column_metadata_blocks[i];
+		if (has_per_column_metadata_blocks) {
+			row_group->per_column_metadata_blocks.AddColumn(i, per_column_metadata_blocks.GetBlocksForColumn(i));
 		}
 	}
 	// add the new column
@@ -591,8 +589,9 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[target_idx] = column_pointers[i];
 		}
-		if (!row_group->per_column_metadata_blocks.empty()) {
-			row_group->per_column_metadata_blocks[target_idx] = per_column_metadata_blocks[i];
+		if (has_per_column_metadata_blocks) {
+			row_group->per_column_metadata_blocks.AddColumn(target_idx,
+			                                                per_column_metadata_blocks.GetBlocksForColumn(i));
 		}
 		target_idx++;
 	}
@@ -1283,16 +1282,16 @@ bool RowGroup::HasUnloadedDeletes() const {
 	return !deletes_is_loaded;
 }
 
-vector<vector<idx_t>> RowGroup::ComputePerColumnMetadataBlocks(bool contiguous_layout) const {
+PerColumnMetadataBlocks RowGroup::ComputePerColumnMetadataBlocks(bool contiguous_layout) const {
+	PerColumnMetadataBlocks result;
 	if (column_pointers.empty()) {
-		return {};
+		return result;
 	}
 
 	auto &metadata_manager = GetCollection().GetMetadataManager();
 	auto &types = GetCollection().GetTypes();
 	idx_t last_idx = column_pointers.size() - 1;
 
-	vector<vector<idx_t>> result(column_pointers.size());
 	for (idx_t i = 0; i < column_pointers.size(); i++) {
 		unordered_set<idx_t> result_as_set;
 		if (contiguous_layout && i < last_idx) {
@@ -1312,7 +1311,7 @@ vector<vector<idx_t>> RowGroup::ComputePerColumnMetadataBlocks(bool contiguous_l
 			}
 		}
 		result_as_set.erase(column_pointers[i].block_pointer);
-		result[i] = {result_as_set.begin(), result_as_set.end()};
+		result.AddColumn(i, {result_as_set.begin(), result_as_set.end()});
 	}
 	return result;
 }
@@ -1329,11 +1328,7 @@ vector<idx_t> RowGroup::GetOrComputeExtraMetadataBlocks(bool force_compute) {
 	// legacy path: compute from contiguous column layout
 	auto computed = ComputePerColumnMetadataBlocks(/* contiguous_layout */ true);
 	unordered_set<idx_t> all_blocks;
-	for (auto &col_blocks : computed) {
-		for (auto &block_id : col_blocks) {
-			all_blocks.insert(block_id);
-		}
-	}
+	computed.ForEachBlock([&](idx_t block_id) { all_blocks.insert(block_id); });
 	return {all_blocks.begin(), all_blocks.end()};
 }
 
@@ -1378,7 +1373,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		RowGroupWriteData result;
 		result.fully_reuse_existing_metadata_blocks = true;
 		result.existing_extra_metadata_blocks = GetOrComputeExtraMetadataBlocks();
-		if (per_column_metadata_blocks.empty() && GetCollection().SupportsPerColumnWrites()) {
+		if (!has_per_column_metadata_blocks && GetCollection().SupportsPerColumnWrites()) {
 			// compute per-column blocks to speed up future checkpoints with partial column reuse
 			result.existing_per_column_metadata_blocks = ComputePerColumnMetadataBlocks(/* contiguous_layout */ true);
 		} else {
@@ -1389,7 +1384,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	// determine which columns can be reused
 	bool partial_reuse =
-	    can_reuse_metadata && !per_column_metadata_blocks.empty() && GetCollection().SupportsPerColumnWrites();
+	    can_reuse_metadata && has_per_column_metadata_blocks && GetCollection().SupportsPerColumnWrites();
 	auto &compression_types = writer.GetCompressionTypes();
 	RowGroupWriteData result;
 	if (partial_reuse) {
@@ -1403,6 +1398,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	if (partial_reuse) {
 		// copy metadata pointers so checkpoint can access them for reused columns
 		result_row_group->column_pointers = column_pointers;
+		result_row_group->has_per_column_metadata_blocks = has_per_column_metadata_blocks;
 		result_row_group->per_column_metadata_blocks = per_column_metadata_blocks;
 		result_row_group->has_metadata_blocks = has_metadata_blocks;
 		result_row_group->extra_metadata_blocks = extra_metadata_blocks;
@@ -1481,6 +1477,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.extra_metadata_blocks = write_data.existing_extra_metadata_blocks;
+		row_group_pointer.has_per_column_metadata_blocks = true;
 		row_group_pointer.per_column_metadata_blocks = write_data.existing_per_column_metadata_blocks;
 		if (metadata_manager) {
 			row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
@@ -1497,6 +1494,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			// remember metadata_blocks to avoid loading them on future checkpoints
 			has_metadata_blocks = true;
 			extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+			has_per_column_metadata_blocks = row_group_pointer.has_per_column_metadata_blocks;
 			per_column_metadata_blocks = row_group_pointer.per_column_metadata_blocks;
 		}
 		// merge row group stats into the global stats
@@ -1543,11 +1541,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		if (is_reused) {
 			// reuse existing column pointer and per-column blocks
 			row_group_pointer.data_pointers.push_back(column_pointers[column_idx]);
-			row_group_pointer.per_column_metadata_blocks.push_back(per_column_metadata_blocks[column_idx]);
+			auto col_blocks = per_column_metadata_blocks.GetBlocksForColumn(column_idx);
+			row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_blocks);
 
 			// collect all blocks for this reused column for ClearModifiedBlocks
 			reused_column_blocks.push_back(column_pointers[column_idx]);
-			for (auto &block_id : per_column_metadata_blocks[column_idx]) {
+			for (auto &block_id : col_blocks) {
 				reused_column_blocks.emplace_back(block_id, 0);
 			}
 			continue;
@@ -1582,8 +1581,9 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 				col_extra_blocks.push_back(written_ptr.block_pointer);
 			}
 		}
-		row_group_pointer.per_column_metadata_blocks.push_back(std::move(col_extra_blocks));
+		row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_extra_blocks);
 	}
+	row_group_pointer.has_per_column_metadata_blocks = true;
 
 	if (metadata_manager) {
 		row_group_pointer.has_metadata_blocks = true;
@@ -1594,13 +1594,11 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			data_pointer_blocks.insert(dp.block_pointer);
 		}
 		unordered_set<idx_t> extra_blocks_set;
-		for (auto &col_blocks : row_group_pointer.per_column_metadata_blocks) {
-			for (auto &block_id : col_blocks) {
-				if (data_pointer_blocks.find(block_id) == data_pointer_blocks.end()) {
-					extra_blocks_set.insert(block_id);
-				}
+		row_group_pointer.per_column_metadata_blocks.ForEachBlock([&](idx_t block_id) {
+			if (data_pointer_blocks.find(block_id) == data_pointer_blocks.end()) {
+				extra_blocks_set.insert(block_id);
 			}
-		}
+		});
 		row_group_pointer.extra_metadata_blocks = {extra_blocks_set.begin(), extra_blocks_set.end()};
 
 		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
@@ -1613,6 +1611,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		column_pointers = row_group_pointer.data_pointers;
 		has_metadata_blocks = true;
 		extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
+		has_per_column_metadata_blocks = row_group_pointer.has_per_column_metadata_blocks;
 		per_column_metadata_blocks = row_group_pointer.per_column_metadata_blocks;
 	}
 	for (idx_t c = 0; c < columns.size(); c++) {
@@ -1693,7 +1692,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 		serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
 	}
 	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault(106, "per_column_metadata_blocks", pointer.per_column_metadata_blocks);
+		serializer.WritePropertyWithDefault(106, "per_column_metadata_blocks", pointer.has_per_column_metadata_blocks);
+		serializer.WriteProperty(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.Serialize());
 	}
 }
 
@@ -1705,16 +1705,14 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.deletes_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(103, "delete_pointers");
 	result.has_metadata_blocks = deserializer.ReadPropertyWithExplicitDefault<bool>(104, "has_metadata_blocks", false);
 	result.extra_metadata_blocks = deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "extra_metadata_blocks");
-	result.per_column_metadata_blocks =
-	    deserializer.ReadPropertyWithDefault<vector<vector<idx_t>>>(106, "per_column_metadata_blocks");
-	if (!result.per_column_metadata_blocks.empty()) {
+	result.has_per_column_metadata_blocks =
+	    deserializer.ReadPropertyWithExplicitDefault<bool>(106, "has_per_column_metadata_blocks", false);
+	auto pcmb_packed = deserializer.ReadPropertyWithDefault<vector<idx_t>>(107, "per_column_metadata_blocks");
+	if (result.has_per_column_metadata_blocks) {
+		result.per_column_metadata_blocks = PerColumnMetadataBlocks::Deserialize(pcmb_packed);
 		D_ASSERT(!result.has_metadata_blocks);
 		unordered_set<idx_t> extra_blocks_set;
-		for (auto &col_blocks : result.per_column_metadata_blocks) {
-			for (auto &block_id : col_blocks) {
-				extra_blocks_set.insert(block_id);
-			}
-		}
+		result.per_column_metadata_blocks.ForEachBlock([&](idx_t block_id) { extra_blocks_set.insert(block_id); });
 		result.has_metadata_blocks = true;
 		result.extra_metadata_blocks = {extra_blocks_set.begin(), extra_blocks_set.end()};
 	}

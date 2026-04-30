@@ -13,6 +13,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/enums/column_segment_info_scan_type.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/storage/table/per_column_metadata_blocks.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/storage/table/segment_base.hpp"
@@ -83,7 +84,7 @@ struct RowGroupWriteData {
 	vector<bool> keep_column_loaded;
 	bool fully_reuse_existing_metadata_blocks = false;
 	vector<idx_t> existing_extra_metadata_blocks;
-	vector<vector<idx_t>> existing_per_column_metadata_blocks;
+	PerColumnMetadataBlocks existing_per_column_metadata_blocks;
 	optional_idx write_count;
 	//! Per-column reuse flags for partial column checkpoint
 	//! When non-empty, states[i] is nullptr for columns where reuse_column[i] is true
@@ -119,7 +120,7 @@ public:
 	vector<idx_t> GetOrComputeExtraMetadataBlocks(bool force_compute = false);
 	//! Compute per-column metadata blocks by reading column metadata from disk
 	//! If contiguous_layout is true, uses linked-list shortcut for non-last columns
-	vector<vector<idx_t>> ComputePerColumnMetadataBlocks(bool contiguous_layout) const;
+	PerColumnMetadataBlocks ComputePerColumnMetadataBlocks(bool contiguous_layout) const;
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
@@ -265,7 +266,8 @@ private:
 	vector<MetaBlockPointer> deletes_pointers;
 	bool has_metadata_blocks = false;
 	vector<idx_t> extra_metadata_blocks;
-	vector<vector<idx_t>> per_column_metadata_blocks;
+	bool has_per_column_metadata_blocks = false;
+	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
 	//! The row id column data (mutable because `const` can lazy load)
