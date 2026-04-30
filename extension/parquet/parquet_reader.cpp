@@ -485,10 +485,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
 					auto cast_expression =
 					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
-					auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
-						column_reader->Schema(), cast_expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
-					auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader),
-					                                                     std::move(cast_expression), std::move(expr_schema));
+					auto expr_schema = make_uniq<ParquetColumnSchema>(
+					    ParquetColumnSchema::FromParentSchema(column_reader->Schema(), cast_expression->GetReturnType(),
+					                                          ParquetColumnSchemaType::EXPRESSION));
+					auto expr_reader = make_uniq<ExpressionColumnReader>(
+					    context, std::move(column_reader), std::move(cast_expression), std::move(expr_schema));
 					children[0] = std::move(expr_reader);
 				} else {
 					children[0] = std::move(column_reader);
