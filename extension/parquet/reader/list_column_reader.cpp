@@ -193,8 +193,8 @@ idx_t ListColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 }
 
 ListColumnReader::ListColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                   unique_ptr<ColumnReader> child_column_reader_p, const ColumnIndex &column_id)
-    : ColumnReader(reader, schema, column_id), child_column_reader(std::move(child_column_reader_p)),
+                                   unique_ptr<ColumnReader> child_column_reader_p)
+    : ColumnReader(reader, schema), child_column_reader(std::move(child_column_reader_p)),
       read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);

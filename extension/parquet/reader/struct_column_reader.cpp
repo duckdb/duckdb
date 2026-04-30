@@ -39,8 +39,8 @@ struct ParquetColumnSchema;
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
 StructColumnReader::StructColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                       vector<unique_ptr<ColumnReader>> child_readers_p, const ColumnIndex &column_id)
-    : ColumnReader(reader, schema, column_id), child_readers(std::move(child_readers_p)) {
+                                       vector<unique_ptr<ColumnReader>> child_readers_p)
+    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 }
 
@@ -62,15 +62,15 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
 }
 
 idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
+	auto &struct_entries = StructVector::GetEntries(result);
+	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
+
 	if (pending_skips > 0) {
 		throw InternalException("StructColumnReader cannot have pending skips");
 	}
 	auto &num_values = input.num_values;
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
-
-	auto &struct_entries = StructVector::GetEntries(result);
-	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand

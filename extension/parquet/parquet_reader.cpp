@@ -64,6 +64,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -455,14 +456,14 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
-		return make_uniq<RowNumberColumnReader>(*this, schema, column_id);
+		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::GEOMETRY: {
-		return GeometryColumnReader::Create(*this, schema, context, column_id);
+		return GeometryColumnReader::Create(*this, schema, context);
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
-			return ColumnReader::CreateReader(*this, schema, column_id);
+			return ColumnReader::CreateReader(*this, schema);
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
@@ -505,12 +506,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
-			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), column_id);
+			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
 		case LogicalTypeId::STRUCT: {
 			if (column_id.IsPushdownExtract()) {
 				return std::move(children[0]);
 			}
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children), column_id);
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
 		}
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
@@ -526,7 +527,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			children[child_index] =
 			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 		}
-		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+		return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
@@ -1273,7 +1274,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 		if (stats && filter_entry) {
 			auto &filter = *filter_entry;
 
-			auto schema_column_index = column_reader.ColumnSchemaIndex();
+			auto schema_column_index = column_reader.ColumnIndex();
 			FilterPropagateResult prune_result;
 			bool is_generated_column = schema_column_index >= group.columns.size();
 			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;

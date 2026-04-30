@@ -21,9 +21,8 @@ struct SelectionVector;
 //===--------------------------------------------------------------------===//
 // String Column Reader
 //===--------------------------------------------------------------------===//
-StringColumnReader::StringColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                       const ColumnIndex &column_id)
-    : ColumnReader(reader, schema, column_id), string_column_type(GetStringColumnType(Type())) {
+StringColumnReader::StringColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
+    : ColumnReader(reader, schema), string_column_type(GetStringColumnType(Type())) {
 	fixed_width_string_length = 0;
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
 		fixed_width_string_length = schema.type_length;

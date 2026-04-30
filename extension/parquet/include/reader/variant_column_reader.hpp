@@ -19,7 +19,7 @@ public:
 
 public:
 	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
-	                    vector<unique_ptr<ColumnReader>> child_readers_p, const ColumnIndex &column_id);
+	                    vector<unique_ptr<ColumnReader>> child_readers_p);
 
 	ClientContext &context;
 	vector<unique_ptr<ColumnReader>> child_readers;

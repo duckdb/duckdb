@@ -42,8 +42,8 @@ class ThriftFileTransport;
 //===--------------------------------------------------------------------===//
 VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
-                                         vector<unique_ptr<ColumnReader>> child_readers_p, const ColumnIndex &column_id)
-    : ColumnReader(reader, schema, column_id), context(context), child_readers(std::move(child_readers_p)) {
+                                         vector<unique_ptr<ColumnReader>> child_readers_p)
+    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {

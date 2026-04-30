@@ -44,7 +44,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -105,12 +104,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p, const ColumnIndex &column_id);
+	ColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-	                                             const ColumnIndex &column_id);
+	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
 	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
@@ -130,11 +128,8 @@ public:
 		return column_schema;
 	}
 
-	inline idx_t ColumnSchemaIndex() const {
+	inline idx_t ColumnIndex() const {
 		return column_schema.column_index;
-	}
-	const ColumnIndex &ColumnId() const {
-		return index;
 	}
 	inline idx_t MaxDefine() const {
 		return column_schema.max_define;
@@ -154,7 +149,7 @@ public:
 			throw InvalidInputException("File is encrypted but no encryption algorithm is set");
 		}
 
-		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnSchemaIndex());
+		aad_crypto_metadata.Initialize(unique_file_identifier, row_group_ordinal_p, ColumnIndex());
 	}
 
 	virtual idx_t FileOffset() const;
@@ -349,9 +344,8 @@ protected:
 
 protected:
 	const ParquetColumnSchema &column_schema;
-	const ParquetReader &reader;
-	ColumnIndex index;
 
+	const ParquetReader &reader;
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 
