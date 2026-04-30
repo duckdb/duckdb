@@ -32,11 +32,15 @@ enum class GeometryType : uint8_t {
 
 enum class VertexType : uint8_t { XY = 0, XYZ = 1, XYM = 2, XYZM = 3 };
 
+template <class... Args>
+struct FlatStruct;
+
 struct VertexXY {
 	static constexpr auto TYPE = VertexType::XY;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 2;
+	using FlatStructType = FlatStruct<double, double>;
 
 	double x;
 	double y;
@@ -51,6 +55,7 @@ struct VertexXYZ {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = false;
 	static constexpr auto WIDTH = 3;
+	using FlatStructType = FlatStruct<double, double, double>;
 
 	double x;
 	double y;
@@ -65,6 +70,7 @@ struct VertexXYM {
 	static constexpr auto HAS_M = true;
 	static constexpr auto HAS_Z = false;
 	static constexpr auto WIDTH = 3;
+	using FlatStructType = FlatStruct<double, double, double>;
 
 	double x;
 	double y;
@@ -80,6 +86,7 @@ struct VertexXYZM {
 	static constexpr auto HAS_Z = true;
 	static constexpr auto HAS_M = true;
 	static constexpr auto WIDTH = 4;
+	using FlatStructType = FlatStruct<double, double, double, double>;
 
 	double x;
 	double y;

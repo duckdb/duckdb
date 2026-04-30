@@ -3,6 +3,7 @@
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -1313,18 +1314,14 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	auto &vert_parts = StructVector::GetEntries(source_vec);
+	auto vert_iter = source_vec.Values<typename V::FlatStructType>(row_count);
 	auto geom_data = FlatVector::GetDataMutable<string_t>(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
 
-		if (FlatVector::IsNull(source_vec, row_idx)) {
+		const auto vert_entry = vert_iter[row_idx];
+		if (!vert_entry.IsValid()) {
 			FlatVector::SetNull(target_vec, out_idx, true);
 			continue;
 		}
@@ -1342,9 +1339,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 		writer.Write<uint32_t>(meta); // Type/meta
 
 		// Write vertex data
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			writer.Write<double>(vert_data[dim_idx][row_idx]);
-		}
+		vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 
 		blob.Finalize();
 		geom_data[out_idx] = blob;
@@ -1428,12 +1423,9 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto line_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetChildMutable(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto &vert_struct_vec = ListVector::GetChildMutable(source_vec);
+	const auto vert_total = ListVector::GetListSize(source_vec);
+	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1461,9 +1453,8 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 		// Write vertex data
 		for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
-			}
+			const auto vert_entry = vert_iter[line_entry.offset + vert_idx];
+			vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 		}
 
 		blob.Finalize();
@@ -1577,12 +1568,9 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 	const auto poly_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &ring_vec = ListVector::GetChildMutable(source_vec);
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetChildMutable(ring_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto &vert_struct_vec = ListVector::GetChildMutable(ring_vec);
+	const auto vert_total = ListVector::GetListSize(ring_vec);
+	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1626,9 +1614,8 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
-				}
+				const auto vert_entry = vert_iter[ring_entry.offset + vert_idx];
+				vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 			}
 		}
 
@@ -1717,12 +1704,9 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	source_vec.Flatten(row_count);
 
 	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetChildMutable(source_vec));
-
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto &vert_struct_vec = ListVector::GetChildMutable(source_vec);
+	const auto vert_total = ListVector::GetListSize(source_vec);
+	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1763,9 +1747,8 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 			writer.Write<uint32_t>(point_meta); // Type/meta
 
 			// Write vertex data
-			for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-				writer.Write<double>(vert_data[dim_idx][mult_entry.offset + part_idx]);
-			}
+			const auto vert_entry = vert_iter[mult_entry.offset + part_idx];
+			vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 		}
 
 		blob.Finalize();
@@ -1889,11 +1872,9 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &line_vec = ListVector::GetChildMutable(source_vec);
 	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetChildMutable(line_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto &vert_struct_vec = ListVector::GetChildMutable(line_vec);
+	const auto vert_total = ListVector::GetListSize(line_vec);
+	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1943,9 +1924,8 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 
 			// Write vertex data
 			for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-				for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-					writer.Write<double>(vert_data[dim_idx][line_entry.offset + vert_idx]);
-				}
+				const auto vert_entry = vert_iter[line_entry.offset + vert_idx];
+				vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 			}
 		}
 		blob.Finalize();
@@ -2085,11 +2065,9 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	const auto poly_data = FlatVector::GetData<list_entry_t>(poly_vec);
 	auto &ring_vec = ListVector::GetChildMutable(poly_vec);
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
-	auto &vert_parts = StructVector::GetEntries(ListVector::GetChildMutable(ring_vec));
-	double *vert_data[V::WIDTH];
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	auto &vert_struct_vec = ListVector::GetChildMutable(ring_vec);
+	const auto vert_total = ListVector::GetListSize(ring_vec);
+	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -2151,9 +2129,8 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 
 				// Write vertex data
 				for (uint32_t vert_idx = 0; vert_idx < vert_count; vert_idx++) {
-					for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-						writer.Write<double>(vert_data[dim_idx][ring_entry.offset + vert_idx]);
-					}
+					const auto vert_entry = vert_iter[ring_entry.offset + vert_idx];
+					vert_entry.ForEach([&](const auto &v) { writer.Write<double>(v.GetValueUnsafe()); });
 				}
 			}
 		}
