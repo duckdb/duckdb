@@ -161,10 +161,6 @@ public:
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
-		//! Gather the RHS output columns for the matched rows in row_ptrs[ptr_sel[0..count)] into result.
-		//! When use_dict_emission is active, emits dictionary vectors via EmitDictVectors; otherwise
-		//! gathers each output column individually from the TupleDataCollection.
-		void GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result);
 		idx_t ResolvePredicates(DataChunk &keys, DataChunk &probe_data, SelectionVector &match_sel,
 		                        SelectionVector *no_match_sel);
 	};
@@ -238,6 +234,10 @@ public:
 	//! *FlatVector::IncrementalSelectionVector() when row_ptrs is already compacted
 	void EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count, DataChunk &result,
 	                     idx_t rhs_col_offset) const;
+	//! Emit RHS output columns for matched rows row_ptrs[ptr_sel[0..count)] into result starting at
+	//! result column rhs_col_offset; routes through EmitDictVectors when use_dict_emission is active.
+	void GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
+	               idx_t rhs_col_offset) const;
 	//! Follow the chain pointer; when USE_DICT_EMISSION, resolves via aux_next_ptrs
 	template <bool USE_DICT_EMISSION>
 	inline data_ptr_t GetNextPointer(data_ptr_t row_ptr) const {
