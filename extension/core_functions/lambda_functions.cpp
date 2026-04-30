@@ -2,6 +2,7 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -194,15 +195,13 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	// (slice and) reference the other columns
 	vector<Vector> slices;
 	for (idx_t i = 0; i < column_infos.size(); i++) {
-		if (column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			// only reference constant vectorsl
-			info.input_chunk.data[i + slice_offset].Reference(column_infos[i].vector);
+		slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
+		info.input_chunk.data[i + slice_offset].Reference(slices.back());
+	}
 
-		} else {
-			// slice inconstant vectors
-			slices.emplace_back(column_infos[i].vector, column_infos[i].sel, elem_cnt);
-			info.input_chunk.data[i + slice_offset].Reference(slices.back());
-		}
+	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
+	for (idx_t i = 0; i < info.input_chunk.ColumnCount(); i++) {
+		FlatVector::SetSize(info.input_chunk.data[i], count_t(elem_cnt));
 	}
 
 	// execute the lambda expression
@@ -338,7 +337,11 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	}
 
 	execute_info.lambda_chunk.Reset();
-	ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	if (elem_cnt > 0) {
+		// only execute when there are remaining list elements; calling with elem_cnt = 0 would
+		// resize the (shared) source buffers down to size 0
+		ExecuteExpression(elem_cnt, child_info, info.column_infos, index_vector, execute_info);
+	}
 	auto &lambda_vector = execute_info.lambda_chunk.data[0];
 
 	FUNCTION_FUNCTOR::AppendResult(result, lambda_vector, elem_cnt, result_entries, list_filter_info, execute_info);
@@ -346,6 +349,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	if (info.is_all_constant && !info.is_volatile) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(info.row_count));
 }
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,

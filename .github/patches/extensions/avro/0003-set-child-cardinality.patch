@@ -1,0 +1,13 @@
+diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
+index 4a21b5b..67125b5 100644
+--- a/src/avro_reader.cpp
++++ b/src/avro_reader.cpp
+@@ -398,7 +398,7 @@ void AvroReader::Read(DataChunk &output) {
+ 	} else {
+ 		output.data[column_indexes[0].GetPrimaryIndex()].Reference(*read_vec);
+ 	}
+-	output.SetCardinality(out_idx);
++	output.SetChildCardinality(out_idx);
+ }
+ 
+ } // namespace duckdb

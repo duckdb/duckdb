@@ -68,6 +68,7 @@ static void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY
 		}
 	}
 	key.SetCardinality(count);
+	FlatVector::SetSize(key.data[0], count_t(count));
 }
 
 template <class SORT_KEY>
@@ -145,7 +146,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 		}
 	}
 
-	chunk.SetCardinality(count);
+	chunk.SetChildCardinality(count);
 }
 
 //===--------------------------------------------------------------------===//

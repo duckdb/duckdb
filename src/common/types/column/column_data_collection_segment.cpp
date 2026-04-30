@@ -229,9 +229,11 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto internal_type = vector_type.InternalType();
 	auto &vdata = GetVectorData(vector_index);
 	if (vdata.count == 0) {
+		FlatVector::SetSize(result, 0);
 		return 0;
 	}
 	auto vcount = ReadVectorInternal(state, vector_index, result);
+	FlatVector::SetSize(result, vcount);
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetChildMutable(result);

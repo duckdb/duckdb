@@ -83,7 +83,8 @@ private:
 //! The VectorBuffer is a class used by the vector to hold its data
 class VectorBuffer : public enable_shared_from_this<VectorBuffer> {
 public:
-	explicit VectorBuffer(VectorType vector_type, VectorBufferType type) : vector_type(vector_type), buffer_type(type) {
+	explicit VectorBuffer(VectorType vector_type, VectorBufferType type, count_t count_p)
+	    : vector_type(vector_type), buffer_type(type), v_size(count_p) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -104,12 +105,8 @@ public:
 	virtual const ValidityMask &GetValidityMask() const {
 		throw InternalException("VectorBuffer does not have a ValidityMask");
 	}
-	//! FIXME: should be removed
-	bool HasSize() const {
-		return v_size.IsValid();
-	}
 	idx_t Size() const {
-		return v_size.GetIndex();
+		return v_size;
 	}
 	void SetVectorSize(idx_t new_size);
 
@@ -210,8 +207,7 @@ protected:
 	VectorType vector_type;
 	VectorBufferType buffer_type;
 	buffer_ptr<AuxiliaryDataSet> auxiliary_data;
-	//! FIXME: optional_idx only temporarily...
-	optional_idx v_size;
+	idx_t v_size;
 
 public:
 	template <class TARGET>

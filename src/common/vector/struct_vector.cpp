@@ -8,7 +8,7 @@
 namespace duckdb {
 
 VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capacity)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), capacity(capacity) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)), capacity(capacity) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		children.emplace_back(child_type.second, capacity);
@@ -17,13 +17,13 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, capacity_t capac
 }
 
 VectorStructBuffer::VectorStructBuffer(vector<Vector> children_p, capacity_t capacity_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER), children(std::move(children_p)),
-      capacity(capacity_p) {
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count_t(0)),
+      children(std::move(children_p)), capacity(capacity_p) {
 	validity.Resize(capacity);
 }
 
-VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, idx_t count)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER),
+VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const SelectionVector &sel, count_t count)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STRUCT_BUFFER, count),
       capacity(MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE)) {
 	auto &other_vector = other.children;
 	for (auto &child_vector : other_vector) {
@@ -35,7 +35,6 @@ VectorStructBuffer::VectorStructBuffer(VectorStructBuffer &other, const Selectio
 		validity.Resize(count);
 	}
 	validity.CopySel(original_validity, sel, 0, 0, count);
-	v_size = count;
 }
 
 void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
@@ -48,8 +47,8 @@ void VectorStructBuffer::SetVectorType(VectorType new_vector_type) {
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-void VectorStructBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
+void VectorStructBuffer::ResetCapacity(idx_t capacity_p) {
+	this->capacity = capacity_p;
 	validity.Reset(capacity);
 }
 
@@ -112,7 +111,7 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &ty
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                            idx_t count) {
-	return make_buffer<VectorStructBuffer>(*this, sel, count);
+	return make_buffer<VectorStructBuffer>(*this, sel, count_t(count));
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
