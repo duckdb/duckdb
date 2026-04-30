@@ -321,6 +321,8 @@ typedef double (*table_function_progress_t)(ClientContext &context, const Functi
 typedef void (*table_function_dependency_t)(LogicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
+typedef idx_t (*table_function_rows_scanned_t)(GlobalTableFunctionState &global_state,
+                                               LocalTableFunctionState &local_state);
 typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
                                              GlobalTableFunctionState &global_state,
                                              LocalTableFunctionState &local_state,
@@ -439,6 +441,8 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
+	//! (Optional) deprecated compatibility callback; prefer get_metrics for new table scan metrics
+	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) returns profiling metrics for this table scan operator
 	table_function_get_metrics_t get_metrics;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
