@@ -21,6 +21,8 @@ public:
 
 	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
 
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, ErrorData &error) override;
+
 protected:
 	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) override;
 
