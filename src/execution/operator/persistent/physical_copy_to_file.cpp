@@ -139,13 +139,17 @@ public:
 	void Initialize();
 
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
-	unique_ptr<GlobalFileState> CreateFileState(string output_path = string()) DUCKDB_REQUIRES(lock);
-	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
+	unique_ptr<GlobalFileState> CreateFileState(string output_path = string(),
+	                                            optional_ptr<const vector<Value>> partition_values = nullptr)
+	    DUCKDB_REQUIRES(lock);
 	unique_ptr<GlobalFileState> FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) DUCKDB_REQUIRES(lock);
 	void FinalizeFileState(unique_ptr<GlobalFileState> file_state) DUCKDB_EXCLUDES(lock);
 
 	unique_ptr<GlobalFileState> TryFinalizeOwnedFileStateLocked() DUCKDB_REQUIRES(lock);
 	void TryFinalizeOwnedFileState() DUCKDB_EXCLUDES(lock);
+
+private:
+	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
 
 public:
 	const PhysicalCopyToFile &op;
@@ -1272,38 +1276,8 @@ unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileStateLocked(cons
 			full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 		}
 	}
-	copy_gstate.created_files.push_back(full_path);
-
-	optional_ptr<CopyToFileInfo> written_file_info;
-	if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
-		written_file_info = copy_gstate.AddFile(full_path);
-	}
-
 	// Initialize write
-	auto file_state = copy_gstate.CreateFileState(full_path);
-	if (op.function.initialize_operator) {
-		op.function.initialize_operator(*file_state->data, op);
-	}
-
-	if (written_file_info) {
-		// Set up the file stats
-		op.function.copy_to_get_written_statistics(context, *op.bind_data, *file_state->data,
-		                                           *written_file_info->file_stats);
-
-		// Set partition info
-		vector<Value> partition_keys;
-		vector<Value> partition_values;
-		for (idx_t i = 0; i < op.partition_columns.size(); i++) {
-			const auto &partition_col_name = op.names[op.partition_columns[i]];
-			const auto &partition_value = values[i];
-			partition_keys.emplace_back(partition_col_name);
-			partition_values.push_back(partition_value.DefaultCastAs(LogicalType::VARCHAR));
-		}
-		written_file_info->partition_keys = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR,
-		                                               std::move(partition_keys), std::move(partition_values));
-	}
-
-	return file_state;
+	return copy_gstate.CreateFileState(full_path, values);
 }
 
 string PartitionedCopy::GetOrCreateDirectory(string path, const vector<Value> &values) {
@@ -1362,16 +1336,7 @@ void CopyToFileGlobalState::Initialize() {
 		return;
 	}
 	// initialize writing to the file
-	created_files.push_back(op.file_path);
 	global_state = CreateFileState(op.file_path);
-	if (op.function.initialize_operator) {
-		op.function.initialize_operator(*global_state->data, op);
-	}
-	auto written_file_info = AddFile(op.file_path);
-	if (written_file_info) {
-		op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state->data,
-		                                           *written_file_info->file_stats);
-	}
 	initialized = true;
 }
 
@@ -1387,7 +1352,8 @@ void CopyToFileGlobalState::CreateDir(const string &dir_path) {
 	created_directories.insert(dir_path);
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path) {
+unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path,
+                                                                   optional_ptr<const vector<Value>> partition_values) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	if (output_path.empty()) {
 		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
@@ -1402,6 +1368,21 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output
 	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, output_path);
 	if (written_file_info) {
 		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data, *written_file_info->file_stats);
+
+		if (!op.partition_columns.empty()) {
+			D_ASSERT(partition_values);
+			vector<Value> partition_keys;
+			vector<Value> partition_values_as_varchar;
+			for (idx_t i = 0; i < op.partition_columns.size(); i++) {
+				const auto &partition_col_name = op.names[op.partition_columns[i]];
+				const auto &partition_value = (*partition_values)[i];
+				partition_keys.emplace_back(partition_col_name);
+				partition_values_as_varchar.push_back(partition_value.DefaultCastAs(LogicalType::VARCHAR));
+			}
+			written_file_info->partition_keys =
+			    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(partition_keys),
+			               std::move(partition_values_as_varchar));
+		}
 	}
 
 	if (op.function.initialize_operator) {
@@ -1430,9 +1411,8 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::FinalizeFileStateLocked(uniqu
 	if (RefersToSameObject(*prepare_global_state.load().get(), *file_state)) {
 		prepare_global_state_owned = std::move(file_state);
 		return nullptr;
-	} else {
-		return file_state;
 	}
+	return file_state;
 }
 
 void CopyToFileGlobalState::FinalizeFileState(unique_ptr<GlobalFileState> file_state) {
