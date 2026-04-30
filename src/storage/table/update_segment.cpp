@@ -422,8 +422,8 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 			return;
 		}
 		idx_t left = 0;
-		idx_t right = current.N - 1;
-		while (left <= right) {
+		idx_t right = current.N;
+		while (left < right) {
 			idx_t mid = left + (right - left) / 2;
 			if (tuples[mid] == row_idx) {
 				result_mask.Set(result_idx, info_data[mid]);
@@ -431,7 +431,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 			} else if (tuples[mid] < row_idx) {
 				left = mid + 1;
 			} else {
-				right = mid - 1;
+				right = mid;
 			}
 		}
 	});

@@ -1072,23 +1072,31 @@ idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, Selec
 	}
 }
 
+template <bool USE_DICT_EMISSION>
+static void AdvancePointersLoop(JoinHashTable &ht, Vector &pointers, SelectionVector &out_sel,
+                                const SelectionVector &sel, const idx_t sel_count, idx_t &out_count) {
+	idx_t new_count = 0;
+	auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(pointers);
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto idx = sel.get_index(i);
+		ptrs[idx] = ht.GetNextPointer<USE_DICT_EMISSION>(ptrs[idx]);
+		if (ptrs[idx]) {
+			out_sel.set_index(new_count++, idx);
+		}
+	}
+	out_count = new_count;
+}
+
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
 	if (!ht.chains_longer_than_one) {
 		this->count = 0;
 		return;
 	}
-
-	// now for all the pointers, we move on to the next set of pointers
-	idx_t new_count = 0;
-	auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(this->pointers);
-	for (idx_t i = 0; i < sel_count; i++) {
-		auto idx = sel.get_index(i);
-		ptrs[idx] = LoadPointer(ptrs[idx] + ht.pointer_offset);
-		if (ptrs[idx]) {
-			this->sel_vector.set_index(new_count++, idx);
-		}
+	if (ht.use_dict_emission) {
+		AdvancePointersLoop<true>(ht, pointers, sel_vector, sel, sel_count, count);
+	} else {
+		AdvancePointersLoop<false>(ht, pointers, sel_vector, sel, sel_count, count);
 	}
-	this->count = new_count;
 }
 
 void ScanStructure::AdvancePointers() {
@@ -1108,6 +1116,23 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t col_idx) {
 	ht.data_collection->Gather(rhs_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
 	                           *FlatVector::IncrementalSelectionVector(), nullptr);
+}
+
+void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
+                              idx_t rhs_col_offset) const {
+	if (use_dict_emission) {
+		const auto ptrs = FlatVector::GetData<data_ptr_t>(row_ptrs);
+		EmitDictVectors(ptrs, ptr_sel, count, result, rhs_col_offset);
+		return;
+	}
+	const auto &result_sel = *FlatVector::IncrementalSelectionVector();
+	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
+		auto &vector = result.data[rhs_col_offset + col_idx];
+		const auto output_col_idx = output_columns[col_idx];
+		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
+		data_collection->Gather(row_ptrs, ptr_sel, count, output_col_idx, vector, result_sel, nullptr);
+		FlatVector::SetSize(vector, count_t(count));
+	}
 }
 
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
@@ -1170,13 +1195,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 					result.SetCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
-					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-						auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-						const auto output_col_idx = ht.output_columns[i];
-						D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
-						FlatVector::SetSize(vector, count_t(result_count));
-					}
+					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
 
 					AdvancePointers();
 					return;
@@ -1199,13 +1218,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 		result.SetCardinality(base_count);
 
 		// 2) gather RHS vectors
-		for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-			auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-			const auto output_col_idx = ht.output_columns[i];
-			D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-			GatherResult(vector, base_count, output_col_idx);
-			FlatVector::SetSize(vector, count_t(base_count));
-		}
+		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
+		             ht.lhs_output_in_probe.size());
 	}
 }
 
@@ -1277,6 +1291,32 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 	finished = true;
 }
 
+template <bool USE_DICT_EMISSION>
+static void MarkChainsAsFoundLoop(JoinHashTable &ht, data_ptr_t ptrs[], const SelectionVector &chain_match_sel_vector,
+                                  const idx_t result_count, const data_ptr_t dead_end_ptr) {
+	for (idx_t i = 0; i < result_count; i++) {
+		const auto idx = chain_match_sel_vector.get_index(i);
+		auto &ptr = ptrs[idx];
+		if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
+			ptr = dead_end_ptr;
+			continue;
+		}
+
+		// Fully mark chain as found
+		while (true) {
+			// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
+			// threads Technically it is, but it does not matter, since the only value that can be written is
+			// "true"
+			Store<bool>(true, ptr + ht.tuple_size);
+			auto next_ptr = ht.GetNextPointer<USE_DICT_EMISSION>(ptr);
+			if (!next_ptr) {
+				break;
+			}
+			ptr = next_ptr;
+		}
+	}
+}
+
 void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data) {
 	const auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(pointers);
 	while (!PointersExhausted()) {
@@ -1285,26 +1325,11 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 
 		if (ht.non_equality_predicates.empty() && !ht.residual_predicate) {
 			// we only have equality predicates - the match is found for the entire chain
-			for (idx_t i = 0; i < result_count; i++) {
-				const auto idx = chain_match_sel_vector.get_index(i);
-				auto &ptr = ptrs[idx];
-				if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
-					ptr = ht.dead_end.get();
-					continue;
-				}
-
-				// Fully mark chain as found
-				while (true) {
-					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
-					// threads Technically it is, but it does not matter, since the only value that can be written is
-					// "true"
-					Store<bool>(true, ptr + ht.tuple_size);
-					auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
-					if (!next_ptr) {
-						break;
-					}
-					ptr = next_ptr;
-				}
+			const auto dead_end_ptr = ht.dead_end.get();
+			if (ht.use_dict_emission) {
+				MarkChainsAsFoundLoop<true>(ht, ptrs, chain_match_sel_vector, result_count, dead_end_ptr);
+			} else {
+				MarkChainsAsFoundLoop<false>(ht, ptrs, chain_match_sel_vector, result_count, dead_end_ptr);
 			}
 		} else {
 			// we have non-equality predicates - we need to evaluate the join condition for every row
@@ -1656,13 +1681,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	}
 
 	// gather the values from the RHS
-	for (idx_t i = 0; i < output_columns.size(); i++) {
-		auto &vector = result.data[left_column_count + i];
-		const auto output_col_idx = output_columns[i];
-		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
-		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
-		FlatVector::SetSize(vector, count_t(found_entries));
-	}
+	GatherRHS(addresses, sel_vector, found_entries, result, left_column_count);
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {
@@ -1992,6 +2011,128 @@ void ProbeSpill::PrepareNextProbe() {
 	}
 	consumer = make_uniq<ColumnDataConsumer>(*global_spill_collection, column_ids);
 	consumer->InitializeScan();
+}
+
+//===--------------------------------------------------------------------===//
+// Small Build Side Dictionary Emission
+//===--------------------------------------------------------------------===//
+//! Threshold constants gating small-build-side dictionary emission
+struct DictionaryEmissionActivation {
+	//! Caps the dict_arrays allocation; 8 MiB keeps them in L3 and bounds aux_next_ptrs
+	static constexpr idx_t MAX_BUILD_PAYLOAD_BYTES = 8ULL * 1024ULL * 1024ULL;
+	//! Below this, dictionary-emission setup is not amortized by probe-side savings
+	static constexpr idx_t MIN_PROBE_ROWS = 262144;
+	//! Below this ratio, per-row savings are unlikely to amortize the setup cost
+	static constexpr idx_t PROBE_BUILD_RATIO = 100;
+};
+
+idx_t JoinHashTable::ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const {
+	// the size of variable-size strings isn't counted here because they are already stored in the TupleDataCollection
+	idx_t payload_bytes_per_row = 0;
+	for (const auto &type : rhs_output_types) {
+		payload_bytes_per_row += GetTypeIdSize(type.InternalType());
+	}
+	return Count() * payload_bytes_per_row;
+}
+
+bool JoinHashTable::CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const {
+	// external joins rebuild partitions, invalidating row pointers
+	if (external) {
+		return false;
+	}
+	// SINGLE joins need FlatVector::SetNull for unmatched rows; dictionary vectors cannot supply it
+	if (join_type == JoinType::SINGLE) {
+		return false;
+	}
+	if (op.rhs_output_columns.col_types.empty()) {
+		return false;
+	}
+	if (Count() == 0) {
+		return false;
+	}
+	if (probe_cardinality < DictionaryEmissionActivation::MIN_PROBE_ROWS) {
+		return false;
+	}
+	if (probe_cardinality < DictionaryEmissionActivation::PROBE_BUILD_RATIO * Count()) {
+		return false;
+	}
+	// Vector::Dictionary does not support nested types
+	for (const auto &type : op.rhs_output_columns.col_types) {
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
+			return false;
+		default:
+			break;
+		}
+	}
+	if (ComputeBuildPayloadBytes(op.rhs_output_columns.col_types) >
+	    DictionaryEmissionActivation::MAX_BUILD_PAYLOAD_BYTES) {
+		return false;
+	}
+	// Count() fits in the uint32_t dict index stored into NEXT_PTR by BuildDictionaryArrays
+	D_ASSERT(Count() <= NumericLimits<uint32_t>::Maximum());
+	return true;
+}
+
+void JoinHashTable::EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count,
+                                    DataChunk &result, idx_t rhs_col_offset) const {
+	D_ASSERT(output_columns.size() == dict_arrays.size());
+	SelectionVector build_sel_vec(count);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = ptr_sel.get_index(i);
+		build_sel_vec.set_index(i, Load<uint32_t>(row_ptrs[idx] + pointer_offset));
+	}
+	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
+		auto &vector = result.data[rhs_col_offset + col_idx];
+		vector.Dictionary(dict_arrays[col_idx], build_sel_vec, count);
+	}
+}
+
+void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
+	auto &collection = *data_collection;
+	const auto build_count = collection.Count();
+	// preconditions enforced by CanUseDictionaryEmission
+	D_ASSERT(build_count > 0);
+	// dict index is a uint32_t; assert defensively if MAX_BUILD_PAYLOAD_BYTES is ever relaxed
+	D_ASSERT(build_count <= NumericLimits<uint32_t>::Maximum());
+
+	// collect a row pointer per build row; the TDC holds its own BufferHandles for its lifetime,
+	// and FinishEvent has already verified everything is pinned before calling us
+	Vector row_pointer_vector(LogicalType::POINTER, build_count);
+	JoinHTScanState scan_state(collection, 0, collection.ChunkCount(), TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	const auto collected = FillWithHTOffsets(scan_state, row_pointer_vector);
+	D_ASSERT(collected == build_count);
+	(void)collected;
+	const auto row_ptrs = FlatVector::GetData<data_ptr_t>(row_pointer_vector);
+
+	// gather RHS output columns into columnar dictionary arrays
+	const auto &sel = *FlatVector::IncrementalSelectionVector();
+	for (idx_t col_idx = 0; col_idx < op.rhs_output_columns.col_types.size(); col_idx++) {
+		const auto &type = op.rhs_output_columns.col_types[col_idx];
+		auto dict_entry = DictionaryVector::CreateReusableDictionary(type, build_count);
+		const auto output_col_idx = output_columns[col_idx];
+		collection.Gather(row_pointer_vector, sel, build_count, output_col_idx, dict_entry->data, sel, nullptr);
+		dict_arrays.emplace_back(std::move(dict_entry));
+	}
+
+	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
+	if (chains_longer_than_one) {
+		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
+		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
+	}
+
+	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
+	for (idx_t i = 0; i < build_count; i++) {
+		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
+		if (chains_longer_than_one) {
+			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
+		}
+		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);
+	}
+
+	use_dict_emission = true;
 }
 
 } // namespace duckdb
