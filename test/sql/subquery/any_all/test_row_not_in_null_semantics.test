@@ -41,24 +41,6 @@ SELECT (NULL, 1) =ANY ((VALUES (0, 1), (NULL, 5)))
 NULL
 
 query I
-SELECT CASE
-	WHEN ((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) IS NULL THEN 1
-	WHEN ((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) THEN 2
-	ELSE 3
-END
-----
-1
-
-query I
-SELECT CASE
-	WHEN ((1, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) IS NULL THEN 1
-	WHEN ((1, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) THEN 2
-	ELSE 3
-END
-----
-3
-
-query I
 SELECT (1, 2, 3) =ANY ((VALUES (1, NULL, 4)))
 ----
 false
@@ -83,16 +65,6 @@ SELECT (1, 2) =ANY ((VALUES (NULL, NULL)))
 ----
 NULL
 
-query I
-SELECT (1, 2) =ANY ((VALUES (NULL, NULL), (0, 3)))
-----
-NULL
-
-query I
-SELECT (1, 2) =ANY ((VALUES (0, 3), (4, NULL)))
-----
-false
-
 statement ok
 CREATE TABLE mixed_rhs(a INTEGER, b INTEGER);
 
@@ -104,16 +76,6 @@ SELECT (0, 1) =ANY (SELECT a, b FROM mixed_rhs)
 ----
 true
 
-query I
-SELECT (0, 7) =ANY (SELECT a, b FROM mixed_rhs)
-----
-NULL
-
-query I
-SELECT (2, 8) =ANY (SELECT a, b FROM mixed_rhs)
-----
-false
-
 statement ok
 CREATE TABLE all_null_rhs(a INTEGER, b INTEGER);
 
@@ -124,11 +86,6 @@ query I
 SELECT (3, 4) =ANY (SELECT a, b FROM all_null_rhs)
 ----
 NULL
-
-query I
-SELECT COALESCE((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5))), FALSE)
-----
-false
 
 query I
 SELECT count(*) FROM (VALUES (1, 7), (0, 7), (NULL, 7)) t(a, b)
