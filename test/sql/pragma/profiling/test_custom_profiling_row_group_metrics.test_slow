@@ -26,6 +26,9 @@ statement ok
 CREATE TABLE mixed_t AS
 SELECT CASE WHEN range < 122880 THEN range ELSE range + 10000000 END AS i FROM range(400000);
 
+statement ok
+CREATE TABLE self_insert_t AS SELECT range i FROM range(400000);
+
 # --- Full seq_scan: all 4 row groups scanned ---
 
 statement ok
@@ -338,6 +341,42 @@ query II
 SELECT * FROM cumulative_metrics;
 ----
 2	8
+
+# --- Self-insert: total reflects the scan target, not row groups appended by the same statement ---
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+INSERT INTO self_insert_t SELECT i + 100000000 FROM self_insert_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+statement ok
+ROLLBACK;
 
 # --- LIMITation: rows scanned is not flushed when the scan is stopped early ---
 

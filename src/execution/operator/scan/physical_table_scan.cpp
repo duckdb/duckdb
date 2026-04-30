@@ -427,7 +427,8 @@ void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gs
 	}
 	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
 	auto &state = lstate.Cast<TableScanLocalSourceState>();
-	function.get_metrics(context, bind_data.get(), *gstate.global_state, *state.local_state, requested_metrics, metrics);
+	function.get_metrics(context, bind_data.get(), *gstate.global_state, *state.local_state, requested_metrics,
+	                     metrics);
 }
 
 } // namespace duckdb

@@ -68,11 +68,15 @@ public:
 		D_ASSERT(bind_data_p);
 		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
-		max_threads = duck_table.GetStorage().MaxThreads(context);
+		auto &storage = duck_table.GetStorage();
+		max_threads = storage.MaxThreads(context);
+		total_row_groups_to_scan = storage.GetRowGroupCountWithLocalStorage(context);
 	}
 
 	//! The maximum number of threads for this table scan.
 	idx_t max_threads;
+	//! The total number of row groups available to this table scan.
+	idx_t total_row_groups_to_scan;
 	//! The projected columns of this table scan.
 	vector<idx_t> projection_ids;
 	//! The types of all scanned columns.
@@ -819,7 +823,7 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(table_rows, estimated_cardinality);
 }
 
-void TableScanGetMetrics(ClientContext &context, const FunctionData *bind_data_p, GlobalTableFunctionState &gstate_p,
+void TableScanGetMetrics(ClientContext &, const FunctionData *, GlobalTableFunctionState &gstate_p,
                          LocalTableFunctionState &local_state, const profiler_settings_t &requested_metrics,
                          profiler_metrics_t &metrics) {
 	auto &gstate = gstate_p.Cast<TableScanGlobalState>();
@@ -827,13 +831,11 @@ void TableScanGetMetrics(ClientContext &context, const FunctionData *bind_data_p
 		metrics[MetricType::OPERATOR_ROWS_SCANNED] = Value::UBIGINT(gstate.TableScanRowsScanned(local_state));
 	}
 	if (requested_metrics.find(MetricType::OPERATOR_ROW_GROUPS_SCANNED) != requested_metrics.end()) {
-		metrics[MetricType::OPERATOR_ROW_GROUPS_SCANNED] = Value::UBIGINT(gstate.TableScanRowGroupsScanned(local_state));
+		metrics[MetricType::OPERATOR_ROW_GROUPS_SCANNED] =
+		    Value::UBIGINT(gstate.TableScanRowGroupsScanned(local_state));
 	}
-	if (bind_data_p && requested_metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) != requested_metrics.end()) {
-		auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-		auto &storage = bind_data.table.Cast<DuckTableEntry>().GetStorage();
-		metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] =
-		    Value::UBIGINT(storage.GetRowGroupCountWithLocalStorage(context));
+	if (requested_metrics.find(MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) != requested_metrics.end()) {
+		metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] = Value::UBIGINT(gstate.total_row_groups_to_scan);
 	}
 }
 

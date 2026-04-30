@@ -324,8 +324,7 @@ typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext
 typedef void (*table_function_get_metrics_t)(ClientContext &context, const FunctionData *bind_data,
                                              GlobalTableFunctionState &global_state,
                                              LocalTableFunctionState &local_state,
-                                             const profiler_settings_t &requested_metrics,
-                                             profiler_metrics_t &metrics);
+                                             const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
