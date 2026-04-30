@@ -659,14 +659,6 @@ idx_t LocalStorage::AddedRows(DataTable &table) {
 	return storage->GetCollection().GetTotalRows() - storage->deleted_rows;
 }
 
-idx_t LocalStorage::AddedRowGroups(DataTable &table) const {
-	auto storage = table_manager.GetStorage(table);
-	if (!storage) {
-		return 0;
-	}
-	return storage->GetCollection().GetRowGroupCount();
-}
-
 vector<PartitionStatistics> LocalStorage::GetPartitionStats(DataTable &table) const {
 	auto storage = table_manager.GetStorage(table);
 	if (!storage) {
