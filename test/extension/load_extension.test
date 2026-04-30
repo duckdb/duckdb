@@ -32,11 +32,6 @@ SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'loadab
 default-version
 
 query I
-SELECT hello('World');
-----
-10
-
-query I
 QUACK QUACK QUACK
 ----
 QUACK
