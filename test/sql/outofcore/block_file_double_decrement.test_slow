@@ -1,0 +1,85 @@
+# name: test/sql/outofcore/block_file_double_decrement.test_slow
+# description: Stricter regression test for the .block read-back double-decrement bug.
+#              Forces an explicit write→full-scan→write cycle and asserts that the
+#              OVERFLOW_STRINGS counter remains consistent with on-disk .block files
+#              after every phase.
+#
+# See block_file_evicted_bytes_accounting.test_slow for the full bug analysis. This test
+# differs by:
+#   - Establishes a baseline counter > 0 after the initial write phase.
+#   - Performs an explicit full scan that reads every .block file back through the
+#     ReadTemporaryBuffer .block path.
+#   - Performs a second write wave to force fresh evictions, and asserts the counter
+#     recovers — with the bug it stayed clamped to 0 (the wrapped uint64 stayed
+#     > INT64_MAX even after adding fresh evictions).
+#
+# Memory budget: 50 MB with a streaming-friendly setting so the read-back scan does not
+# OOM. The workload is intentionally modest (~57 MB) — it is the *number* of read-back
+# events that exercises the bug, not the absolute byte count.
+#
+# group: [outofcore]
+
+statement ok
+SET threads = 1;
+
+statement ok
+SET temp_directory = '{TEST_DIR}/tmp_dd';
+
+statement ok
+SET memory_limit = '50MB';
+
+statement ok
+SET preserve_insertion_order = false;
+
+statement ok
+CREATE TABLE r1 (id INT, s VARCHAR);
+
+# Phase 1: write ~57 MB of incompressible OVERFLOW_STRINGS data (100 rows × ~576 KB).
+loop b 0 5
+
+statement ok
+INSERT INTO r1 SELECT range + ${b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+
+endloop
+
+# .block files must exist after the writes.
+query I
+SELECT count(*) > 0 FROM glob('{TEST_DIR}/tmp_dd/*.block');
+----
+true
+
+# Baseline: with .block files on disk, OVERFLOW_STRINGS counter must be > 0.
+# (If this fails, the bug already fired during insert-time evict/read cycles.)
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'OVERFLOW_STRINGS';
+----
+true
+
+# Phase 2: full scan forces every .block to be read back through ReadTemporaryBuffer.
+# count(*) avoids materialising the strings themselves while still pinning each block,
+# so the read-back path runs without OOM under the tight budget.
+statement ok
+SELECT count(s) FROM r1;
+
+# Phase 3: insert another ~57 MB to force fresh OVERFLOW_STRINGS evictions.
+loop b 0 5
+
+statement ok
+INSERT INTO r1 SELECT range + 100 + ${b}*20, hex(repeat(md5(range::VARCHAR)::BLOB, 9000)) FROM range(20);
+
+endloop
+
+# .block files exist again from the new evictions.
+query I
+SELECT count(*) > 0 FROM glob('{TEST_DIR}/tmp_dd/*.block');
+----
+true
+
+# Core regression assertion: after the read-back scan and a fresh wave of writes,
+# the per-tag counter must reflect the on-disk eviction state.
+# FAILS with the double-decrement bug (counter remains clamped to 0).
+# PASSES once the duplicate decrement at standard_buffer_manager.cpp:569 is removed.
+query I
+SELECT temporary_storage_bytes > 0 FROM duckdb_memory() WHERE tag = 'OVERFLOW_STRINGS';
+----
+true
