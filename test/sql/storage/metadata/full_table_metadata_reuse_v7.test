@@ -1,0 +1,74 @@
+# name: test/sql/storage/metadata/full_table_metadata_reuse_v7.test
+# description: Test that column metadata is not loaded when making no changes to a table (v1.5.0 / serialization version 7)
+# group: [metadata]
+
+load {TEST_DIR}/partial_column_metadata_reuse_v6.test.db readwrite v1.5.0
+
+# create a table with several columns
+statement ok
+CREATE TABLE tbl AS SELECT
+    i AS c0, i AS c1, i AS c2, i AS c3, i AS c4
+FROM range(200000) t(i);
+
+# first checkpoint
+restart
+
+# verify no columns are loaded after restart (all lazy)
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+----
+0
+
+# checkpoint again without any changes
+restart
+
+# verify still no columns are loaded after a second restart
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+----
+0
+
+# verify data is correct
+query II
+SELECT COUNT(*), SUM(c0) FROM tbl
+----
+200000	19999900000
+
+# --- modifications to another table should not load columns on the original table ---
+restart
+
+# create and modify a second table, triggering a checkpoint
+statement ok
+CREATE TABLE other_tbl AS SELECT i AS x FROM range(1000) t(i);
+
+statement ok
+CHECKPOINT
+
+# verify tbl still has no columns loaded
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+----
+0
+
+# modify the other table and checkpoint again
+statement ok
+INSERT INTO other_tbl SELECT i FROM range(1000, 2000) t(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('tbl', scan_type='only_loaded_segments')
+----
+0
+
+# verify data on both tables is correct
+query II
+SELECT COUNT(*), SUM(c0) FROM tbl
+----
+200000	19999900000
+
+query II
+SELECT COUNT(*), SUM(x) FROM other_tbl
+----
+2000	1999000

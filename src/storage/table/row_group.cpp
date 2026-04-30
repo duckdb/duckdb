@@ -1672,11 +1672,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
-	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault(106, "has_per_column_metadata_blocks",
-		                                    pointer.has_per_column_metadata_blocks);
-		serializer.WriteProperty(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
-	} else if (serializer.ShouldSerialize(6)) {
+	if (serializer.ShouldSerialize(6) && !serializer.ShouldSerialize(8)) {
+		// legacy metadata blocks for v1.4 and v1.5
 		if (!pointer.has_metadata_blocks && pointer.has_per_column_metadata_blocks) {
 			vector<MetaBlockPointer> extra_metadata_block_pointers;
 			pointer.per_column_metadata_blocks.ForEachBlock(
@@ -1687,6 +1684,11 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 			serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_metadata_blocks);
 			serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
 		}
+	}
+	if (serializer.ShouldSerialize(8)) {
+		serializer.WritePropertyWithDefault(106, "has_per_column_metadata_blocks",
+		                                    pointer.has_per_column_metadata_blocks);
+		serializer.WriteProperty(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
 	}
 }
 
