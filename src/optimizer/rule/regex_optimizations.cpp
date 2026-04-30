@@ -222,7 +222,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	return std::move(like_expression);
 }
 
-RegexpReplaceShortExtractRule::RegexpReplaceShortExtractRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+RegexpReplaceExtractRule::RegexpReplaceExtractRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("regexp_replace");
 	func->policy = SetMatcher::Policy::SOME_ORDERED;
@@ -232,12 +232,11 @@ RegexpReplaceShortExtractRule::RegexpReplaceShortExtractRule(ExpressionRewriter 
 	root = std::move(func);
 }
 
-// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P's `^...$`
-// shape forces a whole-input match. The `.*$` trim and remainder-newline check happen in
+// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P has a `^...*.$`
+// shape that forces a whole-input match. The `.*$` trim and remainder-newline check happen in
 // regexp_extract's bind, so the bind data here stays a pure function of the children.
-unique_ptr<Expression> RegexpReplaceShortExtractRule::Apply(LogicalOperator &op,
-                                                            vector<reference<Expression>> &bindings, bool &changes_made,
-                                                            bool is_root) {
+unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                       bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
 	if (!root.bind_info) {
 		return nullptr;
