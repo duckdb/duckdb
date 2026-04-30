@@ -1426,7 +1426,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
 		auto column_stats = column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
-		if (!storage_index.IsPushdownExtract()) {
+		if (!column_stats || !storage_index.IsPushdownExtract() || !column_stats->GetType().IsNested()) {
 			return column_stats;
 		}
 		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));
