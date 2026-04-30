@@ -276,8 +276,8 @@ jobs:
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -300,6 +300,17 @@ jobs:
 
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Fix ASan runtime
+      shell: bash
+      run: |
+        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
+        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
+        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
+        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
+          sudo mkdir -p "${asan_static_dir}"
+          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
+        fi
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -423,6 +434,8 @@ jobs:
    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
    needs: prepare
    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+   env:
+     CLANGD_BINARY: clangd-20
 
    steps:
      - name: "Checkout"
@@ -435,8 +448,6 @@ jobs:
      - name: Install
        run: |
          python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
          python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
          python3 scripts/ci/retry.py -- make install-clangd-tidy
 
@@ -613,12 +624,12 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install pytest
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
-        python3 -m pip install --break-system-packages pytest
+        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -1203,8 +1214,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -1246,12 +1257,12 @@ jobs:
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
