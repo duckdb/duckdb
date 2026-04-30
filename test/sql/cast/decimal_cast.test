@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-# Valid casts that previously threw a false "out of range" error.
-
 query I
 SELECT '9.90'::DECIMAL(4,3)::DECIMAL(3,2);
 ----
@@ -31,8 +29,6 @@ query I
 SELECT '9.9000000000000000000000000000000000000'::DECIMAL(38,37)::DECIMAL(37,36);
 ----
 9.900000000000000000000000000000000000
-
-# True overflow: rounding pushes value past the limit. These should still error.
 
 statement error
 SELECT '9.995'::DECIMAL(4,3)::DECIMAL(3,2);
