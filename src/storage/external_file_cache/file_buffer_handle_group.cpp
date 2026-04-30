@@ -30,7 +30,7 @@ void FileBufferHandleGroup::CopyTo(data_ptr_t dest, idx_t nr_bytes) const {
 	}
 }
 
-data_ptr_t FileBufferHandleGroup::Ptr() const {
+const_data_ptr_t FileBufferHandleGroup::Ptr() const {
 	if (handles.size() != 1) {
 		throw InternalException("FileBufferHandleGroup::Ptr() requires exactly one handle, got %llu", handles.size());
 	}

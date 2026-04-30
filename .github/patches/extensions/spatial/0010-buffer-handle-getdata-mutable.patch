@@ -1,0 +1,13 @@
+diff --git a/src/spatial/util/managed_collection.hpp b/src/spatial/util/managed_collection.hpp
+index 2923aee..033664e 100644
+--- a/src/spatial/util/managed_collection.hpp
++++ b/src/spatial/util/managed_collection.hpp
+@@ -124,7 +124,7 @@ void ManagedCollection<T>::Append(ManagedCollectionAppendState &state, const T *
+ 		auto to_copy = MinValue<idx_t>(remaining_capacity, remaining_elements);
+ 
+ 		// Get the writeable pointer to the block
+-		auto ptr = state.handle.Ptr() + state.block->item_count * sizeof(T);
++		auto ptr = state.handle.GetDataMutable() + state.block->item_count * sizeof(T);
+ 
+ 		// Store as many elements as we can
+ 		for (idx_t i = 0; i < to_copy; i++) {

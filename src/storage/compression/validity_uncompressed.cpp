@@ -461,7 +461,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
-	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	D_ASSERT(scan_state.block_id == segment.block->BlockId());
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	ValidityUncompressed::UnalignedScan(buffer_ptr, segment.count, start, result_mask, result_offset, scan_count);
@@ -474,7 +474,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
-		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+		auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 		D_ASSERT(scan_state.block_id == segment.block->BlockId());
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		ValidityUncompressed::AlignedScan(buffer_ptr, start, result_mask, scan_count);
@@ -492,7 +492,7 @@ void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vecto
 	result.Flatten(sel_count);
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
-	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
@@ -513,7 +513,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
+	auto dataptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr), segment.count);
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (!mask.RowIsValidUnsafe(NumericCast<idx_t>(row_id))) {
@@ -535,7 +535,7 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
-		memset(handle.Ptr(), 0xFF, segment.SegmentSize());
+		memset(handle.GetDataMutable(), 0xFF, segment.SegmentSize());
 	}
 	return nullptr;
 }
@@ -554,7 +554,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		return append_count;
 	}
 
-	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.Ptr()), max_tuples);
+	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.GetDataMutable()), max_tuples);
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
@@ -582,7 +582,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()), segment.count);
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.GetDataMutable()), segment.count);
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i);
 		}
@@ -591,7 +591,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t new_count) {
 		revert_start = start_bit / 8;
 	}
 	// for the rest, we just memset
-	memset(handle.Ptr() + revert_start, 0xFF, segment.SegmentSize() - revert_start);
+	memset(handle.GetDataMutable() + revert_start, 0xFF, segment.SegmentSize() - revert_start);
 }
 
 //===--------------------------------------------------------------------===//

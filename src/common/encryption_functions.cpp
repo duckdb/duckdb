@@ -99,7 +99,7 @@ void EncryptionEngine::EncryptBlock(AttachedDatabase &attached_db, const string 
 
 	auto checksum_offset = block.InternalBuffer() + delta;
 	auto encryption_checksum_offset = block_offset_internal + delta;
-	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto size = block.Size() + Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	//! encrypt the data including the checksum
 	auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
