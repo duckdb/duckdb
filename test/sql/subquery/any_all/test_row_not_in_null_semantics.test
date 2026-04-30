@@ -26,6 +26,106 @@ SELECT (0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))
 NULL
 
 query I
+SELECT (0, 1) =ANY ((VALUES (0, 1), (0, NULL), (NULL, 1)))
+----
+true
+
+query I
+SELECT (2, 1) =ANY ((VALUES (0, NULL), (NULL, 5)))
+----
+false
+
+query I
+SELECT (NULL, 1) =ANY ((VALUES (0, 1), (NULL, 5)))
+----
+NULL
+
+query I
+SELECT CASE
+	WHEN ((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) IS NULL THEN 1
+	WHEN ((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) THEN 2
+	ELSE 3
+END
+----
+1
+
+query I
+SELECT CASE
+	WHEN ((1, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) IS NULL THEN 1
+	WHEN ((1, 7) =ANY ((VALUES (0, NULL), (NULL, 5)))) THEN 2
+	ELSE 3
+END
+----
+3
+
+query I
+SELECT (1, 2, 3) =ANY ((VALUES (1, NULL, 4)))
+----
+false
+
+query I
+SELECT (1, 2, 3) =ANY ((VALUES (1, NULL, 3)))
+----
+NULL
+
+query I
+SELECT (1, 2, 3) =ANY ((VALUES (NULL, 2, 3)))
+----
+NULL
+
+query I
+SELECT (1, 2, 3) =ANY ((VALUES (0, NULL, 3)))
+----
+false
+
+query I
+SELECT (1, 2) =ANY ((VALUES (NULL, NULL)))
+----
+NULL
+
+query I
+SELECT (1, 2) =ANY ((VALUES (NULL, NULL), (0, 3)))
+----
+NULL
+
+query I
+SELECT (1, 2) =ANY ((VALUES (0, 3), (4, NULL)))
+----
+false
+
+statement ok
+CREATE TABLE mixed_rhs(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO mixed_rhs VALUES (0, 1), (0, NULL), (NULL, 7);
+
+query I
+SELECT (0, 1) =ANY (SELECT a, b FROM mixed_rhs)
+----
+true
+
+query I
+SELECT (0, 7) =ANY (SELECT a, b FROM mixed_rhs)
+----
+NULL
+
+query I
+SELECT (2, 8) =ANY (SELECT a, b FROM mixed_rhs)
+----
+false
+
+statement ok
+CREATE TABLE all_null_rhs(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO all_null_rhs VALUES (NULL, NULL), (NULL, NULL);
+
+query I
+SELECT (3, 4) =ANY (SELECT a, b FROM all_null_rhs)
+----
+NULL
+
+query I
 SELECT COALESCE((0, 7) =ANY ((VALUES (0, NULL), (NULL, 5))), FALSE)
 ----
 false
@@ -44,6 +144,18 @@ WITH cte AS (
 SELECT count(*) FROM cte WHERE marker
 ----
 0
+
+query I
+WITH rhs AS (
+	SELECT * FROM (VALUES (0, NULL), (NULL, 5), (7, 7), (NULL, NULL)) v(a, b)
+)
+SELECT CASE
+	WHEN ((1, 7) =ANY (SELECT a, b FROM rhs)) IS NULL THEN 1
+	WHEN ((1, 7) =ANY (SELECT a, b FROM rhs)) THEN 2
+	ELSE 3
+END
+----
+1
 
 statement ok
 CREATE TABLE outer_tab (f1 int4, f2 int4);

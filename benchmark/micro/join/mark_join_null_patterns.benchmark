@@ -19,7 +19,11 @@ SELECT NULL::INTEGER AS a, (i % 8192)::INTEGER AS b
 FROM range(8192) tbl(i);
 
 run
-SELECT count(*) FROM lhs WHERE COALESCE((a, b) = ANY (SELECT a, b FROM rhs), false);
+SELECT sum(CASE WHEN subq IS NULL THEN 1 WHEN subq THEN 2 ELSE 4 END)
+FROM (
+	SELECT (a, b) = ANY (SELECT a, b FROM rhs) AS subq
+	FROM lhs
+) t;
 
 result I
-0
+5000000
