@@ -278,11 +278,12 @@ void SerializeStructFields(const AggregateStateLayout &layout, Vector &result, i
 
 			// we need to write to the buffers with the current offset the child is pointing to in the state
 			Vector child_addresses(LogicalType::POINTER);
-			auto child_ptrs = FlatVector::GetDataMutable<data_ptr_t>(child_addresses);
+			auto child_writer = FlatVector::Writer<data_ptr_t>(child_addresses, count);
 			for (idx_t row = 0; row < count; row++) {
-				child_ptrs[row] = addresses_ptrs[row] + offset_in_state;
+				child_writer.WriteValue(addresses_ptrs[row] + offset_in_state);
 			}
 
+			auto child_ptrs = FlatVector::GetData<data_ptr_t>(child_addresses);
 			auto &struct_entries = StructVector::GetEntries(result);
 			SerializeStructFields(child_layout, struct_entries[field_idx], count, child_ptrs);
 		} else {
@@ -329,9 +330,9 @@ void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector
 
 	// AggregateStateFinalize: packed buffer -> result values
 	Vector addresses_vec(LogicalType::POINTER);
-	auto addresses_finalize = FlatVector::GetDataMutable<data_ptr_t>(addresses_vec);
+	auto addresses_finalize = FlatVector::Writer<data_ptr_t>(addresses_vec, valid_count);
 	for (idx_t i = 0; i < valid_count; i++) {
-		addresses_finalize[i] = temp_state_buf.get() + i * layout.aligned_state_size;
+		addresses_finalize.WriteValue(temp_state_buf.get() + i * layout.aligned_state_size);
 	}
 	Vector result_roundtrip(result.GetType(), valid_count);
 	bind_data.aggr.GetStateFinalizeCallback()(addresses_vec, aggr_input_data, result_roundtrip, valid_count, 0);
@@ -402,7 +403,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	AggregateStateLayout layout(input.data[0].GetType(), bind_data.state_size);
 
-	auto state_vec_ptr = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses);
+	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, input.size());
 
 	input.data[0].Flatten(input.size());
 
@@ -411,7 +412,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	if (layout.is_struct) {
 		for (idx_t i = 0; i < input.size(); i++) {
-			state_vec_ptr[i] = local_state.state_buffer.get() + i * layout.aligned_state_size;
+			state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.aligned_state_size);
 		}
 
 		DeserializeStructFields(layout, layout.aligned_state_size, input.data[0], state_data, input.size(),
@@ -428,7 +429,7 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 				// we put the NULL back in explicitly below
 				bind_data.aggr.GetStateInitCallback()(bind_data.aggr, data_ptr_cast(target_ptr));
 			}
-			state_vec_ptr[i] = data_ptr_cast(target_ptr);
+			state_vec_writer.WriteValue(data_ptr_cast(target_ptr));
 		}
 	}
 
@@ -559,14 +560,17 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 
 	// Handle both-valid rows - batched load, combine, store
 	if (both_valid_count > 0) {
-		auto state0_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses0);
-		auto state1_ptrs = FlatVector::GetDataMutable<data_ptr_t>(local_state.addresses1);
+		auto state0_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses0, both_valid_count);
+		auto state1_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses1, both_valid_count);
 
 		// Pack state buffer pointers in selection order (not row order)
 		for (idx_t i = 0; i < both_valid_count; i++) {
-			state0_ptrs[i] = local_state.state_buffer0.get() + i * layout.aligned_state_size;
-			state1_ptrs[i] = local_state.state_buffer1.get() + i * layout.aligned_state_size;
+			state0_writer.WriteValue(local_state.state_buffer0.get() + i * layout.aligned_state_size);
+			state1_writer.WriteValue(local_state.state_buffer1.get() + i * layout.aligned_state_size);
 		}
+
+		auto state0_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses0);
+		auto state1_ptrs = FlatVector::GetData<data_ptr_t>(local_state.addresses1);
 
 		if (layout.is_struct) {
 			// Use tight loops to load both inputs
@@ -810,18 +814,18 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 
 	// source_vec holds pointers to the binary states buffer (temp_state_buf) deserialized from the input states
 	Vector source_vec(LogicalType::POINTER);
-	auto source_ptrs = FlatVector::GetDataMutable<data_ptr_t>(source_vec);
+	auto source_data = FlatVector::Writer<data_ptr_t>(source_vec, count);
 
 	// target_vec will hold pointers to the binary state buffer where the combined states should be stored, built by the
 	// underlying aggregate function's combine callback
 	Vector target_vec(LogicalType::POINTER);
-	auto target_ptrs = FlatVector::GetDataMutable<data_ptr_t>(target_vec);
+	auto target_data = FlatVector::Writer<data_ptr_t>(target_vec, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto temp_ptr = temp_state_buf.get() + i * aligned_size;
 		underlying_aggr.GetStateInitCallback()(underlying_aggr, temp_ptr);
-		source_ptrs[i] = temp_ptr;
-		target_ptrs[i] = state_ptrs[sdata.sel->get_index(i)];
+		source_data.WriteValue(temp_ptr);
+		target_data.WriteValue(state_ptrs[sdata.sel->get_index(i)]);
 	}
 
 	DeserializeStructFields(layout, layout.aligned_state_size, inputs[0], input_data, count, temp_state_buf.get());

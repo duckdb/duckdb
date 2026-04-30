@@ -352,7 +352,7 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 }
 
 static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, idx_t current_pos) {
-	auto strings = FlatVector::GetDataMutable<string_t>(vector);
+	auto strings = FlatVector::Writer<string_t>(vector, size);
 	auto arrow_string = ArrowBufferData<arrow_string_view_t>(array, 1) + current_pos;
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
@@ -365,7 +365,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 			//  | Bytes 0-3  | Bytes 4-15                            |
 			//  |------------|---------------------------------------|
 			//  | length     | data (padded with 0)                  |
-			strings[row_idx] = string_t(arrow_string[row_idx].GetInlineData(), length);
+			strings.WriteStringRef(string_t(arrow_string[row_idx].GetInlineData(), length));
 		} else {
 			//  This string is not inlined, we have to check a different buffer and offsets
 			//  | Bytes 0-3  | Bytes 4-7  | Bytes 8-11 | Bytes 12-15 |
@@ -375,7 +375,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 			int32_t offset = arrow_string[row_idx].GetOffset();
 			D_ASSERT(array.n_buffers > 2 + buffer_index);
 			auto c_data = ArrowBufferData<char>(array, 2 + buffer_index);
-			strings[row_idx] = string_t(&c_data[offset], length);
+			strings.WriteStringRef(string_t(&c_data[offset], length));
 		}
 	}
 }
@@ -392,24 +392,28 @@ static void DirectConversion(Vector &vector, ArrowArray &array, idx_t chunk_offs
 template <class T>
 static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset, int64_t nested_offset,
                            int64_t parent_offset, idx_t size, int64_t conversion) {
-	auto tgt_ptr = FlatVector::GetDataMutable<dtime_t>(vector);
+	auto tgt_writer = FlatVector::Writer<dtime_t>(vector, size);
 	auto &validity_mask = FlatVector::ValidityMutable(vector);
 	auto src_ptr = static_cast<const T *>(array.buffers[1]) +
 	               GetEffectiveOffset(array, parent_offset, chunk_offset, nested_offset);
 	if (validity_mask.CannotHaveNull()) {
 		for (idx_t row = 0; row < size; row++) {
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			int64_t result;
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, result)) {
 				throw ConversionException("Could not convert Time to Microsecond");
 			}
+			tgt_writer.WriteValue(dtime_t(result));
 		}
 	} else {
 		for (idx_t row = 0; row < size; row++) {
 			if (!validity_mask.RowIsValid(row)) {
 				continue;
 			}
-			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, tgt_ptr[row].micros)) {
+			int64_t result;
+			if (!TryMultiplyOperator::Operation(static_cast<int64_t>(src_ptr[row]), conversion, result)) {
 				throw ConversionException("Could not convert Time to Microsecond");
 			}
+			tgt_writer.WriteValue(dtime_t(result));
 		}
 	}
 }

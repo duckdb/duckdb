@@ -343,7 +343,6 @@ template <class OP = HistogramGenericFunctor>
 void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	auto states = state_vector.Values<ApproxTopKState *>(count);
 
-	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need
@@ -358,7 +357,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	}
 	// reserve space in the list vector
 	ListVector::Reserve(result, old_len + new_entries);
-	auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
+	auto list_entries = FlatVector::Writer<list_entry_t>(result, count);
 	auto &child_data = ListVector::GetChildMutable(result);
 
 	idx_t current_offset = old_len;
@@ -366,10 +365,10 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 		const auto rid = i + offset;
 		auto &state = states[i].GetValue()->GetState();
 		if (state.values.empty()) {
-			mask.SetInvalid(rid);
+			list_entries.WriteNull();
 			continue;
 		}
-		auto &list_entry = list_entries[rid];
+		list_entry_t list_entry;
 		list_entry.offset = current_offset;
 		for (idx_t val_idx = 0; val_idx < MinValue<idx_t>(state.values.size(), state.k); val_idx++) {
 			auto &val = state.values[val_idx].get();
@@ -378,6 +377,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 			current_offset++;
 		}
 		list_entry.length = current_offset - list_entry.offset;
+		list_entries.WriteValue(list_entry);
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
