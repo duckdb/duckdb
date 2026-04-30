@@ -64,6 +64,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -449,7 +450,7 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
-//static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) {
+// static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) {
 //	D_ASSERT(IsShredded());
 //	auto &shredded = *sub_columns[1];
 //	auto &variant_stats = GetStatisticsRef();
@@ -481,7 +482,9 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 //	return true;
 //}
 
-static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_meta_data, const ParquetColumnSchema &column, const ParquetOptions &parquet_options) {
+static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_meta_data,
+                                                       const ParquetColumnSchema &column,
+                                                       const ParquetOptions &parquet_options) {
 	unique_ptr<BaseStatistics> column_stats;
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data.row_groups.size(); row_group_idx++) {
@@ -566,7 +569,8 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 		}
 		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
 		if (child_column.type.id() != LogicalTypeId::STRUCT) {
-			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)", child_column.type.ToString());
+			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)",
+			                        child_column.type.ToString());
 		}
 		auto typed_value_index = child_column.GetChildIndexByName("typed_value");
 		if (!typed_value_index.IsValid()) {
@@ -582,7 +586,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 
 		//! <field_name>.typed_value
 		ColumnIndex nested_typed_value(typed_value_index.GetIndex());
-		nested_typed_value.SetType(path_iter.get().GetType());
+		nested_typed_value.SetType(child.GetType());
 		result.get().AddChildIndex(std::move(nested_typed_value));
 		result.get().SetPushdownExtract();
 		result = result.get().GetChildIndexesMutable()[0];
@@ -601,14 +605,14 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 
 	switch (schema.schema_type) {
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
-		return make_uniq<RowNumberColumnReader>(*this, schema, column_id);
+		return make_uniq<RowNumberColumnReader>(*this, schema);
 	case ParquetColumnSchemaType::GEOMETRY: {
-		return GeometryColumnReader::Create(*this, schema, context, column_id);
+		return GeometryColumnReader::Create(*this, schema, context);
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
 			// leaf reader
-			return ColumnReader::CreateReader(*this, schema, column_id);
+			return ColumnReader::CreateReader(*this, schema);
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
@@ -619,38 +623,37 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
 		} else {
-			if (column_id.IsPushdownExtract()) {
-				D_ASSERT(indexes.size() == 1);
-				auto &child = indexes[0];
-				auto child_index = child.GetPrimaryIndex();
-				auto &child_schema = schema.children[child_index];
-				auto &child_type = StructType::GetChildTypes(schema.type)[child_index].second;
-
-				auto column_reader = CreateReaderRecursive(context, child, child_schema);
-				if (!child.HasChildren() && child_type != child.GetType()) {
-					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
-					auto cast_expression =
-					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
-					auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(column_reader),
-					                                                     std::move(cast_expression), child_schema);
-					children[0] = std::move(expr_reader);
-				} else {
-					children[0] = std::move(column_reader);
-				}
-			} else {
-				for (idx_t i = 0; i < indexes.size(); i++) {
-					auto child_index = indexes[i].GetPrimaryIndex();
-					children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
-				}
+			for (idx_t i = 0; i < indexes.size(); i++) {
+				auto child_index = indexes[i].GetPrimaryIndex();
+				children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
 			}
 		}
 		switch (schema.type.id()) {
 		case LogicalTypeId::LIST:
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
-			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), column_id);
-		case LogicalTypeId::STRUCT:
-			return make_uniq<StructColumnReader>(*this, schema, std::move(children), column_id);
+			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
+		case LogicalTypeId::STRUCT: {
+			if (column_id.IsPushdownExtract()) {
+				auto &child = indexes[0];
+				auto child_index = child.GetPrimaryIndex();
+				auto column_reader = std::move(children[child_index]);
+				auto &child_type = column_reader->Type();
+				if (!child.HasChildren() && child_type != child.GetType()) {
+					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
+					auto cast_expression =
+					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
+					auto expr_schema = make_uniq<ParquetColumnSchema>(
+					    ParquetColumnSchema::FromParentSchema(column_reader->Schema(), cast_expression->GetReturnType(),
+					                                          ParquetColumnSchemaType::EXPRESSION));
+					auto expr_reader = make_uniq<ExpressionColumnReader>(
+					    context, std::move(column_reader), std::move(cast_expression), std::move(expr_schema));
+					return std::move(expr_reader);
+				}
+				return column_reader;
+			}
+			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
+		}
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -664,18 +667,20 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		if (schema.children.size() != 3) {
 			//! Not shredded
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+				children[child_index] =
+				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
-			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 		}
 		//! VARIANT is shredded, has a 'typed_value' column
 		auto &typed_value_schema = schema.children[2];
 		D_ASSERT(typed_value_schema.name == "typed_value");
 		if (!column_id.IsPushdownExtract()) {
 			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+				children[child_index] =
+				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
-			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 		}
 
 		//! VARIANT is shredded AND we have a pushed down extract to execute
@@ -689,16 +694,18 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
 		} else {
 			for (idx_t child_index = 0; child_index < 2; child_index++) {
-				children[child_index] = CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+				children[child_index] =
+				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
 			children[2] = CreateReaderRecursive(context, ColumnIndex(2), typed_value_schema);
 		}
 
 		auto scan_type = column_id.GetScanType();
-		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
+		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
 		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), column_id.GetPrimaryIndex());
 		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
-		return make_uniq<ExpressionColumnReader>(context, std::move(column_reader), std::move(cast_expression), typed_value_schema);
+		return make_uniq<ExpressionColumnReader>(context, std::move(column_reader), std::move(cast_expression),
+		                                         typed_value_schema);
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
@@ -1082,7 +1089,7 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 
 ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_p)), context(context_p), fs(CachingFileSystem::Get(context_p)),
+    : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
@@ -1163,9 +1170,8 @@ unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &contex
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(string()), context(context_p), fs(CachingFileSystem::Get(context_p)),
-      allocator(BufferAllocator::Get(context_p)), metadata(std::move(metadata_p)),
-      parquet_options(std::move(parquet_options_p)), rows_read(0) {
+    : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
+      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	InitializeSchema(context_p);
 }
 
@@ -1376,8 +1382,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
-		auto storage_index = StorageIndex::FromColumnIndex(column_indexes[i]);
-		if (stats && storage_index.IsPushdownExtract()) {
+		if (stats && stats->GetType().IsNested() && column_indexes[i].IsPushdownExtract()) {
+			auto storage_index = StorageIndex::FromColumnIndex(column_indexes[i]);
 			stats = stats->PushdownExtract(storage_index.GetChildIndex(0));
 		}
 		// filters contain output chunk index, not file col idx!
@@ -1385,7 +1391,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 		if (stats && filter_entry) {
 			auto &filter = *filter_entry;
 
-			auto schema_column_index = column_reader.ColumnSchemaIndex();
+			auto schema_column_index = column_reader.ColumnIndex();
 			FilterPropagateResult prune_result;
 			bool is_generated_column = schema_column_index >= group.columns.size();
 			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
@@ -1503,7 +1509,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		auto column_id = index.GetPrimaryIndex();
 		auto &schema = root_schema->children[column_id];
 		auto column_reader = CreateReaderRecursive(context, index, schema);
-		auto it = expression_map.find(column_id);
+		auto it = expression_map.find(i);
 		if (it != expression_map.end()) {
 			auto &expression = it->second;
 			auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
@@ -1545,7 +1551,7 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
 		auto column_stats = column_schema.Stats(metadata, *parquet_options, row_group_idx, row_group.columns);
-		if (!storage_index.IsPushdownExtract()) {
+		if (!column_stats || !storage_index.IsPushdownExtract() || !column_stats->GetType().IsNested()) {
 			return column_stats;
 		}
 		return column_stats->PushdownExtract(storage_index.GetChildIndex(0));

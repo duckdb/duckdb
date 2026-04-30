@@ -16,19 +16,18 @@ struct hugeint_t;
 
 template <bool FIXED>
 static unique_ptr<ColumnReader> CreateDecimalReaderInternal(const ParquetReader &reader,
-                                                            const ParquetColumnSchema &schema,
-                                                            const ColumnIndex &column_id) {
+                                                            const ParquetColumnSchema &schema) {
 	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
-		return make_uniq<DecimalColumnReader<int16_t, FIXED>>(reader, schema, column_id);
+		return make_uniq<DecimalColumnReader<int16_t, FIXED>>(reader, schema);
 	case PhysicalType::INT32:
-		return make_uniq<DecimalColumnReader<int32_t, FIXED>>(reader, schema, column_id);
+		return make_uniq<DecimalColumnReader<int32_t, FIXED>>(reader, schema);
 	case PhysicalType::INT64:
-		return make_uniq<DecimalColumnReader<int64_t, FIXED>>(reader, schema, column_id);
+		return make_uniq<DecimalColumnReader<int64_t, FIXED>>(reader, schema);
 	case PhysicalType::INT128:
-		return make_uniq<DecimalColumnReader<hugeint_t, FIXED>>(reader, schema, column_id);
+		return make_uniq<DecimalColumnReader<hugeint_t, FIXED>>(reader, schema);
 	case PhysicalType::DOUBLE:
-		return make_uniq<DecimalColumnReader<double, FIXED>>(reader, schema, column_id);
+		return make_uniq<DecimalColumnReader<double, FIXED>>(reader, schema);
 	default:
 		throw InternalException("Unrecognized type for Decimal");
 	}
@@ -60,12 +59,11 @@ double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t siz
 }
 
 unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(const ParquetReader &reader,
-                                                           const ParquetColumnSchema &schema,
-                                                           const ColumnIndex &column_id) {
+                                                           const ParquetColumnSchema &schema) {
 	if (schema.parquet_type == Type::FIXED_LEN_BYTE_ARRAY) {
-		return CreateDecimalReaderInternal<true>(reader, schema, column_id);
+		return CreateDecimalReaderInternal<true>(reader, schema);
 	} else {
-		return CreateDecimalReaderInternal<false>(reader, schema, column_id);
+		return CreateDecimalReaderInternal<false>(reader, schema);
 	}
 }
 

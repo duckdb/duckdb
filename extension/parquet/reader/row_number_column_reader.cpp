@@ -25,9 +25,8 @@ struct TableFilterState;
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
 //===--------------------------------------------------------------------===//
-RowNumberColumnReader::RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema,
-                                             const ColumnIndex &column_id)
-    : ColumnReader(reader, schema, column_id) {
+RowNumberColumnReader::RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema)
+    : ColumnReader(reader, schema) {
 }
 
 void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,

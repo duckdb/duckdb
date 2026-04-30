@@ -24,7 +24,8 @@ optional_idx ParquetColumnSchema::GetChildIndexByName(const string &name) const 
 
 const ParquetColumnSchema &ParquetColumnSchema::GetChildByIndex(idx_t index) const {
 	if (index >= children.size()) {
-		throw InternalException("ParquetColumnSchema::GetChildByIndex: index (%d) out of range (size: %d)", index, children.size());
+		throw InternalException("ParquetColumnSchema::GetChildByIndex: index (%d) out of range (size: %d)", index,
+		                        children.size());
 	}
 	return children[index];
 }

@@ -129,10 +129,10 @@ public:
 		return child_indexes;
 	}
 
-	ColumnIndex CopyWithIndex(idx_t new_index) const {
+	ColumnIndex RemapRootIndex(idx_t new_index) const {
 		auto res = *this;
 		if (!has_index) {
-			throw InternalException("Can't perform 'CopyWithIndex' on ColumnIndex without a primary index!");
+			throw InternalException("Can't perform 'RemapRootIndex' on ColumnIndex without a primary index!");
 		}
 		res.index = new_index;
 		return res;

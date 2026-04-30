@@ -375,7 +375,7 @@ public:
 
 			auto primary_index = local_id.GetPrimaryIndex();
 			auto cast_entry = reader.cast_map.find(primary_index);
-			auto expr_entry = reader.expression_map.find(primary_index);
+			auto expr_entry = reader.expression_map.find(i);
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {

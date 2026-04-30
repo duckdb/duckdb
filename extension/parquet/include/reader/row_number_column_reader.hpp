@@ -43,7 +43,7 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
 
 public:
-	RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema, const ColumnIndex &column_id);
+	RowNumberColumnReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 
 public:
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
