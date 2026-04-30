@@ -1,5 +1,7 @@
 # name: test/sql/outofcore/block_file_double_decrement.test_slow
 # description: Stricter regression test for the .block read-back double-decrement bug.
+# group: [outofcore]
+
 #              Forces an explicit write→full-scan→write cycle and asserts that the
 #              OVERFLOW_STRINGS counter remains consistent with on-disk .block files
 #              after every phase.
@@ -17,7 +19,6 @@
 # OOM. The workload is intentionally modest (~57 MB) — it is the *number* of read-back
 # events that exercises the bug, not the absolute byte count.
 #
-# group: [outofcore]
 
 statement ok
 SET threads = 1;

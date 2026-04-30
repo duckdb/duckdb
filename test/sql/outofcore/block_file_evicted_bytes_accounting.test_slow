@@ -1,5 +1,7 @@
 # name: test/sql/outofcore/block_file_evicted_bytes_accounting.test_slow
 # description: Regression test for the double-decrement bug in StandardBufferManager::ReadTemporaryBuffer
+# group: [outofcore]
+
 #              for the .block (variable-sized) eviction path.
 #
 # Bug location (src/storage/standard_buffer_manager.cpp):
@@ -29,7 +31,6 @@
 #     receives basenames but passes them to OpenFile expecting full paths), so we use
 #     glob() to verify on-disk presence.
 #
-# group: [outofcore]
 
 statement ok
 SET threads = 1;
