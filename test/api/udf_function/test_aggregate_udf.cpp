@@ -109,8 +109,7 @@ TEST_CASE("Aggregate UDFs", "[coverage][.]") {
 		REQUIRE_NOTHROW(con.CreateAggregateFunction(
 		    "udf_sum", {LogicalType::DOUBLE}, LogicalType::DOUBLE, &UDFSum::StateSize<UDFSum::sum_state_t>,
 		    &UDFSum::Initialize<UDFSum::sum_state_t>, &UDFSum::Update<UDFSum::sum_state_t, double>,
-		    &UDFSum::Combine<UDFSum::sum_state_t>, &UDFSum::Finalize<UDFSum::sum_state_t, double>,
-		    &UDFSum::SimpleUpdate<UDFSum::sum_state_t, double>));
+		    &UDFSum::Combine<UDFSum::sum_state_t>, &UDFSum::Finalize<UDFSum::sum_state_t, double>));
 
 		REQUIRE_NO_FAIL(con.Query("SELECT udf_sum(1)"));
 		result = con.Query("SELECT udf_sum(1)");

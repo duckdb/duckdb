@@ -207,23 +207,10 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 		}
 	}
 
-	idx_t payload_idx = 0;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
-	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		auto &aggregate = aggregates[aggr_idx];
-		if (aggregate.filter) {
-			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
-			                                    payload, payload_idx);
-		} else {
-			RowOperations::UpdateStates(row_state, aggregate, addresses, payload, payload_idx, count, &clustered);
-		}
-		payload_idx += aggregate.child_count;
-		if (!skip_addresses) {
-			VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size), count);
-		}
-		clustered.AdvanceStates(aggregate.payload_size);
-	}
+	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, count,
+	                                     clustered, skip_addresses);
 	return true;
 }
 

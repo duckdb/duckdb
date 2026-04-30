@@ -34,21 +34,6 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, data_ptr_t state,
-                                             idx_t count) {
-	D_ASSERT(input_count == 1);
-	auto &input = inputs[0];
-
-	if (count > STANDARD_VECTOR_SIZE) {
-		throw InternalException("ApproxCountDistinct - count must be at most vector size");
-	}
-	Vector hash_vec(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hash_vec, count);
-
-	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
-	agg_state->hll.Update(input, hash_vec, count);
-}
-
 void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
                                        idx_t count) {
 	D_ASSERT(input_count == 1);
@@ -80,8 +65,7 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
 	    AggregateFunction::StateCombine<ApproxDistinctCountState, ApproxCountDistinctFunction>,
-	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
-	    ApproxCountDistinctSimpleUpdateFunction);
+	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

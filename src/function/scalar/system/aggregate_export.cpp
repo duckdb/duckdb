@@ -890,7 +890,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.GetArguments(), return_type,
 	                      bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
 	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
-	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),
+	                      ExportAggregateFinalize, FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                      bound_function.GetStateClusterUpdateCallback(),
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
@@ -963,7 +963,8 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 
 AggregateFunction CombineAggrFun::GetFunction() {
 	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
-	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
+	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  CombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return function;

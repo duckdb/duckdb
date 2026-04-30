@@ -25,7 +25,7 @@ ORDER BY ALL;
 4	4	4	9
 4	9	13	NULL
 
-# Constant aggregate with non-simple_update 
+# Constant aggregate without cluster_update
 query III
 SELECT part, id, list_sort(list(val) OVER(PARTITION BY part))
 FROM (SELECT range AS id, range % 5 AS part, range AS val FROM range(13)) t

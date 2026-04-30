@@ -19,6 +19,7 @@ struct ClusteredAggr;
 class ArenaAllocator;
 struct AggregateObject;
 struct AggregateFilterData;
+struct AggregateFilterDataSet;
 class DataChunk;
 class TupleDataLayout;
 struct SelectionVector;
@@ -48,6 +49,11 @@ struct RowOperations {
 	//! filtered update - aligned addresses
 	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
 	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);
+	//! clustered update loop shared by grouped and perfect aggregate hash tables
+	static void UpdateStatesClustered(RowOperationsState &state, vector<AggregateObject> &aggregates,
+	                                  AggregateFilterDataSet *filter_set, const unsafe_vector<idx_t> *filter,
+	                                  Vector &addresses, DataChunk &payload, idx_t count, ClusteredAggr &clustered,
+	                                  bool skip_addresses);
 	//! combine - unaligned addresses, updated
 	static void CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets,
 	                          idx_t count);

@@ -29,6 +29,23 @@ struct FirstFunctionBase {
 	}
 };
 
+template <bool LAST, class FUNC>
+static inline void ScanClusterRange(idx_t pos, idx_t end, FUNC &&func) {
+	if constexpr (LAST) {
+		for (idx_t k = end; k > pos; k--) {
+			if (func(k - 1)) {
+				return;
+			}
+		}
+	} else {
+		for (idx_t k = pos; k < end; k++) {
+			if (func(k)) {
+				return;
+			}
+		}
+	}
+}
+
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -59,40 +76,24 @@ struct FirstFunction : public FirstFunctionBase {
 	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, const sel_t *sel,
 	                                       const SelectionVector &isel, const ValidityMask &validity, idx_t pos,
 	                                       idx_t end) {
-		if constexpr (LAST) {
-			for (idx_t k = end; k > pos; k--) {
-				auto idx = isel.get_index(sel[k - 1]);
-				if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
-					state.is_set = true;
-					state.is_null = false;
-					state.value = vals[idx];
-					return;
-				}
-				if (!SKIP_NULLS) {
-					state.is_set = true;
-					state.is_null = true;
-					return;
-				}
-			}
-		} else {
-			if (state.is_set) {
-				return;
-			}
-			for (idx_t k = pos; k < end; k++) {
-				auto idx = isel.get_index(sel[k]);
-				if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
-					state.is_set = true;
-					state.is_null = false;
-					state.value = vals[idx];
-					return;
-				}
-				if (!SKIP_NULLS) {
-					state.is_set = true;
-					state.is_null = true;
-					return;
-				}
-			}
+		if (!LAST && state.is_set) {
+			return;
 		}
+		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
+			auto idx = isel.get_index(sel[k]);
+			if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
+				state.is_set = true;
+				state.is_null = false;
+				state.value = vals[idx];
+				return true;
+			}
+			if (!SKIP_NULLS) {
+				state.is_set = true;
+				state.is_null = true;
+				return true;
+			}
+			return false;
+		});
 	}
 
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
@@ -189,30 +190,16 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
 	                                       const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
 	                                       idx_t pos, idx_t end) {
-		if constexpr (LAST) {
-			for (idx_t k = end; k > pos; k--) {
-				auto idx = isel.get_index(sel[k - 1]);
-				bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
-				FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
-				                                                                         vals[idx], is_null);
-				if (state.is_set) {
-					return;
-				}
-			}
-		} else {
-			if (state.is_set) {
-				return;
-			}
-			for (idx_t k = pos; k < end; k++) {
-				auto idx = isel.get_index(sel[k]);
-				bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
-				FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
-				                                                                         vals[idx], is_null);
-				if (state.is_set) {
-					return;
-				}
-			}
+		if (!LAST && state.is_set) {
+			return;
 		}
+		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
+			auto idx = isel.get_index(sel[k]);
+			bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
+			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input, vals[idx],
+			                                                                         is_null);
+			return state.is_set;
+		});
 	}
 
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
@@ -355,8 +342,6 @@ AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
 	                                AggregateFunction::StateFinalize<FirstState<T>, T,
 	                                                                 FirstFunction<LAST, SKIP_NULLS>>,
 	                                FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                                AggregateFunction::UnaryUpdate<FirstState<T>, T,
-	                                                              FirstFunction<LAST, SKIP_NULLS>>,
 	                                FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
 	result.SetStructStateExport(GetFirstStateType);
 	return result;
@@ -434,7 +419,8 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-		    nullptr, OP::Bind, LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OP::Bind,
+		    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
 		fun.SetStructStateExport(GetFirstStateType);
 		return fun;
 	}
@@ -484,9 +470,11 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 template <bool LAST, bool SKIP_NULLS>
 void AddFirstOperator(AggregateFunctionSet &set) {
 	set.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindDecimalFirst<LAST, SKIP_NULLS>));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalFirst<LAST, SKIP_NULLS>));
 	set.AddFunction(AggregateFunction({LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, BindFirst<LAST, SKIP_NULLS>));
+	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindFirst<LAST, SKIP_NULLS>));
 }
 
 } // namespace

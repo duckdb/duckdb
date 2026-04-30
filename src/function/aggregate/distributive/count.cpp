@@ -129,27 +129,10 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static void CountScatterClusteredGeneric(Vector &input, const ClusteredAggr &cs, idx_t count) {
-		if (input.GetVectorType() == VectorType::FLAT_VECTOR) {
-			auto &validity = FlatVector::Validity(input);
-			const bool all_valid = !validity.CanHaveNull();
-			for (idx_t r = 0; r < cs.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
-				const auto run_count = cs.group_runs[r].count;
-				if (all_valid) {
-					state += UnsafeNumericCast<STATE>(run_count);
-				} else {
-					const auto *run_sel = cs.group_runs[r].sel;
-					for (idx_t k = 0; k < run_count; k++) {
-						state += validity.RowIsValidUnsafe(run_sel[k]);
-					}
-				}
-			}
-			return;
-		}
-		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
-		const bool all_valid = !idata.validity.CanHaveNull();
+	template <class INDEXER>
+	static void CountClusteredRuns(const ClusteredAggr &cs, const ValidityMask &validity, INDEXER indexer) {
+		const bool all_valid = !validity.CanHaveNull();
+		idx_t pos = 0;
 		for (idx_t r = 0; r < cs.n_group_runs; r++) {
 			auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
 			const auto *run_sel = cs.group_runs[r].sel;
@@ -158,34 +141,45 @@ struct CountFunction : public BaseCountFunction {
 				state += UnsafeNumericCast<STATE>(run_count);
 			} else {
 				for (idx_t k = 0; k < run_count; k++) {
-					auto idx = idata.sel->get_index(run_sel[k]);
-					state += idata.validity.RowIsValidUnsafe(idx);
+					state += validity.RowIsValidUnsafe(indexer(run_sel, pos, k));
 				}
 			}
+			pos += run_count;
+		}
+	}
+
+	static void CountScatterClusteredGeneric(Vector &input, const ClusteredAggr &cs, idx_t count) {
+		if (input.GetVectorType() == VectorType::FLAT_VECTOR) {
+			auto &validity = FlatVector::Validity(input);
+			CountClusteredRuns(cs, validity, [&](const sel_t *run_sel, idx_t, idx_t k) { return run_sel[k]; });
+			return;
+		}
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
+		CountClusteredRuns(cs, idata.validity,
+		                   [&](const sel_t *run_sel, idx_t, idx_t k) { return idata.sel->get_index(run_sel[k]); });
+	}
+
+	template <bool SIMPLE_DICT>
+	static void CountClusteredDictionary(Vector &input, const ClusteredAggr &clustered, idx_t count,
+	                                     const sel_t *cluster_iter = nullptr) {
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
+		if constexpr (SIMPLE_DICT) {
+			CountClusteredRuns(clustered, idata.validity,
+			                   [&](const sel_t *, idx_t pos, idx_t k) { return cluster_iter[pos + k]; });
+		} else {
+			CountClusteredRuns(clustered, idata.validity,
+			                   [&](const sel_t *run_sel, idx_t, idx_t k) { return idata.sel->get_index(run_sel[k]); });
 		}
 	}
 
 	static void CountClusterUpdate(Vector inputs[], AggregateInputData &, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 1);
-		if (auto *cluster_iter = clustered.ClusterIter(inputs[0], count)) {
-			UnifiedVectorFormat idata;
-			inputs[0].ToUnifiedFormat(count, idata);
-			const bool all_valid = !idata.validity.CanHaveNull();
-			idx_t pos = 0;
-			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-				auto &state = *reinterpret_cast<STATE *>(clustered.group_runs[r].state);
-				const idx_t run_count = clustered.group_runs[r].count;
-				if (all_valid) {
-					state += UnsafeNumericCast<STATE>(run_count);
-				} else {
-					const idx_t end = pos + run_count;
-					for (idx_t k = pos; k < end; k++) {
-						state += idata.validity.RowIsValidUnsafe(cluster_iter[k]);
-					}
-				}
-				pos += run_count;
-			}
+		auto *cluster_iter = clustered.ClusterIter(inputs[0], count);
+		if (cluster_iter) {
+			CountClusteredDictionary<true>(inputs[0], clustered, count, cluster_iter);
 			return;
 		}
 		CountScatterClusteredGeneric(inputs[0], clustered, count);
@@ -198,24 +192,9 @@ struct CountFunction : public BaseCountFunction {
 		// pre-composes the dict sel once for the whole chunk.
 		if (aggr_input_data.clustered) {
 			auto &cs = *aggr_input_data.clustered;
-			if (auto *cluster_iter = cs.ClusterIter(inputs[0], count)) {
-				UnifiedVectorFormat idata;
-				inputs[0].ToUnifiedFormat(count, idata);
-				const bool all_valid = !idata.validity.CanHaveNull();
-				idx_t pos = 0;
-				for (idx_t r = 0; r < cs.n_group_runs; r++) {
-					auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
-					const idx_t run_count = cs.group_runs[r].count;
-					if (all_valid) {
-						state += UnsafeNumericCast<STATE>(run_count);
-					} else {
-						const idx_t end = pos + run_count;
-						for (idx_t k = pos; k < end; k++) {
-							state += idata.validity.RowIsValidUnsafe(cluster_iter[k]);
-						}
-					}
-					pos += run_count;
-				}
+			auto *cluster_iter = cs.ClusterIter(inputs[0], count);
+			if (cluster_iter) {
+				CountClusteredDictionary<true>(inputs[0], cs, count, cluster_iter);
 				return;
 			}
 			CountScatterClusteredGeneric(inputs[0], cs, count);
@@ -260,49 +239,6 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static inline void CountUpdateLoop(STATE &result, const ValidityMask &mask, idx_t count,
-	                                   const SelectionVector &sel_vector) {
-		if (mask.CannotHaveNull()) {
-			// no NULL values
-			result += UnsafeNumericCast<STATE>(count);
-			return;
-		}
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel_vector.get_index(i);
-			if (mask.RowIsValid(idx)) {
-				result++;
-			}
-		}
-	}
-
-	static void CountUpdate(Vector inputs[], AggregateInputData &, idx_t input_count, data_ptr_t state_p, idx_t count) {
-		auto &input = inputs[0];
-		auto &result = *reinterpret_cast<STATE *>(state_p);
-		switch (input.GetVectorType()) {
-		case VectorType::CONSTANT_VECTOR: {
-			if (!ConstantVector::IsNull(input)) {
-				// if the constant is not null increment the state
-				result += UnsafeNumericCast<STATE>(count);
-			}
-			break;
-		}
-		case VectorType::FLAT_VECTOR: {
-			CountFlatUpdateLoop(result, FlatVector::ValidityMutable(input), count);
-			break;
-		}
-		case VectorType::SEQUENCE_VECTOR: {
-			// sequence vectors cannot have NULL values
-			result += UnsafeNumericCast<STATE>(count);
-			break;
-		}
-		default: {
-			UnifiedVectorFormat idata;
-			input.ToUnifiedFormat(count, idata);
-			CountUpdateLoop(result, idata.validity, count, *idata.sel);
-			break;
-		}
-		}
-	}
 };
 
 LogicalType GetCountStateType(const AggregateFunction &function) {
@@ -329,8 +265,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
 	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
-	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate,
-	                      CountFunction::CountClusterUpdate);
+	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountClusterUpdate);
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);

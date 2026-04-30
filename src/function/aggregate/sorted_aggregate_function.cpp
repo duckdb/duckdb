@@ -444,16 +444,6 @@ struct SortedAggregateFunction {
 		buffered.SetCardinality(count);
 	}
 
-	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-	                         idx_t count) {
-		const auto order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
-		DataChunk arg_input;
-		ProjectInputs(inputs, order_bind, input_count, count, arg_input);
-
-		const auto order_state = reinterpret_cast<SortedAggregateState *>(state);
-		order_state->Update(aggr_input_data, arg_input);
-	}
-
 	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                          idx_t count) {
 		if (!count) {
@@ -718,8 +708,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
-	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), nullptr, nullptr,
+	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
@@ -774,7 +764,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), nullptr, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::Window);
 

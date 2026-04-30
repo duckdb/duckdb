@@ -315,7 +315,8 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	return AggregateFunction(
 	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
-	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OP::Bind,
 	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
@@ -400,7 +401,8 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(string name) {
 	return AggregateFunction(std::move(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	                         nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                         BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
 } // namespace
@@ -547,7 +549,8 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 template <class COMPARATOR>
 AggregateFunction GetMinMaxNFunction() {
 	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
+	                         nullptr, nullptr, nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                         MinMaxNBind<COMPARATOR>, nullptr);
 }
 
 LogicalType GetExportStateType(const AggregateFunction &function) {

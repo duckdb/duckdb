@@ -512,41 +512,6 @@ struct UDFSum {
 		}
 	}
 
-	template <class STATE_TYPE, class INPUT_TYPE>
-	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
-	                         idx_t count) {
-		D_ASSERT(input_count == 1);
-		switch (inputs[0].GetVectorType()) {
-		case VectorType::CONSTANT_VECTOR: {
-			if (ConstantVector::IsNull(inputs[0])) {
-				return;
-			}
-			auto idata = ConstantVector::GetData<INPUT_TYPE>(inputs[0]);
-			UDFSum::ConstantOperation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, count);
-			break;
-		}
-		default: {
-			inputs[0].Flatten(count);
-			auto idata = FlatVector::GetData<INPUT_TYPE>(inputs[0]);
-			auto &mask = FlatVector::Validity(inputs[0]);
-			if (mask.CanHaveNull()) {
-				// potential NULL values and NULL values are ignored
-				for (idx_t i = 0; i < count; i++) {
-					if (mask.RowIsValid(i)) {
-						UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, i);
-					}
-				}
-			} else {
-				// quick path: no NULL values or NULL values are not ignored
-				for (idx_t i = 0; i < count; i++) {
-					UDFSum::Operation<INPUT_TYPE, STATE_TYPE>((STATE_TYPE *)state, aggr_input_data, idata, i);
-				}
-			}
-			break;
-		}
-		}
-	}
-
 	template <class STATE_TYPE>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);

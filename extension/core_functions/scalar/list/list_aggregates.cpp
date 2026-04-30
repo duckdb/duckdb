@@ -28,7 +28,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
                                                             FunctionData *bind_data) {
 	return make_uniq<ListAggregatesLocalState>(BufferAllocator::Get(state.GetContext()));
 }
-// FIXME: benchmark the use of simple_update against using update (if applicable)
+// FIXME: benchmark the use of cluster_update against using update (if applicable)
 
 unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
 	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
