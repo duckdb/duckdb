@@ -573,17 +573,26 @@ define ensure_apt_commands
 	fi
 endef
 
+define ensure_apt_packages
+	missing=0; \
+	for pkg in $(1); do \
+		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq $(1); \
+	fi
+endef
+
 .PHONY: toolsci
 
 toolsci:
 	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
-	pkg-config --exists libcurl || { \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq libcurl4-openssl-dev; \
-	}
-	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
+	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
 	g++ --version
+	clang++ --version
 
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
