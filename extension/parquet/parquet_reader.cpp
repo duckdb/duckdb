@@ -1447,6 +1447,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
+		if (state.current_group_filter_ran && state.current_group > 0) {
+			const bool fully_filtered = !state.current_group_had_match;
+			DUCKDB_LOG(context, ParquetPrefetchLogType, file.path, state.group_idx_list[state.current_group - 1],
+			           fully_filtered);
+		}
 		state.FinalizeRowGroupSelectivity();
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
@@ -1497,7 +1502,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				}
 			}
 
-			const char *strategy;
 			if ((!filters || filters_look_unselective) &&
 			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
@@ -1508,7 +1512,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 					state.current_group_prefetched = true;
 				}
-				strategy = "whole_group";
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
@@ -1561,16 +1564,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (!lazy_fetch) {
 					trans.PrefetchRegistered();
 				}
-				strategy = lazy_fetch ? "column_wise_lazy" : "column_wise_eager";
-			}
-
-			{
-				vector<pair<string, string>> info;
-				info.emplace_back("row_groups_executed", to_string(state.row_groups_executed));
-				info.emplace_back("row_groups_with_matches", to_string(state.row_groups_with_matches));
-				info.emplace_back("scan_percentage", StringUtil::Format("%.3f", scan_percentage));
-				DUCKDB_LOG(context, ParquetPrefetchLogType, file.path,
-				           state.group_idx_list[state.current_group], strategy, info);
 			}
 		}
 		result.Reset();

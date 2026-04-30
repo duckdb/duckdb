@@ -122,7 +122,6 @@ struct ParquetReaderScanState {
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
-
 	bool current_group_filter_ran = false;
 	bool current_group_had_match = false;
 
