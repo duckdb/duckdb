@@ -13,6 +13,10 @@ bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	       collation_handling == rhs.collation_handling;
 }
 
+bool FunctionProperties::operator!=(const FunctionProperties &rhs) const {
+	return !(*this == rhs);
+}
+
 FunctionData::~FunctionData() {
 }
 
@@ -156,6 +160,17 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	return StringUtil::Format("%s%s(%s)", prefix, name, StringUtil::Join(input_arguments, ", "));
 }
 
+void Function::EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+                             idx_t argument_index) {
+	if (bound_function.GetOriginalArguments().empty()) {
+		bound_function.GetOriginalArguments() = bound_function.GetArguments();
+	}
+	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
+	D_ASSERT(argument_index < arguments.size());
+	arguments.erase_at(argument_index);
+	bound_function.GetArguments().erase_at(argument_index);
+}
+
 void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                              idx_t argument_index) {
 	if (bound_function.GetOriginalArguments().empty()) {
@@ -165,6 +180,18 @@ void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<E
 	D_ASSERT(argument_index < arguments.size());
 	arguments.erase_at(argument_index);
 	bound_function.GetArguments().erase_at(argument_index);
+}
+
+hash_t BoundSimpleFunction::Hash() const {
+	hash_t hash = return_type.Hash();
+	for (auto &arg : arguments) {
+		hash = duckdb::CombineHash(hash, arg.Hash());
+	}
+	return hash;
+}
+
+string BoundSimpleFunction::ToString() const {
+	return Function::CallToString(catalog_name, schema_name, name, arguments, return_type);
 }
 
 } // namespace duckdb

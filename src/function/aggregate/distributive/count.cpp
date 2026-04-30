@@ -222,7 +222,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const AggregateFunction &function) {
+LogicalType GetCountStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::BIGINT);
 	return LogicalType::STRUCT(std::move(children));

@@ -18,7 +18,23 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
 }
 
-BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) {
+BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_enum(base.window_enum) {
+	name = base.name;
+	schema_name = base.schema_name;
+	catalog_name = base.catalog_name;
+	arguments = base.GetArguments();
+	return_type = base.GetReturnType();
+	callbacks = base.GetCallbacks();
+	properties = base.GetProperties();
+	function_info = base.GetFunctionInfo();
+}
+
+bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {
+	return window_enum == rhs.window_enum && arguments == rhs.arguments && return_type == rhs.return_type;
+}
+
+bool BoundWindowFunction::operator!=(const BoundWindowFunction &rhs) const {
+	return !(*this == rhs);
 }
 
 } // namespace duckdb

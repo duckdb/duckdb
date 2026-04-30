@@ -219,7 +219,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 };
 
-LogicalType GetFirstStateType(const AggregateFunction &function) {
+LogicalType GetFirstStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	LogicalType value_type = function.GetArguments()[0];
 	child_types.emplace_back("value", value_type);
@@ -358,7 +358,7 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	auto name = std::move(function.name);
 	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
 	function.name = std::move(name);
-	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.GetProperties().SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -380,7 +380,7 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	auto name = std::move(function.name);
 	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
 	function.name = std::move(name);
-	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.GetProperties().SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	return nullptr;
 }
 

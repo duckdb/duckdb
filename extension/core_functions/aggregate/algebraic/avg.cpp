@@ -239,14 +239,14 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
-LogicalType GetAvgStateType(const AggregateFunction &function) {
+LogicalType GetAvgStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::UBIGINT);
 	children.emplace_back("value", function.GetArguments()[0]);
 	return LogicalType::STRUCT(std::move(children));
 }
 
-LogicalType GetKahanAvgStateType(const AggregateFunction &function) {
+LogicalType GetKahanAvgStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::UBIGINT);
 	children.emplace_back("value", LogicalType::DOUBLE);

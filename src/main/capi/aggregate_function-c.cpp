@@ -68,7 +68,7 @@ unique_ptr<FunctionData> CAPIAggregateBind(BindAggregateFunctionInput &input) {
 	return make_uniq<CAggregateFunctionBindData>(info);
 }
 
-idx_t CAPIAggregateStateSize(const AggregateFunction &function) {
+idx_t CAPIAggregateStateSize(const BoundAggregateFunction &function) {
 	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
@@ -79,7 +79,7 @@ idx_t CAPIAggregateStateSize(const AggregateFunction &function) {
 	return result;
 }
 
-void CAPIAggregateStateInit(const AggregateFunction &function, data_ptr_t state) {
+void CAPIAggregateStateInit(const BoundAggregateFunction &function, data_ptr_t state) {
 	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);

@@ -625,8 +625,7 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 }
 
-// Creates the bind data by resolving the underlying aggregate function from an AGGREGATE_STATE logical type.
-unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, SimpleFunction &function,
+unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &context, BoundSimpleFunction &function,
                                                                vector<unique_ptr<Expression>> &arguments,
                                                                bool allow_legacy) {
 	auto &arg_return_type = arguments[0]->GetReturnType();

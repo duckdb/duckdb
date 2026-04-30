@@ -331,7 +331,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctio
 	auto impl = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
 	function.ReplaceImplementation(impl);
 	function.name = "mad";
-	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.GetProperties().SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return BindMAD(input);
 }
 

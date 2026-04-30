@@ -488,21 +488,22 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 }
 
 template <class VAL_TYPE, class COMPARATOR>
-void SpecializeMinMaxNFunction(AggregateFunction &function) {
+void SpecializeMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = MinMaxNState<VAL_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
-	function.SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
-	function.SetStateInitCallback(AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
-	function.SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
-	function.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
+	function.GetCallbacks().SetStateSizeCallback(AggregateFunction::StateSize<STATE>);
+	function.GetCallbacks().SetStateInitCallback(
+	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>);
+	function.GetCallbacks().SetStateCombineCallback(AggregateFunction::StateCombine<STATE, OP>);
+	function.GetCallbacks().SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 
-	function.SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
-	function.SetStateUpdateCallback(MinMaxNUpdate<STATE>);
+	function.GetCallbacks().SetStateFinalizeCallback(MinMaxNOperation::Finalize<STATE>);
+	function.GetCallbacks().SetStateUpdateCallback(MinMaxNUpdate<STATE>);
 }
 
 template <class COMPARATOR>
-void SpecializeMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (arg_type) {
 	case PhysicalType::VARCHAR:
 		SpecializeMinMaxNFunction<MinMaxStringValue, COMPARATOR>(function);
@@ -550,7 +551,7 @@ AggregateFunction GetMinMaxNFunction() {
 	                         nullptr, nullptr, nullptr, nullptr, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 }
 
-LogicalType GetExportStateType(const AggregateFunction &function) {
+LogicalType GetExportStateType(const BoundAggregateFunction &function) {
 	auto struct_children_types = child_list_t<LogicalType> {};
 	struct_children_types.emplace_back("value", function.GetReturnType());
 	struct_children_types.emplace_back("isset", LogicalType::BOOLEAN);

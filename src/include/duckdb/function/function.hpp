@@ -36,6 +36,7 @@ class TableFunction;
 class SimpleFunction;
 class WindowFunction;
 class WindowFunctionSet;
+class BoundSimpleFunction;
 
 struct PragmaInfo;
 
@@ -131,6 +132,9 @@ public:
 
 	//! Used in the bind to erase an argument from a function
 	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+	                                     idx_t argument_index);
+	//! Used in the bind to erase an argument from a function
+	DUCKDB_API static void EraseArgument(BoundSimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
 	                                     idx_t argument_index);
 };
 
@@ -246,6 +250,46 @@ public:
 
 class FunctionProperties {
 public:
+	auto GetStability() const -> FunctionStability {
+		return stability;
+	}
+	auto SetStability(FunctionStability value) -> void {
+		stability = value;
+	}
+
+	auto GetNullHandling() const -> FunctionNullHandling {
+		return null_handling;
+	}
+	auto SetNullHandling(FunctionNullHandling value) -> void {
+		null_handling = value;
+	}
+
+	auto GetErrorMode() const -> FunctionErrors {
+		return errors;
+	}
+	auto SetErrorMode(FunctionErrors value) -> void {
+		errors = value;
+	}
+
+	auto GetCollationHandling() const -> FunctionCollationHandling {
+		return collation_handling;
+	}
+	auto SetCollationHandling(FunctionCollationHandling value) -> void {
+		collation_handling = value;
+	}
+
+	// Helpers
+	auto SetFallible() -> void {
+		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	}
+	auto SetVolatile() -> void {
+		stability = FunctionStability::VOLATILE;
+	}
+
+	bool operator==(const FunctionProperties &rhs) const;
+	bool operator!=(const FunctionProperties &rhs) const;
+
+public:
 	FunctionStability stability = FunctionStability::CONSISTENT;
 	//! How this function handles NULL values
 	FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
@@ -253,9 +297,50 @@ public:
 	FunctionErrors errors = FunctionErrors::CANNOT_ERROR;
 	//! Collation handling of the function
 	FunctionCollationHandling collation_handling = FunctionCollationHandling::PROPAGATE_COLLATIONS;
+};
 
-	bool operator==(const FunctionProperties &rhs) const;
-	bool operator!=(const FunctionProperties &rhs) const;
+class BoundSimpleFunction {
+public:
+	string name;
+	string schema_name;
+	string catalog_name;
+
+protected:
+	//! The set of arguments of the function
+	vector<LogicalType> arguments;
+	//! The set of original arguments of the function - only set if Function::EraseArgument is called
+	//! Used for (de)serialization purposes
+	vector<LogicalType> original_arguments;
+	//! Return type of the function
+	LogicalType return_type;
+
+public:
+	DUCKDB_API string ToString() const;
+	DUCKDB_API hash_t Hash() const;
+
+	auto GetArguments() const -> const vector<LogicalType> & {
+		return arguments;
+	}
+	auto GetArguments() -> vector<LogicalType> & {
+		return arguments;
+	}
+
+	auto GetOriginalArguments() const -> const vector<LogicalType> & {
+		return original_arguments;
+	}
+	auto GetOriginalArguments() -> vector<LogicalType> & {
+		return original_arguments;
+	}
+
+	auto GetReturnType() const -> const LogicalType & {
+		return return_type;
+	}
+	auto GetReturnType() -> LogicalType & {
+		return return_type;
+	}
+	auto SetReturnType(LogicalType return_type_p) -> void {
+		return_type = std::move(return_type_p);
+	}
 };
 
 } // namespace duckdb

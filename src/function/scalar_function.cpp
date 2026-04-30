@@ -94,4 +94,24 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 
 	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
 }
+
+BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
+	name = function.name;
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
+	arguments = function.GetArguments();
+	return_type = function.GetReturnType();
+	callbacks = function.GetCallbacks();
+	properties = function.GetProperties();
+	function_info = function.GetFunctionInfo();
+}
+
+bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
+	return callbacks == rhs.callbacks && properties == rhs.properties && name == rhs.name &&
+	       return_type == rhs.return_type && arguments == rhs.arguments;
+}
+bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {
+	return !(*this == rhs);
+}
+
 } // namespace duckdb

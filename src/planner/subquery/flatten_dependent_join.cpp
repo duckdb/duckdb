@@ -605,8 +605,18 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-		if (bound.function == CountFunctionBase::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+
+		auto count_fun = CountFunctionBase::GetFunction();
+		auto count_star_fun = CountStarFun::GetFunction();
+
+		const auto is_count_func =
+		    bound_func.name == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
+
+		const auto is_count_star_func =
+		    bound_func.name == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
+
+		if (is_count_func || is_count_star_func) {
 			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 		}
 	}

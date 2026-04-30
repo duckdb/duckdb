@@ -5,7 +5,7 @@ namespace duckdb {
 
 namespace {
 
-LogicalType GetCovarStateType(const AggregateFunction &) {
+LogicalType GetCovarStateType(const BoundAggregateFunction &) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("count", LogicalType::UBIGINT);
 	child_types.emplace_back("meanx", LogicalType::DOUBLE);

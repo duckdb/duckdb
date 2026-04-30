@@ -249,7 +249,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
 	LogicalType child_type;

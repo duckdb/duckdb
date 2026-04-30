@@ -277,7 +277,7 @@ public:
 bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
 	for (auto &expr : aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr.function.GetProperties().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
 			return true;
 		}
 	}
@@ -636,7 +636,7 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 &&
-		    aggr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		    aggr.function.GetProperties().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);

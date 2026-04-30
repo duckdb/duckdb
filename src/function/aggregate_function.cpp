@@ -33,7 +33,23 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
-BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) : AggregateFunction(function) {
+BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
+	this->name = function.name;
+	this->schema_name = function.schema_name;
+	this->catalog_name = function.catalog_name;
+	this->arguments = function.GetArguments();
+	this->return_type = function.GetReturnType();
+	this->properties = function.GetProperties();
+	this->callbacks = function.GetCallbacks();
+	this->function_info = function.GetFunctionInfo();
+}
+
+bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
+	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
+	       return_type == rhs.return_type;
+}
+bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
+	return !(*this == rhs);
 }
 
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {

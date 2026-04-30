@@ -82,10 +82,10 @@ public:
 	                                                                vector<OrderByNode> &arg_orders);
 
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
+	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
-	void ResolveTemplateTypes(SimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
-	void CheckTemplateTypesResolved(const SimpleFunction &bound_function);
+	void ResolveTemplateTypes(BoundSimpleFunction &bound_function, const vector<unique_ptr<Expression>> &children);
+	void CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function);
 
 	pair<BoundScalarFunction, unique_ptr<FunctionData>> ResolveFunction(const ScalarFunction &function,
 	                                                                    vector<unique_ptr<Expression>> &children);

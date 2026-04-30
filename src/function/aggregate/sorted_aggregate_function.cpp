@@ -22,7 +22,7 @@ struct SortedAggregateBindData : public FunctionData {
 	using BindInfoPtr = unique_ptr<FunctionData>;
 	using OrderBys = vector<BoundOrderByNode>;
 
-	SortedAggregateBindData(ClientContext &context, Expressions &children, AggregateFunction &aggregate,
+	SortedAggregateBindData(ClientContext &context, Expressions &children, BoundAggregateFunction &aggregate,
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
@@ -129,7 +129,7 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	ClientContext &context;
-	AggregateFunction function;
+	BoundAggregateFunction function;
 	unique_ptr<FunctionData> bind_info;
 
 	//! The sort expressions (all references as the expressions have been computed)
@@ -542,7 +542,7 @@ struct SortedAggregateFunction {
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
-		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
+		vector<data_t> agg_state(aggr.GetCallbacks().GetStateSizeCallback()(aggr));
 		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1));
 
 		// State variables
@@ -550,11 +550,11 @@ struct SortedAggregateFunction {
 		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
-		auto initialize = aggr.GetStateInitCallback();
-		auto destructor = aggr.GetStateDestructorCallback();
-		auto simple_update = aggr.GetStateSimpleUpdateCallback();
-		auto update = aggr.GetStateUpdateCallback();
-		auto finalize = aggr.GetStateFinalizeCallback();
+		auto initialize = aggr.GetCallbacks().GetStateInitCallback();
+		auto destructor = aggr.GetCallbacks().GetStateDestructorCallback();
+		auto simple_update = aggr.GetCallbacks().GetStateSimpleUpdateCallback();
+		auto update = aggr.GetCallbacks().GetStateUpdateCallback();
+		auto finalize = aggr.GetCallbacks().GetStateFinalizeCallback();
 
 		auto sdata = states.Values<SortedAggregateState *>(count);
 
@@ -727,10 +727,9 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
+	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
 	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
-	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
 	expr.function.ReplaceImplementation(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
@@ -740,7 +739,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
 	//	Make implicit orderings explicit
 	auto &aggregate = *expr.aggregate;
-	if (aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
+	if (aggregate.GetProperties().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT &&
+	    expr.arg_orders.empty()) {
 		for (auto &order : expr.orders) {
 			const auto type = order.type;
 			const auto null_order = order.null_order;
@@ -784,7 +784,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetProperties().GetNullHandling(),
+	    SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);

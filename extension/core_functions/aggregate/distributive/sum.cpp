@@ -90,7 +90,7 @@ LogicalType GetValueLogicalType<double>() {
 }
 
 template <class T>
-LogicalType GetSumStateType(const AggregateFunction &function) {
+LogicalType GetSumStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("isset", LogicalType::BOOLEAN);
 
@@ -239,7 +239,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	function.name = "sum";
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
-	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.GetProperties().SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }
 
@@ -331,7 +331,7 @@ AggregateFunctionSet SumNoOverflowFun::GetFunctions() {
 	return sum_no_overflow;
 }
 
-LogicalType GetKahanSumStateType(const AggregateFunction &function) {
+LogicalType GetKahanSumStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("isset", LogicalType::BOOLEAN);
 	children.emplace_back("value", LogicalType::DOUBLE);
