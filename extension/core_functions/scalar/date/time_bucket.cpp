@@ -364,6 +364,7 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
 	for (auto &func : time_bucket.functions) {
 		func.SetFallible();
+		func.SetArgProperties(1, ArgProperties().Increasing());
 	}
 	return time_bucket;
 }

@@ -100,3 +100,48 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(ABS(i)) s FROM integers LIMIT 1)
 ----
 1	10
+
+# negate: i in [-10, -1] -> -i in [1, 10]
+query II
+SELECT s.min, s.max FROM (SELECT STATS(-i) s FROM integers LIMIT 1)
+----
+1	10
+
+# impossible filter folds away
+query II
+EXPLAIN SELECT count(*) FROM integers WHERE -i < 0;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# floor: non-decreasing, x in [1.5, 9.7] -> floor(x) in [1.0, 9.0]
+statement ok
+CREATE TABLE doubles(x DOUBLE);
+
+statement ok
+INSERT INTO doubles VALUES (1.5), (9.7);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(floor(x)) s FROM doubles LIMIT 1)
+----
+1.0	9.0
+
+# year(date) is non-decreasing: corner eval succeeds when min/max are finite dates
+statement ok
+CREATE TABLE finite_dates AS SELECT (DATE '2020-01-01' + INTERVAL (range) DAY)::DATE AS dt FROM range(2048);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(year(dt)) s FROM finite_dates LIMIT 1)
+----
+2020	2025
+
+# year(infinity) is NULL: corner eval returns NULL, propagator bails (no derived stats)
+statement ok
+CREATE TABLE inf_dates(dt DATE);
+
+statement ok
+INSERT INTO inf_dates VALUES (DATE '2021-01-01'), ('infinity'::DATE);
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(year(dt)) s FROM inf_dates LIMIT 1)
+----
+NULL	NULL

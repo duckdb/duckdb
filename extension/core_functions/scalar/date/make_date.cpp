@@ -151,6 +151,7 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
 	for (auto &func : make_date.functions) {
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().Increasing(true));
 	}
 	return make_date;
 }
@@ -172,6 +173,7 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 
 	for (auto &func : operator_set.functions) {
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().Increasing(true));
 	}
 	return operator_set;
 }
@@ -180,6 +182,7 @@ ScalarFunctionSet MakeTimestampNsFun::GetFunctions() {
 	ScalarFunctionSet operator_set("make_timestamp_ns");
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_NS, ExecuteMakeTimestampNs<int64_t>));
+	operator_set.SetUnaryArgProperties(ArgProperties().Increasing(true));
 	return operator_set;
 }
 
