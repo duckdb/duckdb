@@ -529,9 +529,9 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED, node.second.row_groups_scanned);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) &&
-		    node.second.has_total_row_groups_to_scan) {
+		    node.second.total_row_groups_to_scan.IsValid()) {
 			info.metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] =
-			    Value::UBIGINT(node.second.total_row_groups_to_scan);
+			    Value::UBIGINT(node.second.total_row_groups_to_scan.GetIndex());
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);

@@ -15,6 +15,7 @@
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/profiler.hpp"
 #include "duckdb/common/reference_map.hpp"
@@ -51,8 +52,7 @@ struct OperatorInformation {
 	idx_t system_peak_temp_directory_size = 0;
 	idx_t rows_scanned = 0;
 	idx_t row_groups_scanned = 0;
-	idx_t total_row_groups_to_scan = 0;
-	bool has_total_row_groups_to_scan = false;
+	optional_idx total_row_groups_to_scan;
 
 	InsertionOrderPreservingMap<string> extra_info;
 
@@ -87,8 +87,7 @@ struct OperatorInformation {
 			row_groups_scanned = LossyNumericCast<idx_t>(metric);
 			break;
 		case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
-			total_row_groups_to_scan = LossyNumericCast<idx_t>(metric);
-			has_total_row_groups_to_scan = true;
+			total_row_groups_to_scan = optional_idx(LossyNumericCast<idx_t>(metric));
 			break;
 		default:
 			throw InternalException("OperatorProfiler: Unknown metric type");
