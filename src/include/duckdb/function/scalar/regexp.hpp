@@ -105,7 +105,7 @@ struct RegexpReplaceBindData : public RegexpBaseBindData {
 struct RegexpExtractBindData : public RegexpBaseBindData {
 	RegexpExtractBindData();
 	RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string, bool constant_pattern,
-	                      int8_t group_index, bool no_match_returns_input = false, bool trim_dotstar_dollar = false);
+	                      int8_t group_index, bool no_match_returns_input = false);
 
 	// `regexp_extract` always extracts a single capture group. -1 represents "no group requested"
 	// (e.g. NULL group argument), which the runtime treats as a no-match (returns empty/input).
@@ -113,10 +113,6 @@ struct RegexpExtractBindData : public RegexpBaseBindData {
 	// On no match, return the input instead of an empty string (set via the `k` option, also used by
 	// the regexp_replace -> regexp_extract optimizer rewrite).
 	bool no_match_returns_input = false;
-	// Set when RegexExtractBind has stripped a trailing `.*$` from constant_string (see the bind
-	// for the gate). Tells the runtime to reject matches whose remainder contains `\n`, preserving
-	// the original end-of-text-without-newline semantics under default RE2 options.
-	bool trim_dotstar_dollar = false;
 
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;

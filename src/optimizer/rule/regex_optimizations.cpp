@@ -232,9 +232,18 @@ RegexpReplaceExtractRule::RegexpReplaceExtractRule(ExpressionRewriter &rewriter)
 	root = std::move(func);
 }
 
-// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P has a `^...*.$`
-// shape that forces a whole-input match. The `.*$` trim and remainder-newline check happen in
-// regexp_extract's bind, so the bind data here stays a pure function of the children.
+static bool RegexpHasWholeTextAnchors(duckdb_re2::Regexp *regexp) {
+	if (regexp->op() != duckdb_re2::kRegexpConcat || regexp->nsub() < 2) {
+		return false;
+	}
+	auto subs = regexp->sub();
+	return subs[0]->op() == duckdb_re2::kRegexpBeginText &&
+	       subs[regexp->nsub() - 1]->op() == duckdb_re2::kRegexpEndText;
+}
+
+// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P's byte shape and
+// parsed RE2 anchors prove that any match spans the whole input. The original pattern is preserved;
+// any regexp_extract pattern simplification belongs in a separate optimization.
 unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                        bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -266,7 +275,7 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 
 	// `\1` requires at least one capture group; multi-group patterns are still valid.
 	duckdb_re2::RE2 compiled(duckdb_re2::StringPiece(pattern.c_str(), pattern.size()), bind_data.options);
-	if (!compiled.ok() || compiled.NumberOfCapturingGroups() < 1) {
+	if (!compiled.ok() || compiled.NumberOfCapturingGroups() < 1 || !RegexpHasWholeTextAnchors(compiled.Regexp())) {
 		return nullptr;
 	}
 

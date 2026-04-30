@@ -157,8 +157,23 @@ SELECT regexp_replace(E'https://www.example.com/path\nsecond-line',
 ----
 example.com
 
+# Inline multiline mode makes the trailing `$` an end-of-line anchor. The match no longer spans the
+# whole input, so the optimizer must not rewrite this to regexp_extract and drop the unmatched tail.
+query T
+SELECT COUNT(*) FROM (SELECT E'a\nb') t1(a)
+  JOIN (SELECT regexp_replace(s, '^(?m)(a).*$', '\1') FROM (VALUES (E'a\nb')) v(s)) t2(a) USING (a);
+----
+1
+
+# A top-level alternation can pass a byte-level `^...*$` check without every branch being anchored.
+query T
+SELECT regexp_replace(s, '^a(.*)$|b(.*).*$', '\1') FROM (VALUES ('xxbzz'), ('azz')) v(s);
+----
+xx
+zz
+
 # Pattern whose trailing `.*$` is preceded by an escape (`\.*$` = literal-dot star, end-of-text).
-# Non-constant input bypasses constant folding so the optimizer rewrite + bind-time trim path runs.
+# Non-constant input bypasses constant folding so the optimizer rewrite path runs.
 query T
 SELECT regexp_replace(s, '^a(b)\.*$', '\1') FROM (VALUES ('ab'), ('ab.'), ('cd')) v(s);
 ----
@@ -171,4 +186,3 @@ query T
 SELECT regexp_replace('héllo-café/rest', '^([^/]+)/.*$', '\1');
 ----
 héllo-café
-

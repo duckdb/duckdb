@@ -16,8 +16,6 @@
 #include "re2/stringpiece.h"
 #include "utf8proc_wrapper.hpp"
 
-#include <cstring>
-
 namespace duckdb {
 
 using regexp_util::CreateStringPiece;
@@ -25,10 +23,9 @@ using regexp_util::ParseRegexOptions;
 using regexp_util::TryParseConstantPattern;
 
 // Zero-copy slice of capture group `group_index` from `input`'s buffer; caller must call
-// StringVector::AddHeapReference(result, source) first. check_remainder_newline=true rejects
-// matches whose remainder contains `\n` (used after RegexExtractBind has stripped a trailing `.*$`).
+// StringVector::AddHeapReference(result, source) first.
 static inline string_t ExtractCaptureGroup(const string_t &input, const RE2 &re, int8_t group_index,
-                                           bool no_match_returns_input, bool check_remainder_newline) {
+                                           bool no_match_returns_input) {
 	if (group_index < 0 || group_index > re.NumberOfCapturingGroups()) {
 		return no_match_returns_input ? input : string_t(nullptr, 0);
 	}
@@ -36,14 +33,6 @@ static inline string_t ExtractCaptureGroup(const string_t &input, const RE2 &re,
 	duckdb_re2::StringPiece submatch[10];
 	const int nsubmatch = group_index + 1;
 	if (re.Match(in_piece, 0, in_piece.size(), duckdb_re2::RE2::UNANCHORED, submatch, nsubmatch)) {
-		if (check_remainder_newline) {
-			const char *match_end = submatch[0].data() + submatch[0].size();
-			const char *input_end = in_piece.data() + in_piece.size();
-			const auto remainder = static_cast<size_t>(input_end - match_end);
-			if (std::memchr(match_end, '\n', remainder) != nullptr) {
-				return no_match_returns_input ? input : string_t(nullptr, 0);
-			}
-		}
 		return string_t(submatch[group_index].data(), UnsafeNumericCast<uint32_t>(submatch[group_index].size()));
 	}
 	return no_match_returns_input ? input : string_t(nullptr, 0);
@@ -242,21 +231,20 @@ RegexpExtractBindData::RegexpExtractBindData() {
 }
 
 RegexpExtractBindData::RegexpExtractBindData(duckdb_re2::RE2::Options options, string constant_string_p,
-                                             bool constant_pattern, int8_t group_index, bool no_match_returns_input,
-                                             bool trim_dotstar_dollar)
+                                             bool constant_pattern, int8_t group_index, bool no_match_returns_input)
     : RegexpBaseBindData(options, std::move(constant_string_p), constant_pattern), group_index(group_index),
-      no_match_returns_input(no_match_returns_input), trim_dotstar_dollar(trim_dotstar_dollar) {
+      no_match_returns_input(no_match_returns_input) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() const {
 	return make_uniq<RegexpExtractBindData>(options, constant_string, constant_pattern, group_index,
-	                                        no_match_returns_input, trim_dotstar_dollar);
+	                                        no_match_returns_input);
 }
 
 bool RegexpExtractBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<RegexpExtractBindData>();
 	return RegexpBaseBindData::Equals(other) && group_index == other.group_index &&
-	       no_match_returns_input == other.no_match_returns_input && trim_dotstar_dollar == other.trim_dotstar_dollar;
+	       no_match_returns_input == other.no_match_returns_input;
 }
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -269,21 +257,18 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	// no_match_returns_input is set), so register the heap reference once per chunk regardless of
 	// per-row outcomes.
 	StringVector::AddHeapReference(result, strings);
-	const bool check_remainder_newline = info.trim_dotstar_dollar;
 
 	if (info.constant_pattern) {
 		auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();
 		const auto &re = lstate.constant_pattern;
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input,
-			                           check_remainder_newline);
+			return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(
 		    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
 			    RE2 re(CreateStringPiece(pattern), info.options);
-			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input,
-			                               check_remainder_newline);
+			    return ExtractCaptureGroup(input, re, info.group_index, info.no_match_returns_input);
 		    });
 	}
 }
@@ -412,23 +397,8 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 		}
 	}
 
-	// Strip a trailing `.*$`; the runtime restores end-of-text semantics via a remainder-newline
-	// check. Gated to default newline-sensitive options and group_index >= 1 (group 0 = whole match).
-	// Test-compile guards the byte-suffix check against escaped `.` (e.g. `^(a)\.*$`).
-	bool trim_dotstar_dollar = false;
-	if (constant_pattern && group_index >= 1 && !options.literal() && !options.dot_nl() &&
-	    constant_string.size() >= 4 && constant_string.front() == '^' &&
-	    constant_string.compare(constant_string.size() - 3, 3, ".*$") == 0) {
-		string trimmed = constant_string.substr(0, constant_string.size() - 3);
-		const duckdb_re2::RE2 trial(duckdb_re2::StringPiece(trimmed.c_str(), trimmed.size()), options);
-		if (trial.ok()) {
-			constant_string = std::move(trimmed);
-			trim_dotstar_dollar = true;
-		}
-	}
-
 	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, group_index,
-	                                        no_match_returns_input, trim_dotstar_dollar);
+	                                        no_match_returns_input);
 }
 
 ScalarFunctionSet RegexpFun::GetFunctions() {
