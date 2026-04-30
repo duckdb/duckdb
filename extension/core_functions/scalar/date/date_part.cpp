@@ -773,9 +773,8 @@ struct DatePart {
 template <class OP, class T>
 void DatePartCachedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<DateCacheLocalState<OP>>();
-	UnaryExecutor::ExecuteWithNulls<T, int64_t>(
-	    args.data[0], result, args.size(),
-	    [&](T input, ValidityMask &mask, idx_t idx) { return lstate.cache.ExtractElement(input, mask, idx); });
+	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
+	                                   [&](T input) { return lstate.cache.ExtractElement(input); });
 }
 
 template <>
@@ -1750,13 +1749,12 @@ void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &spec_arg = args.data[0];
 	auto &date_arg = args.data[1];
 
-	BinaryExecutor::ExecuteWithNulls<string_t, T, int64_t>(
-	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date, ValidityMask &mask, idx_t idx) {
+	BinaryExecutor::Execute<string_t, T, int64_t>(
+	    spec_arg, date_arg, result, args.size(), [&](string_t specifier, T date) -> optional<int64_t> {
 		    if (Value::IsFinite(date)) {
 			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
 		    } else {
-			    mask.SetInvalid(idx);
-			    return int64_t(0);
+			    return nullopt;
 		    }
 	    });
 }
