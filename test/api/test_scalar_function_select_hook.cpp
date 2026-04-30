@@ -58,6 +58,10 @@ static idx_t NullOrEvenSelectFunction(DataChunk &args, ExpressionState &, Select
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_val = input_data[i];
 		if (!input_val.IsValid()) {
+			if (true_sel) {
+				true_sel->set_index(true_count, i);
+			}
+			true_count++;
 			continue;
 		}
 		if (IsEvenOperator::Operation(input_val.GetValue())) {
