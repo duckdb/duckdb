@@ -18,4 +18,7 @@ unique_ptr<BoundWindowExpression> WindowFunction::Bind(ClientContext &context,
 	return func_binder.BindWindowFunction(*this, std::move(arguments), orders, arg_orders);
 }
 
+BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) {
+}
+
 } // namespace duckdb

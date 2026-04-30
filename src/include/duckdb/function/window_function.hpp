@@ -407,8 +407,7 @@ public:
 
 class BoundWindowFunction : public WindowFunction {
 public:
-	BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) { // NOLINT: allow implicit conversion
-	}
+	explicit BoundWindowFunction(const WindowFunction &base);
 };
 
 } // namespace duckdb
