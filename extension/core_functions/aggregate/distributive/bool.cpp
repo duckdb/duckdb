@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
@@ -13,7 +14,13 @@ struct BoolState {
 	bool val;
 };
 
-struct BoolAndFunFunction {
+struct BoolAndFunFunction : public ClusteredStateCopy {
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		local.empty = false;
+		local.val = input && local.val;
+	}
+
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = true;
@@ -53,7 +60,13 @@ struct BoolAndFunFunction {
 	}
 };
 
-struct BoolOrFunFunction {
+struct BoolOrFunFunction : public ClusteredStateCopy {
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		local.empty = false;
+		local.val = input || local.val;
+	}
+
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = false;

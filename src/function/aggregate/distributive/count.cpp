@@ -130,31 +130,72 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	static void CountScatterClusteredGeneric(Vector &input, const ClusteredAggr &cs, idx_t count) {
+		if (input.GetVectorType() == VectorType::FLAT_VECTOR) {
+			auto &validity = FlatVector::Validity(input);
+			const bool all_valid = !validity.CanHaveNull();
+			for (idx_t r = 0; r < cs.n_group_runs; r++) {
+				auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
+				const auto run_count = cs.group_runs[r].count;
+				if (all_valid) {
+					state += UnsafeNumericCast<STATE>(run_count);
+				} else {
+					const auto *run_sel = cs.group_runs[r].sel;
+					for (idx_t k = 0; k < run_count; k++) {
+						state += validity.RowIsValidUnsafe(run_sel[k]);
+					}
+				}
+			}
+			return;
+		}
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 		const bool all_valid = !idata.validity.CanHaveNull();
-		idx_t pos = 0;
 		for (idx_t r = 0; r < cs.n_group_runs; r++) {
 			auto &state = *reinterpret_cast<STATE *>(cs.group_runs[r].state);
-			const idx_t run_count = cs.group_runs[r].count;
+			const auto *run_sel = cs.group_runs[r].sel;
+			const auto run_count = cs.group_runs[r].count;
 			if (all_valid) {
 				state += UnsafeNumericCast<STATE>(run_count);
 			} else {
-				const idx_t end = pos + run_count;
-				for (idx_t k = pos; k < end; k++) {
-					auto idx = idata.sel->get_index(cs.sel[k]);
+				for (idx_t k = 0; k < run_count; k++) {
+					auto idx = idata.sel->get_index(run_sel[k]);
 					state += idata.validity.RowIsValidUnsafe(idx);
 				}
 			}
-			pos += run_count;
 		}
+	}
+
+	static void CountClusterUpdate(Vector inputs[], AggregateInputData &, idx_t input_count,
+	                               const ClusteredAggr &clustered, idx_t count) {
+		D_ASSERT(input_count == 1);
+		if (auto *cluster_iter = clustered.ClusterIter(inputs[0], count)) {
+			UnifiedVectorFormat idata;
+			inputs[0].ToUnifiedFormat(count, idata);
+			const bool all_valid = !idata.validity.CanHaveNull();
+			idx_t pos = 0;
+			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+				auto &state = *reinterpret_cast<STATE *>(clustered.group_runs[r].state);
+				const idx_t run_count = clustered.group_runs[r].count;
+				if (all_valid) {
+					state += UnsafeNumericCast<STATE>(run_count);
+				} else {
+					const idx_t end = pos + run_count;
+					for (idx_t k = pos; k < end; k++) {
+						state += idata.validity.RowIsValidUnsafe(cluster_iter[k]);
+					}
+				}
+				pos += run_count;
+			}
+			return;
+		}
+		CountScatterClusteredGeneric(inputs[0], clustered, count);
 	}
 
 	static void CountScatter(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                         idx_t count) {
-		// COUNT(col) clustered fast path: for each run, add run count when input is all-valid
-		// or count validity bits per-run otherwise. Use ClusterIter which returns a chunk-wide
-		// sel that already composes any DICT sel with cs.sel — single indirection per tuple.
+		// COUNT(col) clustered fast path: add run counts when the input is all-valid,
+		// otherwise count validity bits over each run. For simple DICT input, ClusterIter
+		// pre-composes the dict sel once for the whole chunk.
 		if (aggr_input_data.clustered) {
 			auto &cs = *aggr_input_data.clustered;
 			if (auto *cluster_iter = cs.ClusterIter(inputs[0], count)) {
@@ -288,11 +329,11 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
 	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
 	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
-	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
+	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate,
+	                      CountFunction::CountClusterUpdate);
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
-	fun.SetClusteredOptimized(true);
 	return fun;
 }
 

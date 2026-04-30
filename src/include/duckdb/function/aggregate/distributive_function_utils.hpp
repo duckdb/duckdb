@@ -12,6 +12,23 @@
 
 namespace duckdb {
 
+struct ClusteredStateCopy {
+	template <class STATE>
+	struct ClusteredLocalState {
+		typedef STATE Type;
+	};
+
+	template <class STATE>
+	static void InitializeClusteredLocal(STATE &local, const STATE &state) {
+		local = state;
+	}
+
+	template <class STATE>
+	static void FlushClusteredLocal(STATE &state, const STATE &local, bool) {
+		state = local;
+	}
+};
+
 struct CountFunctionBase {
 	static AggregateFunction GetFunction();
 };

@@ -512,8 +512,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		result_addresses[i] = aggregate_address;
 	}
 
-	// process the aggregates (ht_offsets are only valid for the single constant group, not the full payload)
-	// FIXME: we can use simple_update here if the aggregates support it
+	// Process the aggregates: ht_offsets are only valid for the single constant group, not the full payload.
 	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
@@ -568,6 +567,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
+			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
 			if (!skip_addresses) {
 				VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
@@ -585,6 +585,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 			                            &clustered);
 		}
 
+		// Move to the next aggregate
 		payload_idx += aggr.child_count;
 		if (!skip_addresses) {
 			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
@@ -608,6 +609,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
+			// Skip all the aggregates that are not in the filter
 			payload_idx += aggr.child_count;
 			VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 			continue;
@@ -621,6 +623,7 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}
 
+		// Move to the next aggregate
 		payload_idx += aggr.child_count;
 		VectorOperations::AddInPlace(state.addresses, NumericCast<int64_t>(aggr.payload_size), payload.size());
 		filter_idx++;

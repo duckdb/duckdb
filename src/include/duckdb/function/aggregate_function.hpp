@@ -98,6 +98,9 @@ typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_i
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                           data_ptr_t state, idx_t count);
+//! The type used for updating a clustered set of aggregate states.
+typedef void (*aggregate_cluster_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+                                           const ClusteredAggr &clustered, idx_t count);
 
 //! The type used for computing complex/custom windowed aggregate functions (optional)
 typedef void (*aggregate_window_t)(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
@@ -153,53 +156,105 @@ public:
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_simple_update_t simple_update = nullptr,
+	                  aggregate_cluster_update_t cluster_update_p = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
-	                  aggregate_deserialize_t deserialize = nullptr, bool clustered_optimized_p = false)
+	                  aggregate_deserialize_t deserialize = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
-	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT),
-	      clustered_optimized(clustered_optimized_p) {
+	      simple_update(simple_update), cluster_update(cluster_update_p), window(window), bind(bind),
+	      destructor(destructor),
+	      statistics(statistics), serialize(serialize), deserialize(deserialize),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
+	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  FunctionNullHandling null_handling, aggregate_simple_update_t simple_update,
+	                  bind_aggregate_function_t bind, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
+	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
+	                        null_handling, simple_update, nullptr, bind, destructor, statistics, window, serialize,
+	                        deserialize) {
+	}
+
+	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
+	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                  aggregate_simple_update_t simple_update = nullptr,
+	                  aggregate_cluster_update_t cluster_update_p = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
-	                  aggregate_deserialize_t deserialize = nullptr, bool clustered_optimized_p = false)
+	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
-	                        window, serialize, deserialize, clustered_optimized_p) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, cluster_update_p, bind,
+	                        destructor, statistics, window, serialize, deserialize) {
+	}
+
+	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
+	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                  aggregate_simple_update_t simple_update, bind_aggregate_function_t bind,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_deserialize_t deserialize = nullptr)
+	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, nullptr, bind, destructor,
+	                        statistics, window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_simple_update_t simple_update = nullptr,
+	                  aggregate_cluster_update_t cluster_update_p = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        null_handling, simple_update, bind, destructor, statistics, window, serialize,
+	                        null_handling, simple_update, cluster_update_p, bind, destructor, statistics, window, serialize,
+	                        deserialize) {
+	}
+
+	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
+	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
+	                  aggregate_finalize_t finalize, FunctionNullHandling null_handling,
+	                  aggregate_simple_update_t simple_update, bind_aggregate_function_t bind,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_deserialize_t deserialize = nullptr)
+	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
+	                        null_handling, simple_update, nullptr, bind, destructor, statistics, window, serialize,
 	                        deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_cluster_update_t cluster_update_p = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_destructor_t destructor = nullptr,
 	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
 	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
-	                        window, serialize, deserialize) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, cluster_update_p, bind,
+	                        destructor, statistics, window, serialize, deserialize) {
+	}
+
+	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
+	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
+	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update,
+	                  bind_aggregate_function_t bind, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
+	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, nullptr, bind, destructor,
+	                        statistics, window, serialize, deserialize) {
 	}
 
 	// Window constructor
@@ -211,7 +266,8 @@ public:
 	    : BaseScalarFunction(name, arguments, return_type, FunctionStability::CONSISTENT,
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(nullptr), combine(nullptr), finalize(nullptr),
-	      simple_update(nullptr), window(window), window_init(window_init), bind(bind), destructor(destructor),
+	      simple_update(nullptr), cluster_update(nullptr), window(window), window_init(window_init), bind(bind),
+	      destructor(destructor),
 	      statistics(statistics), serialize(serialize), deserialize(deserialize),
 	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
 	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
@@ -246,6 +302,8 @@ public:
 	bool HasStateSimpleUpdateCallback() const { return simple_update != nullptr; }
 	aggregate_simple_update_t GetStateSimpleUpdateCallback() const { return simple_update; }
 	void SetStateSimpleUpdateCallback(aggregate_simple_update_t callback) { simple_update = callback; }
+	aggregate_cluster_update_t GetStateClusterUpdateCallback() const { return cluster_update; }
+	void SetStateClusterUpdateCallback(aggregate_cluster_update_t callback) { cluster_update = callback; }
 
 	void SetStateCombineCallback(aggregate_combine_t callback) { combine = callback; }
 	aggregate_combine_t GetStateCombineCallback() const { return combine; }
@@ -278,8 +336,6 @@ public:
 	void SetDeserializeCallback(aggregate_deserialize_t callback) { deserialize = callback; }
 	aggregate_serialize_t GetSerializeCallback() const { return serialize; }
 	aggregate_deserialize_t GetDeserializeCallback() const { return deserialize; }
-	bool IsClusteredOptimized() const { return clustered_optimized; }
-	void SetClusteredOptimized(bool value) { clustered_optimized = value; }
 	// clang-format on
 
 protected:
@@ -295,6 +351,8 @@ protected:
 	aggregate_finalize_t finalize;
 	//! The simple aggregate update function (may be null)
 	aggregate_simple_update_t simple_update;
+	//! The clustered aggregate update function (may be null)
+	aggregate_cluster_update_t cluster_update;
 	//! The windowed aggregate custom function (may be null)
 	aggregate_window_t window;
 	//! The windowed aggregate custom initialization function (may be null)
@@ -317,8 +375,6 @@ protected:
 	AggregateOrderDependent order_dependent;
 	//! Whether or not the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent;
-	//! True when the update path can consume ClusteredAggr directly.
-	bool clustered_optimized = false;
 	aggregate_get_state_type_t get_state_type = nullptr;
 
 	//! Additional function info, passed to the bind
@@ -393,14 +449,40 @@ public:
 	}
 
 public:
+	template <class...>
+	using void_t_helper = void;
+
+	template <class OP, class STATE, class = void>
+	struct HasClusteredLocalState : std::false_type {};
+	template <class OP, class STATE>
+	struct HasClusteredLocalState<OP, STATE,
+	                              void_t_helper<typename OP::template ClusteredLocalState<STATE>::Type>>
+	    : std::true_type {};
+
+	template <class OP, class = void>
+	struct HasClusteredOperation : std::false_type {};
+	template <class OP>
+	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOperation<int32_t, int32_t, OP>)>>
+	    : std::true_type {};
+
+	template <class STATE, class INPUT_TYPE, class OP>
+	static aggregate_cluster_update_t UnaryClusterUpdateCallback() {
+		if constexpr (HasClusteredLocalState<OP, STATE>::value || HasClusteredOperation<OP>::value) {
+			return AggregateFunction::UnaryClusterUpdate<STATE, INPUT_TYPE, OP>;
+		} else {
+			return nullptr;
+		}
+	}
+
 	template <class STATE, class RESULT_TYPE, class OP>
 	static AggregateFunction NullaryAggregate(LogicalType return_type) {
-		return AggregateFunction(
+		auto function = AggregateFunction(
 		    string(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryUpdate<STATE, OP>, nullptr, nullptr,
-		    nullptr, nullptr, nullptr, nullptr, true);
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryUpdate<STATE, OP>,
+		    AggregateFunction::NullaryClusterUpdate<STATE, OP>);
+		return function;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -408,13 +490,14 @@ public:
 	static AggregateFunction
 	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		return AggregateFunction(string(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
-		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-		                         AggregateFunction::StateCombine<STATE, OP>,
-		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
-		                         AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>, nullptr, nullptr, nullptr,
-		                         nullptr, nullptr, nullptr, true);
+		auto function = AggregateFunction(string(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                                 AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                                 AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
+		                                 AggregateFunction::StateCombine<STATE, OP>,
+		                                 AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                                 AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
+		                                 UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
+		return function;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -429,12 +512,14 @@ public:
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
 	                                         LogicalType return_type) {
-		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
-		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
-		                         AggregateFunction::StateCombine<STATE, OP>,
-		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		                         AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
+		auto function = AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                                 AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                                 AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
+		                                 AggregateFunction::StateCombine<STATE, OP>,
+		                                 AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
+		                                 FunctionNullHandling::DEFAULT_NULL_HANDLING,
+		                                 AggregateFunction::BinaryUpdate<STATE, A_TYPE, B_TYPE, OP>);
+		return function;
 	}
 
 public:
@@ -468,6 +553,13 @@ public:
 		AggregateExecutor::NullaryUpdate<STATE, OP>(state, aggr_input_data, count);
 	}
 
+	template <class STATE, class OP>
+	static void NullaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+	                                 const ClusteredAggr &clustered, idx_t count) {
+		D_ASSERT(input_count == 0);
+		AggregateExecutor::NullaryClusterUpdate<STATE, OP>(aggr_input_data, clustered, count);
+	}
+
 	template <class STATE, class T, class OP>
 	static void UnaryScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               Vector &states, idx_t count) {
@@ -480,6 +572,13 @@ public:
 	                        idx_t count) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, state, count);
+	}
+
+	template <class STATE, class INPUT_TYPE, class OP>
+	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
+	                               const ClusteredAggr &clustered, idx_t count) {
+		D_ASSERT(input_count == 1);
+		AggregateExecutor::UnaryClusterUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

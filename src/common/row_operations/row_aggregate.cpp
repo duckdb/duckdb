@@ -49,9 +49,14 @@ void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &agg
                                  DataChunk &payload, idx_t arg_idx, idx_t count,
                                  optional_ptr<const ClusteredAggr> clustered) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-	aggr_input_data.clustered = clustered;
-	aggr.function.GetStateUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data,
-	                                       aggr.child_count, addresses, count);
+	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
+	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
+	auto inputs = aggr.child_count ? payload.data.data() + arg_idx : nullptr;
+	if (clustered && cluster_update) {
+		cluster_update(inputs, aggr_input_data, aggr.child_count, *clustered, count);
+		return;
+	}
+	aggr.function.GetStateUpdateCallback()(inputs, aggr_input_data, aggr.child_count, addresses, count);
 }
 
 void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data,

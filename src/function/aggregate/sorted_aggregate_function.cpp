@@ -1,3 +1,4 @@
+#include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -540,7 +541,7 @@ struct SortedAggregateFunction {
 		// Inner aggregate APIs
 		auto initialize = aggr.GetStateInitCallback();
 		auto destructor = aggr.GetStateDestructorCallback();
-		auto simple_update = aggr.GetStateSimpleUpdateCallback();
+		auto cluster_update = aggr.GetStateClusterUpdateCallback();
 		auto update = aggr.GetStateUpdateCallback();
 		auto finalize = aggr.GetStateFinalizeCallback();
 
@@ -623,10 +624,12 @@ struct SortedAggregateFunction {
 					}
 					sliced.SetCardinality(input_count);
 
-					// These are all simple updates, so use it if available
-					if (simple_update) {
-						simple_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), agg_state.data(),
-						              sliced.size());
+					if (cluster_update) {
+						ClusteredAggr clustered;
+						clustered.SetSingleRun(agg_state.data(), sliced.size());
+						aggr_bind_info.clustered = &clustered;
+						cluster_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), clustered, sliced.size());
+						aggr_bind_info.clustered = nullptr;
 					} else {
 						// We are only updating a constant state
 						agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);

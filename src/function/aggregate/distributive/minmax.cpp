@@ -92,10 +92,28 @@ struct MinMaxBase {
 	}
 };
 
-struct NumericMinMaxBase : public MinMaxBase {
+template <class COMPARE>
+struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		state.value = input;
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		if (!local.isset) {
+			local.value = input;
+			local.isset = true;
+		} else if (COMPARE::template Operation<INPUT_TYPE>(input, local.value)) {
+			local.value = input;
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
+		if (COMPARE::template Operation<INPUT_TYPE>(input, state.value)) {
+			state.value = input;
+		}
 	}
 
 	template <class T, class STATE>
@@ -108,14 +126,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 };
 
-struct MinOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
-			state.value = input;
-		}
-	}
-
+struct MinOperation : public NumericMinMaxBase<LessThan> {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.isset) {
@@ -131,14 +142,7 @@ struct MinOperation : public NumericMinMaxBase {
 	}
 };
 
-struct MaxOperation : public NumericMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
-			state.value = input;
-		}
-	}
-
+struct MaxOperation : public NumericMinMaxBase<GreaterThan> {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.isset) {

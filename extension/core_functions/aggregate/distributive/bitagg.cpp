@@ -5,6 +5,7 @@
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 
 namespace duckdb {
 
@@ -130,23 +131,34 @@ struct BitwiseOperation {
 	}
 };
 
-struct BitAndOperation : public BitwiseOperation {
+template <class OP>
+struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateCopy {
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		if (!local.is_set) {
+			Assign(local, input);
+			local.is_set = true;
+		} else {
+			OP::template Execute<INPUT_TYPE>(local, input);
+		}
+	}
+};
+
+struct BitAndOperation : public NumericBitwiseOperation<BitAndOperation> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value &= typename STATE::TYPE(input);
-		;
 	}
 };
 
-struct BitOrOperation : public BitwiseOperation {
+struct BitOrOperation : public NumericBitwiseOperation<BitOrOperation> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value |= typename STATE::TYPE(input);
-		;
 	}
 };
 
-struct BitXorOperation : public BitwiseOperation {
+struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value ^= typename STATE::TYPE(input);

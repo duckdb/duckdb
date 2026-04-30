@@ -23,26 +23,26 @@ struct ClusteredAggr {
 
 	struct GroupRun {
 		data_ptr_t state; //! caller fills this after TryClustered; advanced between aggregates
+		const sel_t *sel; //! points to the tuple positions for this run
 		idx_t count;      //! number of tuples in this group
 	};
 
 	idx_t n_group_runs = 0;
 	GroupRun group_runs[MAX_GROUPS];
-	uint16_t group_id_per_run[MAX_GROUPS]; //! raw group id, in the order runs appear in sel[]
-	//! Concatenation of all runs in run order.
-	sel_t sel[STANDARD_VECTOR_SIZE];
+	uint16_t group_id_per_run[MAX_GROUPS]; //! raw group id, in the order runs appear in group_runs[]
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
-	//! On success fills sel[], group_runs[].count, and group_id_per_run[].
-	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE uint16_t),
+	//! On success fills group_runs[].sel/count and group_id_per_run[].
+	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE sel_t),
 	//! left_cursor and right_cursor (n_groups pointers each, pre-initialized to nullptr).
-	bool TryClustered(const uint64_t *group_ids, idx_t count, uint16_t *arena, uint16_t **left_cursor,
-	                  uint16_t **right_cursor);
+	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, sel_t **left_cursor, sel_t **right_cursor);
+	//! Initialize a single run covering 0..count-1 for one aggregate state.
+	void SetSingleRun(data_ptr_t state, idx_t count);
 
 	//! Advance all run state pointers by payload_size.
 	void AdvanceStates(idx_t payload_size);
 
-	//! Returns sel for flat input, a composed dict sel for simple dictionary input, or nullptr.
+	//! Returns a composed dict sel for simple dictionary input, or nullptr.
 	const sel_t *ClusterIter(const Vector &input, idx_t count) const;
 
 private:
@@ -52,9 +52,9 @@ private:
 
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
 struct ClusteredAggregateState {
-	unsafe_unique_array<uint16_t> arena;
-	unsafe_unique_array<uint16_t *> left_cursor;
-	unsafe_unique_array<uint16_t *> right_cursor;
+	unsafe_unique_array<sel_t> arena;
+	unsafe_unique_array<sel_t *> left_cursor;
+	unsafe_unique_array<sel_t *> right_cursor;
 	bool all_clustered = false;
 	bool any_clustered = false;
 

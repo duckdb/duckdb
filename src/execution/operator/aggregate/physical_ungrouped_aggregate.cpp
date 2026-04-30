@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -360,8 +361,18 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
 	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
-	aggregate.function.GetStateSimpleUpdateCallback()(start_of_input, aggr_input_data, payload_cnt,
-	                                                  state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+	auto cluster_update = aggregate.function.GetStateClusterUpdateCallback();
+	if (cluster_update) {
+		ClusteredAggr clustered;
+		clustered.SetSingleRun(state.aggregate_data[aggr_idx].get(), payload_chunk.size());
+		aggr_input_data.clustered = &clustered;
+		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
+	} else {
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, agg_state_vec,
+		                                            payload_chunk.size());
+	}
 }
 
 //===--------------------------------------------------------------------===//

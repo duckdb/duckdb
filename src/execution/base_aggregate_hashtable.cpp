@@ -17,7 +17,7 @@ bool BaseAggregateHashTable::AllAggregatesClustered(const vector<AggregateObject
 		return false;
 	}
 	for (auto &aggregate : aggregates) {
-		if (aggregate.filter || !aggregate.function.IsClusteredOptimized()) {
+		if (aggregate.filter || !aggregate.function.GetStateClusterUpdateCallback()) {
 			return false;
 		}
 	}
@@ -26,7 +26,7 @@ bool BaseAggregateHashTable::AllAggregatesClustered(const vector<AggregateObject
 
 bool BaseAggregateHashTable::AnyAggregatesClustered(const vector<AggregateObject> &aggregates) {
 	for (auto &aggregate : aggregates) {
-		if (!aggregate.filter && aggregate.function.IsClusteredOptimized()) {
+		if (!aggregate.filter && aggregate.function.GetStateClusterUpdateCallback()) {
 			return true;
 		}
 	}

@@ -152,7 +152,7 @@ duckdb_aggregate_function duckdb_create_aggregate_function() {
 	auto function = new duckdb::AggregateFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIAggregateStateSize,
 	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
 	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize, nullptr,
-	                                              duckdb::CAPIAggregateBind);
+	                                              nullptr, duckdb::CAPIAggregateBind);
 	try {
 		function->SetExtraFunctionInfo<duckdb::CAggregateFunctionInfo>();
 		return reinterpret_cast<duckdb_aggregate_function>(function);
