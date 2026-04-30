@@ -54,7 +54,6 @@ public:
 		return buffer;
 	}
 
-
 	// Same rules as the constructor. We add room for a header, in addition to
 	// the requested user bytes. We then sector-align the result.
 	void Resize(uint64_t user_size, idx_t block_header_size);

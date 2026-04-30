@@ -8,7 +8,7 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
                      const idx_t &global_csv_current_position)
     : context(context), requested_size(buffer_size_p), can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()) {
 	AllocateBuffer(buffer_size_p);
-	auto buffer = Ptr();
+	auto buffer = char_ptr_cast(handle.GetDataMutable());
 	actual_buffer_size = file_handle.Read(buffer, buffer_size_p);
 	while (actual_buffer_size < buffer_size_p && !file_handle.FinishedReading()) {
 		// We keep reading until this block is full
@@ -23,8 +23,8 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
     : context(context), requested_size(buffer_size), global_csv_start(global_csv_current_position),
       can_seek(file_handle.CanSeek()), is_pipe(file_handle.IsPipe()), buffer_idx(buffer_idx_p) {
 	AllocateBuffer(buffer_size);
-	auto buffer = handle.Ptr();
-	actual_buffer_size = file_handle.Read(handle.Ptr(), buffer_size);
+	auto buffer = handle.GetDataMutable();
+	actual_buffer_size = file_handle.Read(buffer, buffer_size);
 	while (actual_buffer_size < buffer_size && !file_handle.FinishedReading()) {
 		// We keep reading until this block is full
 		actual_buffer_size += file_handle.Read(&buffer[actual_buffer_size], buffer_size - actual_buffer_size);
@@ -64,7 +64,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	AllocateBuffer(actual_buffer_size);
 	// If we can seek, we seek and return the correct pointers
 	file_handle.Seek(global_csv_start);
-	file_handle.Read(handle.Ptr(), actual_buffer_size);
+	file_handle.Read(handle.GetDataMutable(), actual_buffer_size);
 }
 
 shared_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle, bool &has_seeked) {

@@ -34,7 +34,7 @@ data_ptr_t FileBufferHandleGroup::Ptr() const {
 	if (handles.size() != 1) {
 		throw InternalException("FileBufferHandleGroup::Ptr() requires exactly one handle, got %llu", handles.size());
 	}
-	return handles[0].handle.Ptr() + handles[0].start_offset;
+	return const_cast<BufferHandle &>(handles[0].handle).GetDataMutable() + handles[0].start_offset;
 }
 
 } // namespace duckdb

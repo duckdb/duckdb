@@ -86,7 +86,7 @@ data_ptr_t UpdateInfo::GetValues() {
 }
 
 UpdateInfo &UpdateInfo::Get(UndoBufferReference &entry) {
-	auto update_info = reinterpret_cast<UpdateInfo *>(entry.Ptr());
+	auto update_info = reinterpret_cast<UpdateInfo *>(entry.GetDataMutable());
 	return *update_info;
 }
 

@@ -45,6 +45,9 @@ struct UndoBufferReference {
 	const_data_ptr_t Ptr() const {
 		return handle.Ptr() + position;
 	}
+	data_ptr_t GetDataMutable() {
+		return handle.GetDataMutable() + position;
+	}
 	bool IsSet() const {
 		return entry;
 	}

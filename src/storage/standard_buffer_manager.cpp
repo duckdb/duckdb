@@ -496,7 +496,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) * 2 + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	idx_t block_header_size = buffer.GetHeaderSize();
-	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
+	auto user_size = buffer.Size();
+	handle->Write(QueryContext(), &user_size, sizeof(idx_t), 0);
 	handle->Write(QueryContext(), &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;
