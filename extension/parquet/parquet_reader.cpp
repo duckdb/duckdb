@@ -1450,7 +1450,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		if (state.current_group_filter_ran && state.current_group > 0) {
 			const bool fully_filtered = !state.current_group_had_match;
 			DUCKDB_LOG(context, ParquetPrefetchLogType, file.path, state.group_idx_list[state.current_group - 1],
-			           fully_filtered, state.current_group_strategy);
+			           fully_filtered, state.current_group_strategy, state.current_group_prefetch_groups);
 		}
 		state.FinalizeRowGroupSelectivity();
 
@@ -1513,6 +1513,12 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					state.current_group_prefetched = true;
 				}
 				state.current_group_strategy = "whole_group";
+				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+				vector<string> all_cols;
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					all_cols.push_back(root_reader.GetChildReader(column_ids[MultiFileLocalIndex(i)]).Schema().name);
+				}
+				state.current_group_prefetch_groups.push_back(std::move(all_cols));
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
@@ -1532,6 +1538,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 				vector<bool> already_registered(column_ids.size(), false);
+				vector<string> current_batch;
 
 				if (filters && !state.scan_filters.empty()) {
 					auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
@@ -1540,15 +1547,21 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]] && !first_group) {
 							trans.FinalizeRegistration();
+							state.current_group_prefetch_groups.push_back(std::move(current_batch));
+							current_batch.clear();
 							first_group = true;
 						}
 						auto &scan_filter = state.scan_filters[permutation[i]];
 						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 						auto file_col_idx = column_ids[local_idx];
-						root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, true);
+						auto &child = root_reader.GetChildReader(file_col_idx);
+						child.RegisterPrefetch(trans, true);
+						current_batch.push_back(child.Schema().name);
 						already_registered[local_idx.GetIndex()] = true;
 					}
 					trans.FinalizeRegistration();
+					state.current_group_prefetch_groups.push_back(std::move(current_batch));
+					current_batch.clear();
 				}
 
 				for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1557,15 +1570,20 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = column_ids[col_idx];
-					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, true);
+					auto &child = root_reader.GetChildReader(file_col_idx);
+					child.RegisterPrefetch(trans, true);
+					current_batch.push_back(child.Schema().name);
 				}
 
 				trans.FinalizeRegistration();
+				if (!current_batch.empty()) {
+					state.current_group_prefetch_groups.push_back(std::move(current_batch));
+				}
 
 				if (!lazy_fetch) {
 					trans.PrefetchRegistered();
 				}
-				state.current_group_strategy = lazy_fetch ? "column_wise_lazy" : "column_wise_eager";
+				state.current_group_strategy = lazy_fetch ? "prefetch_filters" : "column_wise_eager";
 			}
 		}
 		result.Reset();

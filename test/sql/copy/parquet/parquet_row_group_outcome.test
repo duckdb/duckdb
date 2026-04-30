@@ -17,7 +17,11 @@ COPY (
         CASE
             WHEN i % 100 = 50 THEN 51
             ELSE i % 100
-        END AS c
+        END AS c,
+        CASE
+            WHEN i < 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
     FROM RANGE(12288) t(i)
 ) TO '{TEST_DIR}/rgo.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
 
@@ -25,41 +29,120 @@ statement ok
 CALL enable_logging('ParquetPrefetch')
 
 statement ok
-SELECT count(*)
+SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
-WHERE a > 5
-    AND b > 15
+WHERE a > 5 AND b > 15
 
-query ITT
-SELECT row_group_id, fully_filtered, strategy
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	false	column_wise_lazy
-1	false	whole_group
-2	false	whole_group
-3	false	whole_group
-4	false	whole_group
-5	false	whole_group
+0	false	prefetch_filters	[[a, b], [c, g]]
+1	false	whole_group	[[a, b, c, g]]
+2	false	whole_group	[[a, b, c, g]]
+3	false	whole_group	[[a, b, c, g]]
+4	false	whole_group	[[a, b, c, g]]
+5	false	whole_group	[[a, b, c, g]]
 
 statement ok
 CALL truncate_duckdb_logs()
 
 statement ok
-SELECT count(*)
+SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
 WHERE c = 50
 
-query ITT
-SELECT row_group_id, fully_filtered, strategy
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	column_wise_lazy
-1	true	column_wise_lazy
-2	true	column_wise_lazy
-3	true	column_wise_lazy
-4	true	column_wise_lazy
-5	true	column_wise_lazy
+0	true	prefetch_filters	[[c], [a, b, g]]
+1	true	prefetch_filters	[[c], [a, b, g]]
+2	true	prefetch_filters	[[c], [a, b, g]]
+3	true	prefetch_filters	[[c], [a, b, g]]
+4	true	prefetch_filters	[[c], [a, b, g]]
+5	true	prefetch_filters	[[c], [a, b, g]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE g = 500
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	true	prefetch_filters	[[g], [a, b, c]]
+1	true	prefetch_filters	[[g], [a, b, c]]
+2	true	prefetch_filters	[[g], [a, b, c]]
+3	false	prefetch_filters	[[g], [a, b, c]]
+4	false	prefetch_filters	[[g], [a, b, c]]
+5	false	prefetch_filters	[[g], [a, b, c]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Three filter columns where (a, c) together fully eliminate every row group
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo.parquet')
+WHERE a > 100 AND b > 5 AND c = 50
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo.parquet'
+ORDER BY row_group_id
+----
+0	true	prefetch_filters	[[a, c], [b, g]]
+1	true	prefetch_filters	[[a, c], [b, g]]
+2	true	prefetch_filters	[[a, c], [b, g]]
+3	true	prefetch_filters	[[a, c], [b, g]]
+4	true	prefetch_filters	[[a, c], [b, g]]
+5	true	prefetch_filters	[[a, c], [b, g]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# groups 0-2 have matches, groups 3-5 are fully filtered
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i >= 6144 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(12288) t(i)
+) TO '{TEST_DIR}/rgo2.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo2.parquet')
+WHERE g = 500
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo2.parquet'
+ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[g], [a, b, c]]
+1	false	whole_group	[[g, a, b, c]]
+2	false	whole_group	[[g, a, b, c]]
+3	true	whole_group	[[g, a, b, c]]
+4	true	prefetch_filters	[[g], [a, b, c]]
+5	true	prefetch_filters	[[g], [a, b, c]]

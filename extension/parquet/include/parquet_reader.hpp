@@ -125,6 +125,7 @@ struct ParquetReaderScanState {
 	bool current_group_filter_ran = false;
 	bool current_group_had_match = false;
 	const char *current_group_strategy = nullptr;
+	vector<vector<string>> current_group_prefetch_groups;
 
 	idx_t row_groups_executed = 0;
 	idx_t row_groups_with_matches = 0;
@@ -139,6 +140,7 @@ struct ParquetReaderScanState {
 		current_group_filter_ran = false;
 		current_group_had_match = false;
 		current_group_strategy = nullptr;
+		current_group_prefetch_groups.clear();
 	}
 
 	//! Per-thread adaptive filter cache
