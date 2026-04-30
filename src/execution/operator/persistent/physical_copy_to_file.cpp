@@ -1670,7 +1670,9 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 			PrepareAndFlushBatch(context.client, gstate, lstate.global_file_state, gstate.create_file_state_fun,
 			                     std::move(lstate.batch));
 		}
-		function.copy_to_finalize(context.client, *bind_data, *lstate.global_file_state->data);
+		if (lstate.global_file_state) {
+			gstate.FinalizeFileState(std::move(lstate.global_file_state));
+		}
 		return SinkCombineResultType::FINISHED;
 	}
 
