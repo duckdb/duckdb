@@ -233,6 +233,7 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
                                                 array_ptr<const Value> constants) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	D_ASSERT(stats.CanHaveNoNull());
+
 	for (auto &constant_value : constants) {
 		D_ASSERT(constant_value.type() == stats.GetType());
 		D_ASSERT(!constant_value.IsNull());
@@ -249,12 +250,25 @@ FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, Exp
 }
 
 FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t min_len, const_data_ptr_t max_data,
-                                                idx_t max_len, ExpressionType comparison_type, const string &constant) {
+                                                idx_t max_len, ExpressionType comparison_type, const string &constant,
+                                                bool min_is_exact, bool max_is_exact) {
 	auto data = const_data_ptr_cast(constant.c_str());
 	idx_t size = constant.size();
 
-	int min_comp = StringValueComparison(data, MinValue(min_len, size), min_data);
-	int max_comp = StringValueComparison(data, MinValue(max_len, size), max_data);
+	// When the stored bound is exact (not truncated), use a full lexicographic comparison so that
+	// length differences resolve definitively. When not exact, compare only the shared prefix length;
+	// a tie (== 0) is ambiguous because the stored value may extend past the compared bytes.
+	auto LexCompare = [](const_data_ptr_t a, idx_t a_len, const_data_ptr_t b, idx_t b_len) -> int {
+		int c = StringValueComparison(a, MinValue(a_len, b_len), b);
+		if (c != 0) {
+			return c;
+		}
+		return (a_len < b_len) ? -1 : (a_len > b_len) ? 1 : 0;
+	};
+	int min_comp = min_is_exact ? LexCompare(data, size, min_data, min_len)
+	                            : StringValueComparison(data, MinValue(min_len, size), min_data);
+	int max_comp = max_is_exact ? LexCompare(data, size, max_data, max_len)
+	                            : StringValueComparison(data, MinValue(max_len, size), max_data);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -270,19 +284,33 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		if (min_comp < 0 || (min_is_exact && min_comp == 0)) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max_comp > 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		if (max_comp <= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
+		if (min_comp < 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
-	case ExpressionType::COMPARE_LESSTHAN:
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		if (min_comp >= 0) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		} else {
+		if (max_comp > 0 || (max_is_exact && max_comp == 0)) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min_comp < 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_LESSTHAN:
+		if (max_comp > 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		} else if (min_comp < 0) {
+			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	default:
 		throw InternalException("Expression type not implemented for string statistics zone map");
 	}

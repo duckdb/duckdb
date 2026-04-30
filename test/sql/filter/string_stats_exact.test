@@ -1,0 +1,49 @@
+# name: test/sql/filter/string_stats_exact.test
+# description: Plan-level filter elimination for VARCHAR via segment zone maps
+# group: [filter]
+
+# Persist to disk so segment zone maps are evaluated on restart.
+load {TEST_DIR}/string_stats_exact.db
+
+statement ok
+CREATE TABLE t (s VARCHAR);
+
+# segment zone map: min='abc', max='xyz' (both <= 8 bytes, exact)
+statement ok
+INSERT INTO t VALUES ('abc'), ('mno'), ('xyz');
+
+restart
+
+statement ok
+PRAGMA explain_output = 'PHYSICAL_ONLY'
+
+# always-true via segment min/max: optimizer eliminates the filter from the scan
+query II
+EXPLAIN SELECT count(*) FROM t WHERE s > 'aa';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+# always-true via exact-bound <= path (constant longer than max but shares prefix)
+query II
+EXPLAIN SELECT count(*) FROM t WHERE s <= 'xyza';
+----
+physical_plan	<!REGEX>:.*Filters:.*
+
+# always-false: optimizer collapses the entire scan to EMPTY_RESULT
+query II
+EXPLAIN SELECT count(*) FROM t WHERE s > 'zzz';
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# correctness for cases the zone map can't fully prune (constant strictly between min and max)
+query I
+SELECT count(*) FROM t WHERE s > 'mno';
+----
+1
+
+# equality with a value in [min,max] but not in the data — zone map says NO_PRUNING_POSSIBLE,
+# per-row eval correctly returns 0
+query I
+SELECT count(*) FROM t WHERE s = 'abcd';
+----
+0
