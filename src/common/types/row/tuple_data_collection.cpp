@@ -134,9 +134,9 @@ vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const
 	return chunk_ranges;
 }
 
-vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
+vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	D_ASSERT(segments.size() == 1);
-	auto &segment = const_cast<TupleDataSegment &>(*segments[0]);
+	auto &segment = *segments[0];
 	vector<data_ptr_t> result;
 	result.reserve(segment.pinned_row_handles.size());
 	for (auto &pinned_row_handle : segment.pinned_row_handles) {

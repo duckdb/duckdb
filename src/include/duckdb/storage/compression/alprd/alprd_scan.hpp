@@ -11,6 +11,7 @@
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -84,7 +85,11 @@ public:
 		uint8_t actual_dictionary_size =
 		    Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE + AlpRDConstants::RIGHT_BIT_WIDTH_SIZE +
 		                  AlpRDConstants::LEFT_BIT_WIDTH_SIZE);
-		uint8_t actual_dictionary_size_bytes = actual_dictionary_size * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
+		if (actual_dictionary_size > AlpRDConstants::MAX_DICTIONARY_SIZE) {
+			throw IOException("Corrupt database file: ALPRD dictionary size exceeds maximum");
+		}
+		idx_t actual_dictionary_size_bytes =
+		    static_cast<idx_t>(actual_dictionary_size) * AlpRDConstants::DICTIONARY_ELEMENT_SIZE;
 
 		// Load the left parts dictionary which is after the segment header and is of a fixed size
 		memcpy(vector_state.left_parts_dict, (void *)(segment_data + AlpRDConstants::HEADER_SIZE),
@@ -160,6 +165,9 @@ public:
 				memcpy(value_buffer, vector_ptr, sizeof(T) * vector_size);
 			}
 			return;
+		}
+		if (vector_state.exceptions_count > vector_size) {
+			throw IOException("Corrupt database file: ALPRD exceptions_count exceeds vector size");
 		}
 
 		auto left_bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.left_bit_width);
