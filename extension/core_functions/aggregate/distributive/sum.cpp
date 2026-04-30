@@ -239,7 +239,7 @@ unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	function.name = "sum";
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
-	function.GetProperties().SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
 }
 

@@ -358,7 +358,7 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	auto name = std::move(function.name);
 	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
 	function.name = std::move(name);
-	function.GetProperties().SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetReturnType(decimal_type);
 	return nullptr;
 }
@@ -380,7 +380,7 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	auto name = std::move(function.name);
 	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
 	function.name = std::move(name);
-	function.GetProperties().SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
+	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	return nullptr;
 }
 

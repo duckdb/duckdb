@@ -154,8 +154,8 @@ void WindowSegmentTree::Finalize(ExecutionContext &context, CollectionPtr collec
 
 WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const AggregateObject &aggr,
                                              unique_ptr<WindowCursor> cursor_p, const ValidityArray &filter_mask)
-    : allocator(allocator), aggr(aggr), order_insensitive(aggr.function.GetProperties().GetOrderDependent() ==
-                                                          AggregateOrderDependent::NOT_ORDER_DEPENDENT),
+    : allocator(allocator), aggr(aggr),
+      order_insensitive(aggr.function.GetOrderDependent() == AggregateOrderDependent::NOT_ORDER_DEPENDENT),
       filter_mask(filter_mask), state_size(aggr.function.GetStateSizeCallback()(aggr.function)),
       state(state_size * STANDARD_VECTOR_SIZE), cursor(std::move(cursor_p)), statep(LogicalType::POINTER),
       statel(LogicalType::POINTER), statef(LogicalType::POINTER), flush_count(0) {

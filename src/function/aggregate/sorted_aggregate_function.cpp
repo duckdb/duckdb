@@ -739,8 +739,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
 	//	Make implicit orderings explicit
 	auto &aggregate = *expr.aggregate;
-	if (aggregate.GetProperties().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT &&
-	    expr.arg_orders.empty()) {
+	if (aggregate.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
 		for (auto &order : expr.orders) {
 			const auto type = order.type;
 			const auto null_order = order.null_order;

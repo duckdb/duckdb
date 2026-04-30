@@ -822,9 +822,9 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 
 	unique_ptr<FunctionData> bind_info;
 
-	if (bound_function.GetCallbacks().HasBindCallback()) {
+	if (bound_function.HasBindCallback()) {
 		BindWindowFunctionInput input(context, bound_function, children, orders, arg_orders);
-		bind_info = bound_function.GetCallbacks().GetBindCallback()(input);
+		bind_info = bound_function.GetBindCallback()(input);
 		// we may have lost some arguments in the bind
 		children.resize(MinValue(bound_function.GetArguments().size(), children.size()));
 	}

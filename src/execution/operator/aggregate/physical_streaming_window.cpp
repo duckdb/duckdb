@@ -129,7 +129,7 @@ public:
 			auto &fstate = states[expr_idx];
 			if (expr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 				fstate = make_uniq<AggregateState>(client, wexpr, allocator);
-			} else if (wexpr.window && wexpr.window->GetCallbacks().HasStreamingStateCallback()) {
+			} else if (wexpr.window && wexpr.window->HasStreamingStateCallback()) {
 				fstate = wexpr.window->GetStreamingState(client, input, wexpr);
 			} else {
 				throw NotImplementedException("GetStreamingState for %s",
@@ -315,7 +315,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		auto &fstate = *state.states[expr_idx];
 		if (expr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 			fstate.Cast<StreamingWindowState::AggregateState>().Execute(context, output, result);
-		} else if (wexpr.window && wexpr.window->GetCallbacks().HasStreamingDataCallback()) {
+		} else if (wexpr.window && wexpr.window->HasStreamingDataCallback()) {
 			wexpr.window->GetStreamingData(context, output, delayed, state.delayed_capacity, result, fstate);
 		} else {
 			throw NotImplementedException("GetStreamingData for %s", ExpressionTypeToString(expr.GetExpressionType()));

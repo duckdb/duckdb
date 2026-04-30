@@ -277,7 +277,7 @@ public:
 bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
 	for (auto &expr : aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.GetProperties().GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr.function.GetOrderDependent() == AggregateOrderDependent::ORDER_DEPENDENT) {
 			return true;
 		}
 	}
