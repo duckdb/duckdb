@@ -1118,6 +1118,23 @@ void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t 
 	                           *FlatVector::IncrementalSelectionVector(), nullptr);
 }
 
+void ScanStructure::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result) {
+	const auto rhs_col_offset = ht.lhs_output_in_probe.size();
+	if (ht.use_dict_emission) {
+		const auto ptrs = FlatVector::GetData<data_ptr_t>(row_ptrs);
+		ht.EmitDictVectors(ptrs, ptr_sel, count, result, rhs_col_offset);
+		return;
+	}
+	const auto &result_sel = *FlatVector::IncrementalSelectionVector();
+	for (idx_t col_idx = 0; col_idx < ht.output_columns.size(); col_idx++) {
+		auto &vector = result.data[rhs_col_offset + col_idx];
+		const auto output_col_idx = ht.output_columns[col_idx];
+		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
+		ht.data_collection->Gather(row_ptrs, ptr_sel, count, output_col_idx, vector, result_sel, nullptr);
+		FlatVector::SetSize(vector, count_t(count));
+	}
+}
+
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
 	// matches were found
 	// record the result
@@ -1178,19 +1195,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 					result.SetCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
-					if (ht.use_dict_emission) {
-						auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-						ht.EmitDictVectors(ptrs, chain_match_sel_vector, result_count, result,
-						                   ht.lhs_output_in_probe.size());
-					} else {
-						for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-							auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-							const auto output_col_idx = ht.output_columns[i];
-							D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-							GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
-							FlatVector::SetSize(vector, count_t(result_count));
-						}
-					}
+					GatherRHS(pointers, chain_match_sel_vector, result_count, result);
 
 					AdvancePointers();
 					return;
@@ -1213,18 +1218,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 		result.SetCardinality(base_count);
 
 		// 2) gather RHS vectors
-		if (ht.use_dict_emission) {
-			auto rhs_ptrs = FlatVector::GetData<data_ptr_t>(rhs_pointers);
-			ht.EmitDictVectors(rhs_ptrs, base_count, result, ht.lhs_output_in_probe.size());
-		} else {
-			for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-				auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-				const auto output_col_idx = ht.output_columns[i];
-				D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-				GatherResult(vector, base_count, output_col_idx);
-				FlatVector::SetSize(vector, count_t(base_count));
-			}
-		}
+		GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result);
 	}
 }
 
@@ -1688,7 +1682,7 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	// gather the values from the RHS
 	if (use_dict_emission && found_entries > 0) {
 		auto key_locs = FlatVector::GetData<data_ptr_t>(addresses);
-		EmitDictVectors(key_locs, found_entries, result, left_column_count);
+		EmitDictVectors(key_locs, sel_vector, found_entries, result, left_column_count);
 	} else {
 		for (idx_t i = 0; i < output_columns.size(); i++) {
 			auto &vector = result.data[left_column_count + i];
@@ -2092,19 +2086,6 @@ bool JoinHashTable::CanUseDictionaryEmission(const PhysicalHashJoin &op, bool ex
 	return true;
 }
 
-void JoinHashTable::EmitDictVectors(const data_ptr_t *row_ptrs, idx_t count, DataChunk &result,
-                                    idx_t rhs_col_offset) const {
-	D_ASSERT(output_columns.size() == dict_arrays.size());
-	SelectionVector build_sel_vec(count);
-	for (idx_t i = 0; i < count; i++) {
-		build_sel_vec.set_index(i, Load<uint32_t>(row_ptrs[i] + pointer_offset));
-	}
-	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
-		auto &vector = result.data[rhs_col_offset + col_idx];
-		vector.Dictionary(dict_arrays[col_idx], build_sel_vec, count);
-	}
-}
-
 void JoinHashTable::EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count,
                                     DataChunk &result, idx_t rhs_col_offset) const {
 	D_ASSERT(output_columns.size() == dict_arrays.size());
@@ -2150,14 +2131,15 @@ void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
 	if (chains_longer_than_one) {
 		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
 		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
-		for (idx_t i = 0; i < build_count; i++) {
-			aux_next_ptrs_data[i] = LoadPointer(row_ptrs[i] + pointer_offset);
-		}
 	}
 
-	// embed the dict index into NEXT_PTR; GetNextPointer now resolves chains via aux_next_ptrs
+	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
 	for (idx_t i = 0; i < build_count; i++) {
-		Store<uint32_t>(static_cast<uint32_t>(i), row_ptrs[i] + pointer_offset);
+		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
+		if (chains_longer_than_one) {
+			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
+		}
+		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);
 	}
 
 	use_dict_emission = true;
