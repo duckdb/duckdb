@@ -26,8 +26,13 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_delete.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_merge_into.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
@@ -547,6 +552,41 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	}
 	if (new_returning_list.empty()) {
 		throw BinderException("RETURNING list is empty!");
+	}
+	// Surface the set of target-table columns referenced by RETURNING on the write
+	// operator so catalog extensions can do projection pushdown for affected-row
+	// payloads. Filter to the target table's bindings; refs to other tables (e.g.
+	// from a correlated subquery) are not the write operator's columns.
+	{
+		unordered_set<column_t> referenced;
+		vector<column_t> referenced_ordered;
+		for (auto &expr : projection_expressions) {
+			ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+			    *expr, [&](const BoundColumnRefExpression &colref) {
+				    if (colref.binding.table_index != update_table_index) {
+					    return;
+				    }
+				    if (referenced.insert(colref.binding.column_index).second) {
+					    referenced_ordered.push_back(colref.binding.column_index);
+				    }
+			    });
+		}
+		switch (child_operator->type) {
+		case LogicalOperatorType::LOGICAL_INSERT:
+			child_operator->Cast<LogicalInsert>().returning_referenced_columns = std::move(referenced_ordered);
+			break;
+		case LogicalOperatorType::LOGICAL_UPDATE:
+			child_operator->Cast<LogicalUpdate>().returning_referenced_columns = std::move(referenced_ordered);
+			break;
+		case LogicalOperatorType::LOGICAL_DELETE:
+			child_operator->Cast<LogicalDelete>().returning_referenced_columns = std::move(referenced_ordered);
+			break;
+		case LogicalOperatorType::LOGICAL_MERGE_INTO:
+			child_operator->Cast<LogicalMergeInto>().returning_referenced_columns = std::move(referenced_ordered);
+			break;
+		default:
+			break;
+		}
 	}
 	auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(projection_expressions));
 	projection->AddChild(std::move(child_operator));

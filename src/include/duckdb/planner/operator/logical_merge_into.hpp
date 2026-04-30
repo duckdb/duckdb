@@ -58,6 +58,12 @@ public:
 	//! For DELETE with RETURNING: maps storage_idx -> input chunk position
 	//! Used to pass columns through instead of fetching by row ID
 	vector<idx_t> delete_return_columns;
+	//! The set of target-table column indices referenced by the RETURNING list.
+	//! Populated by the binder when RETURNING is present so catalog extensions can
+	//! perform write-side projection pushdown for affected-row payloads.
+	//! An empty vector means no projection information is available; treat as a request
+	//! for all columns. Built-in MERGE INTO ignores this field.
+	vector<column_t> returning_referenced_columns;
 
 	map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>> actions;
 

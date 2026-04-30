@@ -1,0 +1,78 @@
+# name: test/sql/returning/returning_referenced_columns.test
+# description: Verify that returning_referenced_columns is populated on the write operator
+# group: [returning]
+
+require json
+
+statement ok
+CREATE TABLE t(a INT, b INT, c INT);
+
+# INSERT RETURNING single column -> [0]
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3) RETURNING a'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0]
+
+# INSERT RETURNING multiple columns -> [0, 2]
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3) RETURNING a, c'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0,2]
+
+# INSERT RETURNING * -> all columns
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3) RETURNING *'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0,1,2]
+
+# INSERT RETURNING expression involving multiple columns
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3) RETURNING a + b AS sum'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0,1]
+
+# INSERT RETURNING with a constant -> empty (no target columns referenced)
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3) RETURNING 42'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[]
+
+# UPDATE RETURNING single column
+query I
+SELECT json_extract(json_serialize_plan('UPDATE t SET a = 10 RETURNING b'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[1]
+
+# UPDATE RETURNING multiple columns
+query I
+SELECT json_extract(json_serialize_plan('UPDATE t SET a = 10 RETURNING a, c'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0,2]
+
+# DELETE RETURNING single column
+query I
+SELECT json_extract(json_serialize_plan('DELETE FROM t WHERE a = 1 RETURNING c'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[2]
+
+# DELETE RETURNING *
+query I
+SELECT json_extract(json_serialize_plan('DELETE FROM t RETURNING *'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0,1,2]
+
+# MERGE INTO RETURNING - target column reference only
+statement ok
+CREATE TABLE src(a INT, b INT, c INT);
+
+query I
+SELECT json_extract(json_serialize_plan('MERGE INTO t USING src ON t.a = src.a WHEN MATCHED THEN UPDATE SET b = src.b WHEN NOT MATCHED THEN INSERT VALUES (src.a, src.b, src.c) RETURNING t.a'), '$.plans[0].children[0].returning_referenced_columns');
+----
+[0]
+
+# Sanity: when there is no RETURNING clause the field is absent (or empty);
+# the plan has no projection wrapping the write op.
+query I
+SELECT json_extract(json_serialize_plan('INSERT INTO t VALUES (1, 2, 3)'), '$.plans[0].returning_referenced_columns');
+----
+[]

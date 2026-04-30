@@ -417,6 +417,7 @@ void LogicalDelete::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(202, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", expressions);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(204, "return_columns", return_columns);
+	serializer.WritePropertyWithDefault<vector<column_t>>(205, "returning_referenced_columns", returning_referenced_columns, vector<column_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserializer) {
@@ -426,6 +427,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<bool>(202, "return_chunk", result->return_chunk);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(203, "expressions", result->expressions);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(204, "return_columns", result->return_columns);
+	deserializer.ReadPropertyWithExplicitDefault<vector<column_t>>(205, "returning_referenced_columns", result->returning_referenced_columns, vector<column_t>());
 	return std::move(result);
 }
 
@@ -560,6 +562,7 @@ void LogicalInsert::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<column_t>>(216, "source_columns", on_conflict_info.source_columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", expressions);
 	serializer.WritePropertyWithDefault<bool>(218, "update_is_del_and_insert", on_conflict_info.update_is_del_and_insert, false);
+	serializer.WritePropertyWithDefault<vector<column_t>>(219, "returning_referenced_columns", returning_referenced_columns, vector<column_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserializer) {
@@ -583,6 +586,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<vector<column_t>>(216, "source_columns", result->on_conflict_info.source_columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(217, "expressions", result->expressions);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(218, "update_is_del_and_insert", result->on_conflict_info.update_is_del_and_insert, false);
+	deserializer.ReadPropertyWithExplicitDefault<vector<column_t>>(219, "returning_referenced_columns", result->returning_referenced_columns, vector<column_t>());
 	return std::move(result);
 }
 
@@ -626,6 +630,7 @@ void LogicalMergeInto::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", actions);
 	serializer.WritePropertyWithDefault<bool>(206, "return_chunk", return_chunk);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(207, "delete_return_columns", delete_return_columns);
+	serializer.WritePropertyWithDefault<vector<column_t>>(208, "returning_referenced_columns", returning_referenced_columns, vector<column_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserializer) {
@@ -638,6 +643,7 @@ unique_ptr<LogicalOperator> LogicalMergeInto::Deserialize(Deserializer &deserial
 	deserializer.ReadPropertyWithDefault<map<MergeActionCondition, vector<unique_ptr<BoundMergeIntoAction>>>>(205, "actions", result->actions);
 	deserializer.ReadPropertyWithDefault<bool>(206, "return_chunk", result->return_chunk);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(207, "delete_return_columns", result->delete_return_columns);
+	deserializer.ReadPropertyWithExplicitDefault<vector<column_t>>(208, "returning_referenced_columns", result->returning_referenced_columns, vector<column_t>());
 	return std::move(result);
 }
 
@@ -818,6 +824,7 @@ void LogicalUpdate::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<PhysicalIndex>>(204, "columns", columns);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", bound_defaults);
 	serializer.WritePropertyWithDefault<bool>(206, "update_is_del_and_insert", update_is_del_and_insert);
+	serializer.WritePropertyWithDefault<vector<column_t>>(207, "returning_referenced_columns", returning_referenced_columns, vector<column_t>());
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserializer) {
@@ -829,6 +836,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(204, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", result->bound_defaults);
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
+	deserializer.ReadPropertyWithExplicitDefault<vector<column_t>>(207, "returning_referenced_columns", result->returning_referenced_columns, vector<column_t>());
 	return std::move(result);
 }
 
