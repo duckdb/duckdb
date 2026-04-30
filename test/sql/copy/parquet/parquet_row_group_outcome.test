@@ -60,12 +60,12 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[c], [a, b, g]]
-1	true	prefetch_filters	[[c], [a, b, g]]
-2	true	prefetch_filters	[[c], [a, b, g]]
-3	true	prefetch_filters	[[c], [a, b, g]]
-4	true	prefetch_filters	[[c], [a, b, g]]
-5	true	prefetch_filters	[[c], [a, b, g]]
+0	true	prefetch_filters	[[c], [a, b, *c*, g]]
+1	true	prefetch_filters	[[c], [a, b, *c*, g]]
+2	true	prefetch_filters	[[c], [a, b, *c*, g]]
+3	true	prefetch_filters	[[c], [a, b, *c*, g]]
+4	true	prefetch_filters	[[c], [a, b, *c*, g]]
+5	true	prefetch_filters	[[c], [a, b, *c*, g]]
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -103,12 +103,12 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[a, c], [b, g]]
-1	true	prefetch_filters	[[a, c], [b, g]]
-2	true	prefetch_filters	[[a, c], [b, g]]
-3	true	prefetch_filters	[[a, c], [b, g]]
-4	true	prefetch_filters	[[a, c], [b, g]]
-5	true	prefetch_filters	[[a, c], [b, g]]
+0	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+1	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+2	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+3	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+4	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+5	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
 
 statement ok
 CALL truncate_duckdb_logs()

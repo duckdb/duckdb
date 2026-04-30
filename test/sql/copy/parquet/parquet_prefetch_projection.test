@@ -1,0 +1,95 @@
+# name: test/sql/copy/parquet/parquet_prefetch_projection.test
+# description: Check prefetch with projection
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET threads=1
+
+statement ok
+SET prefetch_all_parquet_files=true
+
+statement ok
+COPY (
+    SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE i END AS a,
+        CASE WHEN i % 11 = 0 THEN NULL ELSE i + 10 END AS b,
+        i % 1000 AS g,
+        i % 500 AS d,
+        hash(i)::VARCHAR AS unproj1,
+        hash(i + 1)::VARCHAR AS unproj2,
+        hash(i + 2)::VARCHAR AS unproj3
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/rgo_proj.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+CALL enable_logging('ParquetPrefetch')
+
+statement ok
+SELECT sum(g + d)
+FROM read_parquet('{TEST_DIR}/rgo_proj.parquet')
+WHERE a >= 0 AND b >= 0
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_proj.parquet'
+ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[a, b], [g, d]]
+1	false	column_wise_eager	[[a, b, g, d]]
+2	false	column_wise_eager	[[a, b, g, d]]
+3	false	column_wise_eager	[[a, b, g, d]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT CASE WHEN i % 7 = 0 THEN NULL ELSE i END AS a,
+        i + 1 AS b,
+        CASE WHEN i % 11 = 0 THEN NULL ELSE i + 2 END AS c,
+        hash(i)::VARCHAR AS d,
+        hash(i + 1)::VARCHAR AS e,
+        hash(i + 2)::VARCHAR AS f,
+        hash(i + 3)::VARCHAR AS g,
+        hash(i + 4)::VARCHAR AS h,
+        hash(i + 5)::VARCHAR AS ii,
+        i + 9 AS j
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/rgo_proj_gap.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(b + j)
+FROM read_parquet('{TEST_DIR}/rgo_proj_gap.parquet')
+WHERE a >= 0 AND c >= 0
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_proj_gap.parquet'
+ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[a, *b*, c], [b], [j]]
+1	false	column_wise_eager	[[a, b, c], [j]]
+2	false	column_wise_eager	[[a, b, c], [j]]
+3	false	column_wise_eager	[[a, b, c], [j]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+SELECT sum(j)
+FROM read_parquet('{TEST_DIR}/rgo_proj_gap.parquet')
+WHERE a >= 0 AND c >= 0
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_proj_gap.parquet'
+ORDER BY row_group_id
+----
+0	false	prefetch_filters	[[a, *b*, c], [j]]
+1	false	column_wise_eager	[[a, *b*, c], [j]]
+2	false	column_wise_eager	[[a, *b*, c], [j]]
+3	false	column_wise_eager	[[a, *b*, c], [j]]
