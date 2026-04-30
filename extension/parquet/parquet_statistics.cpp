@@ -437,6 +437,7 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
                                                    optional_ptr<const ColumnChunk> column_chunk) {
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -454,6 +455,7 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UUID:
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:

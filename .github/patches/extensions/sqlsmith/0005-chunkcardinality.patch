@@ -1,0 +1,13 @@
+diff --git a/src/sqlsmith_extension.cpp b/src/sqlsmith_extension.cpp
+index c5f2274..1542369 100644
+--- a/src/sqlsmith_extension.cpp
++++ b/src/sqlsmith_extension.cpp
+@@ -118,7 +118,7 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
+ 		output.data[0].SetValue(count, Value(entry));
+ 		count++;
+ 	}
+-	output.SetCardinality(count);
++	output.SetChildCardinality(count);
+ }
+
+ struct FuzzyDuckFunctionData : public TableFunctionData {
