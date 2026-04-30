@@ -624,12 +624,12 @@ jobs:
     - name: Install tools
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install pytest
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
-        python3 -m pip install --break-system-packages pytest
+        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
       with:

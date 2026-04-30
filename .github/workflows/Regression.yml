@@ -167,7 +167,7 @@ jobs:
       - name: Install
         run: |
           python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install requests
+          python3 scripts/ci/retry.py -- pip install --break-system-packages requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
