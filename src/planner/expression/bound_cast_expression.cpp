@@ -76,6 +76,13 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 			parameter.SetReturnType(parameter.parameter_data->return_type);
 			return expr;
 		}
+		// If this occurrence's own return_type still matches parameter_data->return_type, the
+		// parameter was pinned by an inner cast on this same occurrence (e.g. CAST(CAST($1 AS A) AS B)).
+		// Add a regular cast on top instead of invalidating.
+		if (parameter.return_type == parameter.parameter_data->return_type) {
+			auto cast_function = cast_functions.GetCastFunction(parameter.return_type, target_type, get_input);
+			return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
+		}
 		// invalidate the type
 		parameter.parameter_data->return_type = LogicalType::INVALID;
 		parameter.SetReturnType(target_type);
