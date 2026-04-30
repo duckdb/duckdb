@@ -33,6 +33,11 @@ idx_t VectorArrayBuffer::GetChildSize() const {
 	return capacity * array_size;
 }
 
+void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	FlatVector::SetSize(*child, new_size * array_size);
+}
+
 void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
