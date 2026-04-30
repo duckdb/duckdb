@@ -273,8 +273,8 @@ static idx_t CompactUnresolvedSelection(const SelectionVector &unresolved_sel, i
 	return remaining_count;
 }
 
-static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unresolved_sel, idx_t unresolved_count,
-                                     DataChunk &scan_chunk, SelectionVector &matched_sel) {
+static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector &unresolved_sel,
+                                     idx_t unresolved_count, DataChunk &scan_chunk, SelectionVector &matched_sel) {
 	SelectionVector equal_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector false_sel(STANDARD_VECTOR_SIZE);
 	SelectionVector candidate_sel_a(STANDARD_VECTOR_SIZE);
