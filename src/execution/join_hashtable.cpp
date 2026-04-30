@@ -342,10 +342,9 @@ static idx_t MatchRemainderRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_
 			continue;
 		}
 		auto &remaining_sel = use_a ? state.candidate_sel_a : state.candidate_sel_b;
-		candidate_count = FilterCandidatesForColumnComparison(join_keys.data[col_idx], scan_chunk.data[col_idx],
-		                                                      state.rhs_constant_values[col_idx], scan_row,
-		                                                      scan_chunk.size(),
-		                                                      *candidate_sel, candidate_count, state, remaining_sel);
+		candidate_count = FilterCandidatesForColumnComparison(
+		    join_keys.data[col_idx], scan_chunk.data[col_idx], state.rhs_constant_values[col_idx], scan_row,
+		    scan_chunk.size(), *candidate_sel, candidate_count, state, remaining_sel);
 		candidate_sel = &remaining_sel;
 		use_a = !use_a;
 		if (candidate_count == 0) {
