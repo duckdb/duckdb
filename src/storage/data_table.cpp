@@ -1853,7 +1853,7 @@ idx_t DataTable::GetRowGroupCount() const {
 
 idx_t DataTable::GetRowGroupCountWithLocalStorage(ClientContext &context) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	auto storage = local_storage.table_manager.GetStorage(*this);
+	auto storage = local_storage.GetStorage(*this);
 	if (!storage) {
 		return GetRowGroupCount();
 	}
