@@ -307,10 +307,10 @@ struct MarkJoinNullMatchState {
 };
 
 static idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs_column, Vector &rhs_value,
-                                                 idx_t rhs_row, const SelectionVector &candidate_sel,
+                                                 idx_t rhs_row, idx_t rhs_count, const SelectionVector &candidate_sel,
                                                  idx_t candidate_count, MarkJoinNullMatchState &state,
                                                  SelectionVector &remaining_sel) {
-	ConstantVector::Reference(rhs_value, rhs_column, rhs_row, candidate_count);
+	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
 
 	state.null_mask.SetAllValid(state.probe_count);
 	const idx_t equal_count = VectorOperations::Equals(lhs_column, rhs_value, &candidate_sel, candidate_count,
@@ -344,6 +344,7 @@ static idx_t MatchRemainderRow(DataChunk &join_keys, DataChunk &scan_chunk, idx_
 		auto &remaining_sel = use_a ? state.candidate_sel_a : state.candidate_sel_b;
 		candidate_count = FilterCandidatesForColumnComparison(join_keys.data[col_idx], scan_chunk.data[col_idx],
 		                                                      state.rhs_constant_values[col_idx], scan_row,
+		                                                      scan_chunk.size(),
 		                                                      *candidate_sel, candidate_count, state, remaining_sel);
 		candidate_sel = &remaining_sel;
 		use_a = !use_a;
