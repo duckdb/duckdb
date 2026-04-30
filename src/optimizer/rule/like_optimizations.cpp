@@ -139,7 +139,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, ScalarFunction function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, BoundScalarFunction function,
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
