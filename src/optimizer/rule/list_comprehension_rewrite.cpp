@@ -19,7 +19,7 @@ namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
 	if (expr.function.name == target_name) {
-		D_ASSERT(!expr.children.empty() && expr.children[0]->return_type.id() == LogicalTypeId::LIST);
+		D_ASSERT(!expr.children.empty() && expr.children[0]->GetReturnType().id() == LogicalTypeId::LIST);
 		return true;
 	}
 
@@ -49,7 +49,7 @@ optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 }
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
-	D_ASSERT(struct_pack.return_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(struct_pack.GetReturnType().id() == LogicalTypeId::STRUCT);
 	for (auto &child : struct_pack.children) {
 		if (child->GetAlias() == name) {
 			return child.get();
@@ -230,7 +230,7 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 		filter_children.push_back(std::move(inner_apply.children[i]));
 	}
 
-	auto filter_return_type = filter_children[0]->return_type;
+	auto filter_return_type = filter_children[0]->GetReturnType();
 	auto filter_bind_info = make_uniq<ListLambdaBindData>(filter_return_type, filter_expr.Copy(), inner_bind.has_index);
 	auto new_filter =
 	    make_uniq<BoundFunctionExpression>(filter_return_type, list_filter_expr.function, std::move(filter_children),
@@ -244,7 +244,7 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 		apply_children.push_back(std::move(captured_child));
 	}
 
-	auto apply_return_type = LogicalType::LIST(result_expr.return_type);
+	auto apply_return_type = LogicalType::LIST(result_expr.GetReturnType());
 	auto apply_lambda = result_expr.Copy();
 	if (inner_bind.has_index) {
 		// The apply function included an index but it was not used. Adapt references to exclude index

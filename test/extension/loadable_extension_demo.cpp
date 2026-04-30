@@ -231,7 +231,7 @@ public:
 	static unique_ptr<FunctionData> Bind(BindWindowFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function.SetReturnType(arguments[0]->return_type);
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 
@@ -292,8 +292,8 @@ public:
 	class StreamingState : public WindowExecutorStreamingState {
 	public:
 		StreamingState(ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr)
-		    : wexpr(wexpr), filler(Value(wexpr.children[0]->return_type), count_t(STANDARD_VECTOR_SIZE)),
-		      executor(client), arg(wexpr.children[0]->return_type) {
+		    : wexpr(wexpr), filler(Value(wexpr.children[0]->GetReturnType()), count_t(STANDARD_VECTOR_SIZE)),
+		      executor(client), arg(wexpr.children[0]->GetReturnType()) {
 			executor.AddExpression(*wexpr.children[0]);
 		}
 		//! The window expression
@@ -561,8 +561,8 @@ static void BoundedMaxFunc(DataChunk &args, ExpressionState &state, Vector &resu
 static unique_ptr<FunctionData> BoundedMaxBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	} else {
 		throw BinderException("bounded_max expects a BOUNDED type");
 	}
@@ -580,14 +580,14 @@ static void BoundedAddFunc(DataChunk &args, ExpressionState &state, Vector &resu
 static unique_ptr<FunctionData> BoundedAddBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (BoundedType::GetDefault() == arguments[0]->return_type &&
-	    BoundedType::GetDefault() == arguments[1]->return_type) {
-		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->return_type);
-		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->return_type);
+	if (BoundedType::GetDefault() == arguments[0]->GetReturnType() &&
+	    BoundedType::GetDefault() == arguments[1]->GetReturnType()) {
+		auto left_max_val = BoundedType::GetMaxValue(arguments[0]->GetReturnType());
+		auto right_max_val = BoundedType::GetMaxValue(arguments[1]->GetReturnType());
 
 		auto new_max_val = left_max_val + right_max_val;
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
-		bound_function.GetArguments()[1] = arguments[1]->return_type;
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.GetArguments()[1] = arguments[1]->GetReturnType();
 		bound_function.SetReturnType(BoundedType::Get(new_max_val));
 	} else {
 		throw BinderException("bounded_add expects two BOUNDED types");
@@ -613,9 +613,9 @@ struct BoundedFunctionData : public FunctionData {
 static unique_ptr<FunctionData> BoundedInvertBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type == BoundedType::GetDefault()) {
-		bound_function.GetArguments()[0] = arguments[0]->return_type;
-		bound_function.SetReturnType(arguments[0]->return_type);
+	if (arguments[0]->GetReturnType() == BoundedType::GetDefault()) {
+		bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
+		bound_function.SetReturnType(arguments[0]->GetReturnType());
 	} else {
 		throw BinderException("bounded_invert expects a BOUNDED type");
 	}

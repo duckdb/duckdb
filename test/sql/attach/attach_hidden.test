@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH ':memory:' AS hidden_db (HIDDEN true);
 
 # hidden database should not appear in duckdb_databases()

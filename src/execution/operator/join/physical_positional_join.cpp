@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_positional_join.hpp"
 
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/join/physical_join.hpp"
 
@@ -130,7 +131,7 @@ void PositionalJoinGlobalState::Execute(DataChunk &input, DataChunk &output) {
 	Refill();
 	CopyData(output, count, col_offset);
 
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 OperatorResultType PhysicalPositionalJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -166,7 +167,7 @@ void PositionalJoinGlobalState::GetData(DataChunk &output) {
 
 	//	RHS still has data, so copy it
 	CopyData(output, count, col_offset);
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 SourceResultType PhysicalPositionalJoin::GetDataInternal(ExecutionContext &context, DataChunk &result,

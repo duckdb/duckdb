@@ -48,7 +48,7 @@ int64_t SequenceCatalogEntry::CurrentValue() {
 	if (!data.last_value) {
 		throw SequenceException("currval: sequence is not yet defined in this session");
 	}
-	result = data.last_value.GetValue();
+	result = data.last_value.value();
 	return result;
 }
 

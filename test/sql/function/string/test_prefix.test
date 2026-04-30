@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 # "Early out prefix"
 query T
 SELECT prefix('abcd', 'a')

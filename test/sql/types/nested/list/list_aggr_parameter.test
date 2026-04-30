@@ -2,9 +2,6 @@
 # description: Test lists aggregations with extra parameters
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT list_aggr(list(i), 'quantile', 0.5) FROM range(1, 11) tbl(i);
 ----

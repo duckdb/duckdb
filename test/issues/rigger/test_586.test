@@ -2,9 +2,6 @@
 # description: Issue 586
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # NOACCENT.NOCASE comparison with a special character results in a segmentation fault
 query T
 SELECT ''='Ʇ';

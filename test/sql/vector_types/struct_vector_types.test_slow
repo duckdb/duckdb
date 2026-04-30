@@ -2,9 +2,6 @@
 # description: Vector Types test: structs
 # group: [vector_types]
 
-statement ok
-PRAGMA enable_verification
-
 # we run a bunch of queries, and verify that the result does not change
 # when running with different vector types vs running with only flat vectors
 

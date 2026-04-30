@@ -11,11 +11,13 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include <mutex>
 
 namespace duckdb {
+class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
@@ -214,22 +216,25 @@ struct PEGMatcher {
 		return *root;
 	}
 
+	static shared_ptr<PEGMatcher> Get(ClientContext &context);
+	static shared_ptr<PEGMatcher> Get(DatabaseInstance &db);
+
 private:
-	friend struct PEGMatcherCache;
+	friend struct ParserCache;
 	optional_ptr<Matcher> root;
 };
 
-//! Per-database cache holder for the compiled PEG root matcher.
-struct PEGMatcherCache : ParserExtensionInfo {
+//! Per-database cache holder for the compiled PEG root matcher and transformer factory.
+//! Both are always invalidated together, so they share one mutex and one Invalidate() call.
+struct ParserCache {
 	shared_ptr<PEGMatcher> GetMatcher();
+	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
 	void Invalidate();
 
 private:
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
+	shared_ptr<PEGTransformerFactory> transformer_factory;
 };
-
-//! Returns the process-wide singleton PEGMatcherCache (built once, reused for all parses).
-PEGMatcherCache &GetGlobalPEGMatcherCache();
 
 } // namespace duckdb

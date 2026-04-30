@@ -1,0 +1,28 @@
+# name: test/sql/update/issue_22392.test
+# description: Regression for issue #22392.
+# group: [update]
+
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+statement ok
+CREATE TABLE t (k INTEGER PRIMARY KEY, v INTEGER);
+
+statement ok
+INSERT INTO t VALUES (0, 0), (1, NULL);
+
+statement ok
+UPDATE t SET v = 99 WHERE k = 1;
+
+query II
+SELECT k, v FROM t WHERE k IN (0);
+----
+0	0
+
+query II
+SELECT k, v FROM t WHERE k IN (1);
+----
+1	99

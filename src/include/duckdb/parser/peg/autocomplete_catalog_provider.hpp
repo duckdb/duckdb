@@ -81,7 +81,7 @@ public:
 	}
 
 private:
-	PEGMatcherCache cache;
+	ParserCache cache;
 };
 
 //! Get a human-readable string for a suggestion type.

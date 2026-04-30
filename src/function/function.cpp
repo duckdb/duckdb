@@ -46,15 +46,17 @@ Function::Function(string name_p) : name(std::move(name_p)) {
 Function::~Function() {
 }
 
-SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
-    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
+SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
+                               LogicalType varargs_p)
+    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)),
+      return_type(std::move(return_type)) {
 }
 
 SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs);
+	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
 }
 
 bool SimpleFunction::HasVarArgs() const {
@@ -63,7 +65,7 @@ bool SimpleFunction::HasVarArgs() const {
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
                                                            LogicalType varargs_p)
-    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)) {
+    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)) {
 }
 
 SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
@@ -75,19 +77,6 @@ string SimpleNamedParameterFunction::ToString() const {
 
 bool SimpleNamedParameterFunction::HasNamedParameters() const {
 	return !named_parameters.empty();
-}
-
-BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       LogicalType varargs_p)
-    : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)) {
-}
-
-BaseScalarFunction::~BaseScalarFunction() {
-}
-
-string BaseScalarFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
 }
 
 // add your initializer for new functions here
@@ -110,7 +99,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterExtensionOverloads();
 }
 
-hash_t BaseScalarFunction::Hash() const {
+hash_t SimpleFunction::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &arg : arguments) {
 		hash = duckdb::CombineHash(hash, arg.Hash());

@@ -13,13 +13,13 @@
 #include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
-
 class BoundWindowExpression;
 struct WindowSharedExpressions;
 class WindowExecutor;
 class GlobalSinkState;
 class LocalSinkState;
 class WindowCollection;
+class BoundWindowFunction;
 
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
@@ -61,7 +61,7 @@ class BindWindowFunctionInput {
 public:
 	using OptionalOrdering = optional_ptr<vector<OrderByNode>>;
 
-	BindWindowFunctionInput(ClientContext &context_p, WindowFunction &bound_function_p,
+	BindWindowFunctionInput(ClientContext &context_p, BoundWindowFunction &bound_function_p,
 	                        vector<unique_ptr<Expression>> &arguments_p, OptionalOrdering orders_p = nullptr,
 	                        OptionalOrdering arg_orders_p = nullptr)
 	    : context(context_p), bound_function(bound_function_p), arguments(arguments_p), orders(orders_p),
@@ -71,7 +71,7 @@ public:
 	ClientContext &GetClientContext() const {
 		return context;
 	}
-	WindowFunction &GetBoundFunction() const {
+	BoundWindowFunction &GetBoundFunction() const {
 		return bound_function;
 	}
 	vector<unique_ptr<Expression>> &GetArguments() const {
@@ -92,7 +92,7 @@ public:
 
 private:
 	ClientContext &context;
-	WindowFunction &bound_function;
+	BoundWindowFunction &bound_function;
 	vector<unique_ptr<Expression>> &arguments;
 	OptionalOrdering orders;
 	OptionalOrdering arg_orders;
@@ -143,8 +143,8 @@ typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &i
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                   const WindowFunction &function);
-typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, WindowFunction &function);
+                                   const BoundWindowFunction &function);
+typedef unique_ptr<FunctionData> (*window_deserialize_t)(Deserializer &deserializer, BoundWindowFunction &function);
 
 class WindowFunctionCallbacks {
 public:
@@ -192,7 +192,7 @@ public:
 	bool can_ignore_nulls = true;
 };
 
-class WindowFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
+class WindowFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	WindowFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	               ExpressionType window_enum, window_bind_function_t bind = nullptr,
@@ -200,7 +200,7 @@ public:
 	               window_global_function_t global = nullptr, window_local_function_t local = nullptr,
 	               window_sink_function_t sink = nullptr, window_finalize_function_t finalize = nullptr,
 	               window_evaluate_function_t evaluate = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type), window_enum(window_enum) {
+	    : SimpleFunction(name, arguments, return_type), window_enum(window_enum) {
 		callbacks.bind = bind;
 		callbacks.bounds = bounds;
 		callbacks.sharing = sharing;
@@ -224,11 +224,9 @@ public:
 	bool HasBindCallback() const { return callbacks.bind != nullptr; }
 	window_bind_function_t GetBindCallback() const { return callbacks.bind; }
 	void SetBindCallback(window_bind_function_t callback) { callbacks.bind = callback; }
-	unique_ptr<FunctionData> Bind(BindWindowFunctionInput &bind_input) { return GetBindCallback()(bind_input); }
-	unique_ptr<FunctionData> Bind(ClientContext &context, vector<unique_ptr<Expression>> &arguments) {
-		BindWindowFunctionInput bind_input(context, *this, arguments);
-		return Bind(bind_input);
-	}
+
+	unique_ptr<BoundWindowExpression> Bind(ClientContext &context) const;
+	unique_ptr<BoundWindowExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments) const;
 
 	bool HasBoundsCallback() const { return callbacks.bounds != nullptr; }
 	window_bounds_function_t GetBoundsCallback() const { return callbacks.bounds; }
@@ -250,9 +248,9 @@ public:
 	window_global_function_t GetGlobalCallback() const { return callbacks.global; }
 	void SetGlobalCallback(window_global_function_t callback) { callbacks.global = callback; }
 	unique_ptr<GlobalSinkState> GetGlobalState(ClientContext &client, const WindowExecutor &executor,
-                                                                const idx_t payload_count,
-                                                                const ValidityMask &partition_mask,
-                                                                const ValidityMask &order_mask) const {
+								const idx_t payload_count,
+								const ValidityMask &partition_mask,
+								const ValidityMask &order_mask) const {
 		D_ASSERT(HasGlobalCallback());
 		return GetGlobalCallback()(client, executor, payload_count, partition_mask, order_mask);
 	}
@@ -269,7 +267,7 @@ public:
 	window_sink_function_t GetSinkCallback() const { return callbacks.sink; }
 	void SetSinkCallback(window_sink_function_t callback) { callbacks.sink = callback; }
 	void Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
-                                    idx_t input_idx, OperatorSinkInput &sink) const {
+				    idx_t input_idx, OperatorSinkInput &sink) const {
 		D_ASSERT(HasSinkCallback());
 		return GetSinkCallback()(context, sink_chunk, coll_chunk, input_idx, sink);
 	}
@@ -312,7 +310,7 @@ public:
 	window_stream_function_t GetStreamingDataCallback() const { return callbacks.stream; }
 	void SetStreamingDataCallback(window_stream_function_t callback) { callbacks.stream = callback; }
 	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	 					  Vector &result, LocalSourceState &lstate) const {
+						   Vector &result, LocalSourceState &lstate) const {
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
@@ -404,6 +402,12 @@ public:
 	}
 	bool operator!=(const WindowFunction &rhs) const {
 		return !(*this == rhs);
+	}
+};
+
+class BoundWindowFunction : public WindowFunction {
+public:
+	BoundWindowFunction(const WindowFunction &base) : WindowFunction(base) { // NOLINT: allow implicit conversion
 	}
 };
 

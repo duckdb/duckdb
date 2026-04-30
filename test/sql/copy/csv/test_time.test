@@ -2,10 +2,6 @@
 # description: Test the time type is sniffed
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
-
 query I
 from read_csv('{DATA_DIR}/csv/auto/invalid_time.csv', header = 0)
 ----

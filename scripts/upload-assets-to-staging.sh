@@ -11,7 +11,7 @@ if [ -z "$1" ] || [ -z "$2" ]; then
     exit 1
 fi
 
-set -e
+set -eu -o pipefail
 
 # skip if repo is not in duckdb organization
 if [ "$GITHUB_REPOSITORY_OWNER" != "duckdb" ]; then
@@ -25,12 +25,12 @@ DRY_RUN_PARAM=""
 # dryrun if repo is not duckdb/duckdb
 if [ "$GITHUB_REPOSITORY" != "duckdb/duckdb" ]; then
   echo "Repository is $GITHUB_REPOSITORY (not duckdb/duckdb)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--dry-run"
 fi
 # dryrun if we are not in main
 if [ "$GITHUB_REF" != "refs/heads/main" ]; then
   echo "git ref is $GITHUB_REF (not refs/heads/main)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--dry-run"
 fi
 
 if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
@@ -38,31 +38,71 @@ if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
   DRY_RUN_PARAM=""
 fi
 
-# dryrun if AWS key is not set
-if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-  echo "No access key available"
-  DRY_RUN_PARAM="--dryrun"
-fi
+# Early exit if credentials are missing
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+  echo "No access or secret key available"
 
+  if [ "$DRY_RUN_PARAM" == "" ]; then
+    exit 1
+  else
+    exit 0
+  fi
+fi
 
 TARGET=$(git log -1 --format=%h)
 
-if [ "$UPLOAD_ASSETS_TO_STAGING_TARGET" ]; then
+if [ "${UPLOAD_ASSETS_TO_STAGING_TARGET:-}" ]; then
   TARGET="$UPLOAD_ASSETS_TO_STAGING_TARGET"
 fi
 
 # decide target for staging
-if [ "$OVERRIDE_GIT_DESCRIBE" ]; then
+if [ "${OVERRIDE_GIT_DESCRIBE:-}" ]; then
   TARGET="$TARGET/$OVERRIDE_GIT_DESCRIBE"
 fi
 
-if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
-  python3 -m pip install --break-system-packages awscli
-else
-  python3 -m pip install awscli
+if ! command -v rclone >/dev/null 2>&1; then
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      python3 scripts/ci/retry.py -- choco install rclone -y --limit-output --no-progress
+      ;;
+    *)
+      install_runner=(bash)
+      if command -v sudo >/dev/null 2>&1; then
+        install_runner=(sudo bash)
+      fi
+      curl -fsSL --retry 5 https://rclone.org/install.sh | "${install_runner[@]}"
+      ;;
+  esac
 fi
 
-for var in "${@: 2}"
-do
-    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/ $DRY_RUN_PARAM
-done
+files_from="$(mktemp "${TMPDIR:-/tmp}/duckdb-staging-files.XXXXXX")"
+cleanup() {
+  rm -f "$files_from"
+}
+trap cleanup EXIT
+printf '%s\n' "${@:2}" > "$files_from"
+
+s3_provider="${S3_PROVIDER:-AWS}"
+if [[ "${AWS_ENDPOINT_URL:-}" == *"r2.cloudflarestorage.com"* ]]; then
+  s3_provider="Cloudflare"
+fi
+
+rclone_s3_args=(
+  --s3-provider "${s3_provider}"
+  --s3-endpoint "${AWS_ENDPOINT_URL:-}"
+  --s3-access-key-id "${AWS_ACCESS_KEY_ID:-}"
+  --s3-secret-access-key "${AWS_SECRET_ACCESS_KEY:-}"
+)
+
+set -x
+
+rclone $DRY_RUN_PARAM copy \
+  --no-traverse \
+  --ignore-times \
+  --ignore-checksum \
+  --s3-no-check-bucket \
+  --s3-no-head \
+  "${rclone_s3_args[@]}" \
+  --files-from "$files_from" \
+  . \
+  ":s3:duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/"

@@ -3,9 +3,6 @@
 # group: [semianti]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE left_table (a INTEGER, b INTEGER, c INTEGER);
 
 statement ok

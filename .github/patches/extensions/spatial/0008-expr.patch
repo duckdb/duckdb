@@ -1,0 +1,347 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index f073188..3e15656 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -109,7 +109,7 @@ RTreeIndex::RTreeIndex(const string &name, IndexConstraintType index_constraint_
+ 	}
+ 
+ 	// Construct the key expression executor
+-	auto &source_type = unbound_expressions[0]->return_type;
++	auto &source_type = unbound_expressions[0]->GetReturnType();
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
+ 	auto func = entry.functions.GetFunctionByArguments(context, {source_type});
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index 63d35f1..d4c8dbc 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -151,7 +151,7 @@ PhysicalOperator &RTreeIndex::CreatePlan(PlanIndexInput &input) {
+ 	auto &expr = op.unbound_expressions[0];
+ 
+ 	// Validate that we have the right type of expression (float array)
+-	if (expr->return_type != LogicalType::GEOMETRY()) {
++	if (expr->GetReturnType() != LogicalType::GEOMETRY()) {
+ 		throw BinderException("RTree indexes can only be created over GEOMETRY columns.");
+ 	}
+ 
+@@ -167,7 +167,7 @@ PhysicalOperator &RTreeIndex::CreatePlan(PlanIndexInput &input) {
+ 
+ 	// Add the geometry expression to the select list
+ 	auto geom_expr = op.expressions[0]->Copy();
+-	new_column_types.push_back(geom_expr->return_type);
++	new_column_types.push_back(geom_expr->GetReturnType());
+ 	select_list.push_back(std::move(geom_expr));
+ 
+ 	// Add the row ID to the select list
+@@ -218,7 +218,7 @@ PhysicalOperator &LogicalCreateRTreeIndex::CreatePlan(ClientContext &context, Ph
+ 	auto &expr = op.unbound_expressions[0];
+ 
+ 	// Validate that we have the right type of expression (float array)
+-	if (expr->return_type != LogicalType::GEOMETRY()) {
++	if (expr->GetReturnType() != LogicalType::GEOMETRY()) {
+ 		throw BinderException("RTree indexes can only be created over GEOMETRY columns.");
+ 	}
+ 
+@@ -244,7 +244,7 @@ PhysicalOperator &LogicalCreateRTreeIndex::CreatePlan(ClientContext &context, Ph
+ 
+ 	// Add the geometry expression to the select list
+ 	auto geom_expr = op.expressions[0]->Copy();
+-	new_column_types.push_back(geom_expr->return_type);
++	new_column_types.push_back(geom_expr->GetReturnType());
+ 	select_list.push_back(std::move(geom_expr));
+ 
+ 	// Add the row ID to the select list
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index b313294..5c35637 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -40,7 +40,7 @@ public:
+ 	}
+ 
+ 	static void RewriteIndexExpression(Index &index, LogicalGet &get, Expression &expr, bool &rewrite_possible) {
+-		if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
++		if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 			auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
+ 			// bound column ref: rewrite to fit in the current set of bound column ids
+ 			bound_colref.binding.table_index = get.table_index;
+@@ -63,7 +63,7 @@ public:
+ 
+ 	static void RewriteIndexExpressionForFilter(Index &index, LogicalGet &get, unique_ptr<Expression> &expr,
+ 	                                            const ColumnIndex &filter_idx, bool &rewrite_possible) {
+-		if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
++		if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+ 			auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
+ 
+ 			auto &indexed_columns = index.GetColumnIds();
+@@ -84,7 +84,7 @@ public:
+ 			}
+ 
+ 			// this column matches the index column - turn it into a BoundReference
+-			expr = make_uniq<BoundReferenceExpression>(bound_colref.return_type, 0ULL);
++			expr = make_uniq<BoundReferenceExpression>(bound_colref.GetReturnType(), 0ULL);
+ 			return;
+ 		}
+ 		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 996e0ff..df5cdd6 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -732,7 +732,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+ 			continue;
+ 		}
+-		if (expr->return_type != LogicalType::BOOLEAN) {
++		if (expr->GetReturnType() != LogicalType::BOOLEAN) {
+ 			continue;
+ 		}
+ 		const auto &func = expr->Cast<BoundFunctionExpression>();
+@@ -740,8 +740,8 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			continue;
+ 		}
+ 
+-		if (func.children[0]->return_type.id() != LogicalTypeId::GEOMETRY ||
+-		    func.children[1]->return_type.id() != LogicalTypeId::GEOMETRY) {
++		if (func.children[0]->GetReturnType().id() != LogicalTypeId::GEOMETRY ||
++		    func.children[1]->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
+ 			continue;
+ 		}
+ 
+@@ -814,7 +814,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 			// Constant is NULL
+ 			continue;
+ 		}
+-		if (geometry_expr->return_type.id() != LogicalTypeId::GEOMETRY) {
++		if (geometry_expr->GetReturnType().id() != LogicalTypeId::GEOMETRY) {
+ 			// Not the geometry column
+ 			continue;
+ 		}
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index b9c0aee..4a9e3f6 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -4600,7 +4600,7 @@ struct ST_GeomFromText {
+ 		if (arguments.empty()) {
+ 			throw InvalidInputException("ST_GeomFromText requires at least one argument");
+ 		}
+-		const auto &input_type = arguments[0]->return_type;
++		const auto &input_type = arguments[0]->GetReturnType();
+ 		if (input_type.id() != LogicalTypeId::VARCHAR) {
+ 			throw InvalidInputException("ST_GeomFromText requires a string argument");
+ 		}
+@@ -4615,8 +4615,8 @@ struct ST_GeomFromText {
+ 				throw InvalidInputException(
+ 				    "Non-constant arguments are not supported in ST_GeomFromText optional arguments");
+ 			}
+-			if (arg->alias == "ignore_invalid") {
+-				if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
++			if (arg->GetAlias() == "ignore_invalid") {
++				if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
+ 					throw InvalidInputException("ST_GeomFromText optional argument 'ignore_invalid' must be a boolean");
+ 				}
+ 				ignore_invalid = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index 4127b90..b646469 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -833,7 +833,7 @@ struct ST_AsMVT {
+ 		auto result = make_uniq<BindData>();
+ 
+ 		// Figure part of the row is the geometry column
+-		const auto &row_type = arguments[0]->return_type;
++		const auto &row_type = arguments[0]->GetReturnType();
+ 		if (row_type.id() != LogicalTypeId::STRUCT) {
+ 			throw InvalidInputException("ST_AsMVT: first argument must be a STRUCT (i.e. a row type)");
+ 		}
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index a2481ab..e911f0f 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -251,32 +251,32 @@ struct ST_Transform {
+ 
+ 		// Get CRS from source geometry
+ 		const auto &geo_arg = args[0];
+-		if (!GeoType::HasCRS(geo_arg->return_type)) {
+-			throw BinderException(geo_arg->query_location, "Source geometry must have a coordinate reference system");
++		if (!GeoType::HasCRS(geo_arg->GetReturnType())) {
++			throw BinderException(geo_arg->GetQueryLocation(), "Source geometry must have a coordinate reference system");
+ 		}
+-		result->source_crs = GeoType::GetCRS(geo_arg->return_type).GetDefinition();
++		result->source_crs = GeoType::GetCRS(geo_arg->GetReturnType()).GetDefinition();
+ 		if (result->source_crs.empty()) {
+-			throw BinderException(geo_arg->query_location, "Source geometry must have a coordinate reference system");
++			throw BinderException(geo_arg->GetQueryLocation(), "Source geometry must have a coordinate reference system");
+ 		}
+ 
+ 		// Constant-fold target_crs
+ 		const auto &crs_arg = args[1];
+ 		if (crs_arg->HasParameter()) {
+-			throw BinderException(crs_arg->query_location, "The 'target_crs' parameter must be a constant");
++			throw BinderException(crs_arg->GetQueryLocation(), "The 'target_crs' parameter must be a constant");
+ 		}
+ 		if (!crs_arg->IsFoldable()) {
+-			throw BinderException(crs_arg->query_location, "The 'target_crs' parameter must be a constant");
++			throw BinderException(crs_arg->GetQueryLocation(), "The 'target_crs' parameter must be a constant");
+ 		}
+-		if (crs_arg->return_type.id() != LogicalTypeId::VARCHAR) {
+-			throw BinderException(crs_arg->query_location, "The 'target_crs' parameter must be a string");
++		if (crs_arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
++			throw BinderException(crs_arg->GetQueryLocation(), "The 'target_crs' parameter must be a string");
+ 		}
+ 		result->target_crs = StringValue::Get(ExpressionExecutor::EvaluateScalar(ctx, *crs_arg));
+ 		if (result->target_crs.empty()) {
+-			throw BinderException(crs_arg->query_location, "The 'target_crs' parameter cannot be empty");
++			throw BinderException(crs_arg->GetQueryLocation(), "The 'target_crs' parameter cannot be empty");
+ 		}
+ 		const auto result_crs = CoordinateReferenceSystem::TryIdentify(ctx, result->target_crs);
+ 		if (!result_crs) {
+-			throw BinderException(crs_arg->query_location,
++			throw BinderException(crs_arg->GetQueryLocation(),
+ 			                      "The 'target_crs' parameter '%s' is not a recognized coordinate reference system",
+ 			                      result->target_crs);
+ 		}
+@@ -286,13 +286,13 @@ struct ST_Transform {
+ 		if (args.size() == 3) {
+ 			const auto &xy_arg = args[2];
+ 			if (xy_arg->HasParameter()) {
+-				throw BinderException(xy_arg->query_location, "The 'always_xy' parameter must be a constant");
++				throw BinderException(xy_arg->GetQueryLocation(), "The 'always_xy' parameter must be a constant");
+ 			}
+ 			if (!xy_arg->IsFoldable()) {
+-				throw BinderException(xy_arg->query_location, "The 'always_xy' parameter must be a constant");
++				throw BinderException(xy_arg->GetQueryLocation(), "The 'always_xy' parameter must be a constant");
+ 			}
+-			if (xy_arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+-				throw BinderException(xy_arg->query_location, "The 'always_xy' parameter must be a boolean");
++			if (xy_arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
++				throw BinderException(xy_arg->GetQueryLocation(), "The 'always_xy' parameter must be a boolean");
+ 			}
+ 			result->normalize = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(ctx, *xy_arg));
+ 			explicit_normalize = true;
+@@ -301,7 +301,7 @@ struct ST_Transform {
+ 		}
+ 
+ 		// Set return types
+-		func.GetArguments()[0] = geo_arg->return_type;
++		func.GetArguments()[0] = geo_arg->GetReturnType();
+ 		func.SetReturnType(LogicalType::GEOMETRY(*result_crs));
+ 
+ 		// Check if we need to warn for this
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index b0b219c..18c5938 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -71,9 +71,9 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, it->second);
+ 	auto inverse_func =
+-	    entry.functions.GetFunctionByArguments(context, {func.children[0]->return_type, func.children[1]->return_type});
++	    entry.functions.GetFunctionByArguments(context, {func.children[0]->GetReturnType(), func.children[1]->GetReturnType()});
+ 
+-	return make_uniq_base<Expression, BoundFunctionExpression>(func.return_type, inverse_func, std::move(func.children),
++	return make_uniq_base<Expression, BoundFunctionExpression>(func.GetReturnType(), inverse_func, std::move(func.children),
+ 	                                                           nullptr, func.is_operator);
+ }
+ 
+@@ -87,7 +87,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	// Check if the expression is a spatial predicate
+-	if (expr->type != ExpressionType::BOUND_FUNCTION) {
++	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+ 		return false;
+ 	}
+ 
+@@ -99,7 +99,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	// The function must return a boolean
+-	if (func.return_type != LogicalType::BOOLEAN) {
++	if (func.GetReturnType() != LogicalType::BOOLEAN) {
+ 		return false;
+ 	}
+ 
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index c9f55a4..b9f75c0 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -444,7 +444,7 @@ PhysicalSpatialJoin::PhysicalSpatialJoin(PhysicalPlan &physical_plan, LogicalOpe
+ 		conditions_in_layout.emplace(build_side_key->Cast<BoundReferenceExpression>().index, 0); // TODO: i, not 0
+ 	}
+ 	// TODO Add rest too
+-	build_side_key_types.push_back(build_side_key->return_type);
++	build_side_key_types.push_back(build_side_key->GetReturnType());
+ 
+ 	const auto &build_side_input_types = children[1].get().types;
+ 	auto right_projection_map_copy = FillProjectionMap(children[1].get(), lop.right_projection_map);
+@@ -543,7 +543,7 @@ public:
+ 
+ 		build_side_payload_chunk.InitializeEmpty(op.build_side_payload_types);
+ 
+-		auto &geom_type = op.build_side_key->return_type;
++		auto &geom_type = op.build_side_key->GetReturnType();
+ 
+ 		auto &catalog = Catalog::GetSystemCatalog(context);
+ 		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_IsEmpty");
+@@ -838,8 +838,8 @@ unique_ptr<OperatorState> PhysicalSpatialJoin::GetOperatorState(ExecutionContext
+ 	// Create a match expression using the condition, that will be used to filter the results
+ 	lstate->match_expr = condition->Copy();
+ 	auto &func_expr = lstate->match_expr->Cast<BoundFunctionExpression>();
+-	func_expr.children[0] = make_uniq<BoundReferenceExpression>(probe_side_key->return_type, 0);
+-	func_expr.children[1] = make_uniq<BoundReferenceExpression>(build_side_key->return_type, 1);
++	func_expr.children[0] = make_uniq<BoundReferenceExpression>(probe_side_key->GetReturnType(), 0);
++	func_expr.children[1] = make_uniq<BoundReferenceExpression>(build_side_key->GetReturnType(), 1);
+ 
+ 	lstate->join_match_executor.AddExpression(*lstate->match_expr);
+ 
+@@ -847,15 +847,15 @@ unique_ptr<OperatorState> PhysicalSpatialJoin::GetOperatorState(ExecutionContext
+ 	lstate->join_probe_executor.AddExpression(*probe_side_key);
+ 
+ 	// Make bbox expression for probe side
+-	lstate->bound_expr = GetBBOXExpression(context.client, probe_side_key->return_type);
++	lstate->bound_expr = GetBBOXExpression(context.client, probe_side_key->GetReturnType());
+ 	lstate->bbox_probe_executor.AddExpression(*lstate->bound_expr);
+ 
+ 	// The chunks we need for the join
+ 	lstate->probe_side_row_chunk.Initialize(context.client, probe_side_output_types);
+-	lstate->probe_side_key_chunk.Initialize(context.client, {probe_side_key->return_type});
+-	lstate->probe_side_box_chunk.Initialize(context.client, {lstate->bound_expr->return_type});
+-	lstate->build_side_key_chunk.Initialize(context.client, {build_side_key->return_type});
+-	lstate->match_pred_arg_chunk.Initialize(context.client, {probe_side_key->return_type, build_side_key->return_type});
++	lstate->probe_side_key_chunk.Initialize(context.client, {probe_side_key->GetReturnType()});
++	lstate->probe_side_box_chunk.Initialize(context.client, {lstate->bound_expr->GetReturnType()});
++	lstate->build_side_key_chunk.Initialize(context.client, {build_side_key->GetReturnType()});
++	lstate->match_pred_arg_chunk.Initialize(context.client, {probe_side_key->GetReturnType(), build_side_key->GetReturnType()});
+ 
+ 	return std::move(lstate);
+ }
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index e731bf3..2195fef 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -96,7 +96,7 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, S
+ 
+ 		auto has_crs = false;
+ 
+-		TypeVisitor::Contains(arg->return_type, [&](const LogicalType &type) {
++		TypeVisitor::Contains(arg->GetReturnType(), [&](const LogicalType &type) {
+ 			if (type.id() == LogicalTypeId::GEOMETRY && GeoType::HasCRS(type)) {
+ 				has_crs = true;
+ 				if (!found_crs) {
+@@ -106,7 +106,7 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, S
+ 					auto &type_crs = GeoType::GetCRS(type);
+ 					if (!crs.Equals(type_crs)) {
+ 						throw BinderException(
+-						    arg->query_location,
++						    arg->GetQueryLocation(),
+ 						    "Cannot call function '%s' with geometries of different coordinate reference systems "
+ 						    "(CRS).\n"
+ 						    "First geometry type is in '%s' which is not compatible with '%s'.\n"
+@@ -124,7 +124,7 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, S
+ 
+ 		if (has_crs) {
+ 			// Override the type so that we set the CRS
+-			bound_function.GetArguments()[arg_idx] = arg->return_type;
++			bound_function.GetArguments()[arg_idx] = arg->GetReturnType();
+ 		}
+ 	}
+ 

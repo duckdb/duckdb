@@ -19,7 +19,7 @@ namespace duckdb {
 SortedRunScanState::SortedRunScanState(ClientContext &context, const Sort &sort_p)
     : sort(sort_p), key_executor(context, *sort.decode_sort_key) {
 	key.Initialize(context, {sort.key_layout->GetTypes()[0]});
-	decoded_key.Initialize(context, {sort.decode_sort_key->return_type});
+	decoded_key.Initialize(context, {sort.decode_sort_key->GetReturnType()});
 }
 
 void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, const idx_t &count,
@@ -56,8 +56,8 @@ void SortedRunScanState::Clear() {
 }
 
 template <class SORT_KEY, class PHYSICAL_TYPE>
-void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
-                               DataChunk &key, data_ptr_t *const payload_ptrs) {
+static void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count,
+                                      DataChunk &key, data_ptr_t *const payload_ptrs) {
 	const auto key_data = FlatVector::GetDataMutable<PHYSICAL_TYPE>(key.data[0]);
 	for (idx_t i = 0; i < count; i++) {
 		auto &sort_key = temp_keys[i];
@@ -68,11 +68,12 @@ void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_
 		}
 	}
 	key.SetCardinality(count);
+	FlatVector::SetSize(key.data[0], count_t(count));
 }
 
 template <class SORT_KEY>
-void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key,
-                      data_ptr_t *const payload_ptrs) {
+static void GetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY *temp_keys, const idx_t &count, DataChunk &key,
+                             data_ptr_t *const payload_ptrs) {
 	const auto type_id = key.data[0].GetType().id();
 	switch (type_id) {
 	case LogicalTypeId::BLOB:
@@ -145,7 +146,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 		}
 	}
 
-	chunk.SetCardinality(count);
+	chunk.SetChildCardinality(count);
 }
 
 //===--------------------------------------------------------------------===//

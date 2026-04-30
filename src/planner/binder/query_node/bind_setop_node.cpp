@@ -215,7 +215,7 @@ void Binder::BuildUnionByNameInfo(BoundSetOperationNode &result) {
 		// if we have re-order expressions push a projection
 		vector<LogicalType> child_types;
 		for (auto &expr : child_reorder_expressions) {
-			child_types.push_back(expr->return_type);
+			child_types.push_back(expr->GetReturnType());
 		}
 		auto child_projection =
 		    make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(child_reorder_expressions));

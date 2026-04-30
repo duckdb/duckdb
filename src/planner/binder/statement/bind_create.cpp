@@ -298,7 +298,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
-			if (param_expr->type == ExpressionType::VALUE_CONSTANT) {
+			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				continue;
 			}
 
@@ -315,7 +315,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			// Save this back as a constant expression
 			auto const_expr = make_uniq<ConstantExpression>(default_val);
-			const_expr->alias = param_name;
+			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
 		}
 
@@ -428,9 +428,9 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 		throw BinderException(*type_expr, "Type expression is not constant");
 	}
 
-	if (expr->return_type != LogicalTypeId::TYPE) {
+	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
 		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
-		                      expr->return_type.ToString());
+		                      expr->GetReturnType().ToString());
 	}
 
 	// Shortcut for constant expressions

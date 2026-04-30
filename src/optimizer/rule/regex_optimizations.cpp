@@ -155,12 +155,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto regexp_bind_data = root.bind_info.get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr.return_type);
+	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
 	if (constant_expr.value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root.return_type));
+		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
 	auto patt_str = StringValue::Get(constant_value);
 
@@ -192,7 +192,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, GetStringContains(),
+		auto contains = make_uniq<BoundFunctionExpression>(root.GetReturnType(), GetStringContains(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
 
@@ -213,8 +213,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	auto like_expression =
-	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
+	auto like_expression = make_uniq<BoundFunctionExpression>(root.GetReturnType(), LikeFun::GetFunction(),
+	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
 	return std::move(like_expression);

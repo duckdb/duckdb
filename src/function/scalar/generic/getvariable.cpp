@@ -28,7 +28,7 @@ unique_ptr<FunctionData> GetVariableBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	auto &function = input.GetBoundFunction();
 
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {

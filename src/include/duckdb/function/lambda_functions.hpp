@@ -47,9 +47,9 @@ public:
 
 	//! Serializes a lambda function's bind data
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function);
+	                      const BoundScalarFunction &function);
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &);
 };
 
 class LambdaFunctions {
