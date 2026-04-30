@@ -153,7 +153,7 @@ public:
 	mutable annotated_mutex lock;
 	//! Whether the copy was successfully initialized/finalized
 	atomic<bool> initialized;
-	bool finalized;
+	atomic<bool> finalized;
 
 	//! We write to files using the Prepare/Flush batch API:
 	//! - Prepare gets the data ready and can take a lot of time
@@ -1198,27 +1198,23 @@ void PartitionedCopy::Flush(ExecutionContext &execution_context, InterruptState 
 }
 
 PartitionWriteInfo &PartitionedCopy::GetPartitionWriteInfo(const vector<Value> &values) {
-	{
-		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		// check if we have already started writing this partition
-		auto active_write_entry = active_writes.find(values);
-		if (active_write_entry != active_writes.end()) {
-			// we have - continue writing in this partition
-			active_write_entry->second->active_writes++;
-			return *active_write_entry->second;
-		}
+	annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
+	// check if we have already started writing this partition
+	auto active_write_entry = active_writes.find(values);
+	if (active_write_entry != active_writes.end()) {
+		// we have - continue writing in this partition
+		active_write_entry->second->active_writes++;
+		return *active_write_entry->second;
 	}
 
 	auto info = make_uniq<PartitionWriteInfo>();
 	info->file_state = CreatePartitionFileState(values);
 	auto &result = *info;
 
-	{
-		annotated_lock_guard<annotated_mutex> guard(active_writes_lock);
-		info->active_writes = 1;
-		// store in active write map
-		active_writes.insert(make_pair(values, std::move(info)));
-	}
+	info->active_writes = 1;
+	// store in active write map
+	active_writes.insert(make_pair(values, std::move(info)));
+
 	return result;
 }
 
@@ -1432,6 +1428,7 @@ void CopyToFileGlobalState::FinalizeFileState(unique_ptr<GlobalFileState> file_s
 void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
 	if (prepare_global_state_owned) {
 		op.function.copy_to_finalize(context, *op.bind_data, *prepare_global_state_owned->data);
+		prepare_global_state_owned.reset();
 	}
 }
 
@@ -1733,6 +1730,7 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 
 	// Ensure we have a global state for prepares
 	if (!gstate.prepare_global_state.load(std::memory_order_relaxed)) {
+		D_ASSERT(!file_state_ptr);
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
 		if (!gstate.prepare_global_state.load()) {
 			file_state_ptr = create_file_state_fun();
