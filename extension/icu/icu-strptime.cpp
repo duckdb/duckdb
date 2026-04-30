@@ -164,7 +164,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    }
 				    }
 
-				    return {};
+				    return nullopt;
 			    });
 		}
 	}
@@ -284,7 +284,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    msg = Timestamp::FormatError(string(str, len));
 				    }
 				    HandleCastError::AssignError(msg, parameters);
-				    return {};
+				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
 				    auto calendar = cal.get();
@@ -295,7 +295,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    SetTimeZone(calendar, tz, &error_msg);
 					    if (!error_msg.empty()) {
 						    HandleCastError::AssignError(error_msg, parameters);
-						    return {};
+						    return nullopt;
 					    }
 				    }
 
@@ -323,7 +323,7 @@ struct ICUStrptime : public ICUDateFunc {
 			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
 				    auto msg = Time::ConversionError(string(str, len));
 				    HandleCastError::AssignError(msg, parameters);
-				    return {};
+				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
 				    auto calendar = cal.get();

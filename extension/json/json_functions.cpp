@@ -260,7 +260,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 				HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error), parameters);
 				success = false;
 			}
-			return {};
+			return nullopt;
 		}
 
 		return input;
@@ -348,7 +348,7 @@ static bool CastVarcharToJSONList(Vector &source, Vector &result, idx_t count, C
 				    }
 				    success = false;
 			    }
-			    return {};
+			    return nullopt;
 		    }
 
 		    auto current_size = ListVector::GetListSize(result);

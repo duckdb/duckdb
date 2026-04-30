@@ -1084,7 +1084,7 @@ bool Geometry::FromBinary(Vector &source, Vector &result, idx_t count, bool stri
 		string_t geom;
 		if (!FromBinary(wkb, geom, heap, false)) {
 			all_ok = false;
-			return {};
+			return nullopt;
 		}
 		return geom;
 	});

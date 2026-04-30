@@ -31,7 +31,7 @@ public:
 	optional<int64_t> ExtractElement(date_t date) const {
 		if (DUCKDB_UNLIKELY(date.days < CACHE_MIN_DATE || date.days >= CACHE_MAX_DATE)) {
 			if (DUCKDB_UNLIKELY(!Value::IsFinite(date))) {
-				return {};
+				return nullopt;
 			}
 			return OP::template Operation<date_t, int64_t>(date);
 		}

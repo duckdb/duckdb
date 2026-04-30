@@ -208,7 +208,7 @@ struct TimeBucket {
 		template <class TA, class TB, class TC, class TR>
 		static inline optional<TR> Operation(TA bucket_width, TB ts, TC origin) {
 			if (!Value::IsFinite(origin)) {
-				return {};
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {

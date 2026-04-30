@@ -331,7 +331,7 @@ public:
 		case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 		case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 		case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
-			return {};
+			return nullopt;
 		default:
 			return JSONCommon::WriteVal<yyjson_val>(val, alc);
 		}

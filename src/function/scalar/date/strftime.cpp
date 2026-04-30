@@ -190,7 +190,7 @@ struct StrpTimeFunction {
 				}
 			}
 
-			return {};
+			return nullopt;
 		});
 	}
 

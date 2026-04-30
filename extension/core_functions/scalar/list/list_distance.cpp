@@ -54,7 +54,7 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 		    }
 
 		    if (!OP::ALLOW_EMPTY && left.length == 0) {
-			    return {};
+			    return nullopt;
 		    }
 
 		    return OP::Operation(lhs_data + left.offset, rhs_data + right.offset, left.length);

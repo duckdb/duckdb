@@ -240,7 +240,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 					    } else {
-						    return {};
+						    return nullopt;
 					    }
 				    });
 			}
@@ -254,7 +254,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 					    auto sub_func = SubtractFactory(part);
 					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 				    } else {
-					    return {};
+					    return nullopt;
 				    }
 			    });
 		}

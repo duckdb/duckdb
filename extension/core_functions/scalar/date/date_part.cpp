@@ -1754,7 +1754,7 @@ void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		    if (Value::IsFinite(date)) {
 			    return ExtractElement<T>(GetDatePartSpecifier(specifier.GetString()), date);
 		    } else {
-			    return {};
+			    return nullopt;
 		    }
 	    });
 }

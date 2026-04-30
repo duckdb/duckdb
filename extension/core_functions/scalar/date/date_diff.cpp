@@ -23,7 +23,7 @@ struct DateDiff {
 			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 				return OP::template Operation<TA, TB, TR>(startdate, enddate);
 			} else {
-				return {};
+				return nullopt;
 			}
 		});
 	}
@@ -357,7 +357,7 @@ struct DateDiffTernaryOperator {
 		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
-			return {};
+			return nullopt;
 		}
 	}
 };
