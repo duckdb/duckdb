@@ -1,0 +1,128 @@
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index 7300678..8d9d777 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -103,7 +103,7 @@ static void RTreeIndexInfoExecute(ClientContext &context, TableFunctionInput &da
+ 
+ 		row++;
+ 	}
+-	output.SetCardinality(row);
++	output.SetChildCardinality(row);
+ }
+ 
+ static optional_ptr<RTreeIndex> TryGetIndex(ClientContext &context, const string &index_name) {
+@@ -233,7 +233,11 @@ static void RTreeIndexDumpExecute(ClientContext &context, TableFunctionInput &da
+ 		return RTreeScanResult::CONTINUE;
+ 	});
+ 
+-	output.SetCardinality(output_idx);
++	FlatVector::SetSize(bounds_vectors[0], count_t(output_idx));
++	FlatVector::SetSize(bounds_vectors[1], count_t(output_idx));
++	FlatVector::SetSize(bounds_vectors[2], count_t(output_idx));
++	FlatVector::SetSize(bounds_vectors[3], count_t(output_idx));
++	output.SetChildCardinality(output_idx);
+ }
+ 
+ //-------------------------------------------------------------------------
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index df5cdd6..5c44fb2 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -985,6 +985,7 @@ void Scan(ClientContext &context, TableFunctionInput &input, DataChunk &output)
+ 		default:
+ 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
+ 		}
++		FlatVector::SetSize(vec, count_t(arrow_array.length));
+ 	}
+ 
+ 	state.features_read += arrow_array.length;
+@@ -1684,7 +1685,7 @@ void Scan(ClientContext &context, TableFunctionInput &input, DataChunk &output)
+ 		output.data[5].SetValue(count, help_topic_value);
+ 		count++;
+ 	}
+-	output.SetCardinality(count);
++	output.SetChildCardinality(count);
+ }
+ 
+ //----------------------------------------------------------------------------------------------------------------------
+@@ -1901,7 +1902,7 @@ void Scan(ClientContext &context, TableFunctionInput &input, DataChunk &output)
+ 		output_idx++;
+ 	}
+ 
+-	output.SetCardinality(output_idx);
++	output.SetChildCardinality(output_idx);
+ }
+ 
+ //----------------------------------------------------------------------------------------------------------------------
+diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
+index 616feb5..e78d8f6 100644
+--- a/src/spatial/modules/shapefile/shapefile_module.cpp
++++ b/src/spatial/modules/shapefile/shapefile_module.cpp
+@@ -844,7 +844,7 @@ struct ST_ReadSHP {
+ 		gstate.shape_idx += output_size;
+ 
+ 		// Set the cardinality of the output
+-		output.SetCardinality(output_size);
++		output.SetChildCardinality(output_size);
+ 	}
+ 
+ 	//------------------------------------------------------------------------------------------------------------------
+@@ -1044,7 +1044,11 @@ struct Shapefile_Meta {
+ 		}
+ 
+ 		state.current_file_idx += output_count;
+-		output.SetCardinality(output_count);
++		FlatVector::SetSize(bounds_vector_children[0], count_t(output_count));
++		FlatVector::SetSize(bounds_vector_children[1], count_t(output_count));
++		FlatVector::SetSize(bounds_vector_children[2], count_t(output_count));
++		FlatVector::SetSize(bounds_vector_children[3], count_t(output_count));
++		output.SetChildCardinality(output_count);
+ 	}
+ 
+ 	static double GetProgress(ClientContext &context, const FunctionData *bind_data,
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index b9f75c0..6117306 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -701,6 +701,7 @@ SinkFinalizeType PhysicalSpatialJoin::Finalize(Pipeline &pipeline, Event &event,
+ 		D_ASSERT(build_side_key_types.size() == 1); // TODO: remove this
+ 
+ 		gstate.collection->Gather(row_pointer_vector, sel, row_count, build_side_key_col, geom_vec, sel, nullptr);
++		FlatVector::SetSize(geom_vec, count_t(row_count));
+ 
+ 		// This should be flat to begin with, but just to be sure
+ 		bbox_chunk.Flatten();
+@@ -1051,6 +1052,13 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
+ 			output_index += scan_count;
+ 			lstate.scan.matches_idx += scan_count;
+ 
++			// Update vector sizes to match the data we have written so far
++			FlatVector::SetSize(lstate.build_side_key_chunk.data[0], count_t(output_index));
++			for (idx_t i = 0; i < build_side_output_columns.size(); i++) {
++				auto &target = chunk.data[probe_side_output_columns.size() + i];
++				FlatVector::SetSize(target, count_t(output_index));
++			}
++
+ 			if (output_index != output_count) {
+ 				// We still have space left. Scan more!
+ 				continue;
+@@ -1140,8 +1148,7 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
+ 				// Null the RHS columns
+ 				for (idx_t i = 0; i < build_side_output_columns.size(); i++) {
+ 					auto &target = chunk.data[probe_side_output_columns.size() + i];
+-					target.SetVectorType(VectorType::CONSTANT_VECTOR);
+-					ConstantVector::SetNull(target, true);
++					ConstantVector::SetNull(target, count_t(remaining_count));
+ 				}
+ 			}
+ 
+@@ -1267,8 +1274,7 @@ SourceResultType PhysicalSpatialJoin::GetDataInternal(ExecutionContext &context,
+ 		// Null the LHS columns
+ 		for (idx_t i = 0; i < lhs_col_count; i++) {
+ 			auto &target = chunk.data[i];
+-			target.SetVectorType(VectorType::CONSTANT_VECTOR);
+-			ConstantVector::SetNull(target, true);
++			ConstantVector::SetNull(target, count_t(result_count));
+ 		}
+ 
+ 		// Set the RHS columns
