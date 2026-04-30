@@ -588,13 +588,13 @@ WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 
 	for (auto &func : funcs.functions) {
-		if (func.GetArguments().size() != nargs) {
+		if (func.GetSignature().GetParameterCount() != nargs) {
 			continue;
 		}
 
-		func.GetArguments()[0] = type;
+		func.GetSignature().GetParameter(0).SetType(type);
 		if (nargs > 2) {
-			func.GetArguments()[2] = type;
+			func.GetSignature().GetParameter(2).SetType(type);
 		}
 		return func;
 	}

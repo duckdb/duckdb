@@ -380,7 +380,7 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetArguments().emplace_back(LogicalType::DOUBLE);
+	fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -391,7 +391,7 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-	fun.GetArguments().push_back(list_of_double);
+	fun.GetSignature().AddParameter(list_of_double);
 	return fun;
 }
 
@@ -400,14 +400,14 @@ void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type)
 	auto fun = GetReservoirQuantileAggregate(type.InternalType());
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 
 	// List variants
 	fun = GetReservoirQuantileListAggregate(type);
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 
@@ -419,7 +419,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
-	fun.GetArguments().emplace_back(LogicalType::INTEGER);
+	fun.GetSignature().AddParameter(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 

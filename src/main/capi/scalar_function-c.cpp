@@ -276,7 +276,7 @@ void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.GetArguments().push_back(*logical_type);
+	scalar_function.GetSignature().AddParameter(*logical_type);
 }
 
 void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duckdb_logical_type type) {
@@ -516,8 +516,8 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 		    duckdb::TypeVisitor::Contains(scalar_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
-		for (const auto &argument : scalar_function.GetArguments()) {
-			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+		for (const auto &argument : scalar_function.GetSignature().GetParameters()) {
+			if (duckdb::TypeVisitor::Contains(argument.GetType(), duckdb::LogicalTypeId::INVALID)) {
 				return DuckDBError;
 			}
 		}

@@ -334,7 +334,7 @@ ScalarFunctionSet ListReduceFun::GetFunctions() {
 
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.GetArguments().push_back(LogicalType::ANY);
+	fun.GetSignature().AddParameter(LogicalType::ANY);
 	set.AddFunction(fun);
 	return set;
 }

@@ -54,7 +54,7 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression>
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
 	auto func = ConstantOrNullFun::GetFunction();
-	func.GetArguments()[0] = type;
+	func.GetSignature().GetParameter(0).SetType(type);
 	func.SetReturnType(type);
 	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
 

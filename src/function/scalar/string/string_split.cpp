@@ -184,7 +184,7 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
-	regex_fun.GetArguments().emplace_back(LogicalType::VARCHAR);
+	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	return regexp_split;
 }

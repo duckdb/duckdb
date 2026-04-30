@@ -22,11 +22,16 @@ BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_en
 	name = base.name;
 	schema_name = base.schema_name;
 	catalog_name = base.catalog_name;
-	arguments = base.GetArguments();
 	return_type = base.GetReturnType();
 	callbacks = base.GetCallbacks();
 	properties = base.GetProperties();
 	function_info = base.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : base.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
 }
 
 bool BoundWindowFunction::operator==(const BoundWindowFunction &rhs) const {

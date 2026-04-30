@@ -52,19 +52,14 @@ Function::~Function() {
 
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
-    : Function(std::move(name_p)), arguments(std::move(arguments_p)), varargs(std::move(varargs_p)),
-      return_type(std::move(return_type)) {
+    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
 }
 
 SimpleFunction::~SimpleFunction() {
 }
 
 string SimpleFunction::ToString() const {
-	return Function::CallToString(catalog_name, schema_name, name, arguments, varargs, return_type);
-}
-
-bool SimpleFunction::HasVarArgs() const {
-	return varargs.id() != LogicalTypeId::INVALID;
+	throw NotImplementedException("SimpleFunction::ToString() not implemented");
 }
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
@@ -103,12 +98,16 @@ void BuiltinFunctions::Initialize() {
 	RegisterExtensionOverloads();
 }
 
-hash_t SimpleFunction::Hash() const {
+hash_t FunctionSignature::Hash() const {
 	hash_t hash = return_type.Hash();
-	for (auto &arg : arguments) {
-		hash = duckdb::CombineHash(hash, arg.Hash());
+	for (auto &param : parameters) {
+		hash = duckdb::CombineHash(hash, param.GetType().Hash());
 	}
 	return hash;
+}
+
+hash_t SimpleFunction::Hash() const {
+	return signature.Hash();
 }
 
 static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
@@ -171,17 +170,6 @@ void Function::EraseArgument(BoundSimpleFunction &bound_function, vector<unique_
 	bound_function.GetArguments().erase_at(argument_index);
 }
 
-void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-                             idx_t argument_index) {
-	if (bound_function.GetOriginalArguments().empty()) {
-		bound_function.GetOriginalArguments() = bound_function.GetArguments();
-	}
-	D_ASSERT(arguments.size() == bound_function.GetArguments().size());
-	D_ASSERT(argument_index < arguments.size());
-	arguments.erase_at(argument_index);
-	bound_function.GetArguments().erase_at(argument_index);
-}
-
 hash_t BoundSimpleFunction::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &arg : arguments) {
@@ -192,6 +180,40 @@ hash_t BoundSimpleFunction::Hash() const {
 
 string BoundSimpleFunction::ToString() const {
 	return Function::CallToString(catalog_name, schema_name, name, arguments, return_type);
+}
+
+bool FunctionParameter::operator==(const FunctionParameter &other) const {
+	return type == other.type && StringUtil::CIEquals(name, other.name);
+}
+
+bool FunctionParameter::operator!=(const FunctionParameter &other) const {
+	return !(*this == other);
+}
+
+bool FunctionSignature::operator==(const FunctionSignature &other) const {
+	return parameters == other.parameters && varargs == other.varargs && return_type == other.return_type;
+}
+
+bool FunctionSignature::operator!=(const FunctionSignature &other) const {
+	return !(*this == other);
+}
+
+bool FunctionSignature::Equal(const FunctionSignature &other) const {
+	if (parameters.size() != other.parameters.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < parameters.size(); i++) {
+		if (parameters[i].GetType() != other.parameters[i].GetType()) {
+			return false;
+		}
+	}
+	if (varargs != other.varargs) {
+		return false;
+	}
+	if (return_type != other.return_type) {
+		return false;
+	}
+	return true;
 }
 
 } // namespace duckdb

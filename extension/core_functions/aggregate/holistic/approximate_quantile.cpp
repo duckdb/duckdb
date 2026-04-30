@@ -293,7 +293,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetArguments().emplace_back(LogicalType::FLOAT);
+	fun.GetSignature().AddParameter(LogicalType::FLOAT);
 	return fun;
 }
 
@@ -415,7 +415,7 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetArguments().push_back(list_of_float);
+	fun.GetSignature().AddParameter(list_of_float);
 	return fun;
 }
 

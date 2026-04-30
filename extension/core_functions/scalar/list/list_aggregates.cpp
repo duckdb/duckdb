@@ -479,7 +479,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// create the unordered map histogram function
-	D_ASSERT(best_function.GetArguments().size() == 1);
+	D_ASSERT(best_function.GetSignature().GetParameterCount() == 1);
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }

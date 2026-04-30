@@ -46,8 +46,7 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.GetArguments() && return_type == rhs.return_type &&
-	       varargs == rhs.GetVarArgs() && callbacks == rhs.callbacks && properties == rhs.properties;
+	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
@@ -55,26 +54,7 @@ bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 }
 
 bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
-	// number of types
-	if (this->GetArguments().size() != rhs.GetArguments().size()) {
-		return false;
-	}
-	// argument types
-	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
-		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
-			return false;
-		}
-	}
-	// return type
-	if (this->return_type != rhs.return_type) {
-		return false;
-	}
-	// varargs
-	if (this->GetVarArgs() != rhs.GetVarArgs()) {
-		return false;
-	}
-
-	return true; // they are equal
+	return signature.Equal(rhs.signature);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -99,11 +79,16 @@ BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	name = function.name;
 	schema_name = function.schema_name;
 	catalog_name = function.catalog_name;
-	arguments = function.GetArguments();
 	return_type = function.GetReturnType();
 	callbacks = function.GetCallbacks();
 	properties = function.GetProperties();
 	function_info = function.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {

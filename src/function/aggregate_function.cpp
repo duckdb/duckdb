@@ -37,11 +37,16 @@ BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function
 	this->name = function.name;
 	this->schema_name = function.schema_name;
 	this->catalog_name = function.catalog_name;
-	this->arguments = function.GetArguments();
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();
 	this->function_info = function.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
@@ -56,11 +61,16 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 	this->name = function.name;
 	this->schema_name = function.schema_name;
 	this->catalog_name = function.catalog_name;
-	this->arguments = function.GetArguments();
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();
 	this->function_info = function.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
 }
 
 } // namespace duckdb

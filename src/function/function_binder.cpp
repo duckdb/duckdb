@@ -23,13 +23,15 @@ FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(bi
 }
 
 optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
-	if (arguments.size() < func.GetArguments().size()) {
+	auto &sig = func.GetSignature();
+
+	if (arguments.size() < sig.GetParameterCount()) {
 		// not enough arguments to fulfill the non-vararg part of the function
 		return optional_idx();
 	}
 	idx_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		LogicalType arg_type = i < func.GetArguments().size() ? func.GetArguments()[i] : func.GetVarArgs();
+		LogicalType arg_type = i < sig.GetParameterCount() ? sig.GetParameter(i).GetType() : sig.GetVarArgs();
 		if (arguments[i] == arg_type) {
 			// arguments match: do nothing
 			continue;
@@ -47,11 +49,13 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func,
 }
 
 optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
-	if (func.HasVarArgs()) {
+	auto &sig = func.GetSignature();
+
+	if (sig.HasVarArgs()) {
 		// special case varargs function
 		return BindVarArgsFunctionCost(func, arguments);
 	}
-	if (func.GetArguments().size() != arguments.size()) {
+	if (sig.GetParameterCount() != arguments.size()) {
 		// invalid argument count: check the next function
 		return optional_idx();
 	}
@@ -62,7 +66,7 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 			has_parameter = true;
 			continue;
 		}
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
+		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], sig.GetParameter(i).GetType());
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
 			cost += idx_t(cast_cost);
@@ -703,7 +707,7 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
 		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetArguments().size(); i < children.size(); i++) {
+		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
 			bound_function.GetArguments().push_back(varargs_type);
 		}
 	}
@@ -769,7 +773,7 @@ FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
 		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetArguments().size(); i < children.size(); i++) {
+		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
 			bound_function.GetArguments().push_back(varargs_type);
 		}
 	}
@@ -813,7 +817,7 @@ FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_pt
 	// Expand varargs if necessary
 	if (function.HasVarArgs()) {
 		const auto &varargs_type = function.GetVarArgs();
-		for (idx_t i = function.GetArguments().size(); i < children.size(); i++) {
+		for (idx_t i = function.GetSignature().GetParameterCount(); i < children.size(); i++) {
 			bound_function.GetArguments().push_back(varargs_type);
 		}
 	}
