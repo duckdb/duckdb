@@ -146,3 +146,46 @@ ORDER BY row_group_id
 3	true	whole_group	[[g, a, b, c]]
 4	true	prefetch_filters	[[g], [a, b, c]]
 5	true	prefetch_filters	[[g], [a, b, c]]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+# Test the 90% threshold to go back at whole_group
+statement ok
+COPY (
+    SELECT i AS a,
+        i + 10 AS b,
+        CASE
+            WHEN i % 100 = 50 THEN 51
+            ELSE i % 100
+        END AS c,
+        CASE
+            WHEN i < 2048 AND i % 1000 = 500 THEN 501
+            ELSE i % 1000
+        END AS g
+    FROM RANGE(24576) t(i)
+) TO '{TEST_DIR}/rgo3.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + b + c + g)
+FROM read_parquet('{TEST_DIR}/rgo3.parquet')
+WHERE g = 500
+
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo3.parquet'
+ORDER BY row_group_id
+----
+0	true	prefetch_filters	[[g], [a, b, c]]
+1	false	prefetch_filters	[[g], [a, b, c]]
+2	false	prefetch_filters	[[g], [a, b, c]]
+3	false	prefetch_filters	[[g], [a, b, c]]
+4	false	prefetch_filters	[[g], [a, b, c]]
+5	false	prefetch_filters	[[g], [a, b, c]]
+6	false	prefetch_filters	[[g], [a, b, c]]
+7	false	prefetch_filters	[[g], [a, b, c]]
+8	false	prefetch_filters	[[g], [a, b, c]]
+9	false	prefetch_filters	[[g], [a, b, c]]
+10	false	prefetch_filters	[[g], [a, b, c]]
+11	false	whole_group	[[g, a, b, c]]
