@@ -20,8 +20,11 @@ public:
 public:
 	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
 	                    vector<unique_ptr<ColumnReader>> child_readers_p);
+	VariantColumnReader(ClientContext &context, const ParquetReader &reader, const ParquetColumnSchema &schema,
+	                    vector<unique_ptr<ColumnReader>> child_readers_p, const struct ColumnIndex &index);
 
 	ClientContext &context;
+	struct ColumnIndex index;
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:

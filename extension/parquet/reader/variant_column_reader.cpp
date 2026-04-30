@@ -19,6 +19,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/function/scalar/variant_utils.hpp"
 #include "parquet_column_schema.hpp"
 
 namespace duckdb_apache {
@@ -42,8 +43,9 @@ class ThriftFileTransport;
 //===--------------------------------------------------------------------===//
 VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
                                          const ParquetColumnSchema &schema,
-                                         vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, schema), context(context), child_readers(std::move(child_readers_p)) {
+                                         vector<unique_ptr<ColumnReader>> child_readers_p,
+                                         const struct ColumnIndex &index)
+    : ColumnReader(reader, schema), context(context), index(index), child_readers(std::move(child_readers_p)) {
 	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
@@ -55,6 +57,12 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 	} else {
 		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
 	}
+}
+
+VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetReader &reader,
+                                         const ParquetColumnSchema &schema,
+                                         vector<unique_ptr<ColumnReader>> child_readers_p)
+    : VariantColumnReader(context, reader, schema, std::move(child_readers_p), {}) {
 }
 
 ColumnReader &VariantColumnReader::GetChildReader(idx_t child_idx) {
@@ -130,7 +138,27 @@ idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	}
 	intermediate =
 	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
-	VariantValue::ToVARIANT(intermediate, result);
+
+	if (index.IsPushdownExtract()) {
+		Vector extract_intermediate(LogicalType::VARIANT(), value_values);
+		VariantValue::ToVARIANT(intermediate, extract_intermediate);
+
+		vector<VariantPathComponent> components;
+		reference<const struct ColumnIndex> path_iter(index.GetChildIndex(0));
+
+		while (true) {
+			auto &current = path_iter.get();
+			auto &field_name = current.GetFieldName();
+			components.emplace_back(field_name);
+			if (!current.HasChildren()) {
+				break;
+			}
+			path_iter = current.GetChildIndex(0);
+		}
+		VariantUtils::VariantExtract(extract_intermediate, components, result, value_values);
+	} else {
+		VariantValue::ToVARIANT(intermediate, result);
+	}
 
 	read_count = value_values;
 	return read_count.GetIndex();

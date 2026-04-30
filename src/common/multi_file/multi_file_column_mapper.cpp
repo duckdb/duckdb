@@ -1149,7 +1149,6 @@ MultiFileColumnMapper::CreateFilters(map<MultiFileGlobalIndex, reference<TableFi
 		}
 		auto &map_entry = local_it->second;
 		auto local_id = map_entry.mapping.index;
-		auto &column_index = reader.column_indexes[local_id];
 		auto &local_type = map_entry.local_type;
 		auto &global_type = map_entry.global_type;
 

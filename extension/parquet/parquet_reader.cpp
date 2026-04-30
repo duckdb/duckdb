@@ -450,38 +450,6 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 	                                              parquet_options);
 }
 
-// static bool PushdownShreddedFieldExtract(const ColumnIndex &variant_extract, ColumnIndex &out_struct_extract) {
-//	D_ASSERT(IsShredded());
-//	auto &shredded = *sub_columns[1];
-//	auto &variant_stats = GetStatisticsRef();
-
-//	if (!VariantStats::IsShredded(variant_stats)) {
-//		//! FIXME: this happens when we Checkpoint but don't restart, the stats of the ColumnData aren't updated by
-//		//! Checkpoint The variant is shredded, but there are no stats / the stats are cluttered (?)
-//		return false;
-//	}
-
-//	//! shredded.typed_value
-//	ColumnIndex column_index(0);
-
-//	reference<const BaseStatistics> shredded_stats(VariantStats::GetShreddedStats(variant_stats));
-//	LogicalType root_type;
-//	if (!FindShreddedColumnInternal(shredded, shredded_stats, variant_extract, column_index, root_type)) {
-//		return false;
-//	}
-//	if (shredded_stats.get().GetType().IsNested()) {
-//		//! Can't push down an extract if the leaf we're extracting is not a primitive
-//		//! (Since the shredded representation for OBJECT/ARRAY is interleaved with 'untyped_value_index' fields)
-//		return false;
-//	}
-//	if (root_type.id() != LogicalTypeId::INVALID) {
-//		column_index.SetPushdownExtractType(shredded.type, root_type);
-//	}
-
-//	out_struct_extract = column_index;
-//	return true;
-//}
-
 static unique_ptr<BaseStatistics> ReadColumnStatistics(const FileMetaData &file_meta_data,
                                                        const ParquetColumnSchema &column,
                                                        const ParquetOptions &parquet_options) {
@@ -684,7 +652,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 
 		//! VARIANT is shredded AND we have a pushed down extract to execute
-		auto &child = indexes[0];
 		auto variant_stats = ReadColumnStatistics(*GetFileMetadata(), schema, parquet_options);
 
 		if (IsFullyShredded(*variant_stats, column_id)) {
@@ -692,20 +659,24 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
 			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
 			return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
-		} else {
-			for (idx_t child_index = 0; child_index < 2; child_index++) {
-				children[child_index] =
-				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
-			}
-			children[2] = CreateReaderRecursive(context, ColumnIndex(2), typed_value_schema);
 		}
+		for (idx_t child_index = 0; child_index < 3; child_index++) {
+			children[child_index] =
+			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
+		}
+		//! Create the VariantColumnReader with the column index, so we can perform the extract at Read
+		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
 		auto scan_type = column_id.GetScanType();
-		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
+		if (scan_type.id() == LogicalTypeId::VARIANT) {
+			return std::move(column_reader);
+		}
 		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), column_id.GetPrimaryIndex());
 		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
+		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
+		    column_reader->Schema(), cast_expression->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
 		return make_uniq<ExpressionColumnReader>(context, std::move(column_reader), std::move(cast_expression),
-		                                         typed_value_schema);
+		                                         std::move(expr_schema));
 	}
 	default:
 		throw InternalException("Unsupported ParquetColumnSchemaType");
