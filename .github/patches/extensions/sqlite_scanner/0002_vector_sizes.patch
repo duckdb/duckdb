@@ -1,0 +1,65 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index 49239a2..4268928 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -252,10 +252,16 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
+ 			}
+ 		}
+ 
++		auto SetVectorSizes = [&](idx_t count) {
++			for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
++				FlatVector::SetSize(output.data[col_idx], count_t(count));
++			}
++		};
+ 		idx_t out_idx = 0;
+ 		while (true) {
+ 			if (out_idx == STANDARD_VECTOR_SIZE) {
+ 				output.SetCardinality(out_idx);
++				SetVectorSizes(out_idx);
+ 				return;
+ 			}
+ 			auto &stmt = state.stmt;
+@@ -263,6 +269,7 @@ static void SqliteScan(ClientContext &context, TableFunctionInput &data, DataChu
+ 			if (!has_more) {
+ 				state.done = true;
+ 				output.SetCardinality(out_idx);
++				SetVectorSizes(out_idx);
+ 				break;
+ 			}
+ 			state.scan_count++;
+diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
+index 2409c46..09c3dba 100644
+--- a/src/storage/sqlite_delete.cpp
++++ b/src/storage/sqlite_delete.cpp
+@@ -80,6 +80,7 @@ SourceResultType SQLiteDelete::GetDataInternal(ExecutionContext &context, DataCh
+ 	}
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.delete_count));
++	FlatVector::SetSize(chunk.data[0], count_t(1));
+ 
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/storage/sqlite_insert.cpp b/src/storage/sqlite_insert.cpp
+index 95c4e39..44502ef 100644
+--- a/src/storage/sqlite_insert.cpp
++++ b/src/storage/sqlite_insert.cpp
+@@ -122,6 +122,7 @@ SourceResultType SQLiteInsert::GetDataInternal(ExecutionContext &context, DataCh
+ 	auto &insert_gstate = sink_state->Cast<SQLiteInsertGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
++	FlatVector::SetSize(chunk.data[0], count_t(1));
+ 
+ 	return SourceResultType::FINISHED;
+ }
+diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
+index f49b4ea..ac10d13 100644
+--- a/src/storage/sqlite_update.cpp
++++ b/src/storage/sqlite_update.cpp
+@@ -85,6 +85,7 @@ SourceResultType SQLiteUpdate::GetDataInternal(ExecutionContext &context, DataCh
+ 	auto &insert_gstate = sink_state->Cast<SQLiteUpdateGlobalState>();
+ 	chunk.SetCardinality(1);
+ 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.update_count));
++	FlatVector::SetSize(chunk.data[0], count_t(1));
+ 
+ 	return SourceResultType::FINISHED;
+ }

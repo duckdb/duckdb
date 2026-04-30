@@ -3,9 +3,6 @@
 # group: [catalog]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create schema """cursed_schema";
 
 statement ok

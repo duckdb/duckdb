@@ -2,9 +2,6 @@
 # description: Extract month function
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 select date '1992-01-01' + interval (i) days, month(date '1992-01-01' + interval (i) days) from range(0, 366) tbl(i);
 ----

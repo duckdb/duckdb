@@ -2,9 +2,6 @@
 # description: Have you seen the fnords?
 # group: [time]
 
-statement ok
-PRAGMA enable_verification
-
 # Parse and format
 query I
 SELECT '15:30:00.123456789'::TIME_NS;

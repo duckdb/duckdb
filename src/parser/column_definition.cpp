@@ -128,7 +128,7 @@ bool ColumnDefinition::Generated() const {
 }
 
 string ColumnDefinition::ToSQLString() const {
-	string result = KeywordHelper::WriteOptionallyQuoted(Name()) + " ";
+	string result = SQLIdentifier(Name()) + " ";
 	auto &column_type = Type();
 	if (column_type.id() != LogicalTypeId::ANY) {
 		result += Type().ToString();

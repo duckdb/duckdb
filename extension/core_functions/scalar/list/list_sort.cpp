@@ -77,6 +77,9 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	// initialize and fill chunk
 	DataChunk chunk;
 	chunk.InitializeEmpty(types);
+	FlatVector::SetSize(lists_indices, count_t(offset_lists_indices));
+	FlatVector::SetSize(payload_vector, count_t(offset_lists_indices));
+	FlatVector::SetSize(slice, count_t(offset_lists_indices));
 	chunk.data[0].Reference(lists_indices);
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);

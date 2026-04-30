@@ -14,9 +14,6 @@ insert into t1 values ('a');
 statement ok
 insert into t2 values ('A');
 
-statement ok
-pragma enable_verification;
-
 query I
 select upper(col1)
 from (

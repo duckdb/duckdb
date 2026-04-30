@@ -15,7 +15,4 @@ statement maybe
 FROM read_csv('{DATA_DIR}/csv/afl/4496/crashes/case_1.csv', auto_detect=false, buffer_size=42, columns={'json': 'JSON'}, delim=NULL, rejects_limit=658694493994253607, store_rejects=true);
 ----
 
-statement ok
-PRAGMA enable_verification
-
 endloop

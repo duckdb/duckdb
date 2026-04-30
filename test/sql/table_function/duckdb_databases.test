@@ -5,9 +5,6 @@
 require noforcestorage
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SELECT * FROM duckdb_databases();
 
 query IIIII

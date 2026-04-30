@@ -1023,7 +1023,7 @@ static void GetStatsUnifier(const ColumnWriter &column_writer, vector<unique_ptr
 		if (!base_name.empty()) {
 			base_name += ".";
 		}
-		base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
+		base_name += SQLQuotedIdentifier(schema.name);
 	}
 
 	auto &children = column_writer.ChildWriters();

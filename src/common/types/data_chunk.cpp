@@ -128,6 +128,13 @@ void DataChunk::SetCardinality(idx_t count_p) {
 	this->count = count_p;
 }
 
+void DataChunk::SetChildCardinality(idx_t count_p) {
+	this->count = count_p;
+	for (auto &v : data) {
+		FlatVector::SetSize(v, count_p);
+	}
+}
+
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
@@ -148,11 +155,13 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	D_ASSERT(ColumnCount() == other.ColumnCount());
 	D_ASSERT(other.size() == 0);
 
+	const idx_t target_count = size() - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
+		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(size() - offset);
+	other.SetCardinality(target_count);
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -160,11 +169,13 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	D_ASSERT(other.size() == 0);
 	D_ASSERT(source_count <= size());
 
+	const idx_t target_count = source_count - offset;
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
+		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(source_count - offset);
+	other.SetCardinality(target_count);
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
@@ -225,6 +236,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 		} else {
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
+		FlatVector::SetSize(data[i], count_t(new_size));
 	}
 	SetCardinality(new_size);
 }
@@ -294,6 +306,7 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
+		FlatVector::SetSize(data[i], count_t(row_count));
 	});
 }
 
@@ -369,12 +382,13 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 }
 
 void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
-	// for (idx_t i = 0; i < ColumnCount(); i++) {
-	// 	if (data[i].HasSize() && data[i].size() != size()) {
-	// 		throw InternalException("DataChunk::Verify - size mismatch: vector has size %d but chunk has size %d",
-	// 		                        data[i].size(), size());
-	// 	}
-	// }
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		if (data[i].size() != size()) {
+			throw InternalException(
+			    "DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d", i,
+			    data[i].GetType().ToString(), data[i].size(), size());
+		}
+	}
 #ifdef DEBUG
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {

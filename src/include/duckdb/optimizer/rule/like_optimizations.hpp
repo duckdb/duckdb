@@ -21,8 +21,8 @@ public:
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<reference<Expression>> &bindings, bool &changes_made,
 	                             bool is_root) override;
 
-	static unique_ptr<Expression> ApplyRule(BoundFunctionExpression &expr, BoundScalarFunction function, string pattern,
-	                                        bool is_not_like);
+	unique_ptr<Expression> ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function, string pattern,
+	                                 bool is_not_like);
 };
 
 } // namespace duckdb

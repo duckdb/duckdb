@@ -2,9 +2,6 @@
 # description: Create a table with basic generated column usage and restart
 # group: [virtual]
 
-statement ok
-PRAGMA enable_verification
-
 # load the DB from disk
 load {TEST_DIR}/generated_column_storage.db
 

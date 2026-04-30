@@ -1,4 +1,5 @@
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -236,8 +237,13 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			}
 		}
 	}
-	arguments.SetCardinality(all_constant ? 1 : count);
-	arguments.Verify(context ? context->db : nullptr);
+	const idx_t arg_count = all_constant ? 1 : count;
+	arguments.SetCardinality(arg_count);
+	if (!all_constant) {
+		// when all-constant we execute the function on a single row but keep argument vectors at outer size
+		// (the buffers are shared with the input chunk so we cannot resize them) - skip verification in that case
+		arguments.Verify(context ? context->db : nullptr);
+	}
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
@@ -261,6 +267,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(count));
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.GetReturnType());

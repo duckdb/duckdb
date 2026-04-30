@@ -227,7 +227,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
-	return std::move(plan);
+	return plan;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<LogicalOperator> &plan,

@@ -2,9 +2,6 @@
 # description: Test handling of overflow bigint; this is tested extra because the multiply overflow detection code is tricky
 # group: [overflow]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT 251658240::BIGINT * 251658240::BIGINT
 ----
