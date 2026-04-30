@@ -139,7 +139,7 @@ public:
 	void Initialize();
 
 	void CreateDir(const string &dir_path) DUCKDB_REQUIRES(lock);
-	unique_ptr<GlobalFileState> CreateFileState() DUCKDB_REQUIRES(lock);
+	unique_ptr<GlobalFileState> CreateFileState(string output_path = string()) DUCKDB_REQUIRES(lock);
 	optional_ptr<CopyToFileInfo> AddFile(const string &file_name) DUCKDB_REQUIRES(lock);
 	void FinalizeFileState(unique_ptr<GlobalFileState> file_state);
 
@@ -194,8 +194,7 @@ class PartitionedCopyLocalState;
 
 class CopyToFileLocalState : public LocalSinkState {
 public:
-	CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p, CopyToFileGlobalState &gstate_p,
-	                     unique_ptr<LocalFunctionData> local_state);
+	CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p, CopyToFileGlobalState &gstate_p);
 
 public:
 	const PhysicalCopyToFile &op;
@@ -1271,8 +1270,7 @@ unique_ptr<GlobalFileState> PartitionedCopy::CreatePartitionFileState(const vect
 	}
 
 	// Initialize write
-	auto file_state =
-	    make_uniq<GlobalFileState>(op.function.copy_to_initialize_global(context, *op.bind_data, full_path), full_path);
+	auto file_state = copy_gstate.CreateFileState(full_path);
 	if (op.function.initialize_operator) {
 		op.function.initialize_operator(*file_state->data, op);
 	}
@@ -1355,8 +1353,7 @@ void CopyToFileGlobalState::Initialize() {
 	}
 	// initialize writing to the file
 	created_files.push_back(op.file_path);
-	global_state = make_uniq<GlobalFileState>(
-	    op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path), op.file_path);
+	global_state = CreateFileState(op.file_path);
 	if (op.function.initialize_operator) {
 		op.function.initialize_operator(*global_state->data, op);
 	}
@@ -1380,9 +1377,11 @@ void CopyToFileGlobalState::CreateDir(const string &dir_path) {
 	created_directories.insert(dir_path);
 }
 
-unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState() {
+unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	string output_path(op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++));
+	if (output_path.empty()) {
+		output_path = op.filename_pattern.CreateFilename(fs, op.file_path, op.file_extension, last_file_offset++);
+	}
 	created_files.push_back(output_path);
 
 	optional_ptr<CopyToFileInfo> written_file_info;
@@ -1436,8 +1435,8 @@ void CopyToFileGlobalState::TryFinalizeOwnedFileState() {
 // CopyToFileLocalState hpp
 //===--------------------------------------------------------------------===//
 CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, ExecutionContext &context_p,
-                                           CopyToFileGlobalState &gstate_p, unique_ptr<LocalFunctionData> local_state)
-    : op(op_p), context(context_p), gstate(gstate_p), local_file_state(std::move(local_state)) {
+                                           CopyToFileGlobalState &gstate_p)
+    : op(op_p), context(context_p), gstate(gstate_p) {
 	if (op.partition_output) {
 		++gstate.partitioned_copy->locals;
 		partitioned_copy_local_state = make_uniq<PartitionedCopyLocalState>();
@@ -1572,8 +1571,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	auto &gstate = sink_state->Cast<CopyToFileGlobalState>();
-	auto lstate = partition_output ? nullptr : function.copy_to_initialize_local(context, *bind_data);
-	return make_uniq<CopyToFileLocalState>(*this, context, gstate, std::move(lstate));
+	return make_uniq<CopyToFileLocalState>(*this, context, gstate);
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
