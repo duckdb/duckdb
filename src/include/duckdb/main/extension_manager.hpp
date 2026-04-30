@@ -58,6 +58,8 @@ public:
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
 
+	void RemoveExtensionInfo(const string &name);
+
 private:
 	DatabaseInstance &db;
 	mutex lock;

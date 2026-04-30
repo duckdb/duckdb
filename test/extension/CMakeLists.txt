@@ -12,7 +12,7 @@ build_loadable_extension_directory(
 build_loadable_extension_directory(
   loadable_extension_demo_double
   "CPP"
-  test/extension/copy
+  test/extension
   "default-version"
   ""
   ${PARAMETERS}

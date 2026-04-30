@@ -1,6 +1,4 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
-#include "duckdb/main/extension_manager.hpp"
-#include "duckdb/main/settings.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/collate_catalog_entry.hpp"

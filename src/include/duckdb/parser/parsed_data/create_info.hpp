@@ -44,8 +44,6 @@ public:
 	bool internal;
 	//! The name of the extension that registered this entry (empty for core entries)
 	string extension_name;
-	//! The alias under which the extension was loaded (empty if no alias was given)
-	string extension_alias;
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry

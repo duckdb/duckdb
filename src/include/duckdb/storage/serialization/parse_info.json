@@ -632,6 +632,11 @@
         "id": 204,
         "name": "repo_is_alias",
         "type": "bool"
+      },
+      {
+        "id": 205,
+        "name": "alias",
+        "type": "string"
       }
     ]
   },

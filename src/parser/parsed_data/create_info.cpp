@@ -14,7 +14,6 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.temporary = temporary;
 	other.internal = internal;
 	other.extension_name = extension_name;
-	other.extension_alias = extension_alias;
 	other.sql = sql;
 	other.dependencies = dependencies;
 	other.comment = comment;

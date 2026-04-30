@@ -59,8 +59,7 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	function.extension_name = extension_name;
-	function.extension_alias = extension_alias;
+	function.extension_name = GetRegisteredName();
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -80,8 +79,7 @@ void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	function.extension_name = extension_name;
-	function.extension_alias = extension_alias;
+	function.extension_name = GetRegisteredName();
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -101,8 +99,7 @@ void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateWindowFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	function.extension_name = extension_name;
-	function.extension_alias = extension_alias;
+	function.extension_name = GetRegisteredName();
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
