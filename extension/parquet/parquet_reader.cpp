@@ -474,32 +474,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 			}
 		} else {
-			if (column_id.IsPushdownExtract()) {
-				D_ASSERT(indexes.size() == 1);
-				auto &child = indexes[0];
-				auto child_index = child.GetPrimaryIndex();
-				auto &child_schema = schema.children[child_index];
-				auto &child_type = StructType::GetChildTypes(schema.type)[child_index].second;
-
-				auto column_reader = CreateReaderRecursive(context, child, child_schema);
-				if (!child.HasChildren() && child_type != child.GetType()) {
-					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
-					auto cast_expression =
-					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
-					auto expr_schema = make_uniq<ParquetColumnSchema>(
-					    ParquetColumnSchema::FromParentSchema(column_reader->Schema(), cast_expression->GetReturnType(),
-					                                          ParquetColumnSchemaType::EXPRESSION));
-					auto expr_reader = make_uniq<ExpressionColumnReader>(
-					    context, std::move(column_reader), std::move(cast_expression), std::move(expr_schema));
-					children[0] = std::move(expr_reader);
-				} else {
-					children[0] = std::move(column_reader);
-				}
-			} else {
-				for (idx_t i = 0; i < indexes.size(); i++) {
-					auto child_index = indexes[i].GetPrimaryIndex();
-					children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
-				}
+			for (idx_t i = 0; i < indexes.size(); i++) {
+				auto child_index = indexes[i].GetPrimaryIndex();
+				children[child_index] = CreateReaderRecursive(context, indexes[i], schema.children[child_index]);
 			}
 		}
 		switch (schema.type.id()) {
@@ -509,7 +486,22 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
 		case LogicalTypeId::STRUCT: {
 			if (column_id.IsPushdownExtract()) {
-				return std::move(children[0]);
+				auto &child = indexes[0];
+				auto child_index = child.GetPrimaryIndex();
+				auto column_reader = std::move(children[child_index]);
+				auto &child_type = column_reader->Type();
+				if (!child.HasChildren() && child_type != child.GetType()) {
+					auto input = make_uniq<BoundReferenceExpression>(child_type, 0ULL);
+					auto cast_expression =
+					    BoundCastExpression::AddCastToType(context, std::move(input), child.GetType());
+					auto expr_schema = make_uniq<ParquetColumnSchema>(
+					    ParquetColumnSchema::FromParentSchema(column_reader->Schema(), cast_expression->GetReturnType(),
+					                                          ParquetColumnSchemaType::EXPRESSION));
+					auto expr_reader = make_uniq<ExpressionColumnReader>(
+					    context, std::move(column_reader), std::move(cast_expression), std::move(expr_schema));
+					return std::move(expr_reader);
+				}
+				return column_reader;
 			}
 			return make_uniq<StructColumnReader>(*this, schema, std::move(children));
 		}
