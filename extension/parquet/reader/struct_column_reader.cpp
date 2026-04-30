@@ -69,12 +69,6 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	auto &define_out = input.define_out;
 	auto &repeat_out = input.repeat_out;
 
-	if (index.IsPushdownExtract()) {
-		auto &child_reader = child_readers[0];
-		ColumnReaderInput child_input(num_values, define_out, repeat_out);
-		return child_reader->Read(child_input, result);
-	}
-
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 

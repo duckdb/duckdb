@@ -503,8 +503,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]), column_id);
-		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::STRUCT: {
+			if (column_id.IsPushdownExtract()) {
+				return std::move(children[0]);
+			}
 			return make_uniq<StructColumnReader>(*this, schema, std::move(children), column_id);
+		}
 		default:
 			throw InternalException("Unsupported schema type for schema with children");
 		}
@@ -1257,8 +1261,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
-		auto storage_index = StorageIndex::FromColumnIndex(column_indexes[i]);
-		if (stats && storage_index.IsPushdownExtract()) {
+		if (stats && stats->GetType().IsNested() && column_indexes[i].IsPushdownExtract()) {
+			auto storage_index = StorageIndex::FromColumnIndex(column_indexes[i]);
 			stats = stats->PushdownExtract(storage_index.GetChildIndex(0));
 		}
 		// filters contain output chunk index, not file col idx!
