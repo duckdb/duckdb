@@ -124,6 +124,9 @@ public:
 
 	const ParquetReader &Reader();
 	const LogicalType &Type() const {
+		if (index.IsPushdownExtract()) {
+			return index.GetScanType();
+		}
 		return column_schema.type;
 	}
 	const ParquetColumnSchema &Schema() const {

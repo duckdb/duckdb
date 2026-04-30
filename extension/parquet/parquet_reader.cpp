@@ -582,7 +582,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 
 		//! <field_name>.typed_value
 		ColumnIndex nested_typed_value(typed_value_index.GetIndex());
-		nested_typed_value.SetType(typed_value_column.type);
+		nested_typed_value.SetType(path_iter.get().GetType());
 		result.get().AddChildIndex(std::move(nested_typed_value));
 		result.get().SetPushdownExtract();
 		result = result.get().GetChildIndexesMutable()[0];
