@@ -241,9 +241,9 @@ static bool RegexpHasWholeTextAnchors(duckdb_re2::Regexp *regexp) {
 	       subs[regexp->nsub() - 1]->op() == duckdb_re2::kRegexpEndText;
 }
 
-// Rewrites `regexp_replace(s, P, '\1')` into `regexp_extract(s, P, 1, 'k')` when P's byte shape and
-// parsed RE2 anchors prove that any match spans the whole input. The original pattern is preserved;
-// any regexp_extract pattern simplification belongs in a separate optimization.
+// Rewrites `regexp_replace(s, P, '\N')` into `regexp_extract(s, P, N, 'k')` when parsed RE2 anchors
+// prove that any match spans the whole input. The original pattern is preserved; any regexp_extract
+// pattern simplification belongs in a separate optimization.
 unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                        bool &changes_made, bool is_root) {
 	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
@@ -264,18 +264,17 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 		return nullptr;
 	}
 	const auto &replace_str = StringValue::Get(replace_const.value);
-	if (replace_str.size() != 2 || replace_str[0] != '\\' || replace_str[1] != '1') {
+	int32_t group_index;
+	// Only a bare backreference can be represented by regexp_extract. Replacement literals or
+	// composites such as `x\1`, `\1x`, and `\1\2` must stay on regexp_replace.
+	if (replace_str.size() != 2 || replace_str[0] != '\\' || replace_str[1] < '0' || replace_str[1] > '9') {
 		return nullptr;
 	}
+	group_index = replace_str[1] - '0';
 
 	const auto &pattern = bind_data.constant_string;
-	if (pattern.size() < 4 || pattern.front() != '^' || pattern.compare(pattern.size() - 3, 3, ".*$") != 0) {
-		return nullptr;
-	}
-
-	// `\1` requires at least one capture group; multi-group patterns are still valid.
 	duckdb_re2::RE2 compiled(duckdb_re2::StringPiece(pattern.c_str(), pattern.size()), bind_data.options);
-	if (!compiled.ok() || compiled.NumberOfCapturingGroups() < 1 || !RegexpHasWholeTextAnchors(compiled.Regexp())) {
+	if (!compiled.ok() || !RegexpHasWholeTextAnchors(compiled.Regexp())) {
 		return nullptr;
 	}
 
@@ -291,7 +290,7 @@ unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vect
 	vector<unique_ptr<Expression>> extract_children;
 	extract_children.emplace_back(std::move(root.children[0]));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(pattern)));
-	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(1)));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(group_index)));
 	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(options_str))));
 
 	FunctionBinder binder(rewriter.context);

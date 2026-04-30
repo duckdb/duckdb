@@ -119,7 +119,7 @@ select regexp_replace(s, r, 'X') from regex;
 ----
 no argument for repetition operator: *
 
-# Anchored capture-then-truncate patterns: `^...(group).*$` with replacement `\1`.
+# Anchored whole-input patterns with a single backreference replacement.
 # The optimizer rewrites these into regexp_extract with no_match_returns_input set.
 
 # Path-segment extraction. Match and no-match rows must behave identically to the un-rewritten form.
@@ -140,6 +140,12 @@ query T
 SELECT regexp_replace('aXYbZW', '^(a)(XY)(b)(ZW).*$', '\1');
 ----
 a
+
+# Non-`\1` backreferences work, and the pattern does not need to end in `.*$`.
+query T
+SELECT regexp_replace('left-right', '^([^-]+)-([^-]+)$', '\2');
+----
+right
 
 # Embedded newline in the remainder under default options: `.*$` cannot match `\n`,
 # so the result is the input unchanged. Result contains a newline so we check by JOIN.
