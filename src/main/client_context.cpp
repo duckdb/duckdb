@@ -275,6 +275,16 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	// Locks are sorted by DuckTransaction pointer to give every connection the same acquisition
 	// order across multiple shared databases — this prevents AB/BA deadlock when two
 	// participants imported the same set of DBs in opposite orders.
+	//
+	// We acquire statement_lock with the context_lock TEMPORARILY RELEASED so the only
+	// lock-order edge in the graph is M1(statement_lock) -> M0(context_lock). The reverse
+	// edge would form a cycle against StreamQueryResult::FetchInternal, which re-acquires
+	// the context_lock while statement_lock is still held in active_query->statement_guards
+	// across the BeginQuery -> Fetch boundary (TSan-detected lock-order-inversion).
+	//
+	// Lifetime: each duck reference is pinned by either ownership (this connection's own
+	// MetaTransaction holds it) or by participant_count (we've claimed a participant slot),
+	// so the DuckTransaction cannot be destroyed during the released-context_lock window.
 	{
 		auto &meta = transaction.ActiveTransaction();
 		vector<reference<DuckTransaction>> ducks;
@@ -285,12 +295,31 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 			}
 			ducks.push_back(txn->Cast<DuckTransaction>());
 		}
-		std::sort(ducks.begin(), ducks.end(),
-		          [](const reference<DuckTransaction> &a, const reference<DuckTransaction> &b) {
-			          return std::less<const void *>()(&a.get(), &b.get());
-		          });
-		for (auto &duck : ducks) {
-			active_query->statement_guards.push_back(duck.get().LockStatement());
+		if (!ducks.empty()) {
+			std::sort(ducks.begin(), ducks.end(),
+			          [](const reference<DuckTransaction> &a, const reference<DuckTransaction> &b) {
+				          return std::less<const void *>()(&a.get(), &b.get());
+			          });
+			vector<StatementGuard> guards;
+			guards.reserve(ducks.size());
+			{
+				// RAII: re-acquire the context_lock at scope exit, even if LockStatement throws.
+				struct ContextRelockGuard {
+					ClientContextLock &lock;
+					explicit ContextRelockGuard(ClientContextLock &l) : lock(l) {
+						lock.Unlock();
+					}
+					~ContextRelockGuard() {
+						lock.Lock();
+					}
+				};
+				ContextRelockGuard relock(lock);
+				for (auto &duck : ducks) {
+					guards.push_back(duck.get().LockStatement());
+				}
+			}
+			// context_lock is held again here; safe to mutate active_query.
+			active_query->statement_guards = std::move(guards);
 		}
 	}
 

@@ -344,8 +344,19 @@ public:
 	~ClientContextLock() {
 	}
 
+	//! Temporarily release the context_lock. Used by BeginQueryInternal to acquire
+	//! per-DuckTransaction statement locks outside the context_lock critical section,
+	//! avoiding the M0(context_lock) -> M1(statement_lock) ordering that would otherwise
+	//! cycle against StreamQueryResult::FetchInternal's M1 -> M0 acquisition.
+	void Unlock() {
+		client_guard.unlock();
+	}
+	void Lock() {
+		client_guard.lock();
+	}
+
 private:
-	lock_guard<mutex> client_guard;
+	unique_lock<mutex> client_guard;
 };
 
 //! The QueryContext wraps an optional client context.
