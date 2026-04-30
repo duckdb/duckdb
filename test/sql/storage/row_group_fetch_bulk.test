@@ -1,0 +1,233 @@
+# name: test/sql/storage/row_group_fetch_bulk.test
+# description: Check correctness for fetch rows in batches.
+# group: [storage]
+
+# Force the planner to use the ART index path, which routes through RowGroupCollection::Fetch.
+statement ok
+SET index_scan_percentage = 1.0;
+
+statement ok
+SET index_scan_max_count = 0;
+
+# Setup: 500k rows / default row_group_size=122880 -> ~5 row groups; row_id == k.
+statement ok
+CREATE TABLE big (
+    k INTEGER PRIMARY KEY,
+    v BIGINT,
+    s VARCHAR,
+    n INTEGER
+);
+
+statement ok
+INSERT INTO big SELECT
+    range::INTEGER,
+    (range * 10)::BIGINT,
+    'val_' || range::VARCHAR,
+    CASE WHEN range % 7 = 0 THEN NULL ELSE range::INTEGER END
+FROM range(500000);
+
+# ====================================================================
+# Case 1: Co-located run. 10 keys all inside row group 0.
+# ====================================================================
+query II
+SELECT k, v FROM big WHERE k IN (10, 11, 12, 13, 14, 15, 16, 17, 18, 19) ORDER BY k;
+----
+10	100
+11	110
+12	120
+13	130
+14	140
+15	150
+16	160
+17	170
+18	180
+19	190
+
+# ====================================================================
+# Case 2: Cross row group, sorted. One key per row group (default row_group_size=122880).
+# ====================================================================
+query II
+SELECT k, v FROM big WHERE k IN (10, 150000, 280000, 410000) ORDER BY k;
+----
+10	100
+150000	1500000
+280000	2800000
+410000	4100000
+
+# ====================================================================
+# Case 3: Interleaved keys. Alternates between two row groups so every row forms a length-1 run.
+# ====================================================================
+query II
+SELECT k, v FROM big WHERE k IN (10, 200000, 11, 200001, 12, 200002) ORDER BY k;
+----
+10	100
+11	110
+12	120
+200000	2000000
+200001	2000010
+200002	2000020
+
+# ====================================================================
+# Case 4: Unsorted but co-located.
+# ====================================================================
+query II
+SELECT k, v FROM big WHERE k IN (42, 7, 99, 13) ORDER BY k;
+----
+7	70
+13	130
+42	420
+99	990
+
+# ====================================================================
+# Case 5: Multi-column fetch with mixed types (INT, BIGINT, VARCHAR, INT).
+# ====================================================================
+query IIII
+SELECT k, v, s, n FROM big WHERE k IN (3, 4, 5, 6, 7) ORDER BY k;
+----
+3	30	val_3	3
+4	40	val_4	4
+5	50	val_5	5
+6	60	val_6	6
+7	70	val_7	NULL
+
+# ====================================================================
+# Case 6: NULL values returned alongside non-NULL rows.
+# ====================================================================
+query II
+SELECT k, n FROM big WHERE k IN (0, 1, 7, 14, 21, 28) ORDER BY k;
+----
+0	NULL
+1	1
+7	NULL
+14	NULL
+21	NULL
+28	NULL
+
+# ====================================================================
+# Case 7: Mid-run visibility. Txn-local DELETE must pack out invisible rows
+# while preserving input order, both within and across row groups.
+# ====================================================================
+statement ok
+BEGIN;
+
+statement ok
+DELETE FROM big WHERE k IN (501, 503, 505);
+
+query II
+SELECT k, v FROM big WHERE k IN (500, 501, 502, 503, 504, 505, 506) ORDER BY k;
+----
+500	5000
+502	5020
+504	5040
+506	5060
+
+statement ok
+DELETE FROM big WHERE k IN (200000, 200002);
+
+query II
+SELECT k, v FROM big WHERE k IN (200000, 200001, 200002, 200003) ORDER BY k;
+----
+200001	2000010
+200003	2000030
+
+statement ok
+ROLLBACK;
+
+# Post-rollback: all rows visible; sum(v) for k=500..506 = 10*(500+..+506) = 35210.
+query II
+SELECT count(*), sum(v) FROM big WHERE k IN (500, 501, 502, 503, 504, 505, 506);
+----
+7	35210
+
+# ====================================================================
+# Case 8: Committed UPDATE inside a co-located run. UpdateSegment overlay must apply.
+# ====================================================================
+statement ok
+UPDATE big SET v = v + 1 WHERE k IN (12, 14, 16);
+
+query II
+SELECT k, v FROM big WHERE k IN (10, 11, 12, 13, 14, 15, 16, 17, 18, 19) ORDER BY k;
+----
+10	100
+11	110
+12	121
+13	130
+14	141
+15	150
+16	161
+17	170
+18	180
+19	190
+
+# ====================================================================
+# Case 9: Pending UPDATE in a txn. Bulk fetch must merge the in-flight overlay,
+# then ROLLBACK must restore the originals (incl. the NULL at k=105).
+# ====================================================================
+statement ok
+BEGIN;
+
+statement ok
+UPDATE big SET v = -1, s = 'updated', n = 999 WHERE k IN (101, 103, 105);
+
+query IIII
+SELECT k, v, s, n FROM big WHERE k IN (100, 101, 102, 103, 104, 105, 106) ORDER BY k;
+----
+100	1000	val_100	100
+101	-1	updated	999
+102	1020	val_102	102
+103	-1	updated	999
+104	1040	val_104	104
+105	-1	updated	999
+106	1060	val_106	106
+
+statement ok
+ROLLBACK;
+
+query IIII
+SELECT k, v, s, n FROM big WHERE k IN (101, 103, 105) ORDER BY k;
+----
+101	1010	val_101	101
+103	1030	val_103	103
+105	1050	val_105	NULL
+
+# ====================================================================
+# Case 10: UPDATE crossing a row-group boundary (122879 in RG0; 122880-122881 in RG1).
+# Each row group has its own UpdateSegment.
+# ====================================================================
+statement ok
+UPDATE big SET s = 'boundary', n = -7 WHERE k IN (122879, 122880, 122881);
+
+query IIII
+SELECT k, v, s, n FROM big WHERE k IN (122878, 122879, 122880, 122881, 122882) ORDER BY k;
+----
+122878	1228780	val_122878	NULL
+122879	1228790	boundary	-7
+122880	1228800	boundary	-7
+122881	1228810	boundary	-7
+122882	1228820	val_122882	122882
+
+# ====================================================================
+# Case 11: Bulk indexed DELETE crossing a row group boundary, FORCE_FETCH path.
+# ====================================================================
+statement ok
+CREATE TABLE del (k INTEGER PRIMARY KEY, v BIGINT);
+
+statement ok
+INSERT INTO del SELECT range::INTEGER, (range * 10)::BIGINT FROM range(300000);
+
+statement ok
+DELETE FROM del WHERE k BETWEEN 100 AND 200099;
+
+query I
+SELECT count(*) FROM del;
+----
+100000
+
+# Spot-check survivors immediately on either side of the deleted range.
+query II
+SELECT k, v FROM del WHERE k IN (50, 99, 100, 200099, 200100, 200101) ORDER BY k;
+----
+50	500
+99	990
+200100	2001000
+200101	2001010
