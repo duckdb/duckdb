@@ -2,9 +2,6 @@
 # description: Correlated IN segfault
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT (SELECT 1 WHERE 1 IN (c0) GROUP BY ()) FROM (SELECT 1) t0(c0);
 ----

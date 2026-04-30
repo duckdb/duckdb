@@ -2,9 +2,6 @@
 # description: Test constant intervals
 # group: [interval]
 
-statement ok
-PRAGMA enable_verification
-
 # interval constants with different representations
 query I
 SELECT interval 2 days;

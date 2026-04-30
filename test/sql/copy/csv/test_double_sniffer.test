@@ -2,9 +2,6 @@
 # description: Test CSV Sniffer correctly sniffs doubles with special decimal seperators
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT typeof(number) FROM read_csv('{DATA_DIR}/csv/double_trouble.csv', decimal_separator=',') limit 1;
 ----

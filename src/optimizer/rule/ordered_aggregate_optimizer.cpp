@@ -77,7 +77,7 @@ unique_ptr<Expression> OrderedAggregateOptimizer::Apply(ClientContext &context, 
 	// bind the aggregate
 	vector<LogicalType> types;
 	for (const auto &child : children) {
-		types.emplace_back(child->return_type);
+		types.emplace_back(child->GetReturnType());
 	}
 	auto best_function = binder.BindFunction(func.name, func.functions, types, error);
 	if (!best_function.IsValid()) {

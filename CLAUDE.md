@@ -80,7 +80,7 @@ Ensure you run formatting before committing.
 ```
 SQL String
     ↓
-[PARSER] - Uses libpg_query to parse SQL into AST
+[PARSER] - Uses a PEG parser to parse SQL into AST
     ↓
 SQLStatement tree (ParsedExpression, TableRef objects)
     ↓
@@ -105,9 +105,13 @@ Results
 
 **Parser** (`src/parser/`)
 - Converts SQL strings to Abstract Syntax Tree (AST)
-- Uses PostgreSQL's libpg_query for parsing
+- Uses a PEG-based parser
+- The grammar is located in `*.gram` files and generated using `scripts/build_grammar.sh`
 - Outputs: `SQLStatement`, `ParsedExpression`, `TableRef` objects
-- Key subdirectories: `expression/`, `statement/`, `tableref/`, `transform/`
+- Key subdirectories: `expression/`, `statement/`, `tableref/`, `peg/`
+
+For more details on adding new grammar, see the README located at `src/parser/peg/README.md`. 
+Each new grammar rule must have a corresponding transformer rule, located at `peg/transformer`.
 
 **Planner** (`src/planner/`)
 - Binds symbols to catalog entries and resolves types

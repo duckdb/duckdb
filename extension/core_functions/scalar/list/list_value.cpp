@@ -258,7 +258,7 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 				if (k == i) {
 					error_index = list_arguments.size();
 				}
-				list_arguments += arguments[k]->ToString() + " " + arguments[k]->return_type.ToString();
+				list_arguments += arguments[k]->ToString() + " " + arguments[k]->GetReturnType().ToString();
 			}
 			auto error = StringUtil::Format("Cannot unpivot columns of types %s and %s - an explicit cast is required",
 			                                child_type.ToString(), arg_type.ToString());
@@ -277,7 +277,7 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto list_stats = ListStats::CreateEmpty(expr.return_type);
+	auto list_stats = ListStats::CreateEmpty(expr.GetReturnType());
 	auto &list_child_stats = ListStats::GetChildStats(list_stats);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		list_child_stats.Merge(child_stats[i]);

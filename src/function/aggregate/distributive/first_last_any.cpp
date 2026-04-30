@@ -213,8 +213,8 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 
-		function.GetArguments()[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 };
@@ -354,7 +354,7 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto decimal_type = arguments[0]->return_type;
+	auto decimal_type = arguments[0]->GetReturnType();
 	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
 	function.name = std::move(name);
@@ -376,17 +376,12 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto input_type = arguments[0]->return_type;
+	auto input_type = arguments[0]->GetReturnType();
 	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
 	function.name = std::move(name);
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	if (function.HasBindCallback()) {
-		return function.Bind(input.GetClientContext(), arguments);
-		;
-	} else {
-		return nullptr;
-	}
+	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>

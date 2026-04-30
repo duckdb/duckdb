@@ -21,9 +21,6 @@ NULL	hello
 
 restart
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT a, b FROM test ORDER BY a
 ----

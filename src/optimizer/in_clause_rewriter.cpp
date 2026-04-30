@@ -38,7 +38,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		return nullptr;
 	}
 	D_ASSERT(root);
-	auto in_type = expr.children[0]->return_type;
+	auto in_type = expr.children[0]->GetReturnType();
 	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression

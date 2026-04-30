@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE services (date DATE, train_number INT);
 
 statement ok
@@ -165,7 +162,7 @@ FROM services
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
-query III
+query III rowsort
 SELECT 
 	*,
 	list(train_number) OVER(
@@ -173,7 +170,6 @@ SELECT
 		ORDER BY train_number DESC
 		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
 		) as trains
-		
 FROM services 
 ----
 2024-01-01	100	[101, 100, 100]

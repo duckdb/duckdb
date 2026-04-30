@@ -210,12 +210,11 @@ public:
 
 class PEGTransformerFactory {
 public:
-	static PEGTransformerFactory &GetInstance();
 	explicit PEGTransformerFactory();
 
 	//! Helper functions
-	static vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                                  Matcher &root_matcher);
+	vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+	                                           Matcher &root_matcher);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);

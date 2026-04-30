@@ -43,8 +43,8 @@ ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, Phys
 		if (parameters->cast_source && parameters->cast_target) {
 			auto &source_expr = *parameters->cast_source;
 			auto &target_expr = *parameters->cast_target;
-			return ConversionException(query_location,
-			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+			return ConversionException(
+			    query_location, UnimplementedCastMessage(source_expr.GetReturnType(), target_expr.GetReturnType()));
 		}
 	}
 	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
@@ -1605,7 +1605,7 @@ template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
 	// Pass the query location of the cast source if available.
 	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->query_location : optional_idx());
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
 }
 
 //===--------------------------------------------------------------------===//

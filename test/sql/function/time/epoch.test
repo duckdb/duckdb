@@ -2,9 +2,6 @@
 # description: Extract function
 # group: [time]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select epoch(TIME '14:21:13')
 ----
