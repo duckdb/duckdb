@@ -521,6 +521,14 @@ struct SortedAggregateFunction {
 		throw InternalException("Sorted aggregates should not be generated for window clauses");
 	}
 
+	static void WindowBatch(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row,
+	                        idx_t count, Vector &result, idx_t row_idx) {
+		for (idx_t rid = 0; rid < count; ++rid) {
+			Window(aggr_input_data, partition, g_state, l_state, subframes_per_row[rid], result, rid);
+		}
+	}
+
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
@@ -721,7 +729,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
 	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window);
+	    SortedAggregateFunction::WindowBatch);
+	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
 	expr.function = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
@@ -777,7 +786,8 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window);
+	    SortedAggregateFunction::WindowBatch);
+	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
 	aggregate = ordered_aggregate;
 	expr.bind_info = std::move(sorted_bind);
