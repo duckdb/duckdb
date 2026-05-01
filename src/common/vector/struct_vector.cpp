@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -267,6 +268,10 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 
 const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
+}
+
+const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector) {
+	return StructVector::GetEntries(vector);
 }
 
 } // namespace duckdb
