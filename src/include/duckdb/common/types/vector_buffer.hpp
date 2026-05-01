@@ -109,6 +109,10 @@ public:
 		return v_size;
 	}
 	virtual void SetVectorSize(idx_t new_size);
+	//! Set only this buffer's vector size without propagating to children (for struct/array buffers)
+	void SetVectorSizeOnly(idx_t new_size) {
+		v_size = new_size;
+	}
 
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> aux_data_p) {
 		if (!auxiliary_data) {

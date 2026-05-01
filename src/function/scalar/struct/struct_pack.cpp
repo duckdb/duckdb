@@ -27,9 +27,10 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 		// same holds for this
 		child_entries[i].Reference(args.data[i]);
 	}
-	// set only the struct buffer's type - do not propagate to children
+	// set only the struct buffer's type/size - do not propagate to children
 	// since children reference external vectors (args) that may have incompatible buffer types
 	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	result.BufferMutable().SetVectorSizeOnly(args.size());
 	result.Verify(args.size());
 }
 

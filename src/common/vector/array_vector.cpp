@@ -36,6 +36,7 @@ idx_t VectorArrayBuffer::GetChildSize() const {
 void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
 	VectorBuffer::SetVectorSize(new_size);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		FlatVector::SetSize(*child, array_size);
 		return;
 	}
 	FlatVector::SetSize(*child, new_size * array_size);
@@ -70,7 +71,7 @@ void VectorArrayBuffer::Verify(const LogicalType &type) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		verify_count = 1;
 	}
-	D_ASSERT(child->size() == Size() * array_size);
+	D_ASSERT(child->size() == verify_count * array_size);
 	// FIXME: verify NULL-ness in child
 }
 

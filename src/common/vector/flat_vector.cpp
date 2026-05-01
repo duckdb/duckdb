@@ -57,7 +57,7 @@ void StandardVectorBuffer::Verify(const LogicalType &type) const {
 		verify_count = 1;
 	}
 	// verify all entries in the sel fit within the validity
-	D_ASSERT(verify_count < validity.Capacity());
+	D_ASSERT(verify_count <= validity.Capacity());
 	D_ASSERT(verify_count <= Capacity());
 	D_ASSERT(type_size == GetTypeIdSize(type.InternalType()));
 }
