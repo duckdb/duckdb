@@ -1,0 +1,398 @@
+diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
+index 3e15656..bf3db98 100644
+--- a/src/spatial/index/rtree/rtree_index.cpp
++++ b/src/spatial/index/rtree/rtree_index.cpp
+@@ -112,13 +112,13 @@ RTreeIndex::RTreeIndex(const string &name, IndexConstraintType index_constraint_
+ 	auto &source_type = unbound_expressions[0]->GetReturnType();
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
+-	auto func = entry.functions.GetFunctionByArguments(context, {source_type});
++	const auto &func = entry.functions.GetFunctionByArguments(context, {source_type});
+ 	auto child_expr = make_uniq<BoundReferenceExpression>(source_type, 0);
+ 
+ 	vector<unique_ptr<Expression>> children;
+ 	children.push_back(std::move(child_expr));
+ 
+-	key_expr = make_uniq<BoundFunctionExpression>(GeoTypes::BOX_2DF(), func, std::move(children), nullptr);
++	key_expr = func.Bind(context, std::move(children));
+ 	key_executor = make_uniq<ExpressionExecutor>(context);
+ 	key_executor->AddExpression(*key_expr);
+ 	key_chunk.Initialize(context, {GeoTypes::BOX_2DF()});
+diff --git a/src/spatial/index/rtree/rtree_index_create_logical.cpp b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+index d4c8dbc..70dd812 100644
+--- a/src/spatial/index/rtree/rtree_index_create_logical.cpp
++++ b/src/spatial/index/rtree/rtree_index_create_logical.cpp
+@@ -57,8 +57,7 @@ static PhysicalOperator &CreateNullFilter(PhysicalPlanGenerator &generator, cons
+ 	auto is_empty_func = is_empty_entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
+ 	vector<unique_ptr<Expression>> is_empty_args;
+ 	is_empty_args.push_back(std::move(bound_ref));
+-	auto is_empty_expr = make_uniq_base<Expression, BoundFunctionExpression>(LogicalType::BOOLEAN, is_empty_func,
+-	                                                                         std::move(is_empty_args), nullptr);
++	auto is_empty_expr = is_empty_func.Bind(context, std::move(is_empty_args));
+ 
+ 	auto is_not_empty_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+ 	is_not_empty_expr->children.push_back(std::move(is_empty_expr));
+@@ -79,14 +78,13 @@ static PhysicalOperator &CreateBoundingBoxProjection(PhysicalPlanGenerator &plan
+ 	auto &bbox_func_entry =
+ 	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "ST_Extent_Approx")
+ 	        .Cast<ScalarFunctionCatalogEntry>();
+-	auto bbox_func = bbox_func_entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
++	const auto &bbox_func = bbox_func_entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
+ 
+ 	auto geom_ref_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::GEOMETRY(), 0);
+ 	vector<unique_ptr<Expression>> bbox_args;
+ 	bbox_args.push_back(std::move(geom_ref_expr));
+ 
+-	auto bbox_expr = make_uniq_base<Expression, BoundFunctionExpression>(GeoTypes::BOX_2DF(), bbox_func,
+-	                                                                     std::move(bbox_args), nullptr);
++	auto bbox_expr = bbox_func.Bind(context, std::move(bbox_args));
+ 
+ 	// Also project the rowid column
+ 	auto rowid_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::ROW_TYPE, 1);
+@@ -106,25 +104,24 @@ static PhysicalOperator &CreateOrderByMinX(PhysicalPlanGenerator &planner, const
+ 	auto &centroid_func_entry =
+ 	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_centroid")
+ 	        .Cast<ScalarFunctionCatalogEntry>();
+-	auto centroid_func = centroid_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::BOX_2DF()});
++	const auto &centroid_func = centroid_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::BOX_2DF()});
+ 	vector<unique_ptr<Expression>> centroid_func_args;
+ 
+ 	// Reference the geometry column
+ 	auto geom_ref_expr = make_uniq_base<Expression, BoundReferenceExpression>(GeoTypes::BOX_2DF(), 0);
+ 	centroid_func_args.push_back(make_uniq_base<Expression, BoundReferenceExpression>(GeoTypes::BOX_2DF(), 0));
+-	auto centroid_expr = make_uniq_base<Expression, BoundFunctionExpression>(GeoTypes::POINT_2D(), centroid_func,
+-	                                                                         std::move(centroid_func_args), nullptr);
++
++	auto centroid_expr = centroid_func.Bind(context, std::move(centroid_func_args));
+ 
+ 	// Get the xmin value function
+ 	auto &xmin_func_entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_xmin")
+ 	                            .Cast<ScalarFunctionCatalogEntry>();
+-	auto xmin_func = xmin_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::POINT_2D()});
++	const auto &xmin_func = xmin_func_entry.functions.GetFunctionByArguments(context, {GeoTypes::POINT_2D()});
+ 	vector<unique_ptr<Expression>> xmin_func_args;
+ 
+ 	// Reference the centroid
+ 	xmin_func_args.push_back(std::move(centroid_expr));
+-	auto xmin_expr = make_uniq_base<Expression, BoundFunctionExpression>(LogicalType::DOUBLE, xmin_func,
+-	                                                                     std::move(xmin_func_args), nullptr);
++	auto xmin_expr = xmin_func.Bind(context, std::move(xmin_func_args));
+ 
+ 	vector<BoundOrderByNode> orders;
+ 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(xmin_expr));
+diff --git a/src/spatial/index/rtree/rtree_index_plan_scan.cpp b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+index 5c35637..de38847 100644
+--- a/src/spatial/index/rtree/rtree_index_plan_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_plan_scan.cpp
+@@ -92,9 +92,9 @@ public:
+ 		});
+ 	}
+ 
+-	static bool IsSpatialPredicate(const ScalarFunction &function, const unordered_set<string> &predicates) {
++	static bool IsSpatialPredicate(const BoundScalarFunction &function, const unordered_set<string> &predicates) {
+ 
+-		if (predicates.find(function.name) == predicates.end()) {
++		if (predicates.find(function.GetName()) == predicates.end()) {
+ 			return false;
+ 		}
+ 		if (function.GetArguments().size() < 2) {
+@@ -121,13 +121,12 @@ public:
+ 		// make a new box expression
+ 		auto &catalog = Catalog::GetSystemCatalog(context);
+ 		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
+-		auto func = entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
++		const auto &func = entry.functions.GetFunctionByArguments(context, {LogicalType::GEOMETRY()});
+ 
+ 		vector<unique_ptr<Expression>> children;
+ 		children.push_back(expr.Copy());
+ 
+-		const auto bbox_expr =
+-		    make_uniq<BoundFunctionExpression>(GeoTypes::BOX_2DF(), func, std::move(children), nullptr);
++		const auto bbox_expr = func.Bind(context, std::move(children));
+ 
+ 		Value result;
+ 		if (!ExpressionExecutor::TryEvaluateScalar(context, *bbox_expr, result)) {
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 93dbe61..34fc469 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -752,7 +752,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 
+ 		auto found = false;
+ 		for (const auto &name : geometry_predicates) {
+-			if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
++			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
+ 				found = true;
+ 				break;
+ 			}
+@@ -834,7 +834,7 @@ auto Pushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data,
+ 		// We can __ONLY__ do this if the filter predicate is "&&" or "st_intersects_extent"
+ 		// as other predicates may require exact geometry evaluation, the filter cannot be fully removed
+ 		for (auto &name : {"&&", "ST_Intersects_Extent"}) {
+-			if (StringUtil::CIEquals(func.function.name.c_str(), name)) {
++			if (StringUtil::CIEquals(func.function.GetName().c_str(), name)) {
+ 				geom_filter_idx = expr_idx;
+ 				break;
+ 			}
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 365aa90..53edea4 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -9,6 +9,7 @@
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
++#include "duckdb/function/aggregate_function.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+ #include "spatial/geometry/sgl.hpp"
+ 
+@@ -2518,7 +2519,7 @@ struct ST_Union_Agg {
+ 		vector<GEOSGeometry *> geoms;
+ 	};
+ 
+-	static idx_t StateSize(const AggregateFunction &) {
++	static idx_t StateSize(const BoundAggregateFunction &) {
+ 		return sizeof(State);
+ 	}
+ 
+@@ -2543,7 +2544,7 @@ struct ST_Union_Agg {
+ 		return GeosSerde::Deserialize(context, arena, ptr, size);
+ 	}
+ 
+-	static void Initialize(const AggregateFunction &, data_ptr_t state_mem) {
++	static void Initialize(const BoundAggregateFunction &, data_ptr_t state_mem) {
+ 		const auto state_ptr = new (state_mem) State();
+ 		auto &state = *state_ptr;
+ 		state.context = GEOS_init_r();
+@@ -2742,7 +2743,7 @@ struct GEOSCoverageAggFunction {
+ 		return GeosSerde::Deserialize(context, arena, ptr, size);
+ 	}
+ 
+-	static void Initialize(const AggregateFunction &, data_ptr_t state_mem) {
++	static void Initialize(const BoundAggregateFunction &, data_ptr_t state_mem) {
+ 		const auto state_ptr = new (state_mem) State();
+ 		auto &state = *state_ptr;
+ 		state.context = GEOS_init_r();
+@@ -2809,7 +2810,7 @@ struct GEOSCoverageAggFunction {
+ 		}
+ 	}
+ 
+-	static idx_t StateSize(const AggregateFunction &) {
++	static idx_t StateSize(const BoundAggregateFunction &) {
+ 		return sizeof(State);
+ 	}
+ 
+@@ -2965,7 +2966,7 @@ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
+ 			func.SetDescription("Simplifies a set of geometries while maintaining coverage");
+ 
+ 			// TODO: this is a hack
+-			agg.GetArguments().push_back(LogicalType::BOOLEAN);
++			agg.GetSignature().AddParameter(LogicalType::BOOLEAN);
+ 			func.SetFunction(agg);
+ 			func.CanThrowErrors();
+ 
+@@ -3130,7 +3131,7 @@ struct ST_CoverageInvalidEdges_Agg : GEOSCoverageAggFunction {
+ 			func.CanThrowErrors();
+ 
+ 			// TODO: this is a hack
+-			agg.GetArguments().push_back(LogicalType::DOUBLE);
++			agg.GetSignature().AddParameter(LogicalType::DOUBLE);
+ 			func.SetFunction(agg);
+ 			func.CanThrowErrors();
+ 
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 82074fa..9beacda 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -5814,7 +5814,7 @@ struct ST_Distance_Sphere {
+ 			    " * 'SET geometry_always_xy = false' to keep the current behavior and make this warning go away.";
+ 
+ 			auto &logger = Logger::Get(context);
+-			logger.WriteLog("Spatial", LogLevel::LOG_WARNING, StringUtil::Format(raw_message, func.name.c_str()));
++			logger.WriteLog("Spatial", LogLevel::LOG_WARNING, StringUtil::Format(raw_message, func.GetName().c_str()));
+ 		}
+ 
+ 		return std::move(bind_data);
+diff --git a/src/spatial/modules/mvt/mvt_module.cpp b/src/spatial/modules/mvt/mvt_module.cpp
+index b646469..3eb71de 100644
+--- a/src/spatial/modules/mvt/mvt_module.cpp
++++ b/src/spatial/modules/mvt/mvt_module.cpp
+@@ -5,6 +5,7 @@
+ #include "duckdb/common/types/hash.hpp"
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
++#include "duckdb/function/aggregate_function.hpp"
+ #include "spatial/geometry/geometry_serialization.hpp"
+ #include "spatial/geometry/sgl.hpp"
+ #include "spatial/spatial_types.hpp"
+@@ -1009,11 +1010,11 @@ struct ST_AsMVT {
+ 		MVTLayer layer;
+ 	};
+ 
+-	static idx_t StateSize(const AggregateFunction &) {
++	static idx_t StateSize(const BoundAggregateFunction &) {
+ 		return sizeof(State);
+ 	}
+ 
+-	static void Initialize(const AggregateFunction &, data_ptr_t state_mem) {
++	static void Initialize(const BoundAggregateFunction &, data_ptr_t state_mem) {
+ 		new (state_mem) State();
+ 	}
+ 
+@@ -1266,7 +1267,7 @@ struct ST_AsMVT {
+ 			func.SetFunction(agg);
+ 			for (auto &arg_type : optional_args) {
+ 				// Register all the variants with optional arguments
+-				agg.GetArguments().push_back(arg_type);
++				agg.GetSignature().AddParameter(arg_type);
+ 				func.SetFunction(agg);
+ 			}
+ 
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index e911f0f..e5c259d 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -750,7 +750,7 @@ struct GeodesicBindData final : FunctionData {
+ 			    " * 'SET geometry_always_xy = false' to keep the current behavior and make this warning go away.";
+ 
+ 			auto &logger = Logger::Get(ctx);
+-			logger.WriteLog("Spatial", LogLevel::LOG_WARNING, StringUtil::Format(raw_message, func.name.c_str()));
++			logger.WriteLog("Spatial", LogLevel::LOG_WARNING, StringUtil::Format(raw_message, func.GetName().c_str()));
+ 		}
+ 
+ 		return std::move(result);
+diff --git a/src/spatial/operators/spatial_join_optimizer.cpp b/src/spatial/operators/spatial_join_optimizer.cpp
+index 18c5938..b3db4c1 100644
+--- a/src/spatial/operators/spatial_join_optimizer.cpp
++++ b/src/spatial/operators/spatial_join_optimizer.cpp
+@@ -56,7 +56,7 @@ static bool HasInversePredicate(const string &func_name) {
+ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique_ptr<Expression> expr) {
+ 	auto &func = expr->Cast<BoundFunctionExpression>();
+ 
+-	const auto it = spatial_predicate_inverse_map.find(func.function.name);
++	const auto it = spatial_predicate_inverse_map.find(func.function.GetName());
+ 	D_ASSERT(it != spatial_predicate_inverse_map.end());
+ 
+ 	// Swap the arguments
+@@ -70,11 +70,11 @@ static unique_ptr<Expression> GetInversePredicate(ClientContext &context, unique
+ 	// Get the function from the catalog
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, it->second);
+-	auto inverse_func =
++	const auto &inverse_func =
+ 	    entry.functions.GetFunctionByArguments(context, {func.children[0]->GetReturnType(), func.children[1]->GetReturnType()});
+ 
+-	return make_uniq_base<Expression, BoundFunctionExpression>(func.GetReturnType(), inverse_func, std::move(func.children),
+-	                                                           nullptr, func.is_operator);
++	auto func_expr = inverse_func.Bind(context, std::move(func.children));
++	return std::move(func_expr);
+ }
+ 
+ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const unordered_set<TableIndex> &left_bindings,
+@@ -104,7 +104,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	// The function must be a recognized spatial predicate
+-	if (spatial_predicate_map.count(func.function.name) == 0) {
++	if (spatial_predicate_map.count(func.function.GetName()) == 0) {
+ 		return false;
+ 	}
+ 
+@@ -117,7 +117,7 @@ static bool IsSpatialJoinPredicate(const unique_ptr<Expression> &expr, const uno
+ 	}
+ 
+ 	if (left_side == JoinSide::RIGHT) {
+-		if (!HasInversePredicate(func.function.name)) {
++		if (!HasInversePredicate(func.function.GetName())) {
+ 			return false;
+ 		}
+ 		needs_flipping = true;
+@@ -190,7 +190,7 @@ static bool TrySwapComparisonJoin(OptimizerExtensionInput &input, unique_ptr<Log
+ 
+ 	// If this is ST_DWithin, try to extract the constant distance value
+ 	const auto &pred_func = spatial_join->spatial_predicate->Cast<BoundFunctionExpression>();
+-	if (pred_func.function.name == "ST_DWithin") {
++	if (pred_func.function.GetName() == "ST_DWithin") {
+ 		// Try to get the constant distance value from the bind data;
+ 		spatial_join->has_const_distance =
+ 		    ST_DWithinHelper::TryGetConstDistance(pred_func.bind_info, spatial_join->const_distance);
+@@ -296,7 +296,7 @@ static void TrySwapAnyJoin(OptimizerExtensionInput &input, unique_ptr<LogicalOpe
+ 
+ 	// If this is ST_DWithin, try to extract the constant distance value
+ 	const auto &pred_func = spatial_join->spatial_predicate->Cast<BoundFunctionExpression>();
+-	if (pred_func.function.name == "ST_DWithin") {
++	if (pred_func.function.GetName() == "ST_DWithin") {
+ 		// Try to get the constant distance value from the bind data;
+ 		spatial_join->has_const_distance =
+ 		    ST_DWithinHelper::TryGetConstDistance(pred_func.bind_info, spatial_join->const_distance);
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index 6117306..94e13c1 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -387,13 +387,13 @@ private:
+ static unique_ptr<Expression> GetBBOXExpression(ClientContext &context, const LogicalType &geom_type) {
+ 	auto &catalog = Catalog::GetSystemCatalog(context);
+ 	auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_Extent_Approx");
+-	auto func = entry.functions.GetFunctionByArguments(context, {geom_type});
++	const auto &func = entry.functions.GetFunctionByArguments(context, {geom_type});
+ 
+ 	auto child_expr = make_uniq<BoundReferenceExpression>(geom_type, 0);
+ 	vector<unique_ptr<Expression>> children;
+ 	children.push_back(std::move(child_expr));
+ 
+-	auto bbox_expr = make_uniq<BoundFunctionExpression>(GeoTypes::BOX_2DF(), func, std::move(children), nullptr);
++	auto bbox_expr = func.Bind(context, std::move(children));
+ 
+ 	return std::move(bbox_expr);
+ }
+@@ -547,11 +547,11 @@ public:
+ 
+ 		auto &catalog = Catalog::GetSystemCatalog(context);
+ 		auto &entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "ST_IsEmpty");
+-		auto func = entry.functions.GetFunctionByArguments(context, {geom_type});
++		const auto &func = entry.functions.GetFunctionByArguments(context, {geom_type});
+ 
+-		auto is_empty_expr = make_uniq<BoundFunctionExpression>(LogicalTypeId::BOOLEAN, func,
+-		                                                        vector<unique_ptr<Expression>> {}, nullptr);
+-		is_empty_expr->children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(geom_type, 0));
++		vector<unique_ptr<Expression>> children;
++		children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(geom_type, 0));
++		auto is_empty_expr = func.Bind(context, std::move(children));
+ 
+ 		auto is_not_empty_expr =
+ 		    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalTypeId::BOOLEAN);
+diff --git a/src/spatial/spatial_types.cpp b/src/spatial/spatial_types.cpp
+index 2195fef..d98b266 100644
+--- a/src/spatial/spatial_types.cpp
++++ b/src/spatial/spatial_types.cpp
+@@ -85,7 +85,7 @@ LogicalType GeoTypes::CreateEnumType(const string &name, const vector<string> &m
+ 	return enum_type;
+ }
+ 
+-static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, SimpleFunction &bound_function,
++static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, BoundSimpleFunction &bound_function,
+                                                        vector<unique_ptr<Expression>> &arguments) {
+ 
+ 	CoordinateReferenceSystem crs;
+@@ -115,7 +115,7 @@ static unique_ptr<FunctionData> PropagateTypesInternal(ClientContext &context, S
+ 						    " * Use 'ST_SetCRS' to explicitly override the CRS of a geometry expression, without "
+ 						    "performing a "
+ 						    "transformation.\n",
+-						    bound_function.name, crs.GetIdentifier(), type_crs.GetIdentifier());
++						    bound_function.GetName(), crs.GetIdentifier(), type_crs.GetIdentifier());
+ 					}
+ 				}
+ 			}
+diff --git a/src/spatial/util/function_builder.hpp b/src/spatial/util/function_builder.hpp
+index e4d5165..bdebe71 100644
+--- a/src/spatial/util/function_builder.hpp
++++ b/src/spatial/util/function_builder.hpp
+@@ -68,7 +68,7 @@ private:
+ };
+ 
+ inline void ScalarFunctionVariantBuilder::AddParameter(const char *name, const LogicalType &type) {
+-	function.GetArguments().emplace_back(type);
++	function.GetSignature().AddParameter(name, type);
+ 	description.parameter_names.emplace_back(name);
+ 	description.parameter_types.emplace_back(type);
+ }
