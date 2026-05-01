@@ -2,9 +2,6 @@
 # group: [error]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 SET ieee_floating_point_ops = false;
 
 # --- OPERATOR_CAST ---

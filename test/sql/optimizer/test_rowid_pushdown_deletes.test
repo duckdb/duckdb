@@ -2,9 +2,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
 
 

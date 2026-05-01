@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -924,7 +925,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
 			if (result.escaped) {
 				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
@@ -1188,6 +1189,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
 		}
+		insert_chunk.SetChildCardinality(insert_chunk.size());
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
 			if (iterator.IsBoundarySet()) {

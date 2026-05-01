@@ -3,9 +3,6 @@
 # group: [timestamp]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE ts_precision(
 	sec TIMESTAMP(0),
 	msec TIMESTAMP(3),

@@ -196,6 +196,10 @@ public:
 		throw NotImplementedException("POST request not implemented");
 	}
 
+	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
+		throw NotImplementedException("OPTIONS request not implemented");
+	}
+
 	unique_ptr<duckdb_httplib::Client> client;
 
 private:
@@ -536,6 +540,8 @@ unique_ptr<HTTPResponse> HTTPClient::Request(BaseRequest &request) {
 		return Delete(request.Cast<DeleteRequestInfo>());
 	case RequestType::POST_REQUEST:
 		return Post(request.Cast<PostRequestInfo>());
+	case RequestType::OPTIONS_REQUEST:
+		return Options(request.Cast<OptionsRequestInfo>());
 	default:
 		throw InternalException("Unsupported request type");
 	}

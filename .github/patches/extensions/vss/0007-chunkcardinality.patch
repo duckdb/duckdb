@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
+index 93429a6..c3a2bc1 100644
+--- a/src/hnsw/hnsw_index_pragmas.cpp
++++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -168,7 +168,7 @@ static void HNSWIndexInfoExecute(ClientContext &context, TableFunctionInput &dat
+
+ 		row++;
+ 	}
+-	output.SetCardinality(row);
++	output.SetChildCardinality(row);
+ }
+
+ //-------------------------------------------------------------------------

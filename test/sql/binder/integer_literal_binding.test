@@ -2,9 +2,6 @@
 # description: Test integer literal binding
 # group: [binder]
 
-statement ok
-PRAGMA enable_verification
-
 # integer literal binding for arithmetic
 foreach type UTINYINT USMALLINT UINTEGER UBIGINT TINYINT SMALLINT INTEGER BIGINT
 

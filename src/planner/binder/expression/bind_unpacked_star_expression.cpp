@@ -16,7 +16,7 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 		return;
 	}
 	auto &unpack = child->Cast<OperatorExpression>();
-	D_ASSERT(unpack.type == ExpressionType::OPERATOR_UNPACK);
+	D_ASSERT(unpack.GetExpressionType() == ExpressionType::OPERATOR_UNPACK);
 	D_ASSERT(unpack.children.size() == 1);
 	auto &unpack_child = unpack.children[0];
 
@@ -79,13 +79,13 @@ static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_lis
 	bool allowed = false;
 	for (idx_t i = 0; i < allowed_types.size() && !allowed; i++) {
 		auto &type = allowed_types[i];
-		if (operator_expr.type == type) {
+		if (operator_expr.GetExpressionType() == type) {
 			allowed = true;
 		}
 	}
 	if (!allowed) {
 		throw BinderException("*COLUMNS() can not be used together with the '%s' operator",
-		                      EnumUtil::ToString(operator_expr.type));
+		                      EnumUtil::ToString(operator_expr.GetExpressionType()));
 	}
 
 	// Replace children

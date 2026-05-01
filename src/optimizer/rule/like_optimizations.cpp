@@ -108,7 +108,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	D_ASSERT(root.children.size() == 2);
 
 	if (constant_expr.value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root.return_type));
+		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
@@ -117,7 +117,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr.return_type);
+	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 	auto &patt_str = StringValue::Get(constant_value);
 
 	bool is_not_like = root.function.name == "!~~";
@@ -139,12 +139,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, ScalarFunction function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
-	auto new_function =
-	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
+	auto new_function = make_uniq<BoundFunctionExpression>(expr.GetReturnType(), std::move(function),
+	                                                       std::move(expr.children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());

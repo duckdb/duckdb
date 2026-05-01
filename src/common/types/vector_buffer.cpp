@@ -34,7 +34,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &t
 }
 
 void VectorBuffer::SetVectorSize(idx_t new_size) {
-	if (HasSize() && Size() == new_size) {
+	if (Size() == new_size) {
 		// nop: size is the same as previous size
 		return;
 	}
@@ -49,9 +49,8 @@ void VectorBuffer::SetVectorSize(idx_t new_size) {
 		}
 		break;
 	default:
-		// non-flat/non-constant vector buffers manage their size internally (based on their underlying data)
-		// SetVectorSize is a no-op for these vector types
-		return;
+		throw InternalException("VectorBuffer::SetVectorSize can only be used for flat or constant vectors, other "
+		                        "vector types have their size set on creation");
 	}
 	v_size = new_size;
 }
@@ -118,15 +117,9 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
-	// FIXME: this should just be using size.GetIndex()...
-	if (v_size.IsValid()) {
-		if (count > v_size.GetIndex()) {
-			throw InternalException("Flatten called with count that exceeds the size of the vector");
-		}
-		count = v_size.GetIndex();
-	}
+	count = v_size;
 	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
-	if (result && (!result->HasSize() || result->Size() != count)) {
+	if (result && (result->Size() != count)) {
 		throw InternalException("FlattenSliceInternal did not set size correctly");
 	}
 	return result;
@@ -144,7 +137,7 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSlice(const LogicalType &type, con
 	} else {
 		result = FlattenSliceInternal(type, sel, count);
 	}
-	if (result && (!result->HasSize() || result->Size() != count)) {
+	if (result && (result->Size() != count)) {
 		throw InternalException("FlattenSliceInternal did not set size correctly");
 	}
 	return result;
@@ -157,12 +150,12 @@ buffer_ptr<VectorBuffer> VectorBuffer::FlattenSliceInternal(const LogicalType &t
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offset, idx_t end) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, count_t(end - offset));
 	}
 	auto result = SliceInternal(type, offset, end);
 	if (result) {
-		if (!result->HasSize() || result->Size() != end - offset) {
+		if (result->Size() != end - offset) {
 			throw InternalException("Slice with offset,end did not set size correctly");
 		}
 	}
@@ -171,16 +164,28 @@ buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, idx_t offs
 
 buffer_ptr<VectorBuffer> VectorBuffer::Slice(const LogicalType &type, const SelectionVector &sel, idx_t count) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		// constant vectors do not need to get sliced
-		return nullptr;
+		// constant vectors do not need to get sliced - but we do need to update the count
+		return ConstantSlice(type, count_t(count));
 	}
 	auto result = SliceInternal(type, sel, count);
-	if (result && v_size.IsValid()) {
-		if (!result->HasSize() || result->Size() != count) {
+	if (result) {
+		if (result->Size() != count) {
 			throw InternalException("Slice with count did not set size correctly");
 		}
 	}
 	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::ConstantSlice(const LogicalType &type, count_t count) {
+	if (count == Size()) {
+		// if the size is already set correctly we don't need to do do anything
+		return nullptr;
+	}
+	return ConstantSliceInternal(type, count);
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	throw InternalException("Constant slice not implemented for this vector buffer");
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::SliceWithCache(SelCache &cache, const LogicalType &type,
@@ -229,24 +234,18 @@ void VectorBuffer::Reserve(idx_t required_capacity, VectorAppendMode append_mode
 }
 
 void VectorBuffer::AppendValue(const LogicalType &type, const Value &val, VectorAppendMode append_mode) {
-	if (!HasSize()) {
-		throw InternalException("Can only append to vector with a size");
-	}
-	auto new_capacity = v_size.GetIndex() + 1;
+	auto new_capacity = Size() + 1;
 	Reserve(new_capacity, append_mode);
-	SetValue(type, v_size.GetIndex(), val);
-	v_size = v_size.GetIndex() + 1;
+	SetValue(type, v_size, val);
+	v_size++;
 }
 
 void VectorBuffer::Append(const Vector &source, const SelectionVector &sel, idx_t append_size,
                           VectorAppendMode append_mode) {
-	if (!HasSize()) {
-		throw InternalException("Cannot append to vector without size");
-	}
 	auto current_size = Size();
 	Reserve(current_size + append_size, append_mode);
 	Copy(source, sel, append_size, 0, current_size, append_size);
-	v_size = v_size.GetIndex() + append_size;
+	v_size += append_size;
 }
 
 void VectorBuffer::SetValue(const LogicalType &type, idx_t index, const Value &val) {

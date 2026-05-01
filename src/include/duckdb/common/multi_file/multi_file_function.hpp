@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
@@ -378,7 +379,7 @@ public:
 			if (cast_entry != reader.cast_map.end()) {
 				intermediate_chunk_types.push_back(cast_entry->second);
 			} else if (expr_entry != reader.expression_map.end()) {
-				intermediate_chunk_types.push_back(expr_entry->second->return_type);
+				intermediate_chunk_types.push_back(expr_entry->second->GetReturnType());
 			} else {
 				auto &col = local_columns[local_id];
 				intermediate_chunk_types.push_back(col.type);
@@ -644,6 +645,7 @@ public:
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
+				output.SetChildCardinality(output.size());
 			}
 			if (res.GetResultType() == AsyncResultType::HAVE_MORE_OUTPUT) {
 				// Loop back to the same block

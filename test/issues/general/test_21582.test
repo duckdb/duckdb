@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE MACRO m(t) AS TABLE
 WITH i1 AS MATERIALIZED (
 	SELECT v

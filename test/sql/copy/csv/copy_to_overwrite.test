@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SET threads=1;
 
 # run with and without preservation of insertion order

@@ -6,7 +6,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector_operations/senary_executor.hpp"
+#include "duckdb/common/vector_operations/variadic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cmath>
@@ -125,7 +125,7 @@ void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vector &resu
 	D_ASSERT(input.ColumnCount() == 6);
 
 	auto func = MakeTimestampOperator::Operation<T, T, T, T, T, double, timestamp_t>;
-	SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(input, result, func);
+	VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(input, result, func);
 }
 
 template <typename T>

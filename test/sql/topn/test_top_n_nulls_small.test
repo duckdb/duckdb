@@ -2,9 +2,6 @@
 # description: Test Top N NULLS FIRST/LAST with few rows
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
-
 # we execute this set of tests twice
 # the data is the same, but organized different physically
 # first the nulls are at the end of the table

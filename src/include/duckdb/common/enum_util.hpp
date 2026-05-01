@@ -162,6 +162,8 @@ enum class DatePartSpecifier : uint8_t;
 
 enum class DebugInitialize : uint8_t;
 
+enum class DebugStatementVerification : uint8_t;
+
 enum class DebugVectorVerification : uint8_t;
 
 enum class DecimalBitWidth : uint8_t;
@@ -514,8 +516,6 @@ enum class VectorBufferType : uint8_t;
 
 enum class VectorType : uint8_t;
 
-enum class VerificationType : uint8_t;
-
 enum class VerifyExistenceType : uint8_t;
 
 enum class VertexType : uint8_t;
@@ -725,6 +725,9 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
 
 template<>
 const char* EnumUtil::ToChars<DebugInitialize>(DebugInitialize value);
+
+template<>
+const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value);
@@ -1255,9 +1258,6 @@ template<>
 const char* EnumUtil::ToChars<VectorType>(VectorType value);
 
 template<>
-const char* EnumUtil::ToChars<VerificationType>(VerificationType value);
-
-template<>
 const char* EnumUtil::ToChars<VerifyExistenceType>(VerifyExistenceType value);
 
 template<>
@@ -1473,6 +1473,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);
 
 template<>
 DebugInitialize EnumUtil::FromString<DebugInitialize>(const char *value);
+
+template<>
+DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value);
@@ -2001,9 +2004,6 @@ VectorBufferType EnumUtil::FromString<VectorBufferType>(const char *value);
 
 template<>
 VectorType EnumUtil::FromString<VectorType>(const char *value);
-
-template<>
-VerificationType EnumUtil::FromString<VerificationType>(const char *value);
 
 template<>
 VerifyExistenceType EnumUtil::FromString<VerifyExistenceType>(const char *value);

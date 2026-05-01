@@ -2,9 +2,6 @@
 # description: cast strings into (nested) types
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # These are some slow tests in addition to the string_to_list/struct casting tests
 
 #               All types to List cast

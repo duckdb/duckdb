@@ -423,16 +423,15 @@ bool ICUToTimeTZ::CastToTimeTZ(Vector &source, Vector &result, idx_t count, Cast
 	auto &info = cast_data.info->Cast<BindData>();
 	CalendarPtr calendar(info.calendar->clone());
 
-	UnaryExecutor::ExecuteWithNulls<timestamp_t, dtime_tz_t>(source, result, count,
-	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-		                                                         dtime_tz_t output;
-		                                                         if (ToTimeTZ(calendar.get(), input, output)) {
-			                                                         return output;
-		                                                         } else {
-			                                                         mask.SetInvalid(idx);
-			                                                         return dtime_tz_t();
-		                                                         }
-	                                                         });
+	UnaryExecutor::Execute<timestamp_t, dtime_tz_t>(source, result, count,
+	                                                [&](timestamp_t input) -> optional<dtime_tz_t> {
+		                                                dtime_tz_t output;
+		                                                if (ToTimeTZ(calendar.get(), input, output)) {
+			                                                return output;
+		                                                } else {
+			                                                return nullopt;
+		                                                }
+	                                                });
 	return true;
 }
 
@@ -447,9 +446,41 @@ BoundCastInfo ICUToTimeTZ::BindCastToTimeTZ(BindCastInput &input, const LogicalT
 	return BoundCastInfo(CastToTimeTZ, std::move(cast_data));
 }
 
+bool ICUToTimeTZ::CastFromTime(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<CastData>();
+	auto &info = cast_data.info->Cast<BindData>();
+	CalendarPtr calendar_ptr(info.calendar->clone());
+	auto calendar = calendar_ptr.get();
+
+	// Read the session UTC offset (with DST) from the calendar.
+	// This mirrors the no-offset branch in ICUStrptime::VarcharToTimeTZ so that
+	// '00:00:00'::TIME::TIMETZ matches '00:00:00'::TIMETZ.
+	auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, UCAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
+
+	UnaryExecutor::Execute<dtime_t, dtime_tz_t>(source, result, count,
+	                                            [&](dtime_t input) { return dtime_tz_t(input, offset); });
+	return true;
+}
+
+BoundCastInfo ICUToTimeTZ::BindCastFromTime(BindCastInput &input, const LogicalType &source,
+                                            const LogicalType &target) {
+	if (!input.context) {
+		throw InternalException("Missing context for TIME to TIMETZ cast.");
+	}
+
+	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+
+	return BoundCastInfo(CastFromTime, std::move(cast_data));
+}
+
 void ICUToTimeTZ::AddCasts(ExtensionLoader &loader) {
 	const auto implicit_cost = CastRules::ImplicitCast(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ);
 	loader.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ, BindCastToTimeTZ, implicit_cost);
+
+	const auto time_implicit_cost = CastRules::ImplicitCast(LogicalType::TIME, LogicalType::TIME_TZ);
+	loader.RegisterCastFunction(LogicalType::TIME, LogicalType::TIME_TZ, BindCastFromTime, time_implicit_cost);
 }
 
 struct ICUTimeZoneFunc : public ICUDateFunc {

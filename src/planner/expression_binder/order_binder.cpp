@@ -90,7 +90,7 @@ optional_idx OrderBinder::TryGetProjectionReference(ParsedExpression &expr) cons
 		// check the expression list
 		vector<idx_t> matching_columns;
 		for (idx_t i = 0; i < bind_state.original_expressions.size(); i++) {
-			if (bind_state.original_expressions[i]->type != ExpressionType::COLUMN_REF) {
+			if (bind_state.original_expressions[i]->GetExpressionType() != ExpressionType::COLUMN_REF) {
 				continue;
 			}
 			auto &colref = bind_state.original_expressions[i]->Cast<ColumnRefExpression>();

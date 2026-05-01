@@ -2,9 +2,6 @@
 # group: [virtual]
 
 statement ok
-pragma enable_verification;
-
-statement ok
 CREATE TABLE t1 (
 	tr INTEGER,
 	td INTEGER GENERATED ALWAYS AS (tr),

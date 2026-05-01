@@ -22,6 +22,7 @@ public:
 	ValidityMask &GetValidityMask() override {
 		return validity;
 	}
+	void SetVectorSize(idx_t new_size) override;
 	idx_t Capacity() const override {
 		return capacity;
 	}
@@ -46,6 +47,7 @@ public:
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
+	buffer_ptr<VectorBuffer> ConstantSliceInternal(const LogicalType &type, count_t count) override;
 	void CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

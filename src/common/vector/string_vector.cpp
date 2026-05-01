@@ -75,20 +75,6 @@ idx_t StringHeapHolder::GetAllocationSize() const {
 	return heap.AllocationSize();
 }
 
-buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
-	auto type_size = GetTypeIdSize(type.InternalType());
-	auto offset_ptr = data_ptr + type_size * offset;
-	auto count = count_t(end - offset);
-	auto result = make_buffer<VectorStringBuffer>(offset_ptr, count);
-	result->GetValidityMask().Slice(validity, offset, count);
-	// keep the heap alive
-	if (auxiliary_data) {
-		result->AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
-	}
-	result->SetVectorSize(count);
-	return result;
-}
-
 void VectorStringBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
 	auto ldata = FlatVector::GetData<string_t>(source);
@@ -147,6 +133,24 @@ void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &
 			break;
 		}
 	}
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	auto type_size = GetTypeIdSize(type.InternalType());
+	auto offset_ptr = data_ptr + type_size * offset;
+	auto count = count_t(end - offset);
+	auto result = make_buffer<VectorStringBuffer>(offset_ptr, count);
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorStringBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<VectorStringBuffer>(data_ptr, count);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorStringBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {

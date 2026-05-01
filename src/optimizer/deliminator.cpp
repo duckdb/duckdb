@@ -126,7 +126,7 @@ bool Deliminator::HasSelection(const LogicalOperator &op) {
 			auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "Deliminator::HasSelection");
 			auto &expr = *expr_filter.expr;
 			if (expr.GetExpressionClass() != ExpressionClass::BOUND_OPERATOR ||
-			    expr.type != ExpressionType::OPERATOR_IS_NOT_NULL) {
+			    expr.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) {
 				return true;
 			}
 		}
