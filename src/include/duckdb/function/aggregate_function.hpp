@@ -202,6 +202,10 @@ public:
 
 class AggregateFunction : public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
+	static constexpr aggregate_cluster_update_t NoClusterUpdate() {
+		return nullptr;
+	}
+
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
@@ -234,8 +238,8 @@ public:
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, nullptr, destructor, statistics, window,
-	                        serialize, deserialize) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, nullptr, destructor, statistics,
+	                        window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -245,9 +249,8 @@ public:
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                        static_cast<aggregate_cluster_update_t>(nullptr), bind, destructor, statistics, window,
-	                        serialize, deserialize) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, NoClusterUpdate(), bind, destructor,
+	                        statistics, window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -267,8 +270,8 @@ public:
 	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
 	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(name, arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        null_handling, static_cast<aggregate_cluster_update_t>(nullptr), bind, destructor,
-	                        statistics, window, serialize, deserialize) {
+	                        null_handling, NoClusterUpdate(), bind, destructor, statistics, window, serialize,
+	                        deserialize) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -300,8 +303,8 @@ public:
 	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
 	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, nullptr, destructor, statistics, window,
-	                        serialize, deserialize) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, nullptr, destructor, statistics,
+	                        window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -311,9 +314,8 @@ public:
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                        static_cast<aggregate_cluster_update_t>(nullptr), bind, destructor, statistics, window,
-	                        serialize, deserialize) {
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, NoClusterUpdate(), bind, destructor,
+	                        statistics, window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -322,8 +324,8 @@ public:
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
-	    : AggregateFunction(arguments, return_type, state_size, initialize, update, combine, finalize, bind,
-	                        destructor, statistics, window, serialize, deserialize) {
+	    : AggregateFunction(arguments, return_type, state_size, initialize, update, combine, finalize, bind, destructor,
+	                        statistics, window, serialize, deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -333,8 +335,8 @@ public:
 	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        null_handling, static_cast<aggregate_cluster_update_t>(nullptr), bind, destructor,
-	                        statistics, window, serialize, deserialize) {
+	                        null_handling, NoClusterUpdate(), bind, destructor, statistics, window, serialize,
+	                        deserialize) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,

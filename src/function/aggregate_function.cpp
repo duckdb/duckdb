@@ -17,8 +17,7 @@ bool AggregateFunctionCallbacks::operator==(const AggregateFunctionCallbacks &rh
 	       combine == rhs.combine && finalize == rhs.finalize && cluster_update == rhs.cluster_update &&
 	       window == rhs.window && window_init == rhs.window_init && window_batch == rhs.window_batch &&
 	       bind == rhs.bind && destructor == rhs.destructor && statistics == rhs.statistics &&
-	       serialize == rhs.serialize && deserialize == rhs.deserialize &&
-	       get_state_type == rhs.get_state_type;
+	       serialize == rhs.serialize && deserialize == rhs.deserialize && get_state_type == rhs.get_state_type;
 }
 
 bool AggregateFunctionCallbacks::operator!=(const AggregateFunctionCallbacks &rhs) const {
