@@ -30,7 +30,6 @@ PULL_REQUEST_JOBS = [
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    "check-clangd-tidy",
     "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
@@ -42,7 +41,6 @@ MERGE_GROUP_JOBS = [
     "linux-relassert",
     "linux-release",
     "linux-release-tests",
-    "check-clangd-tidy",
     "tidy-check",
 ]
 
