@@ -114,6 +114,9 @@ Two recent examples of this:
 * The Norwegian collation names were changed around 2020;
 * The dates of the Meiji Restoration were updated in the Japanese calendar.
 
+One other source of changes with code updates is `duckdb/main/extension_entries.hpp`.
+You may need to regenerate it if new collations are added.
+
 ### Clean up and Commit
 
 The simplest way to remove the unused files is to use `git clean -d -f`. 
