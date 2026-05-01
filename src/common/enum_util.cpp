@@ -3805,19 +3805,20 @@ const StringUtil::EnumStringLiteral *GetPEGKeywordCategoryValues() {
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
-		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" }
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_TYPE_NAME), "KEYWORD_TYPE_NAME" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value) {
-	return StringUtil::EnumToString(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPEGKeywordCategoryValues(), 6, "PEGKeywordCategory", static_cast<uint32_t>(value));
 }
 
 template<>
 PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value) {
-	return static_cast<PEGKeywordCategory>(StringUtil::StringToEnum(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", value));
+	return static_cast<PEGKeywordCategory>(StringUtil::StringToEnum(GetPEGKeywordCategoryValues(), 6, "PEGKeywordCategory", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
