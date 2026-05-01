@@ -567,23 +567,32 @@ PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
 	return result;
 }
 
-static idx_t CountLeafColumnWritersRecursive(const ColumnWriter &writer) {
+#ifdef DEBUG
+static idx_t CountLeafColumnWritersRecursiveVerification(const ColumnWriter &writer) {
 	if (writer.ChildWriters().empty()) {
 		return 1;
 	}
 	idx_t result = 0;
 	for (auto &child_writer : writer.ChildWriters()) {
-		result += CountLeafColumnWritersRecursive(*child_writer);
+		result += CountLeafColumnWritersRecursiveVerification(*child_writer);
 	}
 	return result;
 }
 
-idx_t ParquetWriter::CountLeafColumnWriters() const {
+idx_t ParquetWriter::LeafColumnWriterCounts() const {
 	idx_t result = 0;
 	for (auto &column_writer : column_writers) {
-		result += CountLeafColumnWritersRecursive(*column_writer);
+		result += CountLeafColumnWritersRecursiveVerification(*column_writer);
 	}
 	return result;
+}
+#endif
+
+void ParquetWriter::VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const {
+#ifdef DEBUG
+	D_ASSERT(prepared.row_group.columns.size() == LeafColumnWriterCounts());
+	D_ASSERT(prepared.states.size() == column_writers.size());
+#endif
 }
 
 void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
@@ -745,8 +754,7 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		throw InternalException("Attempting to flush a row group with no rows");
 	}
 	InitializeSchemaFromPreparedRowGroup(prepared);
-	D_ASSERT(row_group.columns.size() == CountLeafColumnWriters());
-	D_ASSERT(states.size() == column_writers.size());
+	VerifyPreparedRowGroup(prepared);
 	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
 	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
@@ -1234,10 +1242,11 @@ void ParquetWriter::InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup 
 			shredding_types = layout.shredding_types.Copy();
 			InitializeColumnWriters();
 		}
-		InitializeColumnWriterSchemaIndices();
+		auto unique_columns = InitializeColumnWriterSchemaIndices();
+		D_ASSERT(unique_columns == prepared.row_group.columns.size());
 		D_ASSERT(file_meta_data.schema.size() == layout.schema.size());
 		file_meta_data.schema = layout.schema;
-		InitializeColumnOrders(prepared.row_group.columns.size());
+		InitializeColumnOrders(unique_columns);
 	}
 	InitializeStatsUnifiers();
 }

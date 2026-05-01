@@ -251,7 +251,11 @@ private:
 	void InitializeColumnWriters();
 	idx_t InitializeColumnWriterSchemaIndices();
 	PreparedParquetLayout ExportPreparedLayout() const;
-	idx_t CountLeafColumnWriters() const;
+
+	void VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const;
+#ifdef DEBUG
+	idx_t LeafColumnWriterCounts() const;
+#endif
 
 private:
 	ClientContext &context;
