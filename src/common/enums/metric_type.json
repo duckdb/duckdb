@@ -220,7 +220,7 @@
       {
         "name": "CUMULATIVE_VACUUM_TIME",
         "enum_value": 103,
-        "description": "Cumulative elapsed time spent executing checkpoint row-group vacuum tasks and rebuilding indexes when vacuum_rebuild_indexes is enabled.",
+        "description": "Cumulative time spent on checkpoint vacuum tasks and vacuum-triggered index rebuilds.",
         "type": "double",
         "unit": "seconds",
         "query_root": true,
