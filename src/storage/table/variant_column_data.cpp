@@ -258,6 +258,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			scan_count = callback(*validity, state.child_states[0], unshredding_intermediate, target_count);
 
+			FlatVector::SetSize(unshredding_intermediate, count_t(scan_count));
 			intermediate.Shred(unshredding_intermediate, scan_count);
 		} else {
 			scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
@@ -304,6 +305,7 @@ idx_t VariantColumnData::ScanWithCallback(
 			callback(*sub_columns[1], state.child_states[2], child_vectors[1], target_count);
 			auto scan_count = callback(*validity, state.child_states[0], intermediate, target_count);
 
+			FlatVector::SetSize(intermediate, count_t(scan_count));
 			result.Shred(intermediate, scan_count);
 			return scan_count;
 		}

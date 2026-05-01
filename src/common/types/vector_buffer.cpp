@@ -81,6 +81,11 @@ idx_t VectorBuffer::GetAllocationSize() const {
 }
 
 void VectorBuffer::Verify(const LogicalType &type) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		SelectionVector owned_sel;
+		VerifyInternal(type, *ConstantVector::ZeroSelectionVector(1ULL, owned_sel), 1ULL);
+		return;
+	}
 	VerifyInternal(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 

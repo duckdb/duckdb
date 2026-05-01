@@ -20,18 +20,22 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 #endif
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
+	idx_t children_size = 0;
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			all_const = false;
 		}
 		// same holds for this
 		child_entries[i].Reference(args.data[i]);
+		children_size = MaxValue<idx_t>(children_size, child_entries[i].size());
 	}
 	// set only the struct buffer's type/size - do not propagate to children
-	// since children reference external vectors (args) that may have incompatible buffer types
+	// since children reference external vectors (args) that may have incompatible buffer types.
+	// match the parent size to the (already-set) child vector size, not to the chunk cardinality - those can
+	// differ when the caller is collapsing all-constant inputs to a single argument row.
 	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
-	result.BufferMutable().SetVectorSizeOnly(args.size());
-	result.Verify(args.size());
+	result.BufferMutable().SetVectorSizeOnly(children_size);
+	result.Verify(children_size);
 }
 
 template <bool IS_STRUCT_PACK>

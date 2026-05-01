@@ -102,7 +102,7 @@ void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Va
 }
 
 void VectorStringBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	StandardVectorBuffer::Verify(type, sel, count);
+	StandardVectorBuffer::VerifyInternal(type, sel, count);
 
 	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
 	auto data = reinterpret_cast<const string_t *>(data_ptr);

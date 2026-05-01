@@ -202,6 +202,7 @@ static bool TryToShreddedCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &top_shredded = StructVector::GetEntries(shredded_vector);
 	auto &shredded_child = top_shredded[1];
 	ShreddedVectorReference(source, shredded_child, count);
+	FlatVector::SetSize(shredded_vector, count_t(count));
 	result.Shred(shredded_vector, count);
 	return true;
 }

@@ -83,7 +83,7 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 }
 
 void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	StandardVectorBuffer::Verify(type, sel, count);
+	StandardVectorBuffer::VerifyInternal(type, sel, count);
 
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	if (type.id() == LogicalTypeId::MAP) {
