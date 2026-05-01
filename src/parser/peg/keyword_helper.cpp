@@ -29,6 +29,10 @@ bool PEGKeywordHelper::KeywordCategoryType(const std::string &text, const PEGKey
 		auto it = colname_keyword_map.find(text);
 		return it != colname_keyword_map.end();
 	}
+	case PEGKeywordCategory::KEYWORD_TYPE_NAME: {
+		auto it = typename_keyword_map.find(text);
+		return it != typename_keyword_map.end();
+	}
 	default:
 		return false;
 	}
