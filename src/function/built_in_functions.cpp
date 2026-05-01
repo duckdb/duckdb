@@ -126,7 +126,7 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.GetName());
 
 	// override the function with the extension function
-	auto func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
+	const auto &func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());
 	return func.Bind(context, std::move(arguments));
 }
 

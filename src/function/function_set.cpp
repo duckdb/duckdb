@@ -13,7 +13,8 @@ ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
-ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+const ScalarFunction &ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
@@ -34,8 +35,8 @@ AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(
 	functions.push_back(std::move(fun));
 }
 
-AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
-                                                               const vector<LogicalType> &arguments) {
+const AggregateFunction &AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                      const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
@@ -75,7 +76,8 @@ WindowFunctionSet::WindowFunctionSet(WindowFunction fun) : FunctionSet(std::move
 	functions.push_back(std::move(fun));
 }
 
-WindowFunction WindowFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+const WindowFunction &WindowFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                                const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
@@ -93,7 +95,8 @@ TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fu
 	functions.push_back(std::move(fun));
 }
 
-TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
+const TableFunction &TableFunctionSet::GetFunctionByArguments(ClientContext &context,
+                                                              const vector<LogicalType> &arguments) {
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);

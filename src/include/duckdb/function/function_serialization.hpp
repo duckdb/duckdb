@@ -180,7 +180,7 @@ public:
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}
 		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
-		const auto function = functions.functions.GetFunctionByArguments(
+		const auto &function = functions.functions.GetFunctionByArguments(
 		    context, original_arguments.empty() ? arguments : original_arguments);
 
 		// Does this function support serializing its bound data?
