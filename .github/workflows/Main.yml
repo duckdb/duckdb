@@ -395,7 +395,7 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
       CXX: g++
