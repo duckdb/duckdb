@@ -35,6 +35,9 @@ using buffer_ptr = shared_ptr<T>;
 template <class... Args>
 struct VectorStructType;
 
+template <class T>
+struct VectorListType;
+
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
 	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
