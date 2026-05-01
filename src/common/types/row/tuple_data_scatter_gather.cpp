@@ -1368,7 +1368,7 @@ void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &s
 	const auto &gather_function = gather_functions[column_id];
 	gather_function.Gather(layout, row_locations, column_id, scan_sel, scan_count, result, target_sel,
 	                       cached_cast_vector);
-	result.Verify(target_sel, scan_count);
+	result.Verify();
 }
 
 TupleDataGatherFunction::TupleDataGatherFunction(tuple_data_gather_function_t function_p) : function(function_p) {
