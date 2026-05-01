@@ -20,15 +20,15 @@ class FunctionSerializer {
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
-		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty(500, "name", function.name);
+		D_ASSERT(!function.GetName().empty());
+		serializer.WriteProperty(500, "name", function.GetName());
 		serializer.WriteProperty(501, "arguments", function.GetArguments());
 		serializer.WriteProperty(502, "original_arguments", function.GetOriginalArguments());
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
-		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.catalog_name, "");
-		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.schema_name, "");
+		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName(), "");
+		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName(), "");
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -97,7 +97,7 @@ public:
 	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
 		if (!function.HasSerializationCallbacks()) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
-			                             function.name);
+			                             function.GetName());
 		}
 		unique_ptr<FunctionData> result;
 		deserializer.ReadObject(504, "function_data",

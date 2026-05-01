@@ -115,14 +115,15 @@ static unique_ptr<Expression> BindExtensionFunction(FunctionBindExpressionInput 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		throw BinderException("Trying to call function \"%s\" which is present in extension \"%s\" - but the extension "
 		                      "is not loaded and could not be auto-loaded",
-		                      bound_function.name, extension_name);
+		                      bound_function.GetName(), extension_name);
 	}
 	// auto-load the extension
 	ExtensionHelper::AutoLoadExtension(db, extension_name);
 
 	// now find the function in the catalog
 	auto &catalog = Catalog::GetSystemCatalog(db);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.name);
+	auto &function_entry =
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, bound_function.GetName());
 
 	// override the function with the extension function
 	auto func = function_entry.functions.GetFunctionByArguments(context, bound_function.GetArguments());

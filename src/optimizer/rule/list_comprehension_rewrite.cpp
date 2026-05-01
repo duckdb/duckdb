@@ -18,14 +18,14 @@ namespace duckdb {
 namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
-	if (expr.function.name == target_name) {
+	if (expr.function.GetName() == target_name) {
 		D_ASSERT(!expr.children.empty() && expr.children[0]->GetReturnType().id() == LogicalTypeId::LIST);
 		return true;
 	}
 
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.name,
+	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.GetName(),
 	                                                          OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return false;
@@ -37,7 +37,7 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 }
 
 bool IsStructPack(const BoundFunctionExpression &expr) {
-	return expr.function.name == "struct_pack";
+	return expr.function.GetName() == "struct_pack";
 }
 
 optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
@@ -98,7 +98,7 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 	auto &extract_expr = base->Cast<BoundFunctionExpression>();
-	if (extract_expr.function.name != "struct_extract" || extract_expr.children.size() != 2) {
+	if (extract_expr.function.GetName() != "struct_extract" || extract_expr.children.size() != 2) {
 		return false;
 	}
 

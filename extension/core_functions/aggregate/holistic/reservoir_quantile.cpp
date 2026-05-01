@@ -368,7 +368,7 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType()));
 	auto bind_data = BindReservoirQuantile(input);
-	function.name = "reservoir_quantile";
+	function.SetName("reservoir_quantile");
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	return bind_data;

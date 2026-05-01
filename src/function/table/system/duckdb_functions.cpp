@@ -160,7 +160,7 @@ struct ScalarFunctionExtractor {
 
 	static Value GetParameterTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
@@ -168,7 +168,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
@@ -177,7 +177,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -218,7 +218,7 @@ struct WindowFunctionExtractor {
 
 	static Value GetParameterTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
@@ -226,7 +226,7 @@ struct WindowFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
@@ -274,7 +274,7 @@ struct AggregateFunctionExtractor {
 
 	static Value GetParameterTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
@@ -282,7 +282,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		vector<LogicalType> results;
 		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
 			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
@@ -291,7 +291,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -452,7 +452,7 @@ struct TableFunctionExtractor {
 
 	static vector<Value> GetParameters(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back("col" + to_string(i));
 		}
@@ -464,7 +464,7 @@ struct TableFunctionExtractor {
 
 	static Value GetParameterTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back(fun.GetArguments()[i].ToString());
@@ -476,12 +476,12 @@ struct TableFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return fun.GetArguments();
 	}
 
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -513,7 +513,7 @@ struct PragmaFunctionExtractor {
 
 	static vector<Value> GetParameters(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back("col" + to_string(i));
@@ -526,7 +526,7 @@ struct PragmaFunctionExtractor {
 
 	static Value GetParameterTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back(fun.GetArguments()[i].ToString());
@@ -538,12 +538,12 @@ struct PragmaFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return fun.GetArguments();
 	}
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 

@@ -554,9 +554,9 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 		by_type = by_types[best_target];
 	}
 
-	auto name = std::move(function.name);
+	auto name = function.GetName();
 	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
-	function.name = std::move(name);
+	function.SetName(std::move(name));
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);

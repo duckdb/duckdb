@@ -636,7 +636,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	if (arg_return_type.id() != LogicalTypeId::AGGREGATE_STATE &&
 	    (!allow_legacy || arg_return_type.id() != LogicalTypeId::LEGACY_AGGREGATE_STATE)) {
 		string allowed = allow_legacy ? "AGGREGATE_STATE or LEGACY_AGGREGATE_STATE" : "AGGREGATE_STATE";
-		throw BinderException("Can only %s %s, not %s", function.name, allowed, arg_return_type.ToString());
+		throw BinderException("Can only %s %s, not %s", function.GetName(), allowed, arg_return_type.ToString());
 	}
 
 	// following error states are only reachable when someone messes up creating the state_type
@@ -661,7 +661,7 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());
 	}
-	auto aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// FIXME: this is really hacky
 	// but the aggregate state export needs a rework around how it handles more complex aggregates anyway
@@ -699,10 +699,10 @@ unique_ptr<FunctionData> BindAggregateState(BindScalarFunctionInput &input) {
 		                      arguments[0]->GetReturnType().ToString(), arguments[1]->GetReturnType().ToString());
 	}
 
-	if (bound_function.name == "finalize") {
+	if (bound_function.GetName() == "finalize") {
 		bound_function.SetReturnType(bind_data->aggr.GetReturnType());
 	} else {
-		D_ASSERT(bound_function.name == "combine");
+		D_ASSERT(bound_function.GetName() == "combine");
 		bound_function.SetReturnType(arguments[0]->GetReturnType());
 		// When the second argument is a STRUCT (e.g. from a parquet round-trip), prevent casting to AGGREGATE_STATE by
 		// matching the declared parameter type to the actual argument type.
@@ -855,7 +855,7 @@ unique_ptr<BoundAggregateExpression>
 ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggregate) {
 	auto &bound_function = child_aggregate->function;
 	if (!bound_function.HasStateCombineCallback()) {
-		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.name);
+		throw BinderException("Cannot use EXPORT_STATE for non-combinable function %s", bound_function.GetName());
 	}
 	if (bound_function.HasBindCallback()) {
 		throw BinderException("Cannot use EXPORT_STATE on aggregate functions with custom binders");
@@ -874,7 +874,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 #endif
 	auto export_bind_data = make_uniq<ExportAggregateFunctionBindData>(child_aggregate->Copy());
-	aggregate_state_t state_type(child_aggregate->function.name, child_aggregate->function.GetReturnType(),
+	aggregate_state_t state_type(child_aggregate->function.GetName(), child_aggregate->function.GetReturnType(),
 	                             child_aggregate->function.GetArguments());
 
 	LogicalType return_type;
@@ -887,8 +887,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	}
 
 	auto export_function =
-	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.GetArguments(), return_type,
-	                      bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	    AggregateFunction("aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(),
+	                      return_type, bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
 	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
 	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,

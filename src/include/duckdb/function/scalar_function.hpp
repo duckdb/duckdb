@@ -484,7 +484,7 @@ public:
 	}
 	Binder &GetBinder() {
 		if (binder == nullptr) {
-			throw InternalException("Function '%s' has cannot be bound without a Binder!", bound_function.name);
+			throw InternalException("Function '%s' has cannot be bound without a Binder!", bound_function.GetName());
 		}
 		return *binder;
 	}

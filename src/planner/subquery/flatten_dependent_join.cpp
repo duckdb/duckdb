@@ -611,10 +611,10 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 		auto count_star_fun = CountStarFun::GetFunction();
 
 		const auto is_count_func =
-		    bound_func.name == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
+		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
 
 		const auto is_count_star_func =
-		    bound_func.name == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
+		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
 
 		if (is_count_func || is_count_star_func) {
 			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;

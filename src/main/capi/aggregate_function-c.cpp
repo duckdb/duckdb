@@ -305,7 +305,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 	}
 	auto &set = duckdb::GetCAggregateFunctionSet(function_set);
 	for (idx_t idx = 0; idx < set.Size(); idx++) {
-		auto &aggregate_function = set.GetFunctionReferenceByOffset(idx);
+		const auto &aggregate_function = set.GetFunctionByOffset(idx);
 		auto &info = aggregate_function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 
 		if (aggregate_function.name.empty() || !info.update || !info.combine || !info.finalize) {

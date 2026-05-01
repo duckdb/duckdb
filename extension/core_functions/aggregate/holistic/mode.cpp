@@ -509,7 +509,7 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
-	function.name = "mode";
+	function.SetName("mode");
 	return nullptr;
 }
 
@@ -611,7 +611,7 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
-	function.name = "entropy";
+	function.SetName("entropy");
 	return nullptr;
 }
 

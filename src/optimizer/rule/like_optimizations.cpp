@@ -120,7 +120,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 	auto &patt_str = StringValue::Get(constant_value);
 
-	bool is_not_like = root.function.name == "!~~";
+	bool is_not_like = root.function.GetName() == "!~~";
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL

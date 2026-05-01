@@ -198,7 +198,7 @@ optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_na
 	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
 	string candidate_str;
 	for (auto &conf : candidate_functions) {
-		T f = functions.GetFunctionByOffset(conf);
+		const auto &f = functions.GetFunctionByOffset(conf);
 		candidate_str += "\t" + f.ToString() + "\n";
 	}
 	error = ErrorData(
@@ -263,7 +263,7 @@ optional_idx FunctionBinder::BindFunction(const string &name, PragmaFunctionSet 
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
-	auto candidate_function = functions.GetFunctionByOffset(entry.GetIndex());
+	const auto &candidate_function = functions.GetFunctionByOffset(entry.GetIndex());
 	// cast the input parameters
 	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto target_type = i < candidate_function.GetArguments().size() ? candidate_function.GetArguments()[i]
@@ -359,7 +359,7 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 		if (target_type.id() == LogicalTypeId::STRING_LITERAL || target_type.id() == LogicalTypeId::INTEGER_LITERAL) {
 			throw InternalException(
 			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
-			    function.name);
+			    function.GetName());
 		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution
@@ -396,7 +396,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	}
 
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
 	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
@@ -677,7 +677,7 @@ void FunctionBinder::ResolveTemplateTypes(BoundSimpleFunction &bound_function,
 
 	// Finally, substitute all template types in the bound function with their concrete types.
 	for (auto &templated_type : to_substitute) {
-		SubstituteTemplateType(templated_type, bindings, bound_function.name);
+		SubstituteTemplateType(templated_type, bindings, bound_function.GetName());
 	}
 }
 
@@ -695,9 +695,9 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 // Verify that all template types are bound to concrete types.
 void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound_function) {
 	for (const auto &arg : bound_function.GetArguments()) {
-		VerifyTemplateType(arg, bound_function.name);
+		VerifyTemplateType(arg, bound_function.GetName());
 	}
-	VerifyTemplateType(bound_function.GetReturnType(), bound_function.name);
+	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName());
 }
 
 pair<BoundScalarFunction, unique_ptr<FunctionData>>

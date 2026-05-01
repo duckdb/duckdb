@@ -18,7 +18,7 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 }
 
 string BoundWindowExpression::ToString() const {
-	string function_name = aggregate.get() ? aggregate->name : window->name;
+	string function_name = aggregate.get() ? aggregate->GetName() : window->GetName();
 	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
 	                                                                                       function_name);
 }
@@ -202,7 +202,7 @@ vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Seriali
 	vector<unique_ptr<Expression>> result;
 	idx_t nargs = children.size();
 	if (!serializer.ShouldSerialize(8) && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			nargs = 1;
 		}
@@ -217,7 +217,7 @@ vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Seriali
 
 unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(8) && children.size() > 1 && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[1]->Copy();
 		}
@@ -228,7 +228,7 @@ unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &seria
 
 unique_ptr<Expression> BoundWindowExpression::SerializedDefault(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(8) && children.size() > 2 && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[2]->Copy();
 		}
@@ -331,7 +331,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 			error_win.Throw();
 		}
 
-		auto win_func = func.functions.GetFunctionByOffset(best.GetIndex());
+		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
 
 		auto [bound_func, bind_info] = function_binder.ResolveFunction(win_func, result->children);
 

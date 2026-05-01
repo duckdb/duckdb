@@ -224,6 +224,26 @@ public:
 	string schema_name;
 
 public:
+	auto SetName(string name_p) -> void {
+		name = std::move(name_p);
+	}
+	auto SetSchemaName(string schema_name_p) -> void {
+		schema_name = std::move(schema_name_p);
+	}
+	auto SetCatalogName(string catalog_name_p) -> void {
+		catalog_name = std::move(catalog_name_p);
+	}
+
+	const string &GetName() const {
+		return name;
+	}
+	const string &GetSchemaName() const {
+		return schema_name;
+	}
+	const string &GetCatalogName() const {
+		return catalog_name;
+	}
+
 	//! Returns the formatted string name(arg1, arg2, ...)
 	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
 	                                      const vector<LogicalType> &arguments,
@@ -384,12 +404,11 @@ public:
 };
 
 class BoundSimpleFunction {
-public:
+protected:
 	string name;
 	string schema_name;
 	string catalog_name;
 
-protected:
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
 	//! The set of original arguments of the function - only set if Function::EraseArgument is called
@@ -399,6 +418,20 @@ protected:
 	LogicalType return_type;
 
 public:
+	void SetName(string name_p) {
+		name = std::move(name_p);
+	}
+
+	const string &GetName() const {
+		return name;
+	}
+	const string &GetSchemaName() const {
+		return schema_name;
+	}
+	const string &GetCatalogName() const {
+		return catalog_name;
+	}
+
 	DUCKDB_API string ToString() const;
 	DUCKDB_API hash_t Hash() const;
 

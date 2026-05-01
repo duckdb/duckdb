@@ -127,7 +127,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 		cost_children += Cost(*child);
 	}
 
-	auto cost_function = function_costs.find(expr.function.name);
+	auto cost_function = function_costs.find(expr.function.GetName());
 	if (cost_function != function_costs.end()) {
 		return cost_children + cost_function->second;
 	} else {

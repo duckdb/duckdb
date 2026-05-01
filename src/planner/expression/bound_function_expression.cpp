@@ -15,7 +15,7 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, BoundS
     : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)),
       function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info)),
       is_operator(is_operator) {
-	D_ASSERT(!function.name.empty());
+	D_ASSERT(!function.GetName().empty());
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
@@ -50,8 +50,8 @@ bool BoundFunctionExpression::CanThrow() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
-	                                                                         is_operator);
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(),
+	                                                                         function.GetName(), is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
 	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
@@ -95,7 +95,7 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 }
 
 void BoundFunctionExpression::Verify() const {
-	D_ASSERT(!function.name.empty());
+	D_ASSERT(!function.GetName().empty());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {

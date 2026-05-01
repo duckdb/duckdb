@@ -111,7 +111,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.name);
+		                        func.function.GetName());
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());

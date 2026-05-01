@@ -381,7 +381,7 @@ void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 template <bool IS_AGGR = false>
 unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, BoundScalarFunction &bound_function,
                                                     const LogicalType &list_child_type,
-                                                    AggregateFunction &aggr_function,
+                                                    const AggregateFunction &aggr_function,
                                                     vector<unique_ptr<Expression>> &arguments) {
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
@@ -472,7 +472,7 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		bound_function.SetErrorMode(best_function.GetErrorMode());
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);

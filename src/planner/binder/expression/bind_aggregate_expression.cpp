@@ -262,10 +262,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
-		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.name);
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.GetName());
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();

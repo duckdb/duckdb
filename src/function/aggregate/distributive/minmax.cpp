@@ -346,7 +346,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
 		// to make sure the result's correctness.
-		string function_name = function.name == "min" ? "arg_min" : "arg_max";
+		string function_name = function.GetName() == "min" ? "arg_min" : "arg_max";
 		QueryErrorContext error_context;
 		auto func = Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, "", "", function_name,
 		                                                             OnEntryNotFound::RETURN_NULL, error_context);
@@ -354,7 +354,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 			throw NotImplementedException(
 			    "Failure while binding function \"%s\" using collations - arg_min/arg_max do not exist in the "
 			    "catalog - load the core_functions module to fix this issue",
-			    function.name);
+			    function.GetName());
 		}
 
 		auto &func_entry = *func;
@@ -380,13 +380,13 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	auto name = std::move(function.name);
+	auto name = function.GetName();
 
 	auto state_export_type = function.GetStateTypeCallback();
 	auto minmax_func = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 
 	minmax_func.SetStructStateExport(state_export_type);
-	minmax_func.name = std::move(name);
+	minmax_func.SetName(std::move(name));
 	minmax_func.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	minmax_func.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 

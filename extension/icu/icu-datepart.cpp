@@ -492,7 +492,7 @@ struct ICUDatePart : public ICUDateFunc {
 			throw ParameterNotResolvedException();
 		}
 		if (!arguments[0]->IsFoldable()) {
-			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
 		case_insensitive_set_t name_collision_set;
@@ -503,18 +503,19 @@ struct ICUDatePart : public ICUDateFunc {
 		if (parts_list.type().id() == LogicalTypeId::LIST) {
 			auto &list_children = ListValue::GetChildren(parts_list);
 			if (list_children.empty()) {
-				throw BinderException("%s requires non-empty lists of part names", bound_function.name);
+				throw BinderException("%s requires non-empty lists of part names", bound_function.GetName());
 			}
 
 			for (size_t col = 0; col < list_children.size(); ++col) {
 				const auto &part_value = list_children[col];
 				if (part_value.IsNull()) {
-					throw BinderException("NULL struct entry name in %s", bound_function.name);
+					throw BinderException("NULL struct entry name in %s", bound_function.GetName());
 				}
 				const auto part_name = part_value.ToString();
 				const auto part_code = GetDatePartSpecifier(part_name);
 				if (name_collision_set.find(part_name) != name_collision_set.end()) {
-					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name, bound_function.name);
+					throw BinderException("Duplicate struct entry name \"%s\" in %s", part_name,
+					                      bound_function.GetName());
 				}
 				name_collision_set.insert(part_name);
 				part_codes.emplace_back(part_code);
@@ -525,7 +526,7 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 			}
 		} else {
-			throw BinderException("%s can only take constant lists of part names", bound_function.name);
+			throw BinderException("%s can only take constant lists of part names", bound_function.GetName());
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
