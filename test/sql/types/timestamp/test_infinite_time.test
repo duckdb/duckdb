@@ -2,9 +2,6 @@
 # description: Extract timestamp function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 #
 # Special date and time values from
 # https://www.postgresql.org/docs/14/datatype-datetime.html#DATATYPE-DATETIME-SPECIAL-TABLE

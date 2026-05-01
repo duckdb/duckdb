@@ -86,6 +86,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
 	case MetricType::OPTIMIZER_MATERIALIZED_CTE:
 	case MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION:
+	case MetricType::OPTIMIZER_PARTITIONED_EXECUTION:
 	case MetricType::OPTIMIZER_PROJECTION_PULLUP:
 	case MetricType::OPTIMIZER_REGEX_RANGE:
 	case MetricType::OPTIMIZER_REORDER_FILTER:
@@ -174,6 +175,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::OPTIMIZER_LIMIT_PUSHDOWN:
 	case MetricType::OPTIMIZER_MATERIALIZED_CTE:
 	case MetricType::OPTIMIZER_OUTER_JOIN_SIMPLIFICATION:
+	case MetricType::OPTIMIZER_PARTITIONED_EXECUTION:
 	case MetricType::OPTIMIZER_PROJECTION_PULLUP:
 	case MetricType::OPTIMIZER_REGEX_RANGE:
 	case MetricType::OPTIMIZER_REORDER_FILTER:

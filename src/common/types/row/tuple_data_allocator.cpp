@@ -438,10 +438,10 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				lock_guard<mutex> guard(part.lock);
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
-					Vector old_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)));
-					Vector new_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)));
+					Vector old_heap_ptrs(Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
+					Vector new_heap_ptrs(Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part.base_heap_ptr = new_base_heap_ptr;
@@ -834,11 +834,11 @@ BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, con
 }
 
 data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinRowBlock(pin_state, part).Ptr() + part.row_block_offset;
+	return PinRowBlock(pin_state, part).GetDataMutable() + part.row_block_offset;
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinHeapBlock(pin_state, part).Ptr();
+	return PinHeapBlock(pin_state, part).GetDataMutable();
 }
 
 } // namespace duckdb

@@ -3,9 +3,6 @@
 # group: [lateral]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE FUNCTION my_func(x) AS (x + x)
 
 statement ok

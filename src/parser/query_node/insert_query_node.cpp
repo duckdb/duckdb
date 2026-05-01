@@ -24,15 +24,15 @@ string InsertQueryNode::ToString() const {
 	}
 	result += " INTO ";
 	if (!catalog.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
+		result += SQLIdentifier(catalog) + ".";
 	}
 	if (!schema.empty()) {
-		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
+		result += SQLIdentifier(schema) + ".";
 	}
-	result += KeywordHelper::WriteOptionallyQuoted(table);
+	result += SQLIdentifier(table);
 	// Write the (optional) alias of the insert target
 	if (table_ref && !table_ref->alias.empty()) {
-		result += StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(table_ref->alias));
+		result += StringUtil::Format(" AS %s", SQLIdentifier(table_ref->alias));
 	}
 	if (column_order == InsertColumnOrder::INSERT_BY_NAME) {
 		result += " BY NAME";
@@ -43,9 +43,9 @@ string InsertQueryNode::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+			result += SQLIdentifier(columns[i]);
 		}
-		result += " )";
+		result += ")";
 	}
 	result += " ";
 	auto values_list = GetValuesList();
@@ -111,8 +111,7 @@ string InsertQueryNode::ToString() const {
 			}
 			auto col = returning_list[i]->ToString();
 			if (!returning_list[i]->GetAlias().empty()) {
-				col +=
-				    StringUtil::Format(" AS %s", KeywordHelper::WriteOptionallyQuoted(returning_list[i]->GetAlias()));
+				col += StringUtil::Format(" AS %s", SQLIdentifier(returning_list[i]->GetAlias()));
 			}
 			result += col;
 		}

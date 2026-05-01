@@ -1,6 +1,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
@@ -393,7 +394,7 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartiti
 	// If there are no groups we create a fake group so everything has the same group
 	group_chunk.InitializeEmpty(radix_ht.group_types);
 	if (radix_ht.grouping_set.empty()) {
-		group_chunk.data[0].Reference(Value::TINYINT(42));
+		group_chunk.data[0].Reference(Value::TINYINT(42), count_t(STANDARD_VECTOR_SIZE));
 	}
 }
 
@@ -417,6 +418,10 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);
 	}
 	group_chunk.SetCardinality(input_chunk.size());
+	// the fake group for empty grouping_set was created with v_size=STANDARD_VECTOR_SIZE - resize to match
+	if (grouping_set.empty()) {
+		FlatVector::SetSize(group_chunk.data[0], count_t(input_chunk.size()));
+	}
 	group_chunk.Verify();
 }
 
@@ -924,7 +929,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		chunk.data[entry].Reference(scan_chunk.data[chunk_index++]);
 	}
 	for (auto null_group : radix_ht.null_groups) {
-		ConstantVector::SetNull(chunk.data[null_group]);
+		ConstantVector::SetNull(chunk.data[null_group], count_t(scan_chunk.size()));
 	}
 	D_ASSERT(radix_ht.grouping_set.size() + radix_ht.null_groups.size() == radix_ht.op.GroupCount());
 	for (idx_t col_idx = 0; col_idx < radix_ht.op.aggregates.size(); col_idx++) {
@@ -933,7 +938,8 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	}
 	D_ASSERT(radix_ht.op.grouping_functions.size() == radix_ht.grouping_values.size());
 	for (idx_t i = 0; i < radix_ht.op.grouping_functions.size(); i++) {
-		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i]);
+		chunk.data[radix_ht.op.GroupCount() + radix_ht.op.aggregates.size() + i].Reference(radix_ht.grouping_values[i],
+		                                                                                   count_t(scan_chunk.size()));
 	}
 	chunk.SetCardinality(scan_chunk);
 	D_ASSERT(chunk.size() != 0);
@@ -972,7 +978,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// For each column in the aggregates, set to initial state
 			chunk.SetCardinality(1);
 			for (auto null_group : null_groups) {
-				ConstantVector::SetNull(chunk.data[null_group]);
+				ConstantVector::SetNull(chunk.data[null_group], count_t(1));
 			}
 			ArenaAllocator allocator(BufferAllocator::Get(context.client));
 			for (idx_t i = 0; i < op.aggregates.size(); i++) {
@@ -983,9 +989,10 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 				aggr.function.GetStateInitCallback()(aggr.function, aggr_state.get());
 
 				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
-				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
-				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
-				                                         chunk.data[null_groups.size() + i], 1, 0);
+				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())), count_t(1));
+				auto &agg_result = chunk.data[null_groups.size() + i];
+				aggr.function.GetStateFinalizeCallback()(state_vector, aggr_input_data, agg_result, 1, 0);
+				FlatVector::SetSize(agg_result, count_t(1));
 				if (aggr.function.HasStateDestructorCallback()) {
 					aggr.function.GetStateDestructorCallback()(state_vector, aggr_input_data, 1);
 				}
@@ -993,7 +1000,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			// Place the grouping values (all the groups of the grouping_set condensed into a single value)
 			// Behind the null groups + aggregates
 			for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
-				chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
+				chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i], count_t(1));
 			}
 		}
 		gstate.finished = true;

@@ -6,9 +6,6 @@
 load {TEST_DIR}/pivot_storage.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
 
 statement ok

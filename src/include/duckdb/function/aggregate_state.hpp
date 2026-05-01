@@ -66,13 +66,14 @@ struct AggregateBinaryInput {
 };
 
 struct AggregateFinalizeData {
-	AggregateFinalizeData(Vector &result_p, AggregateInputData &input_p)
-	    : result(result_p), input(input_p), result_idx(0) {
+	AggregateFinalizeData(Vector &result_p, AggregateInputData &input_p, idx_t result_count_p = 1)
+	    : result(result_p), input(input_p), result_idx(0), result_count(result_count_p) {
 	}
 
 	Vector &result;
 	AggregateInputData &input;
 	idx_t result_idx;
+	idx_t result_count;
 
 	inline void ReturnNull() {
 		switch (result.GetVectorType()) {
@@ -80,7 +81,7 @@ struct AggregateFinalizeData {
 			FlatVector::SetNull(result, result_idx, true);
 			break;
 		case VectorType::CONSTANT_VECTOR:
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(result_count));
 			break;
 		default:
 			throw InternalException("Invalid result vector type for aggregate");

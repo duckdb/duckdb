@@ -321,6 +321,9 @@ endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
+ifeq (${DISABLE_BUILTIN_HTTPLIB}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_HTTPLIB=1
+endif
 ifeq (${DISABLE_SHELL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
 endif
@@ -570,17 +573,26 @@ define ensure_apt_commands
 	fi
 endef
 
+define ensure_apt_packages
+	missing=0; \
+	for pkg in $(1); do \
+		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -qq; \
+		sudo apt-get install -y -qq $(1); \
+	fi
+endef
+
 .PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
-	pkg-config --exists libcurl || { \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq libcurl4-openssl-dev; \
-	}
-	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
+	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
+	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
 	g++ --version
+	clang++ --version
 
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
@@ -677,13 +689,13 @@ test_compile: # test compilation of individual cpp files
 	$(PYTHON) scripts/test_compile.py
 
 format-check: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py --all --check
+	$(FORMAT_PYTHON) scripts/format.py --all --check $(T)
 
 format-check-silent: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py --all --check --silent
+	$(FORMAT_PYTHON) scripts/format.py --all --check --silent $(T)
 
 format-fix: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm $(T)
 
 .PHONY: check-extension-entries
 check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
@@ -700,16 +712,16 @@ check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	fi
 
 format-head: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
 format-changes: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
 format-main: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm $(T)
 
 format-feature: $(FORMAT_SETUP_DEPS)
-	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm $(T)
 
 format-configs:
 	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)

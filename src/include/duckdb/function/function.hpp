@@ -14,6 +14,7 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -135,7 +136,7 @@ public:
 
 class SimpleFunction : public Function {
 public:
-	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
@@ -148,8 +149,13 @@ protected:
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;
+	//! Return type of the function
+	LogicalType return_type;
 
 public:
+	DUCKDB_API string ToString() const;
+	DUCKDB_API hash_t Hash() const;
+
 	vector<LogicalType> &GetArguments() {
 		return arguments;
 	}
@@ -174,35 +180,8 @@ public:
 		varargs = std::move(varargs_p);
 	}
 
-	DUCKDB_API virtual string ToString() const;
-
 	DUCKDB_API bool HasVarArgs() const;
-};
 
-class SimpleNamedParameterFunction : public SimpleFunction {
-public:
-	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
-	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
-	DUCKDB_API ~SimpleNamedParameterFunction() override;
-
-	//! The named parameters of the function
-	named_parameter_type_map_t named_parameters;
-
-public:
-	DUCKDB_API string ToString() const override;
-	DUCKDB_API bool HasNamedParameters() const;
-};
-
-class BaseScalarFunction : public SimpleFunction {
-public:
-	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              FunctionStability stability,
-	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                              FunctionErrors errors = FunctionErrors::CANNOT_ERROR);
-	DUCKDB_API ~BaseScalarFunction() override;
-
-public:
 	void SetReturnType(LogicalType return_type_p) {
 		return_type = std::move(return_type_p);
 	}
@@ -212,65 +191,71 @@ public:
 	LogicalType &GetReturnType() {
 		return return_type;
 	}
+};
 
-	FunctionStability GetStability() const {
-		return stability;
-	}
-	void SetStability(FunctionStability stability_p) {
-		stability = stability_p;
-	}
+class SimpleNamedParameterFunction : public Function {
+public:
+	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
+	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	DUCKDB_API ~SimpleNamedParameterFunction() override;
 
-	FunctionNullHandling GetNullHandling() const {
-		return null_handling;
-	}
-	void SetNullHandling(FunctionNullHandling null_handling_p) {
-		null_handling = null_handling_p;
-	}
+	//! The set of arguments of the function
+	vector<LogicalType> arguments;
+	//! The set of original arguments of the function - only set if Function::EraseArgument is called
+	//! Used for (de)serialization purposes
+	vector<LogicalType> original_arguments;
+	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
+	//! arguments
+	LogicalType varargs;
 
-	FunctionErrors GetErrorMode() const {
-		return errors;
-	}
-	void SetErrorMode(FunctionErrors errors_p) {
-		errors = errors_p;
-	}
-
-	//! Set this functions error-mode as fallible (can throw runtime errors)
-	void SetFallible() {
-		errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-	}
-	//! Set this functions stability as volatile (can not be cached per row)
-	void SetVolatile() {
-		stability = FunctionStability::VOLATILE;
-	}
-
-	void SetCollationHandling(FunctionCollationHandling collation_handling_p) {
-		collation_handling = collation_handling_p;
-	}
-	FunctionCollationHandling GetCollationHandling() const {
-		return collation_handling;
-	}
-
-protected:
-	//! Return type of the function
-	LogicalType return_type;
-	//! The stability of the function (see FunctionStability enum for more info)
-	FunctionStability stability;
-	//! How this function handles NULL values
-	FunctionNullHandling null_handling;
-	//! Whether or not this function can throw an error
-	FunctionErrors errors;
-	//! Collation handling of the function
-	FunctionCollationHandling collation_handling;
-
-	static BaseScalarFunction SetReturnsError(BaseScalarFunction &function) {
-		function.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
-		return function;
-	}
+	//! The named parameters of the function
+	named_parameter_type_map_t named_parameters;
 
 public:
-	DUCKDB_API hash_t Hash() const;
+	DUCKDB_API virtual string ToString() const;
+	DUCKDB_API bool HasNamedParameters() const;
 
-	DUCKDB_API string ToString() const override;
+	vector<LogicalType> &GetArguments() {
+		return arguments;
+	}
+	const vector<LogicalType> &GetArguments() const {
+		return arguments;
+	}
+
+	vector<LogicalType> &GetOriginalArguments() {
+		return original_arguments;
+	}
+	const vector<LogicalType> &GetOriginalArguments() const {
+		return original_arguments;
+	}
+
+	const LogicalType &GetVarArgs() const {
+		return varargs;
+	}
+	LogicalType &GetVarArgs() {
+		return varargs;
+	}
+	// TODO: Dont expose mutable accessor
+	void SetVarArgs(LogicalType varargs_p) {
+		varargs = std::move(varargs_p);
+	}
+	bool HasVarArgs() const {
+		return varargs.id() != LogicalTypeId::INVALID;
+	}
+};
+
+class FunctionProperties {
+public:
+	FunctionStability stability = FunctionStability::CONSISTENT;
+	//! How this function handles NULL values
+	FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	//! Whether or not this function can throw an error
+	FunctionErrors errors = FunctionErrors::CANNOT_ERROR;
+	//! Collation handling of the function
+	FunctionCollationHandling collation_handling = FunctionCollationHandling::PROPAGATE_COLLATIONS;
+
+	bool operator==(const FunctionProperties &rhs) const;
+	bool operator!=(const FunctionProperties &rhs) const;
 };
 
 } // namespace duckdb

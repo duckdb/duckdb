@@ -32,11 +32,11 @@ const Expression &LogicalAggregate::GetGroupExpression(ProjectionIndex group_col
 void LogicalAggregate::ResolveTypes() {
 	D_ASSERT(groupings_index.IsValid() || grouping_functions.empty());
 	for (auto &expr : groups) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	// get the chunk types from the projection list
 	for (auto &expr : expressions) {
-		types.push_back(expr->return_type);
+		types.push_back(expr->GetReturnType());
 	}
 	for (idx_t i = 0; i < grouping_functions.size(); i++) {
 		types.emplace_back(LogicalType::BIGINT);

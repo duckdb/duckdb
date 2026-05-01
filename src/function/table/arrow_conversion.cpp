@@ -840,7 +840,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
-		vector.Reference(Value());
+		ConstantVector::SetNull(vector, count_t(size));
 		break;
 	case LogicalTypeId::BOOLEAN: {
 		//! Arrow bit-packs boolean values
@@ -1521,6 +1521,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		}
+		FlatVector::SetSize(output.data[idx], count_t(output.size()));
 	}
 }
 

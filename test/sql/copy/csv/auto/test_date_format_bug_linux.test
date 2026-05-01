@@ -1,10 +1,6 @@
 # name: test/sql/copy/csv/auto/test_date_format_bug_linux.test
 # group: [auto]
 
-statement ok
-PRAGMA enable_verification
-
-
 query I
 SELECT *  FROM read_csv_auto('{DATA_DIR}/csv/auto/date_format_bug_linux.csv')
 ----

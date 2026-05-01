@@ -182,7 +182,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto old_handle = buffer_manager.Pin(block);
 	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
 	auto new_block = new_handle.GetBlockHandle();
-	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+	memcpy(new_handle.GetDataMutable(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);

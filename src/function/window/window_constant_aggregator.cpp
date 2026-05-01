@@ -104,7 +104,7 @@ public:
 
 WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
     ExecutionContext &context, const WindowConstantAggregatorGlobalState &gstate)
-    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0)),
+    : WindowAggregatorLocalState(context), gstate(gstate), statep(Value::POINTER(0), count_t(1)),
       statef(context.client, gstate.statef.aggr), partition(0) {
 	matches.Initialize();
 

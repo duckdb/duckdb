@@ -164,11 +164,11 @@ unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 }
 
 void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                            const AggregateFunction &function) {
+                            const BoundAggregateFunction &function) {
 	return;
 }
 
-unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
@@ -289,7 +289,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->return_type;
+	auto decimal_type = arguments[0]->GetReturnType();
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
 	function.GetArguments()[0] = decimal_type;
@@ -333,12 +333,10 @@ struct BignumOperation {
 			return;
 		}
 		if (!target.is_set) {
-			target.value = source.value;
+			target.value.Initialize(input.allocator);
 			target.is_set = true;
-			return;
 		}
 		target.value.AddInPlace(input.allocator, source.value);
-		target.is_set = true;
 	}
 
 	template <class TARGET_TYPE, class STATE>

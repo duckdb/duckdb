@@ -123,7 +123,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		auto &group = op.groups[group_idx];
 		auto &stats = op.group_stats[group_idx];
 
-		switch (group->return_type.InternalType()) {
+		switch (group->GetReturnType().InternalType()) {
 		case PhysicalType::INT8:
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
@@ -138,7 +138,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			return false;
 		}
 		// check if the group has stats available
-		auto &group_type = group->return_type;
+		auto &group_type = group->GetReturnType();
 		if (!stats) {
 			// no stats, but we might still be able to use perfect hashing if the type is small enough
 			// for small types we can just set the stats to [type_min, type_max]
@@ -312,23 +312,23 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		}
 	}
 	for (auto &group : groups) {
-		auto ref = make_uniq<BoundReferenceExpression>(group->return_type, expressions.size());
-		types.push_back(group->return_type);
+		auto ref = make_uniq<BoundReferenceExpression>(group->GetReturnType(), expressions.size());
+		types.push_back(group->GetReturnType());
 		expressions.push_back(std::move(group));
 		group = std::move(ref);
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : bound_aggr.children) {
-			auto ref = make_uniq<BoundReferenceExpression>(child_expr->return_type, expressions.size());
-			types.push_back(child_expr->return_type);
+			auto ref = make_uniq<BoundReferenceExpression>(child_expr->GetReturnType(), expressions.size());
+			types.push_back(child_expr->GetReturnType());
 			expressions.push_back(std::move(child_expr));
 			child_expr = std::move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;
-			auto ref = make_uniq<BoundReferenceExpression>(filter->return_type, expressions.size());
-			types.push_back(filter->return_type);
+			auto ref = make_uniq<BoundReferenceExpression>(filter->GetReturnType(), expressions.size());
+			types.push_back(filter->GetReturnType());
 			expressions.push_back(std::move(filter));
 			bound_aggr.filter = std::move(ref);
 		}

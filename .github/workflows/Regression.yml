@@ -167,7 +167,6 @@ jobs:
       - name: Install
         run: |
           python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -236,7 +235,6 @@ jobs:
       - name: Install
         run: |
           python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Checkout Private Regression
         if: ${{ github.repository == 'duckdb/duckdb' && github.ref_name == 'main' }}
@@ -287,7 +285,6 @@ jobs:
       - name: Install
         run: |
           python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -364,7 +361,6 @@ jobs:
       - name: Install
         run: |
           python3 scripts/ci/retry.py -- make toolsci
-          python3 scripts/ci/retry.py -- pip install requests
 
       - name: Download current release artifact
         uses: actions/download-artifact@v8
@@ -390,7 +386,7 @@ jobs:
 
       - name: Regression Test Extension binary size
         run: |
-          python scripts/regression_test_extension_size.py --old build/base/release/extension --new build/current/release/extension --expect json,parquet,tpch,tpcds
+          python scripts/regression_test_extension_size.py --old build/base/release/repository --new build/current/release/repository --expect json,parquet,tpch,tpcds
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost

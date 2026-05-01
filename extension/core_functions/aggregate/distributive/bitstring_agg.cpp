@@ -49,13 +49,13 @@ struct BitstringAggBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &) {
+	                      const BoundAggregateFunction &) {
 		auto &bind_data = bind_data_p->Cast<BitstringAggBindData>();
 		serializer.WriteProperty(100, "min", bind_data.min);
 		serializer.WriteProperty(101, "max", bind_data.max);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &) {
 		Value min;
 		Value max;
 		deserializer.ReadProperty(100, "min", min);

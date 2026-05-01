@@ -1,0 +1,13 @@
+diff --git a/src/storage/iceberg_delete.cpp b/src/storage/iceberg_delete.cpp
+index e2f31f7c..2110dfd3 100644
+--- a/src/storage/iceberg_delete.cpp
++++ b/src/storage/iceberg_delete.cpp
+@@ -184,7 +184,7 @@ void IcebergDelete::WritePositionalDeleteFile(ClientContext &context, IcebergDel
+ 	write_chunk.Initialize(context, write_types);
+ 	// the first vector is constant (the file name)
+ 	Value filename_val(filename);
+-	write_chunk.data[0].Reference(filename_val);
++	write_chunk.data[0].Reference(filename_val, count_t(STANDARD_VECTOR_SIZE));
+ 
+ 	idx_t row_count = 0;
+ 	auto row_data = FlatVector::GetDataMutable<int64_t>(write_chunk.data[1]);

@@ -4,6 +4,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/clustered_aggr.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
@@ -66,7 +67,7 @@ UngroupedAggregateState::~UngroupedAggregateState() {
 		if (!destructors[i]) {
 			continue;
 		}
-		Vector state_vector(Value::POINTER(CastPointerToValue(aggregate_data[i].get())));
+		Vector state_vector(Value::POINTER(CastPointerToValue(aggregate_data[i].get())), count_t(1));
 		state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		ArenaAllocator allocator(Allocator::DefaultAllocator());
@@ -116,8 +117,8 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 			continue;
 		}
 
-		Vector source_state(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())));
-		Vector dest_state(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		Vector source_state(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
+		Vector dest_state(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
@@ -144,8 +145,8 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 
-		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())));
-		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
+		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 		if (!aggregate.function.HasStateCombineCallback()) {
 			throw InternalException("Aggregate function " + aggregate.function.name +
 			                        " does not support combining of states");
@@ -172,7 +173,7 @@ UngroupedAggregateExecuteState::UngroupedAggregateExecuteState(ClientContext &co
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		// initialize the payload chunk
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 			child_executor.AddExpression(*child);
 		}
 		aggregate_objects.emplace_back(&aggr);
@@ -373,7 +374,8 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 		aggr_input_data.clustered = &clustered;
 		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
 	} else {
-		Vector agg_state_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())),
+		                     count_t(payload_chunk.size()));
 		agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
 		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, agg_state_vec,
 		                                            payload_chunk.size());
@@ -666,10 +668,11 @@ void GlobalUngroupedAggregateState::Finalize(DataChunk &result, idx_t column_off
 	for (idx_t aggr_idx = 0; aggr_idx < state.aggregate_expressions.size(); aggr_idx++) {
 		auto &aggregate = state.aggregate_expressions[aggr_idx]->Cast<BoundAggregateExpression>();
 
-		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())));
+		Vector state_vector(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
 		aggregate.function.GetStateFinalizeCallback()(state_vector, aggr_input_data,
 		                                              result.data[column_offset + aggr_idx], 1, 0);
+		FlatVector::SetSize(result.data[column_offset + aggr_idx], count_t(1));
 	}
 }
 

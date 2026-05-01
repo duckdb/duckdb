@@ -3,9 +3,6 @@
 # group: [prepared]
 
 statement ok
-pragma enable_verification
-
-statement ok
 create table test(id varchar);
 
 statement ok

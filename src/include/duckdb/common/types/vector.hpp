@@ -39,7 +39,7 @@ public:
 	//! Create a vector that slices another vector between a pair of offsets
 	DUCKDB_API explicit Vector(const Vector &other, idx_t offset, idx_t end);
 	//! Create a vector of size one holding the passed on value
-	DUCKDB_API explicit Vector(const Value &value);
+	DUCKDB_API explicit Vector(const Value &value, count_t count);
 	//! Create a vector of size capacity (non-standard)
 	DUCKDB_API explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE,
 	                           VectorDataInitialization initialize = VectorDataInitialization::UNINITIALIZED);
@@ -55,8 +55,6 @@ public:
 	DUCKDB_API Vector(Vector &&other) noexcept;
 
 public:
-	//! FIXME: should be removed - all vectors need to have a size eventually
-	bool HasSize() const;
 	idx_t size() const; // NOLINT
 	//! Checks if a vector has enough space for the given count - throws an internal error otherwise
 	DUCKDB_API void CheckCapacity(idx_t capacity) const;
@@ -65,7 +63,7 @@ public:
 	DUCKDB_API static Vector Ref(const Vector &other);
 
 	//! Create a vector that references the specified value.
-	DUCKDB_API void Reference(const Value &value);
+	DUCKDB_API void Reference(const Value &value, count_t count);
 	//! Causes this vector to reference the data held by the other vector.
 	//! The type of the "other" vector should match the type of this vector
 	DUCKDB_API void Reference(const Vector &other);
@@ -143,16 +141,17 @@ public:
 	void AddAuxiliaryData(unique_ptr<AuxiliaryDataHolder> data);
 	void AddHeapReference(const Vector &other);
 
-	DUCKDB_API void Append(const Value &value);
-	DUCKDB_API void Append(const Vector &source, idx_t count);
-	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Append(const Value &value, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const Vector &source, idx_t count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const Vector &source, const SelectionVector &sel, idx_t count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 	DUCKDB_API void Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
 	                     idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
-	//! Resizes the vector.
-	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
+	DUCKDB_API void Resize(idx_t size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);

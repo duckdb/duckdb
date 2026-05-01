@@ -79,7 +79,7 @@ SELECT COUNT(*) FROM promotion
 query T
 SELECT COUNT(*) FROM reason
 ----
-35
+75
 
 query T
 SELECT COUNT(*) FROM ship_mode
@@ -94,7 +94,7 @@ SELECT COUNT(*) FROM store
 query T
 SELECT COUNT(*) FROM store_returns
 ----
-287867
+287514
 
 query T
 SELECT COUNT(*) FROM store_sales
@@ -119,7 +119,7 @@ SELECT COUNT(*) FROM web_page
 query T
 SELECT COUNT(*) FROM web_returns
 ----
-71654
+71763
 
 query T
 SELECT COUNT(*) FROM web_sales

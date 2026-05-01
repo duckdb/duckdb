@@ -740,10 +740,11 @@ public:
 	                     idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
 			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(**sdata, *rdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -751,7 +752,7 @@ public:
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
 			for (idx_t i = 0; i < count; i++) {
 				finalize_data.result_idx = i + offset;
 				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(*sdata[i], rdata[finalize_data.result_idx],
@@ -765,9 +766,10 @@ public:
 	                         idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			AggregateFinalizeData finalize_data(result, aggr_input_data);
+			AggregateFinalizeData finalize_data(result, aggr_input_data, count);
 			OP::template Finalize<STATE_TYPE>(**sdata, finalize_data);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);

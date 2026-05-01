@@ -5,6 +5,7 @@
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -25,8 +26,8 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 	D_ASSERT(conditions.size() >= 2);
 	for (idx_t i = 0; i < 2; ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 
 		// Convert the conditions to sort orders
 		auto left = cond.GetLHS().Copy();
@@ -55,8 +56,8 @@ PhysicalIEJoin::PhysicalIEJoin(PhysicalPlan &physical_plan, LogicalComparisonJoi
 
 	for (idx_t i = 2; i < conditions.size(); ++i) {
 		auto &cond = conditions[i];
-		D_ASSERT(cond.GetLHS().return_type == cond.GetRHS().return_type);
-		join_key_types.push_back(cond.GetLHS().return_type);
+		D_ASSERT(cond.GetLHS().GetReturnType() == cond.GetRHS().GetReturnType());
+		join_key_types.push_back(cond.GetLHS().GetReturnType());
 	}
 }
 
@@ -576,7 +577,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 	auto local_sort_state = sort.GetLocalSinkState(context);
 	vector<LogicalType> types;
 	for (const auto &expr : executor.expressions) {
-		types.emplace_back(expr->return_type);
+		types.emplace_back(expr->GetReturnType());
 	}
 	const idx_t rid_idx = types.size();
 	types.emplace_back(LogicalType::BIGINT);
@@ -598,7 +599,7 @@ idx_t IEJoinUnion::AppendKey(ExecutionContext &context, InterruptState &interrup
 				;
 			} else {
 				scan_count = valid - table_idx;
-				scanned.SetCardinality(scan_count);
+				scanned.SetChildCardinality(scan_count);
 			}
 		}
 		if (scan_count == 0) {
@@ -884,11 +885,11 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 	//		X/X', Y/Y', R/R'/Li
 	// The first position is the sort key.
 	vector<LogicalType> types;
-	types.emplace_back(order2.expression->return_type);
+	types.emplace_back(order2.expression->GetReturnType());
 	types.emplace_back(LogicalType::BIGINT);
 
 	// Sort on the first expression
-	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0U);
+	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->GetReturnType(), 0U);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 	// The goal is to make i (from the left table) < j (from the right table),
@@ -923,7 +924,7 @@ IEJoinGlobalSourceState::IEJoinGlobalSourceState(const PhysicalIEJoin &op, Clien
 
 	// Sort on the first expression
 	orders.clear();
-	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
+	ref = make_uniq<BoundReferenceExpression>(order2.expression->GetReturnType(), 0U);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	l2 = make_uniq<SortedTable>(client, orders, types, op);
@@ -998,10 +999,10 @@ public:
 		for (idx_t i = 2; i < op.conditions.size(); ++i) {
 			const auto &cond = op.conditions[i];
 
-			left_types.push_back(cond.GetLHS().return_type);
+			left_types.push_back(cond.GetLHS().GetReturnType());
 			left_executor.AddExpression(cond.GetLHS());
 
-			right_types.push_back(cond.GetLHS().return_type);
+			right_types.push_back(cond.GetLHS().GetReturnType());
 			right_executor.AddExpression(cond.GetRHS());
 		}
 
@@ -1256,7 +1257,7 @@ void IEJoinLocalSourceState::ExecuteSinkL2Task(ExecutionContext &context, Interr
 
 	auto &op = gsource.op;
 	const auto &order2 = op.lhs_orders[1];
-	auto ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0U);
+	auto ref = make_uniq<BoundReferenceExpression>(order2.expression->GetReturnType(), 0U);
 
 	ExpressionExecutor executor(context.client);
 	executor.AddExpression(*ref);
@@ -1966,7 +1967,7 @@ void IEJoinLocalSourceState::ExecuteLeftTask(ExecutionContext &context, DataChun
 		if (col_idx < left_cols) {
 			chunk.data[col_idx].Reference(lpayload.data[col_idx]);
 		} else {
-			ConstantVector::SetNull(chunk.data[col_idx]);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		}
 	}
 
@@ -1997,7 +1998,7 @@ void IEJoinLocalSourceState::ExecuteRightTask(ExecutionContext &context, DataChu
 	chunk.Reset();
 	for (column_t col_idx = 0; col_idx < chunk.ColumnCount(); ++col_idx) {
 		if (col_idx < left_cols) {
-			ConstantVector::SetNull(chunk.data[col_idx]);
+			ConstantVector::SetNull(chunk.data[col_idx], count_t(count));
 		} else {
 			chunk.data[col_idx].Reference(rpayload.data[col_idx - left_cols]);
 		}

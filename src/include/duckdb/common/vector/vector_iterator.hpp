@@ -10,7 +10,15 @@
 
 #include "duckdb/common/types/vector.hpp"
 
+#include <tuple>
+#include <utility>
+
 namespace duckdb {
+
+//! Returns StructVector::GetEntries(vector) without requiring StructVector to
+//! be complete in this header (avoids a circular include via flat_vector.hpp).
+//! Defined in struct_vector.cpp.
+DUCKDB_API const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector);
 
 class VectorValidityIterator {
 public:
@@ -169,6 +177,139 @@ public:
 private:
 	UnifiedVectorFormat format;
 	const T *data;
+	idx_t count;
+};
+
+//! Specialization of VectorIterator for FlatStruct<Args...>.
+//! Iterates over a struct vector, exposing per-row top-level NULL information
+//! and per-child VectorIterator<T>::ValueEntry access via the compile-time
+//! GetValue<I>() accessor. Supports heterogeneous child types.
+template <class... Args>
+class VectorIterator<VectorStructType<Args...>> {
+private:
+	static_assert(sizeof...(Args) > 0, "FlatStruct must have at least one child type");
+
+	template <idx_t I>
+	using ChildTypeAt = typename std::tuple_element<I, std::tuple<Args...>>::type;
+	template <idx_t I>
+	using ChildIteratorAt = VectorIterator<ChildTypeAt<I>>;
+	template <idx_t I>
+	using ChildEntryAt = typename ChildIteratorAt<I>::ValueEntry;
+
+	using ChildIterators = std::tuple<VectorIterator<Args>...>;
+
+public:
+	static constexpr idx_t WIDTH = sizeof...(Args);
+
+	VectorIterator(const Vector &vector, idx_t count)
+	    : children(MakeChildren(vector, count, std::index_sequence_for<Args...> {})), count(count) {
+		vector.ToUnifiedFormat(count, format);
+	}
+
+public:
+	struct ValueEntry {
+		ValueEntry(const UnifiedVectorFormat &format, const ChildIterators &children, idx_t index)
+		    : format(format), children(children), index(index) {
+			sel_index = format.sel->get_index(index);
+		}
+
+		//! Returns true if the top-level struct entry is not NULL
+		bool IsValid() const {
+			return format.validity.RowIsValid(sel_index);
+		}
+		idx_t GetIndex() const {
+			return index;
+		}
+		//! Returns the ValueEntry for the I-th child at this row
+		template <idx_t I>
+		ChildEntryAt<I> GetChildValue() const {
+			static_assert(I < sizeof...(Args), "FlatStruct child index out of range");
+			return std::get<I>(children)[index];
+		}
+		//! Invokes fun(child_entry) for each child in declaration order.
+		//! For homogeneous structs the lambda's argument can be a concrete
+		//! VectorIterator<T>::ValueEntry; for heterogeneous structs use auto.
+		template <class FUN>
+		void ForEach(FUN &&fun) const {
+			ForEachImpl(std::forward<FUN>(fun), std::index_sequence_for<Args...> {});
+		}
+
+	private:
+		template <class FUN, std::size_t... Is>
+		void ForEachImpl(FUN &&fun, std::index_sequence<Is...>) const {
+			(fun(GetChildValue<Is>()), ...);
+		}
+
+	private:
+		const UnifiedVectorFormat &format;
+		const ChildIterators &children;
+		idx_t sel_index;
+		idx_t index;
+	};
+
+private:
+	template <std::size_t... Is>
+	static ChildIterators MakeChildren(const Vector &vector, idx_t count, std::index_sequence<Is...>) {
+		auto &entries = VectorIteratorGetStructEntries(vector);
+		D_ASSERT(entries.size() >= sizeof...(Is));
+		return ChildIterators(VectorIterator<Args>(entries[Is], count)...);
+	}
+
+	class Iterator {
+	public:
+		Iterator(const UnifiedVectorFormat &format, const ChildIterators &children, idx_t index)
+		    : format(format), children(children), index(index) {
+		}
+
+	public:
+		Iterator &operator++() { // NOLINT: match stl API
+			++index;
+			return *this;
+		}
+		Iterator operator++(int) { // NOLINT: match stl API
+			auto tmp = *this;
+			++index;
+			return tmp;
+		}
+		bool operator==(const Iterator &other) const {
+			return index == other.index;
+		}
+		bool operator!=(const Iterator &other) const {
+			return index != other.index;
+		}
+		ValueEntry operator*() const {
+			return ValueEntry(format, children, index);
+		}
+		ValueEntry operator[](idx_t n) const {
+			return ValueEntry(format, children, index + n);
+		}
+
+	private:
+		const UnifiedVectorFormat &format;
+		const ChildIterators &children;
+		idx_t index;
+	};
+
+public:
+	Iterator begin() { // NOLINT: match stl API
+		return Iterator(format, children, 0);
+	}
+	Iterator end() { // NOLINT: match stl API
+		return Iterator(format, children, count);
+	}
+	idx_t size() const {
+		return count;
+	}
+	ValueEntry operator[](idx_t i) const {
+		return ValueEntry(format, children, i);
+	}
+	bool CanHaveNull() const {
+		return format.validity.CanHaveNull();
+	}
+
+private:
+	UnifiedVectorFormat format;
+	ChildIterators children;
 	idx_t count;
 };
 

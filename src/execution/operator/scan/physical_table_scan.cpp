@@ -57,7 +57,7 @@ public:
 			}
 			input_chunk.Initialize(BufferAllocator::Get(context), input_types);
 			for (idx_t c = 0; c < op.parameters.size(); c++) {
-				input_chunk.data[c].Reference(op.parameters[c]);
+				input_chunk.data[c].Reference(op.parameters[c], count_t(1));
 			}
 			input_chunk.SetCardinality(1);
 		}
@@ -409,6 +409,10 @@ bool PhysicalTableScan::ParallelSource() const {
 		return false;
 	}
 	return true;
+}
+
+TableFunctionParallelism PhysicalTableScan::SourceParallelism() const {
+	return function.parallelism;
 }
 
 InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,

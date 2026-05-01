@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -162,7 +163,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 		auto &target_vector = GetFieldVectorForScan(result, child.vector_index);
 		if (!child.should_scan) {
 			// if we are not scanning this vector - set it to NULL
-			ConstantVector::SetNull(target_vector);
+			ConstantVector::SetNull(target_vector, count_t(target_count));
 			continue;
 		}
 		ScanChild(state, target_vector, [&](Vector &child_result) {
@@ -170,6 +171,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			return scan_count;
 		});
 	}
+	FlatVector::SetSize(result, scan_count);
 	return scan_count;
 }
 

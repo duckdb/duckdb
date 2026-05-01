@@ -1,6 +1,8 @@
 #include "duckdb/optimizer/rule/regex_optimizations.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
@@ -155,12 +157,12 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	auto regexp_bind_data = root.bind_info.get()->Cast<RegexpMatchesBindData>();
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr.return_type);
+	D_ASSERT(constant_value.type() == constant_expr.GetReturnType());
 
 	duckdb_re2::RE2::Options parsed_options = regexp_bind_data.options;
 
 	if (constant_expr.value.IsNull()) {
-		return make_uniq<BoundConstantExpression>(Value(root.return_type));
+		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
 	auto patt_str = StringValue::Get(constant_value);
 
@@ -192,7 +194,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		}
 
 		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(escaped_like_string.like_string)));
-		auto contains = make_uniq<BoundFunctionExpression>(root.return_type, GetStringContains(),
+		auto contains = make_uniq<BoundFunctionExpression>(root.GetReturnType(), GetStringContains(),
 		                                                   std::move(root.children), nullptr);
 		contains->children[1] = std::move(parameter);
 
@@ -213,11 +215,91 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	auto like_expression =
-	    make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetFunction(), std::move(root.children), nullptr);
+	auto like_expression = make_uniq<BoundFunctionExpression>(root.GetReturnType(), LikeFun::GetFunction(),
+	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
 	like_expression->children[1] = std::move(parameter);
 	return std::move(like_expression);
+}
+
+RegexpReplaceExtractRule::RegexpReplaceExtractRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->function = make_uniq<SpecificFunctionMatcher>("regexp_replace");
+	func->policy = SetMatcher::Policy::SOME_ORDERED;
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	root = std::move(func);
+}
+
+static bool RegexpHasWholeTextAnchors(duckdb_re2::Regexp *regexp) {
+	if (regexp->op() != duckdb_re2::kRegexpConcat || regexp->nsub() < 2) {
+		return false;
+	}
+	auto subs = regexp->sub();
+	return subs[0]->op() == duckdb_re2::kRegexpBeginText &&
+	       subs[regexp->nsub() - 1]->op() == duckdb_re2::kRegexpEndText;
+}
+
+// Rewrites `regexp_replace(s, P, '\N')` into `regexp_extract(s, P, N, 'k')` when parsed RE2 anchors
+// prove that any match spans the whole input. The original pattern is preserved; any regexp_extract
+// pattern simplification belongs in a separate optimization.
+unique_ptr<Expression> RegexpReplaceExtractRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                       bool &changes_made, bool is_root) {
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	if (!root.bind_info) {
+		return nullptr;
+	}
+	auto &bind_data = root.bind_info->Cast<RegexpReplaceBindData>();
+	if (!bind_data.constant_pattern || bind_data.global_replace) {
+		return nullptr;
+	}
+	// Literal mode treats `^`/`$` as literal chars, so the shape check below would be meaningless.
+	if (bind_data.options.literal()) {
+		return nullptr;
+	}
+
+	const auto &replace_const = bindings[3].get().Cast<BoundConstantExpression>();
+	if (replace_const.value.IsNull() || replace_const.value.type().id() != LogicalTypeId::VARCHAR) {
+		return nullptr;
+	}
+	const auto &replace_str = StringValue::Get(replace_const.value);
+	int32_t group_index;
+	// Only a bare backreference can be represented by regexp_extract. Replacement literals or
+	// composites such as `x\1`, `\1x`, and `\1\2` must stay on regexp_replace.
+	if (replace_str.size() != 2 || replace_str[0] != '\\' || replace_str[1] < '0' || replace_str[1] > '9') {
+		return nullptr;
+	}
+	group_index = replace_str[1] - '0';
+
+	const auto &pattern = bind_data.constant_string;
+	duckdb_re2::RE2 compiled(duckdb_re2::StringPiece(pattern.c_str(), pattern.size()), bind_data.options);
+	if (!compiled.ok() || !RegexpHasWholeTextAnchors(compiled.Regexp())) {
+		return nullptr;
+	}
+
+	string options_str = "k";
+	if (root.children.size() == 4) {
+		auto &options_const = root.children[3]->Cast<BoundConstantExpression>();
+		if (options_const.value.IsNull() || options_const.value.type().id() != LogicalTypeId::VARCHAR) {
+			return nullptr;
+		}
+		options_str = StringValue::Get(options_const.value) + options_str;
+	}
+
+	vector<unique_ptr<Expression>> extract_children;
+	extract_children.emplace_back(std::move(root.children[0]));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(pattern)));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value::INTEGER(group_index)));
+	extract_children.emplace_back(make_uniq<BoundConstantExpression>(Value(std::move(options_str))));
+
+	FunctionBinder binder(rewriter.context);
+	ErrorData error;
+	auto extract_expr = binder.BindScalarFunction(DEFAULT_SCHEMA, "regexp_extract", std::move(extract_children), error);
+	if (!extract_expr) {
+		return nullptr;
+	}
+	return extract_expr;
 }
 
 } // namespace duckdb

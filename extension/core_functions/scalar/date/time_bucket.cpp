@@ -206,10 +206,9 @@ struct TimeBucket {
 
 	struct OriginTernaryOperator {
 		template <class TA, class TB, class TC, class TR>
-		static inline TR Operation(TA bucket_width, TB ts, TC origin, ValidityMask &mask, idx_t idx) {
+		static inline optional<TR> Operation(TA bucket_width, TB ts, TC origin) {
 			if (!Value::IsFinite(origin)) {
-				mask.SetInvalid(idx);
-				return TR();
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
@@ -315,7 +314,7 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 	    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 		    !Value::IsFinite(*ConstantVector::GetData<T>(origin_arg))) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
 			interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 			TimeBucket::BucketWidthType bucket_width_type = TimeBucket::ClassifyBucketWidth(bucket_width);
@@ -331,7 +330,7 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 				    TimeBucket::OriginWidthConvertibleToMonthsTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
 			case TimeBucket::BucketWidthType::UNCLASSIFIED:
-				TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
+				TernaryExecutor::Execute<interval_t, T, T, T>(
 				    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 				    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 				break;
@@ -340,7 +339,7 @@ void TimeBucketOriginFunction(DataChunk &args, ExpressionState &state, Vector &r
 			}
 		}
 	} else {
-		TernaryExecutor::ExecuteWithNulls<interval_t, T, T, T>(
+		TernaryExecutor::Execute<interval_t, T, T, T>(
 		    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
 		    TimeBucket::OriginTernaryOperator::Operation<interval_t, T, T, T>);
 	}
@@ -364,6 +363,7 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
 	for (auto &func : time_bucket.functions) {
 		func.SetFallible();
+		func.SetArgProperties(1, ArgProperties().NonDecreasing());
 	}
 	return time_bucket;
 }

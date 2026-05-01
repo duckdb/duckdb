@@ -1,0 +1,44 @@
+diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
+index 43039c6..f7d0c24 100644
+--- a/src/spatial/modules/geos/geos_module.cpp
++++ b/src/spatial/modules/geos/geos_module.cpp
+@@ -4,7 +4,7 @@
+ #include "spatial/spatial_types.hpp"
+ #include "spatial/util/function_builder.hpp"
+ 
+-#include "duckdb/common/vector_operations/senary_executor.hpp"
++#include "duckdb/common/vector_operations/variadic_executor.hpp"
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
+@@ -553,7 +553,7 @@ struct ST_Buffer {
+ 	static void ExecuteWithStyle(DataChunk &args, ExpressionState &state, Vector &result) {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 
+-		SenaryExecutor::Execute<string_t, double, int32_t, string_t, string_t, double, string_t>(
++		VariadicExecutor::Execute<string_t, string_t, double, int32_t, string_t, string_t, double>(
+ 		    args, result,
+ 		    [&](const string_t &blob, double radius, int32_t segments, const string_t &cap_style_str,
+ 		        const string_t &join_style_str, double mitre_limit) {
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 4a9e3f6..21dde18 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -14,7 +14,7 @@
+ #include "duckdb/common/vector_operations/generic_executor.hpp"
+ #include "duckdb/execution/expression_executor.hpp"
+ #include "duckdb/planner/expression/bound_function_expression.hpp"
+-#include "duckdb/common/vector_operations/septenary_executor.hpp"
++#include "duckdb/common/vector_operations/variadic_executor.hpp"
+ #include "duckdb/planner/expression/bound_constant_expression.hpp"
+ 
+ #include "spatial/util/distance_extract.hpp"
+@@ -191,7 +191,7 @@ struct ST_Affine {
+ 		auto &lstate = LocalState::ResetAndGet(state);
+ 		auto &alloc = lstate.GetAllocator();
+ 
+-		SeptenaryExecutor::Execute<string_t, double, double, double, double, double, double, string_t>(
++		VariadicExecutor::Execute<string_t, string_t, double, double, double, double, double, double>(
+ 		    args, result,
+ 		    [&](const string_t &geom_blob, const double a, const double b, const double d, const double e,
+ 		        const double xoff, const double yoff) {

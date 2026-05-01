@@ -1,3 +1,4 @@
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -37,13 +38,14 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	parameters.query_location = expr.GetQueryLocation();
 	parameters.cast_source = expr.child.get();
 	parameters.cast_target = expr;
+	const idx_t outer_count = count;
 	bool all_constant = child.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	if (all_constant) {
 		// if the input is constant we only need to cast one value
 		if (ConstantVector::IsNull(child) && result.GetType().id() != LogicalTypeId::UNION) {
 			// if the input is constant NULL the output is always constant NULL
 			// ... except for unions, that are special
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(outer_count));
 			return;
 		}
 		count = 1;
@@ -52,6 +54,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	if (all_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(outer_count));
 }
 
 } // namespace duckdb

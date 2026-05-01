@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, idx_t count)
-    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, count_t count_p)
+    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER, count_p),
       shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
-	v_size = count;
 }
 
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {
@@ -47,8 +46,8 @@ Value ShreddedVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	shredded_subtypes.push_back(make_pair("unshredded", unshredded.GetType()));
 	shredded_subtypes.push_back(make_pair("shredded", shredded.GetType()));
 	Vector new_shredded(LogicalType::STRUCT(std::move(shredded_subtypes)));
-	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val);
-	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val);
+	StructVector::GetEntries(new_shredded)[0].Reference(unshredded_val, count_t(1));
+	StructVector::GetEntries(new_shredded)[1].Reference(shredded_val, count_t(1));
 
 	Vector result_vec(LogicalType::VARIANT(), 1);
 	VariantUtils::UnshredVariantData(new_shredded, result_vec, 1);

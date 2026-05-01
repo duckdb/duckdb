@@ -43,7 +43,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 }
 
 void CompressedStringScanState::Initialize(bool initialize_dictionary) {
-	baseptr = handle->Ptr() + segment.GetBlockOffset();
+	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
