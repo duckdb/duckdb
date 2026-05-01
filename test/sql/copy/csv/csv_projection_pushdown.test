@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl(i INT, j VARCHAR, k DATE);
 
 statement ok

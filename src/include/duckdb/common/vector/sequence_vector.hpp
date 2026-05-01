@@ -14,7 +14,7 @@ namespace duckdb {
 
 class SequenceBuffer : public VectorBuffer {
 public:
-	explicit SequenceBuffer(int64_t start, int64_t increment, idx_t seq_count);
+	explicit SequenceBuffer(int64_t start, int64_t increment, count_t seq_count);
 
 	int64_t start;
 	int64_t increment;

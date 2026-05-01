@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -170,6 +171,7 @@ idx_t StructColumnData::Scan(TransactionData transaction, idx_t vector_index, Co
 			return scan_count;
 		});
 	}
+	FlatVector::SetSize(result, scan_count);
 	return scan_count;
 }
 

@@ -74,7 +74,7 @@ static unique_ptr<BoundCastData> BindToUnionMemberCast(BindCastInput &input, con
 				best_cost = member_cast_cost;
 			}
 			names.emplace_back(member_name);
-			candidates.emplace_back(member_idx, std::move(input.GetCastFunction(source, member_type)), member_type);
+			candidates.emplace_back(member_idx, input.GetCastFunction(source, member_type), member_type);
 		}
 	};
 

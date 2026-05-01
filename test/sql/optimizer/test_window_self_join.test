@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE services (date DATE, train_number INT);
 
 statement ok

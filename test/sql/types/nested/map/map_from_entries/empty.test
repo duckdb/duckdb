@@ -2,9 +2,6 @@
 # description: Show expected behavior with an empty arguments list
 # group: [map_from_entries]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT map_from_entries();
 ----

@@ -36,13 +36,6 @@ public:
 
 	virtual ~FileBuffer();
 
-	BlockAllocator &allocator;
-	//! The buffer that users can write to
-	data_ptr_t buffer;
-	//! The user-facing size of the buffer.
-	//! This is equivalent to internal_size - block_header_size.
-	uint64_t size;
-
 public:
 	//! Read into the FileBuffer from the location.
 	void Read(QueryContext context, FileHandle &handle, uint64_t location);
@@ -53,6 +46,12 @@ public:
 
 	FileBufferType GetBufferType() const {
 		return type;
+	}
+	const_data_ptr_t GetData() const {
+		return buffer;
+	}
+	data_ptr_t GetDataMutable() {
+		return buffer;
 	}
 
 	// Same rules as the constructor. We add room for a header, in addition to
@@ -83,6 +82,12 @@ public:
 	void Initialize(DebugInitialize info);
 
 protected:
+	BlockAllocator &allocator;
+	//! The buffer that users can write to
+	data_ptr_t buffer;
+	//! The user-facing size of the buffer.
+	//! This is equivalent to internal_size - block_header_size.
+	uint64_t size;
 	//! The type of the buffer.
 	FileBufferType type;
 	//! The pointer to the internal buffer that will be read from or written to.

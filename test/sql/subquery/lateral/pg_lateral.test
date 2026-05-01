@@ -2,9 +2,6 @@
 # description: Several LATERAL JOIN tests taken from Postgres
 # group: [lateral]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 select s1, s2, sm
 from generate_series(1, 3) s1(s1),

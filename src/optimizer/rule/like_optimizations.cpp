@@ -139,12 +139,12 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, ScalarFunction function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function,
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
-	auto new_function = make_uniq<BoundFunctionExpression>(expr.GetReturnType(), std::move(function),
-	                                                       std::move(expr.children), nullptr);
+	auto new_function =
+	    make_uniq<BoundFunctionExpression>(expr.GetReturnType(), function, std::move(expr.children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());

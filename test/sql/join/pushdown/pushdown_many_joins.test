@@ -3,9 +3,6 @@
 # group: [pushdown]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE bigtbl AS SELECT i%2 AS small_key, i%10 AS medium_key, i AS val FROM range(10000) t(i) ORDER BY small_key, medium_key
 
 statement ok

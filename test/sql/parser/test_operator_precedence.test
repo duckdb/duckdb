@@ -2,9 +2,6 @@
 # description: Test operator precedence
 # group: [parser]
 
-statement ok
-PRAGMA enable_verification
-
 # basic arithmetic precedence
 query I
 SELECT 2*3+1

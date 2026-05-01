@@ -56,14 +56,14 @@ string CommonTableExpressionMap::ToString() const {
 			result += ", ";
 		}
 		auto &cte = *kv.second;
-		result += KeywordHelper::WriteOptionallyQuoted(kv.first);
+		result += SQLIdentifier(kv.first);
 		if (!cte.aliases.empty()) {
 			result += " (";
 			for (idx_t k = 0; k < cte.aliases.size(); k++) {
 				if (k > 0) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(cte.aliases[k]);
+				result += SQLIdentifier(cte.aliases[k]);
 			}
 			result += ")";
 		}
