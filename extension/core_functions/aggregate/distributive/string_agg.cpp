@@ -167,7 +167,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::StateCombine<StringAggState, StringAggFunction>,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, StringAggBind);
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), StringAggBind);
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);

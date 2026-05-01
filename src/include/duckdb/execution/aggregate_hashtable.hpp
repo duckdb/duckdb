@@ -203,7 +203,7 @@ private:
 		RowOperationsState row_state;
 	} state;
 
-	ClusteredAggregateState clustered_state;
+	ClusteredAggrState clustered_state;
 
 private:
 	//! Disabled the copy constructor

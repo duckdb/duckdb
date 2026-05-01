@@ -62,7 +62,7 @@ protected:
 	//! Owning arena allocators that this HT has data from
 	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
-	ClusteredAggregateState clustered_state;
+	ClusteredAggrState clustered_state;
 
 private:
 	//! Try adding a chunk using the clustered aggregation path. Returns false if not applicable.

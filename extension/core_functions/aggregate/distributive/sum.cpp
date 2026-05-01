@@ -37,43 +37,16 @@ struct ClusteredSumStateCopy : public BASE, public ClusteredStateCopy {
 	}
 };
 
-struct ClusteredRegularAdd {
+template <class ADD_OP>
+struct ClusteredAddOp {
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		local.value += input;
+		ADD_OP::template AddNumber<STATE, INPUT_TYPE>(local, input);
 	}
 
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		local.value += decltype(local.value)(input) * static_cast<decltype(local.value)>(count);
-	}
-};
-
-struct ClusteredAddToHugeint {
-	template <class STATE, class INPUT_TYPE>
-	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		AddToHugeint::AddValue(local.value, uint64_t(input), input >= 0);
-	}
-
-	template <class STATE, class INPUT_TYPE>
-	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Execute(local, input);
-		}
-	}
-};
-
-struct ClusteredHugeintAdd {
-	template <class STATE, class INPUT_TYPE>
-	static void Execute(STATE &local, const INPUT_TYPE &input) {
-		local.value = Hugeint::Add(local.value, input);
-	}
-
-	template <class STATE, class INPUT_TYPE>
-	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Execute(local, input);
-		}
+		ADD_OP::template AddConstant<STATE, INPUT_TYPE>(local, input, count);
 	}
 };
 
@@ -100,7 +73,7 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 };
 
 struct IntegerSumOperation
-    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredRegularAdd> {
+    : public ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 		if (!state.isset) {
@@ -112,8 +85,9 @@ struct IntegerSumOperation
 };
 
 using SumToHugeintOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddToHugeint>;
-using NumericSumOperation = ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredRegularAdd>;
+    ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddOp<AddToHugeint>>;
+using NumericSumOperation =
+    ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredAddOp<RegularAdd>>;
 
 struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	template <class T, class STATE>
@@ -126,7 +100,8 @@ struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	}
 };
 
-using HugeintSumOperation = ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredHugeintAdd>;
+using HugeintSumOperation =
+    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredAddOp<HugeintAdd>>;
 
 template <class T>
 static LogicalType GetValueLogicalType();
@@ -202,7 +177,8 @@ AggregateFunction GetSumAggregateNoOverflow(PhysicalType type) {
 
 AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, SumNoOverflowBind);
+	                       nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
+	                       SumNoOverflowBind);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;

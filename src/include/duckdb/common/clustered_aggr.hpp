@@ -59,7 +59,7 @@ private:
 };
 
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
-struct ClusteredAggregateState {
+struct ClusteredAggrState {
 	unsafe_unique_array<sel_t> arena;
 	unsafe_unique_array<sel_t *> left_cursor;
 	unsafe_unique_array<sel_t *> right_cursor;

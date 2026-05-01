@@ -144,13 +144,13 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 	return composed_sel_data;
 }
 
-void ClusteredAggregateState::Initialize(idx_t n_groups) {
+void ClusteredAggrState::Initialize(idx_t n_groups) {
 	arena = make_unsafe_uniq_array_uninitialized<sel_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
 	left_cursor = make_unsafe_uniq_array<sel_t *>(n_groups);
 	right_cursor = make_unsafe_uniq_array<sel_t *>(n_groups);
 }
 
-bool ClusteredAggregateState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
+bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
 	return arena && clustered.TryClustered(group_ids, count, arena.get(), left_cursor.get(), right_cursor.get());
 }
 } // namespace duckdb

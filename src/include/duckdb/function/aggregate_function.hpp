@@ -205,6 +205,9 @@ public:
 	static constexpr aggregate_cluster_update_t NoClusterUpdate() {
 		return nullptr;
 	}
+	static constexpr bind_aggregate_function_t NoBind() {
+		return nullptr;
+	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
@@ -529,7 +532,7 @@ public:
 	template <class OP, class = void>
 	struct HasClusteredOperation : std::false_type {};
 	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOperation<int32_t, int32_t, OP>)>>
+	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
 	    : std::true_type {};
 
 	template <class STATE, class INPUT_TYPE, class OP>
@@ -641,7 +644,7 @@ public:
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryClustUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
+		AggregateExecutor::UnartClusteredUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

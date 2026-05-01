@@ -163,8 +163,8 @@ struct CountFunction : public BaseCountFunction {
 	}
 
 	template <bool SIMPLE_DICT>
-	static void CountClusteredDictionary(Vector &input, const ClusteredAggr &clustered, idx_t count,
-	                                     const sel_t *cluster_iter = nullptr) {
+	static void CountClusteredDict(Vector &input, const ClusteredAggr &clustered, idx_t count,
+	                               const sel_t *cluster_iter = nullptr) {
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 		if constexpr (SIMPLE_DICT) {
@@ -192,7 +192,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		auto *cluster_iter = clustered.ClusterIter(inputs[0], count);
 		if (cluster_iter) {
-			CountClusteredDictionary<true>(inputs[0], clustered, count, cluster_iter);
+			CountClusteredDict<true>(inputs[0], clustered, count, cluster_iter);
 			return;
 		}
 		CountScatterClusteredGeneric(inputs[0], clustered, count);
@@ -207,7 +207,7 @@ struct CountFunction : public BaseCountFunction {
 			auto &cs = *aggr_input_data.clustered;
 			auto *cluster_iter = cs.ClusterIter(inputs[0], count);
 			if (cluster_iter) {
-				CountClusteredDictionary<true>(inputs[0], cs, count, cluster_iter);
+				CountClusteredDict<true>(inputs[0], cs, count, cluster_iter);
 				return;
 			}
 			CountScatterClusteredGeneric(inputs[0], cs, count);

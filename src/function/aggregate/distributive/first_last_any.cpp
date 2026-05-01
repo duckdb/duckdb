@@ -73,9 +73,8 @@ struct FirstFunction : public FirstFunctionBase {
 	// Clustered early-exit: first/any_value scan forward and stop at the first valid value;
 	// last scans backward and stops at the first valid value from the end.
 	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
-	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, const sel_t *sel,
-	                                       const SelectionVector &isel, const ValidityMask &validity, idx_t pos,
-	                                       idx_t end) {
+	static void ClusteredOpInternal(STATE_TYPE &state, const INPUT_TYPE *vals, const sel_t *sel,
+	                                const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
 		if (!LAST && state.is_set) {
 			return;
 		}
@@ -97,13 +96,12 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
-	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
-	                               const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
-	                               idx_t pos, idx_t end) {
+	static void ClusteredOp(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input, const sel_t *sel,
+	                        const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
 		if (validity.CanHaveNull()) {
-			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, sel, isel, validity, pos, end);
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, sel, isel, validity, pos, end);
 		} else {
-			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, sel, isel, validity, pos, end);
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, sel, isel, validity, pos, end);
 		}
 	}
 
@@ -186,31 +184,28 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 
 	template <class INPUT_TYPE, class STATE_TYPE, class OP, bool ALL_VALID>
-	static void ClusteredOperationInternal(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
-	                                       const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
-	                                       idx_t pos, idx_t end) {
+	static void ClusteredOpInternal(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input,
+	                                const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
+	                                idx_t pos, idx_t end) {
 		if (!LAST && state.is_set) {
 			return;
 		}
 		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
 			auto idx = isel.get_index(sel ? sel[k] : k);
 			bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
-			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
-			                                                                         vals[idx], is_null);
+			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, input.input, vals[idx],
+			                                                                         is_null);
 			return state.is_set;
 		});
 	}
 
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
-	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
-	                               const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
-	                               idx_t pos, idx_t end) {
+	static void ClusteredOp(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &input, const sel_t *sel,
+	                        const SelectionVector &isel, const ValidityMask &validity, idx_t pos, idx_t end) {
 		if (validity.CanHaveNull()) {
-			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, unary_input, sel, isel, validity,
-			                                                              pos, end);
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, input, sel, isel, validity, pos, end);
 		} else {
-			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, unary_input, sel, isel, validity,
-			                                                             pos, end);
+			ClusteredOpInternal<INPUT_TYPE, STATE_TYPE, OP, true>(state, vals, input, sel, isel, validity, pos, end);
 		}
 	}
 
@@ -325,7 +320,7 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
 		const auto *run_sel = clustered.group_runs[r].sel;
 		const auto run_count = clustered.group_runs[r].count;
-		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOperation<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
+		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
 		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}
 }
