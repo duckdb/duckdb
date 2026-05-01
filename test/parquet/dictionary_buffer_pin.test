@@ -1,0 +1,35 @@
+# name: test/parquet/dictionary_buffer_pin.test
+# description: Ensure dictionary-encoded string values survive page buffer reuse
+# group: [parquet]
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/extension/parquet/parquet.duckdb_extension';
+
+statement ok
+CREATE TABLE dict_buffer_ref AS
+SELECT CASE WHEN i % 2 = 0 THEN repeat('a', 512) ELSE repeat('b', 512) END AS s
+FROM range(20000) t(i);
+
+statement ok
+COPY dict_buffer_ref TO '{TEST_DIR}/dictionary_buffer_pin.parquet'
+  (FORMAT PARQUET, ROW_GROUP_SIZE 20000, PARQUET_VERSION v1);
+
+query I
+SELECT first(encodings) FROM parquet_metadata('{TEST_DIR}/dictionary_buffer_pin.parquet') GROUP BY encodings;
+----
+PLAIN_DICTIONARY
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/dictionary_buffer_pin.parquet') WHERE s = repeat('a', 512);
+----
+10000
+
+query I
+SELECT COUNT(*) FROM parquet_scan('{TEST_DIR}/dictionary_buffer_pin.parquet') WHERE s = repeat('b', 512);
+----
+10000
+
+query I
+SELECT COUNT(*) FROM (SELECT DISTINCT s FROM parquet_scan('{TEST_DIR}/dictionary_buffer_pin.parquet')) t;
+----
+2

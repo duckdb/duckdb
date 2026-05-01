@@ -431,9 +431,13 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
 		block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
-	} else {
-		block->resize(GetAllocator(), size);
+		return;
 	}
+	if (Type().InternalType() == PhysicalType::VARCHAR && block.use_count() > 1) {
+		block = make_shared_ptr<ResizeableBuffer>(GetAllocator(), size);
+		return;
+	}
+	block->resize(GetAllocator(), size);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
