@@ -333,7 +333,7 @@ private:
 
 public:
 	VectorIterator(const Vector &vector, idx_t count)
-	    : count(count), child_iter(VectorIteratorGetListChild(vector), VectorIteratorGetListSize(vector)) {
+	    : child_iter(VectorIteratorGetListChild(vector), VectorIteratorGetListSize(vector)), count(count) {
 		vector.ToUnifiedFormat(count, format);
 		list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 	}
