@@ -50,11 +50,7 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
 		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
-		if (aggr.bind_info) {
-			bind_data.push_back(aggr.bind_info->Copy());
-		} else {
-			bind_data.push_back(nullptr);
-		}
+		bind_data.push_back(aggr.bind_info ? aggr.bind_info->Copy() : nullptr);
 		destructors.push_back(aggr.function.GetStateDestructorCallback());
 #ifdef DEBUG
 		counts[i] = 0;

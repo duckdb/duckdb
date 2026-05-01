@@ -410,7 +410,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 		auto fun = AggregateFunction(
 		    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 		    OP::Update, AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-		    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OP::Bind,
+		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(), OP::Bind,
 		    LAST ? AggregateFunction::StateDestroy<STATE, OP> : nullptr, nullptr, nullptr);
 		fun.SetStructStateExport(GetFirstStateType);
 		return fun;
