@@ -115,36 +115,33 @@ void ClusteredAggr::AdvanceStates(idx_t payload_size) {
 }
 
 const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const {
-	switch (input.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR: {
-		auto &child = DictionaryVector::Child(input);
-		if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
-			return nullptr;
-		}
-		auto &dict_sel = DictionaryVector::SelVector(input);
-		const sel_t *dict_data = dict_sel.data();
-		if (dict_data == nullptr) {
-			return nullptr;
-		}
-		if (cached_dict_sel == dict_data) {
-			return composed_sel_data;
-		}
-		idx_t pos = 0;
-		for (idx_t r = 0; r < n_group_runs; r++) {
-			const auto *run_sel = group_runs[r].sel;
-			const auto run_count = group_runs[r].count;
-			for (idx_t k = 0; k < run_count; k++) {
-				auto idx = run_sel ? run_sel[k] : k;
-				composed_sel_data[pos + k] = dict_data[idx];
-			}
-			pos += run_count;
-		}
-		cached_dict_sel = dict_data;
-		return composed_sel_data;
-	}
-	default:
+	if (input.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
 		return nullptr;
 	}
+	auto &child = DictionaryVector::Child(input);
+	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
+		return nullptr;
+	}
+	auto &dict_sel = DictionaryVector::SelVector(input);
+	const sel_t *dict_data = dict_sel.data();
+	if (dict_data == nullptr) {
+		return nullptr;
+	}
+	if (cached_dict_sel == dict_data) {
+		return composed_sel_data;
+	}
+	idx_t pos = 0;
+	for (idx_t r = 0; r < n_group_runs; r++) {
+		const auto *run_sel = group_runs[r].sel;
+		const auto run_count = group_runs[r].count;
+		for (idx_t k = 0; k < run_count; k++) {
+			auto idx = run_sel ? run_sel[k] : k;
+			composed_sel_data[pos + k] = dict_data[idx];
+		}
+		pos += run_count;
+	}
+	cached_dict_sel = dict_data;
+	return composed_sel_data;
 }
 
 void ClusteredAggregateState::Initialize(idx_t n_groups) {
