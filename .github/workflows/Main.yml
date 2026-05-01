@@ -287,7 +287,7 @@ jobs:
       FORCE_ASSERT: 1
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
-      EXTENSIONS_STATIC_BUILD: 0
+      EXTENSION_STATIC_BUILD: 0
 
     steps:
     - name: "Checkout"
