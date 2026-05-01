@@ -581,7 +581,8 @@ private:
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_RESERVED) ||
-			    keyword_helper.KeywordCategoryType(token_text, GetBannedCategory())) {
+			    (keyword_helper.KeywordCategoryType(token_text, GetBannedCategory()) &&
+			     !keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_TYPE_NAME))) {
 				return false;
 			}
 			break;
