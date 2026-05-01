@@ -30,7 +30,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout_ptr->GetRowWidth();
 
 	if (clustered_state.any_clustered) {
-		clustered_state.Initialize(total_groups);
+		clustered_state.Initialize();
 	}
 
 	// allocate and null initialize the data
@@ -185,7 +185,7 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 	if (!clustered_state.TryBuild(clustered, group_ids_ptr, count)) {
 		return false;
 	}
-	clustered.InitializeStates([&](uint16_t gid) {
+	clustered.InitializeStates([&](uint64_t gid) {
 		auto group_id = static_cast<idx_t>(gid);
 		group_is_set[group_id] = true;
 		return data + group_id * tuple_size;

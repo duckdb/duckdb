@@ -6,41 +6,46 @@
 
 namespace duckdb {
 
-bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, sel_t **left_cursor,
-                                 sel_t **right_cursor) {
+bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, Slot *slots) {
 	// Partition tuple indices 0..count-1 into contiguous, ascending runs per group.
 	//
 	// Each group gets an arena slot with two cursors starting at the center:
-	//   left_cursor  grows downward ← writes indices from the first half (in reverse)
-	//   right_cursor grows upward  → writes indices from the second half (forward)
+	//   left grows downward ← writes indices from the first half (in reverse)
+	//   right grows upward  → writes indices from the second half (forward)
 	//
 	// We scan the input from both ends toward the middle simultaneously, so the two
 	// cursor streams are independent and can execute with higher IPC. After the scan,
-	// left_cursor[gid]..right_cursor[gid] is a single contiguous, ascending sequence
+	// left..right is a single contiguous, ascending sequence
 	// because the left half was visited in descending index order and pushed downward.
 	constexpr idx_t BUCKET_CAP = STANDARD_VECTOR_SIZE;
 	constexpr idx_t CENTER_OFFSET = STANDARD_VECTOR_SIZE / 2;
+	static_assert((HASH_SLOTS & (HASH_SLOTS - 1)) == 0, "ClusteredAggr::HASH_SLOTS must be a power of two");
 
-	sel_t seen_group_ids[MAX_GROUPS];
+	idx_t seen_slots[MAX_GROUPS];
 	idx_t n_seen = 0;
 	sel_t *next_slot = arena;
 	sel_t *const arena_end = arena + MAX_GROUPS * BUCKET_CAP;
 
-	auto allocate_slot = [&](uint64_t gid) {
+	auto get_slot = [&](uint64_t gid) -> Slot * {
+		return &slots[gid & (HASH_SLOTS - 1)];
+	};
+	auto allocate_slot = [&](Slot &slot, uint64_t gid) {
 		if (next_slot == arena_end) {
 			return false;
 		}
 		sel_t *center = next_slot + CENTER_OFFSET;
-		left_cursor[gid] = center;
-		right_cursor[gid] = center;
+		slot.left = center;
+		slot.right = center;
+		slot.gid = gid;
 		next_slot += BUCKET_CAP;
-		seen_group_ids[n_seen++] = static_cast<sel_t>(gid);
+		seen_slots[n_seen++] = gid & (HASH_SLOTS - 1);
 		return true;
 	};
 	auto bail_out = [&]() {
 		for (idx_t i = 0; i < n_seen; i++) {
-			left_cursor[seen_group_ids[i]] = nullptr;
-			right_cursor[seen_group_ids[i]] = nullptr;
+			auto &slot = slots[seen_slots[i]];
+			slot.left = nullptr;
+			slot.right = nullptr;
 		}
 		n_group_runs = 0;
 		return false;
@@ -53,46 +58,55 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *
 		const idx_t j_right = half + i;    // scans half..count-1 forward
 		const auto gid_left = group_ids[j_left];
 		const auto gid_right = group_ids[j_right];
-		if (left_cursor[gid_left] == nullptr) {
-			if (!allocate_slot(gid_left)) {
+		auto &slot_left = *get_slot(gid_left);
+		auto &slot_right = *get_slot(gid_right);
+		if (slot_left.left == nullptr) {
+			if (!allocate_slot(slot_left, gid_left)) {
 				return bail_out();
 			}
+		} else if (slot_left.gid != gid_left) {
+			return bail_out();
 		}
-		if (right_cursor[gid_right] == nullptr) {
-			if (!allocate_slot(gid_right)) {
+		if (slot_right.right == nullptr) {
+			if (!allocate_slot(slot_right, gid_right)) {
 				return bail_out();
 			}
+		} else if (slot_right.gid != gid_right) {
+			return bail_out();
 		}
 		// The two cursor updates are independent (different groups or different
 		// directions within the same slot), giving the CPU two parallel store chains.
-		left_cursor[gid_left]--;
-		left_cursor[gid_left][0] = static_cast<sel_t>(j_left);
-		right_cursor[gid_right][0] = static_cast<sel_t>(j_right);
-		right_cursor[gid_right]++;
+		slot_left.left--;
+		slot_left.left[0] = static_cast<sel_t>(j_left);
+		slot_right.right[0] = static_cast<sel_t>(j_right);
+		slot_right.right++;
 	}
 	// Handle the odd element if count is odd.
 	for (idx_t j = 2 * half; j < count; j++) {
 		const auto gid = group_ids[j];
-		if (right_cursor[gid] == nullptr) {
-			if (!allocate_slot(gid)) {
+		auto &slot = *get_slot(gid);
+		if (slot.right == nullptr) {
+			if (!allocate_slot(slot, gid)) {
 				return bail_out();
 			}
+		} else if (slot.gid != gid) {
+			return bail_out();
 		}
-		right_cursor[gid][0] = static_cast<sel_t>(j);
-		right_cursor[gid]++;
+		slot.right[0] = static_cast<sel_t>(j);
+		slot.right++;
 	}
 
 	// Publish each group's contiguous run and reset the cursor tables for reuse.
 	for (idx_t i = 0; i < n_seen; i++) {
-		const sel_t gid = seen_group_ids[i];
-		const sel_t *run_begin = left_cursor[gid];
-		const sel_t *run_end = right_cursor[gid];
+		auto &slot = slots[seen_slots[i]];
+		const sel_t *run_begin = slot.left;
+		const sel_t *run_end = slot.right;
 		const idx_t run_len = static_cast<idx_t>(run_end - run_begin);
 		group_runs[i].sel = run_begin;
 		group_runs[i].count = run_len;
-		group_runs[i].gid = static_cast<uint16_t>(gid);
-		left_cursor[gid] = nullptr;
-		right_cursor[gid] = nullptr;
+		group_runs[i].gid = slot.gid;
+		slot.left = nullptr;
+		slot.right = nullptr;
 	}
 	n_group_runs = n_seen;
 	cached_dict_sel = nullptr;
@@ -144,13 +158,28 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 	return composed_sel_data;
 }
 
-void ClusteredAggrState::Initialize(idx_t n_groups) {
+void ClusteredAggrState::Initialize() {
 	arena = make_unsafe_uniq_array_uninitialized<sel_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
-	left_cursor = make_unsafe_uniq_array<sel_t *>(n_groups);
-	right_cursor = make_unsafe_uniq_array<sel_t *>(n_groups);
+	slots = make_unsafe_uniq_array<ClusteredAggr::Slot>(ClusteredAggr::HASH_SLOTS);
+	skipped_opportunities = 0;
+	retry_backoff = 1;
 }
 
 bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
-	return arena && clustered.TryClustered(group_ids, count, arena.get(), left_cursor.get(), right_cursor.get());
+	if (!arena) {
+		return false;
+	}
+	if (skipped_opportunities > 0) {
+		skipped_opportunities--;
+		return false;
+	}
+	if (clustered.TryClustered(group_ids, count, arena.get(), slots.get())) {
+		skipped_opportunities = 0;
+		retry_backoff = 1;
+		return true;
+	}
+	skipped_opportunities = retry_backoff;
+	retry_backoff = MinValue<idx_t>(NumericLimits<idx_t>::Maximum() / 2, retry_backoff) * 2;
+	return false;
 }
 } // namespace duckdb

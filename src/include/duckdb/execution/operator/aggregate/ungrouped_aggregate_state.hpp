@@ -68,6 +68,8 @@ public:
 	ArenaAllocator &allocator;
 	//! The local aggregate state
 	UngroupedAggregateState state;
+	//! Reusable flat state-pointer vector for generic update callbacks
+	Vector repeated_state_vector;
 
 public:
 	void Sink(DataChunk &payload_chunk, idx_t payload_idx, idx_t aggr_idx);

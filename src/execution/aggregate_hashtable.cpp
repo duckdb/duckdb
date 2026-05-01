@@ -51,7 +51,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
 	clustered_state.any_clustered = AnyAggregatesClustered(aggregate_objects_p);
 	if (clustered_state.any_clustered) {
-		clustered_state.Initialize(InitialCapacity());
+		clustered_state.Initialize();
 	}
 
 	// Append hash column to the end and initialise the row layout
@@ -547,7 +547,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 
 bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter,
                                                           bool ht_offsets_valid) {
-	if (skip_lookups || !ht_offsets_valid || capacity > InitialCapacity()) {
+	if (skip_lookups || !ht_offsets_valid) {
 		return false;
 	}
 	ClusteredAggr clustered;
@@ -555,7 +555,7 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 		return false;
 	}
 	const auto aggr_offset = layout_ptr->GetAggrOffset();
-	clustered.InitializeStates([&](uint16_t gid) {
+	clustered.InitializeStates([&](uint64_t gid) {
 		auto slot = static_cast<idx_t>(gid);
 		return entries[slot].GetPointer() + aggr_offset;
 	});

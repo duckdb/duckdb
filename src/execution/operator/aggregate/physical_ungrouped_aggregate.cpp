@@ -227,7 +227,8 @@ void UngroupedAggregateExecuteState::Sink(LocalUngroupedAggregateState &state, D
 // Local State
 //===--------------------------------------------------------------------===//
 LocalUngroupedAggregateState::LocalUngroupedAggregateState(GlobalUngroupedAggregateState &gstate)
-    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions) {
+    : allocator(gstate.CreateAllocator()), state(gstate.state.aggregate_expressions),
+      repeated_state_vector(LogicalType::POINTER) {
 }
 
 class UngroupedAggregateLocalSinkState : public LocalSinkState {
@@ -370,12 +371,15 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 		aggr_input_data.clustered = &clustered;
 		cluster_update(start_of_input, aggr_input_data, payload_cnt, clustered, payload_chunk.size());
 	} else {
-		Vector agg_state_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())),
-		                     count_t(payload_chunk.size()));
-		agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-		agg_state_vec.Flatten(payload_chunk.size());
-		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, agg_state_vec,
-		                                            payload_chunk.size());
+		auto count = payload_chunk.size();
+		auto state_ptr = CastPointerToValue(state.aggregate_data[aggr_idx].get());
+		auto state_data = FlatVector::GetDataMutable<uintptr_t>(repeated_state_vector);
+		for (idx_t i = 0; i < count; i++) {
+			state_data[i] = state_ptr;
+		}
+		FlatVector::SetSize(repeated_state_vector, count_t(count));
+		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, repeated_state_vector,
+		                                            count);
 	}
 }
 
