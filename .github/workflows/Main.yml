@@ -433,10 +433,6 @@ jobs:
       if: ${{ github.event_name == 'pull_request' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
-    - name: Tidy Check
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
     - name: Tidy Check (clangd)
       run: |
         mkdir -p ~/.config/clangd
