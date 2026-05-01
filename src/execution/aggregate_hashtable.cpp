@@ -555,10 +555,10 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 		return false;
 	}
 	const auto aggr_offset = layout_ptr->GetAggrOffset();
-	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto slot = static_cast<idx_t>(clustered.group_id_per_run[r]);
-		clustered.group_runs[r].state = entries[slot].GetPointer() + aggr_offset;
-	}
+	clustered.InitializeStates([&](uint16_t gid) {
+		auto slot = static_cast<idx_t>(gid);
+		return entries[slot].GetPointer() + aggr_offset;
+	});
 
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();

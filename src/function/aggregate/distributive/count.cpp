@@ -151,13 +151,15 @@ struct CountFunction : public BaseCountFunction {
 	static void CountScatterClusteredGeneric(Vector &input, const ClusteredAggr &cs, idx_t count) {
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto &validity = FlatVector::Validity(input);
-			CountClusteredRuns(cs, validity, [&](const sel_t *run_sel, idx_t, idx_t k) { return run_sel[k]; });
+			CountClusteredRuns(cs, validity,
+			                   [&](const sel_t *run_sel, idx_t, idx_t k) { return run_sel ? run_sel[k] : k; });
 			return;
 		}
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
-		CountClusteredRuns(cs, idata.validity,
-		                   [&](const sel_t *run_sel, idx_t, idx_t k) { return idata.sel->get_index(run_sel[k]); });
+		CountClusteredRuns(cs, idata.validity, [&](const sel_t *run_sel, idx_t, idx_t k) {
+			return idata.sel->get_index(run_sel ? run_sel[k] : k);
+		});
 	}
 
 	template <bool SIMPLE_DICT>
@@ -169,14 +171,25 @@ struct CountFunction : public BaseCountFunction {
 			CountClusteredRuns(clustered, idata.validity,
 			                   [&](const sel_t *, idx_t pos, idx_t k) { return cluster_iter[pos + k]; });
 		} else {
-			CountClusteredRuns(clustered, idata.validity,
-			                   [&](const sel_t *run_sel, idx_t, idx_t k) { return idata.sel->get_index(run_sel[k]); });
+			CountClusteredRuns(clustered, idata.validity, [&](const sel_t *run_sel, idx_t, idx_t k) {
+				return idata.sel->get_index(run_sel ? run_sel[k] : k);
+			});
 		}
 	}
 
 	static void CountClusterUpdate(Vector inputs[], AggregateInputData &, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 1);
+		if (inputs[0].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			if (ConstantVector::IsNull(inputs[0])) {
+				return;
+			}
+			for (idx_t r = 0; r < clustered.n_group_runs; r++) {
+				auto &state = *reinterpret_cast<STATE *>(clustered.group_runs[r].state);
+				state += UnsafeNumericCast<STATE>(clustered.group_runs[r].count);
+			}
+			return;
+		}
 		auto *cluster_iter = clustered.ClusterIter(inputs[0], count);
 		if (cluster_iter) {
 			CountClusteredDictionary<true>(inputs[0], clustered, count, cluster_iter);
@@ -238,7 +251,6 @@ struct CountFunction : public BaseCountFunction {
 			}
 		}
 	}
-
 };
 
 LogicalType GetCountStateType(const AggregateFunction &function) {

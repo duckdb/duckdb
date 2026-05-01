@@ -74,8 +74,8 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 
 void RowOperations::UpdateStatesClustered(RowOperationsState &state, vector<AggregateObject> &aggregates,
                                           AggregateFilterDataSet *filter_set, const unsafe_vector<idx_t> *filter,
-                                          Vector &addresses, DataChunk &payload, idx_t count,
-                                          ClusteredAggr &clustered, bool skip_addresses) {
+                                          Vector &addresses, DataChunk &payload, idx_t count, ClusteredAggr &clustered,
+                                          bool skip_addresses) {
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {

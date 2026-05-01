@@ -142,6 +142,13 @@ struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateC
 			OP::template Execute<INPUT_TYPE>(local, input);
 		}
 	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
+	}
 };
 
 struct BitAndOperation : public NumericBitwiseOperation<BitAndOperation> {
@@ -159,9 +166,21 @@ struct BitOrOperation : public NumericBitwiseOperation<BitOrOperation> {
 };
 
 struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
+	using NumericBitwiseOperation<BitXorOperation>::UpdateClusteredLocal;
+
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
 		state.value ^= typename STATE::TYPE(input);
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if ((count & 1) != 0) {
+			NumericBitwiseOperation<BitXorOperation>::template UpdateClusteredLocal<INPUT_TYPE>(local, input);
+		} else if (count != 0 && !local.is_set) {
+			local.value = typename STATE::TYPE(0);
+			local.is_set = true;
+		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>

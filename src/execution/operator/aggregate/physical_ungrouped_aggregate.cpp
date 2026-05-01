@@ -49,7 +49,11 @@ UngroupedAggregateState::UngroupedAggregateState(const vector<unique_ptr<Express
 		auto state = make_unsafe_uniq_array_uninitialized<data_t>(aggr.function.GetStateSizeCallback()(aggr.function));
 		aggr.function.GetStateInitCallback()(aggr.function, state.get());
 		aggregate_data.push_back(std::move(state));
-		bind_data.push_back(aggr.bind_info.get());
+		if (aggr.bind_info) {
+			bind_data.push_back(aggr.bind_info->Copy());
+		} else {
+			bind_data.push_back(nullptr);
+		}
 		destructors.push_back(aggr.function.GetStateDestructorCallback());
 #ifdef DEBUG
 		counts[i] = 0;
@@ -66,13 +70,14 @@ UngroupedAggregateState::~UngroupedAggregateState() {
 		state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 		ArenaAllocator allocator(Allocator::DefaultAllocator());
-		AggregateInputData aggr_input_data(bind_data[i], allocator);
+		AggregateInputData aggr_input_data(bind_data[i].get(), allocator);
 		destructors[i](state_vector, aggr_input_data, 1);
 	}
 }
 
 void UngroupedAggregateState::Move(UngroupedAggregateState &other) {
 	other.aggregate_data = std::move(aggregate_data);
+	other.bind_data = std::move(bind_data);
 	other.destructors = std::move(destructors);
 }
 
@@ -360,7 +365,7 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	idx_t payload_cnt = aggregate.children.size();
 	D_ASSERT(payload_idx + payload_cnt <= payload_chunk.data.size());
 	auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
-	AggregateInputData aggr_input_data(state.bind_data[aggr_idx], allocator);
+	AggregateInputData aggr_input_data(state.bind_data[aggr_idx].get(), allocator);
 	auto cluster_update = aggregate.function.GetStateClusterUpdateCallback();
 	if (cluster_update) {
 		ClusteredAggr clustered;

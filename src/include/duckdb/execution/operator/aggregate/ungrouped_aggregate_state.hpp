@@ -29,7 +29,7 @@ public:
 	//! The aggregate values
 	vector<unsafe_unique_array<data_t>> aggregate_data;
 	//! The bind data
-	vector<optional_ptr<FunctionData>> bind_data;
+	vector<unique_ptr<FunctionData>> bind_data;
 	//! The destructors
 	vector<aggregate_destructor_t> destructors;
 	//! Counts (used for verification)

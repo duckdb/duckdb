@@ -80,7 +80,7 @@ struct FirstFunction : public FirstFunctionBase {
 			return;
 		}
 		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
-			auto idx = isel.get_index(sel[k]);
+			auto idx = isel.get_index(sel ? sel[k] : k);
 			if (ALL_VALID || validity.RowIsValidUnsafe(idx)) {
 				state.is_set = true;
 				state.is_null = false;
@@ -99,8 +99,7 @@ struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
 	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
 	                               const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
-	                               idx_t pos,
-	                               idx_t end) {
+	                               idx_t pos, idx_t end) {
 		if (validity.CanHaveNull()) {
 			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, sel, isel, validity, pos, end);
 		} else {
@@ -194,10 +193,10 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 			return;
 		}
 		ScanClusterRange<LAST>(pos, end, [&](idx_t k) {
-			auto idx = isel.get_index(sel[k]);
+			auto idx = isel.get_index(sel ? sel[k] : k);
 			bool is_null = ALL_VALID ? false : !validity.RowIsValidUnsafe(idx);
-			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input, vals[idx],
-			                                                                         is_null);
+			FirstFunctionStringBase<LAST, SKIP_NULLS>::template SetValue<STATE_TYPE>(state, unary_input.input,
+			                                                                         vals[idx], is_null);
 			return state.is_set;
 		});
 	}
@@ -205,8 +204,7 @@ struct FirstFunctionString : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	template <class INPUT_TYPE, class STATE_TYPE, class OP>
 	static void ClusteredOperation(STATE_TYPE &state, const INPUT_TYPE *vals, AggregateUnaryInput &unary_input,
 	                               const sel_t *sel, const SelectionVector &isel, const ValidityMask &validity,
-	                               idx_t pos,
-	                               idx_t end) {
+	                               idx_t pos, idx_t end) {
 		if (validity.CanHaveNull()) {
 			ClusteredOperationInternal<INPUT_TYPE, STATE_TYPE, OP, false>(state, vals, unary_input, sel, isel, validity,
 			                                                              pos, end);
@@ -334,15 +332,13 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 
 template <class T, bool LAST, bool SKIP_NULLS>
 AggregateFunction GetFirstAggregateTemplated(const LogicalType &type) {
-	auto result = AggregateFunction({type}, type, AggregateFunction::StateSize<FirstState<T>>,
-	                                AggregateFunction::StateInitialize<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
-	                                AggregateFunction::UnaryScatterUpdate<FirstState<T>, T,
-	                                                                     FirstFunction<LAST, SKIP_NULLS>>,
-	                                AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
-	                                AggregateFunction::StateFinalize<FirstState<T>, T,
-	                                                                 FirstFunction<LAST, SKIP_NULLS>>,
-	                                FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                                FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
+	auto result =
+	    AggregateFunction({type}, type, AggregateFunction::StateSize<FirstState<T>>,
+	                      AggregateFunction::StateInitialize<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::UnaryScatterUpdate<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateCombine<FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>,
+	                      AggregateFunction::StateFinalize<FirstState<T>, T, FirstFunction<LAST, SKIP_NULLS>>,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, FirstFunctionClusterUpdate<T, LAST, SKIP_NULLS>);
 	result.SetStructStateExport(GetFirstStateType);
 	return result;
 }

@@ -886,14 +886,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
 	}
 
-	auto export_function =
-	    AggregateFunction("aggregate_state_export_" + bound_function.name, bound_function.GetArguments(), return_type,
-	                      bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
-	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
-	                      ExportAggregateFinalize, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                      bound_function.GetStateClusterUpdateCallback(),
-	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	                      /* can't propagate statistics */ nullptr, nullptr);
+	auto export_function = AggregateFunction(
+	    "aggregate_state_export_" + bound_function.name, bound_function.GetArguments(), return_type,
+	    bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	    bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
+	    /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
+	    /* can't propagate statistics */ nullptr, nullptr);
 	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
 	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
@@ -962,11 +961,11 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
-	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
-	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
-	                                  FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  CombineAggrBind, nullptr, nullptr, nullptr);
-	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	auto function =
+	    AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE, nullptr,
+	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
 

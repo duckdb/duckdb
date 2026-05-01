@@ -480,7 +480,7 @@ struct SortedAggregateFunction {
 				order_state->sel.Initialize(sel_data.data() + order_state->offset, count - order_state->offset);
 				start += order_state->nsel;
 			}
-			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(sidx);
+			sel_data[order_state->offset++] = UnsafeNumericCast<sel_t>(i);
 		}
 
 		// Append nonempty slices to the arguments
@@ -618,7 +618,8 @@ struct SortedAggregateFunction {
 						ClusteredAggr clustered;
 						clustered.SetSingleRun(agg_state.data(), sliced.size());
 						aggr_bind_info.clustered = &clustered;
-						cluster_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), clustered, sliced.size());
+						cluster_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), clustered,
+						               sliced.size());
 						aggr_bind_info.clustered = nullptr;
 					} else {
 						// We are only updating a constant state

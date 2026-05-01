@@ -184,23 +184,14 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 	if (!clustered_state.TryBuild(clustered, group_ids_ptr, count)) {
 		return false;
 	}
-	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto group_id = static_cast<idx_t>(clustered.group_id_per_run[r]);
+	clustered.InitializeStates([&](uint16_t gid) {
+		auto group_id = static_cast<idx_t>(gid);
 		group_is_set[group_id] = true;
-		clustered.group_runs[r].state = data + group_id * tuple_size;
-	}
+		return data + group_id * tuple_size;
+	});
 
 	// When all aggregates are clustered-aware, we can skip maintaining per-tuple addresses.
 	bool skip_addresses = clustered_state.all_clustered;
-	if (skip_addresses) {
-		for (idx_t c = 0; c < payload.ColumnCount(); c++) {
-			auto vt = payload.data[c].GetVectorType();
-			if (vt != VectorType::FLAT_VECTOR && vt != VectorType::DICTIONARY_VECTOR) {
-				skip_addresses = false;
-				break;
-			}
-		}
-	}
 	if (!skip_addresses) {
 		for (idx_t i = 0; i < count; i++) {
 			address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;

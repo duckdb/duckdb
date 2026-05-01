@@ -122,8 +122,7 @@ public:
 	                        aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                        aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                        aggregate_cluster_update_t cluster_update = nullptr,
-	                        bind_aggregate_function_t bind = nullptr,
-	                        aggregate_destructor_t destructor = nullptr) {
+	                        bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr) {
 		AggregateFunction aggr_function(name, arguments, return_type, state_size, initialize, update, combine, finalize,
 		                                FunctionNullHandling::DEFAULT_NULL_HANDLING, cluster_update, bind, destructor);
 		aggr_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);

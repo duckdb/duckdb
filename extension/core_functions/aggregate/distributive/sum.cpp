@@ -42,12 +42,24 @@ struct ClusteredRegularAdd {
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
 		local.value += input;
 	}
+
+	template <class STATE, class INPUT_TYPE>
+	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		local.value += decltype(local.value)(input) * static_cast<decltype(local.value)>(count);
+	}
 };
 
 struct ClusteredAddToHugeint {
 	template <class STATE, class INPUT_TYPE>
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
 		AddToHugeint::AddValue(local.value, uint64_t(input), input >= 0);
+	}
+
+	template <class STATE, class INPUT_TYPE>
+	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Execute(local, input);
+		}
 	}
 };
 
@@ -56,6 +68,13 @@ struct ClusteredHugeintAdd {
 	static void Execute(STATE &local, const INPUT_TYPE &input) {
 		local.value = Hugeint::Add(local.value, input);
 	}
+
+	template <class STATE, class INPUT_TYPE>
+	static void Execute(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Execute(local, input);
+		}
+	}
 };
 
 template <class BASE, class LOCAL_OP>
@@ -63,6 +82,11 @@ struct ClusteredSumOperation : public ClusteredSumStateCopy<BASE> {
 	template <class INPUT_TYPE, class STATE>
 	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
 		LOCAL_OP::template Execute<STATE>(local, input);
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		LOCAL_OP::template Execute<STATE>(local, input, count);
 	}
 
 	template <class T, class STATE>
@@ -89,8 +113,7 @@ struct IntegerSumOperation
 
 using SumToHugeintOperation =
     ClusteredSumOperation<BaseSumOperation<SumSetOperation, AddToHugeint>, ClusteredAddToHugeint>;
-using NumericSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredRegularAdd>;
+using NumericSumOperation = ClusteredSumOperation<BaseSumOperation<SumSetOperation, RegularAdd>, ClusteredRegularAdd>;
 
 struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	template <class T, class STATE>
@@ -103,8 +126,7 @@ struct KahanSumOperation : public BaseSumOperation<SumSetOperation, KahanAdd> {
 	}
 };
 
-using HugeintSumOperation =
-    ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredHugeintAdd>;
+using HugeintSumOperation = ClusteredSumOperation<BaseSumOperation<SumSetOperation, HugeintAdd>, ClusteredHugeintAdd>;
 
 template <class T>
 static LogicalType GetValueLogicalType();

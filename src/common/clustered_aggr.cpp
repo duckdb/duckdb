@@ -90,7 +90,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *
 		const idx_t run_len = static_cast<idx_t>(run_end - run_begin);
 		group_runs[i].sel = run_begin;
 		group_runs[i].count = run_len;
-		group_id_per_run[i] = static_cast<uint16_t>(gid);
+		group_runs[i].gid = static_cast<uint16_t>(gid);
 		left_cursor[gid] = nullptr;
 		right_cursor[gid] = nullptr;
 	}
@@ -102,9 +102,9 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {
 	n_group_runs = 1;
 	group_runs[0].state = state;
-	group_runs[0].sel = FlatVector::IncrementalSelectionVector()->data();
+	group_runs[0].sel = nullptr;
+	group_runs[0].gid = 0;
 	group_runs[0].count = count;
-	group_id_per_run[0] = 0;
 	cached_dict_sel = nullptr;
 }
 
@@ -134,7 +134,8 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 			const auto *run_sel = group_runs[r].sel;
 			const auto run_count = group_runs[r].count;
 			for (idx_t k = 0; k < run_count; k++) {
-				composed_sel_data[pos + k] = dict_data[run_sel[k]];
+				auto idx = run_sel ? run_sel[k] : k;
+				composed_sel_data[pos + k] = dict_data[idx];
 			}
 			pos += run_count;
 		}
@@ -153,10 +154,6 @@ void ClusteredAggregateState::Initialize(idx_t n_groups) {
 }
 
 bool ClusteredAggregateState::TryBuild(ClusteredAggr &clustered, const uint64_t *group_ids, idx_t count) {
-	if (!arena) {
-		return false;
-	}
-	return clustered.TryClustered(group_ids, count, arena.get(), left_cursor.get(), right_cursor.get());
+	return arena && clustered.TryClustered(group_ids, count, arena.get(), left_cursor.get(), right_cursor.get());
 }
-
 } // namespace duckdb

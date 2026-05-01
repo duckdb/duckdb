@@ -24,23 +24,31 @@ struct ClusteredAggr {
 	struct GroupRun {
 		data_ptr_t state; //! caller fills this after TryClustered; advanced between aggregates
 		const sel_t *sel; //! points to the tuple positions for this run
+		uint16_t gid;     //! raw group id for this run
 		idx_t count;      //! number of tuples in this group
 	};
 
 	idx_t n_group_runs = 0;
 	GroupRun group_runs[MAX_GROUPS];
-	uint16_t group_id_per_run[MAX_GROUPS]; //! raw group id, in the order runs appear in group_runs[]
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
-	//! On success fills group_runs[].sel/count and group_id_per_run[].
+	//! On success fills group_runs[].sel/gid/count.
 	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE sel_t),
 	//! left_cursor and right_cursor (n_groups pointers each, pre-initialized to nullptr).
 	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, sel_t **left_cursor, sel_t **right_cursor);
+
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
 	void SetSingleRun(data_ptr_t state, idx_t count);
 
 	//! Advance all run state pointers by payload_size.
 	void AdvanceStates(idx_t payload_size);
+
+	template <class GET_STATE>
+	void InitializeStates(GET_STATE &&get_state) {
+		for (idx_t r = 0; r < n_group_runs; r++) {
+			group_runs[r].state = get_state(group_runs[r].gid);
+		}
+	}
 
 	//! Returns a composed dict sel for simple dictionary input, or nullptr.
 	const sel_t *ClusterIter(const Vector &input, idx_t count) const;

@@ -413,8 +413,8 @@ static AggregateFunction QuantileListAggregate(const LogicalType &input_type, co
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>,
 	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-	    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, nullptr, AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 struct ListDiscreteQuantile {

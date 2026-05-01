@@ -97,6 +97,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 		chunk.data.emplace_back(Vector::Ref(inputs[c]));
 	}
 	chunk.SetCardinality(count);
+	state.Flatten(count);
 
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto state_data = FlatVector::GetDataMutableUnsafe<duckdb_aggregate_state>(state);
@@ -149,11 +150,10 @@ void CAPIAggregateDestructor(Vector &state, AggregateInputData &aggr_input_data,
 using duckdb::GetCAggregateFunction;
 
 duckdb_aggregate_function duckdb_create_aggregate_function() {
-	auto function = new duckdb::AggregateFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIAggregateStateSize,
-	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
-	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize,
-	                                              duckdb::FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                              duckdb::CAPIAggregateBind);
+	auto function = new duckdb::AggregateFunction(
+	    "", {}, duckdb::LogicalType::INVALID, duckdb::CAPIAggregateStateSize, duckdb::CAPIAggregateStateInit,
+	    duckdb::CAPIAggregateUpdate, duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize,
+	    duckdb::FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, duckdb::CAPIAggregateBind);
 	try {
 		function->SetExtraFunctionInfo<duckdb::CAggregateFunctionInfo>();
 		return reinterpret_cast<duckdb_aggregate_function>(function);

@@ -110,6 +110,12 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	}
 
 	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
+	}
+	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		if (COMPARE::template Operation<INPUT_TYPE>(input, state.value)) {
 			state.value = input;
@@ -316,8 +322,7 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 	    {type}, LogicalType::BLOB, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateSortKeyHelpers::UnaryUpdate<STATE, OP, OP::ORDER_TYPE, false>,
 	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>,
-	    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OP::Bind,
-	    AggregateFunction::StateDestroy<STATE, OP>);
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>

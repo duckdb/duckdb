@@ -21,6 +21,12 @@ struct BoolAndFunFunction : public ClusteredStateCopy {
 		local.val = input && local.val;
 	}
 
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
+	}
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = true;
@@ -67,6 +73,12 @@ struct BoolOrFunFunction : public ClusteredStateCopy {
 		local.val = input || local.val;
 	}
 
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
+	}
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.val = false;
