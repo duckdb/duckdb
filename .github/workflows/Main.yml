@@ -417,20 +417,8 @@ jobs:
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
         python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Download clang-tidy-cache
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: |
-        set -e
-        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
-        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
-        chmod +x /tmp/clang-tidy-cache
-
     - name: Tidy Check Diff
-      if: ${{ github.event_name == 'pull_request' }}
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
     - name: Tidy Check (clangd)
