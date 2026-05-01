@@ -1,6 +1,3 @@
-#include <string.h>
-#include <unordered_set>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "utf8proc.hpp"

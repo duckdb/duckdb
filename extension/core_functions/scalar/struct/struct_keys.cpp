@@ -1,6 +1,3 @@
-#include <memory>
-#include <utility>
-
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"

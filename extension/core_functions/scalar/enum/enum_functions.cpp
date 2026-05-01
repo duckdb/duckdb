@@ -1,8 +1,5 @@
 #include "core_functions/scalar/enum_functions.hpp"
 
-#include <stdint.h>
-#include <memory>
-
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"

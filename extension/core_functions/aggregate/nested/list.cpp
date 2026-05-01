@@ -1,6 +1,3 @@
-#include <stddef.h>
-#include <string>
-
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/list_segment.hpp"

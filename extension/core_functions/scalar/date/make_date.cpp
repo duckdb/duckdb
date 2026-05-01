@@ -1,8 +1,3 @@
-#include <stdint.h>
-#include <cmath>
-#include <string>
-#include <vector>
-
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"

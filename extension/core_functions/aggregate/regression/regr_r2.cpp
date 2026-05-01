@@ -5,8 +5,6 @@
 // 1                    if var_pop(y) = 0 and var_pop(x) <> 0, else
 // power(corr(y,x), 2)
 
-#include <utility>
-#include <cmath>
 
 #include "core_functions/aggregate/algebraic/corr.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"

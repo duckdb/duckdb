@@ -7,7 +7,6 @@
 //! Output : Double
 
 #pragma once
-#include <math.h>
 
 #include "core_functions/aggregate/algebraic/stddev.hpp"
 #include "core_functions/aggregate/algebraic/covar.hpp"

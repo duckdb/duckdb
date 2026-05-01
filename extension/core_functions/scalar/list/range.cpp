@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <vector>
-
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"

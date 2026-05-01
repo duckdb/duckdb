@@ -1,7 +1,3 @@
-#include <string.h>
-#include <stdint.h>
-#include <vector>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/numeric_utils.hpp"

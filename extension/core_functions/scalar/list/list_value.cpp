@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string>
-
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

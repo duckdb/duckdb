@@ -1,7 +1,4 @@
-#include <stddef.h>
 #include <bitset>
-#include <limits>
-#include <memory>
 
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"

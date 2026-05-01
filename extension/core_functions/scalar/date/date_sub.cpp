@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string>
-
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"

@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string>
-
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/function/create_sort_key.hpp"

@@ -1,7 +1,3 @@
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

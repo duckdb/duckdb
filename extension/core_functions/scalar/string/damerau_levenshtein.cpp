@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <map>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/helper.hpp"

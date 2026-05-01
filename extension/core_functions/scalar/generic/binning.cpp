@@ -1,9 +1,3 @@
-#include <stdint.h>
-#include <algorithm>
-#include <cmath>
-#include <string>
-#include <vector>
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/subtract.hpp"

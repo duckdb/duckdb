@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <memory>
-
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"

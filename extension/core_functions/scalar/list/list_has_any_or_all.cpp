@@ -1,6 +1,3 @@
-#include <string>
-#include <unordered_map>
-
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/function/create_sort_key.hpp"
 #include "duckdb/common/string_map_set.hpp"

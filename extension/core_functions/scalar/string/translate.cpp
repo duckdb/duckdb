@@ -1,8 +1,3 @@
-#include <stdint.h>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "utf8proc_wrapper.hpp"

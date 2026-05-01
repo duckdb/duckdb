@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <string>
-#include <utility>
-
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_count.hpp"
 #include "duckdb/common/types.hpp"

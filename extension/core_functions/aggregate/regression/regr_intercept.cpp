@@ -1,7 +1,5 @@
 //! AVG(y)-REGR_SLOPE(y,x)*AVG(x)
 
-#include <stdint.h>
-#include <utility>
 
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/aggregate/regression/regr_slope.hpp"

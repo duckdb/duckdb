@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <memory>
-
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"

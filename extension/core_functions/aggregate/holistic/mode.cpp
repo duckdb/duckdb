@@ -1,13 +1,3 @@
-#include <math.h>
-#include <stdint.h>
-#include <string.h>
-#include <limits>
-#include <new>
-#include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
-
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "core_functions/aggregate/distributive_functions.hpp"

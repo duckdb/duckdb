@@ -1,7 +1,3 @@
-#include <algorithm>
-#include <string>
-#include <vector>
-
 #include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "core_functions/array_kernels.hpp"

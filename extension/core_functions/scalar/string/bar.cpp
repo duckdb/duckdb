@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/string_type.hpp"

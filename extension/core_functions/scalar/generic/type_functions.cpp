@@ -1,7 +1,3 @@
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

@@ -1,5 +1,3 @@
-#include <string.h>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/typedefs.hpp"

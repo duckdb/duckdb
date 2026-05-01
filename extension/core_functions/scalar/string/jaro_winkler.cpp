@@ -1,8 +1,5 @@
 #include "jaro_winkler.hpp"
 
-#include <math.h>
-#include <algorithm>
-
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/vector_type.hpp"

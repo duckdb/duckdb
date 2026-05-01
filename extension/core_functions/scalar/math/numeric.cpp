@@ -1,10 +1,3 @@
-#include <cmath>
-#include <cstdint>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
-
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/operator/abs.hpp"

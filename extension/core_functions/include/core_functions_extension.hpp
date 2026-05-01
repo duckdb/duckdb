@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include <string>
 
 #include "duckdb.hpp"
 #include "duckdb/main/extension.hpp"

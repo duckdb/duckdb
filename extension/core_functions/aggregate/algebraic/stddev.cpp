@@ -1,5 +1,3 @@
-#include <utility>
-
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/algebraic/stddev.hpp"
 #include "duckdb/common/types.hpp"

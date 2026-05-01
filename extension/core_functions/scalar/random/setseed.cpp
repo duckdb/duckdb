@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string>
-
 #include "core_functions/scalar/random_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"

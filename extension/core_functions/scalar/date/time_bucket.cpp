@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <string>
-#include <vector>
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"

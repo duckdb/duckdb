@@ -1,7 +1,3 @@
-#include <stddef.h>
-#include <string>
-#include <utility>
-
 #include "duckdb/common/vector/union_vector.hpp"
 #include "core_functions/scalar/union_functions.hpp"
 #include "duckdb/common/string_util.hpp"

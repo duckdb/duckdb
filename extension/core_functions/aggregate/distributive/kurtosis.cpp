@@ -1,8 +1,3 @@
-#include <memory>
-#include <type_traits>
-#include <utility>
-#include <cmath>
-
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"

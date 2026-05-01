@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <string.h>
-#include <string>
-
 #include "core_functions/scalar/blob_functions.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"

@@ -1,9 +1,3 @@
-#include <algorithm>
-#include <iterator>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"

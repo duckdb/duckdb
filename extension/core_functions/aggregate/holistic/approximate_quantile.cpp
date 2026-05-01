@@ -1,9 +1,3 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"

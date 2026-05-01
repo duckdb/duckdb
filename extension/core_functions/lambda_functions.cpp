@@ -1,10 +1,5 @@
 #include "duckdb/function/lambda_functions.hpp"
 
-#include <stdint.h>
-#include <functional>
-#include <vector>
-#include <memory>
-
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"

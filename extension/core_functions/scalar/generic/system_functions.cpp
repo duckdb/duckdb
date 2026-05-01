@@ -1,8 +1,3 @@
-#include <algorithm>
-#include <iterator>
-#include <string>
-#include <utility>
-
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/main/database.hpp"

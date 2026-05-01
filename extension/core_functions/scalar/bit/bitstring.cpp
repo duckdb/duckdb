@@ -1,8 +1,3 @@
-#include <stdint.h>
-#include <string.h>
-#include <string>
-#include <vector>
-
 #include "core_functions/scalar/bit_functions.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"

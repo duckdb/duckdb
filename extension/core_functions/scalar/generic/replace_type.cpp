@@ -1,6 +1,3 @@
-#include <memory>
-#include <utility>
-
 #include "core_functions/scalar/generic_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/type_visitor.hpp"
