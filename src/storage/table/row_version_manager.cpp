@@ -67,8 +67,6 @@ idx_t RowVersionManager::Fetch(TransactionData transaction, const idx_t *offsets
 	idx_t visible_count = 0;
 	idx_t i = 0;
 	while (i < count) {
-		// Group consecutive offsets that fall in the same chunk-vector so we look up
-		// the ChunkInfo at most once per (sub)run.
 		const idx_t vector_idx = offsets[i] / STANDARD_VECTOR_SIZE;
 		const idx_t base = vector_idx * STANDARD_VECTOR_SIZE;
 		idx_t j = i + 1;
@@ -77,7 +75,7 @@ idx_t RowVersionManager::Fetch(TransactionData transaction, const idx_t *offsets
 		}
 		auto info = GetChunkInfo(vector_idx);
 		if (!info) {
-			// no version info -> entire chunk is visible
+			// no version info, which means entire chunk is visible
 			for (idx_t k = i; k < j; k++) {
 				visible_sel.set_index(visible_count++, k);
 			}

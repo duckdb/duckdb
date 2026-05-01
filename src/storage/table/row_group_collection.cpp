@@ -425,18 +425,14 @@ RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// Walk row_ids left-to-right, extending a run of consecutive row-ids that all fall in the same
-	// row group, then dispatch a bulk visibility check + bulk per-column fetch per run. Mirrors the
-	// "consecutive run" pattern already used by RowGroupCollection::Delete and NextUpdateRowGroup.
-	//
-	// Reused across runs to avoid per-run heap allocations.
+	if (fetch_count == 0) {
+		result.SetChildCardinality(0);
+		return;
+	}
+
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto row_groups = GetRowGroups();
 	idx_t count = 0;
-	if (fetch_count == 0) {
-		result.SetChildCardinality(count);
-		return;
-	}
 	idx_t offsets[STANDARD_VECTOR_SIZE];
 	SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
 
@@ -448,7 +444,7 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 			idx_t segment_index;
 			auto l = row_groups->Lock();
 			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_ids[pos]), segment_index)) {
-				// parallel-append: row not yet visible, skip
+				// row not yet visible, skip
 				pos++;
 				continue;
 			}
@@ -460,10 +456,10 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 
 		// 2. extend the run while consecutive row-ids stay in [row_start, row_end)
 		const idx_t run_start = pos;
-		offsets[0] = UnsafeNumericCast<idx_t>(row_ids[pos]) - row_start;
+		offsets[0] = NumericCast<idx_t>(row_ids[pos]) - row_start;
 		pos++;
 		while (pos < fetch_count) {
-			const idx_t rid = UnsafeNumericCast<idx_t>(row_ids[pos]);
+			const idx_t rid = NumericCast<idx_t>(row_ids[pos]);
 			if (rid < row_start || rid >= row_end) {
 				break;
 			}
@@ -472,8 +468,8 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		}
 		const idx_t run_count = pos - run_start;
 
-		// 3. bulk visibility check for the whole run; one version_lock acquire per run
-		idx_t visible_count;
+		// 3. bulk visibility check for the whole run
+		idx_t visible_count = 0;
 		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH) {
 			visible_count = current_row_group.Fetch(transaction, offsets, run_count, visible_sel);
 		} else {
@@ -487,10 +483,9 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 			continue;
 		}
 
-		// 4. bulk per-column fetch (column-major)
+		// 4. bulk per-column fetch
 		state.row_group = row_group;
-		current_row_group.FetchRows(transaction, state, column_ids, offsets, visible_sel, visible_count, result,
-		                            count);
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, visible_sel, visible_count, result, count);
 		count += visible_count;
 	}
 	result.SetChildCardinality(count);

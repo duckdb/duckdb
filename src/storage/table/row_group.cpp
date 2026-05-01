@@ -944,7 +944,7 @@ idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t f
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		// no version info at all -> every row is visible
+		// no version info at all, which means every row is visible
 		for (idx_t i = 0; i < fetch_count; i++) {
 			visible_sel.set_index(i, i);
 		}
@@ -975,8 +975,7 @@ void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, c
 	if (visible_count == 0) {
 		return;
 	}
-	// Column-major iteration so the per-column segment-tree state and the buffer handles pinned in
-	// `state.handles` get reused across the rows of this run.
+
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto &column = column_ids[col_idx];
 		auto &result_vector = result.data[col_idx];
@@ -987,8 +986,7 @@ void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, c
 			const idx_t offset = offsets[local];
 			D_ASSERT(offset <= count);
 			D_ASSERT(!FlatVector::IsNull(result_vector, result_offset + i));
-			col_data.FetchRow(transaction, state, column, UnsafeNumericCast<row_t>(offset), result_vector,
-			                  result_offset + i);
+			col_data.FetchRow(transaction, state, column, NumericCast<row_t>(offset), result_vector, result_offset + i);
 		}
 	}
 }

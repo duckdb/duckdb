@@ -1,11 +1,5 @@
 # name: benchmark/micro/index/point/in_filter_large_with_index_scan.benchmark
-# description: Stress fetch-by-rowid through RowGroupCollection::Fetch with many
-#              co-located keys per row group (issue #6963).
-#              The existing in_filter_with_index_scan.benchmark only uses 9 keys
-#              and so cannot expose per-row Fetch overhead. This benchmark uses
-#              50,000 contiguous keys (mapped to a contiguous row-id range) and
-#              fetches multiple columns, which is the workload the bulk
-#              run-detection rewrite is designed to amortize.
+# description: Stress test row group fetching.
 # group: [point]
 
 name IN filter with index scan (50k co-located keys)
