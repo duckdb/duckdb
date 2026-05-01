@@ -1766,12 +1766,61 @@ void PhysicalCopyToFile::PrepareAndFlushBatch(ClientContext &context, GlobalSink
 	FlushBatch(context, gstate_p, file_state_ptr, create_file_state_fun, batch_analyzer, std::move(prepared_batch));
 }
 
+//===--------------------------------------------------------------------===//
+// Legacy
+//===--------------------------------------------------------------------===//
+struct LegacyCopyPreparedBatch : public PreparedBatchData {
+	explicit LegacyCopyPreparedBatch(unique_ptr<ColumnDataCollection> collection_p)
+	    : collection(std::move(collection_p)) {
+	}
+
+	unique_ptr<ColumnDataCollection> collection;
+};
+
+static bool UsesLegacyCopyBatchAPI(const CopyFunction &function) {
+	if (!function.prepare_batch && !function.flush_batch) {
+		return true;
+	}
+	if (!function.prepare_batch || !function.flush_batch) {
+		throw InternalException("Copy function must implement both prepare_batch and flush_batch");
+	}
+	return false;
+}
+
+static unique_ptr<PreparedBatchData> PrepareLegacyCopyBatch(unique_ptr<ColumnDataCollection> batch) {
+	return make_uniq<LegacyCopyPreparedBatch>(std::move(batch));
+}
+
+static void FlushLegacyCopyBatch(ClientContext &context, const CopyFunction &function, FunctionData &bind_data,
+                                 GlobalFunctionData &gstate, PreparedBatchData &prepared_batch) {
+	if (!function.copy_to_initialize_local || !function.copy_to_sink || !function.copy_to_combine) {
+		throw InternalException("Legacy copy function is missing required sink/combine callbacks");
+	}
+
+	auto &legacy_batch = prepared_batch.Cast<LegacyCopyPreparedBatch>();
+	ThreadContext thread_context(context);
+	ExecutionContext execution_context(context, thread_context, nullptr);
+	auto local_state = function.copy_to_initialize_local(execution_context, bind_data);
+	for (auto &chunk : legacy_batch.collection->Chunks()) {
+		function.copy_to_sink(execution_context, bind_data, gstate, *local_state, chunk);
+	}
+	function.copy_to_combine(execution_context, bind_data, gstate, *local_state);
+}
+
+//===--------------------------------------------------------------------===//
+// Prepare/Flush Batch
+//===--------------------------------------------------------------------===//
 pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
 PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p,
                                  unique_ptr<GlobalFileState> &file_state_ptr,
                                  const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
                                  unique_ptr<ColumnDataCollection> batch) const {
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
+	const CopyFunctionBatchAnalyzer batch_analyzer(*batch, batch_size, batch_size_bytes);
+
+	if (UsesLegacyCopyBatchAPI(function)) {
+		return {batch_analyzer, PrepareLegacyCopyBatch(std::move(batch))};
+	}
 
 	// Ensure we have a global state for prepares
 	auto prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
@@ -1787,7 +1836,6 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	}
 
 	// Prepare the batch
-	const CopyFunctionBatchAnalyzer batch_analyzer(*batch, batch_size, batch_size_bytes);
 	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch))};
 }
 
@@ -1824,7 +1872,11 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			            {"rows", to_string(batch_analyzer.current_batch_size)},
 			            {"size", to_string(batch_analyzer.current_batch_size_bytes)},
 			            {"reason", EnumUtil::ToString(batch_analyzer.ToReason())}});
-			function.flush_batch(context, *bind_data, *file_state_ptr->data, *prepared_batch);
+			if (UsesLegacyCopyBatchAPI(function)) {
+				FlushLegacyCopyBatch(context, function, *bind_data, *file_state_ptr->data, *prepared_batch);
+			} else {
+				function.flush_batch(context, *bind_data, *file_state_ptr->data, *prepared_batch);
+			}
 			break;
 		}
 	}
