@@ -22,7 +22,16 @@ struct ProductReduce {
 	}
 };
 
-using ProductFunction = EmptyValAggregate<ProductReduce, ConstantInit<1>>;
+struct ProductFunction : public EmptyValAggregate<ProductReduce, ConstantInit<1>> {
+	using EmptyValAggregate<ProductReduce, ConstantInit<1>>::UpdateClusteredLocal;
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			EmptyValAggregate<ProductReduce, ConstantInit<1>>::template UpdateClusteredLocal<INPUT_TYPE>(local, input);
+		}
+	}
+};
 
 LogicalType GetProductStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> children;

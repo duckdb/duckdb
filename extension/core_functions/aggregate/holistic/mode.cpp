@@ -514,7 +514,8 @@ unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 AggregateFunctionSet ModeFun::GetFunctions() {
 	AggregateFunctionSet mode("mode");
 	mode.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, nullptr, nullptr,
-	                                   nullptr, nullptr, BindModeAggregate));
+	                                   nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                   AggregateFunction::NoClusterUpdate(), BindModeAggregate));
 	return mode;
 }
 
@@ -617,7 +618,8 @@ unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input)
 AggregateFunctionSet EntropyFun::GetFunctions() {
 	AggregateFunctionSet entropy("entropy");
 	entropy.AddFunction(AggregateFunction({LogicalTypeId::ANY}, LogicalType::DOUBLE, nullptr, nullptr, nullptr, nullptr,
-	                                      nullptr, nullptr, BindEntropyAggregate));
+	                                      nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                                      AggregateFunction::NoClusterUpdate(), BindEntropyAggregate));
 	return entropy;
 }
 
