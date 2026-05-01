@@ -58,6 +58,41 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	return info->Fetch(transaction, UnsafeNumericCast<row_t>(row - vector_index * STANDARD_VECTOR_SIZE));
 }
 
+idx_t RowVersionManager::Fetch(TransactionData transaction, const idx_t *offsets, idx_t count,
+                               SelectionVector &visible_sel) {
+	if (count == 0) {
+		return 0;
+	}
+	lock_guard<mutex> lock(version_lock);
+	idx_t visible_count = 0;
+	idx_t i = 0;
+	while (i < count) {
+		// Group consecutive offsets that fall in the same chunk-vector so we look up
+		// the ChunkInfo at most once per (sub)run.
+		const idx_t vector_idx = offsets[i] / STANDARD_VECTOR_SIZE;
+		const idx_t base = vector_idx * STANDARD_VECTOR_SIZE;
+		idx_t j = i + 1;
+		while (j < count && offsets[j] / STANDARD_VECTOR_SIZE == vector_idx) {
+			j++;
+		}
+		auto info = GetChunkInfo(vector_idx);
+		if (!info) {
+			// no version info -> entire chunk is visible
+			for (idx_t k = i; k < j; k++) {
+				visible_sel.set_index(visible_count++, k);
+			}
+		} else {
+			for (idx_t k = i; k < j; k++) {
+				if (info->Fetch(transaction, UnsafeNumericCast<row_t>(offsets[k] - base))) {
+					visible_sel.set_index(visible_count++, k);
+				}
+			}
+		}
+		i = j;
+	}
+	return visible_count;
+}
+
 void RowVersionManager::FillVectorInfo(idx_t vector_idx) {
 	if (vector_idx < vector_info.size()) {
 		return;

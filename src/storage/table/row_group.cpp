@@ -937,6 +937,22 @@ bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	return vinfo->Fetch(transaction, row);
 }
 
+idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t fetch_count,
+                      SelectionVector &visible_sel) {
+	if (fetch_count == 0) {
+		return 0;
+	}
+	auto vinfo = GetVersionInfo();
+	if (!vinfo) {
+		// no version info at all -> every row is visible
+		for (idx_t i = 0; i < fetch_count; i++) {
+			visible_sel.set_index(i, i);
+		}
+		return fetch_count;
+	}
+	return vinfo->Fetch(transaction, offsets, fetch_count, visible_sel);
+}
+
 void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	if (UnsafeNumericCast<idx_t>(row_id) > count) {
@@ -950,6 +966,30 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 		// regular column: fetch data from the base column
 		auto &col_data = GetColumn(column);
 		col_data.FetchRow(transaction, state, column, row_id, result_vector, result_idx);
+	}
+}
+
+void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, const vector<StorageIndex> &column_ids,
+                         const idx_t *offsets, const SelectionVector &visible_sel, idx_t visible_count,
+                         DataChunk &result, idx_t result_offset) {
+	if (visible_count == 0) {
+		return;
+	}
+	// Column-major iteration so the per-column segment-tree state and the buffer handles pinned in
+	// `state.handles` get reused across the rows of this run.
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		auto &column = column_ids[col_idx];
+		auto &result_vector = result.data[col_idx];
+		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		auto &col_data = GetColumn(column);
+		for (idx_t i = 0; i < visible_count; i++) {
+			const idx_t local = visible_sel.get_index(i);
+			const idx_t offset = offsets[local];
+			D_ASSERT(offset <= count);
+			D_ASSERT(!FlatVector::IsNull(result_vector, result_offset + i));
+			col_data.FetchRow(transaction, state, column, UnsafeNumericCast<row_t>(offset), result_vector,
+			                  result_offset + i);
+		}
 	}
 }
 

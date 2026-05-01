@@ -425,32 +425,73 @@ RowGroupIterationHelper RowGroupCollection::Chunks(DuckTransaction &transaction,
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<StorageIndex> &column_ids,
                                const Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
-	// figure out which row_group to fetch from
+	// Walk row_ids left-to-right, extending a run of consecutive row-ids that all fall in the same
+	// row group, then dispatch a bulk visibility check + bulk per-column fetch per run. Mirrors the
+	// "consecutive run" pattern already used by RowGroupCollection::Delete and NextUpdateRowGroup.
+	//
+	// Reused across runs to avoid per-run heap allocations.
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	idx_t count = 0;
 	auto row_groups = GetRowGroups();
-	for (idx_t i = 0; i < fetch_count; i++) {
-		auto row_id = row_ids[i];
+	idx_t count = 0;
+	if (fetch_count == 0) {
+		result.SetChildCardinality(count);
+		return;
+	}
+	idx_t offsets[STANDARD_VECTOR_SIZE];
+	SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
+
+	idx_t pos = 0;
+	while (pos < fetch_count) {
+		// 1. resolve the row group containing row_ids[pos]
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			idx_t segment_index;
 			auto l = row_groups->Lock();
-			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_id), segment_index)) {
-				// in parallel append scenarios it is possible for the row_id
+			if (!row_groups->TryGetSegmentIndex(l, UnsafeNumericCast<idx_t>(row_ids[pos]), segment_index)) {
+				// parallel-append: row not yet visible, skip
+				pos++;
 				continue;
 			}
 			row_group = row_groups->GetSegmentByIndex(l, UnsafeNumericCast<int64_t>(segment_index));
 		}
 		auto &current_row_group = row_group->GetNode();
-		auto offset_in_row_group = UnsafeNumericCast<idx_t>(row_id) - row_group->GetRowStart();
-		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH &&
-		    !current_row_group.Fetch(transaction, offset_in_row_group)) {
+		const idx_t row_start = row_group->GetRowStart();
+		const idx_t row_end = row_start + current_row_group.count;
+
+		// 2. extend the run while consecutive row-ids stay in [row_start, row_end)
+		const idx_t run_start = pos;
+		offsets[0] = UnsafeNumericCast<idx_t>(row_ids[pos]) - row_start;
+		pos++;
+		while (pos < fetch_count) {
+			const idx_t rid = UnsafeNumericCast<idx_t>(row_ids[pos]);
+			if (rid < row_start || rid >= row_end) {
+				break;
+			}
+			offsets[pos - run_start] = rid - row_start;
+			pos++;
+		}
+		const idx_t run_count = pos - run_start;
+
+		// 3. bulk visibility check for the whole run; one version_lock acquire per run
+		idx_t visible_count;
+		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH) {
+			visible_count = current_row_group.Fetch(transaction, offsets, run_count, visible_sel);
+		} else {
+			for (idx_t i = 0; i < run_count; i++) {
+				visible_sel.set_index(i, i);
+			}
+			visible_count = run_count;
+		}
+
+		if (visible_count == 0) {
 			continue;
 		}
+
+		// 4. bulk per-column fetch (column-major)
 		state.row_group = row_group;
-		current_row_group.FetchRow(transaction, state, column_ids, UnsafeNumericCast<row_t>(offset_in_row_group),
-		                           result, count);
-		count++;
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, visible_sel, visible_count, result,
+		                            count);
+		count += visible_count;
 	}
 	result.SetChildCardinality(count);
 }
