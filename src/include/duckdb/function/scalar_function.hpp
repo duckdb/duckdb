@@ -177,7 +177,11 @@ public:
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
 };
 
+template <class IMPL>
 class BaseScalarFunction {
+	friend IMPL; // Only allow the derived class to access the protected members of this class.
+	BaseScalarFunction() = default;
+
 public:
 	// clang-format off
 	auto GetProperties() const -> const FunctionProperties & { return properties; }
@@ -291,23 +295,24 @@ public:
 	bool HasArgProperties() const {
 		return !arg_props.empty();
 	}
-	ScalarFunction &SetArgProperties(idx_t arg_idx, ArgProperties props) {
+	IMPL &SetArgProperties(idx_t arg_idx, ArgProperties props) {
 		if (arg_props.size() <= arg_idx) {
 			arg_props.resize(arg_idx + 1);
 		}
 		arg_props[arg_idx] = props;
-		return *this;
+		return *static_cast<IMPL *>(this);
 	}
-	ScalarFunction &SetArgProperties(vector<ArgProperties> props) {
+	IMPL &SetArgProperties(vector<ArgProperties> props) {
 		arg_props = std::move(props);
-		return *this;
+		return *static_cast<IMPL *>(this);
 	}
 	ScalarFunction &SetUnaryArgProperties(ArgProperties props) {
 		return SetArgProperties(0, props);
 	}
 };
 
-class ScalarFunction : public BaseScalarFunction, public SimpleFunction { // NOLINT: work-around bug in clang-tidy
+class ScalarFunction : public BaseScalarFunction<ScalarFunction>,
+                       public SimpleFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
 	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
@@ -450,7 +455,7 @@ public:
 	}
 };
 
-class BoundScalarFunction : public BaseScalarFunction, public BoundSimpleFunction {
+class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
 

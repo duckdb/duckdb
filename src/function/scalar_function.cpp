@@ -83,6 +83,7 @@ BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
 	callbacks = function.GetCallbacks();
 	properties = function.GetProperties();
 	function_info = function.GetFunctionInfo();
+	arg_props = function.GetAllArgProperties();
 
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
