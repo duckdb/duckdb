@@ -20,6 +20,13 @@ namespace duckdb {
 //! to be complete in this header. Defined in struct_vector.cpp.
 DUCKDB_API vector<Vector> &VectorWriterGetStructEntries(Vector &vector);
 
+//! List-vector helpers that avoid a circular include with list_vector.hpp.
+//! Defined in list_vector.cpp.
+DUCKDB_API Vector &VectorWriterGetListChild(Vector &vector);
+DUCKDB_API idx_t VectorWriterGetListSize(const Vector &vector);
+DUCKDB_API void VectorWriterReserveList(Vector &vector, idx_t required_capacity);
+DUCKDB_API void VectorWriterSetListSize(Vector &vector, idx_t size);
+
 template <class T>
 struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset)
@@ -202,6 +209,106 @@ private:
 	idx_t count;
 	idx_t current_idx;
 	ChildWriters children;
+};
+
+//! Specialization of VectorWriter for VectorListType<T>.
+//! Writes rows to a list vector. Non-null rows are opened with WriteList(n),
+//! which returns a range that iterates over n child writers with their in-list
+//! index. Null rows are written with WriteNull(). Supports recursive nesting:
+//! the child writer T may itself be a list or struct writer.
+template <class T>
+struct VectorWriter<VectorListType<T>> {
+public:
+	//! Range returned by WriteList(n). Holds a VectorWriter<T> scoped to the
+	//! n reserved child slots. Destroying the range asserts all n were written.
+	//! The Entry reference member makes WriteRange non-movable; C++17 guaranteed
+	//! copy elision ensures it is always constructed in place.
+	struct WriteRange {
+		struct Entry {
+			VectorWriter<T> &writer;
+			idx_t idx;
+		};
+
+		class RangeIterator {
+		public:
+			RangeIterator(Entry &entry, idx_t pos) : entry(entry), pos(pos) {
+			}
+			Entry &operator*() {
+				entry.idx = pos;
+				return entry;
+			}
+			RangeIterator &operator++() { // NOLINT: match stl API
+				++pos;
+				return *this;
+			}
+			bool operator!=(const RangeIterator &other) const {
+				return pos != other.pos;
+			}
+
+		private:
+			Entry &entry;
+			idx_t pos;
+		};
+
+		WriteRange(Vector &child_vec, idx_t n, idx_t offset)
+		    : child_writer(child_vec, n, offset), length(n), current_entry {child_writer, 0} {
+		}
+
+		RangeIterator begin() { // NOLINT: match stl API
+			return RangeIterator(current_entry, 0);
+		}
+		RangeIterator end() { // NOLINT: match stl API
+			return RangeIterator(current_entry, length);
+		}
+
+		VectorWriter<T> child_writer;
+		idx_t length;
+		Entry current_entry; // must be declared after child_writer (references it)
+	};
+
+public:
+	VectorWriter(Vector &vector, idx_t count, idx_t offset)
+	    : list_data(FlatVector::GetDataMutable<list_entry_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
+	      list_vec(vector), child_vec(VectorWriterGetListChild(vector)), count(offset + count), current_idx(offset),
+	      child_offset(VectorWriterGetListSize(vector)) {
+	}
+	VectorWriter(VectorWriter &&other) noexcept
+	    : list_data(other.list_data), validity(other.validity), list_vec(other.list_vec), child_vec(other.child_vec),
+	      count(other.count), current_idx(other.current_idx), child_offset(other.child_offset) {
+		other.count = other.current_idx;
+	}
+	~VectorWriter() {
+		D_ASSERT(Exception::UncaughtException() || current_idx == count);
+	}
+
+	void WriteNull() {
+		D_ASSERT(current_idx < count);
+		validity.SetInvalid(current_idx);
+		current_idx++;
+	}
+
+	//! Reserve n child slots, record the list entry for this row, and return a
+	//! WriteRange whose iterator yields {child_writer, in-list-index} pairs.
+	//! Destroying the range asserts that all n child slots were written.
+	WriteRange WriteList(idx_t n) {
+		D_ASSERT(current_idx < count);
+		VectorWriterReserveList(list_vec, child_offset + n);
+		VectorWriterSetListSize(list_vec, child_offset + n);
+		list_data[current_idx] = {child_offset, n};
+		current_idx++;
+		const auto old_offset = child_offset;
+		child_offset += n;
+		return WriteRange(child_vec, n, old_offset);
+	}
+
+private:
+	list_entry_t *list_data;
+	ValidityMask &validity;
+	Vector &list_vec;
+	Vector &child_vec;
+	idx_t count;
+	idx_t current_idx;
+	idx_t child_offset;
 };
 
 template <class T>
