@@ -1,5 +1,6 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -14,55 +15,14 @@ struct ProductState {
 	double val;
 };
 
-struct ProductFunction : public ClusteredStateCopy {
-	template <class INPUT_TYPE, class STATE>
-	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
-		if (local.empty) {
-			local.empty = false;
-		}
-		local.val *= input;
-	}
-
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.val = 1;
-		state.empty = true;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.val *= source.val;
-		target.empty = target.empty && source.empty;
-	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.empty) {
-			finalize_data.ReturnNull();
-			return;
-		}
-		target = state.val;
-	}
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		if (state.empty) {
-			state.empty = false;
-		}
-		state.val *= input;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
+struct ProductReduce {
+	template <class T>
+	static T Operation(T left, T right) {
+		return MultiplyOperator::template Operation<T, T, T>(left, right);
 	}
 };
+
+using ProductFunction = EmptyValAggregate<ProductReduce, ConstantInit<1>>;
 
 LogicalType GetProductStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> children;

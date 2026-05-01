@@ -1,5 +1,6 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
@@ -151,26 +152,23 @@ struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateC
 	}
 };
 
-struct BitAndOperation : public NumericBitwiseOperation<BitAndOperation> {
+template <class OP>
+struct SimpleBitwiseOperation : public NumericBitwiseOperation<SimpleBitwiseOperation<OP>> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value &= typename STATE::TYPE(input);
+		state.value = OP::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
 	}
 };
 
-struct BitOrOperation : public NumericBitwiseOperation<BitOrOperation> {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value |= typename STATE::TYPE(input);
-	}
-};
+using BitAndOperation = SimpleBitwiseOperation<BitAnd>;
+using BitOrOperation = SimpleBitwiseOperation<BitOr>;
 
 struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
 	using NumericBitwiseOperation<BitXorOperation>::UpdateClusteredLocal;
 
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value ^= typename STATE::TYPE(input);
+		state.value = BitXor::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
 	}
 
 	template <class INPUT_TYPE, class STATE>

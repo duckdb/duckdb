@@ -454,10 +454,9 @@ public:
 				    return SelectionIndexer<false, false> {cluster_iter + pos, nullptr};
 			    });
 		} else {
-			ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(
-			    vals, idata.validity, clustered, [&](idx_t r, idx_t) {
-				    return SelectionIndexer<false, true> {clustered.group_runs[r].sel, idata.sel};
-			    });
+			ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(vals, idata.validity, clustered, [&](idx_t r, idx_t) {
+				return SelectionIndexer<false, true> {clustered.group_runs[r].sel, idata.sel};
+			});
 		}
 	}
 

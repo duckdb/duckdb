@@ -447,7 +447,8 @@ AggregateFunction GetFallbackModeFunction(const LogicalType &type) {
 	AggregateFunction aggr({type}, type, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr);
+	                       AggregateFunction::StateVoidFinalize<STATE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                       AggregateFunction::NoClusterUpdate());
 	aggr.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	return aggr;
 }
@@ -569,7 +570,8 @@ AggregateFunction GetFallbackEntropyFunction(const LogicalType &type) {
 	AggregateFunction func({type}, LogicalType::DOUBLE, AggregateFunction::StateSize<STATE>,
 	                       AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                       AggregateSortKeyHelpers::UnaryUpdate<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	                       AggregateFunction::StateFinalize<STATE, double, OP>, nullptr);
+	                       AggregateFunction::StateFinalize<STATE, double, OP>,
+	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate());
 	func.SetStateDestructorCallback(AggregateFunction::StateDestroy<STATE, OP>);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return func;

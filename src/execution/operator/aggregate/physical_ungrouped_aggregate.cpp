@@ -377,6 +377,7 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 		Vector agg_state_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())),
 		                     count_t(payload_chunk.size()));
 		agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+		agg_state_vec.Flatten(payload_chunk.size());
 		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, agg_state_vec,
 		                                            payload_chunk.size());
 	}

@@ -620,7 +620,7 @@ public:
 	static void NullaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                                 const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 0);
-		AggregateExecutor::NullaryClusterUpdate<STATE, OP>(aggr_input_data, clustered, count);
+		AggregateExecutor::NullaryClustUpdate<STATE, OP>(aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class T, class OP>
@@ -641,7 +641,7 @@ public:
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnaryClusterUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
+		AggregateExecutor::UnaryClustUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

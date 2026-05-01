@@ -1,5 +1,6 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -14,109 +15,8 @@ struct BoolState {
 	bool val;
 };
 
-struct BoolAndFunFunction : public ClusteredStateCopy {
-	template <class INPUT_TYPE, class STATE>
-	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
-		local.empty = false;
-		local.val = input && local.val;
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		if (count != 0) {
-			UpdateClusteredLocal(local, input);
-		}
-	}
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.val = true;
-		state.empty = true;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.val = target.val && source.val;
-		target.empty = target.empty && source.empty;
-	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.empty) {
-			finalize_data.ReturnNull();
-			return;
-		}
-		target = state.val;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		state.empty = false;
-		state.val = input && state.val;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-	static bool IgnoreNull() {
-		return true;
-	}
-};
-
-struct BoolOrFunFunction : public ClusteredStateCopy {
-	template <class INPUT_TYPE, class STATE>
-	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
-		local.empty = false;
-		local.val = input || local.val;
-	}
-
-	template <class INPUT_TYPE, class STATE>
-	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
-		if (count != 0) {
-			UpdateClusteredLocal(local, input);
-		}
-	}
-	template <class STATE>
-	static void Initialize(STATE &state) {
-		state.val = false;
-		state.empty = true;
-	}
-
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		target.val = target.val || source.val;
-		target.empty = target.empty && source.empty;
-	}
-
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (state.empty) {
-			finalize_data.ReturnNull();
-			return;
-		}
-		target = state.val;
-	}
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
-		state.empty = false;
-		state.val = input || state.val;
-	}
-
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
-	                              idx_t count) {
-		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
-		}
-	}
-
-	static bool IgnoreNull() {
-		return true;
-	}
-};
+using BoolAndFunFunction = EmptyValAggregate<LogicalAnd, ConstantInit<true>>;
+using BoolOrFunFunction = EmptyValAggregate<LogicalOr, ConstantInit<false>>;
 
 LogicalType GetBoolAndStateType(const AggregateFunction &function) {
 	child_list_t<LogicalType> child_types;

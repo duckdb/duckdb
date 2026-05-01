@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -70,12 +71,7 @@ struct MinMaxBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
 	                              idx_t count) {
-		if (!state.isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
-			state.isset = true;
-		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
-		}
+		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -93,7 +89,7 @@ struct MinMaxBase {
 	}
 };
 
-template <class COMPARE>
+template <class REDUCE_OP>
 struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
 	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &) {
@@ -105,8 +101,8 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 		if (!local.isset) {
 			local.value = input;
 			local.isset = true;
-		} else if (COMPARE::template Operation<INPUT_TYPE>(input, local.value)) {
-			local.value = input;
+		} else {
+			local.value = REDUCE_OP::template Operation<INPUT_TYPE>(local.value, input);
 		}
 	}
 
@@ -118,9 +114,7 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 	}
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
-		if (COMPARE::template Operation<INPUT_TYPE>(input, state.value)) {
-			state.value = input;
-		}
+		state.value = REDUCE_OP::template Operation<INPUT_TYPE>(state.value, input);
 	}
 
 	template <class T, class STATE>
@@ -131,39 +125,23 @@ struct NumericMinMaxBase : public MinMaxBase, public ClusteredStateCopy {
 			target = state.value;
 		}
 	}
-};
 
-struct MinOperation : public NumericMinMaxBase<LessThan> {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.isset) {
-			// source is NULL, nothing to do
 			return;
 		}
 		if (!target.isset) {
-			// target is NULL, use source value directly
 			target = source;
-		} else if (GreaterThan::Operation(target.value, source.value)) {
-			target.value = source.value;
+		} else {
+			using value_type = decltype(target.value);
+			target.value = REDUCE_OP::template Operation<value_type>(target.value, source.value);
 		}
 	}
 };
 
-struct MaxOperation : public NumericMinMaxBase<GreaterThan> {
-	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
-		if (!source.isset) {
-			// source is NULL, nothing to do
-			return;
-		}
-		if (!target.isset) {
-			// target is NULL, use source value directly
-			target = source;
-		} else if (LessThan::Operation(target.value, source.value)) {
-			target.value = source.value;
-		}
-	}
-};
+using MinOperation = NumericMinMaxBase<Min>;
+using MaxOperation = NumericMinMaxBase<Max>;
 
 struct MinMaxStringState : MinMaxState<string_t> {
 	void Destroy() {
@@ -232,23 +210,18 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 };
 
-struct MinOperationString : public StringMinMaxBase {
+template <class COMPARE>
+struct StringMinMaxOperation : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
+		if (COMPARE::template Operation<INPUT_TYPE>(input, state.value)) {
 			Assign(state, input, input_data);
 		}
 	}
 };
 
-struct MaxOperationString : public StringMinMaxBase {
-	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
-			Assign(state, input, input_data);
-		}
-	}
-};
+using MinOperationString = StringMinMaxOperation<LessThan>;
+using MaxOperationString = StringMinMaxOperation<GreaterThan>;
 
 template <OrderType ORDER_TYPE_TEMPLATED>
 struct VectorMinMaxBase {
