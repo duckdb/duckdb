@@ -20,6 +20,12 @@ namespace duckdb {
 //! Defined in struct_vector.cpp.
 DUCKDB_API const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector);
 
+//! Returns ListVector::GetChild(vector) / ListVector::GetListSize(vector) without
+//! requiring list_vector.hpp to be complete in this header.
+//! Defined in list_vector.cpp.
+DUCKDB_API const Vector &VectorIteratorGetListChild(const Vector &vector);
+DUCKDB_API idx_t VectorIteratorGetListSize(const Vector &vector);
+
 class VectorValidityIterator {
 public:
 	VectorValidityIterator(const Vector &vector, idx_t count) : count(count) {
@@ -310,6 +316,179 @@ public:
 private:
 	UnifiedVectorFormat format;
 	ChildIterators children;
+	idx_t count;
+};
+
+//! Specialization of VectorIterator for VectorListType<T>.
+//! Iterates over a list vector, exposing per-row NULL information and access to
+//! the child entries via GetChildValue(idx) / GetChildValues().  Supports
+//! recursive nesting: VectorListType<VectorListType<T>>, etc.
+//!
+//! The source vector must not be a DICTIONARY_VECTOR; call Flatten() first if needed.
+template <class T>
+class VectorIterator<VectorListType<T>> {
+private:
+	using ChildIteratorType = VectorIterator<T>;
+	using ChildEntryType = typename ChildIteratorType::ValueEntry;
+
+public:
+	VectorIterator(const Vector &vector, idx_t count)
+	    : count(count), child_iter(VectorIteratorGetListChild(vector), VectorIteratorGetListSize(vector)) {
+		vector.ToUnifiedFormat(count, format);
+		list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
+	}
+
+public:
+	//! Range object returned by ValueEntry::GetChildValues() for range-based for loops.
+	struct ChildRange {
+	private:
+		struct RangeIterator {
+		public:
+			RangeIterator(const ChildIteratorType &child_iter, idx_t pos) : child_iter(child_iter), pos(pos) {
+			}
+			RangeIterator &operator++() { // NOLINT: match stl API
+				++pos;
+				return *this;
+			}
+			RangeIterator operator++(int) { // NOLINT: match stl API
+				auto tmp = *this;
+				++pos;
+				return tmp;
+			}
+			bool operator==(const RangeIterator &other) const {
+				return pos == other.pos;
+			}
+			bool operator!=(const RangeIterator &other) const {
+				return pos != other.pos;
+			}
+			ChildEntryType operator*() const {
+				return child_iter[pos];
+			}
+
+		private:
+			const ChildIteratorType &child_iter;
+			idx_t pos;
+		};
+
+	public:
+		ChildRange(const ChildIteratorType &child_iter, idx_t offset, idx_t length)
+		    : child_iter(child_iter), offset(offset), length(length) {
+		}
+		RangeIterator begin() const { // NOLINT: match stl API
+			return RangeIterator(child_iter, offset);
+		}
+		RangeIterator end() const { // NOLINT: match stl API
+			return RangeIterator(child_iter, offset + length);
+		}
+		idx_t size() const {
+			return length;
+		}
+
+	private:
+		const ChildIteratorType &child_iter;
+		idx_t offset;
+		idx_t length;
+	};
+
+	struct ValueEntry {
+		ValueEntry(const UnifiedVectorFormat &format, const list_entry_t *list_data,
+		           const ChildIteratorType &child_iter, idx_t index)
+		    : format(format), list_data(list_data), child_iter(child_iter), index(index) {
+			sel_index = format.sel->get_index(index);
+		}
+
+		bool IsValid() const {
+			return format.validity.RowIsValid(sel_index);
+		}
+		idx_t GetIndex() const {
+			return index;
+		}
+		//! Returns the list_entry_t (offset + length). The entry must be valid.
+		const list_entry_t &GetValue() const {
+			D_ASSERT(IsValid());
+			return list_data[sel_index];
+		}
+		//! Returns the number of child elements in this list entry.
+		idx_t GetListLength() const {
+			return GetValue().length;
+		}
+		//! Returns the child entry at position idx within this list.
+		ChildEntryType GetChildValue(idx_t idx) const {
+			return child_iter[GetValue().offset + idx];
+		}
+		//! Returns an iterable range over all child entries in this list.
+		ChildRange GetChildValues() const {
+			const auto &entry = GetValue();
+			return ChildRange(child_iter, entry.offset, entry.length);
+		}
+
+	private:
+		const UnifiedVectorFormat &format;
+		const list_entry_t *list_data;
+		const ChildIteratorType &child_iter;
+		idx_t sel_index;
+		idx_t index;
+	};
+
+private:
+	class Iterator {
+	public:
+		Iterator(const UnifiedVectorFormat &format, const list_entry_t *list_data, const ChildIteratorType &child_iter,
+		         idx_t index)
+		    : format(format), list_data(list_data), child_iter(child_iter), index(index) {
+		}
+
+	public:
+		Iterator &operator++() { // NOLINT: match stl API
+			++index;
+			return *this;
+		}
+		Iterator operator++(int) { // NOLINT: match stl API
+			auto tmp = *this;
+			++index;
+			return tmp;
+		}
+		bool operator==(const Iterator &other) const {
+			return index == other.index;
+		}
+		bool operator!=(const Iterator &other) const {
+			return index != other.index;
+		}
+		ValueEntry operator*() const {
+			return ValueEntry(format, list_data, child_iter, index);
+		}
+		ValueEntry operator[](idx_t n) const {
+			return ValueEntry(format, list_data, child_iter, index + n);
+		}
+
+	private:
+		const UnifiedVectorFormat &format;
+		const list_entry_t *list_data;
+		const ChildIteratorType &child_iter;
+		idx_t index;
+	};
+
+public:
+	Iterator begin() { // NOLINT: match stl API
+		return Iterator(format, list_data, child_iter, 0);
+	}
+	Iterator end() { // NOLINT: match stl API
+		return Iterator(format, list_data, child_iter, count);
+	}
+	idx_t size() const {
+		return count;
+	}
+	ValueEntry operator[](idx_t i) const {
+		return ValueEntry(format, list_data, child_iter, i);
+	}
+	bool CanHaveNull() const {
+		return format.validity.CanHaveNull();
+	}
+
+private:
+	UnifiedVectorFormat format;
+	const list_entry_t *list_data;
+	ChildIteratorType child_iter;
 	idx_t count;
 };
 
