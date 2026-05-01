@@ -258,6 +258,9 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		return;
 	}
 
+	auto &meta_transaction = MetaTransaction::Get(context);
+	meta_transaction.DetachDatabase(*attached_db);
+
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.

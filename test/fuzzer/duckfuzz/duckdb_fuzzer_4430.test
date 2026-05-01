@@ -1,0 +1,21 @@
+# name: test/fuzzer/duckfuzz/duckdb_fuzzer_4430.test
+# description: Regression test for database detach
+# group: [duckfuzz]
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_fuzzer_4430_a.db' AS db1
+
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE db1.tbl(i INTEGER)
+
+statement ok
+DETACH db1
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_fuzzer_4430_b.db' AS db1
+
+statement ok
+COMMIT
