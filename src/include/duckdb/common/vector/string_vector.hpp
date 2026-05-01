@@ -56,7 +56,6 @@ public:
 	}
 
 public:
-	void Verify(const LogicalType &type) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 
 protected:
@@ -67,6 +66,7 @@ protected:
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	StringHeap &AllocateHeap(Allocator &allocator);

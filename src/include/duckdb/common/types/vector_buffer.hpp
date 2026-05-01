@@ -163,7 +163,8 @@ public:
 	virtual idx_t GetDataSize(const LogicalType &type, idx_t count) const;
 	//! Returns the total amount of bytes allocated by the vector buffer
 	virtual idx_t GetAllocationSize() const;
-	virtual void Verify(const LogicalType &type) const;
+	void Verify(const LogicalType &type) const;
+	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 	//! Get the value at the given index directly from the buffer's data
 	virtual Value GetValue(const LogicalType &type, idx_t index) const;
 	//! Set the value at the given index (flat/constant vectors only)
@@ -206,6 +207,8 @@ protected:
 	                          idx_t source_offset, idx_t target_offset, idx_t copy_count);
 	virtual buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                                      idx_t count) const;
+
+	virtual void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
 
 protected:
 	VectorType vector_type;

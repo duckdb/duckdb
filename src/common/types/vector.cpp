@@ -842,6 +842,13 @@ void Vector::Verify() const {
 	buffer->Verify(GetType());
 }
 
+void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (!buffer) {
+		return;
+	}
+	buffer->Verify(GetType(), sel, count);
+}
+
 void Vector::Verify(idx_t count) const {
 	Verify();
 }

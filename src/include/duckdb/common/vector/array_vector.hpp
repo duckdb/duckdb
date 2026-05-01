@@ -43,7 +43,6 @@ public:
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
-	void Verify(const LogicalType &type) const override;
 
 protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, idx_t offset, idx_t end) override;
@@ -52,6 +51,7 @@ protected:
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	ValidityMask validity;

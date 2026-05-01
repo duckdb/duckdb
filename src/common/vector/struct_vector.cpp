@@ -76,7 +76,7 @@ idx_t VectorStructBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorStructBuffer::Verify(const LogicalType &type) const {
+void VectorStructBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	auto &child_types = StructType::GetChildTypes(type);
@@ -84,7 +84,11 @@ void VectorStructBuffer::Verify(const LogicalType &type) const {
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
 		D_ASSERT(child.GetType() == child_types[child_idx].second);
-		child.Verify();
+		if (!sel.IsSet() && count == Size()) {
+			child.Verify();
+		} else {
+			child.Verify(sel, count);
+		}
 		D_ASSERT(child.size() == Size());
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);

@@ -34,11 +34,11 @@ public:
 
 public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type) const override;
 
 protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;

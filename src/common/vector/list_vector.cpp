@@ -82,8 +82,9 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorListBuffer::Verify(const LogicalType &type) const {
-	StandardVectorBuffer::Verify(type);
+void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::Verify(type, sel, count);
+
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	if (type.id() == LogicalTypeId::MAP) {
 		// FIXME: verify map
@@ -95,18 +96,38 @@ void VectorListBuffer::Verify(const LogicalType &type) const {
 		// auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
 		// D_ASSERT(valid_check == MapInvalidReason::VALID);
 	}
-	idx_t verify_count = Size();
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		verify_count = 1;
-	}
+
+	// NOTE: size > capacity can occur in valid intermediate states (e.g. after SetListSize before Reserve)
+	// D_ASSERT(size <= capacity);
+	idx_t total_size = 0;
 	auto list_data = reinterpret_cast<list_entry_t *>(data_ptr);
-	for (idx_t i = 0; i < verify_count; i++) {
-		auto &le = list_data[i];
-		if (validity.RowIsValid(i)) {
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto &le = list_data[idx];
+		if (validity.RowIsValid(idx)) {
 			D_ASSERT(le.offset + le.length <= child->size());
+			total_size += le.length;
 		}
 	}
-	child->Verify();
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
+		return;
+	}
+	SelectionVector child_sel(total_size);
+	idx_t child_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
+		auto &le = list_data[idx];
+		if (validity.RowIsValid(idx)) {
+			D_ASSERT(le.offset + le.length <= child->size());
+			for (idx_t k = 0; k < le.length; k++) {
+				child_sel.set_index(child_count++, le.offset + k);
+			}
+		}
+	}
+	child->Verify(child_sel, child_count);
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {

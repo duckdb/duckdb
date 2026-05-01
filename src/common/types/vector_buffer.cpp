@@ -81,6 +81,26 @@ idx_t VectorBuffer::GetAllocationSize() const {
 }
 
 void VectorBuffer::Verify(const LogicalType &type) const {
+	VerifyInternal(type, *FlatVector::IncrementalSelectionVector(), Size());
+}
+
+void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		SelectionVector owned_sel;
+		VerifyInternal(type, *ConstantVector::ZeroSelectionVector(1ULL, owned_sel), 1ULL);
+		return;
+	}
+	VerifyInternal(type, sel, count);
+}
+
+void VectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	if (sel.IsSet()) {
+		for (idx_t i = 0; i < Size(); i++) {
+			D_ASSERT(sel.get_index(i) < Size());
+		}
+	} else {
+		D_ASSERT(count <= Size());
+	}
 }
 
 void VectorBuffer::SetVectorType(VectorType vector_type) {
