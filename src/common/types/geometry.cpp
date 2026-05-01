@@ -1277,24 +1277,17 @@ uint32_t Geometry::GetExtent(const string_t &wkb, GeometryExtent &extent, bool &
 
 template <class V = VertexXY>
 static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	// Flatten the source vector to extract all vertices
-	source_vec.Flatten(row_count);
-
-	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
-	auto &vert_parts = StructVector::GetEntries(target_vec);
-	double *vert_data[V::WIDTH];
-
-	for (idx_t i = 0; i < V::WIDTH; i++) {
-		vert_data[i] = FlatVector::GetDataMutable<double>(vert_parts[i]);
-	}
+	const auto geom_data = source_vec.Values<string_t>(row_count);
+	auto vert_writer = FlatVector::Writer<typename V::STRUCT_TYPE>(target_vec, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		if (FlatVector::IsNull(source_vec, row_idx)) {
-			FlatVector::SetNull(target_vec, row_idx, true);
+		auto geom_entry = geom_data[row_idx];
+		if (!geom_entry.IsValid()) {
+			vert_writer.WriteNull();
 			continue;
 		}
 
-		const auto &blob = geom_data[row_idx];
+		const auto &blob = geom_entry.GetValue();
 		const auto blob_data = blob.GetData();
 		const auto blob_size = blob.GetSize();
 
@@ -1303,9 +1296,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 		// Skip byte order and type/meta
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 
-		for (uint32_t dim_idx = 0; dim_idx < V::WIDTH; dim_idx++) {
-			vert_data[dim_idx][row_idx] = reader.Read<double>();
-		}
+		vert_writer.ForEach([&](auto &child_writer) { child_writer.WriteValue(reader.Read<double>()); });
 	}
 }
 

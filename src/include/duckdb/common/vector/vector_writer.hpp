@@ -11,13 +11,24 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 
+#include <tuple>
+#include <utility>
+
 namespace duckdb {
+
+//! Returns StructVector::GetEntries(vector) (mutable) without requiring struct_vector.hpp
+//! to be complete in this header. Defined in struct_vector.cpp.
+DUCKDB_API vector<Vector> &VectorWriterGetStructEntries(Vector &vector);
 
 template <class T>
 struct VectorWriter {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset)
 	    : data(FlatVector::GetDataMutable<T>(vector)), validity(FlatVector::ValidityMutable(vector)),
 	      count(offset + count), current_idx(offset) {
+	}
+	VectorWriter(VectorWriter &&other) noexcept
+	    : data(other.data), validity(other.validity), count(other.count), current_idx(other.current_idx) {
+		other.count = other.current_idx;
 	}
 	~VectorWriter() {
 		// ensure that all values we said we were going to write have been written
@@ -53,6 +64,11 @@ private:
 template <>
 struct VectorWriter<string_t> {
 	VectorWriter(Vector &vector, idx_t count, idx_t offset);
+	VectorWriter(VectorWriter &&other) noexcept
+	    : vector(other.vector), data(other.data), validity(other.validity), heap(other.heap), count(other.count),
+	      current_idx(other.current_idx) {
+		other.count = other.current_idx;
+	}
 	~VectorWriter() {
 		D_ASSERT(Exception::UncaughtException() || current_idx == count);
 	}
@@ -113,6 +129,79 @@ private:
 	optional_ptr<StringHeap> heap;
 	idx_t count;
 	idx_t current_idx;
+};
+
+//! Specialization of VectorWriter for VectorStructType<Args...>.
+//! Writes rows to a struct vector with NULL propagation to all children.
+//! Supports recursive nesting: a child writer may itself be a struct writer.
+template <class... Args>
+struct VectorWriter<VectorStructType<Args...>> {
+private:
+	static_assert(sizeof...(Args) > 0, "VectorStructType must have at least one child type");
+
+	using ChildWriters = std::tuple<VectorWriter<Args>...>;
+
+public:
+	VectorWriter(Vector &vector, idx_t count, idx_t offset)
+	    : validity(FlatVector::ValidityMutable(vector)), count(offset + count), current_idx(offset),
+	      children(MakeChildren(vector, count, offset, std::index_sequence_for<Args...> {})) {
+	}
+	~VectorWriter() {
+		D_ASSERT(Exception::UncaughtException() || current_idx == count);
+	}
+
+	//! Write a NULL for this struct row. Also writes NULL to every child so all
+	//! per-child row counters stay in sync with the top-level counter.
+	void WriteNull() {
+		D_ASSERT(current_idx < count);
+		validity.SetInvalid(current_idx);
+		WriteNullToChildren(std::index_sequence_for<Args...> {});
+		current_idx++;
+	}
+
+	//! Write a non-NULL row by calling fun(child0, child1, ...) with each child
+	//! writer as a separate argument. fun is responsible for writing one value to
+	//! each child. Advances the top-level row counter automatically.
+	template <class FUN>
+	void WriteValue(FUN &&fun) {
+		D_ASSERT(current_idx < count);
+		std::apply(std::forward<FUN>(fun), children);
+		current_idx++;
+	}
+
+	//! Call fun(child_writer) for each child in declaration order, then advance
+	//! the top-level row counter. Useful when all children share the same type
+	//! and the same operation is applied to each.
+	template <class FUN>
+	void ForEach(FUN &&fun) {
+		D_ASSERT(current_idx < count);
+		ForEachImpl(std::forward<FUN>(fun), std::index_sequence_for<Args...> {});
+		current_idx++;
+	}
+
+private:
+	template <std::size_t... Is>
+	void WriteNullToChildren(std::index_sequence<Is...>) {
+		(std::get<Is>(children).WriteNull(), ...);
+	}
+
+	template <class FUN, std::size_t... Is>
+	void ForEachImpl(FUN &&fun, std::index_sequence<Is...>) {
+		(fun(std::get<Is>(children)), ...);
+	}
+
+	template <std::size_t... Is>
+	static ChildWriters MakeChildren(Vector &vector, idx_t count, idx_t offset, std::index_sequence<Is...>) {
+		auto &entries = VectorWriterGetStructEntries(vector);
+		D_ASSERT(entries.size() >= sizeof...(Is));
+		return ChildWriters(VectorWriter<Args>(entries[Is], count, offset)...);
+	}
+
+private:
+	ValidityMask &validity;
+	idx_t count;
+	idx_t current_idx;
+	ChildWriters children;
 };
 
 template <class T>
