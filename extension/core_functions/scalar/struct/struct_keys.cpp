@@ -1,4 +1,3 @@
-#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
@@ -15,17 +14,11 @@ struct StructKeysBindData : public FunctionData {
 		const auto &child_types = StructType::GetChildTypes(type);
 		const auto count = child_types.size();
 
-		ListVector::Reserve(keys_vector, count);
-		auto &list_child = ListVector::GetChildMutable(keys_vector);
-		auto child_data = FlatVector::Writer<string_t>(list_child, count);
-		for (idx_t i = 0; i < count; i++) {
-			child_data.WriteValue(string_t(child_types[i].first));
+		auto list_writer = FlatVector::Writer<VectorListType<string_t>>(keys_vector, 2);
+		for (auto &[child_writer, idx] : list_writer.WriteList(count)) {
+			child_writer.WriteValue(string_t(child_types[idx].first));
 		}
-		ListVector::SetListSize(keys_vector, count);
-
-		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
-		list_entries.WriteValue(list_entry_t(0, count));
-		list_entries.WriteNull();
+		list_writer.WriteNull();
 	}
 
 	bool Equals(const FunctionData &other) const override {
