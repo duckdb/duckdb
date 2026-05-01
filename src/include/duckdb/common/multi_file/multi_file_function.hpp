@@ -687,46 +687,6 @@ public:
 		} while (true);
 	}
 
-	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	                                                     column_t column_index) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-
-		if (!bind_data.initial_reader) {
-			// no reader
-			return nullptr;
-		}
-		// scanning single file and we have the metadata read already
-		if (IsVirtualColumn(column_index)) {
-			return nullptr;
-		}
-
-		const auto &col_name = bind_data.names[column_index];
-
-		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			if (!bind_data.file_options.union_by_name) {
-				// multiple files, but no union_by_name: no luck!
-				return nullptr;
-			}
-
-			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
-			if (!merged_stats) {
-				return nullptr;
-			}
-
-			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
-				auto &union_reader = *bind_data.union_readers[i];
-				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats || merged_stats->GetType() != stats->GetType()) {
-					return nullptr;
-				}
-				merged_stats->Merge(*stats);
-			}
-			return merged_stats;
-		}
-		return bind_data.initial_reader->GetStatistics(context, col_name);
-	}
-
 	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
 	                                                             TableFunctionGetStatisticsInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
