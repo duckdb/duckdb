@@ -125,6 +125,7 @@ jobs:
               - tools/juliapkg/**
 
       - name: Check CI
+        timeout-minutes: 10
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
@@ -259,6 +260,7 @@ jobs:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
       - name: Install tools
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
@@ -299,6 +301,7 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Fix ASan runtime
@@ -347,6 +350,7 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
@@ -403,6 +407,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: |
         python3 scripts/ci/retry.py -- make toolsci
         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
@@ -446,6 +451,7 @@ jobs:
          ref: ${{ needs.prepare.outputs.git_sha }}
 
      - name: Install
+       timeout-minutes: 10
        run: |
          python3 scripts/ci/retry.py -- make toolsci
          python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
@@ -498,6 +504,7 @@ jobs:
         version: latest
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -524,6 +531,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -588,6 +596,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
@@ -622,9 +631,11 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Install pytest
+      timeout-minutes: 10
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
         python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
@@ -721,6 +732,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
@@ -936,6 +948,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
@@ -1013,6 +1026,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
@@ -1069,6 +1083,7 @@ jobs:
           python-version: '3.12'
 
       - name: Dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           python scripts/ci/retry.py -- choco install \
@@ -1161,6 +1176,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1193,6 +1209,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1227,6 +1244,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       shell: bash
       run: |
         python3 scripts/ci/retry.py -- make toolsci
@@ -1271,6 +1289,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -1308,6 +1327,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install
+      timeout-minutes: 10
       shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 
