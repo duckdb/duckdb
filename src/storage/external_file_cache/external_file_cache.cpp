@@ -88,8 +88,8 @@ void ExternalFileCache::ReindexCachedFileCore(CachedFile &cached_file, idx_t fil
 				if (copy_start >= copy_end) {
 					continue;
 				}
-				memcpy(buf.Ptr() + (copy_start - new_start), old_entry.first.Ptr() + (copy_start - oi_file_start),
-				       copy_end - copy_start);
+				memcpy(buf.GetDataMutable() + (copy_start - new_start),
+				       old_entry.first.Ptr() + (copy_start - oi_file_start), copy_end - copy_start);
 			}
 
 			auto new_block = make_shared_ptr<CacheBlock>();
