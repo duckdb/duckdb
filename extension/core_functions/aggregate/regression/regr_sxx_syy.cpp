@@ -3,7 +3,6 @@
 // REGR_SYY(y, x)
 // Returns REGR_COUNT(y, x) * VAR_POP(y) for non-null pairs.
 
-
 #include "core_functions/aggregate/regression/regr_count.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"

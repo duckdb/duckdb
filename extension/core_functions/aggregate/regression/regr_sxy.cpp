@@ -1,7 +1,6 @@
 // REGR_SXY(y, x)
 // Returns REGR_COUNT(expr1, expr2) * COVAR_POP(expr1, expr2) for non-null pairs.
 
-
 #include "core_functions/aggregate/regression/regr_count.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
