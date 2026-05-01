@@ -1355,9 +1355,11 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	if (filters) {
 		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, context.logger,
 		                                                     file.path);
-		vector<bool> is_projected(column_ids.size(), projection_ids.empty());
+		// projection_ids is authoritative once the optimizer has finalized it (projection_pushdown_done);
+		// otherwise an empty list means "no info" and every column is treated as projected.
+		const bool unlisted_is_projected = projection_ids.empty() && !projection_pushdown_done;
+		vector<bool> is_projected(column_ids.size(), unlisted_is_projected);
 		for (auto id : projection_ids) {
-			// projection_ids has been translated to file-local space by MultiFileColumnMapper::CreateMapping
 			D_ASSERT(id < is_projected.size());
 			is_projected[id] = true;
 		}
@@ -1614,10 +1616,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
 
 				if (state.filter_always_true[sf_idx] && scan_filter.column_is_filter_only) {
-					// filter-only column whose filter is always-true on this row group: skip both the
-					// filter eval and the decode (Select), and reset the vector so chunk verification
-					// (and any downstream that doesn't realise the column is unused) won't read stale
-					// buffer pointers from a prior batch.
+					// row-group stats prove the filter always-true and the column is unprojected: skip
+					// both the filter eval and the decode. Reset the vector so chunk verification
+					// doesn't see stale buffer pointers from a prior batch.
 					need_to_read[local_idx.GetIndex()] = false;
 					auto &result_vector = result.data[local_idx.GetIndex()];
 					result_vector.Reference(Value(result_vector.GetType()), count_t(result.size()));

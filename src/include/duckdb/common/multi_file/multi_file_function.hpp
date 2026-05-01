@@ -14,6 +14,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include <numeric>
 
 namespace duckdb {
@@ -528,7 +529,14 @@ public:
 		// must run before InitializeReader so pre-opened readers see the projection set during CreateMapping
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
-		if (input.CanRemoveFilterColumns() || require_extra_columns) {
+		bool projection_pushdown_done = false;
+		if (input.op) {
+			projection_pushdown_done = input.op->Cast<PhysicalTableScan>().projection_pushdown_done;
+		}
+		if (projection_pushdown_done) {
+			// optimizer ran — propagate verbatim; empty means "nothing projected" (e.g. count(*))
+			result->projection_ids = input.projection_ids;
+		} else if (input.CanRemoveFilterColumns() || require_extra_columns) {
 			if (!input.projection_ids.empty()) {
 				result->projection_ids = input.projection_ids;
 			} else {
@@ -538,6 +546,14 @@ public:
 				}
 			}
 		}
+		if (require_extra_columns && result->projection_ids.empty()) {
+			// hive partition outputs need an explicit identity mapping to drive synthetic-column expressions
+			result->projection_ids.resize(input.column_indexes.size());
+			for (idx_t i = 0; i < input.column_indexes.size(); i++) {
+				result->projection_ids[i] = i;
+			}
+		}
+		result->projection_pushdown_done = projection_pushdown_done;
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {

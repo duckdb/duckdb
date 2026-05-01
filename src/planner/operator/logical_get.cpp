@@ -318,6 +318,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<optional_idx>(213, "ordinality_idx", ordinality_idx);
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
+	serializer.WritePropertyWithDefault<bool>(215, "projection_pushdown_done", projection_pushdown_done, false);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -350,6 +351,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<optional_idx>(213, "ordinality_idx", result->ordinality_idx);
 	auto row_group_order_options =
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
+	deserializer.ReadPropertyWithDefault<bool>(215, "projection_pushdown_done", result->projection_pushdown_done);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(

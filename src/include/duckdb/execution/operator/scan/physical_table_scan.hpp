@@ -43,6 +43,8 @@ public:
 	vector<ColumnIndex> column_ids;
 	//! The projected-out column ids
 	vector<idx_t> projection_ids;
+	//! True iff projection_ids is authoritative (see LogicalGet::projection_pushdown_done)
+	bool projection_pushdown_done = false;
 	//! The names of the columns
 	vector<string> names;
 	//! The table filters

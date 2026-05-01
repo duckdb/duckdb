@@ -164,6 +164,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 
 	idx_t max_threads = 1;
 	vector<idx_t> projection_ids;
+	//! True iff projection_ids is authoritative — see BaseFileReader::projection_ids.
+	bool projection_pushdown_done = false;
 	vector<LogicalType> scanned_types;
 	vector<ColumnIndex> column_indexes;
 	optional_ptr<TableFilterSet> filters;

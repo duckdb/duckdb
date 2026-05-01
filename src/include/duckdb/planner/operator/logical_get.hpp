@@ -40,6 +40,10 @@ public:
 	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
 	vector<ProjectionIndex> projection_ids;
+	//! True once RemoveUnusedColumns finalized projection_ids; an empty list then authoritatively means
+	//! "nothing projected" (e.g. count(*)). Stays false when the rule didn't run, in which case an empty
+	//! list is treated as "every column projected".
+	bool projection_pushdown_done = false;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
 	//! The set of input parameters for the table function

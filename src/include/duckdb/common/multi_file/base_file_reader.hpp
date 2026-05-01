@@ -54,8 +54,10 @@ public:
 	unique_ptr<DeleteFilter> deletion_filter;
 	//! Global identifiers (which column position of the projected output this filter operates) for the filters
 	vector<MultiFileGlobalIndex> filter_global_indices;
-	//! Local column_ids positions that appear in projected output; empty means all projected.
+	//! Local positions that appear in projected output. An empty list authoritatively means "nothing
+	//! projected" only when projection_pushdown_done is true; otherwise it falls back to "all projected".
 	vector<idx_t> projection_ids;
+	bool projection_pushdown_done = false;
 
 public:
 	const vector<MultiFileColumnDefinition> &GetColumns() const {
