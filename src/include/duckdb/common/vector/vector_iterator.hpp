@@ -222,7 +222,7 @@ public:
 		}
 		//! Returns the ValueEntry for the I-th child at this row
 		template <idx_t I>
-		ChildEntryAt<I> GetValue() const {
+		ChildEntryAt<I> GetChildValue() const {
 			static_assert(I < sizeof...(Args), "FlatStruct child index out of range");
 			return std::get<I>(children)[index];
 		}
@@ -237,7 +237,7 @@ public:
 	private:
 		template <class FUN, std::size_t... Is>
 		void ForEachImpl(FUN &&fun, std::index_sequence<Is...>) const {
-			(fun(GetValue<Is>()), ...);
+			(fun(GetChildValue<Is>()), ...);
 		}
 
 	private:
