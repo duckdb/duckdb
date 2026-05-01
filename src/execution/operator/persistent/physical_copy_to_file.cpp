@@ -1422,8 +1422,8 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::CreateFileState(string output
 	}
 
 	auto res = make_uniq<GlobalFileState>(std::move(data), output_path);
-	if (!prepare_global_state.load()) {
-		prepare_global_state = res;
+	if (!prepare_global_state.load(std::memory_order_acquire)) {
+		prepare_global_state.store(res, std::memory_order_release);
 	}
 	return res;
 }
@@ -1440,7 +1440,8 @@ optional_ptr<CopyToFileInfo> CopyToFileGlobalState::AddFile(const string &file_n
 }
 
 unique_ptr<GlobalFileState> CopyToFileGlobalState::FinalizeFileStateLocked(unique_ptr<GlobalFileState> file_state) {
-	if (RefersToSameObject(*prepare_global_state.load().get(), *file_state)) {
+	auto prepare_state = prepare_global_state.load(std::memory_order_acquire);
+	if (prepare_state && RefersToSameObject(*prepare_state.get(), *file_state)) {
 		prepare_global_state_owned = std::move(file_state);
 		return nullptr;
 	}
@@ -1773,19 +1774,21 @@ PhysicalCopyToFile::PrepareBatch(ClientContext &context, GlobalSinkState &gstate
 	auto &gstate = gstate_p.Cast<CopyToFileGlobalState>();
 
 	// Ensure we have a global state for prepares
-	if (!gstate.prepare_global_state.load(std::memory_order_relaxed)) {
+	auto prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
+	if (!prepare_global_state) {
 		D_ASSERT(!file_state_ptr);
 		annotated_unique_lock<annotated_mutex> global_guard(gstate.lock);
-		if (!gstate.prepare_global_state.load()) {
+		prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
+		if (!prepare_global_state) {
 			file_state_ptr = create_file_state_fun();
-			D_ASSERT(gstate.prepare_global_state.load());
+			prepare_global_state = gstate.prepare_global_state.load(std::memory_order_acquire);
+			D_ASSERT(prepare_global_state);
 		}
 	}
 
 	// Prepare the batch
-	auto &prepare_global_state = *gstate.prepare_global_state.load(std::memory_order_relaxed);
 	const CopyFunctionBatchAnalyzer batch_analyzer(*batch, batch_size, batch_size_bytes);
-	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state.data, std::move(batch))};
+	return {batch_analyzer, function.prepare_batch(context, *bind_data, *prepare_global_state->data, std::move(batch))};
 }
 
 void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
@@ -1802,11 +1805,12 @@ void PhysicalCopyToFile::FlushBatch(ClientContext &context, GlobalSinkState &gst
 			file_state_ptr = create_file_state_fun();
 		}
 
-		annotated_lock_guard<annotated_mutex> file_guard(file_state_ptr->lock);
+		annotated_unique_lock<annotated_mutex> file_guard(file_state_ptr->lock);
 		if (PhysicalCopyRotateNow(*this, *file_state_ptr)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_file_state = std::move(file_state_ptr);
 			file_state_ptr = create_file_state_fun();
+			file_guard.unlock();
 			global_guard.unlock();
 
 			// Finalize this file!
