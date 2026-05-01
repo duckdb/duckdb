@@ -1256,10 +1256,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
-		if (stats && stats->GetType().IsNested() && column_indexes[i].IsPushdownExtract()) {
-			auto storage_index = StorageIndex::FromColumnIndex(column_indexes[i]);
-			stats = stats->PushdownExtract(storage_index.GetChildIndex(0));
-		}
 		// filters contain output chunk index, not file col idx!
 		auto filter_entry = filters->TryGetFilterByColumnIndex(col_idx);
 		if (stats && filter_entry) {
