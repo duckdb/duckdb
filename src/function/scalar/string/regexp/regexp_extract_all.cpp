@@ -13,7 +13,6 @@
 namespace duckdb {
 
 using regexp_util::CreateStringPiece;
-using regexp_util::Extract;
 using regexp_util::ParseRegexOptions;
 using regexp_util::TryParseConstantPattern;
 
@@ -368,7 +367,8 @@ unique_ptr<FunctionData> RegexpExtractAll::Bind(BindScalarFunctionInput &input) 
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
 	}
-	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern, "");
+	return make_uniq<RegexpExtractBindData>(options, std::move(constant_string), constant_pattern,
+	                                        static_cast<int8_t>(0));
 }
 
 } // namespace duckdb
