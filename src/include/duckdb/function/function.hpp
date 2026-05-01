@@ -14,6 +14,7 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/enums/function_errors.hpp"
+#include "duckdb/common/optional_idx.hpp"
 
 namespace duckdb {
 class CatalogEntry;

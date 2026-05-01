@@ -302,6 +302,8 @@ enum class MetricGroup : uint8_t;
 
 enum class MetricType : uint8_t;
 
+enum class Monotonicity : uint8_t;
+
 enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
@@ -935,6 +937,9 @@ const char* EnumUtil::ToChars<MetricGroup>(MetricGroup value);
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value);
+
+template<>
+const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
 
 template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
@@ -1683,6 +1688,9 @@ MetricGroup EnumUtil::FromString<MetricGroup>(const char *value);
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value);
+
+template<>
+Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
 
 template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
