@@ -60,6 +60,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::CUMULATIVE_VACUUM_TIME:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::PHYSICAL_PLANNER:
@@ -115,6 +116,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::CUMULATIVE_VACUUM_TIME:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::PHYSICAL_PLANNER:
@@ -187,6 +189,9 @@ void ProfilingUtils::CollectMetrics(const MetricType &type, QueryMetrics &query_
 		break;
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::COMMIT_LOCAL_STORAGE_LATENCY));
+		break;
+	case MetricType::CUMULATIVE_VACUUM_TIME:
+		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::CUMULATIVE_VACUUM_TIME));
 		break;
 	case MetricType::LATENCY:
 		metric = Value::DOUBLE(query_metrics.GetMetricInSeconds(MetricType::LATENCY));

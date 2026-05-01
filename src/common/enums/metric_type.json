@@ -218,6 +218,15 @@
         "collection_method": "timer"
       },
       {
+        "name": "CUMULATIVE_VACUUM_TIME",
+        "enum_value": 103,
+        "description": "Cumulative elapsed time spent executing checkpoint row-group vacuum tasks and rebuilding indexes when vacuum_rebuild_indexes is enabled.",
+        "type": "double",
+        "unit": "seconds",
+        "query_root": true,
+        "collection_method": "timer"
+      },
+      {
         "name": "WAL_REPLAY_ENTRY_COUNT",
         "enum_value": 97,
         "description": "The total number of entries to replay in the WAL.",

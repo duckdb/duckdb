@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/profiler.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -1819,7 +1820,11 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
+		Profiler rebuild_indexes_timer;
+		rebuild_indexes_timer.Start();
 		RebuildIndexes();
+		rebuild_indexes_timer.End();
+		writer.AddCumulativeVacuumTime(rebuild_indexes_timer.ElapsedNanos());
 	}
 	// The row group payload data has been written. Now write:
 	//   sample

@@ -64,6 +64,7 @@ public:
 	AttachedDatabase &GetAttached();
 	DatabaseInstance &GetDatabase();
 	unique_ptr<TaskExecutor> CreateTaskExecutor();
+	void AddCumulativeVacuumTime(idx_t elapsed_nanos);
 
 protected:
 	DuckTableEntry &table;

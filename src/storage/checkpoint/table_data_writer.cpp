@@ -4,7 +4,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -52,6 +55,13 @@ unique_ptr<TaskExecutor> TableDataWriter::CreateTaskExecutor() {
 		return make_uniq<TaskExecutor>(*context);
 	}
 	return make_uniq<TaskExecutor>(TaskScheduler::GetScheduler(GetDatabase()));
+}
+
+void TableDataWriter::AddCumulativeVacuumTime(idx_t elapsed_nanos) {
+	if (!context || elapsed_nanos == 0) {
+		return;
+	}
+	context->client_data->profiler->AddToCounter(MetricType::CUMULATIVE_VACUUM_TIME, elapsed_nanos);
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
