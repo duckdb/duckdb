@@ -58,8 +58,36 @@ SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, L
 SimpleFunction::~SimpleFunction() {
 }
 
+static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
+	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
+	       schema_name != DEFAULT_SCHEMA;
+}
+
+string FunctionParameter::ToString() const {
+	return StringUtil::Format("%s %s", name, type.ToString());
+}
+
+string FunctionSignature::ToString() const {
+	vector<string> params;
+	params.reserve(parameters.size());
+	for (auto &param : parameters) {
+		params.push_back(param.ToString());
+	}
+	if (varargs.IsValid()) {
+		params.push_back("[" + varargs.ToString() + "...]");
+	}
+	auto head = StringUtil::Format("(%s)", StringUtil::Join(params, ", "));
+	if (return_type.IsValid()) {
+		return head + " -> " + return_type.ToString();
+	}
+	return head;
+}
+
 string SimpleFunction::ToString() const {
-	throw NotImplementedException("SimpleFunction::ToString() not implemented");
+	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
+		return StringUtil::Format("%s.%s.%s%s", catalog_name, schema_name, name, signature.ToString());
+	}
+	return name + signature.ToString();
 }
 
 SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
@@ -108,11 +136,6 @@ hash_t FunctionSignature::Hash() const {
 
 hash_t SimpleFunction::Hash() const {
 	return signature.Hash();
-}
-
-static bool RequiresCatalogAndSchemaNamePrefix(const string &catalog_name, const string &schema_name) {
-	return !catalog_name.empty() && catalog_name != SYSTEM_CATALOG && !schema_name.empty() &&
-	       schema_name != DEFAULT_SCHEMA;
 }
 
 string Function::CallToString(const string &catalog_name, const string &schema_name, const string &name,

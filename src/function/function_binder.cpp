@@ -351,6 +351,7 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 	}
 
 	// Varargs should be expanded by this point
+	// If not, the function has somehow added more argument expressions during binding, which is not allowed.
 	D_ASSERT(children.size() == function.GetArguments().size());
 
 	for (idx_t i = 0; i < children.size(); i++) {

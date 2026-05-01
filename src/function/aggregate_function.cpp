@@ -68,6 +68,7 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
+	arguments.clear();
 	for (auto &param : function.GetSignature().GetParameters()) {
 		arguments.push_back(param.GetType());
 	}

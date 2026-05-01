@@ -152,8 +152,8 @@ struct ScalarFunctionExtractor {
 
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameterCount(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}
@@ -210,8 +210,8 @@ struct WindowFunctionExtractor {
 
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameterCount(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}
@@ -266,8 +266,8 @@ struct AggregateFunctionExtractor {
 
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameterCount(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}

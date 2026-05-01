@@ -104,6 +104,8 @@ public:
 	FunctionParameter(string name, LogicalType type) : name(std::move(name)), type(std::move(type)) {
 	}
 
+	string ToString() const;
+
 	bool operator==(const FunctionParameter &other) const;
 	bool operator!=(const FunctionParameter &other) const;
 
@@ -138,9 +140,12 @@ public:
 	    : FunctionSignature(std::move(arguments), LogicalType(LogicalTypeId::INVALID), std::move(return_type)) {
 	}
 
-	bool Equal(const FunctionSignature &other) const;
+	string ToString() const;
+
 	bool operator==(const FunctionSignature &other) const;
 	bool operator!=(const FunctionSignature &other) const;
+
+	bool Equal(const FunctionSignature &other) const;
 
 public:
 	auto GetParameter(idx_t index) const -> const FunctionParameter & {
