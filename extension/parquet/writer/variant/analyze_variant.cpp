@@ -214,6 +214,7 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 		return;
 	}
 	is_analyzed = true;
+	analyzed_shredding_type = ShreddingType(shredded_type);
 	auto typed_value = TransformTypedValueRecursive(shredded_type);
 	auto &schema = Schema();
 	auto &context = writer.GetContext();
@@ -226,6 +227,14 @@ void VariantColumnWriter::AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState 
 	child_writers.push_back(ColumnWriter::CreateWriterRecursive(context, writer, schema_path, typed_value,
 	                                                            "typed_value", false, nullptr, nullptr,
 	                                                            schema.max_repeat, schema.max_define + 1, true));
+}
+
+bool VariantColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
+	if (analyzed_shredding_type.set) {
+		result = analyzed_shredding_type.Copy();
+		return true;
+	}
+	return StructColumnWriter::TryExportPreparedShreddingType(result);
 }
 
 } // namespace duckdb

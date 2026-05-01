@@ -71,9 +71,15 @@ class ParquetWriter;
 class PhysicalOperator;
 enum class GeoParquetVersion : uint8_t;
 
+struct PreparedParquetLayout {
+	vector<duckdb_parquet::SchemaElement> schema;
+	ShreddingType shredding_types;
+};
+
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
+	PreparedParquetLayout layout;
 };
 
 struct ParquetBloomFilterEntry {
@@ -239,6 +245,13 @@ public:
 
 private:
 	void GatherWrittenStatistics();
+	void InitializeColumnOrders(idx_t unique_columns);
+	void InitializeStatsUnifiers();
+	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);
+	void InitializeColumnWriters();
+	idx_t InitializeColumnWriterSchemaIndices();
+	PreparedParquetLayout ExportPreparedLayout() const;
+	idx_t CountLeafColumnWriters() const;
 
 private:
 	ClientContext &context;
