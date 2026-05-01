@@ -271,7 +271,7 @@ struct ICUStrptime : public ICUDateFunc {
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}
-		const bool is_try = (bound_function.name == "try_strptime");
+		const bool is_try = (bound_function.GetName() == "try_strptime");
 		scalar_function_t function = is_try ? TryParse<timestamp_t> : Parse<timestamp_t>;
 		Value format_value = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		string format_string;
@@ -341,11 +341,24 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &functions = scalar_function.functions.functions;
 		optional_idx best_index;
 		for (idx_t i = 0; i < functions.size(); i++) {
-			auto &function = functions[i];
-			if (types == function.GetArguments()) {
-				best_index = i;
-				break;
+			const auto &sig = functions[i].GetSignature();
+			if (sig.GetParameterCount() != types.size()) {
+				continue;
 			}
+
+			auto match = true;
+			for (idx_t j = 0; j < sig.GetParameterCount(); j++) {
+				if (sig.GetParameter(j).GetType() != types[j]) {
+					match = false;
+					break;
+				}
+			}
+			if (!match) {
+				continue;
+			}
+
+			best_index = i;
+			break;
 		}
 		if (!best_index.IsValid()) {
 			throw InternalException("ICU - Function for TailPatch not found");

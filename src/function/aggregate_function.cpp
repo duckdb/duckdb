@@ -34,13 +34,14 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 }
 
 BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
-	this->name = function.name;
-	this->schema_name = function.schema_name;
-	this->catalog_name = function.catalog_name;
-	this->return_type = function.GetReturnType();
-	this->properties = function.GetProperties();
-	this->callbacks = function.GetCallbacks();
-	this->function_info = function.GetFunctionInfo();
+	name = function.name;
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
+	extra_info = function.extra_info;
+	return_type = function.GetReturnType();
+	properties = function.GetProperties();
+	callbacks = function.GetCallbacks();
+	function_info = function.GetFunctionInfo();
 
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)

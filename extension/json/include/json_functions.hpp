@@ -115,7 +115,7 @@ private:
 	template <class FUNCTION_INFO>
 	static void AddAliases(const vector<string> &names, FUNCTION_INFO fun, vector<FUNCTION_INFO> &functions) {
 		for (auto &name : names) {
-			fun.SetName(name);
+			fun.name = name;
 			functions.push_back(fun);
 		}
 	}

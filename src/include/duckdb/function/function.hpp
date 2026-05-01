@@ -408,6 +408,7 @@ protected:
 	string name;
 	string schema_name;
 	string catalog_name;
+	string extra_info;
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
@@ -430,6 +431,10 @@ public:
 	}
 	const string &GetCatalogName() const {
 		return catalog_name;
+	}
+
+	const string &GetExtraInfo() const {
+		return extra_info;
 	}
 
 	DUCKDB_API string ToString() const;

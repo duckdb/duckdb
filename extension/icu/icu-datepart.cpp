@@ -424,7 +424,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	template <typename BIND_TYPE>
-	static duckdb::unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
+	static duckdb::unique_ptr<FunctionData> BindAdapter(ClientContext &context, BoundScalarFunction &bound_function,
 	                                                    vector<duckdb::unique_ptr<Expression>> &arguments,
 	                                                    typename BIND_TYPE::adapter_t adapter) {
 		return make_uniq<BIND_TYPE>(context, adapter);
@@ -435,7 +435,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &context = input.GetClientContext();
 		auto &arguments = input.GetArguments();
 
-		const auto part_code = GetDatePartSpecifier(bound_function.name);
+		const auto part_code = GetDatePartSpecifier(bound_function.GetName());
 		if (IsBigintDatepart(part_code)) {
 			using data_t = BindAdapterData<int64_t>;
 			auto adapter = PartCodeBigintFactory(part_code);
@@ -471,7 +471,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 			arguments.erase(arguments.begin());
 			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
-			bound_function.name = part_name;
+			bound_function.SetName(part_name);
 			bound_function.SetReturnType(LogicalType::DOUBLE);
 			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_t, double>);
 

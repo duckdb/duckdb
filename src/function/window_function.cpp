@@ -22,6 +22,7 @@ BoundWindowFunction::BoundWindowFunction(const WindowFunction &base) : window_en
 	name = base.name;
 	schema_name = base.schema_name;
 	catalog_name = base.catalog_name;
+	extra_info = base.extra_info;
 	return_type = base.GetReturnType();
 	callbacks = base.GetCallbacks();
 	properties = base.GetProperties();
