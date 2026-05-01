@@ -82,7 +82,7 @@ public:
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void Verify(const LogicalType &type) const override;
 	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
 	                                        idx_t count) override;
 

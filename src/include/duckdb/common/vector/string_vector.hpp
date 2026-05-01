@@ -56,7 +56,7 @@ public:
 	}
 
 public:
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
+	void Verify(const LogicalType &type) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
 
 protected:

@@ -39,22 +39,15 @@ idx_t DictionaryBuffer::GetAllocationSize() const {
 	return size + GetEntry().data.GetAllocationSize();
 }
 
-void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void DictionaryBuffer::Verify(const LogicalType &type) const {
 	D_ASSERT(vector_type == VectorType::DICTIONARY_VECTOR);
-	D_ASSERT(type == GetEntry().data.GetType());
-	if (!sel.IsSet()) {
-		// sel is not set - directly pass in the dictionary
-		GetEntry().data.Verify(sel_vector, count);
-	} else {
-		// sel is set - slice the dictionary with the selection vector
-		SelectionVector child_sel(count);
-		for (idx_t i = 0; i < count; i++) {
-			child_sel.set_index(i, sel_vector.get_index(sel.get_index(i)));
-		}
-		GetEntry().data.Verify(child_sel, count);
+	auto &child = GetEntry().data;
+	D_ASSERT(type == child.GetType());
+	// verify the child vector
+	child.Verify();
+
+	for(idx_t i = 0; i < Size(); i++) {
+		D_ASSERT(sel_vector.get_index(i) < child.size());
 	}
 }
 

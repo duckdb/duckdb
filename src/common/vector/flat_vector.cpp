@@ -50,19 +50,16 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void StandardVectorBuffer::Verify(const LogicalType &type) const {
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
+	idx_t verify_count = Size();
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
+		verify_count = 1;
 	}
 	// verify all entries in the sel fit within the validity
-	if (sel.IsSet()) {
-		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(sel.get_index(i) < validity.Capacity());
-		}
-	} else {
-		D_ASSERT(count <= validity.Capacity());
-	}
+	D_ASSERT(verify_count < validity.Capacity());
+	D_ASSERT(verify_count <= Capacity());
+	D_ASSERT(type_size == GetTypeIdSize(type.InternalType()));
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {

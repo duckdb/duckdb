@@ -22,10 +22,11 @@ idx_t ShreddedVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void ShreddedVectorBuffer::Verify(const LogicalType &type) const {
 	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
 	D_ASSERT(vector_type == VectorType::SHREDDED_VECTOR);
-	shredded_data->Verify(sel, count);
+	shredded_data->Verify();
+	D_ASSERT(shredded_data->size() == Size());
 }
 
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {

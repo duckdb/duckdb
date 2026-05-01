@@ -392,7 +392,7 @@ void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 #ifdef DEBUG
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Verify(size());
+		data[i].Verify();
 	}
 
 	if (!ColumnCount()) {

@@ -101,15 +101,16 @@ void VectorStringBuffer::SetValue(const LogicalType &type, idx_t index, const Va
 	}
 }
 
-void VectorStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	StandardVectorBuffer::Verify(type, sel, count);
+void VectorStringBuffer::Verify(const LogicalType &type) const {
+	StandardVectorBuffer::Verify(type);
+
+	idx_t verify_count = Size();
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		count = 1;
+		verify_count = 1;
 	}
 	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
 	auto data = reinterpret_cast<const string_t *>(data_ptr);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : sel.get_index(i);
+	for (idx_t idx = 0; idx < verify_count; idx++) {
 		if (!validity.RowIsValid(idx)) {
 			// NULL
 			continue;

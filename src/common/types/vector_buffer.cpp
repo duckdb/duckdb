@@ -80,7 +80,7 @@ idx_t VectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void VectorBuffer::Verify(const LogicalType &type) const {
 }
 
 void VectorBuffer::SetVectorType(VectorType vector_type) {

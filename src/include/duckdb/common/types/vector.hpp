@@ -128,10 +128,10 @@ public:
 	//! Turn the vector into a shredded variant vector
 	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
+	DUCKDB_API void Verify(idx_t count) const;
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
-	DUCKDB_API void Verify(idx_t count) const;
-	DUCKDB_API void Verify(const SelectionVector &sel, idx_t count) const;
+	DUCKDB_API void Verify() const;
 
 	//! Returns the [index] element of the Vector as a Value.
 	DUCKDB_API Value GetValue(idx_t index) const;

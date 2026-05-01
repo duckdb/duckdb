@@ -64,41 +64,14 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorArrayBuffer::Verify(const LogicalType &type) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
+	idx_t verify_count = Size();
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		if (!validity.RowIsValid(0)) {
-			// NULL constant array - verify child is also NULL constant
-			if (child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				D_ASSERT(ConstantVector::IsNull(*child));
-			}
-			return;
-		}
-		child->Verify(array_size);
-		return;
+		verify_count = 1;
 	}
-	// flat vector case - only verify children for valid (non-NULL) entries
-	idx_t selected_child_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto oidx = sel.get_index(i);
-		if (validity.RowIsValid(oidx)) {
-			selected_child_count += array_size;
-		}
-	}
-	SelectionVector child_sel(selected_child_count);
-	idx_t child_count = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto oidx = sel.get_index(i);
-		if (validity.RowIsValid(oidx)) {
-			for (idx_t r = 0; r < array_size; r++) {
-				child_sel.set_index(child_count++, oidx * array_size + r);
-			}
-		}
-	}
-	child->Verify(child_sel, child_count);
+	D_ASSERT(child->size() == Size() * array_size);
+	// FIXME: verify NULL-ness in child
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
