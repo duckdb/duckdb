@@ -1314,7 +1314,7 @@ static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, 
 	// Flatten the source vector to extract all vertices
 	source_vec.Flatten(row_count);
 
-	auto vert_iter = source_vec.Values<typename V::FlatStructType>(row_count);
+	auto vert_iter = source_vec.Values<typename V::STRUCT_TYPE>(row_count);
 	auto geom_data = FlatVector::GetDataMutable<string_t>(target_vec);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -1425,7 +1425,7 @@ static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_co
 	const auto line_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &vert_struct_vec = ListVector::GetChildMutable(source_vec);
 	const auto vert_total = ListVector::GetListSize(source_vec);
-	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
+	auto vert_iter = vert_struct_vec.Values<typename V::STRUCT_TYPE>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1570,7 +1570,7 @@ static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_struct_vec = ListVector::GetChildMutable(ring_vec);
 	const auto vert_total = ListVector::GetListSize(ring_vec);
-	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
+	auto vert_iter = vert_struct_vec.Values<typename V::STRUCT_TYPE>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1706,7 +1706,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 	const auto mult_data = FlatVector::GetData<list_entry_t>(source_vec);
 	auto &vert_struct_vec = ListVector::GetChildMutable(source_vec);
 	const auto vert_total = ListVector::GetListSize(source_vec);
-	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
+	auto vert_iter = vert_struct_vec.Values<typename V::STRUCT_TYPE>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -1874,7 +1874,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 	const auto line_data = FlatVector::GetData<list_entry_t>(line_vec);
 	auto &vert_struct_vec = ListVector::GetChildMutable(line_vec);
 	const auto vert_total = ListVector::GetListSize(line_vec);
-	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
+	auto vert_iter = vert_struct_vec.Values<typename V::STRUCT_TYPE>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;
@@ -2067,7 +2067,7 @@ static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_
 	const auto ring_data = FlatVector::GetData<list_entry_t>(ring_vec);
 	auto &vert_struct_vec = ListVector::GetChildMutable(ring_vec);
 	const auto vert_total = ListVector::GetListSize(ring_vec);
-	auto vert_iter = vert_struct_vec.Values<typename V::FlatStructType>(vert_total);
+	auto vert_iter = vert_struct_vec.Values<typename V::STRUCT_TYPE>(vert_total);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto out_idx = result_offset + row_idx;

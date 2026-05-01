@@ -15,10 +15,6 @@
 
 namespace duckdb {
 
-//! Tag type for struct vector writers with a fixed set of child types
-template <class... Args>
-struct FlatStruct {};
-
 //! Returns StructVector::GetEntries(vector) without requiring StructVector to
 //! be complete in this header (avoids a circular include via flat_vector.hpp).
 //! Defined in struct_vector.cpp.
@@ -189,7 +185,7 @@ private:
 //! and per-child VectorIterator<T>::ValueEntry access via the compile-time
 //! GetValue<I>() accessor. Supports heterogeneous child types.
 template <class... Args>
-class VectorIterator<FlatStruct<Args...>> {
+class VectorIterator<VectorStructType<Args...>> {
 private:
 	static_assert(sizeof...(Args) > 0, "FlatStruct must have at least one child type");
 
