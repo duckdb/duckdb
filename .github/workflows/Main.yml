@@ -435,6 +435,7 @@ jobs:
 
     - name: Tidy Check (clangd)
       run: |
+        make clean
         mkdir -p ~/.config/clangd
         cat > ~/.config/clangd/config.yaml <<'EOF'
         Diagnostics:
