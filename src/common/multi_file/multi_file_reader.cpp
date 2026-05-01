@@ -316,8 +316,11 @@ static bool TryResolvePreOpenConstant(column_t column_id, const string &file_pat
 		hive_partitions = HivePartitioning::Parse(file_path);
 		hive_partitions_parsed = true;
 	}
-	D_ASSERT(hive_partitions.size() == hive.size());
-	out_constant = file_options.GetHivePartitionValue(hive_partitions[hp->value], hp->value, context);
+	auto entry = hive_partitions.find(hp->value);
+	if (entry == hive_partitions.end()) {
+		return false;
+	}
+	out_constant = file_options.GetHivePartitionValue(entry->second, hp->value, context);
 	return true;
 }
 
@@ -631,7 +634,9 @@ bool MultiFileReader::CanSkipFileFromFilters(ClientContext &context, const OpenF
 	Value constant;
 
 	for (auto &it : *filters) {
-		auto column_id = global_column_ids[it.GetIndex().GetIndex()].GetPrimaryIndex();
+		auto projection_idx = it.GetIndex().GetIndex();
+		D_ASSERT(projection_idx < global_column_ids.size());
+		auto column_id = global_column_ids[projection_idx].GetPrimaryIndex();
 		if (!TryResolvePreOpenConstant(column_id, file.path, file_list_idx, reader_bind, file_options, context,
 		                               hive_partitions, hive_partitions_parsed, constant)) {
 			continue;
