@@ -1,0 +1,132 @@
+# name: test/sql/pragma/profiling/test_cumulative_vacuum_time_checkpoint_latency.test_slow
+# description: Test cumulative vacuum time relative to checkpoint latency
+# group: [profiling]
+
+require json
+
+require skip_reload
+
+statement ok
+SET wal_autocheckpoint = '1TB';
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+PRAGMA force_compression = 'uncompressed';
+
+statement ok
+SET max_vacuum_tasks = 1000;
+
+# With one execution thread, checkpoint latency should include the vacuum task
+# time plus the checkpoint work that follows it.
+
+statement ok
+SET threads = 1;
+
+statement ok
+ATTACH '__TEST_DIR__/single_thread_vacuum_latency.db' AS single_thread_vacuum (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE single_thread_vacuum.tbl AS
+SELECT
+	i AS id,
+	i % 1024 AS group_id,
+	repeat('payload-' || (i % 1024)::VARCHAR, 8) AS payload
+FROM range(524288) tbl(i);
+
+statement ok
+CHECKPOINT single_thread_vacuum;
+
+statement ok
+DELETE FROM single_thread_vacuum.tbl WHERE id % 2 = 0;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/single_thread_vacuum_latency.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT single_thread_vacuum;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE single_thread_vacuum_metrics AS SELECT * FROM '__TEST_DIR__/single_thread_vacuum_latency.json';
+
+query T
+SELECT CASE
+	WHEN cumulative_vacuum_time > 0 AND cumulative_vacuum_time < checkpoint_latency THEN 'true'
+	ELSE printf('single_thread vacuum=%.9f checkpoint=%.9f', cumulative_vacuum_time, checkpoint_latency)
+	END
+FROM single_thread_vacuum_metrics;
+----
+true
+
+# With many small vacuum tasks and many execution threads, cumulative vacuum
+# time can exceed the single outer checkpoint latency because it sums the
+# elapsed time of individual vacuum tasks.
+
+statement ok
+SET threads = 100;
+
+statement ok
+ATTACH '__TEST_DIR__/parallel_vacuum_latency.db' AS parallel_vacuum (ROW_GROUP_SIZE 2048);
+
+statement ok
+CREATE TABLE parallel_vacuum.tbl AS
+SELECT
+	i AS id,
+	i % 1024 AS group_id,
+	repeat('payload-' || (i % 1024)::VARCHAR, 8) AS payload
+FROM range(524288) tbl(i);
+
+statement ok
+CHECKPOINT parallel_vacuum;
+
+statement ok
+DELETE FROM parallel_vacuum.tbl WHERE id % 2 = 0;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/parallel_vacuum_latency.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_VACUUM_TIME": "true", "CHECKPOINT_LATENCY": "true"}';
+
+statement ok
+SET profiling_coverage='ALL';
+
+statement ok
+CHECKPOINT parallel_vacuum;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE parallel_vacuum_metrics AS SELECT * FROM '__TEST_DIR__/parallel_vacuum_latency.json';
+
+query T
+SELECT CASE
+	WHEN cumulative_vacuum_time > checkpoint_latency THEN 'true'
+	ELSE printf('parallel vacuum=%.9f checkpoint=%.9f ratio=%.2f',
+	            cumulative_vacuum_time,
+	            checkpoint_latency,
+	            CASE WHEN checkpoint_latency = 0 THEN 0 ELSE cumulative_vacuum_time / checkpoint_latency END)
+	END
+FROM parallel_vacuum_metrics;
+----
+true

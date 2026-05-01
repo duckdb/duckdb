@@ -20,8 +20,6 @@ PRAGMA disable_checkpoint_on_shutdown;
 statement ok
 PRAGMA disable_profiling;
 
-# row-group vacuum without indexes is timed.
-
 statement ok
 ATTACH '__TEST_DIR__/cumulative_vacuum_time_vacuum.db' AS vacuum_db;
 
