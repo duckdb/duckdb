@@ -420,13 +420,22 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalS
 	return function.dynamic_to_string(input);
 }
 
-optional_idx PhysicalTableScan::GetRowsScanned(GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	if (function.rows_scanned) {
-		auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-		auto &state = lstate.Cast<TableScanLocalSourceState>();
-		return function.rows_scanned(*gstate.global_state, *state.local_state);
+void PhysicalTableScan::GetMetrics(ClientContext &context, GlobalSourceState &gstate_p, LocalSourceState &lstate,
+                                   const profiler_settings_t &requested_metrics, profiler_metrics_t &metrics) const {
+	if (!function.get_metrics && !function.rows_scanned) {
+		return;
 	}
-	return optional_idx();
+	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
+	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	if (function.get_metrics) {
+		function.get_metrics(context, bind_data.get(), *gstate.global_state, *state.local_state, requested_metrics,
+		                     metrics);
+		return;
+	}
+	if (requested_metrics.find(MetricType::OPERATOR_ROWS_SCANNED) != requested_metrics.end()) {
+		metrics[MetricType::OPERATOR_ROWS_SCANNED] =
+		    Value::UBIGINT(function.rows_scanned(*gstate.global_state, *state.local_state));
+	}
 }
 
 } // namespace duckdb

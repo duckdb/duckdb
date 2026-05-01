@@ -1,0 +1,527 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_row_group_metrics.test_slow
+# description: Test OPERATOR_ROW_GROUPS_SCANNED and OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN metrics
+# group: [profiling]
+
+require json
+
+# 400000 rows with default row_group_size (122880) => 4 row groups
+statement ok
+CREATE TABLE t AS SELECT range i FROM range(400000);
+
+statement ok
+CREATE TABLE empty_t(i INTEGER);
+
+# Single row group (10 rows < row_group_size)
+statement ok
+CREATE TABLE small_t AS SELECT range i FROM range(10);
+
+statement ok
+CREATE TABLE local_t(i BIGINT);
+
+statement ok
+CREATE TABLE persistent_local_rg AS SELECT range i FROM range(10);
+
+# Four persistent row groups: row group 0 is low-valued, row groups 1-3 are high-valued.
+statement ok
+CREATE TABLE mixed_t AS
+SELECT CASE WHEN range < 122880 THEN range ELSE range + 10000000 END AS i FROM range(400000);
+
+statement ok
+CREATE TABLE self_insert_t AS SELECT range i FROM range(400000);
+
+# --- Full seq_scan: all 4 row groups scanned ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE VIEW operator_metrics AS
+WITH RECURSIVE ops AS (
+    SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
+    UNION ALL
+    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+)
+SELECT op.operator_type,
+       op.operator_row_groups_scanned AS scanned,
+       op.operator_total_row_groups_to_scan AS total
+FROM ops;
+
+statement ok
+CREATE VIEW cumulative_metrics AS
+SELECT cumulative_row_groups_scanned::BIGINT AS scanned,
+       cumulative_total_row_groups_to_scan::BIGINT AS total
+FROM '__TEST_DIR__/profiling_output.json';
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+# --- Filtered scan: skips 3 of 4 row groups ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+1	4
+
+# --- Index scan: scanned stays 0; total still reflects table size ---
+
+statement ok
+CREATE INDEX idx ON t(i);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i = 5;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	0	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+0	4
+
+statement ok
+DROP INDEX idx;
+
+# --- Empty table: 0 / 0 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM empty_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	0	0
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+0	0
+
+# --- Single-row-group table: 1 / 1 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM small_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	1
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+1	1
+
+# --- Enabled metric appears on non-scan operators with default value 0 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'UNGROUPED_AGGREGATE';
+----
+UNGROUPED_AGGREGATE	0	0
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+# --- Multi-threaded scan: cross-thread sum still equals 4 ---
+
+statement ok
+PRAGMA threads=4;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+# --- Multi-threaded filtered scan: pruning still leaves 1 ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t WHERE i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	1	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+1	4
+
+# --- Multi-scan query (join): each scan reports its own table's row groups ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t JOIN small_t USING (i);
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY total;
+----
+TABLE_SCAN	1	1
+TABLE_SCAN	1	4
+
+query II
+SELECT sum(scanned)::BIGINT, sum(total)::BIGINT
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2	5
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+2	5
+
+# --- Repeated scan query: same table's row groups are counted once per scan operator ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM t a, t b WHERE a.i < 100 AND b.i < 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN' ORDER BY scanned, total;
+----
+TABLE_SCAN	1	4
+TABLE_SCAN	1	4
+
+query II
+SELECT sum(scanned)::BIGINT, sum(total)::BIGINT
+FROM operator_metrics
+WHERE operator_type = 'TABLE_SCAN';
+----
+2	8
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+2	8
+
+# --- Self-insert: total reflects the scan target, not row groups appended by the same statement ---
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+INSERT INTO self_insert_t SELECT i + 100000000 FROM self_insert_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+statement ok
+ROLLBACK;
+
+# --- LIMITation: rows scanned is not flushed when the scan is stopped early ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROWS_SCANNED": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT * FROM t LIMIT 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE VIEW rows_scanned_operator_metrics AS
+WITH RECURSIVE ops AS (
+    SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
+    UNION ALL
+    SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
+)
+SELECT op.operator_type,
+       op.operator_rows_scanned AS rows_scanned
+FROM ops;
+
+# The table scan starts, but the downstream LIMIT prevents FinishSource from
+# flushing OPERATOR_ROWS_SCANNED. Once fixed, this should report the started row group.
+query II
+SELECT * FROM rows_scanned_operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	0
+
+# --- Transaction-local append: pruning covers distinct persistent and local ranges ---
+
+statement ok
+PRAGMA threads=1;
+
+statement ok
+BEGIN TRANSACTION;
+
+# Two local row groups in a separate middle range. The filter below scans persistent row group 0
+# and local row group 0, while pruning persistent row groups 1-3 and local row group 1.
+statement ok
+INSERT INTO mixed_t SELECT range + 5000000 FROM range(200000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM mixed_t WHERE i < 5000100;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	2	6
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+2	6
+
+statement ok
+ROLLBACK;
+
+# --- Transaction-local append: one persistent and one local row group ---
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO persistent_local_rg SELECT range + 10 FROM range(10);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM persistent_local_rg;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	2	2
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+2	2
+
+statement ok
+ROLLBACK;
+
+# --- Transaction-local append: total includes uncommitted local row groups ---
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_t SELECT range FROM range(400000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true", "CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT count(*) FROM local_t;
+
+statement ok
+PRAGMA disable_profiling;
+
+query III
+SELECT * FROM operator_metrics WHERE operator_type = 'TABLE_SCAN';
+----
+TABLE_SCAN	4	4
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+4	4
+
+statement ok
+ROLLBACK;

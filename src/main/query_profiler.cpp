@@ -339,6 +339,40 @@ OperatorProfiler::OperatorProfiler(ClientContext &context) : context(context) {
 	}
 }
 
+static constexpr MetricType TABLE_SCAN_METRICS[] = {MetricType::OPERATOR_ROWS_SCANNED,
+                                                    MetricType::OPERATOR_ROW_GROUPS_SCANNED,
+                                                    MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN};
+
+static bool TableScanMetricsEnabled(const profiler_settings_t &settings) {
+	for (const auto metric_type : TABLE_SCAN_METRICS) {
+		if (ProfilingInfo::Enabled(settings, metric_type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool TryAddTableScanMetric(OperatorInformation &info, const profiler_metrics_t &metrics,
+                                  const MetricType metric_type) {
+	auto metric = metrics.find(metric_type);
+	if (metric == metrics.end()) {
+		return false;
+	}
+	info.AddMetric(metric_type, metric->second.GetValue<idx_t>());
+	return true;
+}
+
+static void AddEstimatedTableScanRowsScanned(ClientContext &context, OperatorInformation &info,
+                                             const PhysicalTableScan &table_scan) {
+	auto &bind_data = table_scan.bind_data;
+	if (bind_data && table_scan.function.cardinality) {
+		auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
+		if (cardinality && cardinality->has_estimated_cardinality) {
+			info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
+		}
+	}
+}
+
 void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_op) {
 	if (!enabled) {
 		return;
@@ -421,23 +455,23 @@ void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState 
 				}
 			}
 		}
-		if (ProfilingInfo::Enabled(settings, MetricType::OPERATOR_ROWS_SCANNED) &&
-		    active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN) {
+		if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN && TableScanMetricsEnabled(settings)) {
 			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-			const auto rows_scanned = table_scan.GetRowsScanned(gstate, lstate);
+			profiler_metrics_t metrics;
+			table_scan.GetMetrics(context, gstate, lstate, settings, metrics);
 			auto &info = GetOperatorInfo(*active_operator);
-			if (rows_scanned.IsValid()) {
-				// Use exact value if available.
-				info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, rows_scanned.GetIndex());
-			} else {
-				// Otherwise estimate as the cardinality of the table scan, if there is no exact value available.
-				auto &bind_data = table_scan.bind_data;
-				if (bind_data && table_scan.function.cardinality) {
-					auto cardinality = table_scan.function.cardinality(context, &(*bind_data));
-					if (cardinality && cardinality->has_estimated_cardinality) {
-						info.AddMetric(MetricType::OPERATOR_ROWS_SCANNED, cardinality->estimated_cardinality);
-					}
+			for (const auto metric_type : TABLE_SCAN_METRICS) {
+				if (!ProfilingInfo::Enabled(settings, metric_type)) {
+					continue;
 				}
+				if (metric_type == MetricType::OPERATOR_ROWS_SCANNED) {
+					if (!TryAddTableScanMetric(info, metrics, metric_type)) {
+						// Use the cardinality estimate if no exact rows-scanned metric is available.
+						AddEstimatedTableScanRowsScanned(context, info, table_scan);
+					}
+					continue;
+				}
+				TryAddTableScanMetric(info, metrics, metric_type);
 			}
 		}
 	}
@@ -490,6 +524,14 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROWS_SCANNED)) {
 			info.MetricSum<idx_t>(MetricType::OPERATOR_ROWS_SCANNED, node.second.rows_scanned);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_ROW_GROUPS_SCANNED)) {
+			info.MetricSum<idx_t>(MetricType::OPERATOR_ROW_GROUPS_SCANNED, node.second.row_groups_scanned);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN) &&
+		    node.second.total_row_groups_to_scan.IsValid()) {
+			info.metrics[MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN] =
+			    Value::UBIGINT(node.second.total_row_groups_to_scan.GetIndex());
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricType::RESULT_SET_SIZE)) {
 			info.MetricSum<idx_t>(MetricType::RESULT_SET_SIZE, node.second.result_set_size);

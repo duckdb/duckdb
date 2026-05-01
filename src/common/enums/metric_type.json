@@ -34,6 +34,26 @@
         "child": "OPERATOR_ROWS_SCANNED"
       },
       {
+        "name": "CUMULATIVE_ROW_GROUPS_SCANNED",
+        "enum_value": 101,
+        "description": "Total number of row groups scanned by all table scan operators in the query. This is the sum of OPERATOR_ROW_GROUPS_SCANNED across the operator tree.",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_ROW_GROUPS_SCANNED"
+      },
+      {
+        "name": "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN",
+        "enum_value": 102,
+        "description": "Total number of row groups available to all table scan operators in the query. This is the sum of OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN across the operator tree.",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false,
+        "collection_method": "cumulative",
+        "child": "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN"
+      },
+      {
         "name": "EXTRA_INFO",
         "enum_value": 3,
         "description": "Unique operator metrics",
@@ -321,6 +341,22 @@
         "description": "Type of the operator",
         "type": "string",
         "is_default": true
+      },
+      {
+        "name": "OPERATOR_ROW_GROUPS_SCANNED",
+        "enum_value": 99,
+        "description": "Number of row groups scanned by this table scan operator. Non-table-scan operators report 0 for this metric.",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false
+      },
+      {
+        "name": "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN",
+        "enum_value": 100,
+        "description": "Total number of row groups available to this table scan operator. Non-table-scan operators report 0 for this metric.",
+        "type": "uint64",
+        "unit": "absolute",
+        "is_default": false
       }
     ]
   },

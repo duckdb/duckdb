@@ -18,12 +18,16 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
 		MetricType::CUMULATIVE_ROWS_SCANNED,
+		MetricType::CUMULATIVE_ROW_GROUPS_SCANNED,
+		MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::EXTRA_INFO,
 		MetricType::LATENCY,
 		MetricType::OPERATOR_CARDINALITY,
 		MetricType::OPERATOR_NAME,
 		MetricType::OPERATOR_ROWS_SCANNED,
+		MetricType::OPERATOR_ROW_GROUPS_SCANNED,
 		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::OPERATOR_TYPE,
 		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
 		MetricType::OPTIMIZER_COLUMN_LIFETIME,
@@ -106,6 +110,8 @@ profiler_settings_t MetricsUtils::GetCoreMetrics() {
 		MetricType::CPU_TIME,
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_ROWS_SCANNED,
+		MetricType::CUMULATIVE_ROW_GROUPS_SCANNED,
+		MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::EXTRA_INFO,
 		MetricType::LATENCY,
 		MetricType::QUERY_NAME,
@@ -119,6 +125,8 @@ bool MetricsUtils::IsCoreMetric(MetricType type) {
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_CARDINALITY:
 	case MetricType::CUMULATIVE_ROWS_SCANNED:
+	case MetricType::CUMULATIVE_ROW_GROUPS_SCANNED:
+	case MetricType::CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::EXTRA_INFO:
 	case MetricType::LATENCY:
 	case MetricType::QUERY_NAME:
@@ -252,7 +260,9 @@ profiler_settings_t MetricsUtils::GetOperatorMetrics() {
 		MetricType::OPERATOR_CARDINALITY,
 		MetricType::OPERATOR_NAME,
 		MetricType::OPERATOR_ROWS_SCANNED,
+		MetricType::OPERATOR_ROW_GROUPS_SCANNED,
 		MetricType::OPERATOR_TIMING,
+		MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN,
 		MetricType::OPERATOR_TYPE,
 	};
 }
@@ -262,7 +272,9 @@ bool MetricsUtils::IsOperatorMetric(MetricType type) {
 	case MetricType::OPERATOR_CARDINALITY:
 	case MetricType::OPERATOR_NAME:
 	case MetricType::OPERATOR_ROWS_SCANNED:
+	case MetricType::OPERATOR_ROW_GROUPS_SCANNED:
 	case MetricType::OPERATOR_TIMING:
+	case MetricType::OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN:
 	case MetricType::OPERATOR_TYPE:
 		return true;
 	default:
