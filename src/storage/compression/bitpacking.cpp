@@ -435,7 +435,7 @@ public:
 		}
 
 		static void WriteMetaData(BitpackingCompressionState<T, WRITE_STATISTICS> *state, BitpackingMode mode) {
-			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.Ptr())};
+			bitpacking_metadata_t metadata {mode, (uint32_t)(state->data_ptr - state->handle.GetDataMutable())};
 			state->metadata_ptr -= sizeof(bitpacking_metadata_encoded_t);
 			Store<bitpacking_metadata_encoded_t>(EncodeMeta(metadata), state->metadata_ptr);
 		}
@@ -484,8 +484,8 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		metadata_ptr = handle.Ptr() + info.GetBlockSize();
+		data_ptr = handle.GetDataMutable() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();
 	}
 
 	void Append(Vector &input, idx_t count) {
@@ -503,7 +503,7 @@ public:
 
 	void FlushSegment() {
 		auto &state = checkpoint_data.GetCheckpointState();
-		auto base_ptr = handle.Ptr();
+		auto base_ptr = handle.GetDataMutable();
 
 		// Compact the segment by moving the metadata next to the data.
 
@@ -601,13 +601,13 @@ public:
 	explicit BitpackingScanState(const QueryContext &context, ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(context, segment.block);
-		auto data_ptr = handle.Ptr();
+		auto data_ptr = handle.GetDataMutable();
 
 		// load offset to bitpacking widths pointer
 		auto bitpacking_metadata_offset = Load<idx_t>(data_ptr + segment.GetBlockOffset());
 		bitpacking_metadata_ptr =
 		    data_ptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
-		if (bitpacking_metadata_ptr >= handle.Ptr() + current_segment.GetBlockSize()) {
+		if (bitpacking_metadata_ptr >= handle.GetDataMutable() + current_segment.GetBlockSize()) {
 			throw InternalException("Bitpacking offset is out of range at block \"%llu\" - corrupt database file",
 			                        segment.block->BlockId());
 		}
@@ -636,8 +636,8 @@ public:
 	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
-		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
-		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockSize()));
+		D_ASSERT(bitpacking_metadata_ptr > handle.GetDataMutable() &&
+		         (bitpacking_metadata_ptr < handle.GetDataMutable() + current_segment.GetBlockSize()));
 		current_group_offset = 0;
 		current_group = DecodeMeta(reinterpret_cast<bitpacking_metadata_encoded_t *>(bitpacking_metadata_ptr));
 
@@ -749,7 +749,7 @@ public:
 	}
 
 	data_ptr_t GetPtr(bitpacking_metadata_t group) {
-		return handle.Ptr() + current_segment.GetBlockOffset() + group.offset;
+		return handle.GetDataMutable() + current_segment.GetBlockOffset() + group.offset;
 	}
 };
 

@@ -81,7 +81,7 @@ MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
 MapStructField <- Expression ':' Expression
 
-GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression)?)
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
 QuestionMarkNumberedParameter <- '?' NumberLiteral

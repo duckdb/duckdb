@@ -524,7 +524,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	}
 
 	// Write the main database header.
-	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, 0, true);
 
 	// write the database headers
@@ -540,7 +540,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.serialization_compatibility = options.storage_version.GetIndex();
-	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
+	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
 	// header 2
@@ -553,7 +553,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.serialization_compatibility = options.storage_version.GetIndex();
-	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
+	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
 	// ensure that writing to disk is completed before returning
@@ -584,7 +584,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		delta = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	}
 
-	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
+	MainHeader main_header = DeserializeMainHeader(header_buffer.GetDataMutable() - delta);
 	memcpy(options.db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
@@ -648,11 +648,11 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 	// read the database headers from disk
 	DatabaseHeader h1;
 	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE);
-	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
+	h1 = DeserializeDatabaseHeader(main_header, header_buffer.GetDataMutable());
 
 	DatabaseHeader h2;
 	ReadAndChecksum(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
-	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
+	h2 = DeserializeDatabaseHeader(main_header, header_buffer.GetDataMutable());
 
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -698,11 +698,11 @@ void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location,
 	if (skip_block_header && delta > 0) {
 		//! Even with encryption enabled, the main header should be plaintext
 		stored_checksum = Load<uint64_t>(block.InternalBuffer());
-		computed_checksum = Checksum(block.buffer - delta, block.Size() + delta);
+		computed_checksum = Checksum(block.GetDataMutable() - delta, block.Size() + delta);
 	} else {
 		//! We do have to decrypt other headers
 		stored_checksum = Load<uint64_t>(block.InternalBuffer() + delta);
-		computed_checksum = Checksum(block.buffer, block.Size());
+		computed_checksum = Checksum(block.GetDataMutable(), block.Size());
 	}
 
 	// verify the checksum
@@ -737,13 +737,13 @@ void SingleFileBlockManager::ChecksumAndWrite(QueryContext context, FileBuffer &
 	if (skip_block_header && delta > 0) {
 		//! This happens only for the main database header
 		//! We do not encrypt the main database header
-		memmove(block.InternalBuffer() + Storage::DEFAULT_BLOCK_HEADER_SIZE, block.buffer, block.Size());
+		memmove(block.InternalBuffer() + Storage::DEFAULT_BLOCK_HEADER_SIZE, block.GetDataMutable(), block.Size());
 		//! zero out the last bytes of the block
 		memset(block.InternalBuffer() + block.Size() + Storage::DEFAULT_BLOCK_HEADER_SIZE, 0, delta);
-		checksum = Checksum(block.buffer - delta, block.Size() + delta);
+		checksum = Checksum(block.GetDataMutable() - delta, block.Size() + delta);
 		delta = 0;
 	} else {
-		checksum = Checksum(block.buffer, block.Size());
+		checksum = Checksum(block.GetDataMutable(), block.Size());
 	}
 
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
@@ -1322,7 +1322,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// rewrite the main header
 		options.version_number = 65;
 		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
 		// now write the header to the file
 		ChecksumAndWrite(context, header_buffer, 0);
 		header_buffer.Clear();
@@ -1331,7 +1331,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	// set the header inside the buffer
 	MemoryStream serializer(Allocator::Get(db));
 	header.Write(serializer);
-	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
+	memcpy(header_buffer.GetDataMutable(), serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	auto location = active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2;

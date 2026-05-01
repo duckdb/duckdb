@@ -1,0 +1,13 @@
+diff --git a/src/include/s3_multi_part_upload.hpp b/src/include/s3_multi_part_upload.hpp
+index c1020e7..2425342 100644
+--- a/src/include/s3_multi_part_upload.hpp
++++ b/src/include/s3_multi_part_upload.hpp
+@@ -16,7 +16,7 @@ public:
+ 	}
+ 
+ 	void *Ptr() {
+-		return buffer.Ptr();
++		return buffer.GetDataMutable();
+ 	}
+ 
+ 	// The S3 multipart part number. Note that internally we start at 0 but AWS S3 starts at 1

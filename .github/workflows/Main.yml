@@ -125,6 +125,7 @@ jobs:
               - tools/juliapkg/**
 
       - name: Check CI
+        timeout-minutes: 10
         if: steps.changed.outputs.github_any_changed == 'true'
         run: |
           echo "::add-matcher::.github/actionlint-matcher.json"
@@ -259,6 +260,7 @@ jobs:
           save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
       - name: Install tools
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make -j4 format_tools
 
       - name: Check format
@@ -276,8 +278,8 @@ jobs:
     needs: prepare
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
       CRASH_ON_ASSERT: 1
@@ -299,7 +301,19 @@ jobs:
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
+
+    - name: Fix ASan runtime
+      shell: bash
+      run: |
+        # libclang_rt.asan_static.a is missing in ubuntu 24.04.
+        asan_static_dir="/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu"
+        asan_static_target="/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a"
+        if [[ ! -e "${asan_static_dir}/libclang_rt.asan_static.a" && -e "${asan_static_target}" ]]; then
+          sudo mkdir -p "${asan_static_dir}"
+          sudo ln -sf "${asan_static_target}" "${asan_static_dir}/libclang_rt.asan_static.a"
+        fi
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -336,6 +350,7 @@ jobs:
       with:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download relassert build artifact
@@ -392,6 +407,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: |
         python3 scripts/ci/retry.py -- make toolsci
         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
@@ -423,6 +439,8 @@ jobs:
    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
    needs: prepare
    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
+   env:
+     CLANGD_BINARY: clangd-20
 
    steps:
      - name: "Checkout"
@@ -433,10 +451,9 @@ jobs:
          ref: ${{ needs.prepare.outputs.git_sha }}
 
      - name: Install
+       timeout-minutes: 10
        run: |
          python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo apt-get update -y -qq
-         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clangd
          python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
          python3 scripts/ci/retry.py -- make install-clangd-tidy
 
@@ -487,6 +504,7 @@ jobs:
         version: latest
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -513,6 +531,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -577,6 +596,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - name: Download linux release artifact
@@ -611,14 +631,16 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
-    - uses: ./.github/actions/cleanup_runner
-
     - name: Install pytest
+      timeout-minutes: 10
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
       run: |
-        python3 -m pip install --break-system-packages pytest
+        python3 scripts/ci/retry.py -- pip install --break-system-packages pytest
+
+    - uses: ./.github/actions/cleanup_runner
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -710,6 +732,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install tools
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
@@ -925,6 +948,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
@@ -1002,6 +1026,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install Ninja
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- brew install ninja
 
       - uses: ./.github/actions/ccache-action
@@ -1058,6 +1083,7 @@ jobs:
           python-version: '3.12'
 
       - name: Dependencies
+        timeout-minutes: 10
         shell: bash
         run: |
           python scripts/ci/retry.py -- choco install \
@@ -1150,6 +1176,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1182,6 +1209,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.git_sha }}
 
       - name: Install
+        timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -1203,8 +1231,8 @@ jobs:
       - prepare
       - linux-relassert
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -1216,6 +1244,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       shell: bash
       run: |
         python3 scripts/ci/retry.py -- make toolsci
@@ -1246,12 +1275,12 @@ jobs:
       - linux-relassert
     runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
-      CC: clang
-      CXX: clang++
+      CC: clang-20
+      CXX: clang++-20
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
-      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt:external_symbolizer_path=/usr/bin/llvm-symbolizer-20
       DUCKDB_TEST_DESCRIPTION: 'Tests run with thread sanitizer.'
 
     steps:
@@ -1260,6 +1289,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
 
     - name: Install
+      timeout-minutes: 10
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -1297,6 +1327,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install
+      timeout-minutes: 10
       shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 

@@ -1,0 +1,36 @@
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index aba73b9..a1bfbe3 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -261,6 +261,7 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+ 	func.get_bind_info = RTreeIndexScanBindInfo;
+ 	func.serialize = RTreeScanSerialize;
+ 	func.deserialize = RTreeScanDeserialize;
++	func.parallelism = TableFunctionParallelism::SEQUENTIAL;
+ 
+ 	return func;
+ }
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index 996e0ff..b1030cd 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -1172,6 +1172,7 @@ void Register(ExtensionLoader &loader) {
+ 	read_func.named_parameters["layer"] = LogicalType::VARCHAR;
+ 	read_func.named_parameters["max_batch_size"] = LogicalType::INTEGER;
+ 	read_func.named_parameters["keep_wkb"] = LogicalType::BOOLEAN;
++	read_func.parallelism = TableFunctionParallelism::SEQUENTIAL;
+ 
+ 	loader.RegisterFunction(read_func);
+ 
+diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
+index 57b34d0..fda8e1b 100644
+--- a/src/spatial/modules/shapefile/shapefile_module.cpp
++++ b/src/spatial/modules/shapefile/shapefile_module.cpp
+@@ -894,6 +894,7 @@ struct ST_ReadSHP {
+ 		read_func.table_scan_progress = GetProgress;
+ 		read_func.cardinality = GetCardinality;
+ 		read_func.projection_pushdown = true;
++		read_func.parallelism = TableFunctionParallelism::SEQUENTIAL;
+ 		loader.RegisterFunction(read_func);
+ 
+ 		InsertionOrderPreservingMap<string> tags;

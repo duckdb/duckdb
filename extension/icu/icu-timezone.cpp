@@ -423,16 +423,15 @@ bool ICUToTimeTZ::CastToTimeTZ(Vector &source, Vector &result, idx_t count, Cast
 	auto &info = cast_data.info->Cast<BindData>();
 	CalendarPtr calendar(info.calendar->clone());
 
-	UnaryExecutor::ExecuteWithNulls<timestamp_t, dtime_tz_t>(source, result, count,
-	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-		                                                         dtime_tz_t output;
-		                                                         if (ToTimeTZ(calendar.get(), input, output)) {
-			                                                         return output;
-		                                                         } else {
-			                                                         mask.SetInvalid(idx);
-			                                                         return dtime_tz_t();
-		                                                         }
-	                                                         });
+	UnaryExecutor::Execute<timestamp_t, dtime_tz_t>(source, result, count,
+	                                                [&](timestamp_t input) -> optional<dtime_tz_t> {
+		                                                dtime_tz_t output;
+		                                                if (ToTimeTZ(calendar.get(), input, output)) {
+			                                                return output;
+		                                                } else {
+			                                                return nullopt;
+		                                                }
+	                                                });
 	return true;
 }
 

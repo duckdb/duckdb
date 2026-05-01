@@ -45,9 +45,8 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	auto lhs_data = FlatVector::GetData<TYPE>(lhs_child);
 	auto rhs_data = FlatVector::GetData<TYPE>(rhs_child);
 
-	BinaryExecutor::ExecuteWithNulls<list_entry_t, list_entry_t, TYPE>(
-	    lhs_vec, rhs_vec, result, count,
-	    [&](const list_entry_t &left, const list_entry_t &right, ValidityMask &mask, idx_t row_idx) {
+	BinaryExecutor::Execute<list_entry_t, list_entry_t, TYPE>(
+	    lhs_vec, rhs_vec, result, count, [&](const list_entry_t &left, const list_entry_t &right) -> optional<TYPE> {
 		    if (left.length != right.length) {
 			    throw InvalidInputException(
 			        "%s: list dimensions must be equal, got left length '%d' and right length '%d'", func_name,
@@ -55,8 +54,7 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 		    }
 
 		    if (!OP::ALLOW_EMPTY && left.length == 0) {
-			    mask.SetInvalid(row_idx);
-			    return TYPE();
+			    return nullopt;
 		    }
 
 		    return OP::Operation(lhs_data + left.offset, rhs_data + right.offset, left.length);
