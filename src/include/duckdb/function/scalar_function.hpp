@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
@@ -241,6 +242,32 @@ public:
 	propagate_filter_t GetFilterPruneCallback() const { return callbacks.filter_prune; }
 	// clang-format on
 
+	//! Per-argument declarative properties. Returns a default ArgProperties when no annotation exists.
+	const ArgProperties &GetArgProperties(idx_t arg_idx) const {
+		static const ArgProperties unknown;
+		return arg_idx < arg_props.size() ? arg_props[arg_idx] : unknown;
+	}
+	const vector<ArgProperties> &GetAllArgProperties() const {
+		return arg_props;
+	}
+	bool HasArgProperties() const {
+		return !arg_props.empty();
+	}
+	ScalarFunction &SetArgProperties(idx_t arg_idx, ArgProperties props) {
+		if (arg_props.size() <= arg_idx) {
+			arg_props.resize(arg_idx + 1);
+		}
+		arg_props[arg_idx] = props;
+		return *this;
+	}
+	ScalarFunction &SetArgProperties(vector<ArgProperties> props) {
+		arg_props = std::move(props);
+		return *this;
+	}
+	ScalarFunction &SetUnaryArgProperties(ArgProperties props) {
+		return SetArgProperties(0, props);
+	}
+
 	bool HasExtraFunctionInfo() const {
 		return function_info != nullptr;
 	}
@@ -262,6 +289,8 @@ protected:
 
 	//! Additional function info, passed to the bind
 	shared_ptr<ScalarFunctionInfo> function_info;
+	//! Per-argument declarative properties (monotonicity). Empty = no claims made.
+	vector<ArgProperties> arg_props;
 
 public:
 	// clang-format off

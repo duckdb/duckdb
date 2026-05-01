@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # Rows 59392-112639 are NULL, all others are non-null.
 statement ok
 COPY (

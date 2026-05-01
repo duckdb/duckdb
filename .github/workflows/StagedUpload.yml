@@ -24,7 +24,7 @@ jobs:
 
      - name: Install
        shell: bash
-       run: python3 scripts/ci/retry.py -- pip install awscli
+       run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
 
      - name: Download from staging bucket
        shell: bash
@@ -35,7 +35,10 @@ jobs:
        run: |
           TARGET=$(git log -1 --format=%h)
           mkdir to_be_uploaded
-          aws s3 cp --recursive "s3://duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release" to_be_uploaded
+          rclone copy \
+            --no-traverse \
+            ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-staging/$TARGET/${{ inputs.target_git_describe }}/$GITHUB_REPOSITORY/github_release/" \
+            to_be_uploaded/
 
      - name: Deploy
        if: ${{ inputs.target_git_describe != '' }}
@@ -47,4 +50,8 @@ jobs:
          GH_TOKEN: ${{ secrets.GH_TOKEN }}
        run: |
          python3 scripts/asset-upload-gha.py to_be_uploaded/*
-         aws s3 sync --content-type application/octet-stream to_be_uploaded "s3://duckdb-install/${{ inputs.target_git_describe }}"
+         rclone copy \
+           --no-traverse \
+           --header-upload "Content-Type: application/octet-stream" \
+           to_be_uploaded/ \
+           ":s3,provider=AWS,env_auth=true,endpoint=${AWS_ENDPOINT_URL}:duckdb-install/${{ inputs.target_git_describe }}/"

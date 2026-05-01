@@ -7,7 +7,6 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
@@ -56,7 +55,6 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 	DuckDB db(nullptr);
 	Connection con(db);
 	duckdb::unique_ptr<QueryResult> result;
-	con.EnableQueryVerification();
 
 	// can deduce type of prepared parameter here
 	auto prepared = con.Prepare("select 1 + $1");
@@ -301,7 +299,6 @@ TEST_CASE("Test ANALYZE", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// ANALYZE runs without errors, note that ANALYZE is actually just ignored
 	REQUIRE_NO_FAIL(con.Query("ANALYZE"));
@@ -499,7 +496,6 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// create a prepared statement and use it to query
 	auto prepare = con.Prepare("SET default_null_order=$1");
@@ -518,7 +514,6 @@ TEST_CASE("Test prepared statements with SET", "[api]") {
 TEST_CASE("Test prepared statements that require rebind", "[api]") {
 	DuckDB db(nullptr);
 	Connection con1(db);
-	con1.EnableQueryVerification();
 
 	auto prepared = con1.Prepare("DROP TABLE IF EXISTS t1");
 

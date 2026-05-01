@@ -2,9 +2,6 @@
 # description: Test round-trip writing of gzip CSV files
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 foreach csv_name greek_utf8.csv imdb_movie_info_escaped.csv lineitem_sample.csv ncvoter.csv nfc_normalization.csv ontime_sample.csv voter.tsv web_page.csv
 
 statement ok

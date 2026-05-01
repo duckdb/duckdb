@@ -46,7 +46,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 string TypeCatalogEntry::ToSQL() const {
 	duckdb::stringstream ss;
 	ss << "CREATE TYPE ";
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << SQLIdentifier(name);
 	ss << " AS ";
 
 	auto user_type_copy = user_type;

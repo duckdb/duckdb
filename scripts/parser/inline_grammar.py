@@ -16,7 +16,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-scripts_dir = Path(__file__).parent
+scripts_dir = Path(__file__).parent.parent
 peg_dir = scripts_dir.parent / 'src' / 'parser' / 'peg'
 statements_dir = peg_dir / 'grammar' / 'statements'
 keywords_dir = peg_dir / 'grammar' / 'keywords'

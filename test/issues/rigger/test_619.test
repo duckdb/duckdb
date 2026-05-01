@@ -2,9 +2,6 @@
 # description: Issue 619
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Query on altered table results in a segmentation fault
 statement ok
 CREATE TABLE t0(c0 INT UNIQUE, c1 DATE);

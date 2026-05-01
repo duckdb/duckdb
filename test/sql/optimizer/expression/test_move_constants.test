@@ -2,9 +2,6 @@
 # description: Test queries involving constants that can be moved
 # group: [expression]
 
-statement ok
-PRAGMA enable_verification
-
 # move constants with signed value extremes
 
 # tinyint

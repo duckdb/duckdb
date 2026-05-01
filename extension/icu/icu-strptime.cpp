@@ -148,8 +148,8 @@ struct ICUStrptime : public ICUDateFunc {
 		if (ConstantVector::IsNull(fmt_arg)) {
 			ConstantVector::SetNull(result, count_t(args.size()));
 		} else {
-			UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
-			    str_arg, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
+			UnaryExecutor::Execute<string_t, timestamp_t>(
+			    str_arg, result, args.size(), [&](string_t input) -> optional<timestamp_t> {
 				    ParseResult parsed;
 				    for (auto &format : info.formats) {
 					    if (format.Parse(input, parsed)) {
@@ -164,8 +164,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    }
 				    }
 
-				    mask.SetInvalid(idx);
-				    return timestamp_t();
+				    return nullopt;
 			    });
 		}
 	}
@@ -269,8 +268,8 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
 
-		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_tz_t>(
-		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+		UnaryExecutor::Execute<string_t, timestamp_tz_t>(
+		    source, result, count, [&](string_t input) -> optional<timestamp_tz_t> {
 			    timestamp_tz_t result;
 			    const auto str = input.GetData();
 			    const auto len = input.GetSize();
@@ -285,7 +284,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    msg = Timestamp::FormatError(string(str, len));
 				    }
 				    HandleCastError::AssignError(msg, parameters);
-				    mask.SetInvalid(idx);
+				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
 				    auto calendar = cal.get();
@@ -296,7 +295,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    SetTimeZone(calendar, tz, &error_msg);
 					    if (!error_msg.empty()) {
 						    HandleCastError::AssignError(error_msg, parameters);
-						    mask.SetInvalid(idx);
+						    return nullopt;
 					    }
 				    }
 
@@ -314,8 +313,8 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
 
-		UnaryExecutor::ExecuteWithNulls<string_t, dtime_tz_t>(
-		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
+		UnaryExecutor::Execute<string_t, dtime_tz_t>(
+		    source, result, count, [&](string_t input) -> optional<dtime_tz_t> {
 			    dtime_tz_t result;
 			    const auto str = input.GetData();
 			    const auto len = input.GetSize();
@@ -324,7 +323,7 @@ struct ICUStrptime : public ICUDateFunc {
 			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
 				    auto msg = Time::ConversionError(string(str, len));
 				    HandleCastError::AssignError(msg, parameters);
-				    mask.SetInvalid(idx);
+				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
 				    auto calendar = cal.get();
@@ -430,18 +429,16 @@ struct ICUStrftime : public ICUDateFunc {
 			StrfTimeFormat format;
 			ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-			UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
-			    src_arg, result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-				    if (Timestamp::IsFinite(input)) {
-					    return Operation(calendar.get(), input, tz_name, format, result);
-				    } else {
-					    return StringVector::AddString(result, Timestamp::ToString(input));
-				    }
-			    });
+			UnaryExecutor::Execute<timestamp_t, string_t>(src_arg, result, args.size(), [&](timestamp_t input) {
+				if (Timestamp::IsFinite(input)) {
+					return Operation(calendar.get(), input, tz_name, format, result);
+				} else {
+					return StringVector::AddString(result, Timestamp::ToString(input));
+				}
+			});
 		} else {
-			BinaryExecutor::ExecuteWithNulls<timestamp_t, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(),
-			    [&](timestamp_t input, string_t format_specifier, ValidityMask &mask, idx_t idx) {
+			BinaryExecutor::Execute<timestamp_t, string_t, string_t>(
+			    src_arg, fmt_arg, result, args.size(), [&](timestamp_t input, string_t format_specifier) {
 				    if (Timestamp::IsFinite(input)) {
 					    StrfTimeFormat format;
 					    ParseFormatSpecifier(format_specifier, format);
@@ -510,10 +507,8 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(source, result, count,
-		                                                       [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-			                                                       return CastOperation(calendar.get(), input, result);
-		                                                       });
+		UnaryExecutor::Execute<timestamp_t, string_t>(
+		    source, result, count, [&](timestamp_t input) { return CastOperation(calendar.get(), input, result); });
 		return true;
 	}
 

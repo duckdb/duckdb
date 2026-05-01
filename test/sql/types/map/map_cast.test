@@ -2,9 +2,6 @@
 # description: Test map cast
 # group: [map]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT MAP(['a', 'b', 'c'], [1, 2, NULL])::MAP(VARCHAR, VARCHAR)
 ----

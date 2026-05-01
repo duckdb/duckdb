@@ -3,10 +3,16 @@ import re
 import sys
 from pathlib import Path
 
-GRAMMAR_DIR = Path("extension/autocomplete/grammar/statements")
-TRANSFORMER_DIR = Path("extension/autocomplete/transformer")
-FACTORY_REG_FILE = Path("extension/autocomplete/transformer/peg_transformer_factory.cpp")
-FACTORY_HPP_FILE = Path("extension/autocomplete/include/transformer/peg_transformer.hpp")
+try:
+    import yaml
+except ImportError:
+    yaml = None
+
+GRAMMAR_DIR = Path("src/parser/peg/grammar/statements")
+TRANSFORMER_DIR = Path("src/parser/peg/transformer")
+FACTORY_REG_FILE = Path("src/parser/peg/transformer/peg_transformer_factory.cpp")
+FACTORY_HPP_FILE = Path("src/include/duckdb/parser/peg/transformer/peg_transformer.hpp")
+GRAMMAR_TYPES_FILE = Path("scripts/parser/grammar_types.yml")
 
 # Matches: RuleName <- ...
 GRAMMAR_REGEX = re.compile(r"^(\w+)\s*<-")
@@ -20,7 +26,11 @@ ENUM_RULE_REGEX = re.compile(r'RegisterEnum<[^>]+>\s*\(\s*"(\w+)"\s*,')
 # Matches: REGISTER_TRANSFORM(TransformRuleName)
 REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)\s*\)")
 
+# Matches: Register("RuleName", &SomeFunction) — direct registration bypassing the macro
+DIRECT_REGISTER_REGEX = re.compile(r'Register\s*\(\s*"(\w+)"\s*,')
+
 EXCLUDED_RULES = {
+    "Program",
     "FunctionType",
     "IfExists",
     "Database",
@@ -49,6 +59,8 @@ EXCLUDED_RULES = {
     "ReservedSchemaName",
     "ReservedIdentifier",
     "TableName",
+    "ConstraintName",
+    "IntervalNumber",
     "ReservedTableName",
     "ColumnName",
     "ReservedColumnName",
@@ -83,7 +95,70 @@ EXCLUDED_RULES = {
     "RowOrStruct",
     "ForEachRow",
     "ForEachStatement",
+    "SetData",
+    "CTEBodyContent",
+    "SingleArrowPair",
+    "OperatorLiteral",
 }
+
+
+def load_grammar_types(types_file):
+    """
+    Loads grammar_types.yml and returns a dict mapping rule name -> C++ return type.
+    """
+    if yaml is None:
+        print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
+        sys.exit(1)
+
+    if not types_file.is_file():
+        print(f"Error: {types_file} not found.", file=sys.stderr)
+        sys.exit(1)
+
+    with types_file.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+
+    if not isinstance(data, dict):
+        print(f"Error: {types_file} is malformed (expected a top-level mapping).", file=sys.stderr)
+        sys.exit(1)
+
+    rule_to_type = {}
+    rule_to_source = {}  # tracks where each rule was first seen for error messages
+    duplicates = []
+
+    def register(rule_name, cpp_type, source):
+        rule_name = str(rule_name)
+        if rule_name in rule_to_type:
+            duplicates.append(f"  '{rule_name}' in '{source}' (already listed in '{rule_to_source[rule_name]}')")
+        else:
+            rule_to_type[rule_name] = str(cpp_type)
+            rule_to_source[rule_name] = source
+
+    # Top-level overrides: flat RuleName -> "type" map
+    overrides = data.get("overrides", {})
+    if isinstance(overrides, dict):
+        for rule_name, cpp_type in overrides.items():
+            register(rule_name, cpp_type, "overrides")
+
+    # Category entries: CategoryName -> {type: "...", rules: [...]}
+    for key, value in data.items():
+        if key == "overrides":
+            continue
+        if not isinstance(value, dict):
+            continue
+        cpp_type = value.get("type")
+        rules = value.get("rules", [])
+        if not cpp_type or not isinstance(rules, list):
+            continue
+        for rule_name in rules:
+            register(rule_name, cpp_type, key)
+
+    if duplicates:
+        print(f"Error: {types_file} contains duplicate rule listings:", file=sys.stderr)
+        for msg in duplicates:
+            print(msg, file=sys.stderr)
+        sys.exit(1)
+
+    return rule_to_type
 
 
 def find_grammar_rules(grammar_path):
@@ -160,17 +235,19 @@ def find_transformer_rules(transformer_path):
 
 def find_factory_registrations(factory_file_path):
     """
-    Scans the factory file for RegisterEnum<...> and REGISTER_TRANSFORM(...)
+    Scans the factory file for RegisterEnum<...>, REGISTER_TRANSFORM(...),
+    and direct Register("name", &func) calls.
 
-    Returns two sets:
-    (enum_rules, registered_rules)
+    Returns three sets:
+    (enum_rules, registered_rules, directly_registered_rules)
     """
     enum_rules = set()
     registered_rules = set()
+    directly_registered_rules = set()
 
     if not factory_file_path.is_file():
         print(f"Error: Factory file not found: {factory_file_path}", file=sys.stderr)
-        return enum_rules, registered_rules
+        return enum_rules, registered_rules, directly_registered_rules
 
     print(f"Scanning factory file: {factory_file_path}...")
 
@@ -178,27 +255,24 @@ def find_factory_registrations(factory_file_path):
         with factory_file_path.open("r", encoding="utf-8") as f:
             content = f.read()
 
-            # Find enums
-            enum_matches = ENUM_RULE_REGEX.finditer(content)
-            for match in enum_matches:
+            for match in ENUM_RULE_REGEX.finditer(content):
                 enum_rules.add(match.group(1))
 
-            # Find transformer registrations
-            reg_matches = REGISTER_TRANSFORM_REGEX.finditer(content)
-            for match in reg_matches:
+            for match in REGISTER_TRANSFORM_REGEX.finditer(content):
                 registered_rules.add(match.group(1))
+
+            for match in DIRECT_REGISTER_REGEX.finditer(content):
+                directly_registered_rules.add(match.group(1))
 
     except Exception as e:
         print(f"Error reading {factory_file_path}: {e}", file=sys.stderr)
 
-    return enum_rules, registered_rules
+    return enum_rules, registered_rules, directly_registered_rules
 
 
-def generate_declaration_stub(rule_name):
+def generate_declaration_stub(rule_name, cpp_type):
     """Generates the C++ method declaration (for the .hpp file)."""
-    return f"""// TODO: Verify this return type is correct
-static unique_ptr<SQLStatement> Transform{rule_name}(PEGTransformer &transformer, optional_ptr<ParseResult> parse_result);
-"""
+    return f"\tstatic {cpp_type} Transform{rule_name}(PEGTransformer &transformer, ParseResult &parse_result);\n"
 
 
 def generate_registration_stub(rule_name):
@@ -206,35 +280,35 @@ def generate_registration_stub(rule_name):
     return f"REGISTER_TRANSFORM(Transform{rule_name});\n"
 
 
-def generate_implementation_stub(rule_name):
+def generate_implementation_stub(rule_name, cpp_type):
     """Generates the C++ method implementation (for the transform_...cpp file)."""
-    return f"""// TODO: Verify this return type is correct
-unique_ptr<SQLStatement> PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer,
-                                                                   optional_ptr<ParseResult> parse_result) {{
+    return f"""{cpp_type} PEGTransformerFactory::Transform{rule_name}(PEGTransformer &transformer,
+                                                                   ParseResult &parse_result) {{
 	throw NotImplementedException("Transform{rule_name} has not yet been implemented");
 }}
 """
 
 
-def generate_code_for_missing_rules(generation_queue):
+def generate_code_for_missing_rules(generation_queue, rule_to_type):
     """
     Iterates the generation queue and prints stub code, grouped by rule.
+    Caller is responsible for ensuring all rules have types in rule_to_type.
     """
     if not generation_queue:
         print("\nNo missing rules to generate.")
         return
-
-    print("\n--- Code Generation: Missing Stubs ---")
-    print("Copy and paste the code below into the correct files.")
 
     rules_to_generate = []  # List of (rule_name, cpp_filename)
     for cpp_filename, rules in generation_queue.items():
         for rule in rules:
             rules_to_generate.append((rule, cpp_filename))
 
-    # Sort by rule name
+    print("\n--- Code Generation: Missing Stubs ---")
+    print("Copy and paste the code below into the correct files.")
+
     for rule_name, cpp_filename in sorted(rules_to_generate):
         cpp_path = TRANSFORMER_DIR / cpp_filename
+        cpp_type = rule_to_type[rule_name]
 
         # Constraint: Do not generate code for non-existent files
         if not cpp_path.is_file():
@@ -243,13 +317,13 @@ def generate_code_for_missing_rules(generation_queue):
 
         print(f"--- Generation for rule: {rule_name} ---")
         print(f"1. Add DECLARATION to: {FACTORY_HPP_FILE}")
-        print(generate_declaration_stub(rule_name))
+        print(generate_declaration_stub(rule_name, cpp_type))
 
         print(f"2. Add REGISTRATION to: {FACTORY_REG_FILE}\nInside the appropriate Register...() function:")
         print(generate_registration_stub(rule_name))
 
         print(f"3. Add IMPLEMENTATION to: {cpp_path}")
-        print(generate_implementation_stub(rule_name))
+        print(generate_implementation_stub(rule_name, cpp_type))
         print(f"--- End of {rule_name} ---\n")
 
 
@@ -268,9 +342,10 @@ def main():
 
     args = parser.parse_args()
 
+    rule_to_type = load_grammar_types(GRAMMAR_TYPES_FILE)
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
     transformer_impls = find_transformer_rules(Path(TRANSFORMER_DIR))
-    enum_rules, registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
+    enum_rules, registered_rules, directly_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
 
     if not grammar_rules_by_file:
         print("Error: Could not find grammar rules. Exiting.", file=sys.stderr)
@@ -314,10 +389,14 @@ def main():
             is_enum = rule_name in enum_rules
             is_transformer = rule_name in transformer_impls
             is_registered = rule_name in registered_rules
+            is_directly_registered = rule_name in directly_registered_rules
 
             if is_enum:
                 status_str = "[ ENUM ]"
                 total_found_enum += 1
+            elif is_directly_registered:
+                status_str = "[ FOUND ]"
+                total_found_registered += 1
             elif is_transformer:
                 if is_registered:
                     status_str = "[ FOUND ]"
@@ -381,6 +460,12 @@ def main():
         for rule in sorted(list(orphan_registrations)):
             print(f"  - REGISTER_TRANSFORM(Transform{rule})")
 
+    orphan_direct = directly_registered_rules - all_grammar_rules_flat - EXCLUDED_RULES
+    if orphan_direct:
+        print("\n[!] Orphan Direct Registrations (No matching grammar rule):")
+        for rule in sorted(list(orphan_direct)):
+            print(f"  - Register(\"{rule}\", ...)")
+
     missing_impl = registered_rules - transformer_impls
     if missing_impl:
         print("\n  [!] Registered but NOT Implemented (Will cause C++ error):")
@@ -394,7 +479,15 @@ def main():
             print(f"  - {rule}")
 
     if args.generate:
-        generate_code_for_missing_rules(generation_queue)
+        all_rules_to_generate = [r for rules in generation_queue.values() for r in rules]
+        missing_from_yaml = [r for r in all_rules_to_generate if r not in rule_to_type]
+        if missing_from_yaml:
+            print("\n--- Error: Missing Return Types in grammar_types.yml ---")
+            print("Add the following rules before generating stubs:")
+            for rule in sorted(missing_from_yaml):
+                print(f"  {rule}")
+            sys.exit(1)
+        generate_code_for_missing_rules(generation_queue, rule_to_type)
 
 
 if __name__ == "__main__":

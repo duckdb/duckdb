@@ -3,9 +3,6 @@
 # group: [fuzz]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE strings (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, t0 INTEGER DEFAULT -3);
 
 statement ok

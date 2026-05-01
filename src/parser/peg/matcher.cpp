@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
 // uncomment to dynamically read the PEG parser from a file instead of compiling it in (useful for testing)
 // #define PEG_PARSER_SOURCE_FILE "duckdb/parser/peg/inlined_grammar.gram"
@@ -19,11 +21,6 @@
 #endif
 
 namespace duckdb {
-
-PEGMatcherCache &GetGlobalPEGMatcherCache() {
-	static PEGMatcherCache *cache = new PEGMatcherCache();
-	return *cache;
-}
 
 SuggestionType Matcher::AddSuggestion(MatchState &state) const {
 	auto entry = state.added_suggestions.find(*this);
@@ -1449,7 +1446,17 @@ Matcher &MatcherFactory::CreateMatcher(const char *grammar, const char *root_rul
 	return CreateMatcher(parser, root_rule);
 }
 
-shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
+shared_ptr<PEGMatcher> PEGMatcher::Get(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	return PEGMatcher::Get(db);
+}
+
+shared_ptr<PEGMatcher> PEGMatcher::Get(DatabaseInstance &db) {
+	auto &parser_cache = db.GetParserCache();
+	return parser_cache.GetMatcher();
+}
+
+shared_ptr<PEGMatcher> ParserCache::GetMatcher() {
 	{
 		std::unique_lock<std::mutex> lock(mutex);
 		if (matcher) {
@@ -1475,9 +1482,25 @@ shared_ptr<PEGMatcher> PEGMatcherCache::GetMatcher() {
 	return matcher;
 }
 
-void PEGMatcherCache::Invalidate() {
+shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (transformer_factory) {
+			return transformer_factory;
+		}
+	}
+	auto new_factory = make_shared_ptr<PEGTransformerFactory>();
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!transformer_factory) {
+		transformer_factory = std::move(new_factory);
+	}
+	return transformer_factory;
+}
+
+void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
+	transformer_factory = nullptr;
 }
 
 } // namespace duckdb

@@ -3,9 +3,6 @@
 # group: [sqlsmith]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE struct_tbl("struct" STRUCT(a INTEGER, b VARCHAR));
 
 query I

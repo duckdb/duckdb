@@ -28,7 +28,7 @@ UndoBuffer::UndoBuffer(DuckTransaction &transaction_p, ClientContext &context_p)
 UndoBufferReference UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	idx_t alloc_len = AlignValue<idx_t>(len + UNDO_ENTRY_HEADER_SIZE);
 	auto handle = allocator.Allocate(alloc_len);
-	auto data = handle.Ptr();
+	auto data = handle.GetDataMutable();
 	// write the undo entry metadata
 	Store<UndoFlags>(type, data);
 	data += sizeof(UndoFlags);
@@ -45,7 +45,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 	state.started = true;
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
-		state.start = state.handle.Ptr();
+		state.start = state.handle.GetDataMutable();
 		state.end = state.start + state.current->position;
 		while (state.start < state.end) {
 			auto len_position = state.start + sizeof(UndoFlags);
@@ -69,7 +69,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	state.current = allocator.tail.get();
 	while (state.current) {
 		state.handle = allocator.buffer_manager.Pin(state.current->block);
-		state.start = state.handle.Ptr();
+		state.start = state.handle.GetDataMutable();
 		state.end = state.current == end_state.current ? end_state.start : state.start + state.current->position;
 		while (state.start < state.end) {
 			auto type = Load<UndoFlags>(state.start);
@@ -93,7 +93,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	auto current = allocator.head.get();
 	while (current) {
 		auto handle = allocator.buffer_manager.Pin(current->block);
-		data_ptr_t start = handle.Ptr();
+		data_ptr_t start = handle.GetDataMutable();
 		data_ptr_t end = start + current->position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;

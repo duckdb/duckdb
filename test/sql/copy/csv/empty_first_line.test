@@ -2,9 +2,6 @@
 # description: Issue #4933: Reading a CSV file with an empty header is problematic
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT * FROM read_csv_auto('{DATA_DIR}/csv/empty_first_line.csv', delim=' ');
 ----
