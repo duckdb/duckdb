@@ -1396,6 +1396,18 @@ void OrderedAggregateThresholdSetting::OnSet(SettingCallbackInfo &info, Value &i
 }
 
 //===----------------------------------------------------------------------===//
+// Parallelize Sequential Sources
+//===----------------------------------------------------------------------===//
+void ParallelizeSequentialSourcesSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	auto val = StringUtil::Lower(input.ToString());
+	if (val != "automatic" && val != "enabled" && val != "disabled") {
+		throw InvalidInputException(
+		    "Invalid value for parallelize_sequential_sources: '%s' (expected automatic/enabled/disabled)", val);
+	}
+	input = Value(val);
+}
+
+//===----------------------------------------------------------------------===//
 // Perfect Ht Threshold
 //===----------------------------------------------------------------------===//
 void PerfectHtThresholdSetting::OnSet(SettingCallbackInfo &info, Value &input) {

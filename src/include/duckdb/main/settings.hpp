@@ -1354,6 +1354,18 @@ struct OrderedAggregateThresholdSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ParallelizeSequentialSourcesSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "parallelize_sequential_sources";
+	static constexpr const char *Description =
+	    "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr const char *DefaultValue = "automatic";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct PartitionedWriteFlushThresholdSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "partitioned_write_flush_threshold";

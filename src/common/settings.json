@@ -925,6 +925,16 @@
         ]
     },
     {
+        "name": "parallelize_sequential_sources",
+        "description": "Controls automatic parallelization of sequential sources (automatic/enabled/disabled)",
+        "type": "VARCHAR",
+        "default_scope": "local",
+        "default_value": "automatic",
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "partitioned_write_flush_threshold",
         "description": "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY",
         "type": "UBIGINT",
