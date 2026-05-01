@@ -29,9 +29,14 @@ struct string_t; // NOLINT: mimic std casing
 
 template <class T>
 using child_list_t = vector<std::pair<std::string, T>>;
-//! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
+
+template <class... Args>
+struct VectorStructType;
+
+template <class T>
+struct VectorListType;
 
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing

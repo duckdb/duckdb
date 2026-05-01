@@ -451,4 +451,12 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 	//	info.second.offset = 0;
 }
 
+const Vector &VectorIteratorGetListChild(const Vector &vector) {
+	return ListVector::GetChild(vector);
+}
+
+idx_t VectorIteratorGetListSize(const Vector &vector) {
+	return ListVector::GetListSize(vector);
+}
+
 } // namespace duckdb

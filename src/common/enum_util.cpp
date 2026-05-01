@@ -121,6 +121,7 @@
 #include "duckdb/execution/physical_table_scan_enum.hpp"
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function.hpp"
@@ -3367,6 +3368,28 @@ MetricType EnumUtil::FromString<MetricType>(const char *value) {
 	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 72, "MetricType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMonotonicityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(Monotonicity::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(Monotonicity::CONSTANT), "CONSTANT" },
+		{ static_cast<uint32_t>(Monotonicity::NON_DECREASING), "NON_DECREASING" },
+		{ static_cast<uint32_t>(Monotonicity::STRICTLY_INCREASING), "STRICTLY_INCREASING" },
+		{ static_cast<uint32_t>(Monotonicity::NON_INCREASING), "NON_INCREASING" },
+		{ static_cast<uint32_t>(Monotonicity::STRICTLY_DECREASING), "STRICTLY_DECREASING" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value) {
+	return StringUtil::EnumToString(GetMonotonicityValues(), 6, "Monotonicity", static_cast<uint32_t>(value));
+}
+
+template<>
+Monotonicity EnumUtil::FromString<Monotonicity>(const char *value) {
+	return static_cast<Monotonicity>(StringUtil::StringToEnum(GetMonotonicityValues(), 6, "Monotonicity", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_NAME), "BY_NAME" },
@@ -3783,19 +3806,20 @@ const StringUtil::EnumStringLiteral *GetPEGKeywordCategoryValues() {
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_UNRESERVED), "KEYWORD_UNRESERVED" },
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_RESERVED), "KEYWORD_RESERVED" },
 		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_TYPE_FUNC), "KEYWORD_TYPE_FUNC" },
-		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" }
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_COL_NAME), "KEYWORD_COL_NAME" },
+		{ static_cast<uint32_t>(PEGKeywordCategory::KEYWORD_TYPE_NAME), "KEYWORD_TYPE_NAME" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PEGKeywordCategory>(PEGKeywordCategory value) {
-	return StringUtil::EnumToString(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPEGKeywordCategoryValues(), 6, "PEGKeywordCategory", static_cast<uint32_t>(value));
 }
 
 template<>
 PEGKeywordCategory EnumUtil::FromString<PEGKeywordCategory>(const char *value) {
-	return static_cast<PEGKeywordCategory>(StringUtil::StringToEnum(GetPEGKeywordCategoryValues(), 5, "PEGKeywordCategory", value));
+	return static_cast<PEGKeywordCategory>(StringUtil::StringToEnum(GetPEGKeywordCategoryValues(), 6, "PEGKeywordCategory", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParseInfoTypeValues() {
@@ -5252,6 +5276,25 @@ const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value) {
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value) {
 	return static_cast<TableFilterType>(StringUtil::StringToEnum(GetTableFilterTypeValues(), 13, "TableFilterType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetTableFunctionParallelismValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(TableFunctionParallelism::SELF_MANAGED_PARALLELISM), "SELF_MANAGED_PARALLELISM" },
+		{ static_cast<uint32_t>(TableFunctionParallelism::SEQUENTIAL), "SEQUENTIAL" },
+		{ static_cast<uint32_t>(TableFunctionParallelism::FORCE_SINGLE_THREADED), "FORCE_SINGLE_THREADED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value) {
+	return StringUtil::EnumToString(GetTableFunctionParallelismValues(), 3, "TableFunctionParallelism", static_cast<uint32_t>(value));
+}
+
+template<>
+TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value) {
+	return static_cast<TableFunctionParallelism>(StringUtil::StringToEnum(GetTableFunctionParallelismValues(), 3, "TableFunctionParallelism", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTablePartitionInfoValues() {

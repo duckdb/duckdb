@@ -30,7 +30,6 @@ PULL_REQUEST_JOBS = [
 
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    "check-clangd-tidy",
     "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
@@ -42,7 +41,6 @@ MERGE_GROUP_JOBS = [
     "linux-relassert",
     "linux-release",
     "linux-release-tests",
-    "check-clangd-tidy",
     "tidy-check",
 ]
 
@@ -97,12 +95,12 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
         selection_input.repository != "duckdb/duckdb"
         or selection_input.ref_name == "main"
         or selection_input.ref_name == "v1.5-variegata"
-        or (selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"))
+        or selection_input.event_name == "merge_group"
     )
 
 
 def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
-    if selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"):
+    if selection_input.event_name == "merge_group":
         selected_jobs = MERGE_GROUP_JOBS.copy()
     elif selection_input.ref_name == "main":
         selected_jobs = NIGHTLY_JOBS.copy()

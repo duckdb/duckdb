@@ -559,9 +559,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename RESULT_TYPE = int64_t>
 	static void AddUnaryPartCodeFunctions(const string &name, ExtensionLoader &loader,
-	                                      const LogicalType &result_type = LogicalType::BIGINT) {
+	                                      const LogicalType &result_type = LogicalType::BIGINT,
+	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
 
@@ -653,14 +655,17 @@ struct ICUDatePart : public ICUDateFunc {
 void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	// register the individual operators
 
+	// year/decade use UCAL_YEAR (year-of-era, positive in both BC and AD), which is non-monotonic
+	// across the BC/AD flip; leave them unannotated. era/century/millennium/isoyear are signed.
+
 	//	BIGINTs
-	ICUDatePart::AddUnaryPartCodeFunctions("era", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("era", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("year", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("month", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("day", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("decade", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("century", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("century", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("second", loader);
@@ -671,7 +676,7 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions("week", loader); //  Note that WeekOperator is ISO-8601, not US
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", loader);
@@ -681,7 +686,8 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions<double>("julian", loader, LogicalType::DOUBLE);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader); //  Note this is ISO year and week
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT,
+	                                       ArgProperties().NonDecreasing()); //  ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", loader);

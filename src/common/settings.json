@@ -925,6 +925,13 @@
         ]
     },
     {
+        "name": "parallelize_sequential_sources",
+        "description": "Whether to automatically parallelize sequential sources",
+        "type": "BOOLEAN",
+        "default_scope": "local",
+        "default_value": "true"
+    },
+    {
         "name": "partitioned_write_flush_threshold",
         "description": "The threshold in number of rows after which we flush a thread state when writing using PARTITION_BY",
         "type": "UBIGINT",

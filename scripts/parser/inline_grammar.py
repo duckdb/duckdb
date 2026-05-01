@@ -26,7 +26,9 @@ contents = ""
 
 IMPLICIT_RULES = {'%whitespace'}
 
-# Maps filenames to string categories
+# Maps filenames to string categories.
+# typefunc_keyword_map is the union of type name and func name keywords.
+# type_name_keyword.list also populates typename_keyword_map (TypeName-only subset).
 FILENAME_TO_CATEGORY = {
     "reserved_keyword.list": "RESERVED_KEYWORD",
     "unreserved_keyword.list": "UNRESERVED_KEYWORD",
@@ -41,6 +43,7 @@ CPP_MAP_NAMES = {
     "UNRESERVED_KEYWORD": "unreserved_keyword_map",
     "COL_NAME_KEYWORD": "colname_keyword_map",
     "TYPE_FUNC_NAME_KEYWORD": "typefunc_keyword_map",
+    "TYPE_NAME_KEYWORD": "typename_keyword_map",
 }
 
 # Use a dictionary of sets to collect keywords for each category, preventing duplicates
@@ -77,8 +80,12 @@ for filepath in keywords_dir.iterdir():
                 exit(1)
             unreserved_set.add(kw)
 
-        # Add the keyword to the appropriate set
+        # Add the keyword to the primary set
         keyword_sets[category].add(kw)
+
+        # type_name_keyword.list also populates typename_keyword_map
+        if filepath.name == "type_name_keyword.list":
+            keyword_sets["TYPE_NAME_KEYWORD"].add(kw)
 
 
 def write_keyword_map():
