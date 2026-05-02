@@ -8,6 +8,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -19,14 +20,17 @@ ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_ca
                              unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast)
     : types(std::move(types_p)), options(options) {
 	for (idx_t i = 0; i < types.size(); i++) {
-		unique_ptr<ArrowAppendData> entry;
-		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
-		if (extension_type_cast.find(i) != extension_type_cast.end() && !bitshift_boolean) {
-			entry = InitializeChild(types[i], initial_capacity, options, extension_type_cast[i]);
-		} else {
-			entry = InitializeChild(types[i], initial_capacity, options);
-		}
-		root_data.push_back(std::move(entry));
+		// Pass any explicit per-column extension override through to InitializeChild;
+		// when no override is supplied, InitializeChild auto-resolves the extension
+		// via DBConfig so children of nested types (struct/list/map/union/array)
+		// pick up the same extension that SetArrowFormat will use to declare the
+		// schema. The bitshift_boolean fallback (top-level BOOLEAN without
+		// arrow_lossless_conversion stays bit-packed) is also enforced inside
+		// InitializeChild so it applies uniformly at every nesting level.
+		auto extension_it = extension_type_cast.find(i);
+		shared_ptr<ArrowTypeExtensionData> extension =
+		    extension_it != extension_type_cast.end() ? extension_it->second : shared_ptr<ArrowTypeExtensionData>();
+		root_data.push_back(InitializeChild(types[i], initial_capacity, options, extension));
 	}
 }
 
@@ -38,14 +42,7 @@ void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, c
 	D_ASSERT(types == input.GetTypes());
 	D_ASSERT(to >= from);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		if (root_data[i]->extension_data && root_data[i]->extension_data->duckdb_to_arrow) {
-			Vector input_data(root_data[i]->extension_data->GetInternalType());
-			root_data[i]->extension_data->duckdb_to_arrow(*options.client_context, input.data[i], input_data,
-			                                              input_size);
-			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
-		} else {
-			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
-		}
+		root_data[i]->AppendChild(input.data[i], from, to, input_size);
 	}
 	row_count += to - from;
 }
@@ -315,12 +312,36 @@ unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &ty
                                                            ClientProperties &options,
                                                            const shared_ptr<ArrowTypeExtensionData> &extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
+
+	// Pick the effective Arrow extension to route this type through. An
+	// explicit ``extension_type`` (passed by the top-level appender via
+	// extension_type_cast) wins. Otherwise we auto-resolve from DBConfig so
+	// that container appenders (struct/list/map/union/fixed-size list)
+	// initialise their children with the same extension that SetArrowFormat
+	// will use to declare the schema. Without this, e.g. the BOOLEAN child of
+	// a UNION/STRUCT/LIST gets bit-packed by ArrowBoolData while the schema
+	// declares arrow.bool8 (byte-packed), and consumers misread every row.
+	//
+	// The ``bitshift_boolean`` fallback (BOOLEAN stays plain bit-packed when
+	// ``arrow_lossless_conversion`` is off) is enforced here so it applies
+	// uniformly at every nesting level, not just for top-level columns.
+	shared_ptr<ArrowTypeExtensionData> effective_extension = extension_type;
+	const bool bitshift_boolean = type.id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
+	if (bitshift_boolean) {
+		effective_extension = nullptr;
+	} else if (!effective_extension && options.client_context) {
+		const auto &db_config = DBConfig::GetConfig(*options.client_context);
+		if (db_config.HasArrowExtension(type)) {
+			effective_extension = db_config.GetArrowExtension(type).GetTypeExtension();
+		}
+	}
+
 	LogicalType array_type = type;
-	if (extension_type) {
-		array_type = extension_type->GetInternalType();
+	if (effective_extension) {
+		array_type = effective_extension->GetInternalType();
 	}
 	InitializeFunctionPointers(*result, array_type);
-	result->extension_data = extension_type;
+	result->extension_data = effective_extension;
 
 	const auto byte_count = (capacity + 7) / 8;
 	result->GetValidityBuffer().reserve(byte_count);

@@ -23,7 +23,10 @@ void ArrowFixedSizeListData::Append(ArrowAppendData &append_data, Vector &input,
 	auto array_size = ArrayType::GetSize(input.GetType());
 	auto &child_vector = ArrayVector::GetEntry(input);
 	auto &child_data = *append_data.child_data[0];
-	child_data.append_vector(child_data, child_vector, from * array_size, to * array_size, size * array_size);
+	// AppendChild routes through the child's Arrow extension (if any) so
+	// e.g. arrow.bool8 BOOLEAN array-elements get the duckdb_to_arrow
+	// conversion before being fed into the byte-packed appender.
+	child_data.AppendChild(child_vector, from * array_size, to * array_size, size * array_size);
 	append_data.row_count += size;
 }
 

@@ -206,6 +206,112 @@ TEST_CASE("Test Arrow UNION type roundtrip", "[arrow]") {
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", false));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, "SELECT * FROM union_tbl3", true));
 }
+
+// Regression: a BOOLEAN child of any container (UNION, STRUCT, LIST,
+// FIXED_SIZE_LIST, MAP) must keep the appender's data layout in sync with
+// the schema emitted by SetArrowFormat. Under arrow_lossless_conversion=true,
+// the schema declares the bool child as the arrow.bool8 extension
+// (byte-packed int8), so the appender must also push values through that
+// extension. Previously every container appender called InitializeChild
+// without any extension info and used the plain bit-packed bool appender,
+// so the bytes on the wire described 4 bools per byte while the schema
+// said 1 bool per byte; consumers misread every row past the first as
+// `false`. For MAP keys this even crashes ingest with a duplicate-key error.
+TEST_CASE("Test Arrow nested BOOLEAN with arrow.bool8 roundtrip", "[arrow]") {
+	// --- STRUCT(... BOOLEAN ...) ---
+	TestArrowRoundtrip("SELECT {'b': (i % 2 = 0)}::STRUCT(b BOOLEAN) AS s FROM range(64) tbl(i)", false, true);
+	TestArrowRoundtrip("SELECT {'tag': i, 'flag': (i % 3 = 0), 'name': 'r' || i::VARCHAR} "
+	                   "::STRUCT(tag INT, flag BOOLEAN, \"name\" VARCHAR) AS s FROM range(10000) tbl(i)",
+	                   false, true);
+
+	// --- LIST(BOOLEAN) ---
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), (i % 3 = 0)]::BOOLEAN[] AS l FROM range(64) tbl(i)", false, true);
+	// Large batch with >STANDARD_VECTOR_SIZE child elements per chunk: regression
+	// for the case where the converted internal vector is sized only for
+	// STANDARD_VECTOR_SIZE and duckdb_to_arrow writes past the end.
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), (i % 3 = 0), (i % 5 = 0)]::BOOLEAN[] AS l FROM range(10000) tbl(i)", false,
+	                   true);
+
+	// --- FIXED_SIZE_LIST[3](BOOLEAN) ---
+	TestArrowRoundtrip("SELECT [(i % 2 = 0), (i % 3 = 0), true]::BOOLEAN[3] AS fa FROM range(64) tbl(i)", false, true);
+
+	// --- MAP(VARCHAR, BOOLEAN) ---
+	TestArrowRoundtrip("SELECT MAP {'a': (i % 2 = 0), 'b': (i % 3 = 0)} AS m FROM range(64) tbl(i)", false, true);
+
+	// --- MAP(BOOLEAN, INT) — bool-as-key (previously crashed ingest with a
+	// duplicate-key error because every key collapsed to the same byte value).
+	TestArrowRoundtrip("SELECT MAP {true: i, false: i + 1} AS m FROM range(64) tbl(i)", false, true);
+
+	// --- LIST(STRUCT(BOOLEAN)) and STRUCT(LIST(BOOLEAN)) ---
+	TestArrowRoundtrip("SELECT [{'flag': (i % 2 = 0)}, {'flag': (i % 3 = 0)}]::STRUCT(flag BOOLEAN)[] AS l "
+	                   "FROM range(64) tbl(i)",
+	                   false, true);
+	TestArrowRoundtrip("SELECT {'flags': [(i % 2 = 0), true, (i % 3 = 0)]}::STRUCT(flags BOOLEAN[]) AS s "
+	                   "FROM range(64) tbl(i)",
+	                   false, true);
+
+	// --- LIST(BOOLEAN) with mixed NULL container rows ---
+	TestArrowRoundtrip("SELECT * FROM (VALUES ([true, false]::BOOLEAN[]), (NULL), ([(true), (false), (true)])) t(l)",
+	                   false, true);
+}
+
+// Regression for BOOLEAN children of a UNION (the original bug from
+// duckdb#22444). Kept as a separate case so failures point straight at
+// the union path even after the centralised fix lands.
+TEST_CASE("Test Arrow UNION with BOOLEAN member roundtrip", "[arrow]") {
+	// Default mode (lossless = false): schema says "b" (bit-packed), data
+	// is bit-packed - no extension involved, regression is N/A but worth
+	// keeping as a backwards-compat guard.
+	TestArrowRoundtrip("SELECT union_value(b := (i % 2 = 0))::UNION(i INT, b BOOLEAN) AS u "
+	                   "FROM range(64) tbl(i)");
+	TestArrowRoundtrip("SELECT * FROM (VALUES "
+	                   "(union_value(b := true)::UNION(i INT, b BOOLEAN)), "
+	                   "(union_value(b := false)), "
+	                   "(union_value(b := true)), "
+	                   "(union_value(b := false))) t(u)");
+
+	// Lossless mode: schema says arrow.bool8 (byte-packed) - exercises the
+	// path the regression is on.
+	TestArrowRoundtrip("SELECT union_value(b := true)::UNION(i INT, b BOOLEAN) AS u "
+	                   "FROM range(4) tbl(i)",
+	                   false, true);
+	TestArrowRoundtrip("SELECT union_value(b := (i % 2 = 0))::UNION(i INT, b BOOLEAN) AS u "
+	                   "FROM range(64) tbl(i)",
+	                   false, true);
+	// Mixed variants: bool variant interleaved with int variant.
+	TestArrowRoundtrip("SELECT * FROM (VALUES "
+	                   "(union_value(i := 1)::UNION(i INT, b BOOLEAN)), "
+	                   "(union_value(b := true)), "
+	                   "(union_value(i := 7)), "
+	                   "(union_value(b := true)), "
+	                   "(union_value(b := false))) t(u)",
+	                   false, true);
+	// Three-member union including BOOLEAN.
+	TestArrowRoundtrip("SELECT * FROM (VALUES "
+	                   "(union_value(i := 1)::UNION(i INT, s VARCHAR, b BOOLEAN)), "
+	                   "(union_value(s := 'x')), "
+	                   "(union_value(b := true)), "
+	                   "(union_value(b := false)), "
+	                   "(union_value(i := 99))) t(u)",
+	                   false, true);
+	// Large batch crossing STANDARD_VECTOR_SIZE.
+	TestArrowRoundtrip("SELECT union_value(b := (i % 2 = 0))::UNION(i INT, b BOOLEAN) AS u "
+	                   "FROM range(10000) tbl(i)",
+	                   false, true);
+	// Bool-in-union nested inside a struct.
+	TestArrowRoundtrip("SELECT {'tag': i, 'val': union_value(b := (i % 2 = 0))} "
+	                   "::STRUCT(tag INT, val UNION(i INT, b BOOLEAN)) AS s "
+	                   "FROM range(64) tbl(i)",
+	                   false, true);
+	// Bool-in-union with NULL rows.
+	TestArrowRoundtrip("SELECT * FROM (VALUES "
+	                   "(union_value(b := true)::UNION(i INT, b BOOLEAN)), "
+	                   "(NULL), "
+	                   "(union_value(b := false)), "
+	                   "(NULL), "
+	                   "(union_value(b := true))) t(u)",
+	                   false, true);
+}
 TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	// UUID
 	TestArrowRoundtrip("SELECT '2d89ebe6-1e13-47e5-803a-b81c87660b66'::UUID str FROM range(5) tbl(i)", false, true);
