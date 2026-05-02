@@ -459,9 +459,9 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 }
 
 unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
-                                                      const string &table_name) {
+                                                      const string &table_name, const ParserOptions &parser_options) {
 	// Parse the query.
-	Parser parser;
+	Parser parser(parser_options);
 	parser.ParseQuery(query);
 
 	// Must be a single statement.
@@ -614,7 +614,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = ParseStatement(std::move(table_ref), query, table_name, context_ref->GetParserOptions());
 	context_ref->Append(std::move(stmt));
 }
 
@@ -715,7 +715,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
 	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
-	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name);
+	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name, context_ref->GetParserOptions());
 	context_ref->Append(std::move(parsed_statement));
 }
 

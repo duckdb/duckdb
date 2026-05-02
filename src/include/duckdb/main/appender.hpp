@@ -18,6 +18,7 @@ class ClientContext;
 class ColumnDataCollection;
 class Connection;
 class DuckDB;
+struct ParserOptions;
 class SQLStatement;
 class TableCatalogEntry;
 
@@ -38,7 +39,7 @@ public:
 	                                                  const vector<string> &expected_names);
 	//! Parses the statement to append data.
 	static unique_ptr<SQLStatement> ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
-	                                               const string &table_name);
+	                                               const string &table_name, const ParserOptions &parser_options);
 
 protected:
 	//! The allocator for the column data collection.

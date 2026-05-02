@@ -1311,7 +1311,7 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 	vector<string> expected_names;
 	auto query = Appender::ConstructQuery(description, table_name, expected_names);
 	auto table_ref = BaseAppender::GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name);
+	auto stmt = BaseAppender::ParseStatement(std::move(table_ref), query, table_name, GetParserOptions());
 	Append(std::move(stmt));
 }
 
