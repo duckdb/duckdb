@@ -255,63 +255,81 @@ static bool DecimalToStringCast(Vector &source, Vector &result, idx_t count, Cas
 
 BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const LogicalType &source,
                                               const LogicalType &target) {
-	// now switch on the result type
+	// truncation toward zero
+	const auto decimal_to_int = ArgProperties().NonDecreasing();
 	switch (target.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return FromDecimalCast<bool>;
 	case LogicalTypeId::TINYINT:
-		return FromDecimalCast<int8_t>;
+		return BoundCastInfo(FromDecimalCast<int8_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::SMALLINT:
-		return FromDecimalCast<int16_t>;
+		return BoundCastInfo(FromDecimalCast<int16_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::INTEGER:
-		return FromDecimalCast<int32_t>;
+		return BoundCastInfo(FromDecimalCast<int32_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::BIGINT:
-		return FromDecimalCast<int64_t>;
+		return BoundCastInfo(FromDecimalCast<int64_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::UTINYINT:
-		return FromDecimalCast<uint8_t>;
+		return BoundCastInfo(FromDecimalCast<uint8_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::USMALLINT:
-		return FromDecimalCast<uint16_t>;
+		return BoundCastInfo(FromDecimalCast<uint16_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::UINTEGER:
-		return FromDecimalCast<uint32_t>;
+		return BoundCastInfo(FromDecimalCast<uint32_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::UBIGINT:
-		return FromDecimalCast<uint64_t>;
+		return BoundCastInfo(FromDecimalCast<uint64_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::HUGEINT:
-		return FromDecimalCast<hugeint_t>;
+		return BoundCastInfo(FromDecimalCast<hugeint_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::UHUGEINT:
-		return FromDecimalCast<uhugeint_t>;
+		return BoundCastInfo(FromDecimalCast<uhugeint_t>).SetArgProperties(decimal_to_int);
 	case LogicalTypeId::DECIMAL: {
 		// decimal to decimal cast
 		// first we need to figure out the source and target internal types
+		cast_function_t fn;
 		switch (source.InternalType()) {
 		case PhysicalType::INT16:
-			return DecimalDecimalCastSwitch<int16_t, NumericHelper>;
+			fn = DecimalDecimalCastSwitch<int16_t, NumericHelper>;
+			break;
 		case PhysicalType::INT32:
-			return DecimalDecimalCastSwitch<int32_t, NumericHelper>;
+			fn = DecimalDecimalCastSwitch<int32_t, NumericHelper>;
+			break;
 		case PhysicalType::INT64:
-			return DecimalDecimalCastSwitch<int64_t, NumericHelper>;
+			fn = DecimalDecimalCastSwitch<int64_t, NumericHelper>;
+			break;
 		case PhysicalType::INT128:
-			return DecimalDecimalCastSwitch<hugeint_t, Hugeint>;
+			fn = DecimalDecimalCastSwitch<hugeint_t, Hugeint>;
+			break;
 		default:
 			throw NotImplementedException("Unimplemented internal type for decimal in decimal_decimal cast");
 		}
+		// strict when scale doesn't decrease; truncation otherwise
+		auto props = DecimalType::GetScale(target) >= DecimalType::GetScale(source)
+		                 ? ArgProperties().StrictlyIncreasing()
+		                 : ArgProperties().NonDecreasing();
+		return BoundCastInfo(fn).SetArgProperties(props);
 	}
 	case LogicalTypeId::FLOAT:
-		return FromDecimalCast<float>;
+		return BoundCastInfo(FromDecimalCast<float>).SetArgProperties(ArgProperties().NonDecreasing());
 	case LogicalTypeId::DOUBLE:
-		return FromDecimalCast<double>;
+		return BoundCastInfo(FromDecimalCast<double>).SetArgProperties(ArgProperties().NonDecreasing());
 	case LogicalTypeId::VARCHAR: {
+		cast_function_t fn;
 		switch (source.InternalType()) {
 		case PhysicalType::INT16:
-			return DecimalToStringCast<int16_t>;
+			fn = DecimalToStringCast<int16_t>;
+			break;
 		case PhysicalType::INT32:
-			return DecimalToStringCast<int32_t>;
+			fn = DecimalToStringCast<int32_t>;
+			break;
 		case PhysicalType::INT64:
-			return DecimalToStringCast<int64_t>;
+			fn = DecimalToStringCast<int64_t>;
+			break;
 		case PhysicalType::INT128:
-			return DecimalToStringCast<hugeint_t>;
+			fn = DecimalToStringCast<hugeint_t>;
+			break;
 		default:
 			throw InternalException("Unimplemented internal decimal type");
 		}
+		// width-varying integer parts break lex order ('10' < '9' lex but 10 > 9), no annotation
+		return BoundCastInfo(fn);
 	}
 	default:
 		return DefaultCasts::TryVectorNullCast;

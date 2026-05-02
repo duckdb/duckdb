@@ -89,9 +89,16 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
 		return nullptr;
 	}
-	// NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity)).
-	// NaN is excluded even though DuckDB orders it above all other values: negate(NaN) = NaN, which
-	// would violate NON_INCREASING if NaN were treated as a valid corner. Bail instead.
+	return StatisticsPropagator::BuildMonotoneBoundsStats(func.GetReturnType(), out_lo, out_hi, output_can_have_null,
+	                                                      func.function.GetName());
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::BuildMonotoneBoundsStats(const LogicalType &target,
+                                                                          const Value &out_lo, const Value &out_hi,
+                                                                          bool can_have_null,
+                                                                          const string &error_context,
+                                                                          optional_ptr<const BaseStatistics> base) {
+	// NaN-at-corner is unusable: NaN orders above all values, but negate(NaN)=NaN breaks NON_INCREASING.
 	const auto is_unusable = [](const Value &v) {
 		if (v.IsNull()) {
 			return true;
@@ -110,15 +117,19 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.GetName());
+		                        error_context);
 	}
 
-	auto result = NumericStats::CreateEmpty(func.GetReturnType());
+	auto result = NumericStats::CreateEmpty(target);
+	if (base) {
+		// carry distinct_count + base flags; per-bound Set below overrides has_null
+		result.CopyBase(*base);
+	}
 	NumericStats::SetMin(result, out_lo);
 	NumericStats::SetMax(result, out_hi);
 
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
-	if (output_can_have_null) {
+	if (can_have_null) {
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result.ToUnique();

@@ -40,6 +40,11 @@ public:
 	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
 	                                                   const LogicalType &target);
 
+	//! Assemble numeric stats from monotone-derived bounds; throws on `out_hi < out_lo`.
+	static unique_ptr<BaseStatistics>
+	BuildMonotoneBoundsStats(const LogicalType &target, const Value &out_lo, const Value &out_hi, bool can_have_null,
+	                         const string &error_context, optional_ptr<const BaseStatistics> base_to_copy = nullptr);
+
 private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);

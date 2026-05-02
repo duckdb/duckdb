@@ -1,0 +1,32 @@
+# name: test/optimizer/statistics/statistics_cast_icu.test
+# description: ICU overrides correctly disable cast stats propagation (see #22235 / #22259)
+# group: [statistics]
+
+require icu
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+SET TimeZone = 'Asia/Kolkata';
+
+statement ok
+CREATE TABLE times AS SELECT (TIME '00:00:00' + INTERVAL (i) MINUTE) AS t FROM range(60) _(i)
+
+# TIME -> TIME_TZ via ICU's override picks up session zone (here +05:30). The default cast is
+# annotated StrictlyIncreasing in time_casts.cpp, but ICU's BindCastFromTime returns BoundCastInfo
+# without arg_properties — UNKNOWN. Propagation must bail; otherwise propagated bounds (computed
+# via the active registry / ICU cast) could disagree with runtime if data spans a DST change.
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIMETZ) s FROM times LIMIT 1)
+----
+NULL	NULL
+
+# TIMESTAMP_TZ -> TIME_TZ also session-zone dependent; same bail.
+statement ok
+CREATE TABLE tstz AS SELECT (TIMESTAMPTZ '2024-01-01 00:00:00+00' + INTERVAL (i) MINUTE) AS t FROM range(60) _(i)
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIMETZ) s FROM tstz LIMIT 1)
+----
+NULL	NULL
