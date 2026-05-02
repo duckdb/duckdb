@@ -148,8 +148,7 @@ struct DictionaryVector {
 		return type.InternalType() == PhysicalType::VARCHAR;
 	}
 	static inline bool CanCacheHashes(const Vector &vector) {
-		return DictionarySize(vector).IsValid() && !DictionaryId(vector).empty() &&
-		       CanCacheHashes(vector.GetType());
+		return DictionarySize(vector).IsValid() && !DictionaryId(vector).empty() && CanCacheHashes(vector.GetType());
 	}
 	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
 	static const Vector &GetCachedHashes(Vector &input);
