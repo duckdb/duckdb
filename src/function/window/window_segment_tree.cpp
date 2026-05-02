@@ -69,6 +69,20 @@ public:
 	}
 
 	void FlushStates(bool combining);
+	//! Note that a parent has been queued at `level` (TREE_FANOUT pairs added
+	//! to the buffer). Pairs accumulate across same-level parents until
+	//! FlushAndCommit drains them — the corresponding ``build_completed``
+	//! credit is deferred to that point so other threads only observe the
+	//! counter rise after our writes are durable.
+	inline void RecordPending(idx_t level) {
+		buffered_level = level;
+		++pending_count;
+	}
+	//! Flush any deferred pairs and atomically credit ``build_completed``
+	//! at ``buffered_level``. Returns the post-increment counter value
+	//! (or 0 if nothing was pending), letting the caller detect whether
+	//! this flush completed the level.
+	idx_t FlushAndCommit(WindowSegmentTreeGlobalState &gstate);
 	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
 	void WindowSegmentValue(const WindowSegmentTreeGlobalState &tree, idx_t l_idx, idx_t begin, idx_t end,
 	                        data_ptr_t current_state);
@@ -125,6 +139,12 @@ public:
 	Vector statef;
 	//! Count of buffered values
 	idx_t flush_count;
+	//! Tree level whose pairs are currently buffered (idx_t(-1) when empty).
+	//! Used by RecordPending / FlushAndCommit to defer flushes across
+	//! same-level parents — see those methods for details.
+	idx_t buffered_level = idx_t(-1);
+	//! Number of parents queued at buffered_level since the last flush.
+	idx_t pending_count = 0;
 	//! Cache of right side tree ranges for ordered aggregates
 	vector<RightEntry> right_stack;
 };
@@ -206,6 +226,21 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 	}
 
 	flush_count = 0;
+}
+
+idx_t WindowSegmentTreePart::FlushAndCommit(WindowSegmentTreeGlobalState &gstate) {
+	if (pending_count == 0) {
+		return 0;
+	}
+	// FlushStates writes the queued (source, target) pairs into target state
+	// slots before we credit the corresponding `build_completed[level]`
+	// counter — the invariant is that another thread observing the counter
+	// can safely advance to a higher level and read those slots.
+	FlushStates(buffered_level > 0);
+	const idx_t after = (*gstate.build_completed).at(buffered_level).fetch_add(pending_count) + pending_count;
+	pending_count = 0;
+	buffered_level = idx_t(-1);
+	return after;
 }
 
 void WindowSegmentTreePart::Combine(WindowSegmentTreePart &other, idx_t count) {
@@ -353,6 +388,19 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 			break;
 		}
 
+		// Cross-level boundary: drain pairs queued for an older level before
+		// queuing pairs of (possibly) different callback type at this level.
+		if (gtstate.buffered_level != idx_t(-1) && gtstate.buffered_level != level_current) {
+			const idx_t prev_level = gtstate.buffered_level;
+			const idx_t prev_size =
+			    (prev_level == 0 ? leaf_count : levels_flat_start[prev_level] - levels_flat_start[prev_level - 1]);
+			const idx_t prev_count = (prev_size + gstate.TREE_FANOUT - 1) / gstate.TREE_FANOUT;
+			if (gtstate.FlushAndCommit(gstate) == prev_count) {
+				gstate.build_level++;
+			}
+			continue;
+		}
+
 		// level 0 is data itself
 		const auto level_size =
 		    (level_current == 0 ? leaf_count : levels_flat_start[level_current] - levels_flat_start[level_current - 1]);
@@ -364,6 +412,12 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 		// Build the next fan-in
 		const idx_t build_idx = (*gstate.build_started).at(level_current)++;
 		if (build_idx >= build_count) {
+			// Done picking parents at this level — drain so build_completed
+			// reflects our writes before any other thread can advance past us.
+			if (gtstate.FlushAndCommit(gstate) == build_count) {
+				gstate.build_level++;
+				continue;
+			}
 			//	Nothing left at this level, so wait until other threads are done.
 			//	Since we are only building TREE_FANOUT values at a time, this will be quick.
 			while (level_current == gstate.build_level.load()) {
@@ -378,15 +432,26 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 		auto state_ptr = levels_flat_native.GetStatePtr(levels_flat_offset);
 		gtstate.WindowSegmentValue(gstate, level_current, pos, MinValue(level_size, pos + gstate.TREE_FANOUT),
 		                           state_ptr);
-		gtstate.FlushStates(level_current > 0);
+		// Defer FlushStates: same-level parents share a callback type and
+		// target distinct state slots, so they batch safely up to the
+		// STANDARD_VECTOR_SIZE buffer cap. RecordPending tracks the deferred
+		// completion so build_completed only rises when FlushAndCommit
+		// actually writes the pairs.
+		gtstate.RecordPending(level_current);
 
-		//	If that was the last one, mark the level as complete.
-		const idx_t build_complete = ++(*gstate.build_completed).at(level_current);
-		if (build_complete == build_count) {
-			gstate.build_level++;
-			continue;
+		// Bound buffer memory: drain before the next parent's FANOUT pairs
+		// could exceed the STANDARD_VECTOR_SIZE cap.
+		if (gtstate.flush_count + gstate.TREE_FANOUT > STANDARD_VECTOR_SIZE) {
+			if (gtstate.FlushAndCommit(gstate) == build_count) {
+				gstate.build_level++;
+				continue;
+			}
 		}
 	}
+
+	// Drain any leftover. Don't advance build_level here — if this flush
+	// completes a level, some other thread is already doing or has done that.
+	gtstate.FlushAndCommit(gstate);
 }
 
 void WindowSegmentTree::Evaluate(ExecutionContext &context, const DataChunk &bounds, Vector &result, idx_t count,
