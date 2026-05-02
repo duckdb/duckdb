@@ -25,6 +25,11 @@ enum class Monotonicity : uint8_t {
 //! Per-argument metadata for a scalar function.
 struct ArgProperties {
 	Monotonicity monotonicity = Monotonicity::UNKNOWN;
+	//! True if the function may return NULL on +/-inf or NaN inputs (e.g. year(infinity) -> NULL).
+	//! The MIN/MAX peel skips wrappers with this flag unless the caller explicitly opts in via
+	//! `allow_finite_only=true` (Tier-2), since the wrapper might evaluate to NULL on a stat
+	//! boundary that isn't NULL on the underlying column.
+	bool requires_finite_input = false;
 
 	ArgProperties &StrictlyIncreasing() {
 		monotonicity = Monotonicity::STRICTLY_INCREASING;
@@ -44,6 +49,10 @@ struct ArgProperties {
 	}
 	ArgProperties &Constant() {
 		monotonicity = Monotonicity::CONSTANT;
+		return *this;
+	}
+	ArgProperties &RequiresFinite() {
+		requires_finite_input = true;
 		return *this;
 	}
 };

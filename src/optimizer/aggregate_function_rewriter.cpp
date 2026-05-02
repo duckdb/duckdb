@@ -4,6 +4,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
+#include "duckdb/optimizer/monotonic_peel.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -29,6 +30,12 @@ public:
 	virtual unique_ptr<Expression>
 	CreateProjectionExpression(const LogicalType &aggr_type, unique_ptr<Expression> aggr_ref,
 	                           vector<unique_ptr<Expression>> additional_expressions) = 0;
+	//! Whether this rule needs the framework to bind a COUNT helper aggregate alongside the rewritten one.
+	//! Rules like AVG/SUM that derive a result from a count return true (default).
+	//! Rules that just lift an expression off the aggregate (LIST sort, MIN/MAX function peel) return false.
+	virtual bool NeedsHelperAggregate() const {
+		return true;
+	}
 
 public:
 	Optimizer &optimizer;
@@ -219,6 +226,10 @@ public:
 		return false;
 	}
 
+	bool NeedsHelperAggregate() const override {
+		return false;
+	}
+
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
 	                               vector<unique_ptr<Expression>> &additional_expressions) override;
 
@@ -245,6 +256,123 @@ unique_ptr<Expression> ListRewriteRule::Rewrite(unique_ptr<Expression> &expr, ve
 
 	return nullptr;
 }
+
+//! MIN(f_mono(g(col))) -> f_mono(MIN(g(col))) — peel monotonic wrappers off the outside of MIN/MAX,
+//! lift them into a projection above the aggregate. If a wrapper is non-increasing in the column arg,
+//! swap MIN <-> MAX. Walks the chain in one go: peels every contiguous peelable level it can.
+class MonotonicPeelMatcher : public ExpressionMatcher {
+public:
+	MonotonicPeelMatcher() : ExpressionMatcher(ExpressionClass::BOUND_AGGREGATE) {
+	}
+
+	bool Match(Expression &expr_p, vector<reference<Expression>> &bindings) override {
+		if (expr_p.GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			return false;
+		}
+		auto &aggr = expr_p.Cast<BoundAggregateExpression>();
+		if (aggr.function.name != "min" && aggr.function.name != "max") {
+			return false;
+		}
+		if (aggr.children.size() != 1) {
+			return false;
+		}
+		if (aggr.IsDistinct() || aggr.filter || aggr.order_bys) {
+			return false;
+		}
+		MonotonicPeelStep step;
+		if (!TryPeelMonotonicLevel(*aggr.children[0], step, /*allow_finite_only=*/false)) {
+			return false;
+		}
+		bindings.push_back(expr_p);
+		return true;
+	}
+};
+
+class MonotonicPeelRule : public AggregateRewriteRule {
+public:
+	explicit MonotonicPeelRule(Optimizer &optimizer) : AggregateRewriteRule(optimizer) {
+		matcher = make_uniq<MonotonicPeelMatcher>();
+	}
+
+	bool ShouldSkip(const LogicalAggregate &aggr) const override {
+		return !aggr.grouping_functions.empty() || aggr.grouping_sets.size() > 1;
+	}
+
+	bool NeedsHelperAggregate() const override {
+		return false;
+	}
+
+	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &,
+	                               vector<unique_ptr<Expression>> &additional_expressions) override {
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
+		const auto original_child_type = aggr.children[0]->GetReturnType();
+		auto current = std::move(aggr.children[0]);
+		bool inverted = false;
+
+		// Stash each peeled wrapper with its column slot left empty for projection rebuild.
+		while (true) {
+			MonotonicPeelStep step;
+			if (!TryPeelMonotonicLevel(*current, step, /*allow_finite_only=*/false)) {
+				break;
+			}
+			auto inner = ExtractColumnBearingChild(*current, step);
+			if (step.inverts) {
+				inverted = !inverted;
+			}
+			additional_expressions.push_back(std::move(current));
+			current = std::move(inner);
+		}
+		D_ASSERT(!additional_expressions.empty()); // matcher confirmed at least one peelable level
+
+		// If parity is even and the peeled child's type matches the original, the existing min/max
+		// binding still applies; just swap in the new child. Otherwise rebind (child type changed,
+		// e.g. BIGINT -> TIMESTAMP, or we need to flip MIN <-> MAX).
+		if (!inverted && current->GetReturnType() == original_child_type) {
+			aggr.children[0] = std::move(current);
+			return nullptr;
+		}
+		D_ASSERT(aggr.function.name == "min" || aggr.function.name == "max");
+		const string new_name = inverted ? (aggr.function.name == "min" ? "max" : "min") : aggr.function.name;
+		auto &catalog = Catalog::GetSystemCatalog(optimizer.context);
+		auto &fn_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, new_name);
+		const auto fn = fn_entry.functions.GetFunctionByArguments(optimizer.context, {current->GetReturnType()});
+
+		FunctionBinder function_binder(optimizer.context);
+		vector<unique_ptr<Expression>> args;
+		args.push_back(std::move(current));
+		expr = function_binder.BindAggregateFunction(fn, std::move(args));
+		return nullptr;
+	}
+
+	unique_ptr<Expression> CreateProjectionExpression(const LogicalType &, unique_ptr<Expression> aggr_ref,
+	                                                  vector<unique_ptr<Expression>> addnl) override {
+		// addnl holds wrappers in outermost-first order, each missing its column-bearing child.
+		// Rebuild inside-out, plugging the running expression into the empty slot at each level.
+		auto current = std::move(aggr_ref);
+		for (idx_t i = addnl.size(); i-- > 0;) {
+			auto wrapper = std::move(addnl[i]);
+			FillEmptySlot(*wrapper, std::move(current));
+			current = std::move(wrapper);
+		}
+		return current;
+	}
+
+private:
+	static void FillEmptySlot(Expression &wrapper, unique_ptr<Expression> filler) {
+		if (wrapper.GetExpressionClass() == ExpressionClass::BOUND_CAST) {
+			wrapper.Cast<BoundCastExpression>().child = std::move(filler);
+			return;
+		}
+		auto &fun = wrapper.Cast<BoundFunctionExpression>();
+		for (idx_t i = 0; i < fun.children.size(); i++) {
+			if (!fun.children[i]) {
+				fun.children[i] = std::move(filler);
+				return;
+			}
+		}
+		D_ASSERT(false); // every stashed wrapper has exactly one empty slot
+	}
+};
 
 //! Internal LogicalOperatorVisitor that does the actual rewriting
 class AggregateFunctionRewriterInternal : public LogicalOperatorVisitor {
@@ -320,19 +448,22 @@ private:
 			RewriteInfo rewrite_info;
 			auto count_arg = rule.Rewrite(expr, bindings, rewrite_info.additional_expressions);
 
-			// Add COUNT([x]) to the aggregate list
-			FunctionBinder function_binder(optimizer.context);
-			const auto count_fun = CountFunctionBase::GetFunction();
-			vector<unique_ptr<Expression>> count_args;
-			if (count_arg) {
-				count_args.push_back(std::move(count_arg));
+			if (rule.NeedsHelperAggregate()) {
+				// Add COUNT([x]) to the aggregate list
+				FunctionBinder function_binder(optimizer.context);
+				const auto count_fun = CountFunctionBase::GetFunction();
+				vector<unique_ptr<Expression>> count_args;
+				if (count_arg) {
+					count_args.push_back(std::move(count_arg));
+				}
+				auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
+				                                                        AggregateType::NON_DISTINCT);
+				rewrite_info.count_idx = aggr.expressions.size();
+				aggr.expressions.push_back(std::move(count_aggr));
+			} else {
+				rewrite_info.count_idx = DConstants::INVALID_INDEX;
 			}
-			auto count_aggr = function_binder.BindAggregateFunction(count_fun, std::move(count_args), nullptr,
-			                                                        AggregateType::NON_DISTINCT);
-
-			rewrite_info.count_idx = aggr.expressions.size();
 			rewrites.emplace(i, std::move(rewrite_info));
-			aggr.expressions.push_back(std::move(count_aggr));
 		}
 
 		if (rewrites.empty()) {
@@ -367,11 +498,12 @@ private:
 			}
 
 			auto &rewrite_info = rewrite_entry->second;
-			ColumnBinding count_binding(aggr.aggregate_index, ProjectionIndex(rewrite_info.count_idx));
-			auto count_ref = make_uniq<BoundColumnRefExpression>(
-			    aggr.expressions[rewrite_info.count_idx]->GetReturnType(), count_binding);
-
-			rewrite_info.additional_expressions.push_back(std::move(count_ref));
+			if (rule.NeedsHelperAggregate()) {
+				ColumnBinding count_binding(aggr.aggregate_index, ProjectionIndex(rewrite_info.count_idx));
+				auto count_ref = make_uniq<BoundColumnRefExpression>(
+				    aggr.expressions[rewrite_info.count_idx]->GetReturnType(), count_binding);
+				rewrite_info.additional_expressions.push_back(std::move(count_ref));
+			}
 			auto final_result = rule.CreateProjectionExpression(aggr_type, std::move(aggr_ref),
 			                                                    std::move(rewrite_info.additional_expressions));
 			projection_expressions.push_back(std::move(final_result));
@@ -395,6 +527,7 @@ AggregateFunctionRewriter::AggregateFunctionRewriter(Optimizer &optimizer) : opt
 	rules.push_back(make_uniq<AvgRewriteRule>(optimizer));
 	rules.push_back(make_uniq<SumRewriteRule>(optimizer));
 	rules.push_back(make_uniq<ListRewriteRule>(optimizer));
+	rules.push_back(make_uniq<MonotonicPeelRule>(optimizer));
 }
 
 AggregateFunctionRewriter::~AggregateFunctionRewriter() {

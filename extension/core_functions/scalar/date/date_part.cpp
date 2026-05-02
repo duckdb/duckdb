@@ -2112,10 +2112,12 @@ ScalarFunctionSet GetCachedDatepartFunction() {
 
 ScalarFunctionSet YearFun::GetFunctions() {
 	auto set = GetCachedDatepartFunction<DatePart::YearOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
+// Month / Day / Quarter / Day*Of* / Week / Hours / Minutes / Seconds / sub-second extracts
+// are cyclic (wrap modulo their period) and intentionally unannotated — do not add monotonicity.
 ScalarFunctionSet MonthFun::GetFunctions() {
 	return GetCachedDatepartFunction<DatePart::MonthOperator>();
 }
@@ -2126,19 +2128,19 @@ ScalarFunctionSet DayFun::GetFunctions() {
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DecadeOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
 ScalarFunctionSet CenturyFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::CenturyOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
 ScalarFunctionSet MillenniumFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::MillenniumOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
@@ -2168,13 +2170,13 @@ ScalarFunctionSet WeekFun::GetFunctions() {
 
 ScalarFunctionSet ISOYearFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::ISOYearOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
 ScalarFunctionSet EraFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::EraOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
@@ -2204,7 +2206,7 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	auto set = GetTimePartFunction<DatePart::EpochOperator, double>(LogicalType::DOUBLE);
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 
@@ -2233,7 +2235,7 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
-	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return operator_set;
 }
 
@@ -2246,7 +2248,7 @@ ScalarFunctionSet EpochUsFun::GetFunctions() {
 	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, tstz_stats));
-	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return operator_set;
 }
 
@@ -2264,7 +2266,7 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
 
-	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return operator_set;
 }
 
@@ -2272,6 +2274,7 @@ ScalarFunctionSet MakeTimestampMsFun::GetFunctions() {
 	ScalarFunctionSet operator_set("make_timestamp_ms");
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
+	// BIGINT input has no infinity sentinel — no need for RequiresFinite.
 	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return operator_set;
 }
@@ -2317,7 +2320,7 @@ ScalarFunctionSet HoursFun::GetFunctions() {
 
 ScalarFunctionSet YearWeekFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::YearWeekOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	set.SetUnaryArgProperties(ArgProperties().NonDecreasing().RequiresFinite());
 	return set;
 }
 

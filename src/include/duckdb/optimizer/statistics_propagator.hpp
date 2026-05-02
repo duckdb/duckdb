@@ -40,6 +40,15 @@ public:
 	static unique_ptr<BaseStatistics> TryPropagateCast(const BaseStatistics &stats, const LogicalType &source,
 	                                                   const LogicalType &target);
 
+	//! Validate corner-evaluation bounds and assemble a numeric stats result. Returns nullptr if
+	//! either bound is NaN/NULL; throws InternalException if `out_hi < out_lo` (catches an
+	//! arg_properties misannotation early). Shared by the function and cast forward-bounds paths.
+	//! `base_to_copy`, when non-null, seeds distinct-count and base validity flags before the
+	//! per-bound flags below override has_null/has_no_null.
+	static unique_ptr<BaseStatistics> BuildMonotoneBoundsStats(const LogicalType &target, Value out_lo, Value out_hi,
+	                                                           bool can_have_null, const string &error_context,
+	                                                           optional_ptr<const BaseStatistics> base_to_copy = nullptr);
+
 private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
