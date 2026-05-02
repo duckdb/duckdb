@@ -383,8 +383,8 @@ public:
 	};
 
 	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class OP, class INDEXER>
-	static inline bool UpdateUnaryClusteredLocal(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
-	                                             const ValidityMask &mask, INDEXER indexer) {
+	static inline bool UpdateUnaryClusteredOpt(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
+	                                           const ValidityMask &mask, INDEXER indexer) {
 		bool saw_value = false;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = indexer.GetIndex(i);
@@ -411,8 +411,8 @@ public:
 	}
 
 	template <bool CHECK_VALIDITY, class STATE_TYPE, class INPUT_TYPE, class OP, class INDEX_FACTORY>
-	static void ExecuteUnaryClusteredLocal(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
-	                                       const ValidityMask &validity, INDEX_FACTORY index_factory) {
+	static void ExecuteUnaryClusteredOpt(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
+	                                     const ValidityMask &validity, INDEX_FACTORY index_factory) {
 		idx_t pos = 0;
 		using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
@@ -420,7 +420,7 @@ public:
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
 			auto run_count = clustered.group_runs[r].count;
-			auto saw_value = UpdateUnaryClusteredLocal<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
+			auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
 			    vals, local, run_count, validity, index_factory(r, pos));
 			OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 			pos += run_count;
@@ -431,9 +431,9 @@ public:
 	static void ExecuteUnaryClustPrepared(const INPUT_TYPE *vals, const ValidityMask &validity,
 	                                      const ClusteredAggr &clustered, INDEX_FACTORY index_factory) {
 		if (OP::IgnoreNull() && validity.CanHaveNull()) {
-			ExecuteUnaryClusteredLocal<true, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, index_factory);
+			ExecuteUnaryClusteredOpt<true, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, index_factory);
 		} else {
-			ExecuteUnaryClusteredLocal<false, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, index_factory);
+			ExecuteUnaryClusteredOpt<false, STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity, index_factory);
 		}
 	}
 
@@ -443,8 +443,8 @@ public:
 	}
 
 	template <bool SIMPLE_DICT, class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClusteredDictLocal(Vector &input, const ClusteredAggr &clustered, idx_t count,
-	                                           const sel_t *cluster_iter = nullptr) {
+	static void ExecuteUnaryClusteredDictOpt(Vector &input, const ClusteredAggr &clustered, idx_t count,
+	                                         const sel_t *cluster_iter = nullptr) {
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
@@ -461,7 +461,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClusteredLocal(Vector &input, const ClusteredAggr &clustered, idx_t count) {
+	static void ExecuteUnaryClusteredOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
 		auto &validity = FlatVector::Validity(input);
 		if (IsDenseSingleRun(clustered, count)) {
@@ -472,11 +472,11 @@ public:
 			bool saw_value = false;
 			auto dense_indexer = SelectionIndexer<true, false> {nullptr, nullptr};
 			if (OP::IgnoreNull() && validity.CanHaveNull()) {
-				saw_value = UpdateUnaryClusteredLocal<true, local_type, INPUT_TYPE, OP>(vals, local, count, validity,
-				                                                                        dense_indexer);
+				saw_value = UpdateUnaryClusteredOpt<true, local_type, INPUT_TYPE, OP>(vals, local, count, validity,
+				                                                                      dense_indexer);
 			} else {
-				saw_value = UpdateUnaryClusteredLocal<false, local_type, INPUT_TYPE, OP>(vals, local, count, validity,
-				                                                                         dense_indexer);
+				saw_value = UpdateUnaryClusteredOpt<false, local_type, INPUT_TYPE, OP>(vals, local, count, validity,
+				                                                                       dense_indexer);
 			}
 			OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
 			return;
@@ -487,7 +487,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClusteredConstantLocal(Vector &input, const ClusteredAggr &clustered) {
+	static void ExecuteUnaryClusteredConstantOpt(Vector &input, const ClusteredAggr &clustered) {
 		using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 		if (OP::IgnoreNull() && ConstantVector::IsNull(input)) {
 			return;
@@ -510,7 +510,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClusteredUnifiedLocal(Vector &input, const ClusteredAggr &clustered, idx_t count) {
+	static void ExecuteUnaryClusteredUnifiedOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
@@ -542,8 +542,8 @@ public:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static void ExecuteUnaryClustCustomState(Vector &input, AggregateInputData &aggr_input_data,
-	                                         const ClusteredAggr &clustered, idx_t count) {
+	static void ExecuteUnaryNoClusteredOpt(Vector &input, AggregateInputData &aggr_input_data,
+	                                       const ClusteredAggr &clustered, idx_t count) {
 		static_assert(HasClusteredOperation<OP>::value, "Expected custom clustered operation");
 		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			ExecuteUnaryClustConstantCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered);
@@ -567,28 +567,28 @@ public:
 		if constexpr (HasClusteredLocalState<OP, STATE_TYPE>::value) {
 			switch (input.GetVectorType()) {
 			case VectorType::FLAT_VECTOR:
-				ExecuteUnaryClusteredLocal<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+				ExecuteUnaryClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
 				return;
 			case VectorType::CONSTANT_VECTOR:
-				ExecuteUnaryClusteredConstantLocal<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
+				ExecuteUnaryClusteredConstantOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered);
 				return;
 			case VectorType::DICTIONARY_VECTOR: {
 				auto *cluster_iter = clustered.ClusterIter(input, count);
 				if (cluster_iter) {
-					ExecuteUnaryClusteredDictLocal<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
-					                                                                 cluster_iter);
+					ExecuteUnaryClusteredDictOpt<true, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count,
+					                                                               cluster_iter);
 				} else {
-					ExecuteUnaryClusteredDictLocal<false, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+					ExecuteUnaryClusteredDictOpt<false, STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
 				}
 				return;
 			}
 			default:
-				ExecuteUnaryClusteredUnifiedLocal<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
+				ExecuteUnaryClusteredUnifiedOpt<STATE_TYPE, INPUT_TYPE, OP>(input, clustered, count);
 				return;
 			}
 		}
 		if constexpr (HasClusteredOperation<OP>::value) {
-			ExecuteUnaryClustCustomState<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
+			ExecuteUnaryNoClusteredOpt<STATE_TYPE, INPUT_TYPE, OP>(input, aggr_input_data, clustered, count);
 		} else {
 			D_ASSERT(false);
 		}

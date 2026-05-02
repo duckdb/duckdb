@@ -20,7 +20,11 @@ class Vector;
 //! regular scatter path over input-order addresses.
 struct ClusteredAggr {
 	static constexpr idx_t MAX_GROUPS = 256;
-	static constexpr idx_t HASH_SLOTS = 4096;
+	static constexpr idx_t HASH_SLOTS = 8192;
+	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << 24;
+	static constexpr uint32_t GID_MASK = (uint32_t(1) << 24) - 1;
+	static constexpr idx_t POSITION_SHIFT = 24;
+	static constexpr uint32_t INVALID_SLOT = uint32_t(-1);
 
 	struct GroupRun {
 		data_ptr_t state; //! caller fills this after TryClustered; advanced between aggregates
@@ -35,13 +39,8 @@ struct ClusteredAggr {
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! On success fills group_runs[].sel/gid/count.
 	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE sel_t),
-	//! and fixed-size mini-hash slots mapping raw gids to cursors.
-	struct Slot {
-		sel_t *left = nullptr;
-		sel_t *right = nullptr;
-		uint64_t gid = 0;
-	};
-	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, Slot *slots);
+	//! and encoded mini-hash slots mapping raw gids to active-group positions.
+	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
 
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
 	void SetSingleRun(data_ptr_t state, idx_t count);
@@ -67,7 +66,7 @@ private:
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
 struct ClusteredAggrState {
 	unsafe_unique_array<sel_t> arena;
-	unsafe_unique_array<ClusteredAggr::Slot> slots;
+	unsafe_unique_array<uint32_t> slots;
 	bool all_clustered = false;
 	bool any_clustered = false;
 	idx_t skipped_opportunities = 0;

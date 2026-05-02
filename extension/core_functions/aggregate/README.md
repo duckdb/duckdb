@@ -23,7 +23,7 @@ Unlike simple scalar functions, there are several of these:
 | `initialize` | Constructs the `State` in raw memory | X |
 | `destructor` | Destructs the `State` back to raw memory |  |
 | `update` | Accumulate the arguments into the corresponding `State` | X |
-| `cluster_update` | Accumulate the arguments into one or more clustered `State`s. |  |
+| `cluster_update` | Accumulate multiple tuples for the same `State` in one update. |  |
 | `combine` | Merge one `State` into another |  |
 | `finalize` | Convert a `State` into a final value. | X |
 | `window` | Compute a windowed aggregate value from the inputs and frame bounds |  |

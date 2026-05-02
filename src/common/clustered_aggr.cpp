@@ -1,12 +1,13 @@
 #include "duckdb/common/clustered_aggr.hpp"
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
 
 namespace duckdb {
 
-bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, Slot *slots) {
+bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots) {
 	// Partition tuple indices 0..count-1 into contiguous, ascending runs per group.
 	//
 	// Each group gets an arena slot with two cursors starting at the center:
@@ -21,34 +22,54 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *
 	constexpr idx_t CENTER_OFFSET = STANDARD_VECTOR_SIZE / 2;
 	static_assert((HASH_SLOTS & (HASH_SLOTS - 1)) == 0, "ClusteredAggr::HASH_SLOTS must be a power of two");
 
-	idx_t seen_slots[MAX_GROUPS];
 	idx_t n_seen = 0;
+	const idx_t group_limit = MinValue<idx_t>(MAX_GROUPS, count >> 3);
 	sel_t *next_slot = arena;
-	sel_t *const arena_end = arena + MAX_GROUPS * BUCKET_CAP;
-
-	auto get_slot = [&](uint64_t gid) -> Slot * {
-		return &slots[gid & (HASH_SLOTS - 1)];
-	};
-	auto allocate_slot = [&](Slot &slot, uint64_t gid) {
-		if (next_slot == arena_end) {
-			return false;
+	sel_t *left_cursor[MAX_GROUPS];
+	sel_t *right_cursor[MAX_GROUPS];
+	auto allocate_slot = [&](idx_t slot_idx, uint64_t gid) -> GroupRun * {
+		if (n_seen >= group_limit) {
+			return nullptr;
 		}
 		sel_t *center = next_slot + CENTER_OFFSET;
-		slot.left = center;
-		slot.right = center;
-		slot.gid = gid;
+		left_cursor[n_seen] = center;
+		right_cursor[n_seen] = center;
+		group_runs[n_seen].gid = gid;
+		slots[slot_idx] = static_cast<uint32_t>(gid) | (static_cast<uint32_t>(n_seen) << POSITION_SHIFT);
 		next_slot += BUCKET_CAP;
-		seen_slots[n_seen++] = gid & (HASH_SLOTS - 1);
-		return true;
+		n_seen++;
+		return &group_runs[n_seen - 1];
 	};
-	auto bail_out = [&]() {
-		for (idx_t i = 0; i < n_seen; i++) {
-			auto &slot = slots[seen_slots[i]];
-			slot.left = nullptr;
-			slot.right = nullptr;
+	auto find_or_allocate_slot = [&](uint64_t gid) -> GroupRun * {
+		D_ASSERT(gid < MAX_GID_COUNT - 1);
+		auto pos = gid & (HASH_SLOTS - 1);
+		auto &slot = slots[pos];
+		if (DUCKDB_LIKELY((slot & GID_MASK) == gid)) {
+			return &group_runs[slot >> POSITION_SHIFT];
+		} else if (DUCKDB_LIKELY(slot == INVALID_SLOT)) {
+			return allocate_slot(pos, gid);
+		} else {
+			pos = (HASH_SLOTS - 1) - pos;
+			auto &alt = slots[pos];
+			if (DUCKDB_LIKELY((alt & GID_MASK) == gid)) {
+				return &group_runs[alt >> POSITION_SHIFT];
+			} else if (DUCKDB_LIKELY(alt == INVALID_SLOT)) {
+				return allocate_slot(pos, gid);
+			}
+			return nullptr;
 		}
-		n_group_runs = 0;
-		return false;
+	};
+	auto finish = [&](bool result) {
+		for (idx_t i = 0; i < n_seen; i++) {
+			auto pos = group_runs[i].gid & (HASH_SLOTS - 1);
+			slots[pos] = INVALID_SLOT;
+			slots[(HASH_SLOTS - 1) - pos] = INVALID_SLOT;
+		}
+		n_group_runs = result ? n_seen : 0;
+		if (result) {
+			cached_dict_sel = nullptr;
+		}
+		return result;
 	};
 
 	// Scan from both ends toward the middle.
@@ -56,61 +77,37 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, idx_t count, sel_t *
 	for (idx_t i = 0; i < half; i++) {
 		const idx_t j_left = half - 1 - i; // scans 0..half-1 in reverse
 		const idx_t j_right = half + i;    // scans half..count-1 forward
-		const auto gid_left = group_ids[j_left];
-		const auto gid_right = group_ids[j_right];
-		auto &slot_left = *get_slot(gid_left);
-		auto &slot_right = *get_slot(gid_right);
-		if (slot_left.left == nullptr) {
-			if (!allocate_slot(slot_left, gid_left)) {
-				return bail_out();
-			}
-		} else if (slot_left.gid != gid_left) {
-			return bail_out();
+		auto *group_left = find_or_allocate_slot(group_ids[j_left]);
+		auto *group_right = find_or_allocate_slot(group_ids[j_right]);
+		if (!group_left || !group_right) {
+			return finish(false);
 		}
-		if (slot_right.right == nullptr) {
-			if (!allocate_slot(slot_right, gid_right)) {
-				return bail_out();
-			}
-		} else if (slot_right.gid != gid_right) {
-			return bail_out();
-		}
-		// The two cursor updates are independent (different groups or different
-		// directions within the same slot), giving the CPU two parallel store chains.
-		slot_left.left--;
-		slot_left.left[0] = static_cast<sel_t>(j_left);
-		slot_right.right[0] = static_cast<sel_t>(j_right);
-		slot_right.right++;
+		auto left_pos = static_cast<idx_t>(group_left - group_runs);
+		auto right_pos = static_cast<idx_t>(group_right - group_runs);
+		left_cursor[left_pos]--;
+		left_cursor[left_pos][0] = static_cast<sel_t>(j_left);
+		right_cursor[right_pos][0] = static_cast<sel_t>(j_right);
+		right_cursor[right_pos]++;
 	}
-	// Handle the odd element if count is odd.
 	for (idx_t j = 2 * half; j < count; j++) {
-		const auto gid = group_ids[j];
-		auto &slot = *get_slot(gid);
-		if (slot.right == nullptr) {
-			if (!allocate_slot(slot, gid)) {
-				return bail_out();
-			}
-		} else if (slot.gid != gid) {
-			return bail_out();
+		auto *group = find_or_allocate_slot(group_ids[j]);
+		if (!group) {
+			return finish(false);
 		}
-		slot.right[0] = static_cast<sel_t>(j);
-		slot.right++;
+		auto pos = static_cast<idx_t>(group - group_runs);
+		right_cursor[pos][0] = static_cast<sel_t>(j);
+		right_cursor[pos]++;
 	}
 
 	// Publish each group's contiguous run and reset the cursor tables for reuse.
 	for (idx_t i = 0; i < n_seen; i++) {
-		auto &slot = slots[seen_slots[i]];
-		const sel_t *run_begin = slot.left;
-		const sel_t *run_end = slot.right;
+		const sel_t *run_begin = left_cursor[i];
+		const sel_t *run_end = right_cursor[i];
 		const idx_t run_len = static_cast<idx_t>(run_end - run_begin);
 		group_runs[i].sel = run_begin;
 		group_runs[i].count = run_len;
-		group_runs[i].gid = slot.gid;
-		slot.left = nullptr;
-		slot.right = nullptr;
 	}
-	n_group_runs = n_seen;
-	cached_dict_sel = nullptr;
-	return true;
+	return finish(true);
 }
 
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {
@@ -160,7 +157,8 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 
 void ClusteredAggrState::Initialize() {
 	arena = make_unsafe_uniq_array_uninitialized<sel_t>(ClusteredAggr::MAX_GROUPS * STANDARD_VECTOR_SIZE);
-	slots = make_unsafe_uniq_array<ClusteredAggr::Slot>(ClusteredAggr::HASH_SLOTS);
+	slots = make_unsafe_uniq_array_uninitialized<uint32_t>(ClusteredAggr::HASH_SLOTS);
+	std::fill_n(slots.get(), ClusteredAggr::HASH_SLOTS, ClusteredAggr::INVALID_SLOT);
 	skipped_opportunities = 0;
 	retry_backoff = 1;
 }
