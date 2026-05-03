@@ -53,4 +53,26 @@ void PerColumnMetadataBlocks::AddColumn(idx_t col_idx, const vector<idx_t> &bloc
 	}
 }
 
+void PerColumnMetadataBlocks::RemoveColumn(idx_t col_idx) {
+	idx_t start = data.size();
+	idx_t end = data.size();
+	for (idx_t i = 0; i < data.size(); i++) {
+		if (data[i].is_column_index && data[i].index == col_idx) {
+			start = i;
+			// find the end: next column marker or end of data
+			end = data.size();
+			for (idx_t j = i + 1; j < data.size(); j++) {
+				if (data[j].is_column_index) {
+					end = j;
+					break;
+				}
+			}
+			break;
+		}
+	}
+	if (start < data.size()) {
+		data.erase(data.begin() + NumericCast<int64_t>(start), data.begin() + NumericCast<int64_t>(end));
+	}
+}
+
 } // namespace duckdb

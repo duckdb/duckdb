@@ -30,6 +30,8 @@ public:
 	vector<idx_t> GetBlocksForColumn(idx_t col_idx) const;
 	//! Add a column entry with its block IDs
 	void AddColumn(idx_t col_idx, const vector<idx_t> &blocks);
+	//! Remove a column entry and all its block IDs (linear scan)
+	void RemoveColumn(idx_t col_idx);
 
 	//! Iterate over all block IDs (skipping column markers)
 	template <typename Func>

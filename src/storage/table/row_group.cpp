@@ -500,10 +500,11 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 			if (!row_group->column_pointers.empty()) {
 				row_group->column_pointers[i] = column_pointers[i];
 			}
-			if (has_per_column_metadata_blocks) {
-				row_group->per_column_metadata_blocks.AddColumn(i, per_column_metadata_blocks.GetBlocksForColumn(i));
-			}
 		}
+	}
+	if (has_per_column_metadata_blocks) {
+		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
+		row_group->per_column_metadata_blocks.RemoveColumn(changed_idx);
 	}
 	lock.unlock();
 	row_group->Verify();
@@ -549,9 +550,9 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[i] = column_pointers[i];
 		}
-		if (has_per_column_metadata_blocks) {
-			row_group->per_column_metadata_blocks.AddColumn(i, per_column_metadata_blocks.GetBlocksForColumn(i));
-		}
+	}
+	if (has_per_column_metadata_blocks) {
+		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
 	}
 	// add the new column
 	row_group->columns[columns.size()] = std::move(added_column);
@@ -588,11 +589,11 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 		if (!row_group->column_pointers.empty()) {
 			row_group->column_pointers[target_idx] = column_pointers[i];
 		}
-		if (has_per_column_metadata_blocks) {
-			row_group->per_column_metadata_blocks.AddColumn(target_idx,
-			                                                per_column_metadata_blocks.GetBlocksForColumn(i));
-		}
 		target_idx++;
+	}
+	if (has_per_column_metadata_blocks) {
+		row_group->per_column_metadata_blocks = per_column_metadata_blocks;
+		row_group->per_column_metadata_blocks.RemoveColumn(target_idx);
 	}
 	lock.unlock();
 	row_group->Verify();
