@@ -19,15 +19,14 @@
 
 namespace duckdb {
 
-//! CheckedInteger is a templated wrapper around integer types (signed or unsigned) that throws ExceptionT on
-//! overflow or underflow for arithmetic operations.
+//! CheckedInteger is a templated wrapper around integer types.
+//! 
+//! A few key features:
+//! - On underflow and overflow, it throws a templated exception type (by default InternalException).
+//! - It's by default initialized to 0, which avoid accessing uninitialized memory.
+//! - It served as drop-in replacement for the underlying type in most cases.
 //!
-//! Only integral template arguments are accepted: both T (the wrapped storage type) and any U used as the
-//! right-hand side of arithmetic / construction must satisfy std::is_integral. This is enforced both via
-//! SFINAE on the public templated overloads and via a static_assert inside each template body.
-//!
-//! ExceptionT defaults to InternalException; pass another exception class (e.g. OutOfRangeException) to customize
-//! the error type while keeping the same checking semantics.
+//! For all the operations, only integral template arguments are accepted.
 template <typename T, typename ExceptionT = InternalException>
 class CheckedInteger {
 	static_assert(std::is_integral<T>::value, "CheckedInteger only supports integral types");
@@ -43,7 +42,8 @@ public:
 	CheckedInteger(T v) : value(v) {
 	} // NOLINT
 
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 	}
@@ -97,7 +97,8 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator+=(U rhs) {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -129,7 +130,8 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator-=(U rhs) {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -161,7 +163,8 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator*=(U rhs) {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -195,7 +198,8 @@ public:
 		value /= rhs;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator/=(U rhs) {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -229,7 +233,8 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator+(U rhs) const {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -259,7 +264,8 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator-(U rhs) const {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -289,7 +295,8 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator*(U rhs) const {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -321,7 +328,8 @@ public:
 		}
 		return CheckedInteger(value / rhs);
 	}
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator/(U rhs) const {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -408,26 +416,22 @@ private:
 	}
 };
 
-template <typename TL, typename TR, typename E,
-          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
 CheckedInteger<TR, E> operator+(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) + rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E,
-          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
 CheckedInteger<TR, E> operator-(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) - rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E,
-          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
 CheckedInteger<TR, E> operator*(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) * rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E,
-          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
 CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
@@ -482,8 +486,8 @@ public:
 	//! Templated assignment from any integral value. Constructs a CheckedInteger first (which performs
 	//! sign / range validation) and then stores it. Disambiguates `atomic_x = 0` against the deleted
 	//! copy-assignment when the literal is not already value_type.
-	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, value_type>::value,
-	                                           int>::type = 0>
+	template <typename U,
+	          typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, value_type>::value, int>::type = 0>
 	value_type operator=(U desired) {
 		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		value_type checked(desired);
