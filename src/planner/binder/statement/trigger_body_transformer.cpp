@@ -18,12 +18,11 @@ static bool IsNewRef(const string &name) {
 
 static void RewriteNewColumnRefs(QueryNode &node, const string &base_cte_name) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
-		ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
-		    *expr, [&](ColumnRefExpression &col_ref) {
-			    if (col_ref.column_names.size() >= 2 && IsNewRef(col_ref.column_names[0])) {
-				    col_ref.column_names[0] = base_cte_name;
-			    }
-		    });
+		ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(*expr, [&](ColumnRefExpression &col_ref) {
+			if (col_ref.column_names.size() >= 2 && IsNewRef(col_ref.column_names[0])) {
+				col_ref.column_names[0] = base_cte_name;
+			}
+		});
 	});
 }
 
@@ -69,12 +68,11 @@ static bool HasOldRef(QueryNode &node) {
 		if (found) {
 			return;
 		}
-		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
-		    *expr, [&](const ColumnRefExpression &col_ref) {
-			    if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], "old")) {
-				    found = true;
-			    }
-		    });
+		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(*expr, [&](const ColumnRefExpression &col_ref) {
+			if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], "old")) {
+				found = true;
+			}
+		});
 	});
 	return found;
 }
@@ -92,7 +90,8 @@ static string BulkTransformError(QueryNode &body, TriggerEventType event_type) {
 	auto &insert = body.Cast<InsertQueryNode>();
 	if (insert.select_statement && insert.select_statement->node &&
 	    insert.select_statement->node->type != QueryNodeType::SELECT_NODE) {
-		return "FOR EACH ROW trigger bodies only support a single SELECT or VALUES clause; UNION, INTERSECT, and EXCEPT are not supported";
+		return "FOR EACH ROW trigger bodies only support a single SELECT or VALUES clause; UNION, INTERSECT, and "
+		       "EXCEPT are not supported";
 	}
 	auto values_list = insert.GetValuesList();
 	if (values_list && values_list->values.size() > 1) {
@@ -100,7 +99,6 @@ static string BulkTransformError(QueryNode &body, TriggerEventType event_type) {
 	}
 	return "";
 }
-
 
 static void TransformForEachRowBodyAsBulk(QueryNode &body, const string &base_cte_name) {
 	switch (body.type) {
@@ -134,7 +132,6 @@ static void TransformForEachRowBodyAsBulk(QueryNode &body, const string &base_ct
 		throw NotImplementedException("Unsupported FOR EACH ROW trigger body type");
 	}
 }
-
 
 void TransformTriggerBody(QueryNode &body, TriggerEventType event_type) {
 	auto error = BulkTransformError(body, event_type);
