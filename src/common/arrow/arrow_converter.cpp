@@ -227,6 +227,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = root_holder.owned_type_names.back().get();
 		break;
 	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		string format = "tsn:" + options.time_zone;
+		root_holder.owned_type_names.push_back(AddName(format));
+		child.format = root_holder.owned_type_names.back().get();
+		break;
+	}
 	case LogicalTypeId::TIMESTAMP_SEC:
 		child.format = "tss:";
 		break;

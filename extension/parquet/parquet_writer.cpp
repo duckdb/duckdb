@@ -123,6 +123,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -180,7 +181,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 static bool GetTimestampIsAdjustedToUTC(const LogicalTypeId type_id, const TimeStampIsAdjustedToUTC setting) {
 	switch (setting) {
 	case TimeStampIsAdjustedToUTC::AUTO:
-		return type_id == LogicalTypeId::TIMESTAMP_TZ;
+		return type_id == LogicalTypeId::TIMESTAMP_TZ || type_id == LogicalTypeId::TIMESTAMP_TZ_NS;
 	case TimeStampIsAdjustedToUTC::ALWAYS_TRUE:
 		return true;
 	case TimeStampIsAdjustedToUTC::ALWAYS_FALSE:
@@ -261,6 +262,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		if (write_timestamp_as_int96) {
 			return;
 		}
@@ -956,6 +958,8 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		return make_uniq<NumericStatsUnifier<timestamp_t>>();
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return make_uniq<NumericStatsUnifier<timestamp_tz_t>>();
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return make_uniq<NumericStatsUnifier<timestamp_tz_ns_t>>();
 	case LogicalTypeId::TIMESTAMP_MS:
 		return make_uniq<NumericStatsUnifier<timestamp_ms_t>>();
 	case LogicalTypeId::TIMESTAMP_NS:

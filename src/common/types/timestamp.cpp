@@ -200,13 +200,15 @@ bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestam
 	return IsFinite(result);
 }
 
-TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result) {
+TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result, bool use_offset,
+                                                   bool strict) {
 	int32_t nanos = 0;
-	auto success = TryConvertTimestamp(str, len, result, true, &nanos);
+	timestamp_t micros;
+	auto success = TryConvertTimestamp(str, len, micros, use_offset, &nanos, strict);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
 	}
-	if (!TryFromTimestampNanos(result, nanos, result)) {
+	if (!TryFromTimestampNanos(micros, nanos, result)) {
 		return TimestampCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	return TimestampCastResult::SUCCESS;
@@ -370,6 +372,17 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 		return date_t::ninfinity();
 	}
 	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::MICROS_PER_DAY -
+	                                         (timestamp.value < 0)));
+}
+
+date_t Timestamp::GetDateNS(timestamp_ns_t timestamp) {
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::infinity())) {
+		return date_t::infinity();
+	}
+	if (DUCKDB_UNLIKELY(timestamp == timestamp_t::ninfinity())) {
+		return date_t::ninfinity();
+	}
+	return date_t(UnsafeNumericCast<int32_t>((timestamp.value + (timestamp.value < 0)) / Interval::NANOS_PER_DAY -
 	                                         (timestamp.value < 0)));
 }
 
@@ -577,6 +590,7 @@ TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
 	TimestampComponents result;
 	Date::Convert(date, result.year, result.month, result.day);
 	Time::Convert(time, result.hour, result.minute, result.second, result.microsecond);
+	result.nanosecond = 0;
 	return result;
 }
 

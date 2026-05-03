@@ -126,6 +126,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_TIME_TZ = 30,
 	// duckdb_timestamp (microseconds)
 	DUCKDB_TYPE_TIMESTAMP_TZ = 31,
+	// duckdb_timestamp (nanoseconds)
+	DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42,
 	// enum type, only useful as logical type
 	DUCKDB_TYPE_ANY = 34,
 	// duckdb_bignum
@@ -2587,6 +2589,14 @@ Creates a TIMESTAMP_TZ value from a duckdb_timestamp
 DUCKDB_C_API duckdb_value duckdb_create_timestamp_tz(duckdb_timestamp input);
 
 /*!
+Creates a TIMESTAMP_TZ_NS value from a duckdb_timestamp_ns
+
+* @param input The duckdb_timestamp_ns value
+* @return The value. This must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_C_API duckdb_value duckdb_create_timestamp_tz_ns(duckdb_timestamp_ns input);
+
+/*!
 Creates a TIMESTAMP_S value from a duckdb_timestamp_s
 
 * @param input The duckdb_timestamp_s value
@@ -2811,6 +2821,14 @@ Returns the TIMESTAMP_TZ value of the given value.
 * @return A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted
 */
 DUCKDB_C_API duckdb_timestamp duckdb_get_timestamp_tz(duckdb_value val);
+
+/*!
+Returns the TIMESTAMP_TZ_NS value of the given value.
+
+* @param val A duckdb_value containing a TIMESTAMP_TZ_NS
+* @return A duckdb_timestamp_ns, or MinValue<timestamp_tz_ns> if the value cannot be converted
+*/
+DUCKDB_C_API duckdb_timestamp_ns duckdb_get_timestamp_tz_ns(duckdb_value val);
 
 /*!
 Returns the duckdb_timestamp_s value of the given value.

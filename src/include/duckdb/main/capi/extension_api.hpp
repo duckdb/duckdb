@@ -663,6 +663,8 @@ typedef struct {
 	duckdb_value (*duckdb_create_union_value)(duckdb_logical_type union_type, idx_t tag_index, duckdb_value value);
 	duckdb_value (*duckdb_create_time_ns)(duckdb_time_ns input);
 	duckdb_time_ns (*duckdb_get_time_ns)(duckdb_value val);
+	duckdb_value (*duckdb_create_timestamp_tz_ns)(duckdb_timestamp_ns input);
+	duckdb_timestamp_ns (*duckdb_get_timestamp_tz_ns)(duckdb_value val);
 	// API to create and manipulate vector types
 
 	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
@@ -1220,6 +1222,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_create_union_value = duckdb_create_union_value;
 	result.duckdb_create_time_ns = duckdb_create_time_ns;
 	result.duckdb_get_time_ns = duckdb_get_time_ns;
+	result.duckdb_create_timestamp_tz_ns = duckdb_create_timestamp_tz_ns;
+	result.duckdb_get_timestamp_tz_ns = duckdb_get_timestamp_tz_ns;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;

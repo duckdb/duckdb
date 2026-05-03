@@ -67,6 +67,8 @@ PhysicalType GetTypeId() {
 		return PhysicalType::INT64;
 	} else if (std::is_same<TYPE, timestamp_tz_t>()) {
 		return PhysicalType::INT64;
+	} else if (std::is_same<TYPE, timestamp_tz_ns_t>()) {
+		return PhysicalType::INT64;
 	} else if (std::is_same<TYPE, float>() || std::is_same<TYPE, float_na_equal>()) {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<TYPE, double>() || std::is_same<TYPE, double_na_equal>()) {

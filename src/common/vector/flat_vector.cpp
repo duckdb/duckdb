@@ -351,6 +351,8 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(reinterpret_cast<const timestamp_tz_ns_t *>(data_ptr)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
 	case LogicalTypeId::UHUGEINT:
