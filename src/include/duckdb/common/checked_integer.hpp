@@ -44,7 +44,7 @@ public:
 	CheckedInteger(T v) : value(v) {
 	} // NOLINT
 
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 	}
 
@@ -101,7 +101,7 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger &operator+=(U rhs) {
 		const hugeint_t wide = ToHuge(value) + ToHuge(rhs);
 		value =
@@ -122,7 +122,7 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger &operator-=(U rhs) {
 		const hugeint_t wide = ToHuge(value) - ToHuge(rhs);
 		value = NarrowFromHuge(wide, value, rhs,
@@ -143,7 +143,7 @@ public:
 		value = result;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger &operator*=(U rhs) {
 		const hugeint_t wide = ToHuge(value) * ToHuge(rhs);
 		value = NarrowFromHuge(wide, value, rhs,
@@ -164,7 +164,7 @@ public:
 		value /= rhs;
 		return *this;
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger &operator/=(U rhs) {
 		if (rhs == 0) {
 			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
@@ -187,7 +187,7 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger operator+(U rhs) const {
 		const hugeint_t wide = ToHuge(value) + ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
@@ -206,7 +206,7 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger operator-(U rhs) const {
 		const hugeint_t wide = ToHuge(value) - ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
@@ -225,7 +225,7 @@ public:
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger operator*(U rhs) const {
 		const hugeint_t wide = ToHuge(value) * ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
@@ -244,7 +244,7 @@ public:
 		}
 		return CheckedInteger(value / rhs);
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger operator/(U rhs) const {
 		if (rhs == 0) {
 			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
@@ -273,52 +273,52 @@ public:
 		return value >= other.value;
 	}
 
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator==(U other) const {
 		return CmpEqual(value, other);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator!=(U other) const {
 		return !CmpEqual(value, other);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator<(U other) const {
 		return CmpLess(value, other);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator>(U other) const {
 		return CmpLess(other, value);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator<=(U other) const {
 		return !CmpLess(other, value);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator>=(U other) const {
 		return !CmpLess(value, other);
 	}
 
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator==(U lhs, const CheckedInteger &rhs) {
 		return CmpEqual(rhs.value, lhs);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator!=(U lhs, const CheckedInteger &rhs) {
 		return !CmpEqual(rhs.value, lhs);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator<(U lhs, const CheckedInteger &rhs) {
 		return CmpLess(lhs, rhs.value);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator>(U lhs, const CheckedInteger &rhs) {
 		return CmpLess(rhs.value, lhs);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator<=(U lhs, const CheckedInteger &rhs) {
 		return !CmpLess(rhs.value, lhs);
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	friend bool operator>=(U lhs, const CheckedInteger &rhs) {
 		return !CmpLess(lhs, rhs.value);
 	}
@@ -405,22 +405,22 @@ private:
 	}
 };
 
-template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral_v<TL>, int>::type = 0>
+template <typename TL, typename TR, typename E, std::enable_if_t<std::is_integral_v<TL>, int> = 0>
 CheckedInteger<TR, E> operator+(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) + rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral_v<TL>, int>::type = 0>
+template <typename TL, typename TR, typename E, std::enable_if_t<std::is_integral_v<TL>, int> = 0>
 CheckedInteger<TR, E> operator-(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) - rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral_v<TL>, int>::type = 0>
+template <typename TL, typename TR, typename E, std::enable_if_t<std::is_integral_v<TL>, int> = 0>
 CheckedInteger<TR, E> operator*(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) * rhs.GetValue();
 }
 
-template <typename TL, typename TR, typename E, typename std::enable_if<std::is_integral_v<TL>, int>::type = 0>
+template <typename TL, typename TR, typename E, std::enable_if_t<std::is_integral_v<TL>, int> = 0>
 CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
@@ -454,7 +454,7 @@ public:
 	}
 	constexpr atomic(T desired) noexcept : val(desired) { // NOLINT
 	}
-	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	atomic(U desired) : val(value_type(desired).GetValue()) { // NOLINT
 	}
 
@@ -479,8 +479,7 @@ public:
 		return desired;
 	}
 
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, value_type>, int>::type = 0>
+	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, value_type>, int> = 0>
 	value_type operator=(U desired) {
 		value_type checked(desired);
 		store(checked);
@@ -540,27 +539,27 @@ public:
 		return load() >= other;
 	}
 
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator==(U other) const noexcept {
 		return load() == other;
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator!=(U other) const noexcept {
 		return load() != other;
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator<(U other) const noexcept {
 		return load() < other;
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator>(U other) const noexcept {
 		return load() > other;
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator<=(U other) const noexcept {
 		return load() <= other;
 	}
-	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator>=(U other) const noexcept {
 		return load() >= other;
 	}
