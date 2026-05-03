@@ -41,8 +41,8 @@ public:
 
 	CheckedInteger() : value(0) {
 	}
-	CheckedInteger(T v) : value(v) {
-	} // NOLINT
+	CheckedInteger(T v) : value(v) { // NOLINT
+	}
 
 	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
