@@ -1,0 +1,62 @@
+# name: test/overlay.test
+# group: [test]
+
+query T
+SELECT OVERLAY('abcdef' PLACING 'XX' FROM 3)
+----
+abXXef
+
+# comma syntax
+query T
+SELECT OVERLAY('abcdef', 'XX', 3)
+----
+abXXef
+
+query T
+SELECT overlay('abcdef' PLACING 'XXX' FROM 2)
+----
+aXXXef
+
+# Explicit length: replace 2 chars at position 3 with 'XX'
+query T
+SELECT overlay('abcdef' PLACING 'XX' FROM 3 FOR 2)
+----
+abXXef
+
+# Length 0 inserts without removal
+query T
+SELECT overlay('abcdef' PLACING 'XX' FROM 3 FOR 0)
+----
+abXXcdef
+
+# Length larger than the tail truncates the tail
+query T
+SELECT overlay('abcdef' PLACING 'Z' FROM 3 FOR 10)
+----
+abZ
+
+# NULL propagation
+query T
+SELECT overlay(NULL PLACING 'XX' FROM 2)
+----
+NULL
+
+query T
+SELECT overlay('abcdef' PLACING NULL FROM 2)
+----
+NULL
+
+# From a table
+statement ok
+CREATE TABLE t(s STRING);
+
+statement ok
+INSERT INTO t VALUES ('abcdef'), ('hello'), ('xy'), (NULL);
+
+query T rowsort
+SELECT overlay(s PLACING '__' FROM 2 FOR 2) FROM t
+----
+NULL
+a__def
+h__lo
+x__

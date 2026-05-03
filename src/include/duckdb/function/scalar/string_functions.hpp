@@ -239,6 +239,16 @@ struct ArrayLengthFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct OverlayFun {
+	static constexpr const char *Name = "overlay";
+	static constexpr const char *Parameters = "string,replacement,start,count";
+	static constexpr const char *Description = "Replaces a substring of `string` starting at character `start` with `replacement`. If `count` is not specified, it defaults to the length of `replacement`. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "overlay('hello' placing 'xyz' from 2 for 3)\002overlay('hello' placing 'xyz' from 2)";
+	static constexpr const char *Categories = "string";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct SubstringFun {
 	static constexpr const char *Name = "substring";
 	static constexpr const char *Parameters = "string,start,length";
