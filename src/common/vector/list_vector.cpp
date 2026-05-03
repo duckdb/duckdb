@@ -459,4 +459,20 @@ idx_t VectorIteratorGetListSize(const Vector &vector) {
 	return ListVector::GetListSize(vector);
 }
 
+Vector &VectorWriterGetListChild(Vector &vector) {
+	return ListVector::GetChildMutable(vector);
+}
+
+idx_t VectorWriterGetListSize(const Vector &vector) {
+	return ListVector::GetListSize(vector);
+}
+
+void VectorWriterReserveList(Vector &vector, idx_t required_capacity) {
+	ListVector::Reserve(vector, required_capacity);
+}
+
+void VectorWriterSetListSize(Vector &vector, idx_t size) {
+	ListVector::SetListSize(vector, size);
+}
+
 } // namespace duckdb
