@@ -385,10 +385,8 @@ private:
 	template <typename V>
 	static hugeint_t ToHuge(V v) {
 		static_assert(std::is_integral_v<V>, "CheckedInteger only supports integral types");
-		if constexpr (std::is_same_v<V, uint64_t>) {
-			return uhugeint_t(v);
-		} else if constexpr (std::is_unsigned_v<V>) {
-			return hugeint_t(static_cast<int64_t>(static_cast<uint64_t>(v)));
+		if constexpr (std::is_unsigned_v<V>) {
+			return uhugeint_t(static_cast<uint64_t>(v));
 		} else {
 			return hugeint_t(static_cast<int64_t>(v));
 		}
