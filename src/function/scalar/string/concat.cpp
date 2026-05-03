@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -156,33 +157,55 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		input_data.push_back(std::move(data));
 	}
 
-	vector<sel_t> child_idx_data;
-	idx_t offset = 0;
-	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
+	// First pass: compute per-row lengths/validity and total child size
+	vector<idx_t> row_lengths(count, 0);
+	vector<bool> row_invalid(count, false);
+	idx_t total_size = 0;
 	for (idx_t i = 0; i < count; i++) {
-		result_data[i].offset = offset;
-		result_data[i].length = 0;
+		idx_t row_length = 0;
+		bool is_invalid = false;
 		for (auto &data : input_data) {
 			auto list_index = data.vdata.sel->get_index(i);
 			if (!data.vdata.validity.RowIsValid(list_index)) {
 				// LIST_CONCAT ignores NULL values, but || does not
 				if (is_operator) {
-					result_data.SetInvalid(i);
+					is_invalid = true;
 				}
 				continue;
 			}
-			const auto &list_entry = data.input_entries[list_index];
-			result_data[i].length += list_entry.length;
-			if (child_idx_data.size() < list_entry.length) {
-				child_idx_data.resize(NextPowerOfTwo(list_entry.length));
-			}
-			for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-				child_idx_data[child_idx] = NumericCast<sel_t>(list_entry.offset + child_idx);
-			}
-			SelectionVector child_sel(child_idx_data.data(), list_entry.length);
-			ListVector::Append(result, data.child_vec, child_sel, list_entry.length);
+			row_length += data.input_entries[list_index].length;
 		}
-		offset += result_data[i].length;
+		row_invalid[i] = is_invalid;
+		if (!is_invalid) {
+			row_lengths[i] = row_length;
+			total_size += row_length;
+		}
+	}
+
+	// Pre-reserve total child capacity in one shot
+	ListVector::Reserve(result, total_size);
+	auto &result_child = ListVector::GetChildMutable(result);
+
+	// Second pass: write list entries and copy children
+	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
+	idx_t offset = 0;
+	for (idx_t i = 0; i < count; i++) {
+		if (row_invalid[i]) {
+			result_writer.WriteNull();
+			continue;
+		}
+		list_entry_t row_entry {offset, row_lengths[i]};
+		for (auto &data : input_data) {
+			auto list_index = data.vdata.sel->get_index(i);
+			if (!data.vdata.validity.RowIsValid(list_index)) {
+				continue;
+			}
+			const auto &list_entry = data.input_entries[list_index];
+			VectorOperations::Copy(data.child_vec, result_child, list_entry.offset + list_entry.length,
+			                       list_entry.offset, offset);
+			offset += list_entry.length;
+		}
+		result_writer.WriteValue(row_entry);
 	}
 	ListVector::SetListSize(result, offset);
 }

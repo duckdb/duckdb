@@ -6,33 +6,12 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/scalar/regexp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
 namespace {
-
-struct StringSplitInput {
-	StringSplitInput(Vector &result_list, Vector &result_child, idx_t offset)
-	    : result_list(result_list), result_child(result_child), offset(offset) {
-	}
-
-	Vector &result_list;
-	Vector &result_child;
-	idx_t offset;
-
-	void AddSplit(const char *split_data, idx_t split_size, idx_t list_idx) {
-		auto list_entry = offset + list_idx;
-		if (list_entry >= ListVector::GetListCapacity(result_list)) {
-			ListVector::SetListSize(result_list, offset + list_idx);
-			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
-		}
-		FlatVector::GetDataMutable<string_t>(result_child)[list_entry] =
-		    string_t(split_data, UnsafeNumericCast<uint32_t>(split_size));
-	}
-};
 
 struct RegularStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
@@ -71,8 +50,8 @@ struct RegexpStringSplit {
 };
 
 struct StringSplitter {
-	template <class OP>
-	static idx_t Split(string_t input, string_t delim, StringSplitInput &state, void *data) {
+	template <class OP, class CB>
+	static idx_t Split(string_t input, string_t delim, void *data, CB &&emit) {
 		auto input_data = input.GetData();
 		auto input_size = input.GetSize();
 		auto delim_data = delim.GetData();
@@ -97,13 +76,12 @@ struct StringSplitter {
 				}
 			}
 			D_ASSERT(input_size >= pos + match_size);
-			state.AddSplit(input_data, pos, list_idx);
-
+			emit(input_data, pos);
 			list_idx++;
 			input_data += (pos + match_size);
 			input_size -= (pos + match_size);
 		}
-		state.AddSplit(input_data, input_size, list_idx);
+		emit(input_data, input_size);
 		list_idx++;
 		return list_idx;
 	}
@@ -115,38 +93,29 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 	auto delim_entries = args.data[1].Values<string_t>(args.size());
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	ListVector::SetListSize(result, 0);
 
-	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
-
-	// count all the splits and set up the list entries
-	auto &child_entry = ListVector::GetChildMutable(result);
-	idx_t total_splits = 0;
+	auto list_writer = FlatVector::Writer<VectorListType<string_t>>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_entry = input_entries[i];
-		auto delim_entry = delim_entries[i];
 		if (!input_entry.IsValid()) {
-			result_data.WriteNull();
+			list_writer.WriteNull();
 			continue;
 		}
-		StringSplitInput split_input(result, child_entry, total_splits);
+		auto delim_entry = delim_entries[i];
+		auto list = list_writer.WriteDynamicList();
 		if (!delim_entry.IsValid()) {
 			// delim is NULL: copy the complete entry
-			split_input.AddSplit(input_entry.GetValue().GetData(), input_entry.GetValue().GetSize(), 0);
-			result_data.WriteValue(list_entry_t(total_splits, 1));
-			total_splits++;
+			list.WriteElement().WriteStringRef(input_entry.GetValue());
 			continue;
 		}
-		auto list_length = StringSplitter::Split<OP>(input_entry.GetValue(), delim_entry.GetValue(), split_input, data);
-		result_data.WriteValue(list_entry_t(total_splits, list_length));
-		total_splits += list_length;
+		StringSplitter::Split<OP>(
+		    input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
+			    list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
+		    });
 	}
-	ListVector::SetListSize(result, total_splits);
-	D_ASSERT(ListVector::GetListSize(result) == total_splits);
 
-	StringVector::AddHeapReference(child_entry, args.data[0]);
+	StringVector::AddHeapReference(ListVector::GetChildMutable(result), args.data[0]);
 }
 
 void StringSplitFunction(DataChunk &args, ExpressionState &state, Vector &result) {

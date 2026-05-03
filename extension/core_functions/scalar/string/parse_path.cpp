@@ -1,5 +1,4 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -26,26 +25,6 @@ static string GetSeparator(const string_t &input) {
 	}
 	return separator;
 }
-
-struct SplitInput {
-	SplitInput(Vector &result_list, Vector &result_child, idx_t offset)
-	    : result_list(result_list), result_child(result_child), offset(offset) {
-	}
-
-	Vector &result_list;
-	Vector &result_child;
-	idx_t offset;
-
-	void AddSplit(const char *split_data, idx_t split_size, idx_t list_idx) {
-		auto list_entry = offset + list_idx;
-		if (list_entry >= ListVector::GetListCapacity(result_list)) {
-			ListVector::SetListSize(result_list, offset + list_idx);
-			ListVector::Reserve(result_list, ListVector::GetListCapacity(result_list) * 2);
-		}
-		FlatVector::GetDataMutable<string_t>(result_child)[list_entry] =
-		    StringVector::AddString(result_child, split_data, split_size);
-	}
-};
 
 static bool IsIdxValid(const idx_t &i, const idx_t &sentence_size) {
 	if (i > sentence_size || i == DConstants::INVALID_INDEX) {
@@ -88,7 +67,8 @@ static idx_t FindLast(const char *data_ptr, idx_t input_size, const string &sep_
 	return start - 1;
 }
 
-static idx_t SplitPath(string_t input, const string &sep, SplitInput &state) {
+template <class CB>
+static idx_t SplitPath(string_t input, const string &sep, CB &&emit) {
 	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 	if (!input_size) {
@@ -104,21 +84,21 @@ static idx_t SplitPath(string_t input, const string &sep, SplitInput &state) {
 		D_ASSERT(input_size >= pos);
 		if (pos == 0) {
 			if (list_idx == 0) { // first character in path is separator
-				state.AddSplit(input_data, 1, list_idx);
+				emit(input_data, 1);
 				list_idx++;
 				if (input_size == 1) { // special case: the only character in path is a separator
 					return list_idx;
 				}
 			} // else: separator is in the path
 		} else {
-			state.AddSplit(input_data, pos, list_idx);
+			emit(input_data, pos);
 			list_idx++;
 		}
 		input_data += (pos + 1);
 		input_size -= (pos + 1);
 	}
 	if (input_size > 0) {
-		state.AddSplit(input_data, input_size, list_idx);
+		emit(input_data, input_size);
 		list_idx++;
 	}
 	return list_idx;
@@ -266,25 +246,19 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	ListVector::SetListSize(result, 0);
 
-	// set up the list entries
-	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
-	auto &child_entry = ListVector::GetChildMutable(result);
-	idx_t total_splits = 0;
+	auto list_writer = FlatVector::Writer<VectorListType<string_t>>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			result_data.WriteNull();
+			list_writer.WriteNull();
 			continue;
 		}
-		SplitInput split_input(result, child_entry, total_splits);
-		auto list_length = SplitPath(inputs[input_idx], sep, split_input);
-		result_data.WriteValue(list_entry_t(total_splits, list_length));
-		total_splits += list_length;
+		auto list = list_writer.WriteDynamicList();
+		SplitPath(inputs[input_idx], sep, [&](const char *split_data, idx_t split_size) {
+			list.WriteElement().WriteValue(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
+		});
 	}
-	ListVector::SetListSize(result, total_splits);
-	D_ASSERT(ListVector::GetListSize(result) == total_splits);
 }
 
 ScalarFunctionSet ParseDirnameFun::GetFunctions() {
