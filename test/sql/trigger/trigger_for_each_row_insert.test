@@ -140,6 +140,38 @@ DELETE FROM t;
 statement ok
 DELETE FROM audit;
 
+# JOIN body - NEW refs in ON condition are rewritten correctly
+statement ok
+CREATE TABLE lookup (id INTEGER, label VARCHAR);
+
+statement ok
+INSERT INTO lookup VALUES (1, 'one'), (2, 'two');
+
+statement ok
+CREATE TRIGGER trg_join AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit SELECT NEW.id, lookup.label FROM new JOIN lookup ON new.id = lookup.id;
+
+statement ok
+INSERT INTO t VALUES (1, 'a'), (2, 'b'), (99, 'no-match');
+
+query II rowsort
+SELECT * FROM audit;
+----
+1	one
+2	two
+
+statement ok
+DROP TRIGGER trg_join ON t;
+
+statement ok
+DELETE FROM t;
+
+statement ok
+DELETE FROM audit;
+
+statement ok
+DROP TABLE lookup;
+
 # Blocked cases - fail at CREATE TRIGGER time
 
 # AFTER UPDATE FOR EACH ROW not yet supported

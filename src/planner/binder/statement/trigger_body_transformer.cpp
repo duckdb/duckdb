@@ -18,13 +18,12 @@ static bool IsNewRef(const string &name) {
 
 static void RewriteNewColumnRefs(QueryNode &node, const string &base_cte_name) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
-		if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
-			return;
-		}
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (col_ref.column_names.size() >= 2 && IsNewRef(col_ref.column_names[0])) {
-			col_ref.column_names[0] = base_cte_name;
-		}
+		ParsedExpressionIterator::VisitExpressionMutable<ColumnRefExpression>(
+		    *expr, [&](ColumnRefExpression &col_ref) {
+			    if (col_ref.column_names.size() >= 2 && IsNewRef(col_ref.column_names[0])) {
+				    col_ref.column_names[0] = base_cte_name;
+			    }
+		    });
 	});
 }
 
