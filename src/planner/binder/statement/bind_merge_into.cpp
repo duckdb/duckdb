@@ -65,15 +65,20 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 	result->action_type = action.action_type;
 	auto expr_start_idx = expressions.size();
 	if (action.condition) {
-		WhereBinder where_binder(*this, context);
-		where_binder.target_type = LogicalType::BOOLEAN;
-
-		auto cond = where_binder.Bind(action.condition);
-		PlanSubqueries(cond, root);
-
-		auto cond_type = cond->GetReturnType();
-		auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
-		result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
+		if (action.condition->HasSubquery()) {
+			// if we have a subquery we need to execute the condition outside of the MERGE INTO statement
+			WhereBinder where_binder(*this, context);
+			auto cond = where_binder.Bind(action.condition);
+			PlanSubqueries(cond, root);
+			auto cond_type = cond->GetReturnType();
+			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
+			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
+		} else {
+			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
+			proj_binder.target_type = LogicalType::BOOLEAN;
+			auto cond = proj_binder.Bind(action.condition);
+			result->condition = std::move(cond);
+		}
 	}
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
