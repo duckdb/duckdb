@@ -107,35 +107,21 @@ TEST_CASE("Checked integer comparisons", "[checked_integer]") {
 	REQUIRE(a == 100);
 }
 
-TEST_CASE("CheckedInteger mixed type arithmetic", "[checked_integer]") {
-	// int8_t * double -> int8_t (as per user request)
-	i8_t a(10);
-	auto b = a * 2.5; // Should cast 2.5 to int8_t (2) and multiply
-	REQUIRE(b.GetValue() == 20);
-
-	// int8_t + double
-	auto c = a + 1.7; // Casts to 1
-	REQUIRE(c.GetValue() == 11);
-
-	// Compound assignment with different type
-	i16_t d(100);
-	d += 50.9; // Casts to 50
-	REQUIRE(d.GetValue() == 150);
-
-	// int64_t - float
-	i64_t e(1000);
-	auto f = e - 123.9f; // Casts to 123
-	REQUIRE(f.GetValue() == 877);
-
+TEST_CASE("CheckedInteger mixed integer-type arithmetic", "[checked_integer]") {
 	// uint32_t / int
 	u32_t g(100);
-	auto h = g / 3; // Casts int(3) to uint32_t
+	auto h = g / 3;
 	REQUIRE(h.GetValue() == 33u);
 
-	// Compound assignment: int8_t *= double
-	i8_t i(5);
-	i *= 3.9; // Casts to 3
-	REQUIRE(i.GetValue() == 15);
+	// int16_t * int8_t (uses promoted-type branch)
+	i16_t a(7);
+	auto b = a * int8_t(20);
+	REQUIRE(b.GetValue() == 140);
+
+	// Compound: int8_t += int (same-type Promoted branch with range check via TryAdd)
+	i32_t c(100);
+	c += int16_t(23);
+	REQUIRE(c.GetValue() == 123);
 }
 
 TEST_CASE("CheckedInteger unsigned cannot be negative", "[checked_integer]") {
@@ -153,10 +139,6 @@ TEST_CASE("CheckedInteger unsigned cannot be negative", "[checked_integer]") {
 	x += -10;
 	REQUIRE(x.GetValue() == 40u);
 	REQUIRE_THROWS_AS(x -= 100, InternalException); // underflow caught by checked sub
-
-	// Mixed: uint32_t * negative double truncates -2.5 to uint32_t, wraps → overflow
-	u32_t y(10);
-	REQUIRE_THROWS_AS(y *= -2.5, InternalException);
 
 	// Conforms to normal C++ arithmetic: uint16_t(9) -= -10 → 19
 	u16_t z(9);
@@ -273,6 +255,63 @@ TEST_CASE("Cross-type compound assignment matches native behavior", "[checked_in
 		a /= int32_t(10);
 		REQUIRE(a.GetValue() == 99u);
 	}
+}
+
+TEST_CASE("CheckedInteger narrow constructor overflow", "[checked_integer]") {
+	SECTION("signed: int -> smaller signed throws on overflow") {
+		REQUIRE_THROWS_AS(i8_t(1000), InternalException);
+		REQUIRE_THROWS_AS(i8_t(-1000), InternalException);
+		REQUIRE_THROWS_AS(i16_t(40000), InternalException);
+		REQUIRE_THROWS_AS(i32_t(int64_t(NumericLimits<int32_t>::Maximum()) + 1), InternalException);
+
+		// boundary values pass
+		REQUIRE_NOTHROW(i8_t(127));
+		REQUIRE_NOTHROW(i8_t(-128));
+		REQUIRE(i8_t(127).GetValue() == 127);
+		REQUIRE(i8_t(-128).GetValue() == -128);
+	}
+
+	SECTION("unsigned: int -> smaller unsigned throws on overflow") {
+		REQUIRE_THROWS_AS(u8_t(256), InternalException);
+		REQUIRE_THROWS_AS(u8_t(1000), InternalException);
+		REQUIRE_THROWS_AS(u16_t(70000), InternalException);
+
+		// boundary values pass
+		REQUIRE_NOTHROW(u8_t(0));
+		REQUIRE_NOTHROW(u8_t(255));
+		REQUIRE(u8_t(255).GetValue() == 255u);
+	}
+
+	SECTION("signed -> unsigned: large positive that fits passes") {
+		REQUIRE_NOTHROW(u32_t(int64_t(1) << 31));
+		REQUIRE_THROWS_AS(u8_t(int16_t(300)), InternalException);
+	}
+
+	SECTION("unsigned -> signed: too-large unsigned throws") {
+		REQUIRE_THROWS_AS(i8_t(uint16_t(200)), InternalException);
+		REQUIRE_THROWS_AS(i32_t(uint64_t(NumericLimits<int32_t>::Maximum()) + 1), InternalException);
+		REQUIRE_NOTHROW(i32_t(uint8_t(255)));
+	}
+}
+
+TEST_CASE("CheckedInteger custom exception type", "[checked_integer]") {
+	using i32_range_t = CheckedInteger<int32_t, OutOfRangeException>;
+
+	// Constructor narrow overflow throws the customized exception
+	REQUIRE_THROWS_AS(i32_range_t(int64_t(1) << 40), OutOfRangeException);
+
+	// Arithmetic overflow also uses the customized exception
+	i32_range_t a(NumericLimits<int32_t>::Maximum());
+	REQUIRE_THROWS_AS(++a, OutOfRangeException);
+	REQUIRE_THROWS_AS(a + 1, OutOfRangeException);
+
+	// Division by zero too
+	i32_range_t b(100);
+	REQUIRE_THROWS_AS(b / 0, OutOfRangeException);
+
+	// Default alias still throws InternalException
+	i32_t c(NumericLimits<int32_t>::Maximum());
+	REQUIRE_THROWS_AS(++c, InternalException);
 }
 
 TEST_CASE("Cross-type arithmetic overflow detection", "[checked_integer]") {

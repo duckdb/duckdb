@@ -19,9 +19,16 @@
 
 namespace duckdb {
 
-//! CheckedInteger is a templated wrapper around integer types (signed or unsigned) that throws an InternalException on
+//! CheckedInteger is a templated wrapper around integer types (signed or unsigned) that throws ExceptionT on
 //! overflow or underflow for arithmetic operations.
-template <class T>
+//!
+//! Only integral template arguments are accepted: both T (the wrapped storage type) and any U used as the
+//! right-hand side of arithmetic / construction must satisfy std::is_integral. This is enforced both via
+//! SFINAE on the public templated overloads and via a static_assert inside each template body.
+//!
+//! ExceptionT defaults to InternalException; pass another exception class (e.g. OutOfRangeException) to customize
+//! the error type while keeping the same checking semantics.
+template <typename T, typename ExceptionT = InternalException>
 class CheckedInteger {
 	static_assert(std::is_integral<T>::value, "CheckedInteger only supports integral types");
 
@@ -36,9 +43,10 @@ public:
 	CheckedInteger(T v) : value(v) {
 	} // NOLINT
 
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
-	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) {
-	} // NOLINT
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
+	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
+	}
 
 	explicit operator T() const {
 		return value;
@@ -51,7 +59,7 @@ public:
 	CheckedInteger &operator++() {
 		T result;
 		if (!TryAddOperator::Operation(value, T(1), result)) {
-			throw InternalException("Overflow in increment of CheckedInteger");
+			throw ExceptionT("Overflow in increment of CheckedInteger");
 		}
 		value = result;
 		return *this;
@@ -66,7 +74,7 @@ public:
 	CheckedInteger &operator--() {
 		T result;
 		if (!TrySubtractOperator::Operation(value, T(1), result)) {
-			throw InternalException("Underflow in decrement of CheckedInteger");
+			throw ExceptionT("Underflow in decrement of CheckedInteger");
 		}
 		value = result;
 		return *this;
@@ -84,18 +92,16 @@ public:
 	CheckedInteger &operator+=(T rhs) {
 		T result;
 		if (!TryAddOperator::Operation(value, rhs, result)) {
-			throw InternalException("Overflow in addition for CheckedInteger");
+			throw ExceptionT("Overflow in addition for CheckedInteger");
 		}
 		value = result;
 		return *this;
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator+=(U rhs) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator+=(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
 					return operator-=(ToAbsoluteT(rhs));
@@ -105,7 +111,7 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) + static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in addition for CheckedInteger");
+				throw ExceptionT("Overflow in addition for CheckedInteger");
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -118,18 +124,16 @@ public:
 	CheckedInteger &operator-=(T rhs) {
 		T result;
 		if (!TrySubtractOperator::Operation(value, rhs, result)) {
-			throw InternalException("Underflow in subtraction for CheckedInteger");
+			throw ExceptionT("Underflow in subtraction for CheckedInteger");
 		}
 		value = result;
 		return *this;
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator-=(U rhs) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator-=(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
 					return operator+=(ToAbsoluteT(rhs));
@@ -139,7 +143,7 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) - static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Underflow in subtraction for CheckedInteger");
+				throw ExceptionT("Underflow in subtraction for CheckedInteger");
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -152,28 +156,26 @@ public:
 	CheckedInteger &operator*=(T rhs) {
 		T result;
 		if (!TryMultiplyOperator::Operation(value, rhs, result)) {
-			throw InternalException("Overflow in multiplication for CheckedInteger");
+			throw ExceptionT("Overflow in multiplication for CheckedInteger");
 		}
 		value = result;
 		return *this;
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator*=(U rhs) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator*=(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
-					throw InternalException("Cannot multiply unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot multiply unsigned CheckedInteger by negative value");
 				}
 			}
 			return operator*=(static_cast<T>(rhs));
 		} else {
 			Promoted result = static_cast<Promoted>(value) * static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in multiplication for CheckedInteger");
+				throw ExceptionT("Overflow in multiplication for CheckedInteger");
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -185,34 +187,32 @@ public:
 	}
 	CheckedInteger &operator/=(T rhs) {
 		if (rhs == 0) {
-			throw InternalException("Division by zero in CheckedInteger");
+			throw ExceptionT("Division by zero in CheckedInteger");
 		}
 		if (NumericLimits<T>::IsSigned() && value == NumericLimits<T>::Minimum() && rhs == T(-1)) {
-			throw InternalException("Overflow in division for CheckedInteger");
+			throw ExceptionT("Overflow in division for CheckedInteger");
 		}
 		value /= rhs;
 		return *this;
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger &operator/=(U rhs) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator/=(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
-					throw InternalException("Cannot divide unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot divide unsigned CheckedInteger by negative value");
 				}
 			}
 			return operator/=(static_cast<T>(rhs));
 		} else {
 			if (rhs == 0) {
-				throw InternalException("Division by zero in CheckedInteger");
+				throw ExceptionT("Division by zero in CheckedInteger");
 			}
 			Promoted result = static_cast<Promoted>(value) / static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in division for CheckedInteger");
+				throw ExceptionT("Overflow in division for CheckedInteger");
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -225,17 +225,15 @@ public:
 	CheckedInteger operator+(T rhs) const {
 		T result;
 		if (!TryAddOperator::Operation(value, rhs, result)) {
-			throw InternalException("Overflow in addition for CheckedInteger");
+			throw ExceptionT("Overflow in addition for CheckedInteger");
 		}
 		return CheckedInteger(result);
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator+(U rhs) const {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator+(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
 					return operator-(ToAbsoluteT(rhs));
@@ -245,7 +243,7 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) + static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in addition for CheckedInteger");
+				throw ExceptionT("Overflow in addition for CheckedInteger");
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -257,17 +255,15 @@ public:
 	CheckedInteger operator-(T rhs) const {
 		T result;
 		if (!TrySubtractOperator::Operation(value, rhs, result)) {
-			throw InternalException("Underflow in subtraction for CheckedInteger");
+			throw ExceptionT("Underflow in subtraction for CheckedInteger");
 		}
 		return CheckedInteger(result);
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator-(U rhs) const {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator-(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
 					return operator+(ToAbsoluteT(rhs));
@@ -277,7 +273,7 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) - static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Underflow in subtraction for CheckedInteger");
+				throw ExceptionT("Underflow in subtraction for CheckedInteger");
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -289,27 +285,25 @@ public:
 	CheckedInteger operator*(T rhs) const {
 		T result;
 		if (!TryMultiplyOperator::Operation(value, rhs, result)) {
-			throw InternalException("Overflow in multiplication for CheckedInteger");
+			throw ExceptionT("Overflow in multiplication for CheckedInteger");
 		}
 		return CheckedInteger(result);
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator*(U rhs) const {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator*(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
-					throw InternalException("Cannot multiply unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot multiply unsigned CheckedInteger by negative value");
 				}
 			}
 			return operator*(static_cast<T>(rhs));
 		} else {
 			Promoted result = static_cast<Promoted>(value) * static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in multiplication for CheckedInteger");
+				throw ExceptionT("Overflow in multiplication for CheckedInteger");
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -320,33 +314,31 @@ public:
 	}
 	CheckedInteger operator/(T rhs) const {
 		if (rhs == 0) {
-			throw InternalException("Division by zero in CheckedInteger");
+			throw ExceptionT("Division by zero in CheckedInteger");
 		}
 		if (NumericLimits<T>::IsSigned() && value == NumericLimits<T>::Minimum() && rhs == T(-1)) {
-			throw InternalException("Overflow in division for CheckedInteger");
+			throw ExceptionT("Overflow in division for CheckedInteger");
 		}
 		return CheckedInteger(value / rhs);
 	}
-	template <class U, typename std::enable_if<std::is_arithmetic<U>::value, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, T>::value, int>::type = 0>
 	CheckedInteger operator/(U rhs) const {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
-		if constexpr (std::is_floating_point<U>::value) {
-			ValidateAssignment(rhs);
-			return operator/(static_cast<T>(rhs));
-		} else if constexpr (std::is_same<Promoted, T>::value) {
+		if constexpr (std::is_same<Promoted, T>::value) {
 			if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 				if (rhs < 0) {
-					throw InternalException("Cannot divide unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot divide unsigned CheckedInteger by negative value");
 				}
 			}
 			return operator/(static_cast<T>(rhs));
 		} else {
 			if (rhs == 0) {
-				throw InternalException("Division by zero in CheckedInteger");
+				throw ExceptionT("Division by zero in CheckedInteger");
 			}
 			Promoted result = static_cast<Promoted>(value) / static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw InternalException("Overflow in division for CheckedInteger");
+				throw ExceptionT("Overflow in division for CheckedInteger");
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -372,51 +364,72 @@ public:
 	}
 
 private:
-	// Validate negative values cannot be assigned to unsigned types
-	template <class U>
+	//! Validate that v (an integral type) is representable in T and cast it. Throws ExceptionT on:
+	//!   * a negative signed value being assigned to an unsigned T
+	//!   * an integer value that does not fit into T (narrow overflow / underflow)
+	template <typename U>
 	static T ValidateAndCast(U v) {
-		if (std::is_unsigned<T>::value && std::is_signed<U>::value) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
+		if constexpr (std::is_unsigned<T>::value && std::is_signed<U>::value) {
 			if (v < 0) {
-				throw InternalException("Cannot assign negative value to unsigned CheckedInteger");
+				throw ExceptionT("Cannot assign negative value to unsigned CheckedInteger");
 			}
-		}
-		return static_cast<T>(v);
-	}
-
-	template <class U>
-	static void ValidateAssignment(U v) {
-		if (std::is_unsigned<T>::value && std::is_signed<U>::value && v < 0) {
-			throw InternalException("Cannot assign negative value to unsigned CheckedInteger");
+			using UU = typename std::make_unsigned<U>::type;
+			using Wide = typename std::common_type<UU, T>::type;
+			if (static_cast<Wide>(static_cast<UU>(v)) > static_cast<Wide>(NumericLimits<T>::Maximum())) {
+				throw ExceptionT("Value too large for unsigned CheckedInteger");
+			}
+			return static_cast<T>(v);
+		} else if constexpr (std::is_signed<T>::value && std::is_unsigned<U>::value) {
+			using UT = typename std::make_unsigned<T>::type;
+			using Wide = typename std::common_type<U, UT>::type;
+			if (static_cast<Wide>(v) > static_cast<Wide>(NumericLimits<T>::Maximum())) {
+				throw ExceptionT("Value too large for signed CheckedInteger");
+			}
+			return static_cast<T>(v);
+		} else {
+			// Same signedness, possibly different widths.
+			using Wide = typename std::common_type<U, T>::type;
+			if (static_cast<Wide>(v) < static_cast<Wide>(NumericLimits<T>::Minimum()) ||
+			    static_cast<Wide>(v) > static_cast<Wide>(NumericLimits<T>::Maximum())) {
+				throw ExceptionT("Value out of range for CheckedInteger");
+			}
+			return static_cast<T>(v);
 		}
 	}
 
 	//! Compute |rhs| as type T without signed-overflow UB.
 	//! Only valid when T is unsigned and sizeof(T) >= sizeof(U).
-	template <class U>
+	template <typename U>
 	static T ToAbsoluteT(U rhs) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		using UnsignedU = typename std::make_unsigned<U>::type;
 		return static_cast<T>(static_cast<UnsignedU>(-static_cast<UnsignedU>(rhs)));
 	}
 };
 
-template <class TL, class TR>
-CheckedInteger<TR> operator+(TL lhs, const CheckedInteger<TR> &rhs) {
-	return CheckedInteger<TR>(lhs) + rhs.GetValue();
+template <typename TL, typename TR, typename E,
+          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+CheckedInteger<TR, E> operator+(TL lhs, const CheckedInteger<TR, E> &rhs) {
+	return CheckedInteger<TR, E>(lhs) + rhs.GetValue();
 }
 
-template <class TL, class TR>
-CheckedInteger<TR> operator-(TL lhs, const CheckedInteger<TR> &rhs) {
-	return CheckedInteger<TR>(lhs) - rhs.GetValue();
+template <typename TL, typename TR, typename E,
+          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+CheckedInteger<TR, E> operator-(TL lhs, const CheckedInteger<TR, E> &rhs) {
+	return CheckedInteger<TR, E>(lhs) - rhs.GetValue();
 }
 
-template <class TL, class TR>
-CheckedInteger<TR> operator*(TL lhs, const CheckedInteger<TR> &rhs) {
-	return CheckedInteger<TR>(lhs) * rhs.GetValue();
+template <typename TL, typename TR, typename E,
+          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+CheckedInteger<TR, E> operator*(TL lhs, const CheckedInteger<TR, E> &rhs) {
+	return CheckedInteger<TR, E>(lhs) * rhs.GetValue();
 }
 
-template <class TL, class TR>
-CheckedInteger<TR> operator/(TL lhs, const CheckedInteger<TR> &rhs) {
-	return CheckedInteger<TR>(lhs) / rhs.GetValue();
+template <typename TL, typename TR, typename E,
+          typename std::enable_if<std::is_integral<TL>::value, int>::type = 0>
+CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
+	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
 
 using i8_t = CheckedInteger<int8_t>;
@@ -432,17 +445,17 @@ using u64_t = CheckedInteger<uint64_t>;
 
 namespace std { // NOLINT
 
-//! std::atomic specialization for duckdb::CheckedInteger<T>.
+//! std::atomic specialization for duckdb::CheckedInteger<T, ExceptionT>.
 //! Uses a CAS loop to provide fetch_add/fetch_sub with overflow/underflow detection via CheckedInteger arithmetic.
-template <class T>
-struct atomic<duckdb::CheckedInteger<T>> {
+template <typename T, typename ExceptionT>
+struct atomic<duckdb::CheckedInteger<T, ExceptionT>> {
 	static_assert(std::is_integral<T>::value, "CheckedInteger only supports integral types");
 
 private:
 	std::atomic<T> val;
 
 public:
-	using value_type = duckdb::CheckedInteger<T>;
+	using value_type = duckdb::CheckedInteger<T, ExceptionT>;
 
 	atomic() noexcept = default;
 	constexpr atomic(value_type desired) noexcept : val(desired.GetValue()) { // NOLINT
@@ -466,7 +479,19 @@ public:
 		return desired;
 	}
 
-	//! Atomically adds arg to the stored value using a CAS loop; throws InternalException on overflow.
+	//! Templated assignment from any integral value. Constructs a CheckedInteger first (which performs
+	//! sign / range validation) and then stores it. Disambiguates `atomic_x = 0` against the deleted
+	//! copy-assignment when the literal is not already value_type.
+	template <typename U, typename std::enable_if<std::is_integral<U>::value && !std::is_same<U, value_type>::value,
+	                                           int>::type = 0>
+	value_type operator=(U desired) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
+		value_type checked(desired);
+		store(checked);
+		return checked;
+	}
+
+	//! Atomically adds arg to the stored value using a CAS loop; throws ExceptionT on overflow.
 	//! Returns the value before the addition.
 	value_type fetch_add(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
 		T current = val.load(std::memory_order_relaxed);
@@ -477,7 +502,7 @@ public:
 		return value_type(current);
 	}
 
-	//! Atomically subtracts arg from the stored value using a CAS loop; throws InternalException on underflow.
+	//! Atomically subtracts arg from the stored value using a CAS loop; throws ExceptionT on underflow.
 	//! Returns the value before the subtraction.
 	value_type fetch_sub(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
 		T current = val.load(std::memory_order_relaxed);
@@ -488,15 +513,17 @@ public:
 		return value_type(current);
 	}
 
-	template <class U>
+	template <typename U>
 	value_type operator+=(U arg) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		value_type checked_arg(arg);
 		value_type old = fetch_add(checked_arg);
 		return old + checked_arg;
 	}
 
-	template <class U>
+	template <typename U>
 	value_type operator-=(U arg) {
+		static_assert(std::is_integral<U>::value, "CheckedInteger only supports integral types");
 		value_type checked_arg(arg);
 		value_type old = fetch_sub(checked_arg);
 		return old - checked_arg;
