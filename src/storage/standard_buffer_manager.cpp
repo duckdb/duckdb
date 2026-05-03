@@ -439,7 +439,7 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 		MemoryInformation info;
 		info.tag = MemoryTag(k);
 		info.size = buffer_pool.memory_usage.GetUsedMemory(MemoryTag(k), BufferPool::MemoryUsageCaches::FLUSH);
-		info.evicted_data = evicted_data_per_tag[k].load().GetValue();
+		info.evicted_data = evicted_data_per_tag[k].load();
 		result.push_back(info);
 	}
 	return result;

@@ -48,7 +48,7 @@ public:
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 	}
 
-	explicit operator T() const {
+	operator T() const {
 		return value;
 	}
 
@@ -273,7 +273,81 @@ public:
 		return value >= other.value;
 	}
 
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator==(U other) const {
+		return CmpEqual(value, other);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator!=(U other) const {
+		return !CmpEqual(value, other);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator<(U other) const {
+		return CmpLess(value, other);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator>(U other) const {
+		return CmpLess(other, value);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator<=(U other) const {
+		return !CmpLess(other, value);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator>=(U other) const {
+		return !CmpLess(value, other);
+	}
+
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator==(U lhs, const CheckedInteger &rhs) {
+		return CmpEqual(rhs.value, lhs);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator!=(U lhs, const CheckedInteger &rhs) {
+		return !CmpEqual(rhs.value, lhs);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator<(U lhs, const CheckedInteger &rhs) {
+		return CmpLess(lhs, rhs.value);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator>(U lhs, const CheckedInteger &rhs) {
+		return CmpLess(rhs.value, lhs);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator<=(U lhs, const CheckedInteger &rhs) {
+		return !CmpLess(rhs.value, lhs);
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	friend bool operator>=(U lhs, const CheckedInteger &rhs) {
+		return !CmpLess(lhs, rhs.value);
+	}
+
 private:
+	template <typename A, typename B>
+	static bool CmpEqual(A a, B b) {
+		static_assert(std::is_integral_v<A> && std::is_integral_v<B>, "CheckedInteger only supports integral types");
+		if constexpr (std::is_signed_v<A> == std::is_signed_v<B>) {
+			return a == b;
+		} else if constexpr (std::is_signed_v<A>) {
+			return a >= 0 && static_cast<typename std::make_unsigned<A>::type>(a) == b;
+		} else {
+			return b >= 0 && a == static_cast<typename std::make_unsigned<B>::type>(b);
+		}
+	}
+
+	template <typename A, typename B>
+	static bool CmpLess(A a, B b) {
+		static_assert(std::is_integral_v<A> && std::is_integral_v<B>, "CheckedInteger only supports integral types");
+		if constexpr (std::is_signed_v<A> == std::is_signed_v<B>) {
+			return a < b;
+		} else if constexpr (std::is_signed_v<A>) {
+			return a < 0 || static_cast<typename std::make_unsigned<A>::type>(a) < b;
+		} else {
+			return b >= 0 && a < static_cast<typename std::make_unsigned<B>::type>(b);
+		}
+	}
+
 	// Validate `v` could be assigned to `T` with no overflow or underflow.
 	template <typename U>
 	static T ValidateAndCast(U v) {
@@ -445,6 +519,50 @@ public:
 		value_type checked_arg(arg);
 		value_type old = fetch_sub(checked_arg);
 		return old - checked_arg;
+	}
+
+	bool operator==(value_type other) const noexcept {
+		return load() == other;
+	}
+	bool operator!=(value_type other) const noexcept {
+		return load() != other;
+	}
+	bool operator<(value_type other) const noexcept {
+		return load() < other;
+	}
+	bool operator>(value_type other) const noexcept {
+		return load() > other;
+	}
+	bool operator<=(value_type other) const noexcept {
+		return load() <= other;
+	}
+	bool operator>=(value_type other) const noexcept {
+		return load() >= other;
+	}
+
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator==(U other) const noexcept {
+		return load() == other;
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator!=(U other) const noexcept {
+		return load() != other;
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator<(U other) const noexcept {
+		return load() < other;
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator>(U other) const noexcept {
+		return load() > other;
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator<=(U other) const noexcept {
+		return load() <= other;
+	}
+	template <typename U, typename = typename std::enable_if<std::is_integral_v<U>>::type>
+	bool operator>=(U other) const noexcept {
+		return load() >= other;
 	}
 };
 
