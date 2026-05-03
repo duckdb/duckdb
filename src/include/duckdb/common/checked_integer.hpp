@@ -48,7 +48,7 @@ public:
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 	}
 
-	operator T() const {
+	operator T() const { // NOLINT
 		return value;
 	}
 
