@@ -96,52 +96,42 @@ struct DateTrunc {
 		}
 	};
 
+	// Truncate a UTC timestamp to the nearest fixed-width interval boundary.
+	// Applies to any unit whose length is a constant number of microseconds
+	// (second, minute, hour). Variable-length units (month, year, etc.) must
+	// use the calendar-decomposition path above.
+	static inline timestamp_t TruncFixed(timestamp_t ts, int64_t interval_us) {
+		const int64_t v = ts.value;
+		// Round towards negative infinity instead of 0
+		const int64_t q = v / interval_us - (v % interval_us != 0 && v < 0 ? 1 : 0);
+		return timestamp_t(q * interval_us);
+	}
+
 	struct HourOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			int32_t hour, min, sec, micros;
-			date_t date;
-			dtime_t time;
-			Timestamp::Convert(input, date, time);
-			Time::Convert(time, hour, min, sec, micros);
-			return Timestamp::FromDatetime(date, Time::FromTime(hour, 0, 0, 0));
+			return TruncFixed(input, Interval::MICROS_PER_HOUR);
 		}
 	};
 
 	struct MinuteOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			int32_t hour, min, sec, micros;
-			date_t date;
-			dtime_t time;
-			Timestamp::Convert(input, date, time);
-			Time::Convert(time, hour, min, sec, micros);
-			return Timestamp::FromDatetime(date, Time::FromTime(hour, min, 0, 0));
+			return TruncFixed(input, Interval::MICROS_PER_MINUTE);
 		}
 	};
 
 	struct SecondOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			int32_t hour, min, sec, micros;
-			date_t date;
-			dtime_t time;
-			Timestamp::Convert(input, date, time);
-			Time::Convert(time, hour, min, sec, micros);
-			return Timestamp::FromDatetime(date, Time::FromTime(hour, min, sec, 0));
+			return TruncFixed(input, Interval::MICROS_PER_SEC);
 		}
 	};
 
 	struct MillisecondOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			int32_t hour, min, sec, micros;
-			date_t date;
-			dtime_t time;
-			Timestamp::Convert(input, date, time);
-			Time::Convert(time, hour, min, sec, micros);
-			micros -= UnsafeNumericCast<int32_t>(micros % Interval::MICROS_PER_MSEC);
-			return Timestamp::FromDatetime(date, Time::FromTime(hour, min, sec, micros));
+			return TruncFixed(input, Interval::MICROS_PER_MSEC);
 		}
 	};
 
