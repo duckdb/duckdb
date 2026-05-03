@@ -195,6 +195,14 @@ public:
 	AggregateOrderDependent order_dependent = AggregateOrderDependent::ORDER_DEPENDENT;
 	//! Whether or not the aggregate is affect by distinct modifiers
 	AggregateDistinctDependent distinct_dependent = AggregateDistinctDependent::DISTINCT_DEPENDENT;
+	//! Fanout used by WindowSegmentTree's per-partition tree. Each internal
+	//! node aggregates this many children. Must cleanly divide
+	//! STANDARD_VECTOR_SIZE so that combine batches stay aligned. The
+	//! default of 16 is tuned for built-in aggregates with cheap combines;
+	//! higher values reduce tree depth and the number of combine calls,
+	//! which is profitable for aggregates whose `combine` has high fixed
+	//! per-call cost (extension UDFs, FFI/RPC-mediated combines).
+	idx_t window_segment_tree_fanout = 16;
 
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
@@ -405,6 +413,23 @@ public:
 	}
 	void SetDistinctDependent(AggregateDistinctDependent value) {
 		properties.distinct_dependent = value;
+	}
+	idx_t GetWindowSegmentTreeFanout() const {
+		return properties.window_segment_tree_fanout;
+	}
+	//! Set the fanout used by WindowSegmentTree for this aggregate. Must
+	//! cleanly divide STANDARD_VECTOR_SIZE; out-of-range or non-dividing
+	//! values are rejected. Default is 16.
+	void SetWindowSegmentTreeFanout(idx_t value) {
+		if (value < 2 || value > STANDARD_VECTOR_SIZE) {
+			throw InternalException("WindowSegmentTree fanout must be in [2, STANDARD_VECTOR_SIZE], got %llu",
+			                        static_cast<uint64_t>(value));
+		}
+		if (STANDARD_VECTOR_SIZE % value != 0) {
+			throw InternalException("WindowSegmentTree fanout %llu must cleanly divide STANDARD_VECTOR_SIZE %llu",
+			                        static_cast<uint64_t>(value), static_cast<uint64_t>(STANDARD_VECTOR_SIZE));
+		}
+		properties.window_segment_tree_fanout = value;
 	}
 
 	bool HasGetStateTypeCallback() const {

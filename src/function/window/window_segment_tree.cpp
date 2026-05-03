@@ -50,8 +50,17 @@ public:
 	//! not the lifetime of the local state that constructed part of the tree
 	vector<unique_ptr<ArenaAllocator>> tree_allocators;
 
-	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
-	static constexpr idx_t TREE_FANOUT = 16;
+	//! Tree fanout: number of children combined into each parent. Must
+	//! cleanly divide STANDARD_VECTOR_SIZE so combine batches stay aligned.
+	//! Initialised in the constructor from the aggregate's
+	//! ``GetWindowSegmentTreeFanout()`` (default 16). A higher value
+	//! shortens the tree (log_F(N) levels) and reduces the total combine
+	//! call count, which is profitable for aggregates whose ``combine``
+	//! has high fixed per-call overhead. The build phase prefers small
+	//! fanouts to keep intermediate state sizes bounded; the right balance
+	//! depends on the aggregate's per-pair vs. per-call cost ratio, which
+	//! is why the value is per-function rather than a single global.
+	const idx_t TREE_FANOUT;
 };
 
 class WindowSegmentTreePart {
@@ -292,8 +301,15 @@ void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 
 WindowSegmentTreeGlobalState::WindowSegmentTreeGlobalState(ClientContext &client, const WindowSegmentTree &aggregator,
                                                            idx_t group_count)
-    : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr) {
+    : WindowAggregatorGlobalState(client, aggregator, group_count), tree(aggregator), levels_flat_native(client, aggr),
+      TREE_FANOUT(aggr.function.GetWindowSegmentTreeFanout()) {
 	D_ASSERT(!aggregator.wexpr.children.empty());
+	// TREE_FANOUT must cleanly divide STANDARD_VECTOR_SIZE so the combine
+	// flush buffer stays aligned. SetWindowSegmentTreeFanout enforces this
+	// at registration; assert as a defence-in-depth catch for direct
+	// AggregateFunctionProperties manipulation.
+	D_ASSERT(TREE_FANOUT >= 2 && TREE_FANOUT <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(STANDARD_VECTOR_SIZE % TREE_FANOUT == 0);
 
 	// compute space required to store internal nodes of segment tree
 	levels_flat_start.push_back(0);
