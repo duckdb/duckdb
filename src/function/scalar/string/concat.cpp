@@ -130,13 +130,13 @@ void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 struct ListConcatInputData {
-	ListConcatInputData(Vector &input, Vector &child_vec) : input(input), child_vec(child_vec) {
+	ListConcatInputData(Vector &input, idx_t size)
+	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>(size)) {
 	}
 
-	UnifiedVectorFormat vdata;
-	Vector &input;
-	Vector &child_vec;
-	const list_entry_t *input_entries = nullptr;
+	const Vector &input;
+	const Vector &child_vec;
+	VectorIterator<list_entry_t> list_data;
 };
 
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
@@ -148,37 +148,26 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 			// LIST_CONCAT ignores NULL values
 			continue;
 		}
-
-		auto &child_vec = ListVector::GetChildMutable(input);
-		ListConcatInputData data(input, child_vec);
-		input.ToUnifiedFormat(count, data.vdata);
-
-		data.input_entries = UnifiedVectorFormat::GetData<list_entry_t>(data.vdata);
-		input_data.push_back(std::move(data));
+		input_data.emplace_back(input, count);
 	}
-
 	// First pass: compute per-row lengths/validity and total child size
 	vector<idx_t> row_lengths(count, 0);
 	vector<bool> row_invalid(count, false);
 	idx_t total_size = 0;
-	for (idx_t i = 0; i < count; i++) {
-		idx_t row_length = 0;
-		bool is_invalid = false;
-		for (auto &data : input_data) {
-			auto list_index = data.vdata.sel->get_index(i);
-			if (!data.vdata.validity.RowIsValid(list_index)) {
-				// LIST_CONCAT ignores NULL values, but || does not
+	for (auto &input : input_data) {
+		auto &list_data = input.list_data;
+		for (idx_t r = 0; r < count; r++) {
+			auto list_entry = list_data[r];
+			if (!list_entry.IsValid()) {
 				if (is_operator) {
-					is_invalid = true;
+					// LIST_CONCAT ignores NULL values, but || does not
+					row_invalid[r] = true;
 				}
 				continue;
 			}
-			row_length += data.input_entries[list_index].length;
-		}
-		row_invalid[i] = is_invalid;
-		if (!is_invalid) {
-			row_lengths[i] = row_length;
-			total_size += row_length;
+			auto list_length = list_entry.GetValue().length;
+			row_lengths[r] += list_length;
+			total_size += list_length;
 		}
 	}
 
@@ -189,20 +178,20 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 	// Second pass: write list entries and copy children
 	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
 	idx_t offset = 0;
-	for (idx_t i = 0; i < count; i++) {
-		if (row_invalid[i]) {
+	for (idx_t r = 0; r < count; r++) {
+		if (row_invalid[r]) {
 			result_writer.WriteNull();
 			continue;
 		}
-		list_entry_t row_entry {offset, row_lengths[i]};
-		for (auto &data : input_data) {
-			auto list_index = data.vdata.sel->get_index(i);
-			if (!data.vdata.validity.RowIsValid(list_index)) {
+		list_entry_t row_entry {offset, row_lengths[r]};
+		for (auto &input : input_data) {
+			auto list_val = input.list_data[r];
+			if (!list_val.IsValid()) {
 				continue;
 			}
-			const auto &list_entry = data.input_entries[list_index];
-			VectorOperations::Copy(data.child_vec, result_child, list_entry.offset + list_entry.length,
-			                       list_entry.offset, offset);
+			const auto &list_entry = list_val.GetValue();
+			result_child.Copy(input.child_vec, *FlatVector::IncrementalSelectionVector(),
+			                  list_entry.offset + list_entry.length, list_entry.offset, offset, list_entry.length);
 			offset += list_entry.length;
 		}
 		result_writer.WriteValue(row_entry);
