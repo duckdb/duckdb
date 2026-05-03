@@ -66,13 +66,15 @@ static void TransformValuesToSelect(SelectNode &select, const string &base_cte_n
 static bool HasOldRef(QueryNode &node) {
 	bool found = false;
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
-		if (found || expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
+		if (found) {
 			return;
 		}
-		auto &col_ref = expr->Cast<ColumnRefExpression>();
-		if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], "old")) {
-			found = true;
-		}
+		ParsedExpressionIterator::VisitExpression<ColumnRefExpression>(
+		    *expr, [&](const ColumnRefExpression &col_ref) {
+			    if (!col_ref.column_names.empty() && StringUtil::CIEquals(col_ref.column_names[0], "old")) {
+				    found = true;
+			    }
+		    });
 	});
 	return found;
 }
