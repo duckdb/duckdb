@@ -522,9 +522,6 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 
-		// Decrement by the *same* size the write side incremented (the on-disk slot size, which
-		// is the compressed size when compression applies) -- not by `buffer->AllocSize()`, which
-		// is the uncompressed size and would underflow `evicted_data_per_tag` on every read-back.
 		idx_t eviction_size = 0;
 		auto buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(
 		    context, id, std::move(reusable_buffer), &eviction_size);
