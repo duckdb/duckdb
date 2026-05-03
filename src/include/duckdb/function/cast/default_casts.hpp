@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -137,10 +138,28 @@ public:
 		function = new_function;
 	}
 
+	//! Per-arg metadata for the cast's single input. Mirrors `ScalarFunction::arg_properties[0]`,
+	//! so the MIN/MAX monotonic peel reads `cast.bound_cast.arg_properties` the same way it reads
+	//! `func.function.GetArgProperties(0)`. Defaults to UNKNOWN; opt in at the *CastSwitch
+	//! registration site for casts that preserve order. The rvalue-qualified setter lets factories
+	//! chain it onto a temporary: `return BoundCastInfo(&fn).SetArgProperties(...);`.
+	const ArgProperties &GetArgProperties() const {
+		return arg_properties;
+	}
+	BoundCastInfo &SetArgProperties(ArgProperties props) & {
+		arg_properties = props;
+		return *this;
+	}
+	BoundCastInfo SetArgProperties(ArgProperties props) && {
+		arg_properties = props;
+		return std::move(*this);
+	}
+
 private:
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
+	ArgProperties arg_properties;
 };
 
 struct BindCastInput {

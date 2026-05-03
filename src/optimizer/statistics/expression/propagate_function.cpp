@@ -90,6 +90,14 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
 		return nullptr;
 	}
+	return StatisticsPropagator::BuildMonotoneBoundsStats(func.GetReturnType(), std::move(out_lo), std::move(out_hi),
+	                                                     output_can_have_null, func.function.name);
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::BuildMonotoneBoundsStats(const LogicalType &target, Value out_lo,
+                                                                           Value out_hi, bool can_have_null,
+                                                                           const string &error_context,
+                                                                           optional_ptr<const BaseStatistics> base) {
 	// NaN/NULL at a corner means the input was NaN/NULL (column contains NaN, or year(±infinity)).
 	// NaN is excluded even though DuckDB orders it above all other values: negate(NaN) = NaN, which
 	// would violate NON_INCREASING if NaN were treated as a valid corner. Bail instead.
@@ -111,15 +119,20 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.name);
+		                        error_context);
 	}
 
-	auto result = NumericStats::CreateEmpty(func.GetReturnType());
+	auto result = NumericStats::CreateEmpty(target);
+	if (base) {
+		// Carry distinct_count and base validity flags forward; the per-bound Set calls below
+		// then re-assert the freshly-derived has_null / has_no_null on top.
+		result.CopyBase(*base);
+	}
 	NumericStats::SetMin(result, out_lo);
 	NumericStats::SetMax(result, out_hi);
 
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
-	if (output_can_have_null) {
+	if (can_have_null) {
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}
 	return result.ToUnique();

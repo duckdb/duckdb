@@ -176,3 +176,54 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
 ----
 1.0	2.718281828459045
+
+# === Cast forward-bounds via BoundCastInfo::arg_properties ===
+
+statement ok
+CREATE TABLE tinies AS SELECT (i - 50)::TINYINT AS bi FROM range(100) _(i)
+
+# Strict numeric widening: min/max + distinct_count carried forward via CopyBase.
+query IIII
+SELECT s.min, s.max, s.approx_unique, s.has_null
+FROM (SELECT STATS(bi::BIGINT) s FROM tinies LIMIT 1)
+----
+-50	49	100	false
+
+# try_cast must mark has_null even when the input column has no nulls.
+query III
+SELECT s.min, s.max, s.has_null
+FROM (SELECT STATS(TRY_CAST(bi AS BIGINT)) s FROM tinies LIMIT 1)
+----
+-50	49	true
+
+# NonDecreasing cast (TIMESTAMP -> DATE truncation): bounds propagate.
+statement ok
+CREATE TABLE tstamps AS SELECT (TIMESTAMP '2024-01-01' + INTERVAL (i) HOUR) AS t FROM range(100) _(i)
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::DATE) s FROM tstamps LIMIT 1)
+----
+2024-01-01	2024-01-05
+
+# UNKNOWN-monotonicity cast (TIMESTAMP -> TIME drops the date): no bounds derived.
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIME) s FROM tstamps LIMIT 1)
+----
+NULL	NULL
+
+# Strict widening DATE -> TIMESTAMP_NS: bounds propagate.
+query II
+SELECT s.min, s.max FROM (SELECT STATS(dt::TIMESTAMP_NS) s FROM finite_dates LIMIT 1)
+----
+2020-01-01 00:00:00	2025-08-09 00:00:00
+
+# Identity cast (source == target) preserves stats including distinct_count.
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(bi::TINYINT) s FROM tinies LIMIT 1)
+----
+-50	49	100
+
+# Decreasing cast: only intentionally-decreasing annotation among casts is none; verify the
+# swap-on-decreasing branch via a synthetic UDF would require a builtin we don't have, so the
+# logic is exercised at the function level via NEGATE elsewhere in this file.

@@ -1,0 +1,190 @@
+# name: test/optimizer/min_max_function_peel.test
+# description: MIN/MAX folding through monotonic wrappers and casts
+# group: [optimizer]
+
+require no_alternative_verify
+
+load {TEST_DIR}/peel.db
+
+statement ok
+CREATE TABLE t AS SELECT
+  i::INTEGER AS bi,
+  i::DOUBLE AS d,
+  DATE '2020-01-01' + INTERVAL (i) DAY AS dt,
+  TIMESTAMP '2020-01-01' + INTERVAL (i) HOUR AS ts,
+  (12 + (i % 100))::DECIMAL(5,2) AS dec
+FROM range(2048) _(i)
+
+restart
+
+# Aggregate eliminated.
+query II
+EXPLAIN SELECT MIN(year(dt)), MAX(year(dt)),
+               MIN(date_diff('day', DATE '2020-01-01', dt)),
+               MIN(date_diff('day', dt, DATE '2030-01-01')),
+               MIN(ceiling(d)),
+               MIN(bi + 5), MIN(5 + bi),
+               MIN(date_add(dt, INTERVAL '7 day')),
+               MIN(-bi), MAX(-bi),
+               MIN(5 - bi), MAX(5 - bi),
+               MIN(-(-bi)), MIN(-(bi + 5)),
+               MIN(bi::BIGINT),
+               MIN(dt::VARCHAR),
+               MIN(ts::DATE),
+               MIN(ts::TIMESTAMP_NS),
+               MIN(dec::DECIMAL(7,4)),
+               MIN(epoch_ms(ts))
+FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# Outer Tier-1 wrapper lifts above an inner Tier-2 that stats-folds.
+query II
+EXPLAIN SELECT MIN(round(year(dt))) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query IIIIIIIIII
+SELECT MIN(year(dt)), MAX(year(dt)),
+       MIN(date_diff('day', dt, DATE '2030-01-01')),
+       MIN(bi + 5), MIN(bi - 5),
+       MIN(-bi), MAX(-bi),
+       MIN(5 - bi), MAX(5 - bi),
+       MIN(-(bi + 5))
+FROM t
+----
+2020	2025	1606	5	-5	-2047	0	-2042	5	-2052
+
+# Aggregate must remain.
+query II
+EXPLAIN SELECT MIN(month(dt)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT MIN(d * 2.0) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT MIN(bi - (bi + 1)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# Partial peel: outer unary - lifts and flips MIN->MAX; inner month stays.
+query II
+EXPLAIN SELECT MIN(-month(dt)) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*Aggregates: max\(#0\).*
+
+query I
+SELECT MIN(-month(dt)) FROM t
+----
+-12
+
+# Tier-2 with infinity input: year(infinity)=NULL; stats-fold must bail.
+statement ok
+CREATE TABLE t_inf AS SELECT * FROM (VALUES
+    ('2021-01-01'::DATE), ('infinity'::DATE), ('-infinity'::DATE)) v(dt)
+
+query II
+EXPLAIN SELECT MAX(year(dt)) FROM t_inf
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT MAX(year(dt)) FROM t_inf
+----
+2021
+
+# No-stats source: rewriter refuses RequiresFinite wrappers; aggregate stays.
+statement ok
+COPY (SELECT DATE '2020-01-01' + INTERVAL (i) DAY AS dt FROM range(2048) _(i))
+TO '{TEST_DIR}/peel.csv' (FORMAT CSV, HEADER 1)
+
+query II
+EXPLAIN SELECT MIN(year(dt)) FROM read_csv('{TEST_DIR}/peel.csv', auto_detect=true)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT MIN(year(dt)) FROM read_csv('{TEST_DIR}/peel.csv', auto_detect=true)
+----
+2020
+
+# Empty / all-NULL input through wrapper.
+statement ok
+CREATE TABLE t_empty (dt DATE)
+
+query II
+SELECT MIN(year(dt)), MAX(year(dt)) FROM t_empty
+----
+NULL	NULL
+
+statement ok
+INSERT INTO t_empty VALUES (NULL), (NULL)
+
+query II
+SELECT MIN(year(dt)), MAX(year(dt)) FROM t_empty
+----
+NULL	NULL
+
+# try_cast must NOT peel — NULL-set divergence with MIN's NULL-skipping.
+statement ok
+CREATE TABLE t_trycast AS SELECT * FROM (VALUES ('!!!garbage'), ('2024-01-01'), ('2024-06-15')) v(s)
+
+query I
+SELECT MIN(TRY_CAST(s AS DATE)) FROM t_trycast
+----
+2024-01-01
+
+# INTERVAL arg of DATE/TIMESTAMP +/- INTERVAL must NOT peel — interval ordering
+# (normalize-based, 30-day months) disagrees with calendar arithmetic.
+statement ok
+CREATE TABLE t_di AS SELECT * FROM (VALUES
+    (DATE '2025-02-01', TIMESTAMP '2025-02-01 00:00', INTERVAL '1 month'),
+    (DATE '2025-02-01', TIMESTAMP '2025-02-01 00:00', INTERVAL '29 days')) v(d, ts, ival)
+
+query IIII
+SELECT MIN(d + ival), MIN(ts + ival), MIN(d - ival), MIN(ts - ival) FROM t_di
+----
+2025-03-01 00:00:00	2025-03-01 00:00:00	2025-01-01 00:00:00	2025-01-01 00:00:00
+
+query III rowsort
+SELECT d + ival, d - ival, ival FROM t_di
+----
+2025-03-01 00:00:00	2025-01-01 00:00:00	1 month
+2025-03-02 00:00:00	2025-01-03 00:00:00	29 days
+
+# Literal-interval form is monotonic in the DATE arg.
+query II
+SELECT MIN(d + INTERVAL '1 month'), MAX(d + INTERVAL '1 month') FROM t_di
+----
+2025-03-01 00:00:00	2025-03-01 00:00:00
+
+# DATE + TIMETZ result orders in UTC but TIMETZ orders raw-bits; TIME/TIMETZ +/- INTERVAL
+# wraps modulo 24h — none of these are monotonic.
+statement ok
+CREATE TABLE t_tz AS SELECT * FROM (VALUES
+    (DATE '2022-01-01', '00:01:20+00'::TIMETZ, '20:00:00'::TIME),
+    (DATE '0044-03-15 (BC)', '20:08:10.001-15:59'::TIMETZ, '01:00:00'::TIME),
+    (NULL, '20:08:10.998-07'::TIMETZ, NULL)) v(d, z, t)
+
+query I
+SELECT count(a.d + b.z) + count(a.z + b.d) + count(a.t + INTERVAL '5 hours') + count(a.t - INTERVAL '5 hours')
+     + count(a.z + INTERVAL '5 hours') + count(a.z - INTERVAL '5 hours')
+FROM t_tz a, t_tz b
+----
+42
+
+# Regression guard: MIN(time_tz) compares raw bits (time portion in high bits) and
+# epoch(time_tz) only reads the time portion, so they agree today. If MIN(time_tz) ever
+# switches to UTC-instant ordering, this starts failing and the epoch annotation must drop.
+statement ok
+CREATE TABLE t_ttz AS SELECT * FROM (VALUES
+    ('11:00:00+12'::TIMETZ), ('12:00:00-12'::TIMETZ), ('12:00:00+00'::TIMETZ)) v(z)
+
+query II
+SELECT MIN(epoch(z)), epoch(MIN(z)) FROM t_ttz
+----
+39600.0	39600.0

@@ -1,5 +1,8 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
+
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/storage/statistics/numeric_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/variant_stats.hpp"
 
@@ -7,17 +10,12 @@ namespace duckdb {
 
 static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const BaseStatistics &input,
                                                                          const LogicalType &target) {
-	// Bail out if the stats are not numeric
-	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS) {
-		return nullptr;
-	}
-	if (!NumericStats::HasMinMax(input)) {
+	if (input.GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(input)) {
 		return nullptr;
 	}
 	Value min = NumericStats::Min(input);
 	Value max = NumericStats::Max(input);
 	if (!min.DefaultTryCastAs(target) || !max.DefaultTryCastAs(target)) {
-		// overflow in cast: bailout
 		return nullptr;
 	}
 	auto result = NumericStats::CreateEmpty(target);
@@ -205,11 +203,49 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	if (!child_stats) {
 		return nullptr;
 	}
-	auto result_stats = TryPropagateCast(*child_stats, cast.child->GetReturnType(), cast.GetReturnType());
-	if (cast.try_cast && result_stats) {
-		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	auto &source = cast.child->GetReturnType();
+	auto &target = cast.GetReturnType();
+
+	if (source.id() == LogicalTypeId::VARIANT) {
+		auto result = StatisticsPropagateVariant(*child_stats, target);
+		if (cast.try_cast && result) {
+			result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		return result;
 	}
-	return result_stats;
+
+	// Identity cast: NopCast carries no arg_properties, so handle before reading metadata.
+	if (source == target) {
+		auto result = child_stats->ToUnique();
+		if (cast.try_cast && result) {
+			result->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+		}
+		return result;
+	}
+
+	auto &props = cast.bound_cast.GetArgProperties();
+	if (!IsKnownMonotonic(props.monotonicity)) {
+		return nullptr;
+	}
+	if (BaseStatistics::GetStatsType(target) != StatisticsType::NUMERIC_STATS) {
+		return nullptr;
+	}
+	if (child_stats->GetStatsType() != StatisticsType::NUMERIC_STATS || !NumericStats::HasMinMax(*child_stats)) {
+		return nullptr;
+	}
+	// Map child min/max through the active cast registry so ICU overrides apply.
+	Value out_lo = NumericStats::Min(*child_stats);
+	Value out_hi = NumericStats::Max(*child_stats);
+	if (!out_lo.TryCastAs(context, target) || !out_hi.TryCastAs(context, target)) {
+		return nullptr;
+	}
+	if (IsMonotonicDecreasing(props.monotonicity)) {
+		std::swap(out_lo, out_hi);
+	}
+	const bool can_have_null = child_stats->CanHaveNull() || cast.try_cast;
+	return BuildMonotoneBoundsStats(target, std::move(out_lo), std::move(out_hi), can_have_null,
+	                                StringUtil::Format("cast %s -> %s", source.ToString(), target.ToString()),
+	                                child_stats.get());
 }
 
 } // namespace duckdb
