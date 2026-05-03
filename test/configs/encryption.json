@@ -75,7 +75,8 @@
         "test/sql/trigger/drop_trigger_wal.test",
         "test/sql/trigger/trigger_after_delete.test",
         "test/sql/trigger/trigger_after_insert.test",
-        "test/sql/trigger/trigger_after_update.test"
+        "test/sql/trigger/trigger_after_update.test",
+        "test/sql/trigger/trigger_for_each_row_insert.test"
       ]
     },
     {
