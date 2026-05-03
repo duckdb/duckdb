@@ -80,8 +80,7 @@ static bool HasOldRef(QueryNode &node) {
 
 static string BulkTransformError(QueryNode &body, TriggerEventType event_type) {
 	if (event_type != TriggerEventType::INSERT_EVENT) {
-		return "FOR EACH ROW triggers are only supported for AFTER INSERT events; "
-		       "AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented";
+		return "FOR EACH ROW is only supported for AFTER INSERT triggers";
 	}
 	if (body.type != QueryNodeType::INSERT_QUERY_NODE) {
 		return "FOR EACH ROW trigger bodies must be INSERT statements; UPDATE/DELETE bodies are not yet supported";

@@ -511,9 +511,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	}
 	if (create_trigger_info.for_each == TriggerForEach::ROW &&
 	    create_trigger_info.event_type != TriggerEventType::INSERT_EVENT) {
-		throw NotImplementedException(
-		    "FOR EACH ROW triggers are only supported for AFTER INSERT events; "
-		    "AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented");
+		throw NotImplementedException("FOR EACH ROW is only supported for AFTER INSERT triggers");
 	}
 
 	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {

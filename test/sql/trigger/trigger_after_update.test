@@ -49,7 +49,7 @@ statement error
 CREATE TRIGGER trg_row AFTER UPDATE ON target FOR EACH ROW
     INSERT INTO audit VALUES ('row');
 ----
-Not implemented Error: FOR EACH ROW triggers are only supported for AFTER INSERT events; AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented
+Not implemented Error: FOR EACH ROW is only supported for AFTER INSERT triggers
 
 # Trigger body failure rolls back the entire statement
 statement ok

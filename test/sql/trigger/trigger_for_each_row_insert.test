@@ -147,14 +147,14 @@ statement error
 CREATE TRIGGER trg_upd_row AFTER UPDATE ON t FOR EACH ROW
     INSERT INTO audit VALUES (NEW.id, 'updated');
 ----
-Not implemented Error: FOR EACH ROW triggers are only supported for AFTER INSERT events; AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented
+Not implemented Error: FOR EACH ROW is only supported for AFTER INSERT triggers
 
 # AFTER DELETE FOR EACH ROW not yet supported
 statement error
 CREATE TRIGGER trg_del_row AFTER DELETE ON t FOR EACH ROW
     INSERT INTO audit VALUES (0, 'deleted');
 ----
-Not implemented Error: FOR EACH ROW triggers are only supported for AFTER INSERT events; AFTER UPDATE/DELETE FOR EACH ROW requires OLD references which are not yet implemented
+Not implemented Error: FOR EACH ROW is only supported for AFTER INSERT triggers
 
 # OLD references not yet supported
 statement error
