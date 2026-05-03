@@ -1604,9 +1604,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
 				D_ASSERT(write_state.fully_reuse_existing_metadata_blocks);
 				vector<MetaBlockPointer> extra_metadata_block_pointers;
-				extra_metadata_block_pointers.reserve(write_state.existing_extra_metadata_blocks.size());
-				for (auto &block_pointer : write_state.existing_extra_metadata_blocks) {
-					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
+				if (write_state.has_per_column_metadata_blocks) {
+					write_state.existing_per_column_metadata_blocks.ForEachBlock(
+					    [&](idx_t block_id) { extra_metadata_block_pointers.emplace_back(block_id, 0); });
+				} else {
+					extra_metadata_block_pointers.reserve(write_state.existing_extra_metadata_blocks.size());
+					for (auto &block_pointer : write_state.existing_extra_metadata_blocks) {
+						extra_metadata_block_pointers.emplace_back(block_pointer, 0);
+					}
 				}
 				metadata_manager.ClearModifiedBlocks(extra_metadata_block_pointers);
 				auto row_group_writer = checkpoint_state.writer.GetRowGroupWriter(row_group);
