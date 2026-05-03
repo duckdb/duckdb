@@ -14,7 +14,7 @@ void VectorFSSTStringBuffer::SetVectorType(VectorType new_vector_type) {
 	throw InternalException("SetVectorType not supported for FSST vector");
 }
 
-void VectorFSSTStringBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void VectorFSSTStringBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(vector_type == VectorType::FSST_VECTOR);
 }

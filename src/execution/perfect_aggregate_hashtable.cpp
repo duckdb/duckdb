@@ -250,6 +250,7 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 	default:
 		throw InternalException("Invalid type for perfect aggregate HT group");
 	}
+	FlatVector::SetSize(result, count_t(entry_count));
 }
 
 void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
@@ -279,7 +280,6 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	for (idx_t i = 0; i < grouping_columns; i++) {
 		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
-		FlatVector::SetSize(result.data[i], count_t(entry_count));
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);

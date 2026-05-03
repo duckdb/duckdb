@@ -217,7 +217,7 @@ static bool ToUnionMemberCast(Vector &source, Vector &result, idx_t count, CastP
 	// cast succeeded, create union vector
 	UnionVector::SetToMember(result, cast_data.tag_map[0], selected_member_vector, count, true);
 
-	result.Verify(count);
+	result.Verify();
 
 	return true;
 }
@@ -303,7 +303,8 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		}
 	}
 
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 
 	return true;
 }

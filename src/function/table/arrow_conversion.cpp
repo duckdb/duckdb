@@ -1452,6 +1452,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
+		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot
+		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();

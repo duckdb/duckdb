@@ -18,13 +18,6 @@ idx_t SequenceBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
-	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
-}
-
 string SequenceBuffer::ToString(const LogicalType &type, idx_t count) const {
 	string retval;
 	for (idx_t i = 0; i < count; i++) {
