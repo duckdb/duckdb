@@ -257,12 +257,15 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(name);
 		if (entry != databases.end()) {
-			auto &meta_transaction = MetaTransaction::Get(context);
-			if (meta_transaction.TryGetTransaction(*entry->second)) {
-				throw TransactionException(
-				    "Cannot detach database \"%s\" because the current transaction has outstanding "
-				    "work on it - commit or rollback first",
-				    name);
+			// Validate visible database.
+			if (entry->second->GetVisibility() != AttachVisibility::HIDDEN) {
+				auto &meta_transaction = MetaTransaction::Get(context);
+				if (meta_transaction.TryGetTransaction(*entry->second)) {
+					throw TransactionException(
+					    "Cannot detach database \"%s\" because the current transaction has outstanding "
+					    "work on it - commit or rollback first",
+					    name);
+				}
 			}
 			attached_db = std::move(entry->second);
 			databases.erase(entry);
