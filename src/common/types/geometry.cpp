@@ -1303,7 +1303,7 @@ static void ToPoints(Vector &source_vec, Vector &target_vec, idx_t row_count) {
 template <class V = VertexXY>
 static void FromPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto vert_iter = source_vec.Values<typename V::STRUCT_TYPE>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto vert_entry = vert_iter[row_idx];
 		if (!vert_entry.IsValid()) {
@@ -1358,7 +1358,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 template <class V = VertexXY>
 static void FromLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto line_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto line_entry = line_iter[row_idx];
@@ -1416,7 +1416,7 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 template <class V = VertexXY>
 static void FromPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto poly_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto poly_entry = poly_iter[row_idx];
@@ -1476,7 +1476,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 template <class V = VertexXY>
 static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter = source_vec.Values<VectorListType<typename V::STRUCT_TYPE>>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto mult_entry = mult_iter[row_idx];
@@ -1543,7 +1543,7 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 template <class V = VertexXY>
 static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter = source_vec.Values<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto mult_entry = mult_iter[row_idx];
@@ -1621,7 +1621,7 @@ template <class V = VertexXY>
 static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
 	auto mult_iter =
 	    source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>(row_count);
-	auto result_data = FlatVector::Writer<string_t>(target_vec, result_offset + row_count, result_offset);
+	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		const auto mult_entry = mult_iter[row_idx];

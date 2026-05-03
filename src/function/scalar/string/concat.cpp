@@ -150,53 +150,36 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 		}
 		input_data.emplace_back(input, count);
 	}
-	// First pass: compute per-row lengths/validity and total child size
-	vector<idx_t> row_lengths(count, 0);
+
+	// the || operator yields NULL whenever any input is NULL, while list_concat skips NULLs
 	vector<bool> row_invalid(count, false);
-	idx_t total_size = 0;
-	for (auto &input : input_data) {
-		auto &list_data = input.list_data;
-		for (idx_t r = 0; r < count; r++) {
-			auto list_entry = list_data[r];
-			if (!list_entry.IsValid()) {
-				if (is_operator) {
-					// LIST_CONCAT ignores NULL values, but || does not
+	if (is_operator) {
+		for (auto &input : input_data) {
+			for (idx_t r = 0; r < count; r++) {
+				if (!input.list_data[r].IsValid()) {
 					row_invalid[r] = true;
 				}
-				continue;
 			}
-			auto list_length = list_entry.GetValue().length;
-			row_lengths[r] += list_length;
-			total_size += list_length;
 		}
 	}
 
-	// Pre-reserve total child capacity in one shot
-	ListVector::Reserve(result, total_size);
-	auto &result_child = ListVector::GetChildMutable(result);
-
-	// Second pass: write list entries and copy children
 	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
-	idx_t offset = 0;
 	for (idx_t r = 0; r < count; r++) {
 		if (row_invalid[r]) {
 			result_writer.WriteNull();
 			continue;
 		}
-		list_entry_t row_entry {offset, row_lengths[r]};
+		auto list = result_writer.WriteDynamicList();
 		for (auto &input : input_data) {
 			auto list_val = input.list_data[r];
 			if (!list_val.IsValid()) {
 				continue;
 			}
 			const auto &list_entry = list_val.GetValue();
-			result_child.Copy(input.child_vec, *FlatVector::IncrementalSelectionVector(),
-			                  list_entry.offset + list_entry.length, list_entry.offset, offset, list_entry.length);
-			offset += list_entry.length;
+			list.Append(input.child_vec, *FlatVector::IncrementalSelectionVector(),
+			            list_entry.offset + list_entry.length, list_entry.offset, list_entry.length);
 		}
-		result_writer.WriteValue(row_entry);
 	}
-	ListVector::SetListSize(result, offset);
 }
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {

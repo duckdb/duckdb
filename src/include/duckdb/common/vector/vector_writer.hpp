@@ -237,6 +237,9 @@ private:
 template <class T>
 class DynamicListWriter;
 
+//! Forward declaration for the type-erased dynamic list appender (defined below).
+class DynamicListAppender;
+
 //! Specialization of VectorWriter for VectorListType<T>.
 //! Writes rows to a list vector. Non-null rows are opened with WriteList(n),
 //! which returns a range that iterates over n child writers with their in-list
@@ -426,6 +429,131 @@ inline DynamicListWriter<T> VectorWriter<VectorListType<T>>::WriteDynamicList() 
 	const auto row_idx = current_idx;
 	current_idx++;
 	return DynamicListWriter<T>(*this, row_idx, old_offset);
+}
+
+//! Specialization of VectorWriter for list_entry_t. Writes per-row list entries
+//! to a list vector without a templated child type. Supports the primitive-style
+//! WriteValue(list_entry_t) / WriteNull() API for callers that compute list
+//! entries themselves, plus WriteDynamicList() which returns a DynamicListAppender
+//! that grows the child vector via Vector::Copy from another vector.
+template <>
+struct VectorWriter<list_entry_t> {
+	VectorWriter(Vector &vector, idx_t count, idx_t offset)
+	    : list_data(FlatVector::GetDataMutable<list_entry_t>(vector)), validity(FlatVector::ValidityMutable(vector)),
+	      list_vec(vector), count(offset + count), current_idx(offset), child_offset(VectorWriterGetListSize(vector)) {
+	}
+	VectorWriter(VectorWriter &&other) noexcept
+	    : list_data(other.list_data), validity(other.validity), list_vec(other.list_vec), count(other.count),
+	      current_idx(other.current_idx), child_offset(other.child_offset) {
+		other.count = other.current_idx;
+	}
+	~VectorWriter() {
+		D_ASSERT(Exception::UncaughtException() || current_idx == count);
+	}
+
+	void WriteValue(const list_entry_t &value) {
+		D_ASSERT(current_idx < count);
+		list_data[current_idx] = value;
+		current_idx++;
+	}
+
+	void WriteNull() {
+		D_ASSERT(current_idx < count);
+		validity.SetInvalid(current_idx);
+		current_idx++;
+	}
+
+	void WriteNull(const list_entry_t &value) {
+		D_ASSERT(current_idx < count);
+		list_data[current_idx] = value;
+		validity.SetInvalid(current_idx);
+		current_idx++;
+	}
+
+	void Truncate() noexcept {
+		count = current_idx;
+	}
+
+	//! Open a list whose final length is unknown. Returns a DynamicListAppender
+	//! that copies entries from other vectors into the child via Vector::Copy.
+	//! The list_entry for this row is finalized when the appender goes out of scope.
+	DynamicListAppender WriteDynamicList();
+
+private:
+	friend class DynamicListAppender;
+
+	list_entry_t *list_data;
+	ValidityMask &validity;
+	Vector &list_vec;
+	idx_t count;
+	idx_t current_idx;
+	idx_t child_offset;
+};
+
+//! Type-erased counterpart to DynamicListWriter<T> for callers that don't know
+//! the child element type at compile time (e.g., list_concat). Instead of
+//! offering a per-element writer, it appends ranges from another vector via
+//! Vector::Copy. The list_entry length is recorded when the appender goes out
+//! of scope.
+//!
+//! Typical usage:
+//!     auto list = list_writer.WriteDynamicList();
+//!     for (auto &input : inputs) {
+//!         list.Append(input.child_vec, *FlatVector::IncrementalSelectionVector(),
+//!                     entry.offset + entry.length, entry.offset, entry.length);
+//!     }
+class DynamicListAppender {
+public:
+	DynamicListAppender(VectorWriter<list_entry_t> &parent, idx_t row_idx, idx_t base_offset)
+	    : parent(parent), row_idx(row_idx), base_offset(base_offset), current_length(0) {
+	}
+	DynamicListAppender(const DynamicListAppender &) = delete;
+	DynamicListAppender(DynamicListAppender &&) = delete;
+	~DynamicListAppender() {
+		parent.list_data[row_idx] = {base_offset, current_length};
+		parent.child_offset = base_offset + current_length;
+		VectorWriterSetListSize(parent.list_vec, base_offset + current_length);
+	}
+
+	//! Copy `copy_count` rows out of `source` (selected via source_sel/source_offset/source_count)
+	//! into the list under construction. Grows the parent's child vector as needed.
+	void Append(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
+	            idx_t copy_count) {
+		const idx_t target_offset = base_offset + current_length;
+		VectorWriterReserveList(parent.list_vec, target_offset + copy_count);
+		VectorWriterSetListSize(parent.list_vec, target_offset + copy_count);
+		Vector &child_vec = VectorWriterGetListChild(parent.list_vec);
+		child_vec.Copy(source, source_sel, source_count, source_offset, target_offset, copy_count);
+		current_length += copy_count;
+	}
+
+	//! Append `count` NULL elements to the list under construction. Used to pad a
+	//! list to a target length when no source value is available. Goes through
+	//! FlatVector::SetNull so NULL propagates correctly to struct/array children.
+	void AppendNulls(idx_t count) {
+		const idx_t target_offset = base_offset + current_length;
+		VectorWriterReserveList(parent.list_vec, target_offset + count);
+		VectorWriterSetListSize(parent.list_vec, target_offset + count);
+		Vector &child_vec = VectorWriterGetListChild(parent.list_vec);
+		for (idx_t i = 0; i < count; i++) {
+			FlatVector::SetNull(child_vec, target_offset + i, true);
+		}
+		current_length += count;
+	}
+
+private:
+	VectorWriter<list_entry_t> &parent;
+	idx_t row_idx;
+	idx_t base_offset;
+	idx_t current_length;
+};
+
+inline DynamicListAppender VectorWriter<list_entry_t>::WriteDynamicList() {
+	D_ASSERT(current_idx < count);
+	const auto old_offset = child_offset;
+	const auto row_idx = current_idx;
+	current_idx++;
+	return DynamicListAppender(*this, row_idx, old_offset);
 }
 
 template <class T>
