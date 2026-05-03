@@ -18,7 +18,7 @@ static bool IsNewRef(const string &name) {
 
 static void RewriteNewColumnRefs(QueryNode &node, const string &base_cte_name) {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
-		if (expr->type != ExpressionType::COLUMN_REF) {
+		if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			return;
 		}
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
@@ -67,7 +67,7 @@ static void TransformValuesToSelect(SelectNode &select, const string &base_cte_n
 static bool HasOldRef(QueryNode &node) {
 	bool found = false;
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(node, [&](unique_ptr<ParsedExpression> &expr) {
-		if (found || expr->type != ExpressionType::COLUMN_REF) {
+		if (found || expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			return;
 		}
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
