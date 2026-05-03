@@ -525,8 +525,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 
 		idx_t eviction_size = 0;
-		auto buffer =
-		    temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer), &eviction_size);
+		auto buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(
+		    context, id, std::move(reusable_buffer), &eviction_size);
 
 		// Decrement evicted size.
 		evicted_data_per_tag[uint8_t(tag)] -= eviction_size;
