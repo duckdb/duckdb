@@ -1349,7 +1349,7 @@ static void ToLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_coun
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto vert_count = reader.Read<uint32_t>();
 
-		for (auto &[vert_writer, _] : list_writer.WriteList(vert_count)) {
+		for (auto &vert_writer : list_writer.WriteList(vert_count)) {
 			vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 		}
 	}
@@ -1404,9 +1404,9 @@ static void ToPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) 
 		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto ring_count = reader.Read<uint32_t>();
-		for (auto &[ring_writer, _] : poly_writer.WriteList(ring_count)) {
+		for (auto &ring_writer : poly_writer.WriteList(ring_count)) {
 			const auto vert_count = reader.Read<uint32_t>();
-			for (auto &[vert_writer, _] : ring_writer.WriteList(vert_count)) {
+			for (auto &vert_writer : ring_writer.WriteList(vert_count)) {
 				vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 			}
 		}
@@ -1466,7 +1466,7 @@ static void ToMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_coun
 		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto part_count = reader.Read<uint32_t>();
-		for (auto &[vert_writer, _] : mult_writer.WriteList(part_count)) {
+		for (auto &vert_writer : mult_writer.WriteList(part_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 			vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
 		}
@@ -1528,14 +1528,12 @@ static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row
 		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto line_count = reader.Read<uint32_t>();
-		for (auto &[line_writer, line_idx] : mult_writer.WriteList(line_count)) {
+		for (auto &line_writer : mult_writer.WriteList(line_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 			const auto vert_count = reader.Read<uint32_t>();
-			for (auto &[vert_writer, vert_idx] : line_writer.WriteList(vert_count)) {
+			for (auto &vert_writer : line_writer.WriteList(vert_count)) {
 				vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
-				(void)vert_idx;
 			}
-			(void)line_idx;
 		}
 	}
 }
@@ -1601,18 +1599,15 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 		BlobReader reader(blob.GetData(), static_cast<uint32_t>(blob.GetSize()));
 		reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 		const auto poly_count = reader.Read<uint32_t>();
-		for (auto &[poly_writer, poly_idx] : mult_writer.WriteList(poly_count)) {
+		for (auto &poly_writer : mult_writer.WriteList(poly_count)) {
 			reader.Skip(sizeof(uint8_t) + sizeof(uint32_t));
 			const auto ring_count = reader.Read<uint32_t>();
-			for (auto &[ring_writer, ring_idx] : poly_writer.WriteList(ring_count)) {
+			for (auto &ring_writer : poly_writer.WriteList(ring_count)) {
 				const auto vert_count = reader.Read<uint32_t>();
-				for (auto &[vert_writer, vert_idx] : ring_writer.WriteList(vert_count)) {
+				for (auto &vert_writer : ring_writer.WriteList(vert_count)) {
 					vert_writer.ForEach([&](auto &dim_writer) { dim_writer.WriteValue(reader.Read<double>()); });
-					(void)vert_idx;
 				}
-				(void)ring_idx;
 			}
-			(void)poly_idx;
 		}
 	}
 }
