@@ -230,7 +230,7 @@ StepSliceBound <- ':' Expression?
 PostfixOperator <- '!'
 
 
-SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression
+SpecialFunctionExpression <- CoalesceExpression / UnpackExpression / TryExpression / ColumnsExpression / ExtractExpression / LambdaExpression / NullIfExpression / PositionExpression / RowExpression / SubstringExpression / TrimExpression / OverlayExpression
 CoalesceExpression <- 'COALESCE' Parens(List(Expression))
 UnpackExpression <- 'UNPACK' Parens(Expression)
 TryExpression <- 'TRY' Parens(Expression)
@@ -250,6 +250,10 @@ TrimBoth <- 'BOTH'
 TrimLeading <- 'LEADING'
 TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
+OverlayExpression <- 'OVERLAY' Parens(OverlayArguments)
+OverlayArguments <- OverlayParameters / OverlayExpressionList
+OverlayParameters <- Expression 'PLACING' Expression 'FROM' Expression ('FOR' Expression)?
+OverlayExpressionList <- List(Expression)
 
 ExtractArgument <-
     YearKeyword / MonthKeyword / DayKeyword / HourKeyword / MinuteKeyword / SecondKeyword /

@@ -860,6 +860,14 @@ private:
 	static unique_ptr<ParsedExpression> TransformTrimExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformTrimDirection(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformTrimSource(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformOverlayExpression(PEGTransformer &transformer,
+	                                                               ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayArguments(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayParameters(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static vector<unique_ptr<ParsedExpression>> TransformOverlayExpressionList(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformCastExpression(PEGTransformer &transformer, ParseResult &parse_result);
