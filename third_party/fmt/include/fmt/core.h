@@ -226,8 +226,10 @@ template <typename... Ts> struct void_t_impl { using type = void; };
 #endif
 
 #if defined(FMT_USE_STRING_VIEW)
-template <typename Char> using std_string_view = std::basic_string_view<Char>;
-#elif defined(FMT_USE_EXPERIMENTAL_STRING_VIEW)
+// Undefine to avoid deprecation warnings from libc++ for non-standard char types
+#undef FMT_USE_STRING_VIEW
+#endif
+#if defined(FMT_USE_EXPERIMENTAL_STRING_VIEW)
 template <typename Char>
 using std_string_view = std::experimental::basic_string_view<Char>;
 #else

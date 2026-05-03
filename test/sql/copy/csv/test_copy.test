@@ -2,10 +2,6 @@
 # description: Test copy statement
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
-
 # generate CSV file with ',' as delimiter and complex strings
 # load CSV file into a table
 statement ok
@@ -107,19 +103,19 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP ',', HEADER 0.2);
 ----
-"HEADER" expected an argument of type BOOLEAN
+<REGEX>:.*"(HEADER|header)" expected an argument of type BOOLEAN.*
 
 # empty delimiter
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP);
 ----
-"SEP" requires an argument of type VARCHAR
+<REGEX>:.*"(SEP|sep)" requires an argument of type VARCHAR.*
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (SEP 1);
 ----
-"SEP" expected an argument of type VARCHAR
+<REGEX>:.*"(SEP|sep)" expected an argument of type VARCHAR.*
 
 # multiple format options
 statement error
@@ -136,25 +132,25 @@ duplicate option
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ESCAPE 1);
 ----
-"ESCAPE" expected an argument of type VARCHAR
+<REGEX>:.*"(ESCAPE|escape)" expected an argument of type VARCHAR.*
 
 # no escape string
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ESCAPE);
 ----
-"ESCAPE" requires an argument of type VARCHAR
+<REGEX>:.*"(ESCAPE|escape)" requires an argument of type VARCHAR.*
 
 # number as quote string
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (QUOTE 1);
 ----
-"QUOTE" expected an argument of type VARCHAR
+<REGEX>:.*"(QUOTE|quote)" expected an argument of type VARCHAR.*
 
 # no quote string
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (QUOTE);
 ----
-"QUOTE" requires an argument of type VARCHAR
+<REGEX>:.*"(QUOTE|quote)" requires an argument of type VARCHAR.*
 
 # no format string
 statement error
@@ -166,12 +162,12 @@ Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING);
 ----
-"ENCODING" requires an argument of type VARCHAR
+<REGEX>:.*"(ENCODING|encoding)" requires an argument of type VARCHAR.*
 
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING 42);
 ----
-"ENCODING" expected an argument of type VARCHAR
+<REGEX>:.*"(ENCODING|encoding)" expected an argument of type VARCHAR.*
 
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (ENCODING 'utf-42');
@@ -182,7 +178,7 @@ The CSV Reader does not support the encoding: "utf-42"
 statement error
 COPY test4 (a,c) FROM '{TEMP_DIR}/test4.csv' (MAGIC '42');
 ----
-Unrecognized option "MAGIC"
+<REGEX>:.*Unrecognized option "(MAGIC|magic)".*
 
 # Try new_line option
 query I

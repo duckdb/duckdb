@@ -288,16 +288,15 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		UnaryExecutor::ExecuteWithNulls<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
-		                                                         [&](INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
-			                                                         if (Timestamp::IsFinite(input)) {
-				                                                         const auto micros = SetTime(calendar, input);
-				                                                         return info.adapters[0](calendar, micros);
-			                                                         } else {
-				                                                         mask.SetInvalid(idx);
-				                                                         return RESULT_TYPE();
-			                                                         }
-		                                                         });
+		UnaryExecutor::Execute<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
+		                                                [&](INPUT_TYPE input) -> optional<RESULT_TYPE> {
+			                                                if (Timestamp::IsFinite(input)) {
+				                                                const auto micros = SetTime(calendar, input);
+				                                                return info.adapters[0](calendar, micros);
+			                                                } else {
+				                                                return nullopt;
+			                                                }
+		                                                });
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -312,16 +311,15 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		BinaryExecutor::ExecuteWithNulls<string_t, INPUT_TYPE, RESULT_TYPE>(
+		BinaryExecutor::Execute<string_t, INPUT_TYPE, RESULT_TYPE>(
 		    part_arg, date_arg, result, args.size(),
-		    [&](string_t specifier, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+		    [&](string_t specifier, INPUT_TYPE input) -> optional<RESULT_TYPE> {
 			    if (Timestamp::IsFinite(input)) {
 				    const auto micros = SetTime(calendar, input);
 				    auto adapter = PartCodeBigintFactory(GetDatePartSpecifier(specifier.GetString()));
 				    return adapter(calendar, micros);
 			    } else {
-				    mask.SetInvalid(idx);
-				    return RESULT_TYPE(0);
+				    return nullopt;
 			    }
 		    });
 	}
@@ -382,72 +380,42 @@ struct ICUDatePart : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 		const auto count = args.size();
 		Vector &input = args.data[0];
+		auto entries = input.Values<INPUT_TYPE>(count);
 
-		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &child_entries = StructVector::GetEntries(result);
+		for (auto &child_entry : child_entries) {
+			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
+		}
 
-			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
-			} else {
-				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
-				auto micros = SetTime(calendar, tdata[0]);
-				const auto is_finite = Timestamp::IsFinite(*tdata);
-				auto &child_entries = StructVector::GetEntries(result);
+		auto &res_valid = FlatVector::ValidityMutable(result);
+		for (idx_t i = 0; i < count; ++i) {
+			auto entry = entries[i];
+			if (entry.IsValid()) {
+				res_valid.SetValid(i);
+				auto micros = SetTime(calendar, entry.GetValue());
+				const auto is_finite = Timestamp::IsFinite(entry.GetValue());
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
+						FlatVector::ValidityMutable(child_entry).SetValid(i);
 						if (IsBigintDatepart(info.part_codes[col])) {
-							auto pdata = ConstantVector::GetData<int64_t>(child_entry);
+							auto pdata = FlatVector::GetDataMutable<int64_t>(child_entry);
 							auto adapter = info.bigints[col];
-							pdata[0] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						} else {
-							auto pdata = ConstantVector::GetData<double>(child_entry);
+							auto pdata = FlatVector::GetDataMutable<double>(child_entry);
 							auto adapter = info.doubles[col];
-							pdata[0] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						}
 					} else {
-						ConstantVector::SetNull(child_entry);
+						FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 					}
 				}
-			}
-		} else {
-			auto entries = input.template Values<INPUT_TYPE>(count);
-
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			auto &child_entries = StructVector::GetEntries(result);
-			for (auto &child_entry : child_entries) {
-				child_entry.SetVectorType(VectorType::FLAT_VECTOR);
-			}
-
-			auto &res_valid = FlatVector::Validity(result);
-			for (idx_t i = 0; i < count; ++i) {
-				auto entry = entries[i];
-				if (entry.IsValid()) {
-					res_valid.SetValid(i);
-					auto micros = SetTime(calendar, entry.GetValue());
-					const auto is_finite = Timestamp::IsFinite(entry.GetValue());
-					for (size_t col = 0; col < child_entries.size(); ++col) {
-						auto &child_entry = child_entries[col];
-						if (is_finite) {
-							FlatVector::Validity(child_entry).SetValid(i);
-							if (IsBigintDatepart(info.part_codes[col])) {
-								auto pdata = ConstantVector::GetData<int64_t>(child_entry);
-								auto adapter = info.bigints[col];
-								pdata[i] = adapter(calendar, micros);
-							} else {
-								auto pdata = ConstantVector::GetData<double>(child_entry);
-								auto adapter = info.doubles[col];
-								pdata[i] = adapter(calendar, micros);
-							}
-						} else {
-							FlatVector::Validity(child_entry).SetInvalid(i);
-						}
-					}
-				} else {
-					res_valid.SetInvalid(i);
-					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(child_entry).SetInvalid(i);
-					}
+			} else {
+				res_valid.SetInvalid(i);
+				for (auto &child_entry : child_entries) {
+					FlatVector::ValidityMutable(child_entry).SetInvalid(i);
 				}
 			}
 		}
@@ -502,7 +470,7 @@ struct ICUDatePart : public ICUDateFunc {
 			}
 
 			arguments.erase(arguments.begin());
-			bound_function.arguments.erase(bound_function.arguments.begin());
+			bound_function.GetArguments().erase(bound_function.GetArguments().begin());
 			bound_function.name = part_name;
 			bound_function.SetReturnType(LogicalType::DOUBLE);
 			bound_function.SetFunctionCallback(UnaryTimestampFunction<timestamp_t, double>);
@@ -566,7 +534,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void SerializeStructFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                                    const ScalarFunction &function) {
+	                                    const BoundScalarFunction &function) {
 		D_ASSERT(bind_data);
 		auto &info = bind_data->Cast<BindStructData>();
 		serializer.WriteProperty(100, "tz_setting", info.tz_setting);
@@ -575,7 +543,7 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static duckdb::unique_ptr<FunctionData> DeserializeStructFunction(Deserializer &deserializer,
-	                                                                  ScalarFunction &bound_function) {
+	                                                                  BoundScalarFunction &bound_function) {
 		auto tz_setting = deserializer.ReadProperty<string>(100, "tz_setting");
 		auto cal_setting = deserializer.ReadProperty<string>(101, "cal_setting");
 		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(102, "part_codes");
@@ -591,9 +559,11 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename RESULT_TYPE = int64_t>
 	static void AddUnaryPartCodeFunctions(const string &name, ExtensionLoader &loader,
-	                                      const LogicalType &result_type = LogicalType::BIGINT) {
+	                                      const LogicalType &result_type = LogicalType::BIGINT,
+	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
 
@@ -685,14 +655,17 @@ struct ICUDatePart : public ICUDateFunc {
 void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	// register the individual operators
 
+	// year/decade use UCAL_YEAR (year-of-era, positive in both BC and AD), which is non-monotonic
+	// across the BC/AD flip; leave them unannotated. era/century/millennium/isoyear are signed.
+
 	//	BIGINTs
-	ICUDatePart::AddUnaryPartCodeFunctions("era", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("era", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("year", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("month", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("day", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("decade", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("century", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("century", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("second", loader);
@@ -703,7 +676,7 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions("week", loader); //  Note that WeekOperator is ISO-8601, not US
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", loader);
-	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader);
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", loader, LogicalType::BIGINT, ArgProperties().NonDecreasing());
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", loader);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", loader);
@@ -713,7 +686,8 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions<double>("julian", loader, LogicalType::DOUBLE);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader); //  Note this is ISO year and week
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT,
+	                                       ArgProperties().NonDecreasing()); //  ISO year and week
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", loader);

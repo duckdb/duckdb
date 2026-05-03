@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
@@ -31,7 +32,16 @@ struct UnaryOperatorWrapper {
 struct UnaryLambdaWrapper {
 	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
 	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
-		return data(input);
+		if constexpr (std::is_same<decltype(data(input)), optional<RESULT_TYPE>>::value) {
+			auto result = data(input);
+			if (!result.has_value()) {
+				mask.SetInvalid(idx);
+				return RESULT_TYPE();
+			}
+			return result.value();
+		} else {
+			return data(input);
+		}
 	}
 };
 
@@ -39,13 +49,6 @@ struct GenericUnaryWrapper {
 	template <class OP, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
 	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, mask, idx, data);
-	}
-};
-
-struct UnaryLambdaWrapperWithNulls {
-	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE, class DATA_TYPE>
-	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, DATA_TYPE &data) {
-		return data(input, mask, idx);
 	}
 };
 
@@ -61,7 +64,7 @@ struct UnaryExecutor {
 private:
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteLoop(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               const SelectionVector *__restrict sel_vector, ValidityMask &mask,
+	                               const SelectionVector *__restrict sel_vector, const ValidityMask &mask,
 	                               ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
 #ifdef DEBUG
 		// ldata may point to a compressed dictionary buffer which can be smaller than ldata + count
@@ -95,7 +98,8 @@ private:
 #ifndef DUCKDB_SMALLER_BINARY
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class DATA_TYPE>
 	static inline void ExecuteFlat(const INPUT_TYPE *__restrict ldata, RESULT_TYPE *__restrict result_data, idx_t count,
-	                               ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data, bool adds_nulls) {
+	                               const ValidityMask &mask, ValidityMask &result_mask, DATA_TYPE &data,
+	                               bool adds_nulls) {
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (mask.CanHaveNull()) {
@@ -146,11 +150,12 @@ private:
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count);
 			auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto ldata = ConstantVector::GetData<INPUT_TYPE>(input);
 
 			if (ConstantVector::IsNull(input)) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(count));
 			} else {
 				ConstantVector::SetNull(result, false);
 				*result_data = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(
@@ -165,7 +170,7 @@ private:
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
 			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		case VectorType::DICTIONARY_VECTOR: {
@@ -186,9 +191,10 @@ private:
 						auto ldata = FlatVector::GetData<INPUT_TYPE>(dictionary_values);
 						ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
 						    ldata, result_data, dict_size.GetIndex(), FlatVector::Validity(dictionary_values),
-						    FlatVector::Validity(result), data, adds_nulls);
+						    FlatVector::ValidityMutable(result), data, adds_nulls);
 						// slice the result with the original offsets
 						auto &offsets = DictionaryVector::SelVector(input);
+						FlatVector::SetSize(result, dict_size.GetIndex());
 						result.Dictionary(result, dict_size.GetIndex(), offsets, count);
 						break;
 					}
@@ -206,7 +212,7 @@ private:
 			auto ldata = UnifiedVectorFormat::GetData<INPUT_TYPE>(vdata);
 
 			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
-			                                                    FlatVector::Validity(result), data, adds_nulls);
+			                                                    FlatVector::ValidityMutable(result), data, adds_nulls);
 			break;
 		}
 		}
@@ -222,18 +228,15 @@ public:
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun,
 	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, fun, false, errors);
+		constexpr bool adds_nulls =
+		    std::is_same<decltype(fun(std::declval<INPUT_TYPE>())), optional<RESULT_TYPE>>::value;
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, fun, adds_nulls,
+		                                                                   errors);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP, class DATA_TYPE>
 	static void GenericExecute(Vector &input, Vector &result, idx_t count, DATA_TYPE &data, bool adds_nulls = false) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, GenericUnaryWrapper, OP>(input, result, count, data, adds_nulls);
-	}
-
-	template <class INPUT_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(INPUT_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteWithNulls(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapperWithNulls, FUNC>(input, result, count, fun, true);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>

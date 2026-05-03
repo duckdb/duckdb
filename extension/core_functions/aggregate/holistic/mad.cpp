@@ -205,7 +205,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto n = FrameSize(included, frames);
 
 		if (!n) {
-			auto &rmask = FlatVector::Validity(result);
+			auto &rmask = FlatVector::ValidityMutable(result);
 			rmask.Set(ridx, false);
 			return;
 		}
@@ -322,7 +322,7 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->return_type);
+	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
 	function.name = "mad";
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return BindMAD(input);

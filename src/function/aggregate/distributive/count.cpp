@@ -74,7 +74,7 @@ struct CountFunction : public BaseCountFunction {
 		return true;
 	}
 
-	static inline void CountFlatLoop(STATE **__restrict states, ValidityMask &mask, idx_t count) {
+	static inline void CountFlatLoop(STATE **__restrict states, const ValidityMask &mask, idx_t count) {
 		if (mask.CanHaveNull()) {
 			idx_t base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
@@ -133,7 +133,7 @@ struct CountFunction : public BaseCountFunction {
 		auto &input = inputs[0];
 		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetDataMutable<STATE *>(states);
-			CountFlatLoop(sdata, FlatVector::Validity(input), count);
+			CountFlatLoop(sdata, FlatVector::ValidityMutable(input), count);
 		} else {
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
@@ -143,7 +143,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static inline void CountFlatUpdateLoop(STATE &result, ValidityMask &mask, idx_t count) {
+	static inline void CountFlatUpdateLoop(STATE &result, const ValidityMask &mask, idx_t count) {
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
@@ -169,7 +169,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static inline void CountUpdateLoop(STATE &result, ValidityMask &mask, idx_t count,
+	static inline void CountUpdateLoop(STATE &result, const ValidityMask &mask, idx_t count,
 	                                   const SelectionVector &sel_vector) {
 		if (mask.CannotHaveNull()) {
 			// no NULL values
@@ -196,7 +196,7 @@ struct CountFunction : public BaseCountFunction {
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
-			CountFlatUpdateLoop(result, FlatVector::Validity(input), count);
+			CountFlatUpdateLoop(result, FlatVector::ValidityMutable(input), count);
 			break;
 		}
 		case VectorType::SEQUENCE_VECTOR: {
@@ -242,6 +242,7 @@ AggregateFunction CountFunctionBase::GetFunction() {
 	fun.name = "count";
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	fun.SetStructStateExport(GetCountStateType);
+	fun.SetStatisticsCallback(CountPropagateStats);
 	return fun;
 }
 
@@ -257,7 +258,6 @@ AggregateFunction CountStarFun::GetFunction() {
 
 AggregateFunctionSet CountFun::GetFunctions() {
 	AggregateFunction count_function = CountFunctionBase::GetFunction();
-	count_function.SetStatisticsCallback(CountPropagateStats);
 	AggregateFunctionSet count("count");
 	count.AddFunction(count_function);
 	// the count function can also be called without arguments

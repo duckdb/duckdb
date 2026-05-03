@@ -37,6 +37,15 @@ typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vect
                                              const vector<TupleDataGatherFunction> &child_functions);
 
 struct TupleDataGatherFunction {
+public:
+	explicit TupleDataGatherFunction(tuple_data_gather_function_t function);
+	TupleDataGatherFunction(tuple_data_gather_function_t function, vector<TupleDataGatherFunction> child_functions);
+
+	void Gather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+	            const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+	            const SelectionVector &target_sel, optional_ptr<Vector> list_vector) const;
+
+private:
 	tuple_data_gather_function_t function;
 	vector<TupleDataGatherFunction> child_functions;
 };
@@ -79,7 +88,7 @@ public:
 	//! Get chunk ranges that belong to a specific partition index
 	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
-	vector<data_ptr_t> GetRowBlockPointers() const;
+	vector<data_ptr_t> GetRowBlockPointers();
 	//! Destroy the blocks corresponding to the chunk indices
 	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 

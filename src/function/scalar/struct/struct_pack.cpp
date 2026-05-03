@@ -29,7 +29,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 	// set only the struct buffer's type - do not propagate to children
 	// since children reference external vectors (args) that may have incompatible buffer types
-	result.GetBuffer()->SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+	result.BufferMutable().SetVectorTypeOnly(all_const ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	result.Verify(args.size());
 }
 
@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 			}
 			name_collision_set.insert(alias);
 		}
-		struct_children.push_back(make_pair(alias, arguments[i]->return_type));
+		struct_children.push_back(make_pair(alias, arguments[i]->GetReturnType()));
 	}
 
 	// this is more for completeness reasons
@@ -68,7 +68,7 @@ static unique_ptr<FunctionData> StructPackBind(BindScalarFunctionInput &input) {
 static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto struct_stats = StructStats::CreateUnknown(expr.return_type);
+	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(struct_stats, i, child_stats[i]);
 	}
@@ -79,7 +79,7 @@ template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {}, LogicalTypeId::STRUCT, StructPackFunction,
 	                   StructPackBind<IS_STRUCT_PACK>, StructPackStats);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

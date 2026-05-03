@@ -43,8 +43,8 @@ ConversionException TryCast::UnimplementedErrorMessage(PhysicalType source, Phys
 		if (parameters->cast_source && parameters->cast_target) {
 			auto &source_expr = *parameters->cast_source;
 			auto &target_expr = *parameters->cast_target;
-			return ConversionException(query_location,
-			                           UnimplementedCastMessage(source_expr.return_type, target_expr.return_type));
+			return ConversionException(
+			    query_location, UnimplementedCastMessage(source_expr.GetReturnType(), target_expr.GetReturnType()));
 		}
 	}
 	return ConversionException(query_location, "Unimplemented type for cast (%s -> %s)", source, target);
@@ -1603,7 +1603,9 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict);
+	// Pass the query location of the cast source if available.
+	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
+	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : optional_idx());
 }
 
 //===--------------------------------------------------------------------===//
@@ -2926,7 +2928,7 @@ void GetDivMod(hugeint_t lhs, hugeint_t rhs, hugeint_t &div, hugeint_t &mod) {
 template <class SRC, class DST>
 bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t scale) {
 	if (IsRepresentableExactly<SRC, DST>(input, DST(0.0)) || scale == 0) {
-		// Fast path, integer is representable exaclty as a float/double
+		// Fast path, integer is representable exactly as a float/double
 		result = Cast::Operation<SRC, DST>(input) / DST(NumericHelper::DOUBLE_POWERS_OF_TEN[scale]);
 		return true;
 	}

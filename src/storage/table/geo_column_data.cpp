@@ -3,6 +3,7 @@
 
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/vector_operations/generic_executor.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
@@ -57,7 +58,9 @@ idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, Colum
                           idx_t target_count) {
 	// Not a shredded column, so just emit the binary format immediately
 	if (storage_type == GeometryStorageType::WKB) {
-		return base_column->Scan(transaction, vector_index, state, result, target_count);
+		auto count = base_column->Scan(transaction, vector_index, state, result, target_count);
+		FlatVector::SetSize(result, count_t(count));
+		return count;
 	}
 
 	// Setup an intermediate chunk to scan the actual data, based on how much we actually scanned
@@ -69,6 +72,7 @@ idx_t GeoColumnData::Scan(TransactionData transaction, idx_t vector_index, Colum
 
 	// Now reassemble
 	Reassemble(scan_chunk.data[0], result, scan_count, storage_type, 0);
+	FlatVector::SetSize(result, count_t(scan_count));
 	return scan_count;
 }
 
@@ -153,12 +157,12 @@ void GeoColumnData::FetchRow(TransactionData transaction, ColumnFetchState &stat
 // Update
 //----------------------------------------------------------------------------------------------------------------------
 
-void GeoColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void GeoColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                            Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("GEOMETRY Update is not supported");
 }
 
-void GeoColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void GeoColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                  const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                  idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("GEOMETRY Update is not supported");
@@ -378,6 +382,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 			auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 			Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+			scan_chunk.SetCardinality(to_scan);
 
 			// Verify the scan chunk
 			scan_chunk.Verify();
@@ -472,6 +477,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 
 		auto to_scan = MinValue(total_count - scanned, static_cast<idx_t>(STANDARD_VECTOR_SIZE));
 		Scan(TransactionData::Committed(), vector_index++, scan_state, scan_chunk.data[0], to_scan);
+		scan_chunk.SetCardinality(to_scan);
 
 		// Verify the scan chunk
 		scan_chunk.Verify();

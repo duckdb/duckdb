@@ -45,6 +45,10 @@ TupleDataCollection::~TupleDataCollection() {
 
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
+	if (TuplesPerBlock() == 0) {
+		throw NotImplementedException("Too many columns: tuple width exceeds block size of %llu",
+		                              allocator->GetBufferManager().GetBlockSize());
+	}
 	this->count = 0;
 	this->data_size = 0;
 	if (layout.IsSortKeyLayout()) {
@@ -130,13 +134,13 @@ vector<pair<idx_t, idx_t>> TupleDataCollection::GetChunkRangesForPartition(const
 	return chunk_ranges;
 }
 
-vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
+vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() {
 	D_ASSERT(segments.size() == 1);
-	const auto &segment = *segments[0];
+	auto &segment = *segments[0];
 	vector<data_ptr_t> result;
 	result.reserve(segment.pinned_row_handles.size());
-	for (const auto &pinned_row_handle : segment.pinned_row_handles) {
-		result.emplace_back(pinned_row_handle.Ptr());
+	for (auto &pinned_row_handle : segment.pinned_row_handles) {
+		result.emplace_back(pinned_row_handle.GetDataMutable());
 	}
 	return result;
 }
@@ -335,7 +339,8 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 	}
 	case PhysicalType::LIST:
 		D_ASSERT(format.children.size() == 1);
-		ToUnifiedFormatInternal(format.children[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		ToUnifiedFormatInternal(format.children[0], ListVector::GetChildMutable(vector),
+		                        ListVector::GetListSize(vector));
 		break;
 	case PhysicalType::ARRAY: {
 		D_ASSERT(format.children.size() == 1);
@@ -358,7 +363,7 @@ static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector
 		}
 		format.unified.data = reinterpret_cast<data_ptr_t>(format.array_list_entries.get());
 
-		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetEntry(vector), child_array_total_size);
+		ToUnifiedFormatInternal(format.children[0], ArrayVector::GetChildMutable(vector), child_array_total_size);
 		break;
 	}
 	default:
@@ -734,7 +739,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	ResetCachedCastVectors(chunk_state, column_ids);
 	Gather(chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(), chunk.count, column_ids, result,
 	       *FlatVector::IncrementalSelectionVector(), chunk_state.cached_cast_vectors);
-	result.SetCardinality(chunk.count);
+	result.SetChildCardinality(chunk.count);
 }
 
 void TupleDataCollection::ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids) {

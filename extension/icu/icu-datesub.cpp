@@ -102,31 +102,27 @@ struct ICUCalendarSub : public ICUDateFunc {
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(part_arg)) {
-				ConstantVector::SetNull(result);
-			} else {
-				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
-				auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
-				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
-				    startdate_arg, enddate_arg, result, args.size(),
-				    [&](T start_date, T end_date, ValidityMask &mask, idx_t idx) {
-					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
-						    return part_func(calendar.get(), start_date, end_date);
-					    } else {
-						    mask.SetInvalid(idx);
-						    return int64_t(0);
-					    }
-				    });
+				throw InternalException("ICUDateSub called with constant NULL bucket width");
 			}
+			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
+			auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
+			BinaryExecutor::Execute<T, T, int64_t>(
+			    startdate_arg, enddate_arg, result, args.size(), [&](T start_date, T end_date) -> optional<int64_t> {
+				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
+					    return part_func(calendar.get(), start_date, end_date);
+				    } else {
+					    return nullopt;
+				    }
+			    });
 		} else {
-			TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
+			TernaryExecutor::Execute<string_t, T, T, int64_t>(
 			    part_arg, startdate_arg, enddate_arg, result, args.size(),
-			    [&](string_t specifier, T start_date, T end_date, ValidityMask &mask, idx_t idx) {
+			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
 				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 					    auto part_func = SubtractFactory(GetDatePartSpecifier(specifier.GetString()));
 					    return part_func(calendar.get(), start_date, end_date);
 				    } else {
-					    mask.SetInvalid(idx);
-					    return int64_t(0);
+					    return nullopt;
 				    }
 			    });
 		}
@@ -140,6 +136,8 @@ struct ICUCalendarSub : public ICUDateFunc {
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetArgProperties(1, ArgProperties().NonIncreasing());
+		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
 };
@@ -232,35 +230,33 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(part_arg)) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, true);
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 				const auto part = GetDatePartSpecifier(specifier);
 				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
-				BinaryExecutor::ExecuteWithNulls<T, T, int64_t>(
+				BinaryExecutor::Execute<T, T, int64_t>(
 				    startdate_arg, enddate_arg, result, args.size(),
-				    [&](T start_date, T end_date, ValidityMask &mask, idx_t idx) {
+				    [&](T start_date, T end_date) -> optional<int64_t> {
 					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 					    } else {
-						    mask.SetInvalid(idx);
-						    return int64_t(0);
+						    return nullopt;
 					    }
 				    });
 			}
 		} else {
-			TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
+			TernaryExecutor::Execute<string_t, T, T, int64_t>(
 			    part_arg, startdate_arg, enddate_arg, result, args.size(),
-			    [&](string_t specifier, T start_date, T end_date, ValidityMask &mask, idx_t idx) {
+			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
 				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
 					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
 					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
 				    } else {
-					    mask.SetInvalid(idx);
-					    return int64_t(0);
+					    return nullopt;
 				    }
 			    });
 		}
@@ -274,6 +270,8 @@ struct ICUCalendarDiff : public ICUDateFunc {
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetArgProperties(1, ArgProperties().NonIncreasing());
+		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
 };

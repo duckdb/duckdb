@@ -207,12 +207,13 @@ struct ICUTableRange {
 				return OperatorResultType::HAVE_MORE_OUTPUT;
 			}
 			idx_t size = 0;
-			auto data = FlatVector::GetDataMutable<timestamp_t>(output.data[0]);
+			auto data = FlatVector::ScatterWriter<timestamp_t>(output.data[0]);
 			while (true) {
 				if (state.Finished(state.current_state)) {
 					break;
 				}
-				data[size++] = state.current_state;
+				data[size] = state.current_state;
+				size++;
 				state.current_state = ICUDateFunc::Add(calendar, state.current_state, state.increment);
 				if (size >= STANDARD_VECTOR_SIZE) {
 					break;
@@ -224,6 +225,7 @@ struct ICUTableRange {
 				state.initialized_row = false;
 				continue;
 			}
+			FlatVector::SetSize(output.data[0], count_t(size));
 			output.SetCardinality(size);
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}

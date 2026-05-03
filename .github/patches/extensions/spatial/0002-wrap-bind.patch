@@ -1,21 +1,5 @@
-From 97d341e6763ebf57d1e69a0f637f9fa8cd3ceae0 Mon Sep 17 00:00:00 2001
-From: Max Gabrielsson <max@gabrielsson.com>
-Date: Mon, 13 Apr 2026 14:53:36 +0200
-Subject: [PATCH] wrap bind
-
----
- src/spatial/modules/geos/geos_module.cpp      |  29 +++--
- .../modules/main/spatial_functions_cast.cpp   |  12 +--
- .../modules/main/spatial_functions_scalar.cpp | 102 ++++++++++--------
- src/spatial/modules/mvt/mvt_module.cpp        |   8 +-
- src/spatial/modules/osm/osm_module.cpp        |  16 +--
- src/spatial/modules/proj/proj_module.cpp      |  23 ++--
- src/spatial/spatial_types.cpp                 |  14 ++-
- src/spatial/spatial_types.hpp                 |  33 +++---
- 8 files changed, 134 insertions(+), 103 deletions(-)
-
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
-index 4b0a544..91470a6 100644
+index ff2c6cd..4135c83 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
 +++ b/src/spatial/modules/geos/geos_module.cpp
 @@ -229,8 +229,11 @@ struct ST_AsMVTGeom {
@@ -141,7 +125,7 @@ index 8796650..cad93a6 100644
  	auto &point_children = StructVector::GetEntries(point_vector);
  	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 5310f80..1c5031e 100644
+index 2b63e23..b9c0aee 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -439,7 +439,7 @@ struct ST_Area {
@@ -726,6 +710,3 @@ index 9af0cca..ae01922 100644
  };
  
  } // namespace duckdb
--- 
-2.39.5 (Apple Git-154)
-

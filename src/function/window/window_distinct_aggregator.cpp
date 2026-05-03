@@ -125,7 +125,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	sort_types = aggregator.arg_types;
 	sort_types.emplace_back(LogicalType::UBIGINT);
 
-	//	All expressions will be precomputed for sharing, so we jsut need to reference the arguments
+	//	All expressions will be precomputed for sharing, so we just need to reference the arguments
 	vector<BoundOrderByNode> orders;
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());
@@ -261,6 +261,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	auto &sorted_vec = sort_chunk.data.back();
 	auto sorted = FlatVector::GetDataMutable<idx_t>(sorted_vec);
 	std::iota(sorted, sorted + count, input_idx);
+	FlatVector::SetSize(sorted_vec, count_t(count));
 
 	// Our arguments are being fully materialised,
 	// but we also need them as sort keys.
@@ -454,20 +455,20 @@ void WindowDistinctAggregatorLocalState::Sorted() {
 		                   //	10:		prevIdcs[i] ← sorted[i-1].second
 		                   for (idx_t j = 0; j < nmatch; ++j) {
 			                   auto scan_idx = matching.get_index(j);
-			                   auto i = input_idx[scan_idx].GetValue();
-			                   auto second = scan_idx ? input_idx[scan_idx - 1].GetValue() : prev_i;
+			                   auto i = input_idx[scan_idx].GetValueUnsafe();
+			                   auto second = scan_idx ? input_idx[scan_idx - 1].GetValueUnsafe() : prev_i;
 			                   prev_idcs[i] = ZippedTuple(second + 1, i);
 		                   }
 		                   //	11:	else
 		                   //	12:		prevIdcs[i] ← “-”
 		                   for (idx_t j = 0; j < ndistinct; ++j) {
 			                   auto scan_idx = distinct.get_index(j);
-			                   auto i = input_idx[scan_idx].GetValue();
+			                   auto i = input_idx[scan_idx].GetValueUnsafe();
 			                   prev_idcs[i] = ZippedTuple(0, i);
 		                   }
 
 		                   //	Remember the last input_idx of this chunk.
-		                   prev_i = input_idx[count - 1].GetValue();
+		                   prev_i = input_idx[count - 1].GetValueUnsafe();
 	                   });
 
 	//	13:	return prevIdcs
@@ -540,12 +541,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
-	auto updates = FlatVector::Writer<data_ptr_t>(update_v);
+	auto updates = FlatVector::ScatterWriter<data_ptr_t>(update_v);
 
 	auto &source_v = ldastate.source_v;
-	auto sources = FlatVector::Writer<data_ptr_t>(source_v);
+	auto sources = FlatVector::ScatterWriter<data_ptr_t>(source_v);
 	auto &target_v = ldastate.target_v;
-	auto targets = FlatVector::Writer<data_ptr_t>(target_v);
+	auto targets = FlatVector::ScatterWriter<data_ptr_t>(target_v);
 
 	auto &zipped_tree = gdastate.zipped_tree;
 	auto &zipped_level = zipped_tree.tree[level_nr].first;

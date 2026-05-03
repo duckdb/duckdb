@@ -84,11 +84,15 @@ static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_val
 	return LogicalType::STRUCT(std::move(children));
 }
 
-idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+idx_t VariantColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 	if (pending_skips > 0) {
 		throw InternalException("VariantColumnReader cannot have pending skips");
 	}
 	optional_ptr<ColumnReader> typed_value_reader = child_readers.size() == 3 ? child_readers[2].get() : nullptr;
+
+	auto &num_values = input.num_values;
+	auto &define_out = input.define_out;
+	auto &repeat_out = input.repeat_out;
 
 	// If the child reader values are all valid, "define_out" may not be initialized at all
 	// So, we just initialize them to all be valid beforehand
@@ -101,9 +105,11 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 	auto &group_entries = StructVector::GetEntries(intermediate_group);
 	auto &value_intermediate = group_entries[0];
 
-	auto metadata_values =
-	    child_readers[metadata_reader_idx]->Read(num_values, define_out, repeat_out, metadata_intermediate);
-	auto value_values = child_readers[value_reader_idx]->Read(num_values, define_out, repeat_out, value_intermediate);
+	ColumnReaderInput metadata_reader_input(num_values, define_out, repeat_out);
+	auto metadata_values = child_readers[metadata_reader_idx]->Read(metadata_reader_input, metadata_intermediate);
+
+	ColumnReaderInput value_reader_input(num_values, define_out, repeat_out);
+	auto value_values = child_readers[value_reader_idx]->Read(value_reader_input, value_intermediate);
 
 	D_ASSERT(child_readers[metadata_reader_idx]->Schema().name == "metadata");
 	D_ASSERT(child_readers[value_reader_idx]->Schema().name == "value");
@@ -115,14 +121,15 @@ idx_t VariantColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data
 
 	vector<VariantValue> intermediate;
 	if (typed_value_reader) {
-		auto typed_values = typed_value_reader->Read(num_values, define_out, repeat_out, group_entries[1]);
+		ColumnReaderInput child_input(num_values, define_out, repeat_out);
+		auto typed_values = typed_value_reader->Read(child_input, group_entries[1]);
 		if (typed_values != value_values) {
 			throw InvalidInputException(
 			    "The shredded Variant column did not contain the same amount of values for 'typed_value' and 'value'");
 		}
 	}
 	intermediate =
-	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values, false);
+	    VariantShreddedConversion::Convert(metadata_intermediate, intermediate_group, 0, num_values, num_values);
 	VariantValue::ToVARIANT(intermediate, result);
 
 	read_count = value_values;

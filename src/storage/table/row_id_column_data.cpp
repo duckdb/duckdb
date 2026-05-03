@@ -1,4 +1,6 @@
 #include "duckdb/storage/table/row_id_column_data.hpp"
+
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -78,10 +80,14 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	// Generate row ids
 	// Create sequence for row ids
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::Writer<row_t>(result);
+	auto result_data = FlatVector::ScatterWriter<row_t>(result);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
 	}
+	// the writes above scatter into positions sel[0..count) which can be anywhere in [0, max_count),
+	// so the vector's logical size must cover the full max_count - using `count` would leave any
+	// sel index >= count looking out-of-bounds when later slices read through sel
+	FlatVector::SetSize(result, count_t(max_count));
 
 	// Was this filter always true? If so, we dont need to apply it
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -100,7 +106,7 @@ void RowIdColumnData::Select(TransactionData transaction, idx_t vector_index, Co
 	auto result_data = FlatVector::Writer<row_t>(result, count);
 	auto row_start = GetRowStart(state);
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
-		result_data[sel_idx] = UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx));
+		result_data.WriteValue(UnsafeNumericCast<row_t>(row_start + state.offset_in_column + sel.get_index(sel_idx)));
 	}
 	state.offset_in_column += GetVectorCount(vector_index);
 }
@@ -139,12 +145,12 @@ void RowIdColumnData::RevertAppend(row_t new_count) {
 	throw InternalException("RowIdColumnData cannot be appended to");
 }
 
-void RowIdColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void RowIdColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                              Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw InternalException("RowIdColumnData cannot be updated");
 }
 
-void RowIdColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void RowIdColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                    const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                    idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw InternalException("RowIdColumnData cannot be updated");

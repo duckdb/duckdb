@@ -79,27 +79,27 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 	auto old_inputs = UnifiedVectorFormat::GetData<string_t>(old_data);
 	auto new_inputs = UnifiedVectorFormat::GetData<string_t>(new_data);
 
-	auto result_data = FlatVector::Writer<string_t>(result);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto old_idx = old_data.sel->get_index(i);
 		auto new_idx = new_data.sel->get_index(i);
 
 		if (!new_data.validity.RowIsValid(new_idx)) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 
 		auto new_doc = JSONCommon::ReadDocument(new_inputs[new_idx], JSONCommon::READ_FLAG, alc);
 
 		if (!old_data.validity.RowIsValid(old_idx)) {
-			result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_val>(new_doc->root, alc));
+			result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_val>(new_doc->root, alc));
 			continue;
 		}
 
 		auto old_doc = JSONCommon::ReadDocument(old_inputs[old_idx], JSONCommon::READ_FLAG, alc);
 		auto diff = MergePatchDiff(doc, old_doc->root, new_doc->root);
-		result_data[i].AssignWithoutCopying(JSONCommon::WriteVal<yyjson_mut_val>(diff, alc));
+		result_data.WriteStringRef(JSONCommon::WriteVal<yyjson_mut_val>(diff, alc));
 	}
 	JSONAllocator::AddBuffer(result, alc);
 }

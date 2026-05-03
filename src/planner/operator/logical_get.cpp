@@ -10,8 +10,33 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
+
+static void ConvertLegacyTableFilters(LogicalGet &get) {
+	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> converted_filters;
+	for (auto &entry : get.table_filters) {
+		auto filter_idx = entry.GetIndex();
+		auto &filter = entry.Filter();
+		if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
+			continue;
+		}
+		if (filter_idx.GetIndex() >= get.GetColumnIds().size()) {
+			throw SerializationException("LogicalGet::Deserialize - filter index %llu is out of bounds for column ids",
+			                             filter_idx.GetIndex());
+		}
+		auto &column_index = get.GetColumnIds()[filter_idx.GetIndex()];
+		auto &column_type = get.GetColumnType(column_index);
+		converted_filters.emplace_back(filter_idx, ExpressionFilter::FromTableFilter(filter, column_type));
+	}
+	for (auto &entry : converted_filters) {
+		get.table_filters.SetFilterByColumnIndex(entry.first, std::move(entry.second));
+	}
+}
 
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
@@ -381,6 +406,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
+	ConvertLegacyTableFilters(*result);
 	if (row_group_order_options) {
 		result->SetScanOrder(std::move(row_group_order_options));
 	}

@@ -2,9 +2,6 @@
 # description: Test the sha256 function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT sha256('hello'), sha256(NULL)
 ----

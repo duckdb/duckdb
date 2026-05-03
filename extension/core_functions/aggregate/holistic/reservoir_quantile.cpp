@@ -74,13 +74,13 @@ struct ReservoirQuantileBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function) {
+	                      const BoundAggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "sample_size", result->sample_size);
@@ -223,7 +223,7 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		D_ASSERT(finalize_data.input.bind_data);
 		auto &bind_data = finalize_data.input.bind_data->template Cast<ReservoirQuantileBindData>();
 
-		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto &result = ListVector::GetChildMutable(finalize_data.result);
 		auto ridx = ListVector::GetListSize(finalize_data.result);
 		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetDataMutable<CHILD_TYPE>(result);
@@ -332,7 +332,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 
 	if (arguments.size() == 2) {
 		// remove the quantile argument so we can use the unary aggregate
-		if (function.arguments.size() == 2) {
+		if (function.GetArguments().size() == 2) {
 			Function::EraseArgument(function, arguments, arguments.size() - 1);
 		} else {
 			arguments.pop_back();
@@ -353,7 +353,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 	}
 
 	// remove the quantile arguments so we can use the unary aggregate
-	if (function.arguments.size() == arguments.size()) {
+	if (function.GetArguments().size() == arguments.size()) {
 		Function::EraseArgument(function, arguments, arguments.size() - 1);
 		Function::EraseArgument(function, arguments, arguments.size() - 1);
 	} else {
@@ -366,7 +366,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(BindAggregateFunctionInput &input
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	function = GetReservoirQuantileAggregateFunction(arguments[0]->GetReturnType().InternalType());
 	auto bind_data = BindReservoirQuantile(input);
 	function.name = "reservoir_quantile";
 	function.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
@@ -380,7 +380,7 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.SetSerializeCallback(ReservoirQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.emplace_back(LogicalType::DOUBLE);
+	fun.GetArguments().emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -391,7 +391,7 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-	fun.arguments.push_back(list_of_double);
+	fun.GetArguments().push_back(list_of_double);
 	return fun;
 }
 
@@ -400,14 +400,14 @@ void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType &type)
 	auto fun = GetReservoirQuantileAggregate(type.InternalType());
 	set.AddFunction(fun);
 
-	fun.arguments.emplace_back(LogicalType::INTEGER);
+	fun.GetArguments().emplace_back(LogicalType::INTEGER);
 	set.AddFunction(fun);
 
 	// List variants
 	fun = GetReservoirQuantileListAggregate(type);
 	set.AddFunction(fun);
 
-	fun.arguments.emplace_back(LogicalType::INTEGER);
+	fun.GetArguments().emplace_back(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 
@@ -419,7 +419,7 @@ void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector
 	fun.SetDeserializeCallback(ReservoirQuantileBindData::Deserialize);
 	set.AddFunction(fun);
 
-	fun.arguments.emplace_back(LogicalType::INTEGER);
+	fun.GetArguments().emplace_back(LogicalType::INTEGER);
 	set.AddFunction(fun);
 }
 

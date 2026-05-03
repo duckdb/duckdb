@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -19,7 +20,7 @@ constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
+                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p,
                                      const string &path_p, idx_t scan_id, bool &used_unstrictness)
@@ -29,7 +30,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
-      error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
+      error_handler(error_handler_p), iterator(iterator_p), store_line_size(store_line_size_p),
       csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p), used_unstrictness(used_unstrictness),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(path_p) {
 	// Vector information
@@ -106,7 +107,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 	parse_chunk.Initialize(buffer_allocator, logical_types, result_size);
 	for (auto &col : parse_chunk.data) {
 		vector_ptr.push_back(FlatVector::GetDataMutable(col));
-		validity_mask.push_back(&FlatVector::Validity(col));
+		validity_mask.push_back(&FlatVector::ValidityMutable(col));
 	}
 
 	// Setup the NullStr information
@@ -834,7 +835,16 @@ bool StringValueResult::AddRowInternal() {
 		}
 	}
 
+	const auto chunk_col_id_before = chunk_col_id;
 	if (current_errors.HandleErrors(*this)) {
+		// Before we add row, invalid all columns that are not populated for this row (i.e., CSV rows have fewer fields
+		// than expected). Otherwise, uninitialized string_t with valid bits set would lead invalid memory access.
+		if (borked_rows.find(static_cast<idx_t>(number_of_rows)) != borked_rows.end()) {
+			for (idx_t cur_col_idx = chunk_col_id_before; cur_col_idx < validity_mask.size(); ++cur_col_idx) {
+				validity_mask[cur_col_idx]->SetInvalid(static_cast<idx_t>(number_of_rows));
+			}
+		}
+
 		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
 		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
@@ -915,7 +925,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
 			if (result.escaped) {
 				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
@@ -1179,6 +1189,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
 		}
+		insert_chunk.SetChildCardinality(insert_chunk.size());
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
 			if (iterator.IsBoundarySet()) {
@@ -1512,7 +1523,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 				if (result.cur_col_id >= result.number_of_columns &&
 				    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
 					result.used_unstrictness = true;
-				} else {
+				} else if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					if (result.parse_chunk.data[result.chunk_col_id].GetType() != LogicalType::VARCHAR) {
 						// We cant have escapes on non varchar columns
 						result.current_errors.Insert(CAST_ERROR, result.cur_col_id, result.chunk_col_id,
@@ -1530,14 +1541,12 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
-					if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-						value = RemoveEscape(
-						    over_buffer_string.c_str(), over_buffer_string.size(),
-						    state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						    state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-						    result.parse_chunk.data[result.chunk_col_id]);
-					}
+					value =
+					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}

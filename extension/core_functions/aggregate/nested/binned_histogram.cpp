@@ -52,7 +52,7 @@ struct HistogramBinState {
 		}
 		auto bin_list = bin_entry.GetValue();
 
-		auto &bin_child = ListVector::GetEntry(bin_vector);
+		auto &bin_child = ListVector::GetChildMutable(bin_vector);
 		auto bin_count = ListVector::GetListSize(bin_vector);
 		UnifiedVectorFormat bin_child_data;
 		auto extra_state = OP::CreateExtraState(bin_count);
@@ -258,12 +258,25 @@ Value OtherBucketValue(const LogicalType &type) {
 void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_type = args.data[0].GetType();
 	if (!SupportsOtherBucket(input_type)) {
-		result.Reference(Value::BOOLEAN(false));
+		result.Reference(Value::BOOLEAN(false), count_t(args.size()));
 		return;
 	}
 	auto v = OtherBucketValue(input_type);
-	Vector ref(v);
+	Vector ref(v, count_t(args.size()));
 	VectorOperations::NotDistinctFrom(args.data[0], ref, result, args.size());
+
+	// Set NULL if input is NULL.
+	UnifiedVectorFormat input_data;
+	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	if (!input_data.validity.CannotHaveNull()) {
+		auto &result_validity = FlatVector::ValidityMutable(result);
+		for (idx_t idx = 0; idx < args.size(); ++idx) {
+			auto input_idx = input_data.sel->get_index(idx);
+			if (!input_data.validity.RowIsValid(input_idx)) {
+				result_validity.SetInvalid(idx);
+			}
+		}
+	}
 }
 
 template <class OP, class T>
@@ -271,7 +284,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
                                   idx_t offset) {
 	auto states = state_vector.Values<HistogramBinState<T> *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	bool supports_other_bucket = SupportsOtherBucket(MapType::KeyType(result.GetType()));
@@ -380,12 +393,12 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 
-	function = GetHistogramBinFunction<HIST>(arguments[0]->return_type);
+	function = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
 	return nullptr;
 }
 

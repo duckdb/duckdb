@@ -169,7 +169,7 @@ struct ModeState {
 			D_ASSERT(inputs);
 			inputs->Seek(row_idx, *scan, page);
 			data = FlatVector::GetData<KEY_TYPE>(page.data[0]);
-			validity = &FlatVector::Validity(page.data[0]);
+			validity = &FlatVector::ValidityMutable(page.data[0]);
 		}
 		return RowOffset(row_idx);
 	}
@@ -373,7 +373,7 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		auto &rmask = FlatVector::Validity(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 		auto &prevs = state.prevs;
 		if (prevs.empty()) {
 			prevs.resize(1);
@@ -503,7 +503,7 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetModeAggregate(arguments[0]->return_type);
+	function = GetModeAggregate(arguments[0]->GetReturnType());
 	function.name = "mode";
 	return nullptr;
 }
@@ -605,7 +605,7 @@ AggregateFunction GetEntropyFunction(const LogicalType &type) {
 unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetEntropyFunction(arguments[0]->return_type);
+	function = GetEntropyFunction(arguments[0]->GetReturnType());
 	function.name = "entropy";
 	return nullptr;
 }

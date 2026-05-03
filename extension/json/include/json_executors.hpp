@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -17,7 +18,7 @@
 namespace duckdb {
 
 template <class T>
-using json_function_t = std::function<T(yyjson_val *, yyjson_alc *, Vector &, ValidityMask &, idx_t)>;
+using json_function_t = std::function<optional<T>(yyjson_val *, yyjson_alc *, Vector &)>;
 
 struct JSONExecutors {
 public:
@@ -28,11 +29,10 @@ public:
 		auto alc = lstate.json_allocator->GetYYAlc();
 
 		auto &inputs = args.data[0];
-		UnaryExecutor::ExecuteWithNulls<string_t, T>(
-		    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-			    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-			    return fun(doc->root, alc, result, mask, idx);
-		    });
+		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+			auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+			return fun(doc->root, alc, result);
+		});
 
 		JSONAllocator::AddBuffer(result, alc);
 	}
@@ -50,17 +50,15 @@ public:
 			const char *ptr = info.ptr;
 			const idx_t &len = info.len;
 			if (info.path_type == JSONCommon::JSONPathType::REGULAR) {
-				UnaryExecutor::ExecuteWithNulls<string_t, T>(
-				    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-					    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
-					    auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
-					    if (SET_NULL_IF_NOT_FOUND && !val) {
-						    mask.SetInvalid(idx);
-						    return T {};
-					    } else {
-						    return fun(val, alc, result, mask, idx);
-					    }
-				    });
+				UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) -> optional<T> {
+					auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
+					auto val = JSONCommon::GetUnsafe(doc->root, ptr, len);
+					if (SET_NULL_IF_NOT_FOUND && !val) {
+						return nullopt;
+					} else {
+						return fun(val, alc, result);
+					}
+				});
 			} else {
 				D_ASSERT(info.path_type == JSONCommon::JSONPathType::WILDCARD);
 				vector<yyjson_val *> vals;
@@ -76,13 +74,18 @@ public:
 						ListVector::Reserve(result, new_size);
 					}
 
-					auto &child_entry = ListVector::GetEntry(result);
+					auto &child_entry = ListVector::GetChildMutable(result);
 					auto child_vals = FlatVector::GetDataMutable<T>(child_entry);
-					auto &child_validity = FlatVector::Validity(child_entry);
+					auto &child_validity = FlatVector::ValidityMutable(child_entry);
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
 						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
-						child_vals[current_size + i] = fun(val, alc, result, child_validity, current_size + i);
+						auto fun_result = fun(val, alc, result);
+						if (fun_result.has_value()) {
+							child_vals[current_size + i] = fun_result.value();
+						} else {
+							child_validity.SetInvalid(current_size + i);
+						}
 					}
 
 					ListVector::SetListSize(result, new_size);
@@ -99,16 +102,14 @@ public:
 				casted_paths = make_uniq<Vector>(LogicalTypeId::VARCHAR);
 				VectorOperations::DefaultCast(args.data[1], *casted_paths, args.size(), true);
 			}
-			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
-			    inputs, *casted_paths, result, args.size(),
-			    [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
+			BinaryExecutor::Execute<string_t, string_t, T>(
+			    inputs, *casted_paths, result, args.size(), [&](string_t input, string_t path) -> optional<T> {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, alc);
 				    auto val = JSONCommon::Get(doc->root, path, args.data[1].GetType().IsIntegral());
 				    if (SET_NULL_IF_NOT_FOUND && !val) {
-					    mask.SetInvalid(idx);
-					    return T {};
+					    return nullopt;
 				    } else {
-					    return fun(val, alc, result, mask, idx);
+					    return fun(val, alc, result);
 				    }
 			    });
 		}
@@ -135,11 +136,11 @@ public:
 
 		ListVector::Reserve(result, list_size);
 		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(result);
-		auto &list_validity = FlatVector::Validity(result);
+		auto &list_validity = FlatVector::ValidityMutable(result);
 
-		auto &child = ListVector::GetEntry(result);
+		auto &child = ListVector::GetChildMutable(result);
 		auto child_data = FlatVector::GetDataMutable<T>(child);
-		auto &child_validity = FlatVector::Validity(child);
+		auto &child_validity = FlatVector::ValidityMutable(child);
 
 		idx_t offset = 0;
 		yyjson_val *val;
@@ -157,7 +158,12 @@ public:
 				if (SET_NULL_IF_NOT_FOUND && !val) {
 					child_validity.SetInvalid(child_idx);
 				} else {
-					child_data[child_idx] = fun(val, alc, child, child_validity, child_idx);
+					auto fun_result = fun(val, alc, child);
+					if (fun_result.has_value()) {
+						child_data[child_idx] = fun_result.value();
+					} else {
+						child_validity.SetInvalid(child_idx);
+					}
 				}
 			}
 

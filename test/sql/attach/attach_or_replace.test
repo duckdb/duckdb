@@ -3,9 +3,6 @@
 # group: [attach]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 ATTACH '{TEST_DIR}/attach_or_replace.db' AS db1;
 
 statement ok

@@ -33,7 +33,7 @@ OperatorResultType VerifyEmitConstantVectors(const DataChunk &input, DataChunk &
 
 	// emit constant vectors at the current index
 	for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
-		ConstantVector::Reference(chunk.data[c], copied_input.data[c], state.const_idx, 1);
+		ConstantVector::Reference(chunk.data[c], count_t(1), copied_input.data[c], state.const_idx, 1);
 	}
 	chunk.SetCardinality(1);
 	state.const_idx++;
@@ -194,7 +194,7 @@ OperatorResultType VerifyEmitSequenceVector(const DataChunk &input_p, DataChunk 
 			chunk.data[c].Slice(input.data[c], sel, max_length);
 		} else if (info.is_constant) {
 			// constant vector
-			chunk.data[c].Reference(info.values[0]);
+			chunk.data[c].Reference(info.values[0], count_t(max_length));
 		} else {
 			// sequence vector
 			int64_t start = info.values[0].GetValue<int64_t>();

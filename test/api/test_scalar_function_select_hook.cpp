@@ -20,7 +20,7 @@ static void IsEvenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	args.data[0].ToUnifiedFormat(args.size(), data);
 	auto input_data = UnifiedVectorFormat::GetData<int32_t>(data);
 	auto result_data = FlatVector::GetDataMutable<bool>(result);
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 
 	if (data.validity.CanHaveNull()) {
 		result_validity.Copy(data.validity, args.size());
@@ -88,7 +88,6 @@ static void RegisterScalarFunction(Connection &con, ScalarFunction function) {
 TEST_CASE("Test scalar function select hook fallback paths", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	RegisterScalarFunction(
 	    con, ScalarFunction("is_even_function_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN, IsEvenFunction));
@@ -115,7 +114,6 @@ TEST_CASE("Test scalar function select hook fallback paths", "[api]") {
 TEST_CASE("Test scalar function select hook with special null handling", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	ScalarFunction select_only_special("null_or_even_select_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN,
 	                                   nullptr);

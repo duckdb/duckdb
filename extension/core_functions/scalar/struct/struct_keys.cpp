@@ -16,19 +16,16 @@ struct StructKeysBindData : public FunctionData {
 		const auto count = child_types.size();
 
 		ListVector::Reserve(keys_vector, count);
-		auto &list_child = ListVector::GetEntry(keys_vector);
+		auto &list_child = ListVector::GetChildMutable(keys_vector);
 		auto child_data = FlatVector::Writer<string_t>(list_child, count);
 		for (idx_t i = 0; i < count; i++) {
-			child_data[i] = child_types[i].first;
+			child_data.WriteValue(string_t(child_types[i].first));
 		}
 		ListVector::SetListSize(keys_vector, count);
 
-		auto list_entries = FlatVector::GetDataMutable<list_entry_t>(keys_vector);
-		list_entries[0] = {0, count};
-
-		auto &validity = FlatVector::Validity(keys_vector);
-		validity.EnsureWritable();
-		validity.SetInvalid(1);
+		auto list_entries = FlatVector::Writer<list_entry_t>(keys_vector, 2);
+		list_entries.WriteValue(list_entry_t(0, count));
+		list_entries.WriteNull();
 	}
 
 	bool Equals(const FunctionData &other) const override {
@@ -51,11 +48,7 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// If the input is a constant, we must return a CONSTANT_VECTOR
 	if (args.AllConstant()) {
-		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
-			return;
-		}
-		ConstantVector::Reference(result, keys_vector, 0, count);
+		ConstantVector::Reference(result, count_t(count), keys_vector, 0, 1);
 		return;
 	}
 
@@ -72,16 +65,16 @@ static void StructKeysFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructKeysBind(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
-	auto return_type = arguments[0]->return_type;
+	auto return_type = arguments[0]->GetReturnType();
 	if (return_type.id() != LogicalTypeId::STRUCT && !return_type.IsAggregateStateStructType()) {
 		throw InvalidInputException("struct_keys() expects a STRUCT argument");
 	}
 
-	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->return_type);
+	const bool is_unnamed = StructType::IsUnnamed(arguments[0]->GetReturnType());
 	if (is_unnamed) {
 		throw InvalidInputException("struct_keys() cannot be applied to an unnamed STRUCT");
 	}
-	return make_uniq<StructKeysBindData>(arguments[0]->return_type);
+	return make_uniq<StructKeysBindData>(arguments[0]->GetReturnType());
 }
 
 ScalarFunction StructKeysFun::GetFunction() {

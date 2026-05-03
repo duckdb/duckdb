@@ -24,25 +24,25 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 	target.ToUnifiedFormat(count, target_format);
 	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
 
-	vector<const T *> member_datas;
+	vector<const T *> member_data_ptrs;
 	vector<UnifiedVectorFormat> member_vectors;
 	idx_t total_matches = 0;
 	for (auto &member : members) {
 		if (member.GetType().InternalType() == target_type.InternalType()) {
 			UnifiedVectorFormat member_format;
 			member.ToUnifiedFormat(count, member_format);
-			member_datas.push_back(UnifiedVectorFormat::GetData<T>(member_format));
+			member_data_ptrs.push_back(UnifiedVectorFormat::GetData<T>(member_format));
 			member_vectors.push_back(std::move(member_format));
 			total_matches++;
 		} else {
-			member_datas.push_back(nullptr);
+			member_data_ptrs.push_back(nullptr);
 			member_vectors.push_back(UnifiedVectorFormat());
 		}
 	}
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 
@@ -52,7 +52,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		const auto &member_row_idx = vector_format.sel->get_index(row);
 
 		if (!vector_format.validity.RowIsValid(member_row_idx)) {
-			result_data.SetInvalid(row);
+			result_data.WriteNull();
 			continue;
 		}
 
@@ -64,18 +64,19 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 		// We did not find the target (finished, or struct is empty).
 		if (finished) {
 			if (!target_valid || return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
 			continue;
 		}
 
 		bool found = false;
+		RETURN_TYPE found_value {};
 
 		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
-			auto &member_data = member_datas[member_idx];
-			if (!member_data) {
+			auto &member_data_ptr = member_data_ptrs[member_idx];
+			if (!member_data_ptr) {
 				continue; // skip if member data is not compatible with the target type
 			}
 			const auto &member_vector = member_vectors[member_idx];
@@ -83,25 +84,28 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 			const auto col_valid = member_vector.validity.RowIsValid(member_data_idx);
 
 			auto is_null = FIND_NULLS && !col_valid && !target_valid;
-			auto both_valid_and_match = col_valid && target_valid &&
-			                            Equals::Operation<T>(member_data[member_data_idx], target_data[target_row_idx]);
+			auto both_valid_and_match =
+			    col_valid && target_valid &&
+			    Equals::Operation<T>(member_data_ptr[member_data_idx], target_data[target_row_idx]);
 
 			if (is_null || both_valid_and_match) {
 				found = true;
 				if (return_pos) {
-					result_data[row] = UnsafeNumericCast<int32_t>(member_idx + 1);
+					found_value = UnsafeNumericCast<int32_t>(member_idx + 1);
 				} else {
-					result_data[row] = true;
+					found_value = RETURN_TYPE(true);
 				}
 			}
 		}
 
 		if (!found) {
 			if (return_pos) {
-				result_data.SetInvalid(row);
+				result_data.WriteNull();
 			} else {
-				result_data[row] = false;
+				result_data.WriteValue(RETURN_TYPE(false));
 			}
+		} else {
+			result_data.WriteValue(found_value);
 		}
 	}
 }
@@ -175,7 +179,7 @@ static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 
@@ -191,30 +195,30 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
-	auto &child_type = arguments[0]->return_type;
+	D_ASSERT(bound_function.GetArguments().size() == 2);
+	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
-		bound_function.arguments[1] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
+		bound_function.GetArguments()[1] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
 		return nullptr;
 	}
 
-	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		throw InternalException("Can't check for containment in an empty struct");
 	}
 	if (!StructType::IsUnnamed(child_type)) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.name);
 	}
-	bound_function.arguments[0] = child_type;
+	bound_function.GetArguments()[0] = child_type;
 
 	// the value type must match one of the struct's children
-	LogicalType max_child_type = arguments[1]->return_type;
+	LogicalType max_child_type = arguments[1]->GetReturnType();
 	vector<LogicalType> new_child_types;
 	for (auto &child : struct_children) {
 		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {
@@ -223,7 +227,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		}
 
 		new_child_types.push_back(max_child_type);
-		bound_function.arguments[1] = max_child_type;
+		bound_function.GetArguments()[1] = max_child_type;
 	}
 
 	child_list_t<LogicalType> cast_children;
@@ -231,7 +235,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		cast_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
 	}
 
-	bound_function.arguments[0] = LogicalType::STRUCT(cast_children);
+	bound_function.GetArguments()[0] = LogicalType::STRUCT(cast_children);
 
 	return nullptr;
 }

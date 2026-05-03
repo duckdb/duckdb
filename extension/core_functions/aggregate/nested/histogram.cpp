@@ -94,7 +94,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 
 	auto states = state_vector.Values<HIST_STATE *>(count);
 
-	auto &mask = FlatVector::Validity(result);
+	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
 	idx_t new_entries = 0;
 	// figure out how much space we need
@@ -210,10 +210,10 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
+	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType());
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

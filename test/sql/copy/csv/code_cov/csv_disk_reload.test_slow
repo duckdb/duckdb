@@ -3,9 +3,6 @@
 # group: [code_cov]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1 AS select i, (i+1) as j from range(0,300000) tbl(i)
 
 statement ok

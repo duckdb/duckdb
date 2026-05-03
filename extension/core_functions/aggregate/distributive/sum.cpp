@@ -96,8 +96,8 @@ LogicalType GetSumStateType(const AggregateFunction &function) {
 
 	LogicalType value_type = GetValueLogicalType<T>();
 	// Use the return type when its physical representation matches the state type
-	if (function.return_type.InternalType() == value_type.InternalType()) {
-		value_type = function.return_type;
+	if (function.GetReturnType().InternalType() == value_type.InternalType()) {
+		value_type = function.GetReturnType();
 	}
 	child_types.emplace_back("value", value_type);
 
@@ -109,11 +109,11 @@ unique_ptr<FunctionData> SumNoOverflowBind(BindAggregateFunctionInput &input) {
 }
 
 void SumNoOverflowSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                            const AggregateFunction &function) {
+                            const BoundAggregateFunction &function) {
 	return;
 }
 
-unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+unique_ptr<FunctionData> SumNoOverflowDeserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 	function.SetReturnType(deserializer.Get<const LogicalType &>());
 	return nullptr;
 }
@@ -234,10 +234,10 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->return_type;
+	auto decimal_type = arguments[0]->GetReturnType();
 	function = GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
-	function.arguments[0] = decimal_type;
+	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type)));
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return nullptr;
@@ -278,12 +278,10 @@ struct BignumOperation {
 			return;
 		}
 		if (!target.is_set) {
-			target.value = source.value;
+			target.value.Initialize(input.allocator);
 			target.is_set = true;
-			return;
 		}
 		target.value.AddInPlace(input.allocator, source.value);
-		target.is_set = true;
 	}
 
 	template <class TARGET_TYPE, class STATE>

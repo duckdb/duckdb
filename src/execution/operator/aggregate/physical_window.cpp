@@ -5,10 +5,7 @@
 #include "duckdb/common/types/row/tuple_data_iterator.hpp"
 #include "duckdb/function/window/window_aggregate_function.hpp"
 #include "duckdb/function/window/window_executor.hpp"
-#include "duckdb/function/window/window_rank_function.hpp"
-#include "duckdb/function/window/window_rownumber_function.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
-#include "duckdb/function/window/window_value_function.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
@@ -27,8 +24,6 @@ struct WindowSourceTask {
 	idx_t group_idx = 0;
 	//! The thread index (for local state)
 	idx_t thread_idx = 0;
-	//! The total block index count
-	idx_t max_idx = 0;
 	//! The first block index count
 	idx_t begin_idx = 0;
 	//! The end block index count
@@ -108,7 +103,10 @@ public:
 			}
 			return false;
 		case WindowGroupStage::SINK:
-			if (sunk == count) {
+			// Gate on blocks (not rows): every SINK task must have completed before FINALIZE
+			// can run, otherwise a FINALIZE task can read a thread_states[thread_idx] entry
+			// that the matching SINK task hasn't initialised yet.
+			if (sunk == blocks) {
 				stage = WindowGroupStage::FINALIZE;
 				return true;
 			}
@@ -140,8 +138,7 @@ public:
 			task.thread_idx = next_task % group_threads;
 			task.group_idx = hash_bin;
 			task.begin_idx = task.thread_idx * per_thread;
-			task.max_idx = ChunkCount();
-			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
+			task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, ChunkCount());
 			++next_task;
 			return true;
 		}
@@ -163,7 +160,7 @@ public:
 	OrderMasks order_masks;
 	//! The fully materialised data collection
 	unique_ptr<WindowCollection> collection;
-	// The processing stage for this group
+	//! The processing stage for this group
 	atomic<WindowGroupStage> stage;
 	//! The function global states for this hash group
 	ExecutorGlobalStates gestates;
@@ -181,17 +178,17 @@ public:
 	//! The next task to process
 	idx_t next_task = 0;
 	//! Count of sorted run blocks
-	std::atomic<idx_t> sorted;
+	atomic<idx_t> sorted;
 	//! Count of materialized run blocks
-	std::atomic<idx_t> materialized;
+	atomic<idx_t> materialized;
 	//! Count of masked blocks
-	std::atomic<idx_t> masked;
-	//! Count of sunk rows
-	std::atomic<idx_t> sunk;
+	atomic<idx_t> masked;
+	//! Count of sunk blocks (one per completed SINK task block, not per row)
+	atomic<idx_t> sunk;
 	//! Count of finalized blocks
-	std::atomic<idx_t> finalized;
+	atomic<idx_t> finalized;
 	//! Count of completed tasks
-	std::atomic<idx_t> completed;
+	atomic<idx_t> completed;
 	//! The output ordering batch index this hash group starts at
 	idx_t batch_base;
 };
@@ -260,34 +257,13 @@ PhysicalWindow::PhysicalWindow(PhysicalPlan &physical_plan, vector<LogicalType> 
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &client,
                                                         WindowSharedExpressions &shared) {
-	switch (wexpr.GetExpressionType()) {
-	case ExpressionType::WINDOW_AGGREGATE:
+	if (wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		return make_uniq<WindowAggregateExecutor>(wexpr, client, shared);
-	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_LEAD:
-	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_FILL:
-		return make_uniq<WindowFillExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, shared);
-	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, shared);
-	default:
-		throw InternalException("Window expression type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
+	} else {
+		if (!wexpr.window.get()) {
+			throw InternalException("Window expression type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
+		}
+		return make_uniq<WindowExecutor>(wexpr, shared);
 	}
 }
 
@@ -490,7 +466,7 @@ WindowHashGroup::WindowHashGroup(WindowGlobalSinkState &gsink, const ChunkRow &c
 	const auto &shared = WindowSharedExpressions::GetSortedExpressions(gsink.shared.coll_shared);
 	vector<LogicalType> types;
 	for (auto &expr : shared) {
-		types.emplace_back(expr->return_type);
+		types.emplace_back(expr->GetReturnType());
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(gsink.client);
 	collection = make_uniq<WindowCollection>(buffer_manager, count, types);
@@ -789,9 +765,14 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 		}
 	}
 
+	//	The block range owned by this task. Counted whole so that the SINK -> FINALIZE
+	//	transition waits for every SINK task to run, even ones whose blocks contain no rows.
+	const idx_t task_blocks = task->end_idx - task->begin_idx;
+
 	//	First pass over the input without flushing
 	scanner = window_hash_group->GetScanner(task->begin_idx);
 	if (!scanner) {
+		window_hash_group->sunk += task_blocks;
 		return;
 	}
 	for (; task->begin_idx < task->end_idx; ++task->begin_idx) {
@@ -827,10 +808,9 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 			OperatorSinkInput sink {*gestates[w], *local_states[w], interrupt};
 			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 		}
-
-		window_hash_group->sunk += input_chunk.size();
 	}
 	scanner.reset();
+	window_hash_group->sunk += task_blocks;
 }
 
 void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState &interrupt) {
@@ -867,7 +847,7 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 	vector<LogicalType> output_types;
 	for (auto &wexec : gsink.executors) {
 		auto &wexpr = wexec->wexpr;
-		output_types.emplace_back(wexpr.return_type);
+		output_types.emplace_back(wexpr.GetReturnType());
 	}
 	output_chunk.Initialize(gsource.client, output_types);
 

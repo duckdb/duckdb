@@ -17,14 +17,17 @@
 #include "duckdb/common/exception/parser_exception.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 
-namespace duckdb_libpgquery {
-struct PGNode;
-struct PGList;
-} // namespace duckdb_libpgquery
-
 namespace duckdb {
 
+struct ParserCache;
 class GroupByNode;
+struct UnicodeSpace {
+	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
+	}
+
+	idx_t pos;
+	idx_t bytes;
+};
 
 //! The parser is responsible for parsing the query and converting it into a set
 //! of parsed statements. The parsed statements can then be converted into a
@@ -32,6 +35,7 @@ class GroupByNode;
 class Parser {
 public:
 	explicit Parser(ParserOptions options = ParserOptions());
+	~Parser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;
@@ -53,7 +57,8 @@ public:
 	static KeywordCategory IsKeyword(const string &text);
 	//! Returns a list of all keywords in the parser
 	static vector<ParserKeyword> KeywordList();
-
+	// Returns the Keyword category
+	static KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
 	                                                                           ParserOptions options = ParserOptions());
@@ -75,10 +80,12 @@ public:
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
-	unique_ptr<SQLStatement> GetStatement(const string &query);
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
+	ParserCache &GetCache();
+
 	ParserOptions options;
+	unique_ptr<ParserCache> local_cache;
 };
 } // namespace duckdb

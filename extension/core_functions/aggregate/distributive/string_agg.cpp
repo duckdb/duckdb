@@ -124,7 +124,7 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 	D_ASSERT(arguments.size() == 2);
 	// Check if any argument is of UNKNOWN type (parameter not yet bound)
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
@@ -146,12 +146,12 @@ unique_ptr<FunctionData> StringAggBind(BindAggregateFunctionInput &input) {
 }
 
 void StringAggSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                        const AggregateFunction &function) {
+                        const BoundAggregateFunction &function) {
 	auto bind_data = bind_data_p->Cast<StringAggBindData>();
 	serializer.WriteProperty(100, "separator", bind_data.sep);
 }
 
-unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, AggregateFunction &bound_function) {
+unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, BoundAggregateFunction &bound_function) {
 	auto sep = deserializer.ReadProperty<string>(100, "separator");
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
@@ -171,7 +171,7 @@ AggregateFunctionSet StringAggFun::GetFunctions() {
 	string_agg_param.SetSerializeCallback(StringAggSerialize);
 	string_agg_param.SetDeserializeCallback(StringAggDeserialize);
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
+	string_agg_param.GetArguments().emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	return string_agg;
 }

@@ -42,7 +42,7 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 }
 
 template <typename It, typename End>
-void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, End end,
+void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, const End &end,
                   vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
                   const OrderByColumnType column_type, const OrderByStatistics stat_type) {
 	const auto opposite_stat_type =
@@ -93,7 +93,7 @@ void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It i
 }
 
 template <typename It, typename End>
-It SkipOffsetPrunedRowGroups(It it, End end, idx_t row_group_offset) {
+It SkipOffsetPrunedRowGroups(It it, const End &end, idx_t row_group_offset) {
 	while (row_group_offset > 0 && it != end) {
 		++it;
 		row_group_offset--;
@@ -102,7 +102,7 @@ It SkipOffsetPrunedRowGroups(It it, End end, idx_t row_group_offset) {
 }
 
 template <typename It, typename End>
-void InsertAllRowGroups(It it, End end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
+void InsertAllRowGroups(It it, const End &end, vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups) {
 	for (; it != end; ++it) {
 		ordered_row_groups.push_back(it->second.row_group);
 	}
@@ -145,7 +145,7 @@ void AppendRowGroups(const vector<reference<SegmentNode<RowGroup>>> &source, idx
 }
 
 template <typename It, typename End>
-OffsetPruningResult FindOffsetPrunableChunks(It it, End end, const OrderByStatistics order_by,
+OffsetPruningResult FindOffsetPrunableChunks(It it, const End &end, const OrderByStatistics order_by,
                                              const OrderByColumnType column_type, const idx_t row_offset) {
 	if (it == end) {
 		return {row_offset, 0, 0};
@@ -233,9 +233,9 @@ Value RowGroupReorderer::RetrieveStat(const BaseStatistics &stats, OrderByStatis
 		}
 		switch (order_by) {
 		case OrderByStatistics::MIN:
-			return StringStats::Min(stats);
+			return Value::BLOB_RAW(StringStats::Min(stats));
 		case OrderByStatistics::MAX:
-			return StringStats::Max(stats);
+			return Value::BLOB_RAW(StringStats::Max(stats));
 		default:
 			throw InternalException("Unsupported OrderByStatistics for string");
 		}

@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl1 (str VARCHAR, str_list VARCHAR[]);
 
 statement ok

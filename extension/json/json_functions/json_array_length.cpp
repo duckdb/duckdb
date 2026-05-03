@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static inline uint64_t GetArrayLength(yyjson_val *val, yyjson_alc *, Vector &, ValidityMask &, idx_t) {
+static inline optional<uint64_t> GetArrayLength(yyjson_val *val, yyjson_alc *, Vector &) {
 	return yyjson_arr_size(val);
 }
 
@@ -32,6 +32,12 @@ ScalarFunctionSet JSONFunctions::GetArrayLengthFunction() {
 	ScalarFunctionSet set("json_array_length");
 	GetArrayLengthFunctionsInternal(set, LogicalType::VARCHAR);
 	GetArrayLengthFunctionsInternal(set, LogicalType::JSON());
+	for (auto &func : set.functions) {
+		if (func.GetArguments().size() == 1 && func.GetArguments()[0].IsJSONType()) {
+			continue;
+		}
+		func.SetFallible();
+	}
 	return set;
 }
 

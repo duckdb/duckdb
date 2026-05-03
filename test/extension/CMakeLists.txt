@@ -25,8 +25,8 @@ if(NOT WIN32 AND NOT SUN)
     set(TEST_EXT_OBJECTS test_remote_optimizer.cpp)
 
     add_library_unity(test_extensions OBJECT ${TEST_EXT_OBJECTS})
-    set(ALL_OBJECT_FILES
-        ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_extensions>
+    set(UNITTEST_OBJECT_FILES
+        ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_extensions>
         PARENT_SCOPE)
   endif()
 endif()

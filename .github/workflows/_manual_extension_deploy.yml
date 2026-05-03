@@ -115,7 +115,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         name: Download extensions
         with:
           pattern: extensions-${{ inputs.duckdb_ref }}*
@@ -162,7 +162,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: extension-repository-${{ inputs.duckdb_ref }}
           path: /tmp
@@ -181,5 +181,5 @@ jobs:
           DUCKDB_DEPLOY_SCRIPT_MODE: for_real
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         run: |
-          python3 scripts/ci/retry.py -- pip install awscli
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
           make upload-extensions EXTENSION_REPOSITORY_PATH=/tmp/extension-repository-${{ inputs.duckdb_ref }} EXTENSION_BUCKET=duckdb-staging

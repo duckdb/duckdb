@@ -35,7 +35,7 @@ SELECT v FROM tbl WHERE i=42;
 {'a': 42, 'b': 2}
 
 statement ok
-pragma verify_fetch_row;
+SET debug_force_fetch_row=true;
 
 query I
 select v from tbl WHERE i < 10

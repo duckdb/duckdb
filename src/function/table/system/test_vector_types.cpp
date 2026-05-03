@@ -130,8 +130,9 @@ struct TestVectorFlat {
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.Rows() - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				for (idx_t i = 0; i < cardinality; i++) {
-					result->data[c].SetValue(i, result_values.GetValue(cur_row + i, c));
+					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
+				FlatVector::SetSize(result->data[c], count_t(cardinality));
 			}
 			result->SetCardinality(cardinality);
 			info.entries.push_back(std::move(result));
@@ -147,8 +148,7 @@ struct TestVectorConstant {
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
-				result->data[c].SetValue(0, values.GetValue(0, c));
-				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
+				result->data[c].Reference(values.GetValue(0, c), count_t(cardinality));
 			}
 			result->SetCardinality(cardinality);
 
@@ -187,15 +187,12 @@ struct TestVectorSequence {
 		}
 		case PhysicalType::LIST: {
 			D_ASSERT(type.id() != LogicalTypeId::MAP);
-			auto data = FlatVector::GetDataMutable<list_entry_t>(result);
-			data[0].offset = 0;
-			data[0].length = 2;
-			data[1].offset = 2;
-			data[1].length = 0;
-			data[2].offset = 2;
-			data[2].length = 1;
+			auto data = FlatVector::Writer<list_entry_t>(result, 3);
+			data.WriteValue(list_entry_t(0, 2));
+			data.WriteValue(list_entry_t(2, 0));
+			data.WriteValue(list_entry_t(2, 1));
 
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
+			GenerateVector(info, ListType::GetChildType(type), ListVector::GetChildMutable(result));
 			ListVector::SetListSize(result, 3);
 			break;
 		}
@@ -204,9 +201,9 @@ struct TestVectorSequence {
 			if (entry == info.test_type_map.end()) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
-			result.SetValue(0, entry->second.min_value);
-			result.SetValue(1, entry->second.max_value);
-			result.SetValue(2, Value(type));
+			result.Append(entry->second.min_value);
+			result.Append(entry->second.max_value);
+			result.Append(Value(type));
 			break;
 		}
 		}
@@ -225,6 +222,7 @@ struct TestVectorSequence {
 				return;
 			}
 			GenerateVector(info, info.types[c], result->data[c]);
+			FlatVector::SetSize(result->data[c], count_t(SEQ_CARDINALITY));
 		}
 		result->SetCardinality(SEQ_CARDINALITY);
 #if STANDARD_VECTOR_SIZE > 2
@@ -335,7 +333,7 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY}, TestVectorTypesFunction,
 	                                TestVectorTypesBind, TestVectorTypesInit);
-	test_vector_types.varargs = LogicalType::ANY;
+	test_vector_types.SetVarArgs(LogicalType::ANY);
 	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
 
 	set.AddFunction(std::move(test_vector_types));

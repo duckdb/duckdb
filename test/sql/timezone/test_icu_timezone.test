@@ -210,6 +210,16 @@ select value from duckdb_settings() where name = 'TimeZone';
 ----
 Etc/GMT+8
 
+query I
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
+----
+2026-04-23 19:26:40-08
+
+query I
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
+----
+2026-04-23 19:26:40-08
+
 endloop
 
 foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
@@ -221,6 +231,16 @@ query I
 select value from duckdb_settings() where name = 'TimeZone';
 ----
 Etc/GMT-5
+
+query I
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
+----
+2026-04-23 19:26:40+05
+
+query I
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
+----
+2026-04-23 19:26:40+05
 
 endloop
 
@@ -234,6 +254,38 @@ select value from duckdb_settings() where name = 'TimeZone';
 ----
 Etc/GMT-14
 
+query I
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
+----
+2026-04-23 19:26:40+14
+
+query I
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
+----
+2026-04-23 19:26:40+14
+
+endloop
+
+foreach utc UTC+1000 UTC+10 UTC+10:00
+
+statement ok
+set TimeZone = '{utc}';
+
+query I
+select value from duckdb_settings() where name = 'TimeZone';
+----
+Etc/GMT-10
+
+query I
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
+----
+2026-04-23 19:26:40+10
+
+query I
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
+----
+2026-04-23 19:26:40+10
+
 endloop
 
 foreach utc UTC-0 UTC-00 UTC-000 UTC-0000 UTC+0 UTC+00 UTC+000 UTC+0000
@@ -245,6 +297,16 @@ query I
 select value from duckdb_settings() where name = 'TimeZone';
 ----
 Etc/GMT+0
+
+query I
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
+----
+2026-04-23 19:26:40+00
+
+query I
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
+----
+2026-04-23 19:26:40+00
 
 endloop
 
@@ -1079,3 +1141,13 @@ select
 	'2022-10-30 04:00:00+03'::timestamptz,
 ----
 2022-03-27 02:00:00+02	2022-03-27 04:00:00+03	2022-10-30 03:00:00+03	2022-10-30 03:00:00+02
+
+# 2026b
+# British Columbia moved to permanent -07 on 2026-03-09.
+statement ok
+set timezone='America/Vancouver';
+
+query I
+select '2026-11-10'::timestamptz
+----
+2026-11-10 00:00:00-07

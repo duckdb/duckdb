@@ -1,91 +1,91 @@
-w_substr|sm_type|cc_name_lower|30 days|31-60 days|61-90 days|91-120 days|>120 days
-NULL|EXPRESS|mid atlantic|1229|1316|1297|0|0
-NULL|EXPRESS|north midwest|1231|1265|1237|0|0
-NULL|EXPRESS|ny metro|1196|1382|1305|0|0
-NULL|LIBRARY|mid atlantic|943|1062|930|0|0
-NULL|LIBRARY|north midwest|895|939|927|0|0
-NULL|LIBRARY|ny metro|956|974|984|0|0
-NULL|NEXT DAY|mid atlantic|1288|1308|1182|0|0
-NULL|NEXT DAY|north midwest|1198|1218|1249|0|0
-NULL|NEXT DAY|ny metro|1228|1305|1327|0|0
-NULL|OVERNIGHT|mid atlantic|930|980|967|0|0
-NULL|OVERNIGHT|north midwest|930|943|934|0|0
-NULL|OVERNIGHT|ny metro|988|1029|987|0|0
-NULL|REGULAR|mid atlantic|1004|984|916|0|0
-NULL|REGULAR|north midwest|936|958|943|0|0
-NULL|REGULAR|ny metro|925|959|942|0|0
-NULL|TWO DAY|mid atlantic|921|975|930|0|0
-NULL|TWO DAY|north midwest|920|909|996|0|0
-NULL|TWO DAY|ny metro|983|1004|920|0|0
-Conventional childr|EXPRESS|mid atlantic|1291|1266|1272|0|0
-Conventional childr|EXPRESS|north midwest|1146|1250|1290|0|0
-Conventional childr|EXPRESS|ny metro|1252|1342|1353|0|0
-Conventional childr|LIBRARY|mid atlantic|900|973|966|0|0
-Conventional childr|LIBRARY|north midwest|978|902|962|0|0
-Conventional childr|LIBRARY|ny metro|948|943|1013|0|0
-Conventional childr|NEXT DAY|mid atlantic|1229|1368|1307|0|0
-Conventional childr|NEXT DAY|north midwest|1211|1247|1251|0|0
-Conventional childr|NEXT DAY|ny metro|1284|1334|1338|0|0
-Conventional childr|OVERNIGHT|mid atlantic|932|922|979|0|0
-Conventional childr|OVERNIGHT|north midwest|927|935|955|0|0
-Conventional childr|OVERNIGHT|ny metro|928|1026|996|0|0
-Conventional childr|REGULAR|mid atlantic|953|919|962|0|0
-Conventional childr|REGULAR|north midwest|880|939|962|0|0
-Conventional childr|REGULAR|ny metro|920|933|967|0|0
-Conventional childr|TWO DAY|mid atlantic|952|956|1018|0|0
-Conventional childr|TWO DAY|north midwest|874|998|974|0|0
-Conventional childr|TWO DAY|ny metro|982|991|1001|0|0
-Of course ot|EXPRESS|mid atlantic|1255|1303|1332|0|0
-Of course ot|EXPRESS|north midwest|1235|1257|1310|0|0
-Of course ot|EXPRESS|ny metro|1249|1300|1355|0|0
-Of course ot|LIBRARY|mid atlantic|956|1037|951|0|0
-Of course ot|LIBRARY|north midwest|970|988|914|0|0
-Of course ot|LIBRARY|ny metro|961|994|944|0|0
-Of course ot|NEXT DAY|mid atlantic|1253|1260|1324|0|0
-Of course ot|NEXT DAY|north midwest|1182|1280|1253|0|0
-Of course ot|NEXT DAY|ny metro|1260|1334|1297|0|0
-Of course ot|OVERNIGHT|mid atlantic|898|952|943|0|0
-Of course ot|OVERNIGHT|north midwest|947|948|969|0|0
-Of course ot|OVERNIGHT|ny metro|938|953|970|0|0
-Of course ot|REGULAR|mid atlantic|955|972|1001|0|0
-Of course ot|REGULAR|north midwest|906|982|1004|0|0
-Of course ot|REGULAR|ny metro|918|967|944|0|0
-Of course ot|TWO DAY|mid atlantic|970|913|997|0|0
-Of course ot|TWO DAY|north midwest|937|960|970|0|0
-Of course ot|TWO DAY|ny metro|935|1047|993|0|0
-Social, royal laws m|EXPRESS|mid atlantic|1258|1334|1315|0|0
-Social, royal laws m|EXPRESS|north midwest|1263|1326|1233|0|0
-Social, royal laws m|EXPRESS|ny metro|1218|1275|1331|0|0
-Social, royal laws m|LIBRARY|mid atlantic|1009|921|967|0|0
-Social, royal laws m|LIBRARY|north midwest|932|977|982|0|0
-Social, royal laws m|LIBRARY|ny metro|936|1018|942|0|0
-Social, royal laws m|NEXT DAY|mid atlantic|1216|1292|1311|0|0
-Social, royal laws m|NEXT DAY|north midwest|1275|1243|1282|0|0
-Social, royal laws m|NEXT DAY|ny metro|1247|1300|1280|0|0
-Social, royal laws m|OVERNIGHT|mid atlantic|921|1006|1018|0|0
-Social, royal laws m|OVERNIGHT|north midwest|841|922|921|0|0
-Social, royal laws m|OVERNIGHT|ny metro|907|958|994|0|0
-Social, royal laws m|REGULAR|mid atlantic|901|946|971|0|0
-Social, royal laws m|REGULAR|north midwest|964|936|902|0|0
-Social, royal laws m|REGULAR|ny metro|964|1024|959|0|0
-Social, royal laws m|TWO DAY|mid atlantic|939|1009|956|0|0
-Social, royal laws m|TWO DAY|north midwest|904|967|939|0|0
-Social, royal laws m|TWO DAY|ny metro|942|975|993|0|0
-Terms overcome instr|EXPRESS|mid atlantic|1258|1252|1288|0|0
-Terms overcome instr|EXPRESS|north midwest|1237|1263|1271|0|0
-Terms overcome instr|EXPRESS|ny metro|1227|1266|1284|0|0
-Terms overcome instr|LIBRARY|mid atlantic|947|997|1003|0|0
-Terms overcome instr|LIBRARY|north midwest|897|960|988|0|0
-Terms overcome instr|LIBRARY|ny metro|959|945|957|0|0
-Terms overcome instr|NEXT DAY|mid atlantic|1240|1260|1307|0|0
-Terms overcome instr|NEXT DAY|north midwest|1270|1234|1208|0|0
-Terms overcome instr|NEXT DAY|ny metro|1299|1337|1328|0|0
-Terms overcome instr|OVERNIGHT|mid atlantic|979|978|962|0|0
-Terms overcome instr|OVERNIGHT|north midwest|900|935|959|0|0
-Terms overcome instr|OVERNIGHT|ny metro|983|929|988|0|0
-Terms overcome instr|REGULAR|mid atlantic|945|983|939|0|0
-Terms overcome instr|REGULAR|north midwest|919|954|951|0|0
-Terms overcome instr|REGULAR|ny metro|939|942|1008|0|0
-Terms overcome instr|TWO DAY|mid atlantic|948|938|994|0|0
-Terms overcome instr|TWO DAY|north midwest|918|949|936|0|0
-Terms overcome instr|TWO DAY|ny metro|951|972|986|0|0
+w_substr|sm_type|cc_name|30 days|31-60 days|61-90 days|91-120 days|>120 days
+NULL|EXPRESS|Mid Atlantic|1223|1314|1257|0|0
+NULL|EXPRESS|NY Metro|1274|1296|1286|0|0
+NULL|EXPRESS|North Midwest|1159|1329|1276|0|0
+NULL|LIBRARY|Mid Atlantic|941|978|948|0|0
+NULL|LIBRARY|NY Metro|886|1001|1009|0|0
+NULL|LIBRARY|North Midwest|917|943|991|0|0
+NULL|NEXT DAY|Mid Atlantic|1304|1264|1349|0|0
+NULL|NEXT DAY|NY Metro|1271|1251|1291|0|0
+NULL|NEXT DAY|North Midwest|1199|1233|1273|0|0
+NULL|OVERNIGHT|Mid Atlantic|965|989|967|0|0
+NULL|OVERNIGHT|NY Metro|979|993|1039|0|0
+NULL|OVERNIGHT|North Midwest|946|1016|905|0|0
+NULL|REGULAR|Mid Atlantic|933|994|997|0|0
+NULL|REGULAR|NY Metro|961|1022|1034|0|0
+NULL|REGULAR|North Midwest|893|921|949|0|0
+NULL|TWO DAY|Mid Atlantic|972|968|972|0|0
+NULL|TWO DAY|NY Metro|926|974|1004|0|0
+NULL|TWO DAY|North Midwest|941|921|981|0|0
+Bad cards must make.|EXPRESS|Mid Atlantic|1270|1318|1281|0|0
+Bad cards must make.|EXPRESS|NY Metro|1226|1287|1282|0|0
+Bad cards must make.|EXPRESS|North Midwest|1208|1242|1294|0|0
+Bad cards must make.|LIBRARY|Mid Atlantic|962|976|1009|0|0
+Bad cards must make.|LIBRARY|NY Metro|978|984|999|0|0
+Bad cards must make.|LIBRARY|North Midwest|898|959|958|0|0
+Bad cards must make.|NEXT DAY|Mid Atlantic|1225|1328|1327|0|0
+Bad cards must make.|NEXT DAY|NY Metro|1262|1325|1246|0|0
+Bad cards must make.|NEXT DAY|North Midwest|1227|1300|1276|0|0
+Bad cards must make.|OVERNIGHT|Mid Atlantic|956|935|990|0|0
+Bad cards must make.|OVERNIGHT|NY Metro|982|930|993|0|0
+Bad cards must make.|OVERNIGHT|North Midwest|907|990|955|0|0
+Bad cards must make.|REGULAR|Mid Atlantic|928|974|1005|0|0
+Bad cards must make.|REGULAR|NY Metro|942|1009|948|0|0
+Bad cards must make.|REGULAR|North Midwest|921|968|925|0|0
+Bad cards must make.|TWO DAY|Mid Atlantic|954|971|979|0|0
+Bad cards must make.|TWO DAY|NY Metro|947|1013|952|0|0
+Bad cards must make.|TWO DAY|North Midwest|904|930|947|0|0
+Conventional childr|EXPRESS|Mid Atlantic|1214|1296|1243|0|0
+Conventional childr|EXPRESS|NY Metro|1284|1331|1277|0|0
+Conventional childr|EXPRESS|North Midwest|1180|1287|1226|0|0
+Conventional childr|LIBRARY|Mid Atlantic|990|1008|962|0|0
+Conventional childr|LIBRARY|NY Metro|983|976|981|0|0
+Conventional childr|LIBRARY|North Midwest|925|892|953|0|0
+Conventional childr|NEXT DAY|Mid Atlantic|1284|1315|1274|0|0
+Conventional childr|NEXT DAY|NY Metro|1288|1280|1284|0|0
+Conventional childr|NEXT DAY|North Midwest|1249|1278|1308|0|0
+Conventional childr|OVERNIGHT|Mid Atlantic|897|973|926|0|0
+Conventional childr|OVERNIGHT|NY Metro|958|963|897|0|0
+Conventional childr|OVERNIGHT|North Midwest|942|934|937|0|0
+Conventional childr|REGULAR|Mid Atlantic|941|1007|945|0|0
+Conventional childr|REGULAR|NY Metro|949|928|987|0|0
+Conventional childr|REGULAR|North Midwest|920|927|925|0|0
+Conventional childr|TWO DAY|Mid Atlantic|926|979|1047|0|0
+Conventional childr|TWO DAY|NY Metro|925|1007|962|0|0
+Conventional childr|TWO DAY|North Midwest|879|980|971|0|0
+Doors canno|EXPRESS|Mid Atlantic|1240|1245|1267|0|0
+Doors canno|EXPRESS|NY Metro|1234|1270|1349|0|0
+Doors canno|EXPRESS|North Midwest|1185|1238|1197|0|0
+Doors canno|LIBRARY|Mid Atlantic|873|974|948|0|0
+Doors canno|LIBRARY|NY Metro|987|1005|990|0|0
+Doors canno|LIBRARY|North Midwest|947|952|1025|0|0
+Doors canno|NEXT DAY|Mid Atlantic|1264|1276|1185|0|0
+Doors canno|NEXT DAY|NY Metro|1263|1337|1310|0|0
+Doors canno|NEXT DAY|North Midwest|1202|1247|1278|0|0
+Doors canno|OVERNIGHT|Mid Atlantic|912|888|934|0|0
+Doors canno|OVERNIGHT|NY Metro|942|1003|959|0|0
+Doors canno|OVERNIGHT|North Midwest|896|903|911|0|0
+Doors canno|REGULAR|Mid Atlantic|888|953|974|0|0
+Doors canno|REGULAR|NY Metro|971|1028|946|0|0
+Doors canno|REGULAR|North Midwest|937|974|914|0|0
+Doors canno|TWO DAY|Mid Atlantic|974|898|985|0|0
+Doors canno|TWO DAY|NY Metro|982|1017|997|0|0
+Doors canno|TWO DAY|North Midwest|985|937|959|0|0
+Important issues liv|EXPRESS|Mid Atlantic|1322|1329|1293|0|0
+Important issues liv|EXPRESS|NY Metro|1301|1300|1239|0|0
+Important issues liv|EXPRESS|North Midwest|1266|1228|1285|0|0
+Important issues liv|LIBRARY|Mid Atlantic|988|997|925|0|0
+Important issues liv|LIBRARY|NY Metro|947|963|988|0|0
+Important issues liv|LIBRARY|North Midwest|937|972|964|0|0
+Important issues liv|NEXT DAY|Mid Atlantic|1221|1268|1217|0|0
+Important issues liv|NEXT DAY|NY Metro|1281|1311|1310|0|0
+Important issues liv|NEXT DAY|North Midwest|1219|1214|1327|0|0
+Important issues liv|OVERNIGHT|Mid Atlantic|929|1018|991|0|0
+Important issues liv|OVERNIGHT|NY Metro|950|965|931|0|0
+Important issues liv|OVERNIGHT|North Midwest|936|989|932|0|0
+Important issues liv|REGULAR|Mid Atlantic|961|995|949|0|0
+Important issues liv|REGULAR|NY Metro|972|934|1018|0|0
+Important issues liv|REGULAR|North Midwest|905|947|941|0|0
+Important issues liv|TWO DAY|Mid Atlantic|954|982|944|0|0
+Important issues liv|TWO DAY|NY Metro|844|972|1006|0|0
+Important issues liv|TWO DAY|North Midwest|914|969|960|0|0

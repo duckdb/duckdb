@@ -44,6 +44,7 @@ private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCopyToFile &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -82,6 +83,8 @@ private:
 	FilterPropagateResult PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter);
 	//! Update filter statistics from a TableFilter
 	void UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter);
+	//! Update filter statistics from an ExpressionFilter expression
+	void UpdateExpressionFilterStatistics(BaseStatistics &input, const Expression &expr);
 
 	//! Add cardinalities together (i.e. new max is stats.max + new_stats.max): used for union
 	void AddCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &new_stats);

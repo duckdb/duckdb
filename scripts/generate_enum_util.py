@@ -71,6 +71,7 @@ overrides = {
         "HEAD_REQUEST": "HEAD",
         "DELETE_REQUEST": "DELETE",
         "POST_REQUEST": "POST",
+        "OPTIONS_REQUEST": "OPTIONS",
     },
     "CompressionType": {
         "COMPRESSION_AUTO": "AUTO",
@@ -102,8 +103,6 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
     for file in files:
         # Dont include the generated header itself recursively
         if file == "enum_util.hpp":
-            continue
-        if 'amalgamation' in root:
             continue
 
         if file.endswith(".hpp"):

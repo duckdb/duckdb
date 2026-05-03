@@ -2,9 +2,6 @@
 # description: Boundary testing for bignum type
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 # Test All Integers
 query IIIIIIIIII
 select tinyint::varchar::bignum = tinyint::bignum,

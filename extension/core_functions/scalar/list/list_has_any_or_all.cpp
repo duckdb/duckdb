@@ -20,8 +20,8 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	const auto l_size = ListVector::GetListSize(l_vec);
 	const auto r_size = ListVector::GetListSize(r_vec);
 
-	auto &l_child = ListVector::GetEntry(l_vec);
-	auto &r_child = ListVector::GetEntry(r_vec);
+	auto &l_child = ListVector::GetChildMutable(l_vec);
+	auto &r_child = ListVector::GetChildMutable(r_vec);
 
 	// Setup unified formats for the list elements
 	UnifiedVectorFormat l_child_format;
@@ -110,8 +110,8 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto l_size = ListVector::GetListSize(l_vec);
 	const auto r_size = ListVector::GetListSize(r_vec);
 
-	auto &l_child = ListVector::GetEntry(l_vec);
-	auto &r_child = ListVector::GetEntry(r_vec);
+	auto &l_child = ListVector::GetChildMutable(l_vec);
+	auto &r_child = ListVector::GetChildMutable(r_vec);
 
 	// Setup unified formats for the list elements
 	UnifiedVectorFormat build_format;

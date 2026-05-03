@@ -195,9 +195,9 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto entry = cmp_data[i];
 		if (!entry.IsValid()) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 		} else {
-			result_data[i] = predicate(entry.GetValue());
+			result_data.WriteValue(predicate(entry.GetValue()));
 		}
 	}
 }
@@ -366,10 +366,10 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data, c
 
 struct ListEntryAccessor {
 	static Vector &GetChild(Vector &vector) {
-		return ListVector::GetEntry(vector);
+		return ListVector::GetChildMutable(vector);
 	}
 	static void FlattenChild(Vector &vector) {
-		auto &child = ListVector::GetEntry(vector);
+		auto &child = ListVector::GetChildMutable(vector);
 		child.Flatten(ListVector::GetListSize(vector));
 	}
 	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
@@ -388,10 +388,10 @@ struct ArrayEntryAccessor {
 	explicit ArrayEntryAccessor(idx_t array_size) : array_size(array_size) {
 	}
 	Vector &GetChild(Vector &vector) {
-		return ArrayVector::GetEntry(vector);
+		return ArrayVector::GetChildMutable(vector);
 	}
 	void FlattenChild(Vector &vector) {
-		auto &child = ArrayVector::GetEntry(vector);
+		auto &child = ArrayVector::GetChildMutable(vector);
 		child.Flatten(ArrayVector::GetTotalSize(vector));
 	}
 	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
@@ -708,7 +708,7 @@ static void ComparatorTypeSwitch(Vector &left, Vector &right, Vector &result, id
 	case PhysicalType::ARRAY: {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
-		auto &validity = FlatVector::Validity(result);
+		auto &validity = FlatVector::ValidityMutable(result);
 		auto &sel = *FlatVector::IncrementalSelectionVector();
 		auto physical_type = left.GetType().InternalType();
 		if (physical_type == PhysicalType::STRUCT && left.GetType().id() == LogicalTypeId::VARIANT) {

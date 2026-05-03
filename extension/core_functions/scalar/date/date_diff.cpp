@@ -19,15 +19,13 @@ namespace {
 struct DateDiff {
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
-		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
-			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
-				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
-			    } else {
-				    mask.SetInvalid(idx);
-				    return TR();
-			    }
-		    });
+		BinaryExecutor::Execute<TA, TB, TR>(left, right, result, count, [&](TA startdate, TB enddate) -> optional<TR> {
+			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+				return OP::template Operation<TA, TB, TR>(startdate, enddate);
+			} else {
+				return nullopt;
+			}
+		});
 	}
 
 	//	We need to truncate down, not towards 0
@@ -355,12 +353,11 @@ int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate) {
 
 struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
-	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+	static inline optional<TR> Operation(TS part, TA startdate, TB enddate) {
 		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
 			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
-			mask.SetInvalid(idx);
-			return TR();
+			return nullopt;
 		}
 	}
 };
@@ -431,15 +428,13 @@ void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
 		if (ConstantVector::IsNull(part_arg)) {
-			ConstantVector::SetNull(result);
-		} else {
-			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateDiffBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
+			throw InternalException("DateDiff called with constant NULL part");
 		}
+		const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
+		DateDiffBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
 	} else {
-		TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
-		    part_arg, start_arg, end_arg, result, args.size(),
-		    DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
+		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, start_arg, end_arg, result, args.size(),
+		                                                  DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
 
@@ -453,6 +448,8 @@ ScalarFunctionSet DateDiffFun::GetFunctions() {
 	                                     LogicalType::BIGINT, DateDiffFunction<timestamp_t>));
 	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
 	                                     LogicalType::BIGINT, DateDiffFunction<dtime_t>));
+	date_diff.SetArgProperties(1, ArgProperties().NonIncreasing());
+	date_diff.SetArgProperties(2, ArgProperties().NonDecreasing());
 	return date_diff;
 }
 

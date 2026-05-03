@@ -83,6 +83,18 @@ enum class ColumnEncoding {
 	PLAIN
 };
 
+struct ColumnReaderInput {
+public:
+	ColumnReaderInput(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out)
+	    : num_values(num_values), define_out(define_out), repeat_out(repeat_out) {
+	}
+
+public:
+	uint64_t num_values;
+	data_ptr_t define_out;
+	data_ptr_t repeat_out;
+};
+
 class ColumnReader {
 	friend class ByteStreamSplitDecoder;
 	friend class DeltaBinaryPackedDecoder;
@@ -98,12 +110,12 @@ public:
 public:
 	static unique_ptr<ColumnReader> CreateReader(const ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
-	virtual void Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const SelectionVector &sel, idx_t approved_tuple_count);
-	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                    const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                    idx_t &approved_tuple_count, bool is_first_filter);
+	virtual idx_t Read(ColumnReaderInput &input, Vector &result);
+	virtual void Select(ColumnReaderInput &input, Vector &result, const SelectionVector &sel,
+	                    idx_t approved_tuple_count);
+	virtual void Filter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+	                    TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count,
+	                    bool is_first_filter);
 	static void ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
 	                        SelectionVector &sel, idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
@@ -218,24 +230,24 @@ protected:
 	virtual bool SupportsDirectSelect() const {
 		return false;
 	}
-	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                  const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
-	                  idx_t &approved_tuple_count);
-	void DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-	                  const SelectionVector &sel, idx_t approved_tuple_count);
+	void DirectFilter(ColumnReaderInput &input, Vector &result, const TableFilter &filter,
+	                  TableFilterState &filter_state, SelectionVector &sel, idx_t &approved_tuple_count);
+	void DirectSelect(ColumnReaderInput &input, Vector &result, const SelectionVector &sel, idx_t approved_tuple_count);
 	void ReadEncrypted(duckdb_apache::thrift::TBase &object);
 	void ReadDataEncrypted(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type module);
 	void Read(PageHeader &page_hdr);
 	void ReadData(const data_ptr_t buffer, const uint32_t buffer_size, PageType::type page_type);
 
 private:
-	//! Check if a previous table filter has filtered out this page
-	bool PageIsFilteredOut(PageHeader &page_hdr);
+	//! this function tries to skip a page in the below conditions:
+	//! 1. a previous table filter has filtered out this page
+	//! 2. page statistics can be used to skip page
+	bool PageIsFilteredOut(PageHeader &page_hdr, optional_ptr<const TableFilter> filter);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
 	                      optional_ptr<TableFilterState> filter_state = nullptr);
-	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
+	idx_t ReadInternal(ColumnReaderInput &input, Vector &result);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
 	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
@@ -252,7 +264,7 @@ private:
 			plain_data.unsafe_inc(copy_count);
 			return;
 		}
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
@@ -286,7 +298,7 @@ private:
 	                                  const uint64_t num_values, Vector &result, const SelectionVector &sel,
 	                                  idx_t approved_tuple_count) {
 		auto result_ptr = FlatVector::GetDataMutable<VALUE_TYPE>(result);
-		auto &result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::ValidityMutable(result);
 		idx_t current_entry = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto next_entry = sel.get_index(i);

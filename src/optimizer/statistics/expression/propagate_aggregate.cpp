@@ -10,7 +10,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundAggreg
 	for (auto &child : aggr.children) {
 		auto stat = PropagateExpression(child);
 		if (!stat) {
-			stats.push_back(BaseStatistics::CreateUnknown(child->return_type));
+			stats.push_back(BaseStatistics::CreateUnknown(child->GetReturnType()));
 		} else {
 			stats.push_back(stat->Copy());
 		}

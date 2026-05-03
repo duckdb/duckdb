@@ -132,7 +132,7 @@ struct DecimalToString {
 		using UNSIGNED = typename MakeUnsigned<SIGNED>::type;
 		char *end = dst + len;
 		if (value < 0) {
-			value = -value;
+			value = static_cast<SIGNED>(-value);
 			*dst = '-';
 		}
 		if (scale == 0) {

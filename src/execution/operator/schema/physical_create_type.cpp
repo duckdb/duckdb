@@ -46,7 +46,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 	}
 
 	auto entries = chunk.data[0].Values<string_t>(chunk.size());
-	auto result_data = FlatVector::Writer<string_t>(gstate.result, gstate.size + chunk.size());
+	auto result_data = FlatVector::ScatterWriter<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto vec_entry = entries[i];

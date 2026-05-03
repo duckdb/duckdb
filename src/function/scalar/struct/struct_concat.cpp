@@ -43,15 +43,15 @@ static unique_ptr<FunctionData> StructConcatBind(BindScalarFunctionInput &input)
 	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
 		const auto &arg = arguments[arg_idx];
 
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 
-		if (arg->return_type.id() != LogicalTypeId::STRUCT) {
+		if (arg->GetReturnType().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("struct_concat: Argument at position \"%d\" is not a STRUCT", arg_idx + 1);
 		}
 
-		const auto &child_types = StructType::GetChildTypes(arg->return_type);
+		const auto &child_types = StructType::GetChildTypes(arg->GetReturnType());
 		for (const auto &child : child_types) {
 			if (!child.first.empty()) {
 				auto it = name_set.find(child.first);
@@ -86,12 +86,12 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 	auto &arg_stats = input.child_stats;
 	auto &arg_exprs = input.expr.children;
 
-	auto struct_stats = StructStats::CreateUnknown(expr.return_type);
+	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
 	idx_t struct_index = 0;
 
 	for (idx_t arg_idx = 0; arg_idx < arg_exprs.size(); arg_idx++) {
 		auto &arg_stat = arg_stats[arg_idx];
-		auto &arg_type = arg_exprs[arg_idx]->return_type;
+		auto &arg_type = arg_exprs[arg_idx]->GetReturnType();
 		for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(arg_type); child_idx++) {
 			auto &child_stat = StructStats::GetChildStats(arg_stat, child_idx);
 			StructStats::SetChildStats(struct_stats, struct_index++, child_stat);
@@ -103,7 +103,7 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 ScalarFunction StructConcatFun::GetFunction() {
 	ScalarFunction fun("struct_concat", {}, LogicalTypeId::STRUCT, StructConcatFunction, StructConcatBind,
 	                   StructConcatStats);
-	fun.varargs = LogicalType::ANY;
+	fun.SetVarArgs(LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

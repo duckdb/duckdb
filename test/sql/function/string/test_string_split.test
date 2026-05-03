@@ -2,9 +2,6 @@
 # description: String split test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test unnesting of null values a bit
 query T
 SELECT string_split(NULL, NULL)

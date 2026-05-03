@@ -45,7 +45,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	auto offsets_entries = offsets.Values<int64_t>(count);
 
 	UnifiedVectorFormat child_data;
-	auto &child_vector = ListVector::GetEntry(list);
+	auto &child_vector = ListVector::GetChild(list);
 	auto child_count = ListVector::GetListSize(list);
 	child_vector.ToUnifiedFormat(child_count, child_data);
 
@@ -113,7 +113,7 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 		ExecuteStringExtract(result, base, subscript, count);
 		break;
 	case LogicalTypeId::SQLNULL:
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
@@ -124,7 +124,7 @@ static unique_ptr<FunctionData> ListExtractBind(BindScalarFunctionInput &input) 
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	return nullptr;
 }

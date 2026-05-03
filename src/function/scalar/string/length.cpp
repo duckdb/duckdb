@@ -94,7 +94,7 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 	// otherwise we flatten and inherit the null values of the parent
 	result.Flatten(args.size());
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	for (idx_t r = 0; r < args.size(); r++) {
 		if (!validity_entries.IsValid(r)) {
 			result_validity.SetInvalid(r);
@@ -105,11 +105,11 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
-	const auto &arg_type = arguments[0]->return_type.id();
+	const auto &arg_type = arguments[0]->GetReturnType().id();
 	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
@@ -118,7 +118,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.arguments[0] = arguments[0]->return_type;
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
@@ -174,12 +174,12 @@ void ArrayLengthBinaryFunction(DataChunk &args, ExpressionState &state, Vector &
 unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	auto type = arguments[0]->return_type;
+	auto type = arguments[0]->GetReturnType();
 	if (type.id() == LogicalTypeId::ARRAY) {
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		bound_function.SetFunctionCallback(ArrayLengthBinaryFunction);
 
 		// If the input is an array, the dimensions are constant, so we can calculate them at bind time
@@ -198,7 +198,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(BindScalarFunctionInput &in
 
 	} else if (type.id() == LogicalTypeId::LIST) {
 		bound_function.SetFunctionCallback(ListLengthBinaryFunction);
-		bound_function.arguments[0] = type;
+		bound_function.GetArguments()[0] = type;
 		return nullptr;
 	} else {
 		// Unreachable

@@ -83,14 +83,14 @@ struct IcuBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const ScalarFunction &function) {
+	                      const BoundScalarFunction &function) {
 		auto &bind_data = bind_data_p->Cast<IcuBindData>();
 		serializer.WriteProperty(100, "language", bind_data.language);
 		serializer.WriteProperty(101, "country", bind_data.country);
 		serializer.WritePropertyWithDefault<string>(102, "tag", bind_data.tag);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 		string language;
 		string country;
 		string tag;
@@ -219,12 +219,13 @@ unique_ptr<icu::TimeZone> GetKnownTimeZone(const string &tz_str) {
 	return nullptr;
 }
 
-static string NormalizeTimeZone(const string &tz_str) {
-	if (GetKnownTimeZone(tz_str)) {
-		return tz_str;
+unique_ptr<icu::TimeZone> GetNormalizedTimeZone(string &tz_str) {
+	duckdb::unique_ptr<icu::TimeZone> tz;
+	if (tz = GetKnownTimeZone(tz_str)) {
+		return tz;
 	}
 
-	//	Map UTC±NN00 to Etc/UTC±N
+	//	Map UTC±NN00 to Etc/GMT±N
 	do {
 		if (tz_str.size() <= 4) {
 			break;
@@ -233,53 +234,46 @@ static string NormalizeTimeZone(const string &tz_str) {
 			break;
 		}
 
+		//	Parse the offset, allowing single digits
 		idx_t pos = 3;
-		const auto utc = tz_str[pos++];
-		// Invert the sign (UTC and Etc use opposite sign conventions)
-		// https://en.wikipedia.org/wiki/Tz_database#Area
-		auto sign = utc;
-		if (utc == '+') {
-			sign = '-';
-			;
-		} else if (utc == '-') {
-			sign = '+';
-		} else {
+		int hh, mm, ss;
+		if (!Timestamp::TryParseUTCOffset(tz_str.data(), pos, tz_str.size(), hh, mm, ss, false)) {
+			break;
+		}
+		if (pos < tz_str.size() || mm || ss) {
 			break;
 		}
 
+		// Invert the sign (UTC and Etc use opposite sign conventions)
+		// https://en.wikipedia.org/wiki/Tz_database#Area
+		hh = -hh;
+
+		// Build the mapped timezone string with single digit hour offsets
 		string mapped = "Etc/GMT";
-		mapped += sign;
-		const auto base_len = mapped.size();
-		for (; pos < tz_str.size(); ++pos) {
-			const auto digit = tz_str[pos];
-			//	We could get fancy here and count colons and their locations, but I doubt anyone cares.
-			if (digit == '0' || digit == ':') {
-				continue;
-			}
-			if (!StringUtil::CharacterIsDigit(digit)) {
-				break;
-			}
-			mapped += digit;
+		if (hh < 0) {
+			mapped += "-";
+			hh = -hh;
+		} else {
+			mapped += "+";
 		}
-		if (pos < tz_str.size()) {
-			break;
+		if (hh >= 10) {
+			mapped += UnsafeNumericCast<char>('0' + hh / 10);
+			hh %= 10;
 		}
-		// If we didn't add anything, then make it +0
-		if (mapped.size() == base_len) {
-			mapped.back() = '+';
-			mapped += '0';
-		}
+		mapped += UnsafeNumericCast<char>('0' + hh);
+
 		// Final sanity check
-		if (GetKnownTimeZone(mapped)) {
-			return mapped;
+		if (tz = GetKnownTimeZone(mapped)) {
+			tz_str = mapped;
+			return tz;
 		}
 	} while (false);
 
-	return tz_str;
+	return nullptr;
 }
 
 unique_ptr<icu::TimeZone> GetTimeZoneInternal(string &tz_str, vector<string> &candidates) {
-	auto tz = GetKnownTimeZone(tz_str);
+	auto tz = GetNormalizedTimeZone(tz_str);
 	if (tz) {
 		return tz;
 	}
@@ -336,7 +330,6 @@ unique_ptr<icu::TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	auto tz_str = StringValue::Get(parameter);
-	tz_str = NormalizeTimeZone(tz_str);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
 }
@@ -367,6 +360,10 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
+
+	// name, VARCHAR
+	auto &name_col = output.data[0];
+
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
 			break;
@@ -381,7 +378,7 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 		//	The calendar name is all we have
 		std::string utf8;
 		calendar->toUTF8String(utf8);
-		output.SetValue(0, index, Value(utf8));
+		name_col.Append(Value(utf8));
 
 		++index;
 	}
@@ -474,8 +471,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
 	// If the environment TZ is invalid, look for some alternatives
-	tz_string = NormalizeTimeZone(tz_string);
-	if (!GetKnownTimeZone(tz_string)) {
+	tz = GetNormalizedTimeZone(tz_string);
+	if (!tz) {
 		tz_string = "UTC";
 	}
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),

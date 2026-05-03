@@ -88,7 +88,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 	for (idx_t expr_idx = 0; expr_idx < statement.key_targets.size(); expr_idx++) {
 		auto &expr = statement.key_targets[expr_idx];
 
-		if (expr->type == ExpressionType::COLUMN_REF) {
+		if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			if (expr->HasAlias()) {
 				throw BinderException(expr->GetQueryLocation(),
 				                      "In USING KEY, only direct calls to an aggregate function can have an alias.");
@@ -104,7 +104,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			key_references.insert(column_index);
 			key_targets.push_back(std::move(bound_expr));
-		} else if (expr->type == ExpressionType::FUNCTION) {
+		} else if (expr->GetExpressionType() == ExpressionType::FUNCTION) {
 			auto &func_expr = expr->Cast<FunctionExpression>();
 
 			if (func_expr.filter) {
@@ -143,7 +143,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.children) {
 				auto bound_child = expression_binder.Bind(child);
-				aggregation_input_types.push_back(bound_child->return_type);
+				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
 
@@ -159,7 +159,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				}
 				aggregate_idx = ProjectionIndex(NumericCast<idx_t>(std::distance(result.names.begin(), names_iter)));
 			} else {
-				if (bound_children.empty() || bound_children[0]->type != ExpressionType::BOUND_COLUMN_REF) {
+				if (bound_children.empty() ||
+				    bound_children[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 					// No alias and no way to infer target column through first argument
 					throw BinderException(
 					    expr->GetQueryLocation(),
@@ -176,8 +177,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			}
 			// Found a matching function, bind it as an aggregate
 			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-			auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
-			                                                       nullptr, AggregateType::NON_DISTINCT);
+			auto aggregate = function_binder.BindAggregateFunction(best_function, std::move(bound_children), nullptr,
+			                                                       AggregateType::NON_DISTINCT);
 
 			if (payload_references.find(aggregate_idx) != payload_references.end()) {
 				throw BinderException(func_expr.GetQueryLocation(),
@@ -193,7 +194,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				                      result.names[aggregate_idx]);
 			}
 
-			return_types[aggregate_idx] = aggregate->return_type;
+			return_types[aggregate_idx] = aggregate->GetReturnType();
 			payload_references[aggregate_idx] = std::move(aggregate);
 		} else {
 			throw BinderException(

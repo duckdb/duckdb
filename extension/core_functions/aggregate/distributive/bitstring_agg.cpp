@@ -49,13 +49,13 @@ struct BitstringAggBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &) {
+	                      const BoundAggregateFunction &) {
 		auto &bind_data = bind_data_p->Cast<BitstringAggBindData>();
 		serializer.WriteProperty(100, "min", bind_data.min);
 		serializer.WriteProperty(101, "max", bind_data.max);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &) {
 		Value min;
 		Value max;
 		deserializer.ReadProperty(100, "min", min);
@@ -271,7 +271,7 @@ void BindBitString(AggregateFunctionSet &bitstring_agg, const LogicalTypeId &typ
 	function.SetStatisticsCallback(
 	    BitstringPropagateStats);        // stores min and max from column stats in BitstringAggBindData
 	bitstring_agg.AddFunction(function); // uses the BitstringAggBindData to access statistics for creating bitstring
-	function.arguments = {type, type, type};
+	function.GetArguments() = {type, type, type};
 	function.SetStatisticsCallback(nullptr); // min and max are provided as arguments
 	bitstring_agg.AddFunction(function);
 }

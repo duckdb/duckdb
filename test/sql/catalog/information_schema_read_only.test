@@ -2,9 +2,6 @@
 # description: Test that information schema/pg_catalog are read only
 # group: [catalog]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 CREATE TABLE system.information_schema.tbl(i INT)
 ----

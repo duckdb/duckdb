@@ -96,8 +96,8 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto &mask = FlatVector::Validity(result);
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count + offset);
+	auto &mask = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
@@ -121,7 +121,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 
 	// reserve capacity, then iterate over all entries again and copy over the data to the child vector
 	ListVector::Reserve(result, total_len);
-	auto &result_child = ListVector::GetEntry(result);
+	auto &result_child = ListVector::GetChildMutable(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto &state = *states[i].GetValue();
 		const auto rid = i + offset;
@@ -134,6 +134,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	}
 
 	ListVector::SetListSize(result, total_len);
+	FlatVector::SetSize(result, count_t(offset + count));
 }
 
 void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
@@ -170,7 +171,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 unique_ptr<FunctionData> ListBindFunction(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return make_uniq<ListBindData>(function.GetReturnType());
 }
 

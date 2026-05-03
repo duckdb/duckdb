@@ -176,8 +176,8 @@ template <bool FRONT_TRIM>
 static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
 	Vector &path = args.data[0];
-	Vector separator(string_t("default"));
-	Vector trim_extension(Value::BOOLEAN(false));
+	Vector separator(string_t("default"), count_t(args.size()));
+	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, FRONT_TRIM);
 
 	TernaryExecutor::Execute<string_t, string_t, bool, string_t>(
@@ -222,8 +222,8 @@ static void TrimPathFunction(DataChunk &args, ExpressionState &state, Vector &re
 static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// set default values
 	Vector &path = args.data[0];
-	Vector separator(string_t("default"));
-	Vector trim_extension(false);
+	Vector separator(string_t("default"), count_t(args.size()));
+	Vector trim_extension(Value::BOOLEAN(false), count_t(args.size()));
 	ReadOptionalArgs(args, separator, trim_extension, true);
 
 	auto &heap = StringVector::GetStringHeap(result);
@@ -269,20 +269,18 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::SetListSize(result, 0);
 
 	// set up the list entries
-	auto list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	auto &child_entry = ListVector::GetEntry(result);
-	auto &result_mask = FlatVector::Validity(result);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, args.size());
+	auto &child_entry = ListVector::GetChildMutable(result);
 	idx_t total_splits = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			result_mask.SetInvalid(i);
+			result_data.WriteNull();
 			continue;
 		}
 		SplitInput split_input(result, child_entry, total_splits);
 		auto list_length = SplitPath(inputs[input_idx], sep, split_input);
-		list_data[i].length = list_length;
-		list_data[i].offset = total_splits;
+		result_data.WriteValue(list_entry_t(total_splits, list_length));
 		total_splits += list_length;
 	}
 	ListVector::SetListSize(result, total_splits);
@@ -295,7 +293,7 @@ ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_dirname.AddFunction(func);
 	// separator options
-	func.arguments.emplace_back(LogicalType::VARCHAR);
+	func.GetArguments().emplace_back(LogicalType::VARCHAR);
 	parse_dirname.AddFunction(func);
 	return parse_dirname;
 }
@@ -306,7 +304,7 @@ ScalarFunctionSet ParseDirpathFun::GetFunctions() {
 	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_dirpath.AddFunction(func);
 	// separator options
-	func.arguments.emplace_back(LogicalType::VARCHAR);
+	func.GetArguments().emplace_back(LogicalType::VARCHAR);
 	parse_dirpath.AddFunction(func);
 	return parse_dirpath;
 }
@@ -336,7 +334,7 @@ ScalarFunctionSet ParsePathFun::GetFunctions() {
 	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
 	parse_path.AddFunction(func);
 	// separator options
-	func.arguments.emplace_back(LogicalType::VARCHAR);
+	func.GetArguments().emplace_back(LogicalType::VARCHAR);
 	parse_path.AddFunction(func);
 	return parse_path;
 }

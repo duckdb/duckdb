@@ -74,10 +74,10 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		string joined;
 		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
-			result_data.SetInvalid(row_idx);
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[row_idx] = joined;
+		result_data.WriteValue(string_t(joined));
 	}
 }
 
@@ -85,8 +85,8 @@ void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 ScalarFunction PathJoinFun::GetFunction() {
 	ScalarFunction path_join(PathJoinFun::Name, {LogicalType::VARCHAR}, LogicalType::VARCHAR, PathJoinFunction);
-	path_join.varargs = LogicalType::VARCHAR;
-	path_join.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	path_join.SetVarArgs(LogicalType::VARCHAR);
+	path_join.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return path_join;
 }
 

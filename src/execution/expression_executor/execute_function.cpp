@@ -1,4 +1,5 @@
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -12,7 +13,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 		return; // Needs to be consistent, non-volatile, and non-throwing
 	}
 
-	if (expr.return_type.InternalType() == PhysicalType::STRUCT) {
+	if (expr.GetReturnType().InternalType() == PhysicalType::STRUCT) {
 		return; // FIXME: get this working for STRUCT
 	}
 
@@ -30,7 +31,7 @@ ExecuteFunctionState::ExecuteFunctionState(const Expression &expr, ExpressionExe
 				input_col_idx.SetInvalid(); // Found more than 1 non-constant
 				break;
 			}
-			if (child.return_type.InternalType() == PhysicalType::STRUCT) {
+			if (child.GetReturnType().InternalType() == PhysicalType::STRUCT) {
 				break; // FIXME
 			}
 			input_col_idx = child_idx;
@@ -111,7 +112,7 @@ bool ExecuteFunctionState::TryExecuteDictionaryExpression(const BoundFunctionExp
 	}
 
 	// Result references the dictionary
-	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input));
+	result.Dictionary(output_dictionary, DictionaryVector::SelVector(unary_input), args.size());
 
 	return true;
 }
@@ -173,9 +174,9 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 
 static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
                                   Vector &result) {
-	if (expr.return_type != LogicalType::BOOLEAN) {
+	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
 		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.name,
-		                            expr.return_type.ToString());
+		                            expr.GetReturnType().ToString());
 	}
 	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
 		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
@@ -190,7 +191,7 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 		result_data[i] = false;
 	}
 
-	auto &result_validity = FlatVector::Validity(result);
+	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity.SetAllValid(count);
 	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	for (auto &arg : args.data) {
@@ -218,21 +219,31 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto &arguments = state->intermediate_chunk;
 	// if the input is constant and there function is non-volatile we only need to run it on one value
 	bool all_constant = true;
-	if (expr.function.stability == FunctionStability::VOLATILE) {
+	if (expr.function.GetStability() == FunctionStability::VOLATILE) {
 		// we cannot optimize away constant vectors for volatile functions
 		all_constant = false;
 	}
+	auto default_null_handling = expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			D_ASSERT(state->types[i] == expr.children[i]->return_type);
+			D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			if (arguments.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 				all_constant = false;
+			} else if (default_null_handling && ConstantVector::IsNull(arguments.data[i])) {
+				// constant NULL input: result is NULL
+				ConstantVector::SetNull(result, count_t(count));
+				return;
 			}
 		}
 	}
-	arguments.SetCardinality(all_constant ? 1 : count);
-	arguments.Verify(context ? context->db : nullptr);
+	const idx_t arg_count = all_constant ? 1 : count;
+	arguments.SetCardinality(arg_count);
+	if (!all_constant) {
+		// when all-constant we execute the function on a single row but keep argument vectors at outer size
+		// (the buffers are shared with the input chunk so we cannot resize them) - skip verification in that case
+		arguments.Verify(context ? context->db : nullptr);
+	}
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
@@ -256,9 +267,10 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(count));
 
 	VerifyNullHandling(expr, arguments, result);
-	D_ASSERT(result.GetType() == expr.return_type);
+	D_ASSERT(result.GetType() == expr.GetReturnType());
 }
 
 static void ScatterSelectionResult(const SelectionVector &source, idx_t source_count, const SelectionVector *sel,
@@ -278,11 +290,11 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	if (!expr.function.HasSelectCallback()) {
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
-
+	// FIXME: push constant handling in here
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		D_ASSERT(state->types[i] == expr.children[i]->return_type);
+		D_ASSERT(state->types[i] == expr.children[i]->GetReturnType());
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 	}
 	arguments.SetCardinality(count);

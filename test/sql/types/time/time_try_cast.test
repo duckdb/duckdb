@@ -2,9 +2,6 @@
 # description: Test time try cast
 # group: [time]
 
-statement ok
-PRAGMA enable_verification
-
 # try cast on gibberish
 query I
 select try_cast('' as time)

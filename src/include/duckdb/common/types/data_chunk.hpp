@@ -57,25 +57,17 @@ public:
 	inline idx_t ColumnCount() const {
 		return data.size();
 	}
-	inline void SetCardinality(idx_t count_p) {
-		D_ASSERT(count_p <= capacity);
-		this->count = count_p;
-	}
+	void SetCardinality(idx_t count_p);
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
-	inline idx_t GetCapacity() const {
-		return capacity;
-	}
-	inline void SetCapacity(idx_t capacity_p) {
-		this->capacity = capacity_p;
-	}
-	inline void SetCapacity(const DataChunk &other) {
-		SetCapacity(other.capacity);
-	}
+	//! Sets the cardinality of all child vectors of this chunk
+	void SetChildCardinality(idx_t count_p);
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
-	DUCKDB_API void SetValue(idx_t col_idx, idx_t index, const Value &val);
+	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "
+	             "semantics)")]] DUCKDB_API void
+	SetValue(idx_t col_idx, idx_t index, const Value &val);
 
 	//! Returns the uncompressed size of the data elements stored in this data chunk
 	idx_t GetDataSize() const;
@@ -107,8 +99,9 @@ public:
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk and resize is not allowed.
-	DUCKDB_API void Append(const DataChunk &other, bool resize = false, SelectionVector *sel = nullptr,
-	                       idx_t count = 0);
+	DUCKDB_API void Append(const DataChunk &other, VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
+	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t sel_count,
+	                       VectorAppendMode append_mode = VectorAppendMode::ERROR_ON_NO_SPACE);
 
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
@@ -138,6 +131,8 @@ public:
 	//! Slice all Vectors from other.data[i] to data[i + 'col_offset']
 	//! Turning all Vectors into Dictionary Vectors, using 'sel'
 	DUCKDB_API void Slice(const DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);
+	//! Slice all vectors from other.data from "offset..end"
+	DUCKDB_API void Slice(const DataChunk &other, idx_t offset, idx_t end);
 
 	//! Slice a DataChunk from "offset" to "offset + count"
 	DUCKDB_API void Slice(idx_t offset, idx_t count);
@@ -171,10 +166,6 @@ public:
 private:
 	//! The amount of tuples stored in the data chunk
 	idx_t count;
-	//! The amount of tuples that can be stored in the data chunk
-	idx_t capacity;
-	//! The initial capacity of this chunk set during ::Initialize, used when resetting
-	idx_t initial_capacity;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 };

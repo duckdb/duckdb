@@ -7,9 +7,6 @@ require skip_reload
 require notmingw
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
@@ -193,3 +190,10 @@ query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
 ----
 [BOUNDED, BOUNDED]
+
+query I
+SELECT can_cast_implicitly(i, i::UNION(a BOUNDED(200))) FROM t1;
+----
+true
+true
+true

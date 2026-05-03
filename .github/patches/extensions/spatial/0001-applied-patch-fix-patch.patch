@@ -1,31 +1,3 @@
-From d902db238d2bca76a919f4e12306da6e3771b0ec Mon Sep 17 00:00:00 2001
-From: Max Gabrielsson <max@gabrielsson.com>
-Date: Mon, 13 Apr 2026 12:54:05 +0200
-Subject: [PATCH] applied patch: fix.patch
-
----
- src/spatial/index/rtree/rtree_index.cpp       |  16 +-
- .../rtree/rtree_index_create_logical.cpp      |   2 +-
- .../rtree/rtree_index_create_physical.cpp     |  14 +-
- .../index/rtree/rtree_index_plan_scan.cpp     |  50 ++-
- .../index/rtree/rtree_index_pragmas.cpp       |  16 +-
- src/spatial/modules/geos/geos_module.cpp      |  41 +-
- .../modules/main/spatial_functions_cast.cpp   |  78 ++--
- .../modules/main/spatial_functions_scalar.cpp | 360 +++++++++---------
- .../modules/main/spatial_functions_table.cpp  |   9 +-
- src/spatial/modules/mvt/mvt_module.cpp        |  17 +-
- src/spatial/modules/osm/osm_module.cpp        |  54 +--
- src/spatial/modules/proj/proj_module.cpp      |  12 +-
- .../modules/shapefile/shapefile_module.cpp    |  26 +-
- .../operators/spatial_join_logical.cpp        |  14 +-
- .../operators/spatial_join_logical.hpp        |   6 +-
- .../operators/spatial_join_optimizer.cpp      |  14 +-
- .../operators/spatial_join_physical.cpp       |  46 +--
- src/spatial/spatial_settings.cpp              |   1 +
- src/spatial/spatial_types.cpp                 |   2 +-
- src/spatial/util/function_builder.cpp         |  40 +-
- 20 files changed, 411 insertions(+), 407 deletions(-)
-
 diff --git a/src/spatial/index/rtree/rtree_index.cpp b/src/spatial/index/rtree/rtree_index.cpp
 index 239d546..9de9355 100644
 --- a/src/spatial/index/rtree/rtree_index.cpp
@@ -263,7 +235,7 @@ index a0e5397..7300678 100644
  	const auto &tree = *state.index.tree;
  
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
-index d111f0b..4b0a544 100644
+index d111f0b..ff2c6cd 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
 +++ b/src/spatial/modules/geos/geos_module.cpp
 @@ -8,6 +8,7 @@
@@ -377,6 +349,15 @@ index d111f0b..4b0a544 100644
  
  			// We can't steal the list, we need to clone and append all elements
  			auto &combined_state = *combined_ptr[raw_idx];
+@@ -2819,7 +2820,7 @@ struct GEOSCoverageAggFunction {
+ 
+ 		const auto state_ptr = UnifiedVectorFormat::GetData<State *>(state_format);
+ 
+-		auto &mask = FlatVector::Validity(result);
++		auto &mask = FlatVector::ValidityMutable(result);
+ 
+ 		for (idx_t raw_idx = 0; raw_idx < count; raw_idx++) {
+ 			auto &state = *state_ptr[state_format.sel->get_index(raw_idx)];
 @@ -2942,7 +2943,7 @@ struct ST_CoverageSimplify_Agg : GEOSCoverageAggFunction {
  		    GEOSCoverageSimplifyVW_r(state.context, collection, state.tolerance, !state.simplify_boundary);
  
@@ -586,7 +567,7 @@ index 72722cc..8796650 100644
  	UnaryExecutor::Execute<list_entry_t, string_t>(poly_vector, result, count, [&](list_entry_t polygon_entry) {
  		auto offset = polygon_entry.offset;
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 31cd743..5310f80 100644
+index 31cd743..2b63e23 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -179,7 +179,7 @@ struct ST_Affine {
@@ -735,7 +716,8 @@ index 31cd743..5310f80 100644
 +		auto right_x = FlatVector::GetDataMutable<double>(right_entries[0]);
 +		auto right_y = FlatVector::GetDataMutable<double>(right_entries[1]);
  
- 		auto &result_mask = FlatVector::Validity(result);
+-		auto &result_mask = FlatVector::Validity(result);
++		auto &result_mask = FlatVector::ValidityMutable(result);
  
 -		auto out_data = FlatVector::GetData<double>(result);
 +		auto out_data = FlatVector::GetDataMutable<double>(result);
@@ -1799,7 +1781,7 @@ index 206624e..d11d09e 100644
  		if (bdata.always_xy) {
  			std::swap(x_data, y_data);
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index 57b34d0..ecf3163 100644
+index 57b34d0..616feb5 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
 +++ b/src/spatial/modules/shapefile/shapefile_module.cpp
 @@ -1,3 +1,5 @@
@@ -1817,6 +1799,15 @@ index 57b34d0..ecf3163 100644
  		}
  	}
  
+@@ -659,7 +661,7 @@ struct ST_ReadSHP {
+ 	                                  ArenaAllocator &arena, int geom_type) {
+ 		switch (geom_type) {
+ 		case SHPT_NULL:
+-			FlatVector::Validity(result).SetAllInvalid(count);
++			FlatVector::ValidityMutable(result).SetAllInvalid(count);
+ 			break;
+ 		case SHPT_POINT:
+ 			ConvertGeomLoop<ConvertPoint>(result, record_start, count, shp_handle, arena);
 @@ -743,7 +745,7 @@ struct ST_ReadSHP {
  			if (DBFIsAttributeNULL(dbf_handle, record_idx, field_idx)) {
  				FlatVector::SetNull(result, row_idx, true);
@@ -1988,7 +1979,7 @@ index 725512d..b0b219c 100644
  	spatial_join->has_estimated_cardinality = any_join.has_estimated_cardinality;
  	spatial_join->estimated_cardinality = any_join.estimated_cardinality;
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index 5738f83..e601047 100644
+index 5738f83..804b7c9 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -1,3 +1,5 @@
@@ -2055,6 +2046,15 @@ index 5738f83..e601047 100644
  
  		// Push the bounding boxes into the R-Tree
  		auto &validity = FlatVector::Validity(bbox_chunk.data[0]);
+@@ -890,7 +878,7 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
+ 	auto &lstate = lstate_p.Cast<SpatialJoinLocalOperatorState>();
+ 
+ 	idx_t output_index = 0;
+-	idx_t output_count = chunk.GetCapacity();
++	idx_t output_count = STANDARD_VECTOR_SIZE;
+ 
+ 	while (true) {
+ 		switch (lstate.state) {
 @@ -928,11 +916,11 @@ OperatorResultType PhysicalSpatialJoin::ExecuteInternal(ExecutionContext &contex
  			lstate.bbox_probe_executor.Execute(lstate.probe_side_key_chunk, lstate.probe_side_box_chunk);
  			lstate.probe_side_box_chunk.data[0].ToUnifiedFormat(input.size(), lstate.probe_side_box_vformat);
@@ -2181,6 +2181,3 @@ index 5bd4f95..d4c6e43 100644
  }
  
  void FunctionBuilder::AddTableFunctionDocs(ExtensionLoader &loader, const char *name, const char *desc,
--- 
-2.39.5 (Apple Git-154)
-

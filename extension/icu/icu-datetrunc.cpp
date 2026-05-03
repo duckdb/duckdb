@@ -136,20 +136,19 @@ struct ICUDateTrunc : public ICUDateFunc {
 		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// Common case of constant part.
 			if (ConstantVector::IsNull(part_arg)) {
-				ConstantVector::SetNull(result);
-			} else {
-				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
-				auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
-				UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
-					if (Timestamp::IsFinite(input)) {
-						auto micros = SetTime(calendar.get(), input);
-						truncator(calendar.get(), micros);
-						return GetTimeUnsafe(calendar.get(), micros);
-					} else {
-						return input;
-					}
-				});
+				throw InternalException("ICUDateTrunc called with constant NULL bucket width");
 			}
+			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
+			auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
+			UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
+				if (Timestamp::IsFinite(input)) {
+					auto micros = SetTime(calendar.get(), input);
+					truncator(calendar.get(), micros);
+					return GetTimeUnsafe(calendar.get(), micros);
+				} else {
+					return input;
+				}
+			});
 		} else {
 			BinaryExecutor::Execute<string_t, T, timestamp_t>(
 			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
@@ -173,6 +172,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetArgProperties(1, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
 };

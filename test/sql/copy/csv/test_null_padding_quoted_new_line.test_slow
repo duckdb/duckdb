@@ -3,9 +3,6 @@
 # group: [csv]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE T as SELECT 'this line
 has a new line' from range (1000000);
 
