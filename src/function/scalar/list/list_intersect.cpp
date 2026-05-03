@@ -83,7 +83,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 				// value is NULL - skip
 				continue;
 			}
-			const auto &key = hash_keys.GetValue(h_idx);
+			const auto &key = hash_keys.GetValueUnsafe(h_idx);
 			set.insert(key);
 			if (use_l_for_hash) {
 				key_to_index_map[key] = h_idx;
@@ -100,7 +100,7 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 				// value is NULL - skip
 				continue;
 			}
-			const auto &key = iter_keys.GetValue(it_idx);
+			const auto &key = iter_keys.GetValueUnsafe(it_idx);
 			if (set.find(key) == set.end() || result_set.find(key) != result_set.end()) {
 				continue;
 			}
