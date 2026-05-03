@@ -1,5 +1,4 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -36,26 +35,35 @@ struct CountStarFunction : public BaseCountFunction {
 	}
 
 	template <typename RESULT_TYPE>
-	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition, const_data_ptr_t,
-	                   data_ptr_t l_state, const SubFrames &frames, Vector &result, idx_t rid) {
+	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
 		D_ASSERT(partition.column_ids.empty());
 
 		auto data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
-		RESULT_TYPE total = 0;
-		for (const auto &frame : frames) {
-			const auto begin = frame.start;
-			const auto end = frame.end;
 
-			// Slice to any filtered rows
-			if (partition.filter_mask.CannotHaveNull()) {
-				total += end - begin;
-				continue;
+		// Slice to any filtered rows
+		if (partition.filter_mask.CannotHaveNull()) {
+			for (idx_t rid = 0; rid < count; ++rid) {
+				RESULT_TYPE total = 0;
+				const auto &frames = subframes_per_row[rid];
+				for (const auto &frame : frames) {
+					total += frame.end - frame.start;
+				}
+				data[rid] = total;
 			}
-			for (auto i = begin; i < end; ++i) {
-				total += partition.filter_mask.RowIsValid(i);
+		} else {
+			for (idx_t rid = 0; rid < count; ++rid) {
+				RESULT_TYPE total = 0;
+				const auto &frames = subframes_per_row[rid];
+				for (const auto &frame : frames) {
+					for (auto i = frame.start; i < frame.end; ++i) {
+						total += partition.filter_mask.RowIsValid(i);
+					}
+				}
+				data[rid] = total;
 			}
 		}
-		data[rid] = total;
 	}
 };
 
@@ -251,7 +259,7 @@ AggregateFunction CountStarFun::GetFunction() {
 	fun.name = "count_star";
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
-	fun.SetWindowCallback(CountStarFunction::Window<int64_t>);
+	fun.SetWindowBatchCallback(CountStarFunction::Window<int64_t>);
 	fun.SetStructStateExport(GetCountStateType);
 	return fun;
 }

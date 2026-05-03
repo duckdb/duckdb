@@ -172,8 +172,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
@@ -181,7 +181,6 @@ struct QuantileScalarOperation : public QuantileOperation {
 		const auto &fmask = partition.filter_mask;
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
-		const auto n = FrameSize(included, frames);
 
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
@@ -189,26 +188,40 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::ValidityMutable(result);
 
-		if (!n) {
-			rmask.Set(ridx, false);
-			return;
-		}
-
 		const auto &quantile = bind_data.quantiles[0];
 		if (gstate && gstate->HasTree()) {
-			rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result,
-			                                                                                    quantile);
+			for (idx_t ridx = 0; ridx < count; ++ridx) {
+				const auto &frames = subframes_per_row[ridx];
+				const auto n = FrameSize(included, frames);
+				if (!n) {
+					rmask.Set(ridx, false);
+					continue;
+				}
+
+				rdata[ridx] = gstate->GetWindowState().template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n,
+				                                                                                    result, quantile);
+			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
 
-			//	Update the skip list
-			window_state.UpdateSkip(data, frames, included);
+			for (idx_t ridx = 0; ridx < count; ++ridx) {
+				const auto &frames = subframes_per_row[ridx];
+				const auto n = FrameSize(included, frames);
+				if (!n) {
+					rmask.Set(ridx, false);
+					continue;
+				}
 
-			// Find the position(s) needed
-			rdata[ridx] = window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+				//	Update the skip list
+				window_state.UpdateSkip(data, frames, included);
 
-			//	Save the previous state for next time
-			window_state.prevs = frames;
+				// Find the position(s) needed
+				rdata[ridx] =
+				    window_state.template WindowScalar<RESULT_TYPE, DISCRETE>(data, frames, n, result, quantile);
+
+				//	Save the previous state for next time
+				window_state.prevs = frames;
+			}
 		}
 	}
 };
@@ -275,8 +288,8 @@ struct QuantileListOperation : QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &list,
-	                   idx_t lidx) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &list, idx_t row_idx) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
@@ -287,22 +300,36 @@ struct QuantileListOperation : QuantileOperation {
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
-		const auto n = FrameSize(included, frames);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
-		if (!n) {
-			auto &lmask = FlatVector::ValidityMutable(list);
-			lmask.Set(lidx, false);
-			return;
-		}
+		auto &lmask = FlatVector::ValidityMutable(list);
 
 		if (gstate && gstate->HasTree()) {
-			gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+			for (idx_t lidx = 0; lidx < count; ++lidx) {
+				const auto &frames = subframes_per_row[lidx];
+				const auto n = FrameSize(included, frames);
+				if (!n) {
+					lmask.Set(lidx, false);
+					continue;
+				}
+
+				gstate->GetWindowState().template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx,
+				                                                                   bind_data);
+			}
 		} else {
 			auto &window_state = state.GetOrCreateWindowState();
-			window_state.UpdateSkip(data, frames, included);
-			window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
-			window_state.prevs = frames;
+			for (idx_t lidx = 0; lidx < count; ++lidx) {
+				const auto &frames = subframes_per_row[lidx];
+				const auto n = FrameSize(included, frames);
+				if (!n) {
+					lmask.Set(lidx, false);
+					continue;
+				}
+
+				window_state.UpdateSkip(data, frames, included);
+				window_state.template WindowList<CHILD_TYPE, DISCRETE>(data, frames, n, list, lidx, bind_data);
+				window_state.prevs = frames;
+			}
 		}
 	}
 };
@@ -386,7 +413,7 @@ struct ScalarDiscreteQuantile {
 		auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP,
 		                                                       AggregateDestructorType::LEGACY>(type, type);
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.SetWindowCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
+		fun.SetWindowBatchCallback(OP::Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 		fun.SetWindowInitCallback(OP::WindowInit<STATE, INPUT_TYPE>);
 #endif
 		return fun;
@@ -425,7 +452,7 @@ struct ListDiscreteQuantile {
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
+		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 		return fun;
@@ -519,7 +546,7 @@ struct ScalarContinuousQuantile {
 		                                                AggregateDestructorType::LEGACY>(input_type, target_type);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
+		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 		return fun;
@@ -534,7 +561,7 @@ struct ListContinuousQuantile {
 		auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, target_type);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
-		fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
+		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 		return fun;
