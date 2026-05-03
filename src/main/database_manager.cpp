@@ -251,27 +251,14 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	// Lookup the requested database and detech if applicable.
 	shared_ptr<AttachedDatabase> attached_db;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto entry = databases.find(name);
 		if (entry != databases.end()) {
-			// Validate visible database.
-			if (entry->second->GetVisibility() != AttachVisibility::HIDDEN) {
-				auto &meta_transaction = MetaTransaction::Get(context);
-				if (meta_transaction.TryGetTransaction(*entry->second)) {
-					throw TransactionException(
-					    "Cannot detach database \"%s\" because the current transaction has outstanding "
-					    "work on it - commit or rollback first",
-					    name);
-				}
-			}
-			attached_db = std::move(entry->second);
-			databases.erase(entry);
+			attached_db = entry->second;
 		}
 	}
-
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
@@ -279,9 +266,22 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		return;
 	}
 
+	// Reject detach if current transaction already has outstanding work on the database.
+	if (attached_db->GetVisibility() != AttachVisibility::HIDDEN) {
+		auto &meta_transaction = MetaTransaction::Get(context);
+		if (meta_transaction.TryGetTransaction(*attached_db)) {
+			throw TransactionException("Cannot detach database \"%s\" because the current transaction has outstanding "
+			                           "work on it - commit or rollback first",
+			                           name);
+		}
+	}
+
+	// Detach the database.
+	attached_db = DetachInternal(name);
+	D_ASSERT(attached_db);
 	attached_db->OnDetach(context);
 
-	// The AttachedDatabase has been removed from the list of databases that can be referenced.
+	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
 	AttachedDatabase::InvokeCloseIfLastReference(attached_db);
 }
 
