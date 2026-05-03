@@ -727,8 +727,9 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
-	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(),
+	    SortedAggregateFunction::SimpleUpdate, nullptr,
+	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
 	    SortedAggregateFunction::WindowBatch);
 
 	expr.function.ReplaceImplementation(ordered_aggregate);
