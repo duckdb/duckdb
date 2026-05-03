@@ -258,39 +258,100 @@ TEST_CASE("Cross-type compound assignment matches native behavior", "[checked_in
 }
 
 TEST_CASE("CheckedInteger narrow constructor overflow", "[checked_integer]") {
-	SECTION("signed: int -> smaller signed throws on overflow") {
+	SECTION("same-sign widening: always passes (round-trip is exact)") {
+		// signed -> wider signed
+		REQUIRE(i64_t(int8_t(-128)).GetValue() == -128);
+		REQUIRE(i64_t(int8_t(127)).GetValue() == 127);
+		REQUIRE(i32_t(int16_t(-32768)).GetValue() == -32768);
+		REQUIRE(i32_t(int16_t(32767)).GetValue() == 32767);
+
+		// unsigned -> wider unsigned
+		REQUIRE(u64_t(uint8_t(255)).GetValue() == 255u);
+		REQUIRE(u64_t(uint16_t(65535)).GetValue() == 65535u);
+		REQUIRE(u32_t(uint8_t(0)).GetValue() == 0u);
+	}
+
+	SECTION("signed -> smaller signed: round-trip detects narrow overflow / underflow") {
 		REQUIRE_THROWS_AS(i8_t(1000), InternalException);
 		REQUIRE_THROWS_AS(i8_t(-1000), InternalException);
 		REQUIRE_THROWS_AS(i16_t(40000), InternalException);
+		REQUIRE_THROWS_AS(i16_t(-40000), InternalException);
 		REQUIRE_THROWS_AS(i32_t(int64_t(NumericLimits<int32_t>::Maximum()) + 1), InternalException);
+		REQUIRE_THROWS_AS(i32_t(int64_t(NumericLimits<int32_t>::Minimum()) - 1), InternalException);
 
 		// boundary values pass
-		REQUIRE_NOTHROW(i8_t(127));
-		REQUIRE_NOTHROW(i8_t(-128));
 		REQUIRE(i8_t(127).GetValue() == 127);
 		REQUIRE(i8_t(-128).GetValue() == -128);
+		REQUIRE(i16_t(32767).GetValue() == 32767);
+		REQUIRE(i16_t(-32768).GetValue() == -32768);
 	}
 
-	SECTION("unsigned: int -> smaller unsigned throws on overflow") {
+	SECTION("unsigned -> smaller unsigned: round-trip detects narrow overflow") {
 		REQUIRE_THROWS_AS(u8_t(256), InternalException);
 		REQUIRE_THROWS_AS(u8_t(1000), InternalException);
 		REQUIRE_THROWS_AS(u16_t(70000), InternalException);
+		REQUIRE_THROWS_AS(u8_t(uint16_t(256)), InternalException);
+		REQUIRE_THROWS_AS(u32_t(uint64_t(1) << 32), InternalException);
 
 		// boundary values pass
-		REQUIRE_NOTHROW(u8_t(0));
-		REQUIRE_NOTHROW(u8_t(255));
+		REQUIRE(u8_t(0).GetValue() == 0u);
 		REQUIRE(u8_t(255).GetValue() == 255u);
+		REQUIRE(u32_t(uint64_t(NumericLimits<uint32_t>::Maximum())).GetValue() ==
+		        NumericLimits<uint32_t>::Maximum());
 	}
 
-	SECTION("signed -> unsigned: large positive that fits passes") {
-		REQUIRE_NOTHROW(u32_t(int64_t(1) << 31));
+	SECTION("signed -> unsigned: branch 1 rejects negatives, round-trip rejects too-large") {
+		// Branch 1: negative source rejected for unsigned target
+		REQUIRE_THROWS_AS(u8_t(int8_t(-1)), InternalException);
+		REQUIRE_THROWS_AS(u8_t(int16_t(-128)), InternalException);
+		REQUIRE_THROWS_AS(u32_t(int32_t(-1)), InternalException);
+		REQUIRE_THROWS_AS(u64_t(int64_t(-1)), InternalException);
+
+		// Round-trip: positive that doesn't fit
 		REQUIRE_THROWS_AS(u8_t(int16_t(300)), InternalException);
+		REQUIRE_THROWS_AS(u8_t(int32_t(256)), InternalException);
+
+		// Boundary: 0 and target max pass
+		REQUIRE(u8_t(int8_t(127)).GetValue() == 127u);
+		REQUIRE(u32_t(int32_t(0)).GetValue() == 0u);
+		REQUIRE(u32_t(int32_t(NumericLimits<int32_t>::Maximum())).GetValue() ==
+		        static_cast<uint32_t>(NumericLimits<int32_t>::Maximum()));
+		REQUIRE(u32_t(int64_t(1) << 31).GetValue() == (uint32_t(1) << 31));
 	}
 
-	SECTION("unsigned -> signed: too-large unsigned throws") {
+	SECTION("unsigned -> signed: branch 2 rejects sign-flips, round-trip catches narrowing") {
+		// Branch 2: source value > T::max wraps result into negative
+		REQUIRE_THROWS_AS(i8_t(uint8_t(128)), InternalException);
 		REQUIRE_THROWS_AS(i8_t(uint16_t(200)), InternalException);
+		REQUIRE_THROWS_AS(i16_t(uint16_t(NumericLimits<int16_t>::Maximum()) + 1), InternalException);
 		REQUIRE_THROWS_AS(i32_t(uint64_t(NumericLimits<int32_t>::Maximum()) + 1), InternalException);
-		REQUIRE_NOTHROW(i32_t(uint8_t(255)));
+
+		// Boundary: T::max passes
+		REQUIRE(i8_t(uint8_t(127)).GetValue() == 127);
+		REQUIRE(i16_t(uint16_t(NumericLimits<int16_t>::Maximum())).GetValue() ==
+		        NumericLimits<int16_t>::Maximum());
+		REQUIRE(i32_t(uint8_t(255)).GetValue() == 255);
+	}
+
+	SECTION("max-width edges: int64 <-> uint64") {
+		// uint64 -> int64
+		REQUIRE(i64_t(uint64_t(NumericLimits<int64_t>::Maximum())).GetValue() ==
+		        NumericLimits<int64_t>::Maximum());
+		REQUIRE_THROWS_AS(i64_t(uint64_t(NumericLimits<int64_t>::Maximum()) + 1), InternalException);
+		REQUIRE_THROWS_AS(i64_t(NumericLimits<uint64_t>::Maximum()), InternalException);
+
+		// int64 -> uint64
+		REQUIRE(u64_t(int64_t(NumericLimits<int64_t>::Maximum())).GetValue() ==
+		        static_cast<uint64_t>(NumericLimits<int64_t>::Maximum()));
+		REQUIRE_THROWS_AS(u64_t(int64_t(-1)), InternalException);
+		REQUIRE_THROWS_AS(u64_t(NumericLimits<int64_t>::Minimum()), InternalException);
+	}
+
+	SECTION("bool is integral and maps to 0/1") {
+		REQUIRE(i8_t(true).GetValue() == 1);
+		REQUIRE(i8_t(false).GetValue() == 0);
+		REQUIRE(u32_t(true).GetValue() == 1u);
+		REQUIRE(u64_t(false).GetValue() == 0u);
 	}
 }
 

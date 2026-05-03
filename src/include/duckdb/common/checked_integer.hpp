@@ -20,7 +20,7 @@
 namespace duckdb {
 
 //! CheckedInteger is a templated wrapper around integer types.
-//! 
+//!
 //! A few key features:
 //! - On underflow and overflow, it throws a templated exception type (by default InternalException).
 //! - It's by default initialized to 0, which avoid accessing uninitialized memory.
@@ -42,8 +42,7 @@ public:
 	CheckedInteger(T v) : value(v) {
 	} // NOLINT
 
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 	}
 
@@ -58,7 +57,8 @@ public:
 	CheckedInteger &operator++() {
 		T result;
 		if (!TryAddOperator::Operation(value, T(1), result)) {
-			throw ExceptionT("Overflow in increment of CheckedInteger");
+			throw ExceptionT("Overflow in increment of CheckedInteger: %d + 1 exceeds maximum %d", FormatValue(value),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		value = result;
 		return *this;
@@ -73,7 +73,8 @@ public:
 	CheckedInteger &operator--() {
 		T result;
 		if (!TrySubtractOperator::Operation(value, T(1), result)) {
-			throw ExceptionT("Underflow in decrement of CheckedInteger");
+			throw ExceptionT("Underflow in decrement of CheckedInteger: %d - 1 below minimum %d", FormatValue(value),
+			                 FormatValue(NumericLimits<T>::Minimum()));
 		}
 		value = result;
 		return *this;
@@ -91,13 +92,14 @@ public:
 	CheckedInteger &operator+=(T rhs) {
 		T result;
 		if (!TryAddOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Overflow in addition for CheckedInteger");
+			throw ExceptionT("Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		value = result;
 		return *this;
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator+=(U rhs) {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -111,7 +113,9 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) + static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in addition for CheckedInteger");
+				throw ExceptionT("Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -124,13 +128,14 @@ public:
 	CheckedInteger &operator-=(T rhs) {
 		T result;
 		if (!TrySubtractOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Underflow in subtraction for CheckedInteger");
+			throw ExceptionT("Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		value = result;
 		return *this;
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator-=(U rhs) {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -144,7 +149,9 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) - static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Underflow in subtraction for CheckedInteger");
+				throw ExceptionT("Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -157,27 +164,31 @@ public:
 	CheckedInteger &operator*=(T rhs) {
 		T result;
 		if (!TryMultiplyOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Overflow in multiplication for CheckedInteger");
+			throw ExceptionT("Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		value = result;
 		return *this;
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator*=(U rhs) {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
 		if constexpr (std::is_same_v<Promoted, T>) {
 			if constexpr (std::is_unsigned_v<T> && std::is_signed_v<U>) {
 				if (rhs < 0) {
-					throw ExceptionT("Cannot multiply unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot multiply unsigned CheckedInteger %d by negative value %d",
+					                 FormatValue(value), FormatValue(rhs));
 				}
 			}
 			return operator*=(static_cast<T>(rhs));
 		} else {
 			Promoted result = static_cast<Promoted>(value) * static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in multiplication for CheckedInteger");
+				throw ExceptionT("Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -189,33 +200,34 @@ public:
 	}
 	CheckedInteger &operator/=(T rhs) {
 		if (rhs == 0) {
-			throw ExceptionT("Division by zero in CheckedInteger");
+			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 		}
 		if (NumericLimits<T>::IsSigned() && value == NumericLimits<T>::Minimum() && rhs == T(-1)) {
-			throw ExceptionT("Overflow in division for CheckedInteger");
+			throw ExceptionT("Overflow in division for CheckedInteger: %d / %d", FormatValue(value), FormatValue(rhs));
 		}
 		value /= rhs;
 		return *this;
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator/=(U rhs) {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
 		if constexpr (std::is_same_v<Promoted, T>) {
 			if constexpr (std::is_unsigned_v<T> && std::is_signed_v<U>) {
 				if (rhs < 0) {
-					throw ExceptionT("Cannot divide unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot divide unsigned CheckedInteger %d by negative value %d",
+					                 FormatValue(value), FormatValue(rhs));
 				}
 			}
 			return operator/=(static_cast<T>(rhs));
 		} else {
 			if (rhs == 0) {
-				throw ExceptionT("Division by zero in CheckedInteger");
+				throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 			}
 			Promoted result = static_cast<Promoted>(value) / static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in division for CheckedInteger");
+				throw ExceptionT("Overflow in division for CheckedInteger: %d / %d", FormatValue(value),
+				                 FormatValue(rhs));
 			}
 			value = static_cast<T>(result);
 			return *this;
@@ -228,12 +240,13 @@ public:
 	CheckedInteger operator+(T rhs) const {
 		T result;
 		if (!TryAddOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Overflow in addition for CheckedInteger");
+			throw ExceptionT("Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator+(U rhs) const {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -247,7 +260,9 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) + static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in addition for CheckedInteger");
+				throw ExceptionT("Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -259,12 +274,13 @@ public:
 	CheckedInteger operator-(T rhs) const {
 		T result;
 		if (!TrySubtractOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Underflow in subtraction for CheckedInteger");
+			throw ExceptionT("Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator-(U rhs) const {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
@@ -278,7 +294,9 @@ public:
 		} else {
 			Promoted result = static_cast<Promoted>(value) - static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Underflow in subtraction for CheckedInteger");
+				throw ExceptionT("Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -290,26 +308,30 @@ public:
 	CheckedInteger operator*(T rhs) const {
 		T result;
 		if (!TryMultiplyOperator::Operation(value, rhs, result)) {
-			throw ExceptionT("Overflow in multiplication for CheckedInteger");
+			throw ExceptionT("Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])",
+			                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+			                 FormatValue(NumericLimits<T>::Maximum()));
 		}
 		return CheckedInteger(result);
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator*(U rhs) const {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
 		if constexpr (std::is_same_v<Promoted, T>) {
 			if constexpr (std::is_unsigned_v<T> && std::is_signed_v<U>) {
 				if (rhs < 0) {
-					throw ExceptionT("Cannot multiply unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot multiply unsigned CheckedInteger %d by negative value %d",
+					                 FormatValue(value), FormatValue(rhs));
 				}
 			}
 			return operator*(static_cast<T>(rhs));
 		} else {
 			Promoted result = static_cast<Promoted>(value) * static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in multiplication for CheckedInteger");
+				throw ExceptionT("Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])",
+				                 FormatValue(value), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
+				                 FormatValue(NumericLimits<T>::Maximum()));
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -320,32 +342,33 @@ public:
 	}
 	CheckedInteger operator/(T rhs) const {
 		if (rhs == 0) {
-			throw ExceptionT("Division by zero in CheckedInteger");
+			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 		}
 		if (NumericLimits<T>::IsSigned() && value == NumericLimits<T>::Minimum() && rhs == T(-1)) {
-			throw ExceptionT("Overflow in division for CheckedInteger");
+			throw ExceptionT("Overflow in division for CheckedInteger: %d / %d", FormatValue(value), FormatValue(rhs));
 		}
 		return CheckedInteger(value / rhs);
 	}
-	template <typename U,
-	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator/(U rhs) const {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using Promoted = typename std::common_type<T, U>::type;
 		if constexpr (std::is_same_v<Promoted, T>) {
 			if constexpr (std::is_unsigned_v<T> && std::is_signed_v<U>) {
 				if (rhs < 0) {
-					throw ExceptionT("Cannot divide unsigned CheckedInteger by negative value");
+					throw ExceptionT("Cannot divide unsigned CheckedInteger %d by negative value %d",
+					                 FormatValue(value), FormatValue(rhs));
 				}
 			}
 			return operator/(static_cast<T>(rhs));
 		} else {
 			if (rhs == 0) {
-				throw ExceptionT("Division by zero in CheckedInteger");
+				throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 			}
 			Promoted result = static_cast<Promoted>(value) / static_cast<Promoted>(rhs);
 			if (static_cast<Promoted>(static_cast<T>(result)) != result) {
-				throw ExceptionT("Overflow in division for CheckedInteger");
+				throw ExceptionT("Overflow in division for CheckedInteger: %d / %d", FormatValue(value),
+				                 FormatValue(rhs));
 			}
 			return CheckedInteger(static_cast<T>(result));
 		}
@@ -377,17 +400,20 @@ private:
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		if constexpr (std::is_signed_v<U> && std::is_unsigned_v<T>) {
 			if (v < U(0)) {
-				throw ExceptionT("Value out of range for CheckedInteger");
+				throw ExceptionT("Value %d out of range for CheckedInteger (valid range [%d, %d])", FormatValue(v),
+				                 FormatValue(NumericLimits<T>::Minimum()), FormatValue(NumericLimits<T>::Maximum()));
 			}
 		}
 		T result = static_cast<T>(v);
 		if constexpr (std::is_unsigned_v<U> && std::is_signed_v<T>) {
 			if (result < T(0)) {
-				throw ExceptionT("Value out of range for CheckedInteger");
+				throw ExceptionT("Value %d out of range for CheckedInteger (valid range [%d, %d])", FormatValue(v),
+				                 FormatValue(NumericLimits<T>::Minimum()), FormatValue(NumericLimits<T>::Maximum()));
 			}
 		}
 		if (static_cast<U>(result) != v) {
-			throw ExceptionT("Value out of range for CheckedInteger");
+			throw ExceptionT("Value %d out of range for CheckedInteger (valid range [%d, %d])", FormatValue(v),
+			                 FormatValue(NumericLimits<T>::Minimum()), FormatValue(NumericLimits<T>::Maximum()));
 		}
 		return result;
 	}
@@ -399,6 +425,16 @@ private:
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
 		using UnsignedU = typename std::make_unsigned<U>::type;
 		return static_cast<T>(static_cast<UnsignedU>(-static_cast<UnsignedU>(rhs)));
+	}
+
+	template <typename V>
+	static auto FormatValue(V v) {
+		static_assert(std::is_integral_v<V>, "CheckedInteger only supports integral types");
+		if constexpr (std::is_unsigned_v<V>) {
+			return static_cast<idx_t>(v);
+		} else {
+			return static_cast<int64_t>(v);
+		}
 	}
 };
 
