@@ -99,9 +99,9 @@ public:
 		arguments.push_back(unique_ptr_cast<BoundReferenceExpression, Expression>(std::move(expr)));
 
 		BoundScalarFunction bound_func(GetTransformFunction());
+		bound_func.SetReturnType(TransformedType());
 
-		return make_uniq<BoundFunctionExpression>(TransformedType(), std::move(bound_func), std::move(arguments),
-		                                          nullptr, false);
+		return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(arguments), nullptr);
 	}
 
 public:

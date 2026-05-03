@@ -16,8 +16,7 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 		children.push_back(make_uniq<BoundConstantExpression>(v));
 	}
 	auto bind_info_clone = func.bind_info ? func.bind_info->Copy() : nullptr;
-	BoundFunctionExpression clone(func.GetReturnType(), func.function, std::move(children), std::move(bind_info_clone),
-	                              func.is_operator);
+	BoundFunctionExpression clone(func.function, std::move(children), std::move(bind_info_clone), func.is_operator);
 	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
 }
 

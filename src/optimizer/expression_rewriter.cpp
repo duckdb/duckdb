@@ -60,7 +60,7 @@ unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expr
 
 	BoundScalarFunction bound_func(func);
 
-	return make_uniq<BoundFunctionExpression>(type, std::move(bound_func), std::move(children),
+	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
 	                                          ConstantOrNull::Bind(std::move(value)));
 }
 

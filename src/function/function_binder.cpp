@@ -751,8 +751,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 
 	unique_ptr<Expression> result;
 
-	auto result_func = make_uniq<BoundFunctionExpression>(bound_function.GetReturnType(), std::move(bound_function),
-	                                                      std::move(children), std::move(bind_info), is_operator);
+	auto result_func = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(children),
+	                                                      std::move(bind_info), is_operator);
 
 	if (result_func->function.HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression

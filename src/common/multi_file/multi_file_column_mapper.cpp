@@ -874,14 +874,14 @@ static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type)
 
 static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr,
                                                             const LogicalType &source_type, idx_t child_idx) {
-	auto &child_type = StructType::GetChildType(source_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(source_expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(static_cast<int64_t>(child_idx + 1))));
 
 	BoundScalarFunction bound_func(GetExtractAtFunction());
+	bound_func.SetReturnType(StructType::GetChildType(source_type, child_idx));
 
-	return make_uniq<BoundFunctionExpression>(child_type, std::move(bound_func), std::move(arguments),
+	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(arguments),
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 

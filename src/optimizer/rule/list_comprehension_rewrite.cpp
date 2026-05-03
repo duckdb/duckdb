@@ -232,9 +232,12 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 
 	auto filter_return_type = filter_children[0]->GetReturnType();
 	auto filter_bind_info = make_uniq<ListLambdaBindData>(filter_return_type, filter_expr.Copy(), inner_bind.has_index);
-	auto new_filter =
-	    make_uniq<BoundFunctionExpression>(filter_return_type, list_filter_expr.function, std::move(filter_children),
-	                                       std::move(filter_bind_info), list_filter_expr.is_operator);
+
+	auto new_func = list_filter_expr.function;
+	new_func.SetReturnType(filter_return_type);
+
+	auto new_filter = make_uniq<BoundFunctionExpression>(std::move(new_func), std::move(filter_children),
+	                                                     std::move(filter_bind_info), list_filter_expr.is_operator);
 
 	// Build list_apply(list_filter(...), lambda result_expr)
 	vector<unique_ptr<Expression>> apply_children;
@@ -251,8 +254,8 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 		RemoveIndexInputSlot(apply_lambda);
 	}
 	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, std::move(apply_lambda));
-	return make_uniq<BoundFunctionExpression>(apply_return_type, root.function, std::move(apply_children),
-	                                          std::move(apply_bind_info), root.is_operator);
+	return make_uniq<BoundFunctionExpression>(root.function, std::move(apply_children), std::move(apply_bind_info),
+	                                          root.is_operator);
 }
 
 } // namespace
