@@ -26,7 +26,9 @@ namespace duckdb {
 //! - It's by default initialized to 0, which avoid accessing uninitialized memory.
 //! - It served as drop-in replacement for the underlying type in most cases.
 //!
-//! For all the operations, only integral template arguments are accepted.
+//! Known and intentional incompatibilities:
+//! - For all the operations, only integral template arguments are accepted.
+//! - It doesn't support bit operations.
 template <typename T, typename ExceptionT = InternalException>
 class CheckedInteger {
 	static_assert(std::is_integral_v<T>, "CheckedInteger only supports integral types");
@@ -101,7 +103,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator+=(U rhs) {
-		hugeint_t wide = ToHuge(value) + ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) + ToHuge(rhs);
 		value =
 		    NarrowFromHuge(wide, value, rhs, "Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])");
 		return *this;
@@ -122,7 +124,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator-=(U rhs) {
-		hugeint_t wide = ToHuge(value) - ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) - ToHuge(rhs);
 		value = NarrowFromHuge(wide, value, rhs,
 		                       "Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])");
 		return *this;
@@ -143,7 +145,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger &operator*=(U rhs) {
-		hugeint_t wide = ToHuge(value) * ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) * ToHuge(rhs);
 		value = NarrowFromHuge(wide, value, rhs,
 		                       "Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])");
 		return *this;
@@ -167,7 +169,7 @@ public:
 		if (rhs == 0) {
 			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 		}
-		hugeint_t wide = ToHuge(value) / ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) / ToHuge(rhs);
 		value =
 		    NarrowFromHuge(wide, value, rhs, "Overflow in division for CheckedInteger: %d / %d (valid range [%d, %d])");
 		return *this;
@@ -187,7 +189,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator+(U rhs) const {
-		hugeint_t wide = ToHuge(value) + ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) + ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
 		    wide, value, rhs, "Overflow in addition for CheckedInteger: %d + %d (valid range [%d, %d])"));
 	}
@@ -206,7 +208,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator-(U rhs) const {
-		hugeint_t wide = ToHuge(value) - ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) - ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
 		    wide, value, rhs, "Underflow in subtraction for CheckedInteger: %d - %d (valid range [%d, %d])"));
 	}
@@ -225,7 +227,7 @@ public:
 	}
 	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
 	CheckedInteger operator*(U rhs) const {
-		hugeint_t wide = ToHuge(value) * ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) * ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
 		    wide, value, rhs, "Overflow in multiplication for CheckedInteger: %d * %d (valid range [%d, %d])"));
 	}
@@ -247,7 +249,7 @@ public:
 		if (rhs == 0) {
 			throw ExceptionT("Division by zero in CheckedInteger: %d / 0", FormatValue(value));
 		}
-		hugeint_t wide = ToHuge(value) / ToHuge(rhs);
+		const hugeint_t wide = ToHuge(value) / ToHuge(rhs);
 		return CheckedInteger(NarrowFromHuge(
 		    wide, value, rhs, "Overflow in division for CheckedInteger: %d / %d (valid range [%d, %d])"));
 	}
@@ -318,8 +320,9 @@ private:
 		}
 	}
 
+	//! Narrow a 128-bit wide arithmetic result back to T, throwing ExceptionT if underflow/overflow.
 	template <typename V>
-	static T NarrowFromHuge(hugeint_t wide, T lhs, V rhs, const char *op_msg) {
+	static T NarrowFromHuge(const hugeint_t wide, T lhs, V rhs, const char *op_msg) {
 		if (wide < ToHuge(NumericLimits<T>::Minimum()) || wide > ToHuge(NumericLimits<T>::Maximum())) {
 			throw ExceptionT(op_msg, FormatValue(lhs), FormatValue(rhs), FormatValue(NumericLimits<T>::Minimum()),
 			                 FormatValue(NumericLimits<T>::Maximum()));
@@ -348,6 +351,7 @@ CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
 
+// Type alias.
 using i8_t = CheckedInteger<int8_t>;
 using i16_t = CheckedInteger<int16_t>;
 using i32_t = CheckedInteger<int32_t>;
@@ -361,8 +365,6 @@ using u64_t = CheckedInteger<uint64_t>;
 
 namespace std { // NOLINT
 
-//! std::atomic specialization for duckdb::CheckedInteger<T, ExceptionT>.
-//! Uses a CAS loop to provide fetch_add/fetch_sub with overflow/underflow detection via CheckedInteger arithmetic.
 template <typename T, typename ExceptionT>
 struct atomic<duckdb::CheckedInteger<T, ExceptionT>> {
 	static_assert(std::is_integral_v<T>, "CheckedInteger only supports integral types");
@@ -378,6 +380,10 @@ public:
 	}
 	constexpr atomic(T desired) noexcept : val(desired) { // NOLINT
 	}
+	template <typename U, typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, T>, int>::type = 0>
+	atomic(U desired) : val(value_type(desired).GetValue()) { // NOLINT
+	}
+
 	atomic(const atomic &) = delete;
 	atomic &operator=(const atomic &) = delete;
 	atomic &operator=(const atomic &) volatile = delete;
@@ -390,14 +396,15 @@ public:
 		val.store(desired.GetValue(), order);
 	}
 
+	operator value_type() const noexcept { // NOLINT
+		return load();
+	}
+
 	value_type operator=(value_type desired) noexcept { // NOLINT
 		store(desired);
 		return desired;
 	}
 
-	//! Templated assignment from any integral value. Constructs a CheckedInteger first (which performs
-	//! sign / range validation) and then stores it. Disambiguates `atomic_x = 0` against the deleted
-	//! copy-assignment when the literal is not already value_type.
 	template <typename U,
 	          typename std::enable_if<std::is_integral_v<U> && !std::is_same_v<U, value_type>, int>::type = 0>
 	value_type operator=(U desired) {
@@ -406,8 +413,6 @@ public:
 		return checked;
 	}
 
-	//! Atomically adds arg to the stored value using a CAS loop; throws ExceptionT on overflow.
-	//! Returns the value before the addition.
 	value_type fetch_add(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
 		T current = val.load(std::memory_order_relaxed);
 		T next;
@@ -417,8 +422,6 @@ public:
 		return value_type(current);
 	}
 
-	//! Atomically subtracts arg from the stored value using a CAS loop; throws ExceptionT on underflow.
-	//! Returns the value before the subtraction.
 	value_type fetch_sub(value_type arg, std::memory_order order = std::memory_order_seq_cst) {
 		T current = val.load(std::memory_order_relaxed);
 		T next;
