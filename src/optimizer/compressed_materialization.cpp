@@ -398,6 +398,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetIntegralCompress(un
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
 
 	BoundScalarFunction bound_function(compress_function);
+	bound_function.SetReturnType(cast_type);
 	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 
 	auto compress_stats = BaseStatistics::CreateEmpty(cast_type);
@@ -466,6 +467,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	arguments.emplace_back(std::move(input));
 
 	BoundScalarFunction bound_function(compress_function);
+	bound_function.SetReturnType(cast_type);
 
 	auto compress_expr = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 	return make_uniq<CompressExpression>(std::move(compress_expr), compress_stats.ToUnique());
@@ -495,6 +497,7 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
 
 	BoundScalarFunction bound_function(decompress_function);
+	bound_function.SetReturnType(result_type);
 
 	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 }
@@ -508,6 +511,7 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	arguments.emplace_back(std::move(input));
 
 	BoundScalarFunction bound_function(decompress_function);
+	bound_function.SetReturnType(result_type);
 
 	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
 }
