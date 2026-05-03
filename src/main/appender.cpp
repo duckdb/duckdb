@@ -458,17 +458,8 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	}
 }
 
-unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
-                                                      const string &table_name, const ParserOptions &parser_options) {
-	// Parse the query.
-	Parser parser(parser_options);
-	parser.ParseQuery(query);
-
-	// Must be a single statement.
-	if (parser.statements.size() != 1) {
-		throw InvalidInputException("Expected exactly one query for appending data.");
-	}
-
+static unique_ptr<SQLStatement> AttachAppenderCTE(unique_ptr<SQLStatement> statement, unique_ptr<TableRef> table_ref,
+                                                  const string &table_name) {
 	// Create the CTE for the appender.
 	auto cte = make_uniq<SelectNode>();
 	cte->select_list.push_back(make_uniq<StarExpression>());
@@ -485,10 +476,42 @@ unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table
 
 	// Add the appender data as a CTE to the CTE map of the statement.
 	string alias = table_name.empty() ? "appended_data" : table_name;
-	auto &cte_map = GetCTEMap(*parser.statements[0]);
+	auto &cte_map = GetCTEMap(*statement);
 	cte_map.map.insert(alias, std::move(cte_info));
 
+	return statement;
+}
+
+static unique_ptr<SQLStatement> ParseAppenderStatementTemplate(const string &query,
+                                                               const ParserOptions &parser_options) {
+	Parser parser(parser_options);
+	parser.ParseQuery(query);
+
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("Expected exactly one query for appending data.");
+	}
+
 	return std::move(parser.statements[0]);
+}
+
+static unique_ptr<SQLStatement> InstantiateAppenderStatement(const SQLStatement &statement_template,
+                                                             unique_ptr<TableRef> table_ref, const string &table_name) {
+	auto statement = statement_template.Copy();
+	return AttachAppenderCTE(std::move(statement), std::move(table_ref), table_name);
+}
+
+unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
+                                                      const string &table_name, const ParserOptions &parser_options) {
+	// Parse the query.
+	Parser parser(parser_options);
+	parser.ParseQuery(query);
+
+	// Must be a single statement.
+	if (parser.statements.size() != 1) {
+		throw InvalidInputException("Expected exactly one query for appending data.");
+	}
+
+	return AttachAppenderCTE(std::move(parser.statements[0]), std::move(table_ref), table_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -611,10 +634,13 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 
 	string table_name = "__duckdb_internal_appended_data";
 	auto expected_names = GetExpectedNames();
-	auto query = ConstructQuery(*description, table_name, expected_names);
+	if (!statement_template) {
+		auto query = ConstructQuery(*description, table_name, expected_names);
+		statement_template = ParseAppenderStatementTemplate(query, context_ref->GetParserOptions());
+	}
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name, context_ref->GetParserOptions());
+	auto stmt = InstantiateAppenderStatement(*statement_template, std::move(table_ref), table_name);
 	context_ref->Append(std::move(stmt));
 }
 
@@ -678,6 +704,7 @@ void Appender::AddColumn(const string &name) {
 		throw InvalidInputException("the column must exist in the table");
 	}
 
+	statement_template.reset();
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());
 }
@@ -686,6 +713,7 @@ void Appender::ClearColumns() {
 	Flush();
 	column_ids.clear();
 	active_types.clear();
+	statement_template.reset();
 
 	InitializeChunk();
 	collection = make_uniq<ColumnDataCollection>(allocator, GetActiveTypes());

@@ -175,6 +175,8 @@ private:
 	//! If not empty, then this holds all logical column IDs of columns provided by the appender.
 	//! Any other columns default to NULL, or their default values.
 	vector<LogicalIndex> column_ids;
+	//! Cached parsed statement template for the current insert query shape.
+	unique_ptr<SQLStatement> statement_template;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
