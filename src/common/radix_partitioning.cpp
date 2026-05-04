@@ -94,24 +94,12 @@ struct ComputePartitionIndicesFunctor {
 			// We could just slice the "hashes" vector and use the UnaryExecutor
 			// But slicing a dictionary vector causes SelectionData to be allocated
 			// Instead, we just directly compute the partition indices using the selection vectors
-			UnifiedVectorFormat format;
-			hashes.ToUnifiedFormat(original_count, format);
-			const auto source_data = UnifiedVectorFormat::GetData<hash_t>(format);
-			const auto &source_sel = *format.sel;
-
+			const auto source_data = hashes.Values<hash_t>(original_count);
 			partition_indices.SetVectorType(VectorType::FLAT_VECTOR);
-			const auto target = FlatVector::GetDataMutable<hash_t>(partition_indices);
-
-			if (source_sel.IsSet()) {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = source_sel.get_index(append_sel[i]);
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
-			} else {
-				for (idx_t i = 0; i < append_count; i++) {
-					const auto source_idx = append_sel[i];
-					target[i] = CONSTANTS::ApplyMask(source_data[source_idx]);
-				}
+			auto target = FlatVector::Writer<hash_t>(partition_indices, append_count);
+			for (idx_t i = 0; i < append_count; i++) {
+				const auto source_idx = append_sel[i];
+				target.WriteValue(CONSTANTS::ApplyMask(source_data[source_idx].GetValue()));
 			}
 		}
 	}
