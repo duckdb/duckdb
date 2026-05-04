@@ -1392,12 +1392,14 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
-	result_row_group->version_info = version_info.load();
-	result_row_group->owned_version_info = owned_version_info;
+	if (owned_version_info) {
+		result_row_group->SetVersionInfo(owned_version_info);
+	}
+	result_row_group->deletes_pointers = deletes_pointers;
+	result_row_group->deletes_is_loaded = deletes_is_loaded.load();
 	result_row_group->column_pointers = column_pointers;
 	result_row_group->has_per_column_metadata_blocks = has_per_column_metadata_blocks;
 	result_row_group->per_column_metadata_blocks = per_column_metadata_blocks;
-	result_row_group->deletes_pointers = deletes_pointers;
 	result_row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[GetColumnCount()]);
 	for (idx_t c = 0; c < GetColumnCount(); c++) {
 		result_row_group->is_loaded[c] = true;
@@ -1593,7 +1595,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 		metadata_manager->ClearModifiedBlocks(reused_column_blocks);
-		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 	}
 
 	// cache metadata pointers for future checkpoint reuse
@@ -1602,6 +1603,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
 	has_per_column_metadata_blocks = row_group_pointer.has_per_column_metadata_blocks;
 	per_column_metadata_blocks = row_group_pointer.per_column_metadata_blocks;
+	deletes_pointers = row_group_pointer.deletes_pointers;
 
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (!write_data.keep_column_loaded[c]) {
