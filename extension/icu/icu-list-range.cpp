@@ -16,42 +16,38 @@ struct ICUListRange : public ICUDateFunc {
 	template <bool INCLUSIVE_BOUND>
 	class RangeInfoStruct {
 	public:
-		explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
-			if (args.ColumnCount() == 3) {
-				args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-				args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
-				args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
-			} else {
-				throw InternalException("Unsupported number of parameters for range");
-			}
+		explicit RangeInfoStruct(DataChunk &args_p)
+		    : args(args_p), start_value_data(args.data[0].template Values<timestamp_t>(args.size())),
+		      end_value_data(args.data[1].template Values<timestamp_t>(args.size())),
+		      increment_value_data(args.data[2].template Values<interval_t>(args.size())) {
 		}
 
 		bool RowIsValid(idx_t row_idx) {
-			for (idx_t i = 0; i < args.ColumnCount(); i++) {
-				auto idx = vdata[i].sel->get_index(row_idx);
-				if (!vdata[i].validity.RowIsValid(idx)) {
-					return false;
-				}
+			if (!start_value_data[row_idx].IsValid()) {
+				return false;
+			}
+			if (!end_value_data[row_idx].IsValid()) {
+				return false;
+			}
+			if (!increment_value_data[row_idx].IsValid()) {
+				return false;
 			}
 			return true;
 		}
 
 		timestamp_t StartListValue(idx_t row_idx) {
-			auto data = (timestamp_t *)vdata[0].data;
-			auto idx = vdata[0].sel->get_index(row_idx);
-			return data[idx];
+			auto start_val = start_value_data[row_idx];
+			return start_val.GetValue();
 		}
 
 		timestamp_t EndListValue(idx_t row_idx) {
-			auto data = (timestamp_t *)vdata[1].data;
-			auto idx = vdata[1].sel->get_index(row_idx);
-			return data[idx];
+			auto end_val = end_value_data[row_idx];
+			return end_val.GetValue();
 		}
 
 		interval_t ListIncrementValue(idx_t row_idx) {
-			auto data = (interval_t *)vdata[2].data;
-			auto idx = vdata[2].sel->get_index(row_idx);
-			return data[idx];
+			auto increment_val = increment_value_data[row_idx];
+			return increment_val.GetValue();
 		}
 
 		void GetListValues(idx_t row_idx, timestamp_t &start_value, timestamp_t &end_value,
@@ -75,7 +71,9 @@ struct ICUListRange : public ICUDateFunc {
 
 	private:
 		DataChunk &args;
-		UnifiedVectorFormat vdata[3];
+		VectorIterator<timestamp_t> start_value_data;
+		VectorIterator<timestamp_t> end_value_data;
+		VectorIterator<interval_t> increment_value_data;
 
 		uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value,
 		                    bool inclusive_bound, TZCalendar &calendar) {
@@ -134,15 +132,7 @@ struct ICUListRange : public ICUDateFunc {
 		TZCalendar calendar(*bind_info.calendar, bind_info.cal_setting);
 
 		RangeInfoStruct<INCLUSIVE_BOUND> info(args);
-		idx_t args_size = 1;
-		auto result_type = VectorType::CONSTANT_VECTOR;
-		for (idx_t i = 0; i < args.ColumnCount(); i++) {
-			if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				args_size = args.size();
-				result_type = VectorType::FLAT_VECTOR;
-				break;
-			}
-		}
+		idx_t args_size = args.size();
 		auto list_writer = FlatVector::Writer<VectorListType<timestamp_t>>(result, args_size);
 		for (idx_t i = 0; i < args_size; i++) {
 			if (!info.RowIsValid(i)) {
@@ -161,8 +151,6 @@ struct ICUListRange : public ICUDateFunc {
 				list.WriteElement().WriteValue(range_value);
 			}
 		}
-		result.SetVectorType(result_type);
-
 		result.Verify(args.size());
 	}
 
