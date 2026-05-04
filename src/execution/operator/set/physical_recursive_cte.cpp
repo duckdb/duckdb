@@ -4,6 +4,8 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 namespace duckdb {
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(PhysicalPlan &physical_plan, string ctename, TableIndex table_index,
@@ -23,7 +25,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 // Sink State
 //===--------------------------------------------------------------------===//
 RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-    : op(op), executor(context), allow_executor_reuse(context.config.enable_caching_operators),
+    : op(op), executor(context), allow_executor_reuse(Settings::Get<EnableCachingOperatorsSetting>(context)),
       executor_pool(op.shared_executor_pool),
       intermediate_table(context, op.using_key ? op.internal_types : op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE),
       dummy_addresses(LogicalType::POINTER) {
@@ -34,7 +36,7 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 		auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : bound_aggr_expr.children) {
 			executor.AddExpression(*child_expr);
-			aggr_input_types.push_back(child_expr->return_type);
+			aggr_input_types.push_back(child_expr->GetReturnType());
 		}
 		payload_aggregates.emplace_back(bound_aggr_expr);
 	}

@@ -4,6 +4,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_context.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <chrono>
 #include <thread>
@@ -52,7 +54,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 
 void PipelineExecutor::Reset() {
 	D_ASSERT(pipeline.source_state);
-	auto allow_reuse = context.client.config.enable_caching_operators;
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 
 	// Reset execution flags
 	exhausted_pipeline = false;

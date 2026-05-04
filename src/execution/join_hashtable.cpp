@@ -1874,7 +1874,7 @@ static void ResetCorrelatedMarkJoinInfo(JoinHashTable &ht) {
 	for (auto &expr : info.correlated_aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		correlated_aggregates.emplace_back(aggr);
-		payload_types.push_back(aggr.return_type);
+		payload_types.push_back(aggr.GetReturnType());
 	}
 	auto &allocator = BufferAllocator::Get(ht.context);
 	info.correlated_counts = make_uniq<GroupedAggregateHashTable>(ht.context, allocator, info.correlated_types,

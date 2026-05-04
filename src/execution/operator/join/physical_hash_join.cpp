@@ -339,7 +339,7 @@ public:
 		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
 		finalized = false;
 		active_local_states = 0;
-		external = ClientConfig::GetConfig(context).force_external;
+		external = Settings::Get<DebugForceExternalSetting>(context);
 		total_size = 0;
 		max_partition_size = 0;
 		max_partition_count = 0;

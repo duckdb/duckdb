@@ -17,6 +17,8 @@
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include "duckdb/main/settings.hpp"
+
 namespace duckdb {
 
 class RecursiveCTEPipelineEvent;
@@ -958,7 +960,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	auto &executor = recursive_meta_pipeline->GetExecutor();
-	auto allow_reuse = context.client.config.enable_caching_operators;
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 	auto active_meta_pipelines = GetActiveRecursiveMetaPipelines(*this, gstate);
 	auto can_cache_invariant_meta_pipelines = allow_reuse && !invariant_meta_pipelines.empty();
 

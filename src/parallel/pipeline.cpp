@@ -237,7 +237,7 @@ void Pipeline::ResetSinkForReschedule() {
 	}
 	lock_guard<mutex> guard(sink->lock);
 	auto &client = GetClientContext();
-	auto allow_reuse = client.config.enable_caching_operators;
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	if (allow_reuse && sink->sink_state && sink->sink_state->SupportsReuse()) {
 		sink->sink_state->Reset(client);
 		return;
@@ -278,7 +278,7 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 		ResetSinkForReschedule();
 	}
 	auto &client = GetClientContext();
-	auto allow_reuse = client.config.enable_caching_operators;
+	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		lock_guard<mutex> guard(op.lock);
