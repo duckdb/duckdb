@@ -258,7 +258,7 @@ jobs:
           # key: ccache-${{ matrix.distro }}_${{ matrix.arch }}
 
       - name: Build DuckDB
-        uses: ./duckdb-ci/build-duckdb
+        uses: duckdb/duckdb-ci/build-duckdb@main
         with:
           working-directory: duckdb
           build: make release
@@ -268,6 +268,7 @@ jobs:
           # TODO
           key: ccache-extension-main-manylinux_2_28_aarch64_cpp
           # cache-suffix: ${{ matrix.distro }}_${{ matrix.arch }}${{ needs.prepare.outputs.image_suffix }}
+          save-cache: ${{ inputs.save_cache }}
 
       - name: Test DuckDB
         working-directory: duckdb
