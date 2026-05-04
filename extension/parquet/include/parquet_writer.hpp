@@ -157,7 +157,7 @@ struct ParquetWriterOptions {
 	duckdb_parquet::CompressionCodec::type codec;
 	//! The field-ids to assign to the column(s) and their fields
 	ChildFieldIDs field_ids;
-	//! The type to shred all VARIANT columns on, set explicitly by the user
+	//! The mapping of name->type to shred VARIANT on, set explicitly by the user
 	ShreddingType shredding_types;
 	//! The encryption config for the file we're writing
 	shared_ptr<ParquetEncryptionConfig> encryption_config;

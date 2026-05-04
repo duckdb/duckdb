@@ -307,7 +307,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		child_types.emplace_back("value", LogicalType::BLOB);
 		if (is_shredded) {
 			auto &typed_value_type = shredding_type->type;
-			if (typed_value_type.id() != LogicalTypeId::ANY) {
+			if (typed_value_type.id() != LogicalTypeId::SQLNULL) {
 				child_types.emplace_back("typed_value",
 				                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
 			}
@@ -326,6 +326,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		for (auto &entry : child_types) {
 			auto &child_name = entry.first;
 			auto &child_type = entry.second;
+			optional_ptr<const ShreddingType> child_shredding;
 			bool is_optional;
 			if (child_name == "metadata") {
 				is_optional = false;
@@ -338,11 +339,14 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 				}
 			} else {
 				D_ASSERT(child_name == "typed_value");
+				//! Only set shredding for the 'typed_value', just in case there's a child by the name of 'metadata' or
+				//! 'value'
+				child_shredding = shredding_type;
 				is_optional = true;
 			}
 
 			child_writers.push_back(CreateWriterRecursive(context, writer, path_in_schema, child_type, child_name,
-			                                              allow_geometry, child_field_ids, shredding_type, max_repeat,
+			                                              allow_geometry, child_field_ids, child_shredding, max_repeat,
 			                                              max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
