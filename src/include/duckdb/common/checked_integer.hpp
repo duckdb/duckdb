@@ -627,10 +627,10 @@ template <typename T, typename ExceptionT>
 struct numeric_limits<duckdb::CheckedInteger<T, ExceptionT>> : public numeric_limits<T> {
 	using value_type = duckdb::CheckedInteger<T, ExceptionT>;
 
-	static constexpr value_type min() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type min() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::min());
 	}
-	static constexpr value_type max() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type max() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::max());
 	}
 	static constexpr value_type lowest() noexcept {
@@ -639,19 +639,19 @@ struct numeric_limits<duckdb::CheckedInteger<T, ExceptionT>> : public numeric_li
 	static constexpr value_type epsilon() noexcept {
 		return value_type(numeric_limits<T>::epsilon());
 	}
-	static constexpr value_type round_error() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type round_error() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::round_error());
 	}
 	static constexpr value_type infinity() noexcept {
 		return value_type(numeric_limits<T>::infinity());
 	}
-	static constexpr value_type quiet_NaN() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type quiet_NaN() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::quiet_NaN());
 	}
-	static constexpr value_type signaling_NaN() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type signaling_NaN() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::signaling_NaN());
 	}
-	static constexpr value_type denorm_min() noexcept { // NOLINT: mimic std casing
+	static constexpr value_type denorm_min() noexcept { // NOLINT
 		return value_type(numeric_limits<T>::denorm_min());
 	}
 };
