@@ -289,7 +289,7 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload, To
 
 	SelectionVector remaining_sel(nullptr);
 	idx_t remaining_count = sort_chunk.size();
-	for (idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size() && remaining_count > 0; i++) {
 		if (remaining_sel.data()) {
 			compare_chunk.data[i].Slice(sort_chunk.data[i], remaining_sel, remaining_count);
 		} else {
