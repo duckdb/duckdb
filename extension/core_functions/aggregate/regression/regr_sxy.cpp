@@ -47,10 +47,18 @@ struct RegrSXYOperation {
 	}
 };
 
-LogicalType GetRegrSXYStateType(const AggregateFunction &) {
+LogicalType GetRegrSXYStateType(const BoundAggregateFunction &) {
+	child_list_t<LogicalType> covar_children;
+	covar_children.emplace_back("count", LogicalType::UBIGINT);
+	covar_children.emplace_back("meanx", LogicalType::DOUBLE);
+	covar_children.emplace_back("meany", LogicalType::DOUBLE);
+	covar_children.emplace_back("co_moment", LogicalType::DOUBLE);
+	auto cov_pop_type = LogicalType::STRUCT(std::move(covar_children));
+
 	child_list_t<LogicalType> state_children;
 	state_children.emplace_back("count", LogicalType::UBIGINT);
-	state_children.emplace_back("cov_pop", CovarPopFun::GetFunction().GetStateType());
+	state_children.emplace_back("cov_pop", std::move(cov_pop_type));
+
 	return LogicalType::STRUCT(std::move(state_children));
 }
 

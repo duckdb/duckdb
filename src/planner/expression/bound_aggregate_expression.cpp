@@ -15,12 +15,12 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.GetReturnType()),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
       aggr_type(aggr_type), filter(std::move(filter)) {
-	D_ASSERT(!this->function.name.empty());
+	D_ASSERT(!this->function.GetName().empty());
 }
 
 string BoundAggregateExpression::ToString() const {
 	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
-	    *this, string(), string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
+	    *this, string(), string(), function.GetName(), false, IsDistinct(), filter.get(), order_bys.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -62,8 +62,9 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 }
 
 bool BoundAggregateExpression::PropagatesNullValues() const {
-	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
-	                                                                            : Expression::PropagatesNullValues();
+	return function.GetProperties().GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING
+	           ? false
+	           : Expression::PropagatesNullValues();
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() const {

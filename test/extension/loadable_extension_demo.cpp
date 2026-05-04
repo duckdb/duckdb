@@ -883,7 +883,9 @@ public:
 		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
-		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
+
+		BoundScalarFunction bound_func(func);
+		auto expr = make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
 		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
 
 		// Ensure ROW_ID is in the scan's column list

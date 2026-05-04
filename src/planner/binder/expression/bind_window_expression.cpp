@@ -220,7 +220,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 		auto window_bound_aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children));
 		// create the aggregate
@@ -241,7 +241,7 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// found a matching function! bind it as a window
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 		if (window.distinct && !bound_function.CanDistinct()) {
 			throw BinderException(error_context, "DISTINCT is not implemented for the window function \"%s\"",

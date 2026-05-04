@@ -9,13 +9,13 @@
 
 namespace duckdb {
 
-BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, BoundScalarFunction bound_function,
+BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
                                                  unique_ptr<FunctionData> bind_info, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, std::move(return_type)),
+    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
       function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info)),
       is_operator(is_operator) {
-	D_ASSERT(!function.name.empty());
+	D_ASSERT(!function.GetName().empty());
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
@@ -50,8 +50,8 @@ bool BoundFunctionExpression::CanThrow() const {
 }
 
 string BoundFunctionExpression::ToString() const {
-	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
-	                                                                         is_operator);
+	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(),
+	                                                                         function.GetName(), is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
 	return function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING ? false
@@ -88,14 +88,14 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() const {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_uniq<BoundFunctionExpression>(return_type, function, std::move(new_children),
-	                                               std::move(new_bind_info), is_operator);
+	auto copy =
+	    make_uniq<BoundFunctionExpression>(function, std::move(new_children), std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
 
 void BoundFunctionExpression::Verify() const {
-	D_ASSERT(!function.name.empty());
+	D_ASSERT(!function.GetName().empty());
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
@@ -112,7 +112,6 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 
 	auto entry = FunctionSerializer::Deserialize<BoundScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
-	auto function_return_type = entry.first.GetReturnType();
 
 	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
 
@@ -127,8 +126,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 		}
 		// Otherwise, fall through and continue on normally
 	}
-	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
-	                                                 std::move(children), std::move(entry.second));
+	auto result =
+	    make_uniq<BoundFunctionExpression>(std::move(entry.first), std::move(children), std::move(entry.second));
 	result->is_operator = is_operator;
 	if (result->return_type != return_type) {
 		// return type mismatch - push a cast

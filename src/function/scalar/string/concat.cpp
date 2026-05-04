@@ -198,7 +198,7 @@ void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	return StringConcatFunction(args, state, result);
 }
 
-void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
+void SetArgumentType(BoundScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
 	if (is_operator) {
 		bound_function.GetArguments()[0] = type;
 		bound_function.GetArguments()[1] = type;
@@ -209,11 +209,10 @@ void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bo
 	for (auto &arg : bound_function.GetArguments()) {
 		arg = type;
 	}
-	bound_function.SetVarArgs(type);
 	bound_function.SetReturnType(type);
 }
 
-unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindListConcat(ClientContext &context, BoundScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	LogicalType child_type = LogicalType::SQLNULL;
 	bool all_null = true;
@@ -267,7 +266,7 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
-unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, BoundScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	bool list_concat = false;
 	bool all_null = true;
@@ -294,14 +293,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 		if (is_operator) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
-		} else if (bound_function.GetVarArgs().id() == LogicalTypeId::LIST ||
-		           bound_function.GetVarArgs().id() == LogicalTypeId::ARRAY) {
+		}
+
+		const auto &func_args = bound_function.GetArguments();
+		if (!func_args.empty() &&
+		    (func_args[0].id() == LogicalTypeId::LIST || func_args[0].id() == LogicalTypeId::ARRAY)) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
-		} else {
-			SetArgumentType(bound_function, LogicalTypeId::VARCHAR, is_operator);
-			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 		}
+
+		SetArgumentType(bound_function, LogicalTypeId::VARCHAR, is_operator);
+		return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 	}
 	auto return_type = all_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
 

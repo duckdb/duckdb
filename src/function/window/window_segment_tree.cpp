@@ -19,7 +19,8 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	return !wexpr.distinct && wexpr.arg_orders.empty();
+	//	We can't handle DISTINCT, ORDER BY args or () args (COUNT(*))
+	return !wexpr.distinct && wexpr.arg_orders.empty() && !wexpr.children.empty();
 }
 
 WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)

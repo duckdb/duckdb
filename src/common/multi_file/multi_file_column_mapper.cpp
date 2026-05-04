@@ -753,10 +753,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 	}
 }
 
-bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
+bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter =
-		    ExpressionFilter::GetExpressionFilter(filter, "MultiFileColumnMapper::EvaluateFilterAgainstConstant");
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "EvaluateTableFilterAgainstConstant");
 		return expr_filter.EvaluateWithConstant(context, constant);
 	}
 	const auto type = filter.filter_type;
@@ -765,7 +764,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
 		for (auto &it : or_filter.child_filters) {
-			if (EvaluateFilterAgainstConstant(*it, constant)) {
+			if (EvaluateTableFilterAgainstConstant(context, *it, constant)) {
 				return true;
 			}
 		}
@@ -775,7 +774,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
 		auto res = make_uniq<ConjunctionAndFilter>();
 		for (auto &it : and_filter.child_filters) {
-			if (!EvaluateFilterAgainstConstant(*it, constant)) {
+			if (!EvaluateTableFilterAgainstConstant(context, *it, constant)) {
 				return false;
 			}
 		}
@@ -784,7 +783,7 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = filter.Cast<OptionalFilter>();
 		if (optional_filter.child_filter) {
-			return EvaluateFilterAgainstConstant(*optional_filter.child_filter, constant);
+			return EvaluateTableFilterAgainstConstant(context, *optional_filter.child_filter, constant);
 		}
 		return true;
 	}
@@ -822,6 +821,10 @@ bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &fil
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
 		                              EnumUtil::ToString(type));
 	}
+}
+
+bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
+	return EvaluateTableFilterAgainstConstant(context, filter, constant);
 }
 
 Value MultiFileColumnMapper::GetConstantValue(MultiFileGlobalIndex global_index) {
@@ -874,11 +877,14 @@ static unique_ptr<Expression> CreateReferenceExpression(const LogicalType &type)
 
 static unique_ptr<Expression> CreateStructExtractExpression(unique_ptr<Expression> source_expr,
                                                             const LogicalType &source_type, idx_t child_idx) {
-	auto &child_type = StructType::GetChildType(source_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(source_expr));
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(static_cast<int64_t>(child_idx + 1))));
-	return make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
+
+	BoundScalarFunction bound_func(GetExtractAtFunction());
+	bound_func.SetReturnType(StructType::GetChildType(source_type, child_idx));
+
+	return make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(arguments),
 	                                          StructExtractAtFun::GetBindData(child_idx));
 }
 

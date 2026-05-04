@@ -134,11 +134,11 @@ static unique_ptr<FunctionData> ListZipBind(BindScalarFunctionInput &input) {
 	// The last argument could be a flag to be set if we want a minimal list or a maximal list
 	idx_t size = arguments.size();
 	if (size == 0) {
-		throw BinderException("Provide at least one argument to " + bound_function.name);
+		throw BinderException("Provide at least one argument to " + bound_function.GetName());
 	}
 	if (arguments[size - 1]->GetReturnType().id() == LogicalTypeId::BOOLEAN) {
 		if (--size == 0) {
-			throw BinderException("Provide at least one list argument to " + bound_function.name);
+			throw BinderException("Provide at least one list argument to " + bound_function.GetName());
 		}
 	}
 

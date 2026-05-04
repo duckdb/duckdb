@@ -236,10 +236,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 		WriteData<string_t, duckdb_blob, CBlobConverter>(column, collection, column_ids);
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP_NS: {
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		WriteData<timestamp_t, timestamp_t, CTimestampNsConverter>(column, collection, column_ids);
 		break;
-	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		WriteData<timestamp_t, timestamp_t, CTimestampMsConverter>(column, collection, column_ids);
 		break;

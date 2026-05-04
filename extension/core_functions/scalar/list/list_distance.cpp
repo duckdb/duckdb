@@ -15,7 +15,7 @@ template <class TYPE, class OP>
 static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.name;
+	const auto &func_name = expr.function.GetName();
 
 	auto count = args.size();
 

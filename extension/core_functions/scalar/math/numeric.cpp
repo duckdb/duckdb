@@ -428,6 +428,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
+	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return ceil;
 }
 
@@ -483,6 +484,7 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
+	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return floor;
 }
 
@@ -521,7 +523,7 @@ unique_ptr<FunctionData> BindDecimalRoundPrecision(BindScalarFunctionInput &inpu
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	auto fname = StringUtil::Upper(bound_function.name);
+	auto fname = StringUtil::Upper(bound_function.GetName());
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("%s(DECIMAL, INTEGER) with non-constant precision is not supported", fname);
 	}
@@ -751,6 +753,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		trunc.AddFunction(ScalarFunction({type}, type, trunc_func, bind_func));
 		trunc.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, trunc_prec_func, bind_prec_func));
 	}
+	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return trunc;
 }
 
@@ -942,6 +945,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
 	}
+	round.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return round;
 }
 
@@ -960,8 +964,10 @@ struct ExpOperator {
 } // namespace
 
 ScalarFunction ExpFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, ExpOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, ExpOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1026,8 +1032,10 @@ struct CbRtOperator {
 } // namespace
 
 ScalarFunction CbrtFun::GetFunction() {
-	return ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                      ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
+	ScalarFunction func({LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                    ScalarFunction::UnaryFunction<double, double, CbRtOperator>);
+	func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return func;
 }
 
 //===--------------------------------------------------------------------===//

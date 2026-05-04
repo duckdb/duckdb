@@ -55,7 +55,7 @@ struct ProductFunction {
 	}
 };
 
-LogicalType GetProductStateType(const AggregateFunction &function) {
+LogicalType GetProductStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("empty", LogicalType::BOOLEAN);
 	children.emplace_back("val", LogicalType::DOUBLE);

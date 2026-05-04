@@ -175,13 +175,13 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
                                   Vector &result) {
 	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
-		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.name,
+		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.GetName(),
 		                            expr.GetReturnType().ToString());
 	}
 	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
 		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
 		                            "execution requires a scalar callback to produce NULL results",
-		                            expr.function.name);
+		                            expr.function.GetName());
 	}
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -256,7 +256,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		D_ASSERT(expr.function.HasFunctionCallback());
 	} else {
 		throw InternalException("Scalar function %s has neither an execution nor a select callback",
-		                        expr.function.name);
+		                        expr.function.GetName());
 	}
 	if (all_constant) {
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&

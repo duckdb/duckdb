@@ -520,8 +520,10 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]);
 		vector<unique_ptr<Expression>> aggr_children;
 		aggr_children.push_back(std::move(colref));
-		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+
+		BoundAggregateFunction bound_func(first_aggregate);
+		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(aggr_children), nullptr,
+		                                                     nullptr, AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }
@@ -603,8 +605,18 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-		if (bound.function == CountFunctionBase::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+
+		auto count_fun = CountFunctionBase::GetFunction();
+		auto count_star_fun = CountStarFun::GetFunction();
+
+		const auto is_count_func =
+		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
+
+		const auto is_count_star_func =
+		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
+
+		if (is_count_func || is_count_star_func) {
 			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 		}
 	}

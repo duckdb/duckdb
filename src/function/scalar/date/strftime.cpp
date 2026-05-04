@@ -217,15 +217,19 @@ struct StrpTimeFunction {
 				throw InvalidInputException(*arguments[0], "Failed to parse format specifier %s: %s", format_string,
 				                            error);
 			}
-			if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
-			} else if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
-				if (bound_function.name == "strptime") {
+			if (format.HasFormatSpecifier(StrTimeSpecifier::NANOSECOND_PADDED)) {
+				if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+					bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ_NS);
+				} else {
+					bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
+				}
+				if (bound_function.GetName() == "strptime") {
 					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
 					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);
 				}
+			} else if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 			}
 			return make_uniq<StrpTimeBindData>(format, format_string);
 		} else if (format_value.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
@@ -252,18 +256,22 @@ struct StrpTimeFunction {
 				formats.emplace_back(format);
 			}
 
-			if (has_offset) {
-				// If any format has UTC offsets, then we have to produce TSTZ
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
-			} else if (has_nanos) {
+			if (has_nanos) {
 				// If any format has nanoseconds, then we have to produce TSNS
-				// unless there is an offset, in which case we produce
-				bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
-				if (bound_function.name == "strptime") {
+				if (has_offset) {
+					// If any format has UTC offsets, then we have to produce TSTZ
+					bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ_NS);
+				} else {
+					bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
+				}
+				if (bound_function.GetName() == "strptime") {
 					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
 					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);
 				}
+			} else if (has_offset) {
+				// If any format has UTC offsets, then we have to produce TSTZ
+				bound_function.SetReturnType(LogicalType::TIMESTAMP_TZ);
 			}
 			return make_uniq<StrpTimeBindData>(formats, format_strings);
 		} else {
@@ -279,20 +287,24 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 
 	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
-	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
-	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_NS}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::VARCHAR,
 	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
+	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ_NS, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<false>, StrfTimeBindFunction<false>));
+	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ_NS}, LogicalType::VARCHAR,
+	                                    StrfTimeFunctionTimestampNS<true>, StrfTimeBindFunction<true>));
 	return strftime;
 }
 ScalarFunctionSet StrpTimeFun::GetFunctions() {

@@ -58,6 +58,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 			result_length += input.GetValue().GetSize();
 			has_result = true;
 		}
+		result_str.Finalize();
 	}
 }
 
@@ -66,7 +67,6 @@ static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &in
 	for (auto &arg : bound_function.GetArguments()) {
 		arg = LogicalType::VARCHAR;
 	}
-	bound_function.SetVarArgs(LogicalType::VARCHAR);
 	return nullptr;
 }
 

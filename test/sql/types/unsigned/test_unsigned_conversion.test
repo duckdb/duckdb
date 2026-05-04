@@ -146,25 +146,10 @@ SELECT (-42)::TINYINT::UBIGINT
 ----
 <REGEX>:Conversion Error.*INT8.*is out of range for.*UINT64.*
 
-query I
+statement error
 SELECT -42::TINYINT::UTINYINT
 ----
-214
-
-query I
-SELECT -42::TINYINT::USMALLINT
-----
-65494
-
-query I
-SELECT -42::TINYINT::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::TINYINT::UBIGINT
-----
-18446744073709551574
+Out of Range Error
 
 statement error
 SELECT (-42)::SMALLINT::UTINYINT
@@ -186,26 +171,6 @@ SELECT (-42)::SMALLINT::UBIGINT
 ----
 <REGEX>:Conversion Error.*INT16.*is out of range for.*UINT64.*
 
-query I
-SELECT -42::SMALLINT::UTINYINT
-----
-214
-
-query I
-SELECT -42::SMALLINT::USMALLINT
-----
-65494
-
-query I
-SELECT -42::SMALLINT::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::SMALLINT::UBIGINT
-----
-18446744073709551574
-
 statement error
 SELECT (-42)::INTEGER::UTINYINT
 ----
@@ -225,26 +190,6 @@ statement error
 SELECT (-42)::INTEGER::UBIGINT
 ----
 <REGEX>:Conversion Error.*INT32.*is out of range for.*UINT64.*
-
-query I
-SELECT -42::INTEGER::UTINYINT
-----
-214
-
-query I
-SELECT -42::INTEGER::USMALLINT
-----
-65494
-
-query I
-SELECT -42::INTEGER::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::INTEGER::UBIGINT
-----
-18446744073709551574
 
 statement error
 SELECT (-42)::BIGINT::UTINYINT
@@ -266,26 +211,6 @@ SELECT (-42)::BIGINT::UBIGINT
 ----
 <REGEX>:Conversion Error.*INT64.*is out of range for.*UINT64.*
 
-query I
-SELECT -42::BIGINT::UTINYINT
-----
-214
-
-query I
-SELECT -42::BIGINT::USMALLINT
-----
-65494
-
-query I
-SELECT -42::BIGINT::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::BIGINT::UBIGINT
-----
-18446744073709551574
-
 statement error
 SELECT (-42)::FLOAT::UTINYINT
 ----
@@ -306,26 +231,6 @@ SELECT (-42)::FLOAT::UBIGINT
 ----
 <REGEX>:Conversion Error.*FLOAT.*is out of range for.*UINT64.*
 
-query I
-SELECT -42::FLOAT::UTINYINT
-----
-214
-
-query I
-SELECT -42::FLOAT::USMALLINT
-----
-65494
-
-query I
-SELECT -42::FLOAT::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::FLOAT::UBIGINT
-----
-18446744073709551574
-
 statement error
 SELECT (-42)::DOUBLE::UTINYINT
 ----
@@ -345,26 +250,6 @@ statement error
 SELECT (-42)::DOUBLE::UBIGINT
 ----
 <REGEX>:Conversion Error.*DOUBLE.*is out of range for.*UINT64.*
-
-query I
-SELECT -42::DOUBLE::UTINYINT
-----
-214
-
-query I
-SELECT -42::DOUBLE::USMALLINT
-----
-65494
-
-query I
-SELECT -42::DOUBLE::UINTEGER
-----
-4294967254
-
-query I
-SELECT -42::DOUBLE::UBIGINT
-----
-18446744073709551574
 
 # Convert unsigned to signed
 statement error

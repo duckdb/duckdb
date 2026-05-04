@@ -250,21 +250,14 @@ struct VectorWriter<VectorListType<T>> {
 public:
 	//! Range returned by WriteList(n). Holds a VectorWriter<T> scoped to the
 	//! n reserved child slots. Destroying the range asserts all n were written.
-	//! The Entry reference member makes WriteRange non-movable; C++17 guaranteed
-	//! copy elision ensures it is always constructed in place.
+	//! C++17 guaranteed copy elision ensures it is always constructed in place.
 	struct WriteRange {
-		struct Entry {
-			VectorWriter<T> &writer;
-			idx_t idx;
-		};
-
 		class RangeIterator {
 		public:
-			RangeIterator(Entry &entry, idx_t pos) : entry(entry), pos(pos) {
+			RangeIterator(VectorWriter<T> &writer, idx_t pos) : writer(writer), pos(pos) {
 			}
-			Entry &operator*() {
-				entry.idx = pos;
-				return entry;
+			VectorWriter<T> &operator*() {
+				return writer;
 			}
 			RangeIterator &operator++() { // NOLINT: match stl API
 				++pos;
@@ -275,24 +268,22 @@ public:
 			}
 
 		private:
-			Entry &entry;
+			VectorWriter<T> &writer;
 			idx_t pos;
 		};
 
-		WriteRange(Vector &child_vec, idx_t n, idx_t offset)
-		    : child_writer(child_vec, n, offset), length(n), current_entry {child_writer, 0} {
+		WriteRange(Vector &child_vec, idx_t n, idx_t offset) : child_writer(child_vec, n, offset), length(n) {
 		}
 
 		RangeIterator begin() { // NOLINT: match stl API
-			return RangeIterator(current_entry, 0);
+			return RangeIterator(child_writer, 0);
 		}
 		RangeIterator end() { // NOLINT: match stl API
-			return RangeIterator(current_entry, length);
+			return RangeIterator(child_writer, length);
 		}
 
 		VectorWriter<T> child_writer;
 		idx_t length;
-		Entry current_entry; // must be declared after child_writer (references it)
 	};
 
 public:
@@ -321,7 +312,7 @@ public:
 	}
 
 	//! Reserve n child slots, record the list entry for this row, and return a
-	//! WriteRange whose iterator yields {child_writer, in-list-index} pairs.
+	//! WriteRange whose iterator yields child writers for each slot.
 	//! Destroying the range asserts that all n child slots were written.
 	WriteRange WriteList(idx_t n) {
 		D_ASSERT(current_idx < count);

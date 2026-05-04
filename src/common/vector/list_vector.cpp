@@ -82,12 +82,10 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::VerifyInternal(type, sel, count);
+
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	if (type.id() == LogicalTypeId::MAP) {
 		// FIXME: verify map
 		// auto &child = ListType::GetChildType(vector_p.GetType());
@@ -98,9 +96,7 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		// auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
 		// D_ASSERT(valid_check == MapInvalidReason::VALID);
 	}
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		count = 1;
-	}
+
 	// NOTE: size > capacity can occur in valid intermediate states (e.g. after SetListSize before Reserve)
 	// D_ASSERT(size <= capacity);
 	idx_t total_size = 0;
@@ -113,6 +109,10 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 			D_ASSERT(le.offset + le.length <= child->size());
 			total_size += le.length;
 		}
+	}
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
+		return;
 	}
 	SelectionVector child_sel(total_size);
 	idx_t child_count = 0;

@@ -214,11 +214,13 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 		const auto length = info.ListLength(i);
 
 		typename OP::TYPE range_value = start_value;
-		for (auto &[child_writer, range_idx] : list_writer.WriteList(length)) {
-			if (range_idx > 0) {
+		bool seen_value = false;
+		for (auto &child_writer : list_writer.WriteList(length)) {
+			if (seen_value) {
 				OP::Increment(range_value, increment);
 			}
 			child_writer.WriteValue(range_value);
+			seen_value = true;
 		}
 	}
 
