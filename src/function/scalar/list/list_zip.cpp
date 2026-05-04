@@ -15,48 +15,44 @@ namespace duckdb {
 
 static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	idx_t count = args.size();
-	idx_t args_size = args.ColumnCount();
-	bool truncate_flags_set = false;
-
-	// Check flag
-	if (args.data.back().GetType().id() == LogicalTypeId::BOOLEAN) {
-		truncate_flags_set = true;
-		args_size--;
-	}
-
-	vector<UnifiedVectorFormat> input_lists;
-	input_lists.resize(args.ColumnCount());
+	vector<optional<VectorIterator<list_entry_t>>> input_lists;
+	optional<VectorIterator<bool>> truncate_flag;
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		args.data[i].ToUnifiedFormat(count, input_lists[i]);
+		if (i + 1 == args.ColumnCount() && args.data[i].GetType().id() == LogicalTypeId::BOOLEAN) {
+			truncate_flag = args.data[i].Values<bool>(count);
+		} else if (args.data[i].GetType().id() == LogicalTypeId::LIST) {
+			input_lists.emplace_back(args.data[i].Values<list_entry_t>(count));
+		} else {
+			// SQLNULL — no list iterator possible; treated as always-null input
+			input_lists.emplace_back(nullopt);
+		}
 	}
+	idx_t args_size = input_lists.size();
 
 	// Handling output row for each input row
 	idx_t result_size = 0;
 	vector<idx_t> lengths;
-	for (idx_t j = 0; j < count; j++) {
-		// Is flag for current row set
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		bool truncate_to_shortest = false;
-		if (truncate_flags_set) {
-			auto &flag_vec = input_lists.back();
-			idx_t flag_idx = flag_vec.sel->get_index(j);
-			if (flag_vec.validity.RowIsValid(flag_idx)) {
-				truncate_to_shortest = UnifiedVectorFormat::GetData<bool>(flag_vec)[flag_idx];
+		if (truncate_flag) {
+			auto &truncate_vector = *truncate_flag;
+			auto truncate = truncate_vector[row_idx];
+			if (truncate.IsValid()) {
+				truncate_to_shortest = truncate.GetValue();
 			}
 		}
 
 		// Calculation of the outgoing list size
-		idx_t len = truncate_to_shortest ? NumericLimits<int>::Maximum() : 0;
+		idx_t len = truncate_to_shortest ? NumericLimits<idx_t>::Maximum() : 0;
 		for (idx_t i = 0; i < args_size; i++) {
-			idx_t curr_size;
-			if (args.data[i].GetType() == LogicalType::SQLNULL || ListVector::GetListSize(args.data[i]) == 0) {
-				curr_size = 0;
-			} else {
-				idx_t sel_idx = input_lists[i].sel->get_index(j);
-				auto curr_data = UnifiedVectorFormat::GetData<list_entry_t>(input_lists[i]);
-				curr_size = input_lists[i].validity.RowIsValid(sel_idx) ? curr_data[sel_idx].length : 0;
+			idx_t curr_size = 0;
+			if (input_lists[i].has_value() && ListVector::GetListSize(args.data[i]) > 0) {
+				auto list_entry = (*input_lists[i])[row_idx];
+				if (list_entry.IsValid()) {
+					curr_size = list_entry.GetValue().length;
+				}
 			}
 
-			// Dependent on flag using gt or lt
 			if (truncate_to_shortest) {
 				len = len > curr_size ? curr_size : len;
 			} else {
@@ -80,30 +76,30 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	idx_t offset = 0;
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
-	for (idx_t j = 0; j < count; j++) {
-		idx_t len = lengths[j];
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		idx_t len = lengths[row_idx];
 		for (idx_t i = 0; i < args_size; i++) {
-			auto &curr = input_lists[i];
-			idx_t sel_idx = curr.sel->get_index(j);
 			idx_t curr_off = 0;
 			idx_t curr_len = 0;
 
-			// Copying values from the given lists
-			if (curr.validity.RowIsValid(sel_idx)) {
-				auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(curr);
-				curr_off = input_lists_data[sel_idx].offset;
-				curr_len = input_lists_data[sel_idx].length;
-				auto copy_len = len < curr_len ? len : curr_len;
-				idx_t entry = offset;
-				for (idx_t k = 0; k < copy_len; k++) {
-					if (!FlatVector::Validity(ListVector::GetChild(args.data[i])).RowIsValid(curr_off + k)) {
-						masks[i].SetInvalid(entry + k);
+			if (input_lists[i].has_value()) {
+				auto list_entry = (*input_lists[i])[row_idx];
+				if (list_entry.IsValid()) {
+					auto list = list_entry.GetValue();
+					curr_off = list.offset;
+					curr_len = list.length;
+					auto copy_len = len < curr_len ? len : curr_len;
+					idx_t entry = offset;
+					for (idx_t k = 0; k < copy_len; k++) {
+						if (!FlatVector::Validity(ListVector::GetChild(args.data[i])).RowIsValid(curr_off + k)) {
+							masks[i].SetInvalid(entry + k);
+						}
+						selections[i].set_index(entry + k, curr_off + k);
 					}
-					selections[i].set_index(entry + k, curr_off + k);
 				}
 			}
 
-			// Set NULL values for list that are shorter than the output list
+			// Set NULL values for entries beyond the valid range of this input list
 			if (len > curr_len) {
 				for (idx_t d = curr_len; d < len; d++) {
 					masks[i].SetInvalid(d + offset);
