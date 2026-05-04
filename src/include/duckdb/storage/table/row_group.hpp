@@ -86,6 +86,7 @@ struct RowGroupWriteData {
 	vector<idx_t> existing_extra_metadata_blocks;
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks existing_per_column_metadata_blocks;
+	vector<MetaBlockPointer> existing_column_pointers;
 	optional_idx write_count;
 	//! Per-column reuse flags for partial column checkpoint
 	//! When non-empty, states[i] is nullptr for columns where reuse_column[i] is true

@@ -1799,6 +1799,10 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			set<idx_t> all_written_deletes_block_ids;
 			for (auto &ptr : pointer_copy.deletes_pointers) {
 				all_written_deletes_block_ids.insert(ptr.block_pointer);
+				// delete ptr should be cleared
+				if (!block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
+					throw InternalException("Delete ptr %llu was not cleared", ptr.block_pointer);
+				}
 			}
 			set<idx_t> all_read_deletes_block_ids;
 			for (auto &ptr : read_deletes_pointers) {
