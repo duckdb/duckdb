@@ -237,6 +237,14 @@ jobs:
       - uses: actions/checkout@v6
         name: Checkout
         with:
+          repository: duckdb/extension-template
+          ref: main
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      - uses: actions/checkout@v6
+        name: Checkout
+        with:
           ref: ${{ inputs.git_ref }}
           path: 'duckdb'
           fetch-depth: 0
