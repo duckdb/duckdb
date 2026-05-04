@@ -25,8 +25,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto new_size_entries = new_sizes.Values<ubigint_t>(row_count);
 	auto &child_vector = ListVector::GetChild(lists);
 
-	// Sum up the total child capacity using checked arithmetic so we trip an
-	// Overflow exception up-front for absurd target sizes (e.g. UINT64_MAX).
+	// Sum up the total child capacity
 	ubigint_t total_child_size(0);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto list_entry = list_entries[row_idx];
@@ -36,11 +35,9 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
+	ListVector::Reserve(result, total_child_size.value);
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 
-	// the default vector's element type is dynamic so we can't use Values<T>
-	// here -- ToUnifiedFormat lets us check validity for any payload type.
 	optional<VectorValidityIterator> default_validity;
 	if (args.ColumnCount() == 3) {
 		auto &default_vector = args.data[2];
@@ -76,7 +73,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		if (default_validity) {
 			// if a default value is provided fill the list with the default value
-			if (default_validity->IsValid(row_idx)) {
+			if (default_validity.value().IsValid(row_idx)) {
 				SelectionVector sel(remaining_count.value);
 				for (idx_t j = 0; j < remaining_count.value; j++) {
 					sel.set_index(j, row_idx);
