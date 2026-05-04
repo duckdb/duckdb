@@ -57,6 +57,7 @@ public:
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result);
+	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result, const SelectionVector &sel, idx_t count);
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
 	DUCKDB_API void ExecuteExpression(Vector &result);

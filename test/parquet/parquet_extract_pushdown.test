@@ -137,12 +137,10 @@ SELECT v.x::UTINYINT FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet
 ----
 Invalid Input Error: Can't compare values of type VARCHAR (test) and type INTEGER (5) - an explicit cast is required
 
-# FIXME: this should not be erroring
-# What likely happens is that the cast is pushed beyond the filter
-statement error
+query I
 SELECT v.x::UTINYINT FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND v.x=5
 ----
-Conversion Error: Can't convert VARIANT(VARCHAR) value 'test' to 'UTINYINT'
+5
 
 query I
 SELECT v.y FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND v.x=5
@@ -164,23 +162,25 @@ SELECT v.z FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE va
 ----
 50000
 
-# FIXME: the first filters should fix this????
-statement error
+query I
 SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND variant_typeof(v.y) == 'INT64' AND v.x + v.y = 505
 ----
-Conversion Error: Can't convert VARIANT(VARCHAR) value 'test' to 'BIGINT'
+1
 
-# FIXME: the first filters should fix this????
-statement error
+query I
+SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND variant_typeof(v.y) == 'INT64' AND v.x + v.y = 505
+----
+1
+
+query I
 SELECT v.x FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND variant_typeof(v.y) == 'INT64' AND v.x + v.y = 505
 ----
-Conversion Error: Can't convert VARIANT(VARCHAR) value 'test' to 'BIGINT'
+5
 
-# FIXME: the first filters should fix this????
-statement error
+query I
 SELECT v.z FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND variant_typeof(v.y) == 'INT64' AND v.x + v.y = 505
 ----
-Conversion Error: Can't convert VARIANT(VARCHAR) value 'test' to 'BIGINT'
+50000
 
 query I
 SELECT COUNT(*) FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE variant_typeof(v.x) == 'INT64' AND variant_typeof(v.y) == 'INT64' AND (v.x = 5 OR v.y = 400)

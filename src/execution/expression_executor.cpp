@@ -94,6 +94,15 @@ void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
 	ExecuteExpression(result);
 }
 
+void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result, const SelectionVector &sel, idx_t count) {
+	SetChunk(&input);
+	D_ASSERT(!expressions.empty());
+	auto &expression = expressions[0];
+	auto &state = states[0];
+	D_ASSERT(result.GetType().id() == expression->GetReturnType().id());
+	Execute(*expression, state->root_state.get(), &sel, count, result);
+}
+
 idx_t ExpressionExecutor::SelectExpression(DataChunk &input, SelectionVector &sel) {
 	return SelectExpression(input, sel, nullptr, input.size());
 }
