@@ -8,10 +8,9 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO
 
-PULL_REQUEST_JOBS = [
+COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
-    "regression",
     "tidy-check",
     "extensions",
     "wasm-eh",
@@ -28,6 +27,12 @@ PULL_REQUEST_JOBS = [
     "static-libs-linux",
 ]
 
+PULL_REQUEST_ONLY_JOBS = [
+    "regression",
+]
+
+PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
+
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "valgrind",
@@ -35,7 +40,7 @@ NIGHTLY_ONLY_JOBS = [
     "static-libs-windows-mingw",
 ]
 
-NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
+NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
     "linux-relassert",
