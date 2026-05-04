@@ -9,6 +9,7 @@
 #pragma once
 
 #include "struct_column_writer.hpp"
+#include "parquet_shredding.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -80,6 +81,7 @@ public:
 	unique_ptr<ParquetAnalyzeSchemaState> AnalyzeSchemaInit() override;
 	void AnalyzeSchema(ParquetAnalyzeSchemaState &state, Vector &input, idx_t count) override;
 	void AnalyzeSchemaFinalize(const ParquetAnalyzeSchemaState &state) override;
+	bool TryExportPreparedShreddingType(ShreddingType &result) const override;
 
 	bool HasTransform() override {
 		return true;
@@ -108,6 +110,7 @@ public:
 private:
 	//! Whether the schema of the variant has been analyzed already
 	bool is_analyzed = false;
+	ShreddingType analyzed_shredding_type;
 };
 
 } // namespace duckdb

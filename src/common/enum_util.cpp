@@ -3067,6 +3067,7 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 		{ static_cast<uint32_t>(LogicalTypeId::UINTEGER), "UINTEGER" },
 		{ static_cast<uint32_t>(LogicalTypeId::UBIGINT), "UBIGINT" },
 		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_TZ), "TIMESTAMP WITH TIME ZONE" },
+		{ static_cast<uint32_t>(LogicalTypeId::TIMESTAMP_TZ_NS), "TIMESTAMPTZ_NS" },
 		{ static_cast<uint32_t>(LogicalTypeId::TIME_TZ), "TIME WITH TIME ZONE" },
 		{ static_cast<uint32_t>(LogicalTypeId::TIME_NS), "TIME_NS" },
 		{ static_cast<uint32_t>(LogicalTypeId::BIT), "BIT" },
@@ -3096,12 +3097,12 @@ const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
-	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 53, "LogicalTypeId", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalTypeIdValues(), 54, "LogicalTypeId", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
-	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 53, "LogicalTypeId", value));
+	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 54, "LogicalTypeId", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLookupResultTypeValues() {
@@ -5741,6 +5742,7 @@ const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
 		{ static_cast<uint32_t>(VariantLogicalType::BIGNUM), "BIGNUM" },
 		{ static_cast<uint32_t>(VariantLogicalType::BITSTRING), "BITSTRING" },
 		{ static_cast<uint32_t>(VariantLogicalType::GEOMETRY), "GEOMETRY" },
+		{ static_cast<uint32_t>(VariantLogicalType::TIMESTAMP_NANOS_TZ), "TIMESTAMP_NANOS_TZ" },
 		{ static_cast<uint32_t>(VariantLogicalType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;
@@ -5748,12 +5750,12 @@ const StringUtil::EnumStringLiteral *GetVariantLogicalTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<VariantLogicalType>(VariantLogicalType value) {
-	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), 35, "VariantLogicalType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetVariantLogicalTypeValues(), 36, "VariantLogicalType", static_cast<uint32_t>(value));
 }
 
 template<>
 VariantLogicalType EnumUtil::FromString<VariantLogicalType>(const char *value) {
-	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 35, "VariantLogicalType", value));
+	return static_cast<VariantLogicalType>(StringUtil::StringToEnum(GetVariantLogicalTypeValues(), 36, "VariantLogicalType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetVariantStatsShreddingStateValues() {

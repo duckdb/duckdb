@@ -657,6 +657,10 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<
 			    VariantDirectConversion<timestamp_tz_t, VariantLogicalType::TIMESTAMP_MICROS_TZ>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return CastVariantToPrimitive<
+			    VariantDirectConversion<timestamp_tz_ns_t, VariantLogicalType::TIMESTAMP_NANOS_TZ>>(
+			    conversion_data, result, sel, offset, count, row, empty_payload);
 		case LogicalTypeId::UUID:
 			return CastVariantToPrimitive<VariantDirectConversion<hugeint_t, VariantLogicalType::UUID>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
@@ -772,6 +776,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:

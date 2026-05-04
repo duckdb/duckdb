@@ -200,9 +200,7 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	}
 
 	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
-	for (idx_t i = 0; i < info.input_chunk.ColumnCount(); i++) {
-		FlatVector::SetSize(info.input_chunk.data[i], count_t(elem_cnt));
-	}
+	info.input_chunk.SetChildCardinality(elem_cnt);
 
 	// execute the lambda expression
 	info.expr_executor->Execute(info.input_chunk, info.lambda_chunk);

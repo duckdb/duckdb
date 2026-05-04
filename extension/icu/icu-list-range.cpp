@@ -6,9 +6,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {

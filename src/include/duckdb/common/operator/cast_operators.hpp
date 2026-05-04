@@ -637,6 +637,10 @@ template <>
 DUCKDB_API bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Interval Casts
@@ -688,15 +692,21 @@ DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &resu
 template <>
 DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters);
 template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_ns_t &result, CastParameters &parameters);
+template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, timestamp_tz_ns_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict);
 template <>
 timestamp_t Cast::Operation(string_t input);
 template <>
 timestamp_tz_t Cast::Operation(string_t input);
+template <>
+timestamp_tz_ns_t Cast::Operation(string_t input);
 template <>
 timestamp_ns_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//

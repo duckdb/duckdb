@@ -124,6 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
+		FlatVector::SetSize(shredded_vector, count_t(count));
 		result.Shred(shredded_vector, count);
 		return true;
 	}
@@ -284,6 +285,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
