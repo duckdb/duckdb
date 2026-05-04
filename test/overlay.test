@@ -1,7 +1,7 @@
 # name: test/overlay.test
 # group: [test]
 
-`query I
+query I
 SELECT OVERLAY('abcdef' PLACING 'XX' FROM 3)
 ----
 abXXef
