@@ -85,6 +85,8 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadOptions &options) {
+	unique_lock<mutex> extension_list_lock(lock);
+
 	if (!options.alias.empty()) {
 		if (loaded_extensions_info.find(options.alias) != loaded_extensions_info.end()) {
 			auto &info = loaded_extensions_info[options.alias];
@@ -97,7 +99,6 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 	extension_name = ExtensionHelper::GetExtensionName(options.extension_name);
 	string original_extension_name = extension_name;
 
-	unique_lock<mutex> extension_list_lock(lock);
 	optional_ptr<ExtensionInfo> info;
 	auto entry = loaded_extensions_info.end();
 
