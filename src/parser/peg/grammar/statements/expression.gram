@@ -243,7 +243,7 @@ RowExpression <- 'ROW' Parens(List(Expression)?)
 SubstringExpression <- 'SUBSTRING' Parens(SubstringArguments)
 SubstringArguments <- SubstringParameters / SubstringExpressionList
 SubstringExpressionList <- List(Expression)
-SubstringParameters <- Expression 'FROM' Expression 'FOR' Expression
+SubstringParameters <- Expression FromExpression ForExpression
 TrimExpression <- 'TRIM' Parens(TrimDirection? TrimSource? List(Expression))
 TrimDirection <- TrimBoth / TrimLeading / TrimTrailing
 TrimBoth <- 'BOTH'
@@ -252,7 +252,9 @@ TrimTrailing <- 'TRAILING'
 TrimSource <- Expression? 'FROM'
 OverlayExpression <- 'OVERLAY' Parens(OverlayArguments)
 OverlayArguments <- OverlayParameters / OverlayExpressionList
-OverlayParameters <- Expression 'PLACING' Expression 'FROM' Expression ('FOR' Expression)?
+OverlayParameters <- Expression 'PLACING' Expression FromExpression ForExpression?
+FromExpression <- 'FROM' Expression
+ForExpression <- 'FOR' Expression
 OverlayExpressionList <- List(Expression)
 
 ExtractArgument <-

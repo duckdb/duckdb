@@ -866,6 +866,8 @@ private:
 	                                                                      ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformOverlayParameters(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformFromExpression(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<ParsedExpression> TransformForExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformOverlayExpressionList(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformPositionExpression(PEGTransformer &transformer,

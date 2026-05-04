@@ -2234,9 +2234,10 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformSubstringPa
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
+	// SubstringParameters <- Expression FromExpression ForExpression
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0)));
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)));
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2)));
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(4)));
 	return results;
 }
 
@@ -2295,20 +2296,31 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayArgu
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayParameters(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
-	// OverlayParameters <- Expression 'PLACING' Expression 'FROM' Expression ('FOR' Expression)?
-	// Children: 0=expr(A), 1='PLACING', 2=expr(B), 3='FROM', 4=expr(C), 5=optional('FOR' expr(D))
+	// OverlayParameters <- Expression 'PLACING' Expression FromExpression ForExpression?
+	// Children: 0=expr(A), 1='PLACING', 2=expr(B), 3=FromExpression, 4=optional(ForExpression)
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	vector<unique_ptr<ParsedExpression>> results;
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0))); // A
 	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(2))); // B (after PLACING)
-	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(4))); // C (after FROM)
-	auto &for_opt = list_pr.Child<OptionalParseResult>(5);
+	results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(3))); // C FromExpression
+	auto &for_opt = list_pr.Child<OptionalParseResult>(4);                                       // D ForExpression?
 	if (for_opt.HasResult()) {
-		// ('FOR' Expression) is a sequence: child 0 = 'FOR', child 1 = Expression
-		auto &for_list = for_opt.GetResult().Cast<ListParseResult>();
-		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(for_list.GetChild(1))); // D
+		auto &for_pr = for_opt.GetResult();
+		results.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(for_pr));
 	}
 	return results;
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFromExpression(PEGTransformer &transformer,
+                                                                            ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)); // after FROM
+}
+
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformForExpression(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(1)); // after FOR
 }
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformOverlayExpressionList(PEGTransformer &transformer,
