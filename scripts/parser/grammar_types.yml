@@ -358,6 +358,7 @@ Expression:
     - SubstringExpression
     - TrimExpression
     - TrimSource
+    - OverlayExpression
     - PositionExpression
     - CastExpression
     - CaseExpression
