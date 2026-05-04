@@ -270,55 +270,54 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 }
 
 static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &) {
-	UnifiedVectorFormat child_format;
-	ListVector::GetChildMutable(source).ToUnifiedFormat(ListVector::GetListSize(source), child_format);
-	const auto input_jsons = UnifiedVectorFormat::GetData<string_t>(child_format);
-
 	static constexpr char const *NULL_STRING = "NULL";
 	static constexpr idx_t NULL_STRING_LENGTH = 4;
 
-	UnaryExecutor::Execute<list_entry_t, string_t>(
-	    source, result, count,
-	    [&](const list_entry_t &input) {
-		    // Compute len (start with [] and ,)
-		    idx_t len = 2;
-		    len += input.length == 0 ? 0 : (input.length - 1) * 2;
-		    for (idx_t json_idx = input.offset; json_idx < input.offset + input.length; json_idx++) {
-			    const auto sel_json_idx = child_format.sel->get_index(json_idx);
-			    if (child_format.validity.RowIsValid(sel_json_idx)) {
-				    len += input_jsons[sel_json_idx].GetSize();
-			    } else {
-				    len += NULL_STRING_LENGTH;
-			    }
-		    }
+	auto input_jsons = source.Values<VectorListType<string_t>>(count);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
+	for (idx_t r = 0; r < count; r++) {
+		auto entry = input_jsons[r];
+		if (!entry.IsValid()) {
+			result_data.WriteNull();
+			continue;
+		}
+		// Compute len (start with [] and ,)
+		idx_t len = 0;
+		for (auto child : entry.GetChildValues()) {
+			if (child.IsValid()) {
+				len += child.GetValue().GetSize();
+			} else {
+				len += NULL_STRING_LENGTH;
+			}
+			len += 2;
+		}
 
-		    // Allocate string
-		    auto res = StringVector::EmptyString(result, len);
-		    auto ptr = res.GetDataWriteable();
+		// Allocate string
+		auto &res = result_data.WriteEmptyString(len);
+		auto ptr = res.GetDataWriteable();
 
-		    // Populate string
-		    *ptr++ = '[';
-		    for (idx_t json_idx = input.offset; json_idx < input.offset + input.length; json_idx++) {
-			    const auto sel_json_idx = child_format.sel->get_index(json_idx);
-			    if (child_format.validity.RowIsValid(sel_json_idx)) {
-				    auto &input_json = input_jsons[sel_json_idx];
-				    memcpy(ptr, input_json.GetData(), input_json.GetSize());
-				    ptr += input_json.GetSize();
-			    } else {
-				    memcpy(ptr, NULL_STRING, NULL_STRING_LENGTH);
-				    ptr += NULL_STRING_LENGTH;
-			    }
-			    if (json_idx != input.offset + input.length - 1) {
-				    *ptr++ = ',';
-				    *ptr++ = ' ';
-			    }
-		    }
-		    *ptr = ']';
+		// Populate string
+		*ptr++ = '[';
+		bool seen_value = false;
+		for (auto child : entry.GetChildValues()) {
+			if (seen_value) {
+				*ptr++ = ',';
+				*ptr++ = ' ';
+			}
+			if (child.IsValid()) {
+				auto &input_json = child.GetValue();
+				memcpy(ptr, input_json.GetData(), input_json.GetSize());
+				ptr += input_json.GetSize();
+			} else {
+				memcpy(ptr, NULL_STRING, NULL_STRING_LENGTH);
+				ptr += NULL_STRING_LENGTH;
+			}
+			seen_value = true;
+		}
+		*ptr = ']';
 
-		    res.Finalize();
-		    return res;
-	    },
-	    FunctionErrors::CANNOT_ERROR);
+		res.Finalize();
+	}
 	return true;
 }
 
