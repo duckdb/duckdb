@@ -73,7 +73,7 @@ public:
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
-		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		segment_data = handle.GetDataMutable() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 

@@ -1,5 +1,5 @@
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
-index 4a21b5b..67125b5 100644
+index 191bbaf..3e11b92 100644
 --- a/src/avro_reader.cpp
 +++ b/src/avro_reader.cpp
 @@ -398,7 +398,7 @@ void AvroReader::Read(DataChunk &output) {

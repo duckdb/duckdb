@@ -71,9 +71,15 @@ class ParquetWriter;
 class PhysicalOperator;
 enum class GeoParquetVersion : uint8_t;
 
+struct PreparedParquetLayout {
+	vector<duckdb_parquet::SchemaElement> schema;
+	ShreddingType shredding_types;
+};
+
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
+	PreparedParquetLayout layout;
 };
 
 struct ParquetBloomFilterEntry {
@@ -183,8 +189,8 @@ public:
 	BufferedFileWriter &GetWriter() {
 		return *writer;
 	}
-	idx_t FileSize() {
-		return total_written;
+	idx_t FileSize() const {
+		return writer->GetTotalWritten();
 	}
 	optional_idx DictionarySizeLimit() const {
 		return dictionary_size_limit;
@@ -201,8 +207,8 @@ public:
 	int64_t CompressionLevel() const {
 		return compression_level;
 	}
-	idx_t NumberOfRowGroups() {
-		return num_row_groups;
+	idx_t NumberOfRowGroups() const {
+		return file_meta_data.row_groups.size();
 	}
 	ParquetVersion GetParquetVersion() const {
 		return parquet_version;
@@ -239,6 +245,17 @@ public:
 
 private:
 	void GatherWrittenStatistics();
+	void InitializeColumnOrders(idx_t unique_columns);
+	void InitializeStatsUnifiers();
+	void InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared);
+	void InitializeColumnWriters();
+	idx_t InitializeColumnWriterSchemaIndices();
+	PreparedParquetLayout ExportPreparedLayout() const;
+
+	void VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const;
+#ifdef DEBUG
+	idx_t LeafColumnWriterCounts() const;
+#endif
 
 private:
 	ClientContext &context;
@@ -262,9 +279,6 @@ private:
 	vector<bool> not_null_columns;
 
 	unique_ptr<BufferedFileWriter> writer;
-	//! Atomics to reduce contention when rotating writes to multiple Parquet files
-	atomic<idx_t> total_written;
-	atomic<idx_t> num_row_groups;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::FileMetaData file_meta_data;
 	std::mutex lock;

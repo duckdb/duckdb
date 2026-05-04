@@ -34,7 +34,7 @@ unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, 
 	if (constant.value.IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
 	}
-	auto &func_name = root.function.name;
+	auto &func_name = root.function.GetName();
 	if (func_name == "+") {
 		if (constant.value == 0) {
 			// addition with 0

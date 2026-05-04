@@ -285,6 +285,16 @@ public:
 
 			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
+				// skip the file if pre-open-knowable filters already rule it out
+				if (!current_reader_data.union_data &&
+				    MultiFileReader::CanSkipFileFromFilters(
+				        context, current_reader_data.file_to_be_opened, current_file_index, bind_data.file_options,
+				        bind_data.reader_bind, global_state.column_indexes, global_state.filters)) {
+					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					//! Intentionally do not increase 'i'
+					continue;
+				}
+
 				current_reader_data.file_state = MultiFileFileState::OPENING;
 				// Get pointer to file mutex before unlocking
 				auto &current_file_lock = *current_reader_data.file_mutex;

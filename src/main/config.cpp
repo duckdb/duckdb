@@ -181,6 +181,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(OperatorMemoryLimitSetting),
     DUCKDB_SETTING(OrderByNonIntegerLiteralSetting),
     DUCKDB_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
+    DUCKDB_SETTING(ParallelizeSequentialSourcesSetting),
     DUCKDB_SETTING(PartitionedWriteFlushThresholdSetting),
     DUCKDB_SETTING(PartitionedWriteMaxOpenFilesSetting),
     DUCKDB_SETTING(PasswordSetting),
@@ -221,10 +222,10 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("custom_profiling_settings", 27),
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 107),
                                                      DUCKDB_SETTING_ALIAS("null_order", 49),
-                                                     DUCKDB_SETTING_ALIAS("profiling_output", 127),
-                                                     DUCKDB_SETTING_ALIAS("user", 142),
+                                                     DUCKDB_SETTING_ALIAS("profiling_output", 128),
+                                                     DUCKDB_SETTING_ALIAS("user", 143),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 141),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 142),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

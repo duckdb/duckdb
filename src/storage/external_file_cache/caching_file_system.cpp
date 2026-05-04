@@ -66,7 +66,7 @@ public:
 					}
 					const idx_t to_read = MinValue(block_size, file_size - offset);
 					auto buf = buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, to_read);
-					file_handle.Read(context, buf.Ptr(), to_read, offset);
+					file_handle.Read(context, buf.GetDataMutable(), to_read, offset);
 
 					lk.lock();
 					block->block_handle = buf.GetBlockHandle();
@@ -203,7 +203,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	if (!external_file_cache.IsEnabled()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		GetFileHandle().Read(context, buf.Ptr(), nr_bytes, location);
+		GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes, location);
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		return FileBufferHandleGroup(std::move(mem_handles));
@@ -276,7 +276,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 FileBufferHandleGroup CachingFileHandle::Read(idx_t &nr_bytes) {
 	if (!external_file_cache.IsEnabled() || !CanSeek()) {
 		auto buf = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.Ptr(), nr_bytes));
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(context, buf.GetDataMutable(), nr_bytes));
 		vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
 		mem_handles.push_back({std::move(buf), 0, nr_bytes});
 		position += nr_bytes;

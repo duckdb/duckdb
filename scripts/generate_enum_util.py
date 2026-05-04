@@ -29,6 +29,7 @@ overrides = {
         "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE",
         "TIME_TZ": "TIME WITH TIME ZONE",
         "TIMESTAMP_SEC": "TIMESTAMP_S",
+        "TIMESTAMP_TZ_NS": "TIMESTAMPTZ_NS",
     },
     "JoinType": {"OUTER": "FULL"},
     "OrderType": {

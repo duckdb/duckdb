@@ -198,7 +198,7 @@ RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 		throw InternalException("invalid segment_block_offset in RoaringScanState constructor");
 	}
 
-	auto base_ptr = handle.Ptr() + segment_block_offset;
+	auto base_ptr = handle.GetDataMutable() + segment_block_offset;
 	data_ptr = base_ptr + sizeof(idx_t);
 
 	// Deserialize the container metadata for this segment

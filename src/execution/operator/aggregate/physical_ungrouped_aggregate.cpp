@@ -117,7 +117,7 @@ void GlobalUngroupedAggregateState::Combine(LocalUngroupedAggregateState &other)
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator,
 		                                   AggregateCombineType::ALLOW_DESTRUCTIVE);
 		if (!aggregate.function.HasStateCombineCallback()) {
-			throw InternalException("Aggregate function " + aggregate.function.name +
+			throw InternalException("Aggregate function " + aggregate.function.GetName() +
 			                        " does not support combining of states");
 		}
 		aggregate.function.GetStateCombineCallback()(source_state, dest_state, aggr_input_data, 1);
@@ -142,7 +142,7 @@ void GlobalUngroupedAggregateState::CombineDistinct(LocalUngroupedAggregateState
 		Vector state_vec(Value::POINTER(CastPointerToValue(other.state.aggregate_data[aggr_idx].get())), count_t(1));
 		Vector combined_vec(Value::POINTER(CastPointerToValue(state.aggregate_data[aggr_idx].get())), count_t(1));
 		if (!aggregate.function.HasStateCombineCallback()) {
-			throw InternalException("Aggregate function " + aggregate.function.name +
+			throw InternalException("Aggregate function " + aggregate.function.GetName() +
 			                        " does not support combining of states");
 		}
 		aggregate.function.GetStateCombineCallback()(state_vec, combined_vec, aggr_input_data, 1);
@@ -636,7 +636,7 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 		if (state.counts[aggr_idx] == 0 &&
-		    aggr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+		    aggr.function.GetProperties().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
 			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);

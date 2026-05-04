@@ -20,7 +20,7 @@ namespace duckdb {
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 static void WriteGarbageIntoBuffer(BlockLock &lock, BlockHandle &block) {
 	auto &buffer = block.GetMemory().GetBuffer(lock);
-	memset(buffer->buffer, 0xa5, buffer->size); // 0xa5 is default memory in debug mode
+	memset(buffer->GetDataMutable(), 0xa5, buffer->Size()); // 0xa5 is default memory in debug mode
 }
 
 static void WriteGarbageIntoBuffer(BlockHandle &block) {
@@ -388,7 +388,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 		replacement_buffer =
 		    make_uniq<FileBuffer>(block_allocator, buffer->GetBufferType(), alloc_size, block_header_size);
 	}
-	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
+	memcpy(replacement_buffer->GetDataMutable(), buffer->GetData(), buffer->Size());
 	WriteGarbageIntoBuffer(lock, *handle);
 	buffer = std::move(replacement_buffer);
 #endif
@@ -496,7 +496,8 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) * 2 + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	idx_t block_header_size = buffer.GetHeaderSize();
-	handle->Write(QueryContext(), &buffer.size, sizeof(idx_t), 0);
+	auto user_size = buffer.Size();
+	handle->Write(QueryContext(), &user_size, sizeof(idx_t), 0);
 	handle->Write(QueryContext(), &block_header_size, sizeof(idx_t), sizeof(idx_t));
 
 	idx_t offset = sizeof(idx_t) * 2;

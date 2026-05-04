@@ -25,7 +25,7 @@ string_t CompressedStringScanState::FetchStringFromDict(int32_t dict_offset, uin
 }
 
 void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
-	baseptr = handle->Ptr() + segment.GetBlockOffset();
+	baseptr = handle->GetDataMutable() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);

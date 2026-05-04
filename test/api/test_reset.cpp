@@ -136,7 +136,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"checkpoint_on_detach", {"ENABLED"}},
 	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
 	    {"debug_verify_statement", {"copy_statement"}},
-	    {"enable_caching_operators", {false}}};
+	    {"enable_caching_operators", {false}},
+	    {"parallelize_sequential_sources", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {

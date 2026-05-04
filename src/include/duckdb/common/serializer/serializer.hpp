@@ -208,12 +208,12 @@ protected:
 	// DuckDB Optional
 	template <typename T>
 	void WriteValue(const optional<T> &opt) {
-		if (!opt.IsValid()) {
+		if (!opt) {
 			OnNullableBegin(false);
 			OnNullableEnd();
 		} else {
 			OnNullableBegin(true);
-			WriteValue(opt.GetValue());
+			WriteValue(opt.value());
 			OnNullableEnd();
 		}
 	}

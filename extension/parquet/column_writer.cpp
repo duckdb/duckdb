@@ -124,6 +124,24 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 ColumnWriter::~ColumnWriter() {
 }
 
+bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
+	bool has_shredding = false;
+	auto writer_shredding_type = ShreddingType(Type());
+	for (auto &child_writer : ChildWriters()) {
+		ShreddingType child_shredding_type;
+		if (!child_writer->TryExportPreparedShreddingType(child_shredding_type)) {
+			continue;
+		}
+		writer_shredding_type.AddChild(child_writer->Schema().name, std::move(child_shredding_type));
+		has_shredding = true;
+	}
+	if (!has_shredding) {
+		return false;
+	}
+	result = std::move(writer_shredding_type);
+	return true;
+}
+
 ColumnWriterState::~ColumnWriterState() {
 }
 
@@ -458,6 +476,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		return make_uniq<StandardColumnWriter<uhugeint_t, double, ParquetUhugeintOperator>>(writer, std::move(schema),
 		                                                                                    std::move(path_in_schema));
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		if (parquet_write_timestamp_as_int96) {
 			return make_uniq<StandardColumnWriter<int64_t, Int96, ParquetTimestampNSInt96Operator>>(
 			    writer, std::move(schema), std::move(path_in_schema));

@@ -77,13 +77,10 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	// initialize and fill chunk
 	DataChunk chunk;
 	chunk.InitializeEmpty(types);
-	FlatVector::SetSize(lists_indices, count_t(offset_lists_indices));
-	FlatVector::SetSize(payload_vector, count_t(offset_lists_indices));
-	FlatVector::SetSize(slice, count_t(offset_lists_indices));
 	chunk.data[0].Reference(lists_indices);
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
-	chunk.SetCardinality(offset_lists_indices);
+	chunk.SetChildCardinality(offset_lists_indices);
 	chunk.Verify(context.client.db);
 
 	// sink
@@ -252,7 +249,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 }
 
-static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
 	LogicalType child_type;

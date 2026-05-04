@@ -123,8 +123,8 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(job_ids, "failed to parse any top-level jobs from .github/workflows/Main.yml")
         return job_ids
 
-    def test_merge_queue_push_minimal_jobs(self):
-        selection = self._compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+    def test_merge_group_minimal_jobs(self):
+        selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertTrue(selection.save_cache)
@@ -193,7 +193,7 @@ class JobStagesTest(unittest.TestCase):
             sys.argv = [
                 "job_stages.py",
                 "--event",
-                "push",
+                "merge_group",
                 "--ref_name",
                 "gh-readonly-queue/main/pr-1-abc",
                 "--repository",

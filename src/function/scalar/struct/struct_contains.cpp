@@ -213,7 +213,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		throw InternalException("Can't check for containment in an empty struct");
 	}
 	if (!StructType::IsUnnamed(child_type)) {
-		throw BinderException("%s can only be used on unnamed structs", bound_function.name);
+		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
 	}
 	bound_function.GetArguments()[0] = child_type;
 

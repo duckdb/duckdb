@@ -200,9 +200,7 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	}
 
 	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
-	for (idx_t i = 0; i < info.input_chunk.ColumnCount(); i++) {
-		FlatVector::SetSize(info.input_chunk.data[i], count_t(elem_cnt));
-	}
+	info.input_chunk.SetChildCardinality(elem_cnt);
 
 	// execute the lambda expression
 	info.expr_executor->Execute(info.input_chunk, info.lambda_chunk);
@@ -354,7 +352,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
                                                                 ClientContext &context,
-                                                                ScalarFunction &bound_function) {
+                                                                BoundScalarFunction &bound_function) {
 	// NULL list parameter
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
@@ -371,7 +369,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 	return nullptr;
 }
 
-unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, BoundScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments,
                                                          const bool has_index) {
 	unique_ptr<FunctionData> bind_data = ListLambdaPrepareBind(arguments, context, bound_function);

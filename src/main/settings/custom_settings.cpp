@@ -839,6 +839,7 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		case LogicalTypeId::TIME:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIMESTAMP_MS:

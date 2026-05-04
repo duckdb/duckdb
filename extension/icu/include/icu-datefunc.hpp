@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb.hpp"
-
 #include "duckdb/common/enums/date_part_specifier.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/function.hpp"
 #include "tz_calendar.hpp"
 
 namespace duckdb {
@@ -54,10 +53,16 @@ struct ICUDateFunc {
 	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static bool TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestamp_ns_t &result);
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static timestamp_ns_t GetTimeNS(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.
 	static timestamp_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Sets the calendar to the timestamp, returning the unused µs part
 	static uint64_t SetTime(icu::Calendar *calendar, timestamp_t date);
+	//! Sets the calendar to the timestamp, returning the unused ns part
+	static uint64_t SetTimeNS(icu::Calendar *calendar, timestamp_ns_t date);
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar

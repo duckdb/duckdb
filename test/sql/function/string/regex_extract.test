@@ -107,3 +107,31 @@ statement error
 SELECT regexp_extract('foobarbaz', 'b..', '1')
 ----
 <REGEX>:.*Binder Error.*Could not choose a best candidate.*
+
+# 'k' option: keep (return) the input on no match instead of an empty string
+query T
+SELECT regexp_extract('foobarbaz', '(zzz)', 1, 'k')
+----
+foobarbaz
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)', 1, 'k')
+----
+bar
+
+# 'k' combines with other options
+query T
+SELECT regexp_extract('FOOBARBAZ', '(zzz)', 1, 'ik')
+----
+FOOBARBAZ
+
+query T
+SELECT regexp_extract('FOOBARBAZ', '(b..)', 1, 'ik')
+----
+BAR
+
+# 'k' is rejected by regexp_replace
+statement error
+SELECT regexp_replace('foobarbaz', 'b..', 'X', 'k')
+----
+<REGEX>:.*Option 'k'.*

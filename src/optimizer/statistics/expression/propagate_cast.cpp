@@ -66,6 +66,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return false;
 		default:
 			break;
@@ -82,6 +83,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return false;
 		case LogicalTypeId::TIMESTAMP: {
 			if (to_timestamp_tz) {
@@ -102,14 +104,29 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		}
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP_NS: {
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
 		// Same as above ^
+		const bool to_timestamp = target.id() == LogicalTypeId::TIMESTAMP_NS;
+		const bool to_timestamp_tz = target.id() == LogicalTypeId::TIMESTAMP_TZ_NS;
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_SEC:
 			return false;
+		case LogicalTypeId::TIMESTAMP_NS:
+			if (to_timestamp_tz) {
+				// Both use INT64 physical type, but should not be treated equal
+				return false;
+			}
+			break;
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			if (to_timestamp) {
+				// Both use INT64 physical type, but should not be treated equal
+				return false;
+			}
+			break;
 		default:
 			break;
 		}
@@ -120,6 +137,7 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 		switch (source.id()) {
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 		case LogicalTypeId::TIMESTAMP_NS:
 		case LogicalTypeId::TIMESTAMP_SEC:
 			return false;

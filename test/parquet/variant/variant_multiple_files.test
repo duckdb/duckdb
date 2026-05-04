@@ -1,0 +1,30 @@
+# name: test/parquet/variant/variant_multiple_files.test
+# description: Test that writing a VARIANT over multiple files creates correct Parquet files
+# group: [variant]
+
+require parquet
+
+# With FILE_SIZE_BYTES / ROW_GROUPS_PER_FILE we prepare against one file but flush against arbitrary files
+# This checks that the schema is properly initialized in all written files
+statement ok
+copy (
+    (
+        select {duck: range}::variant v
+        from range(2048)
+    ) union all (
+        select {duck: range, goose: range + 42}::variant v
+        from range(2048)
+    )
+) to '{TEST_DIR}/variant_multiple_files' (format parquet, row_group_size 2048, row_groups_per_file 1)
+
+query I
+select count(*)
+from glob('{TEST_DIR}/variant_multiple_files/*.parquet')
+----
+2
+
+query II
+select sum(v.duck::int) = 2 * list_sum(range(2048)), sum(v.goose::int) = list_sum(range(2048)) + 42 * 2048
+from '{TEST_DIR}/variant_multiple_files/*.parquet'
+----
+1	1

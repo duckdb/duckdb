@@ -123,6 +123,7 @@ bool ParquetWriter::TryGetParquetType(const LogicalType &duckdb_type, optional_p
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -180,7 +181,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 static bool GetTimestampIsAdjustedToUTC(const LogicalTypeId type_id, const TimeStampIsAdjustedToUTC setting) {
 	switch (setting) {
 	case TimeStampIsAdjustedToUTC::AUTO:
-		return type_id == LogicalTypeId::TIMESTAMP_TZ;
+		return type_id == LogicalTypeId::TIMESTAMP_TZ || type_id == LogicalTypeId::TIMESTAMP_TZ_NS;
 	case TimeStampIsAdjustedToUTC::ALWAYS_TRUE:
 		return true;
 	case TimeStampIsAdjustedToUTC::ALWAYS_FALSE:
@@ -261,6 +262,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		if (write_timestamp_as_int96) {
 			return;
 		}
@@ -449,8 +451,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       parquet_version(parquet_version), geoparquet_version(geoparquet_version),
       write_timestamp_as_int96(write_timestamp_as_int96_p),
-      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), not_null_columns(std::move(not_null_columns_p)),
-      total_written(0), num_row_groups(0) {
+      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), not_null_columns(std::move(not_null_columns_p)) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -485,6 +486,10 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		file_meta_data.__isset.key_value_metadata = true;
 	}
 
+	InitializeColumnWriters();
+}
+
+void ParquetWriter::InitializeColumnWriters() {
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
 
@@ -492,6 +497,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	auto allow_geometry = geoparquet_version != GeoParquetVersion::V1;
 
 	// construct the column writers
+	column_writers.clear();
 	D_ASSERT(sql_types.size() == unique_names.size());
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		vector<string> path_in_schema;
@@ -550,6 +556,47 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 	}
 }
 
+PreparedParquetLayout ParquetWriter::ExportPreparedLayout() const {
+	PreparedParquetLayout result;
+	result.schema = file_meta_data.schema;
+	for (auto &column_writer : column_writers) {
+		ShreddingType column_shredding_type;
+		if (!column_writer->TryExportPreparedShreddingType(column_shredding_type)) {
+			continue;
+		}
+		result.shredding_types.AddChild(column_writer->Schema().name, std::move(column_shredding_type));
+	}
+	return result;
+}
+
+#ifdef DEBUG
+static idx_t CountLeafColumnWritersRecursiveVerification(const ColumnWriter &writer) {
+	if (writer.ChildWriters().empty()) {
+		return 1;
+	}
+	idx_t result = 0;
+	for (auto &child_writer : writer.ChildWriters()) {
+		result += CountLeafColumnWritersRecursiveVerification(*child_writer);
+	}
+	return result;
+}
+
+idx_t ParquetWriter::LeafColumnWriterCounts() const {
+	idx_t result = 0;
+	for (auto &column_writer : column_writers) {
+		result += CountLeafColumnWritersRecursiveVerification(*column_writer);
+	}
+	return result;
+}
+#endif
+
+void ParquetWriter::VerifyPreparedRowGroup(const PreparedRowGroup &prepared) const {
+#ifdef DEBUG
+	D_ASSERT(prepared.row_group.columns.size() == LeafColumnWriterCounts());
+	D_ASSERT(prepared.states.size() == column_writers.size());
+#endif
+}
+
 void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (transform_data) {
 		return;
@@ -605,6 +652,10 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 	row_group.__isset.file_offset = true;
 
 	InitializeSchemaElements();
+	{
+		lock_guard<mutex> glock(lock);
+		result.layout = ExportPreparedLayout();
+	}
 
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
@@ -704,6 +755,8 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	if (states.empty()) {
 		throw InternalException("Attempting to flush a row group with no rows");
 	}
+	InitializeSchemaFromPreparedRowGroup(prepared);
+	VerifyPreparedRowGroup(prepared);
 	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
 	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
@@ -728,23 +781,12 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file metadata
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
-
-	total_written = writer->GetTotalWritten();
-	++num_row_groups;
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer, unique_ptr<ParquetWriteTransformData> &transform_data) {
 	if (buffer.Count() == 0) {
 		return;
 	}
-
-	// "total_written" is only used for the FILE_SIZE_BYTES flag, and only when threads are writing in parallel.
-	// We pre-emptively increase it here to try to reduce overshooting when many threads are writing in parallel.
-	// However, waiting for the exact value (PrepareRowGroup) takes too long, and would cause overshoots to happen.
-	// So, we guess the compression ratio. We guess 3x, but this will be off depending on the data.
-	// "total_written" is restored to the exact number of written bytes at the end of FlushRowGroup.
-	// PhysicalCopyToFile should be reworked to use prepare/flush batch separately for better accuracy.
-	total_written += buffer.SizeInBytes() / 2;
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group, transform_data);
@@ -956,6 +998,8 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 		return make_uniq<NumericStatsUnifier<timestamp_t>>();
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return make_uniq<NumericStatsUnifier<timestamp_tz_t>>();
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return make_uniq<NumericStatsUnifier<timestamp_tz_ns_t>>();
 	case LogicalTypeId::TIMESTAMP_MS:
 		return make_uniq<NumericStatsUnifier<timestamp_ms_t>>();
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -1148,6 +1192,12 @@ void ParquetWriter::InitializeSchemaElements() {
 	if (!file_meta_data.schema.empty()) {
 		return;
 	}
+	auto unique_columns = InitializeColumnWriterSchemaIndices();
+	InitializeStatsUnifiers();
+	InitializeColumnOrders(unique_columns);
+}
+
+idx_t ParquetWriter::InitializeColumnWriterSchemaIndices() {
 	// populate root schema object
 	file_meta_data.schema.resize(1);
 	file_meta_data.schema[0].name = "duckdb_schema";
@@ -1160,17 +1210,49 @@ void ParquetWriter::InitializeSchemaElements() {
 	for (auto &column_writer : column_writers) {
 		unique_columns += column_writer->FinalizeSchema(file_meta_data.schema);
 	}
+	return unique_columns;
+}
 
-	if (written_stats) {
-		for (auto &column_writer : column_writers) {
-			GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
-		}
+void ParquetWriter::InitializeColumnOrders(idx_t unique_columns) {
+	if (file_meta_data.__isset.column_orders) {
+		return;
 	}
-
 	duckdb_parquet::ColumnOrder column_order;
 	column_order.__set_TYPE_ORDER(duckdb_parquet::TypeDefinedOrder());
 	file_meta_data.column_orders.resize(unique_columns, column_order);
 	file_meta_data.__isset.column_orders = true;
+}
+
+void ParquetWriter::InitializeStatsUnifiers() {
+	if (!written_stats || !stats_accumulator->stats_unifiers.empty()) {
+		return;
+	}
+	for (auto &column_writer : column_writers) {
+		GetStatsUnifier(*column_writer, stats_accumulator->stats_unifiers);
+	}
+}
+
+static bool HasPreparedShreddingTypes(const ShreddingType &shredding_types) {
+	return shredding_types.set || !shredding_types.children.types->empty();
+}
+
+void ParquetWriter::InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup &prepared) {
+	auto &layout = prepared.layout;
+	if (file_meta_data.schema.empty()) {
+		if (layout.schema.empty()) {
+			throw InternalException("Prepared Parquet row group is missing schema");
+		}
+		if (HasPreparedShreddingTypes(layout.shredding_types)) {
+			shredding_types = layout.shredding_types.Copy();
+			InitializeColumnWriters();
+		}
+		auto unique_columns = InitializeColumnWriterSchemaIndices();
+		D_ASSERT(unique_columns == prepared.row_group.columns.size());
+		D_ASSERT(file_meta_data.schema.size() == layout.schema.size());
+		file_meta_data.schema = layout.schema;
+		InitializeColumnOrders(unique_columns);
+	}
+	InitializeStatsUnifiers();
 }
 
 void ParquetWriter::Finalize() {

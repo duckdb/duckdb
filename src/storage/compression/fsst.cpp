@@ -236,7 +236,7 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
-		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
+		current_end_ptr = current_handle.GetDataMutable() + current_dictionary.end;
 	}
 
 	void CreateEmptySegment() {
@@ -352,7 +352,7 @@ public:
 		}
 
 		// calculate ptr and offsets
-		auto base_ptr = handle.Ptr();
+		auto base_ptr = handle.GetDataMutable();
 		auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(base_ptr);
 		auto compressed_index_buffer_offset = sizeof(fsst_compression_header_t);
 		auto symbol_table_offset = compressed_index_buffer_offset + compressed_index_buffer_size;
@@ -577,7 +577,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
-	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
+	auto base_ptr = state->handle.GetDataMutable() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
 	auto decoder = reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get());
@@ -653,7 +653,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		enable_fsst_vectors = false;
 	}
 
-	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
 	auto base_data = data_ptr_cast(baseptr + sizeof(fsst_compression_header_t));
 	string_t *result_data;
@@ -713,7 +713,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
 	auto base_data = data_ptr_cast(baseptr + sizeof(fsst_compression_header_t));
 
@@ -737,7 +737,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
                                  idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
+	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
 	auto base_data = data_ptr_cast(base_ptr + sizeof(fsst_compression_header_t));
 	auto dict = GetDictionary(segment, handle);
 
@@ -797,13 +797,13 @@ bool FSSTFun::TypeIsSupported(const PhysicalType physical_type) {
 // Helper Functions
 //===--------------------------------------------------------------------===//
 void FSSTStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container) {
-	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }
 
 StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
 	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));

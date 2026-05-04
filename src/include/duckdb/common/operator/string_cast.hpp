@@ -86,5 +86,7 @@ template <>
 duckdb::string_t StringCastTZ::Operation(dtime_tz_t input, StringHeap &heap);
 template <>
 duckdb::string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap);
+template <>
+duckdb::string_t StringCastTZ::Operation(timestamp_ns_t input, StringHeap &heap);
 
 } // namespace duckdb

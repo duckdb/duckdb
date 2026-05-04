@@ -159,9 +159,8 @@ void DataChunk::Copy(DataChunk &other, idx_t offset) const {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], size(), offset, 0);
-		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(target_count);
+	other.SetChildCardinality(target_count);
 }
 
 void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count, const idx_t offset) const {
@@ -173,9 +172,8 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(other.data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(data[i], other.data[i], sel, source_count, offset, 0);
-		FlatVector::SetSize(other.data[i], count_t(target_count));
 	}
-	other.SetCardinality(target_count);
+	other.SetChildCardinality(target_count);
 }
 
 void DataChunk::Split(DataChunk &other, idx_t split_idx) {
@@ -230,13 +228,13 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
+		// ensure data[i] has the chunk's current size so the append computes new_size = current + append_size
 		FlatVector::SetSize(data[i], size());
 		if (sel.IsSet()) {
 			data[i].Append(other.data[i], sel, sel_count, append_mode);
 		} else {
 			data[i].Append(other.data[i], other.size(), append_mode);
 		}
-		FlatVector::SetSize(data[i], count_t(new_size));
 	}
 	SetCardinality(new_size);
 }
@@ -301,13 +299,12 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	// initialize the data chunk
 	D_ASSERT(!types.empty());
 	Initialize(Allocator::DefaultAllocator(), types, MaxValue<idx_t>(row_count, STANDARD_VECTOR_SIZE));
-	SetCardinality(row_count);
 
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
-		FlatVector::SetSize(data[i], count_t(row_count));
 	});
+	SetChildCardinality(row_count);
 }
 
 void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
@@ -392,7 +389,7 @@ void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
 #ifdef DEBUG
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Verify(size());
+		data[i].Verify();
 	}
 
 	if (!ColumnCount()) {
