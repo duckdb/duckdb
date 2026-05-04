@@ -142,6 +142,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	// first cast all child elements to varchar
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
+	FlatVector::SetSize(varchar_struct, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
 	auto &base_children = StructVector::GetEntries(source);
 

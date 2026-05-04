@@ -95,6 +95,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	auto size = ArrayType::GetSize(source.GetType());
 	Vector varchar_list(LogicalType::ARRAY(LogicalType::VARCHAR, size), count);
+	FlatVector::SetSize(varchar_list, count);
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
