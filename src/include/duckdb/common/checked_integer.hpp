@@ -23,8 +23,8 @@ namespace duckdb {
 //!
 //! A few key features:
 //! - On underflow and overflow, it throws a templated exception type (by default InternalException).
-//! - It's by default initialized to 0, which avoid accessing uninitialized memory.
-//! - It served as drop-in replacement for the underlying type in most cases.
+//! - It's by default initialized to 0, which avoids accessing uninitialized memory.
+//! - It serves as drop-in replacement for the underlying type in most cases.
 //!
 //! Known and intentional incompatibilities:
 //! - For all the operations, only integral template arguments are accepted.
