@@ -93,8 +93,7 @@ idx_t ExpressionColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 
 	auto amount = child_reader->Read(input, intermediate_vector);
 	// Execute the expression
-	intermediate_chunk.SetCardinality(amount);
-	FlatVector::SetSize(intermediate_vector, count_t(amount));
+	intermediate_chunk.SetChildCardinality(amount);
 	executor.ExecuteExpression(intermediate_chunk, result);
 	return amount;
 }

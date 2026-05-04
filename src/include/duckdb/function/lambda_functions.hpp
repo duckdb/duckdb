@@ -62,10 +62,10 @@ public:
 
 	//! Checks for NULL list parameter and prepared statements and adds bound cast expression
 	static unique_ptr<FunctionData> ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
-	                                                      ClientContext &context, ScalarFunction &bound_function);
+	                                                      ClientContext &context, BoundScalarFunction &bound_function);
 
 	//! Returns the ListLambdaBindData containing the lambda expression
-	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
+	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, BoundScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
 

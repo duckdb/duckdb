@@ -82,7 +82,6 @@ public:
 	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
 	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type, const SelectionVector &sel,
 	                                        idx_t count) override;
 
@@ -91,6 +90,7 @@ protected:
 	buffer_ptr<VectorBuffer> SliceInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	SelectionVector sel_vector;
@@ -148,7 +148,7 @@ struct DictionaryVector {
 		return type.InternalType() == PhysicalType::VARCHAR;
 	}
 	static inline bool CanCacheHashes(const Vector &vector) {
-		return DictionarySize(vector).IsValid() && CanCacheHashes(vector.GetType());
+		return DictionarySize(vector).IsValid() && !DictionaryId(vector).empty() && CanCacheHashes(vector.GetType());
 	}
 	static buffer_ptr<DictionaryEntry> CreateReusableDictionary(const LogicalType &type, const idx_t &size);
 	static const Vector &GetCachedHashes(Vector &input);

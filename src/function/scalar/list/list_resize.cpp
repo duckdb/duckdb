@@ -18,40 +18,29 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto &lists = args.data[0];
 	auto &new_sizes = args.data[1];
 	auto row_count = args.size();
-
-	UnifiedVectorFormat lists_data;
-	lists.ToUnifiedFormat(row_count, lists_data);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
-
-	auto &child_vector = ListVector::GetChild(lists);
-	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(row_count, child_data);
-
-	UnifiedVectorFormat new_sizes_data;
-	new_sizes.ToUnifiedFormat(row_count, new_sizes_data);
 	D_ASSERT(new_sizes.GetType().id() == LogicalTypeId::UBIGINT);
-	auto new_size_entries = UnifiedVectorFormat::GetData<ubigint_t>(new_sizes_data);
 
-	// Get the new size of the result child vector.
-	// We skip rows with NULL values in the input lists.
-	ubigint_t child_vector_size(0);
+	auto list_entries = lists.Values<list_entry_t>(row_count);
+	auto new_size_entries = new_sizes.Values<ubigint_t>(row_count);
+	auto &child_vector = ListVector::GetChild(lists);
+
+	// Sum up the total child capacity using checked arithmetic so we trip an
+	// Overflow exception up-front for absurd target sizes (e.g. UINT64_MAX).
+	ubigint_t total_child_size(0);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		auto list_idx = lists_data.sel->get_index(row_idx);
-		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
-
-		if (lists_data.validity.RowIsValid(list_idx) && new_sizes_data.validity.RowIsValid(new_size_idx)) {
-			child_vector_size += new_size_entries[new_size_idx];
+		auto list_entry = list_entries[row_idx];
+		auto new_size_entry = new_size_entries[row_idx];
+		if (list_entry.IsValid() && new_size_entry.IsValid()) {
+			total_child_size += new_size_entry.GetValue();
 		}
 	}
-	ListVector::Reserve(result, child_vector_size.value);
-	ListVector::SetListSize(result, child_vector_size.value);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
-	auto &result_child_vector = ListVector::GetChildMutable(result);
 
-	// Get the default values, if provided.
+	// the default vector's element type is dynamic so we can't use Values<T>
+	// here -- ToUnifiedFormat lets us check validity for any payload type.
 	UnifiedVectorFormat default_data;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
@@ -59,61 +48,47 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		default_vector->ToUnifiedFormat(row_count, default_data);
 	}
 
-	ubigint_t offset(0);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		auto list_idx = lists_data.sel->get_index(row_idx);
-		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
-
+		auto list_entry = list_entries[row_idx];
 		// Set to NULL, if the list is NULL.
-		if (!lists_data.validity.RowIsValid(list_idx)) {
+		if (!list_entry.IsValid()) {
 			result_entries.WriteNull();
 			continue;
 		}
 
-		ubigint_t new_size(0);
-		if (new_sizes_data.validity.RowIsValid(new_size_idx)) {
-			new_size = new_size_entries[new_size_idx];
-		}
+		auto new_size_entry = new_size_entries[row_idx];
+		ubigint_t new_size = new_size_entry.IsValid() ? new_size_entry.GetValue() : ubigint_t(0);
 
 		// If new_size >= length, then we copy [0, length) values.
 		// If new_size < length, then we copy [0, new_size) values.
-		auto copy_count = MinValue<ubigint_t>(list_entries[list_idx].length, new_size);
+		const auto &source_list = list_entry.GetValue();
+		auto copy_count = MinValue<ubigint_t>(source_list.length, new_size);
 
-		// Set the result entry.
-		result_entries.WriteValue(list_entry_t(offset.value, new_size.value));
-
-		// Copy the child vector's values.
-		// The number of elements to copy is later determined like so: source_count - source_offset.
-		ubigint_t source_offset = list_entries[list_idx].offset;
+		auto list = result_entries.WriteDynamicList();
+		ubigint_t source_offset = source_list.offset;
 		ubigint_t source_count = source_offset + copy_count;
-		VectorOperations::Copy(child_vector, result_child_vector, source_count.value, source_offset.value,
-		                       offset.value);
-		offset += copy_count;
+		list.Append(child_vector, *FlatVector::IncrementalSelectionVector(), source_count.value, source_offset.value,
+		            copy_count.value);
 
-		// Fill the remaining space with the default values.
-		if (copy_count < new_size) {
-			ubigint_t remaining_count = new_size - copy_count;
+		if (copy_count >= new_size) {
+			continue;
+		}
+		ubigint_t remaining_count = new_size - copy_count;
 
-			if (default_vector) {
-				auto default_idx = default_data.sel->get_index(row_idx);
-				if (default_data.validity.RowIsValid(default_idx)) {
-					SelectionVector sel(remaining_count.value);
-					for (idx_t j = 0; j < remaining_count.value; j++) {
-						sel.set_index(j, row_idx);
-					}
-					VectorOperations::Copy(*default_vector, result_child_vector, sel, remaining_count.value, 0,
-					                       offset.value);
-					offset += remaining_count;
-					continue;
+		if (default_vector) {
+			auto default_idx = default_data.sel->get_index(row_idx);
+			if (default_data.validity.RowIsValid(default_idx)) {
+				SelectionVector sel(remaining_count.value);
+				for (idx_t j = 0; j < remaining_count.value; j++) {
+					sel.set_index(j, row_idx);
 				}
-			}
-
-			// Fill the remaining space with NULL.
-			for (idx_t j = copy_count.value; j < new_size.value; j++) {
-				FlatVector::SetNull(result_child_vector, offset.value, true);
-				offset += 1;
+				list.Append(*default_vector, sel, remaining_count.value, 0, remaining_count.value);
+				continue;
 			}
 		}
+
+		// Fill the remaining space with NULL.
+		list.AppendNulls(remaining_count.value);
 	}
 }
 

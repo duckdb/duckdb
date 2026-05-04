@@ -374,14 +374,26 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
-	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
-	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
-	    parquet_bind.timestamp_is_adjusted_to_utc, parquet_bind.not_null_columns);
+
+	ParquetWriterOptions options;
+	options.file_name = file_path;
+	options.sql_types = parquet_bind.sql_types;
+	options.column_names = parquet_bind.column_names;
+	options.codec = parquet_bind.codec, options.field_ids = parquet_bind.field_ids.Copy();
+	options.shredding_types = parquet_bind.shredding_types.Copy();
+	options.encryption_config = parquet_bind.encryption_config;
+	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
+	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
+	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
+	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
+	options.compression_level = parquet_bind.compression_level;
+	options.parquet_version = parquet_bind.parquet_version,
+	options.geoparquet_version = parquet_bind.geoparquet_version;
+	options.write_timestamp_as_int96 = parquet_bind.write_timestamp_as_int96,
+	options.timestamp_is_adjusted_to_utc = parquet_bind.timestamp_is_adjusted_to_utc;
+	options.not_null_columns = parquet_bind.not_null_columns;
+
+	global_state->writer = make_uniq<ParquetWriter>(context, fs, std::move(options), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
 

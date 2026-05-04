@@ -1029,12 +1029,12 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 		switch (precision) {
 		case ArrowDateTimeType::SECONDS: {
 			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
-			                      1000000);
+			                      Interval::MICROS_PER_SEC);
 			break;
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
 			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
-			                      1000);
+			                      Interval::MICROS_PER_MSEC);
 			break;
 		}
 		case ArrowDateTimeType::MICROSECONDS: {
@@ -1051,7 +1051,31 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 			break;
 		}
 		default:
-			throw NotImplementedException("Unsupported precision for TimestampTZ Type ");
+			throw NotImplementedException("Unsupported precision for TimestampTZ(us) Type ");
+		}
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		auto &datetime_info = arrow_type.GetTypeInfo<ArrowDateTimeInfo>();
+		auto precision = datetime_info.GetDateTimeType();
+		switch (precision) {
+		case ArrowDateTimeType::SECONDS:
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_SEC);
+			break;
+		case ArrowDateTimeType::MILLISECONDS:
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_MSEC);
+			break;
+		case ArrowDateTimeType::MICROSECONDS:
+			TimestampTZConversion(vector, array, chunk_offset, nested_offset, NumericCast<int64_t>(parent_offset), size,
+			                      Interval::NANOS_PER_MICRO);
+			break;
+		case ArrowDateTimeType::NANOSECONDS:
+			DirectConversion(vector, array, chunk_offset, nested_offset, parent_offset, size);
+			break;
+		default:
+			throw NotImplementedException("Unsupported precision for TimestampTZ(ns) Type ");
 		}
 		break;
 	}
@@ -1428,6 +1452,8 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		default:
 			throw NotImplementedException("ArrowArrayPhysicalType not recognized");
 		};
+		// the dictionary buffer holds dict_length entries plus one trailing NULL sentinel slot
+		FlatVector::SetSize(*base_vector, count_t(dict_length + 1));
 		array_state.AddDictionary(std::move(base_vector), array.dictionary);
 	}
 	auto offset_type = arrow_type.GetDuckType();

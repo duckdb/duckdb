@@ -50,18 +50,19 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
-	}
+	D_ASSERT(type_size == GetTypeIdSize(type.InternalType()));
 	// verify all entries in the sel fit within the validity
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(sel.get_index(i) < validity.Capacity());
+			auto sel_idx = sel.get_index(i);
+			D_ASSERT(sel_idx <= validity.Capacity());
+			D_ASSERT(sel_idx <= Capacity());
 		}
-	} else {
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
 		D_ASSERT(count <= validity.Capacity());
+		D_ASSERT(count <= Capacity());
 	}
 }
 
@@ -351,6 +352,8 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(reinterpret_cast<const timestamp_tz_ns_t *>(data_ptr)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
 	case LogicalTypeId::UHUGEINT:

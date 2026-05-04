@@ -835,36 +835,22 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
-void Vector::Verify(idx_t count) const {
-	Verify(*FlatVector::IncrementalSelectionVector(), count);
-}
-
-void Vector::Verify(const SelectionVector &sel, idx_t count) const {
-#ifdef DEBUG
+void Vector::Verify() const {
 	if (!buffer) {
 		return;
 	}
-	Buffer().Verify(GetType(), sel, count);
-	// type-specific verification that requires access to the full Vector
-	// these functions may call ToUnifiedFormat which mutates the vector, hence the const_cast
-	auto &self = const_cast<Vector &>(*this);
-	if (GetType().id() == LogicalTypeId::MAP) {
-		auto valid_check = MapVector::CheckMapValidity(self, count, sel);
-		D_ASSERT(valid_check == MapInvalidReason::VALID);
+	buffer->Verify(GetType());
+}
+
+void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (!buffer) {
+		return;
 	}
-	if (GetType().id() == LogicalTypeId::UNION) {
-		auto valid_check = UnionVector::CheckUnionValidity(self, count, sel);
-		if (valid_check != UnionInvalidReason::VALID) {
-			throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
-		}
-	}
-	// FIXME: re-add variant verification once VariantUtils::Verify handles shredded variants correctly
-	// if (GetType().id() == LogicalTypeId::VARIANT) {
-	// 	if (!VariantUtils::Verify(self, sel, count)) {
-	// 		throw InternalException("Variant not valid");
-	// 	}
-	// }
-#endif
+	buffer->Verify(GetType(), sel, count);
+}
+
+void Vector::Verify(idx_t count) const {
+	Verify();
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {

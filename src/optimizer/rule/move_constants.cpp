@@ -52,7 +52,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 	hugeint_t inner_value = IntegralValue::Get(inner_constant.value);
 
 	idx_t arithmetic_child_index = arithmetic.children[0].get() == &inner_constant ? 1 : 0;
-	auto &op_type = arithmetic.function.name;
+	auto &op_type = arithmetic.function.GetName();
 	if (op_type == "+") {
 		// [x + 1 COMP 10] OR [1 + x COMP 10]
 		// order does not matter in addition:

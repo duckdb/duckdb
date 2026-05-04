@@ -94,7 +94,7 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.name != "constant_or_null") {
+	if (expr.function.GetName() != "constant_or_null") {
 		return false;
 	}
 	D_ASSERT(expr.bind_info);

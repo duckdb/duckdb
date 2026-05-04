@@ -9,7 +9,7 @@ namespace duckdb {
 
 namespace {
 
-LogicalType GetRegrCountStateType(const AggregateFunction &) {
+LogicalType GetRegrCountStateType(const BoundAggregateFunction &) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("count", LogicalType::UBIGINT);
 	return LogicalType::STRUCT(std::move(child_types));

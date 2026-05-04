@@ -79,7 +79,7 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("timetz_byte_comparable should only have a single overload");
 	}
-	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	const auto &scalar_function = function_entry.functions.GetFunctionByOffset(0);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
@@ -100,7 +100,7 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("normalized_interval should only have a single overload");
 	}
-	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	const auto &scalar_function = function_entry.functions.GetFunctionByOffset(0);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
@@ -121,7 +121,7 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 		throw InternalException("variant_normalize should only have a single overload");
 	}
 	auto source_alias = source->GetAlias();
-	auto &scalar_function = function_entry.functions.GetFunctionReferenceByOffset(0);
+	const auto &scalar_function = function_entry.functions.GetFunctionByOffset(0);
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
