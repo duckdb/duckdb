@@ -137,7 +137,7 @@ void VectorBuffer::Resize(idx_t current_size, idx_t new_size) {
 	throw InternalException("VectorBuffer::Resize not supported for this vector type");
 }
 
-void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 

@@ -148,9 +148,9 @@ buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalTy
 	return result;
 }
 
-void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorListBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
