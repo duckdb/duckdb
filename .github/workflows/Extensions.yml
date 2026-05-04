@@ -215,7 +215,8 @@ jobs:
     #   runners: ${{ inputs.runners }}
 
     # TODO select correct container (based on toolchain) and runner.
-    runs-on: ${{ fromJSON(inputs.runners).runner_linux_arm64 }}
+    # runs-on: ${{ fromJSON(inputs.runners).runner_linux_arm64 }}
+    runs-on: namespace-profile-linux-arm64
     container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_cpp:20260504-1423eaca
 
     env:
