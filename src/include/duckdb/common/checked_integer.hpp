@@ -31,6 +31,7 @@ namespace duckdb {
 //! Known and intentional incompatibilities:
 //! - For all the operations, only integral template arguments are accepted.
 //! - It doesn't support bit operations.
+//! - Modulo operation is not supported.
 template <typename T, typename ExceptionT = InternalException>
 class CheckedInteger {
 	static_assert(std::is_integral_v<T>, "CheckedInteger only supports integral types");
