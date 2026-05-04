@@ -100,7 +100,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		}
 		idx_t list_length = 2; // "[" and "]"
 		idx_t list_idx = 0;
-		for(auto child_value : list_entry.GetChildValues()) {
+		for (auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				list_length += SEP_LENGTH; // ", "
 			}
@@ -117,7 +117,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
 		list_idx = 0;
-		for(auto child_value : list_entry.GetChildValues()) {
+		for (auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
