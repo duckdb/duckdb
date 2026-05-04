@@ -685,8 +685,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		hll.Update(group_hashes_v, group_hashes_v, groups.size());
 	}
 
-	group_hashes_v.Flatten(chunk_size);
-	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);
 
 	addresses_v.Flatten(chunk_size);
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
@@ -720,7 +719,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	// So, by doing the lookups here, we better amortize cache misses.
 	idx_t occupied_count = 0;
 	for (idx_t r = 0; r < chunk_size; r++) {
-		const auto &hash = hashes[r];
+		const auto &hash = hashes[r].GetValue();
 		auto &ht_offset = ht_offsets[r];
 		ht_offset = ApplyBitMask(hash);
 		occupied_count += entries[ht_offset].IsOccupied(); // Lookup
