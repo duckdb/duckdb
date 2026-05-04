@@ -12,12 +12,6 @@ namespace duckdb {
 static void StructConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &result_cols = StructVector::GetEntries(result);
 	idx_t offset = 0;
-
-	if (!args.AllConstant()) {
-		// Unless all arguments are constant, we flatten the input to make sure it's homogeneous
-		args.Flatten();
-	}
-
 	for (auto &arg : args.data) {
 		const auto &child_cols = StructVector::GetEntries(arg);
 		for (auto &child_col : child_cols) {
