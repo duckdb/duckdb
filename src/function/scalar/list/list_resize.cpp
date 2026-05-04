@@ -71,17 +71,15 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 		ubigint_t remaining_count = new_size - copy_count;
 
-		if (default_validity) {
-			// if a default value is provided fill the list with the default value
-			if (default_validity.value().IsValid(row_idx)) {
-				SelectionVector sel(remaining_count.value);
-				for (idx_t j = 0; j < remaining_count.value; j++) {
-					sel.set_index(j, row_idx);
-				}
-				auto &default_vector = args.data[2];
-				list.Append(default_vector, sel, remaining_count.value, 0, remaining_count.value);
-				continue;
+		// if a default value is provided fill the list with the default value
+		if (default_validity.has_value() && default_validity->IsValid(row_idx)) {
+			SelectionVector sel(remaining_count.value);
+			for (idx_t j = 0; j < remaining_count.value; j++) {
+				sel.set_index(j, row_idx);
 			}
+			auto &default_vector = args.data[2];
+			list.Append(default_vector, sel, remaining_count.value, 0, remaining_count.value);
+			continue;
 		}
 
 		// Fill the remaining space with NULL.
