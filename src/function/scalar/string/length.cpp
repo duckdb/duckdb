@@ -87,16 +87,16 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 		// for arrays the length is constant
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::GetData<int64_t>(result)[0] = array_size;
+		FlatVector::SetSize(result, args.size());
 		return;
 	}
 	// we need to inherit the null values of the parent
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetDataMutable<int64_t>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t r = 0; r < args.size(); r++) {
-		result_data[r] = array_size;
 		if (!validity_entries.IsValid(r)) {
-			result_validity.SetInvalid(r);
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(array_size);
 		}
 	}
 }
