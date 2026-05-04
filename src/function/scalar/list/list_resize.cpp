@@ -41,11 +41,11 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 	// the default vector's element type is dynamic so we can't use Values<T>
 	// here -- ToUnifiedFormat lets us check validity for any payload type.
-	UnifiedVectorFormat default_data;
+	optional<VectorValidityIterator> default_validity;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
 		default_vector = &args.data[2];
-		default_vector->ToUnifiedFormat(row_count, default_data);
+		default_validity = default_vector->Validity(row_count);
 	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -75,9 +75,9 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 		ubigint_t remaining_count = new_size - copy_count;
 
-		if (default_vector) {
-			auto default_idx = default_data.sel->get_index(row_idx);
-			if (default_data.validity.RowIsValid(default_idx)) {
+		if (default_vector && default_validity) {
+			// if a default value is provided fill the list with the default value
+			if (default_validity->IsValid(row_idx)) {
 				SelectionVector sel(remaining_count.value);
 				for (idx_t j = 0; j < remaining_count.value; j++) {
 					sel.set_index(j, row_idx);
