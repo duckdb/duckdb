@@ -312,39 +312,6 @@ jobs:
         run: |
           python scripts/regression_test_storage_size.py --old build/base/release/duckdb --new build/current/release/duckdb
 
-      - name: Test for incompatibility
-        run: |
-          if (cmp test/sql/storage_version/storage_version.db build/base/release/test/sql/storage_version/storage_version.db); then
-            echo "storage_changed=false" >> "$GITHUB_ENV"
-          else
-            echo "storage_changed=true" >> "$GITHUB_ENV"
-          fi
-
-      - name: Regression Compatibility Test (testing bidirectional compatibility)
-        if: env.storage_changed == 'false'
-        run: |
-          # Regenerate test/sql/storage_version.db with newer version -> read with older version
-          python3 scripts/generate_storage_version.py build/current/release/duckdb
-          ./build/base/release/duckdb test/sql/storage_version/storage_version.db
-          # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
-          python3 scripts/generate_storage_version.py build/base/release/duckdb
-          ./build/current/release/duckdb test/sql/storage_version/storage_version.db
-
-      - name: Regression Compatibility Test (testing storage version has been bumped)
-        if: env.storage_changed == 'true'
-        run: |
-          python3 scripts/generate_storage_version.py build/current/release/duckdb
-          mv test/sql/storage_version/storage_version.db current.db
-          python3 scripts/generate_storage_version.py build/base/release/duckdb
-          mv test/sql/storage_version/storage_version.db base.db
-          if (cmp -i 8 -n 12 current.db base.db); then
-            echo "Expected storage format to be bumped, but this is not the case"
-            echo "This might fail spuriously if changes to content of test database / generation script happened"
-            exit 1
-          else
-            echo "Storage bump detected, all good!"
-          fi
-
   regression-test-binary-size:
     name: Regression test binary size
     needs:

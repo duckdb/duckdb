@@ -110,11 +110,11 @@ template <>
 VariantValue ConvertShreddedValue<timestamp_tz_t>::Convert(timestamp_tz_t val) {
 	return VariantValue(Value::TIMESTAMPTZ(val));
 }
-////! timestamptz(9)
-// template <>
-// VariantValue ConvertShreddedValue<timestamp_ns_tz_t>::Convert(timestamp_ns_tz_t val) {
-//	return VariantValue(Value::TIMESTAMPNS_TZ(val));
-//}
+//! timestamptz(9)
+template <>
+VariantValue ConvertShreddedValue<timestamp_tz_ns_t>::Convert(timestamp_tz_ns_t val) {
+	return VariantValue(Value::TIMESTAMPTZNS(val));
+}
 //! timestampntz(6)
 template <>
 VariantValue ConvertShreddedValue<timestamp_t>::Convert(timestamp_t val) {
@@ -291,10 +291,16 @@ vector<VariantValue> VariantShreddedConversion::ConvertShreddedLeaf(Vector &meta
 		return ConvertTypedValues<dtime_t, ConvertShreddedValue<dtime_t>, LogicalTypeId::TIME>(
 		    typed_value, metadata, value, offset, length, total_size);
 	}
-	//! timestamptz(6) (timestamptz(9) not implemented in DuckDB)
+	//! timestamptz(6)
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		return ConvertTypedValues<timestamp_tz_t, ConvertShreddedValue<timestamp_tz_t>, LogicalTypeId::TIMESTAMP_TZ>(
 		    typed_value, metadata, value, offset, length, total_size);
+	}
+	//! timestamptz(9)
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		return ConvertTypedValues<timestamp_tz_ns_t, ConvertShreddedValue<timestamp_tz_ns_t>,
+		                          LogicalTypeId::TIMESTAMP_TZ_NS>(typed_value, metadata, value, offset, length,
+		                                                          total_size);
 	}
 	//! timestampntz(6)
 	case LogicalTypeId::TIMESTAMP: {

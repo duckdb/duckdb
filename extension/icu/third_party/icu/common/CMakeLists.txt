@@ -52,6 +52,7 @@ add_library_unity(
   emojiprops.cpp
   errorcode.cpp
   filterednormalizer2.cpp
+  fixedstring.cpp
   icudataver.cpp
   localematcher.cpp
   localeprioritylist.cpp

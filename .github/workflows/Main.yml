@@ -18,6 +18,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -287,7 +288,7 @@ jobs:
       FORCE_ASSERT: 1
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
-      EXTENSIONS_STATIC_BUILD: 0
+      EXTENSION_STATIC_BUILD: 0
 
     steps:
     - name: "Checkout"
@@ -394,11 +395,12 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
       CXX: g++
       GEN: ninja
+      CLANGD_BINARY: clangd-20
 
     steps:
     - uses: actions/checkout@v6
@@ -414,57 +416,24 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Download clang-tidy-cache
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: |
-        set -e
-        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
-        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
-        chmod +x /tmp/clang-tidy-cache
-
-    - name: Tidy Check
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
     - name: Tidy Check Diff
-      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
- check-clangd-tidy:
-   name: Tidy Check (clangd)
-   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
-   needs: prepare
-   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-   env:
-     CLANGD_BINARY: clangd-20
+    - name: Clean
+      run: make clean
 
-   steps:
-     - name: "Checkout"
-       uses: duckdb/duckdb-ci/.github/actions/checkout@main
-       with:
-         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
-         fetch_depth: 0
-         ref: ${{ needs.prepare.outputs.git_sha }}
+    - name: Install clangd-tidy
+      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-     - name: Install
-       timeout-minutes: 10
-       run: |
-         python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-         python3 scripts/ci/retry.py -- make install-clangd-tidy
-
-     - name: Tidy Check
-       run: |
-         mkdir -p ~/.config/clangd
-         cat > ~/.config/clangd/config.yaml <<'EOF'
-         Diagnostics:
-           UnusedIncludes: None
-         EOF
-         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Tidy Check (clangd)
+      run: |
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
 
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
@@ -1551,7 +1520,6 @@ jobs:
       - linux-relassert-tests
       - regression
       - tidy-check
-      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release

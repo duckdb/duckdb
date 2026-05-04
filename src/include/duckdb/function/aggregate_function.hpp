@@ -208,7 +208,7 @@ public:
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
-	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_window_batch_t window_batch = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : SimpleFunction(name, arguments, return_type) {
 		properties.null_handling = null_handling;
@@ -219,7 +219,7 @@ public:
 		callbacks.combine = combine;
 		callbacks.finalize = finalize;
 		callbacks.simple_update = simple_update;
-		callbacks.window = window;
+		callbacks.window_batch = window_batch;
 		callbacks.bind = bind;
 		callbacks.destructor = destructor;
 		callbacks.statistics = statistics;
@@ -232,7 +232,7 @@ public:
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
-	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_window_batch_t window_batch = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : SimpleFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
@@ -244,7 +244,7 @@ public:
 		callbacks.bind = bind;
 		callbacks.destructor = destructor;
 		callbacks.statistics = statistics;
-		callbacks.window = window;
+		callbacks.window_batch = window_batch;
 		callbacks.serialize = serialize;
 		callbacks.deserialize = deserialize;
 	}
@@ -255,7 +255,7 @@ public:
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
-	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_window_batch_t window = nullptr, aggregate_serialize_t serialize = nullptr,
 	                  aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
 	                        null_handling, simple_update, bind, destructor, statistics, window, serialize,
@@ -266,7 +266,7 @@ public:
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_batch_t window = nullptr,
 	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
 	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
@@ -275,14 +275,14 @@ public:
 
 	// Window constructor
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
-	                  aggregate_initialize_t initialize, aggregate_wininit_t window_init, aggregate_window_t window,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_serialize_t serialize = nullptr,
-	                  aggregate_deserialize_t deserialize = nullptr)
+	                  aggregate_initialize_t initialize, aggregate_wininit_t window_init,
+	                  aggregate_window_batch_t window_batch, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : SimpleFunction(name, arguments, return_type) {
 		callbacks.state_size = state_size;
 		callbacks.initialize = initialize;
-		callbacks.window = window;
+		callbacks.window_batch = window_batch;
 		callbacks.window_init = window_init;
 		callbacks.bind = bind;
 		callbacks.destructor = destructor;
@@ -439,7 +439,7 @@ public:
 		return callbacks.update || callbacks.combine || callbacks.finalize;
 	}
 	bool CanWindow() const {
-		return callbacks.window;
+		return callbacks.window || callbacks.window_batch;
 	}
 
 public:

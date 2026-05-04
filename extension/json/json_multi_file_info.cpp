@@ -502,7 +502,7 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 			return;
 		}
 	}
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
@@ -528,7 +528,7 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 		}
 	}
 
-	output.SetCardinality(count);
+	output.SetChildCardinality(count);
 }
 
 AsyncResult JSONReader::Scan(ClientContext &context, GlobalTableFunctionState &global_state,

@@ -9,7 +9,10 @@ struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
 		using Limits = NumericLimits<T>;
-		return !(Limits::IsSigned() && Limits::Minimum() == input);
+		if (!Limits::IsSigned()) {
+			return input == T(0);
+		}
+		return Limits::Minimum() != input;
 	}
 
 	template <class TA, class TR>

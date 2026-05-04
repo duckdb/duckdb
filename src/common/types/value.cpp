@@ -270,6 +270,13 @@ Value Value::MinimumValue(const LogicalType &type) {
 		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
 		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
 	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
+		// Clear the fractional day.
+		auto min_ns = NumericLimits<int64_t>::Minimum();
+		min_ns /= Interval::NANOS_PER_DAY;
+		min_ns *= Interval::NANOS_PER_DAY;
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(min_ns));
+	}
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -357,6 +364,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	}
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(NumericLimits<int64_t>::Maximum() - 1));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIME_TZ:
 		// "24:00:00-1559" from the PG docs but actually "24:00:00-15:59:59".
 		return Value::TIMETZ(dtime_tz_t(dtime_t(Interval::MICROS_PER_DAY), dtime_tz_t::MIN_OFFSET));
@@ -408,6 +417,8 @@ Value Value::Infinity(const LogicalType &type) {
 		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::infinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::infinity()));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_t::infinity().value));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -431,6 +442,8 @@ Value Value::NegativeInfinity(const LogicalType &type) {
 		return Value::TIMESTAMPNS(timestamp_ns_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_t::ninfinity()));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_t::ninfinity().value));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(-std::numeric_limits<float>::infinity());
 	case LogicalTypeId::DOUBLE:
@@ -589,6 +602,11 @@ bool Value::IsFinite(timestamp_tz_t input) {
 	return Timestamp::IsFinite(input);
 }
 
+template <>
+bool Value::IsFinite(timestamp_tz_ns_t input) {
+	return Timestamp::IsFinite(input);
+}
+
 bool Value::StringIsValid(const char *str, idx_t length) {
 	auto utf_type = Utf8Proc::Analyze(str, length);
 	return utf_type != UnicodeType::INVALID;
@@ -727,6 +745,13 @@ Value Value::TIMESTAMPNS(timestamp_ns_t timestamp) {
 Value Value::TIMESTAMPTZ(timestamp_tz_t value) {
 	Value result(LogicalType::TIMESTAMP_TZ);
 	result.value_.timestamp_tz = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::TIMESTAMPTZNS(timestamp_tz_ns_t value) {
+	Value result(LogicalType::TIMESTAMP_TZ_NS);
+	result.value_.timestamp_tz_ns = value;
 	result.is_null = false;
 	return result;
 }
@@ -1134,6 +1159,11 @@ Value Value::CreateValue(timestamp_tz_t value) {
 }
 
 template <>
+Value Value::CreateValue(timestamp_tz_ns_t value) {
+	return Value::TIMESTAMPTZNS(value);
+}
+
+template <>
 Value Value::CreateValue(const char *value) {
 	return Value(string(value));
 }
@@ -1210,6 +1240,8 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<timestamp_ns_t, T>(value_.timestamp_ns);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_tz_t, T>(value_.timestamp_tz);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Cast::Operation<timestamp_tz_ns_t, T>(value_.timestamp_tz_ns);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
 	case LogicalTypeId::USMALLINT:
@@ -1280,6 +1312,8 @@ int64_t Value::GetValue() const {
 		return value_.timestamp_ns.value;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return value_.timestamp_tz.value;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return value_.timestamp_tz_ns.value;
 	case LogicalTypeId::TIME:
 		return value_.bigint;
 	default:
@@ -1362,6 +1396,11 @@ timestamp_tz_t Value::GetValue() const {
 }
 
 template <>
+timestamp_tz_ns_t Value::GetValue() const {
+	return GetValueInternal<timestamp_tz_ns_t>();
+}
+
+template <>
 dtime_tz_t Value::GetValue() const {
 	return GetValueInternal<dtime_tz_t>();
 }
@@ -1438,6 +1477,8 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TIMESTAMPNS(timestamp_ns_t(value));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(value));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(value));
 	case LogicalTypeId::ENUM:
 		return Value::ENUM(NumericCast<uint64_t>(value), type);
 	default:
@@ -1626,6 +1667,12 @@ timestamp_tz_t Value::GetValueUnsafe() const {
 }
 
 template <>
+timestamp_tz_ns_t Value::GetValueUnsafe() const {
+	D_ASSERT(type_.InternalType() == PhysicalType::INT64);
+	return value_.timestamp_tz_ns;
+}
+
+template <>
 interval_t Value::GetValueUnsafe() const {
 	D_ASSERT(type_.InternalType() == PhysicalType::INTERVAL);
 	return value_.interval;
@@ -1667,6 +1714,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -1871,6 +1919,10 @@ timestamp_ns_t TimestampNSValue::Get(const Value &value) {
 
 timestamp_tz_t TimestampTZValue::Get(const Value &value) {
 	return value.GetValueUnsafe<timestamp_tz_t>();
+}
+
+timestamp_tz_ns_t TimestampTZNSValue::Get(const Value &value) {
+	return value.GetValueUnsafe<timestamp_tz_ns_t>();
 }
 
 interval_t IntervalValue::Get(const Value &value) {
