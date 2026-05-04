@@ -42,6 +42,30 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 	});
 }
 
+static void InlineProjectionReferences(unique_ptr<Expression> &expr, TableIndex proj_index,
+                                       const vector<unique_ptr<Expression>> &expressions, idx_t expr_index) {
+	if (!expr) {
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		InlineProjectionReferences(child, proj_index, expressions, expr_index);
+	});
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return;
+	}
+
+	auto &colref = expr->Cast<BoundColumnRefExpression>();
+	if (colref.binding.table_index != proj_index) {
+		return;
+	}
+	auto column_index = colref.binding.column_index.GetIndex();
+	if (column_index >= expr_index || !expressions[column_index]) {
+		throw InternalException("Projection expression cannot reference itself");
+	}
+	expr = expressions[column_index]->Copy();
+	InlineProjectionReferences(expr, proj_index, expressions, expr_index);
+}
+
 vector<unique_ptr<ParsedExpression>> GenerateColumnReferences(Binder &binder, const vector<BindingAlias> &aliases,
                                                               const vector<string> &names) {
 	vector<unique_ptr<ParsedExpression>> result;
@@ -65,12 +89,20 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 	result->action_type = action.action_type;
 	auto expr_start_idx = expressions.size();
 	if (action.condition) {
-		WhereBinder where_binder(*this, context);
-		auto cond = where_binder.Bind(action.condition);
-		PlanSubqueries(cond, root);
-		auto cond_type = cond->GetReturnType();
-		auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
-		result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
+		if (action.condition->HasSubquery()) {
+			// if we have a subquery we need to execute the condition outside of the MERGE INTO statement
+			WhereBinder where_binder(*this, context);
+			auto cond = where_binder.Bind(action.condition);
+			PlanSubqueries(cond, root);
+			auto cond_type = cond->GetReturnType();
+			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
+			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
+		} else {
+			ProjectionBinder proj_binder(*this, context, proj_index, expressions, "WHERE clause");
+			proj_binder.target_type = LogicalType::BOOLEAN;
+			auto cond = proj_binder.Bind(action.condition);
+			result->condition = std::move(cond);
+		}
 	}
 	switch (action.action_type) {
 	case MergeActionType::MERGE_UPDATE: {
@@ -188,6 +220,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 
 	for (idx_t i = expr_start_idx; i < expressions.size(); i++) {
 		if (expressions[i]) {
+			InlineProjectionReferences(expressions[i], proj_index, expressions, i);
 			ValidateMergeColumns(*expressions[i], condition, get.table_index, source_table_indices);
 		}
 	}
