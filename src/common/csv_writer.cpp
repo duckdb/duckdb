@@ -318,7 +318,7 @@ void CSVWriter::WriteQuotedString(WriteStream &writer, const char *str, idx_t le
 void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOptions &options, bool &written_anything,
                            CSVWriterOptions &writer_options) {
 	vector<VectorIterator<string_t>> input_iterators;
-	for(auto &col : input.data) {
+	for (auto &col : input.data) {
 		input_iterators.emplace_back(col.Values<string_t>(input.size()));
 	}
 	// now loop over the vectors and output the values
@@ -348,8 +348,7 @@ void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOpti
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
 
-			WriteQuotedString(writer, str_val.GetData(), str_val.GetSize(), col_idx, options,
-			                  writer_options);
+			WriteQuotedString(writer, str_val.GetData(), str_val.GetSize(), col_idx, options, writer_options);
 		}
 		if (writer_options.newline_writing_mode == CSVNewLineMode::WRITE_AFTER) {
 			writer.WriteData(const_data_ptr_cast(writer_options.newline.c_str()), writer_options.newline.size());
