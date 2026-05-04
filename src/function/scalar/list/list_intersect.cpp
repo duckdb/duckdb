@@ -8,23 +8,6 @@
 
 namespace duckdb {
 
-static idx_t CalculateMaxResultLength(idx_t row_count, const UnifiedVectorFormat &l_format,
-                                      const UnifiedVectorFormat &r_format, const list_entry_t *l_entries,
-                                      const list_entry_t *r_entries) {
-	idx_t max_result_length = 0;
-	for (idx_t i = 0; i < row_count; i++) {
-		const auto l_idx = l_format.sel->get_index(i);
-		const auto r_idx = r_format.sel->get_index(i);
-
-		if (l_format.validity.RowIsValid(l_idx) && r_format.validity.RowIsValid(r_idx)) {
-			const auto &l_list = l_entries[l_idx];
-			const auto &r_list = r_entries[r_idx];
-			max_result_length += MinValue(l_list.length, r_list.length);
-		}
-	}
-	return max_result_length;
-}
-
 static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto row_count = args.size();
 
@@ -43,20 +26,13 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &l_child = ListVector::GetChildMutable(l_vec);
 	auto &r_child = ListVector::GetChildMutable(r_vec);
 
-	const auto current_left_child_type = l_child.GetType();
+	auto l_entries = l_vec.Values<list_entry_t>(row_count);
+	auto r_entries = r_vec.Values<list_entry_t>(row_count);
 
-	UnifiedVectorFormat l_format;
-	UnifiedVectorFormat r_format;
-
-	l_vec.ToUnifiedFormat(row_count, l_format);
-	r_vec.ToUnifiedFormat(row_count, r_format);
-
-	const auto l_entries = UnifiedVectorFormat::GetData<list_entry_t>(l_format);
-	const auto r_entries = UnifiedVectorFormat::GetData<list_entry_t>(r_format);
-
+	// child element type is generic T, so we cannot use Values<>; UnifiedVectorFormat
+	// gives us per-row validity + selection regardless of the child vector kind.
 	UnifiedVectorFormat l_child_format;
 	UnifiedVectorFormat r_child_format;
-
 	l_child.ToUnifiedFormat(l_size, l_child_format);
 	r_child.ToUnifiedFormat(r_size, r_child_format);
 
@@ -71,48 +47,29 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
 	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
 
-	auto &result_entry = ListVector::GetChildMutable(result);
-
 	string_set_t set;
 	string_set_t result_set;
 	string_map_t<idx_t> key_to_index_map;
 
-	const idx_t max_result_length = CalculateMaxResultLength(row_count, l_format, r_format, l_entries, r_entries);
-
-	ListVector::Reserve(result, max_result_length);
-	ListVector::SetListSize(result, max_result_length);
-
-	SelectionVector result_sel(max_result_length);
-	ValidityMask result_entry_validity_mask(max_result_length);
-	idx_t offset = 0;
-
 	auto result_data = FlatVector::Writer<list_entry_t>(result, row_count);
 	for (idx_t i = 0; i < row_count; i++) {
-		const auto l_idx = l_format.sel->get_index(i);
-		const auto r_idx = r_format.sel->get_index(i);
+		auto l_entry = l_entries[i];
+		auto r_entry = r_entries[i];
 
-		const bool l_valid = l_format.validity.RowIsValid(l_idx);
-		const bool r_valid = r_format.validity.RowIsValid(r_idx);
-
-		list_entry_t entry;
-		entry.offset = offset;
-
-		if (!l_valid) {
+		if (!l_entry.IsValid()) {
 			result_data.WriteNull();
 			continue;
 		}
-		if (!r_valid) {
-			entry.length = 0;
-			result_data.WriteValue(entry);
+
+		auto list = result_data.WriteDynamicList();
+		if (!r_entry.IsValid()) {
 			continue;
 		}
 
-		const auto &l_list = l_entries[l_idx];
-		const auto &r_list = r_entries[r_idx];
+		const auto &l_list = l_entry.GetValue();
+		const auto &r_list = r_entry.GetValue();
 
 		if (l_list.length == 0 || r_list.length == 0) {
-			entry.length = 0;
-			result_data.WriteValue(entry);
 			continue;
 		}
 
@@ -143,6 +100,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 
 		// Iterate the chosen side, but ALWAYS emit a LEFT index
+		const idx_t row_max_length = MinValue(l_list.length, r_list.length);
+		SelectionVector row_sel(row_max_length);
 		idx_t row_result_length = 0;
 		for (idx_t j = 0; j < iter_list.length; j++) {
 			const idx_t it_idx = iter_list.offset + j;
@@ -159,20 +118,12 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 			const idx_t emit_left_idx = use_l_for_hash ? key_to_index_map[key] : it_idx;
 
-			result_sel.set_index(offset + row_result_length, emit_left_idx);
+			row_sel.set_index(row_result_length, emit_left_idx);
 			row_result_length++;
 		}
 
-		entry.length = row_result_length;
-		offset += row_result_length;
-		result_data.WriteValue(entry);
+		list.Append(l_child, row_sel, l_size, 0, row_result_length);
 	}
-
-	ListVector::SetListSize(result, offset);
-
-	result_entry.Slice(l_child, result_sel, offset);
-	result_entry.Flatten(offset);
-	FlatVector::SetValidity(result_entry, result_entry_validity_mask);
 }
 static unique_ptr<FunctionData> ListIntersectBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();

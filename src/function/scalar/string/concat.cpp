@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -129,13 +130,13 @@ void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 struct ListConcatInputData {
-	ListConcatInputData(Vector &input, Vector &child_vec) : input(input), child_vec(child_vec) {
+	ListConcatInputData(Vector &input, idx_t size)
+	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>(size)) {
 	}
 
-	UnifiedVectorFormat vdata;
-	Vector &input;
-	Vector &child_vec;
-	const list_entry_t *input_entries = nullptr;
+	const Vector &input;
+	const Vector &child_vec;
+	VectorIterator<list_entry_t> list_data;
 };
 
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
@@ -147,44 +148,38 @@ void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result,
 			// LIST_CONCAT ignores NULL values
 			continue;
 		}
-
-		auto &child_vec = ListVector::GetChildMutable(input);
-		ListConcatInputData data(input, child_vec);
-		input.ToUnifiedFormat(count, data.vdata);
-
-		data.input_entries = UnifiedVectorFormat::GetData<list_entry_t>(data.vdata);
-		input_data.push_back(std::move(data));
+		input_data.emplace_back(input, count);
 	}
 
-	vector<sel_t> child_idx_data;
-	idx_t offset = 0;
-	auto result_data = FlatVector::ScatterWriter<list_entry_t>(result);
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i].offset = offset;
-		result_data[i].length = 0;
-		for (auto &data : input_data) {
-			auto list_index = data.vdata.sel->get_index(i);
-			if (!data.vdata.validity.RowIsValid(list_index)) {
-				// LIST_CONCAT ignores NULL values, but || does not
-				if (is_operator) {
-					result_data.SetInvalid(i);
+	// the || operator yields NULL whenever any input is NULL, while list_concat skips NULLs
+	vector<bool> row_invalid(count, false);
+	if (is_operator) {
+		for (auto &input : input_data) {
+			for (idx_t r = 0; r < count; r++) {
+				if (!input.list_data[r].IsValid()) {
+					row_invalid[r] = true;
 				}
+			}
+		}
+	}
+
+	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
+	for (idx_t r = 0; r < count; r++) {
+		if (row_invalid[r]) {
+			result_writer.WriteNull();
+			continue;
+		}
+		auto list = result_writer.WriteDynamicList();
+		for (auto &input : input_data) {
+			auto list_val = input.list_data[r];
+			if (!list_val.IsValid()) {
 				continue;
 			}
-			const auto &list_entry = data.input_entries[list_index];
-			result_data[i].length += list_entry.length;
-			if (child_idx_data.size() < list_entry.length) {
-				child_idx_data.resize(NextPowerOfTwo(list_entry.length));
-			}
-			for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-				child_idx_data[child_idx] = NumericCast<sel_t>(list_entry.offset + child_idx);
-			}
-			SelectionVector child_sel(child_idx_data.data(), list_entry.length);
-			ListVector::Append(result, data.child_vec, child_sel, list_entry.length);
+			const auto &list_entry = list_val.GetValue();
+			list.Append(input.child_vec, *FlatVector::IncrementalSelectionVector(),
+			            list_entry.offset + list_entry.length, list_entry.offset, list_entry.length);
 		}
-		offset += result_data[i].length;
 	}
-	ListVector::SetListSize(result, offset);
 }
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
