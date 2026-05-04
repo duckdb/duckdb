@@ -124,6 +124,24 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 ColumnWriter::~ColumnWriter() {
 }
 
+bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
+	bool has_shredding = false;
+	auto writer_shredding_type = ShreddingType(Type());
+	for (auto &child_writer : ChildWriters()) {
+		ShreddingType child_shredding_type;
+		if (!child_writer->TryExportPreparedShreddingType(child_shredding_type)) {
+			continue;
+		}
+		writer_shredding_type.AddChild(child_writer->Schema().name, std::move(child_shredding_type));
+		has_shredding = true;
+	}
+	if (!has_shredding) {
+		return false;
+	}
+	result = std::move(writer_shredding_type);
+	return true;
+}
+
 ColumnWriterState::~ColumnWriterState() {
 }
 
