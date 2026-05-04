@@ -79,6 +79,7 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
+	FlatVector::SetSize(varchar_list, count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
 	auto &child_vec = ListVector::GetChild(source);

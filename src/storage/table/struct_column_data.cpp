@@ -187,6 +187,7 @@ idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t 
 		if (!child.should_scan) {
 			// if we are not scanning this vector - set it to NULL
 			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(target_vector, count_t(count));
 			ConstantVector::SetNull(target_vector, true);
 			continue;
 		}
