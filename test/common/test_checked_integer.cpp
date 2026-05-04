@@ -19,6 +19,18 @@ using ci64 = ci<int64_t>;
 using cu64 = ci<uint64_t>;
 } // namespace
 
+TEST_CASE("CheckedInteger default initialization is zero", "[checked_integer]") {
+	SECTION("non-atomic CheckedInteger default ctor zero-initializes") {
+		ci64 a;
+		REQUIRE(a == 0);
+	}
+
+	SECTION("std::atomic<CheckedInteger> default ctor zero-initializes") {
+		std::atomic<ci64> a;
+		REQUIRE(a == 0);
+	}
+}
+
 TEST_CASE("Checked integer increment/decrement overflow", "[checked_integer]") {
 	SECTION("overflow at maximum (pre and post forms)") {
 		ci8 s(NumericLimits<int8_t>::Maximum());
@@ -187,6 +199,14 @@ TEST_CASE("CheckedInteger cross-type arithmetic", "[checked_integer]") {
 		ci8 d(NumericLimits<int8_t>::Minimum());
 		d /= int64_t(2);
 		REQUIRE(d == NumericLimits<int8_t>::Minimum() / 2);
+	}
+
+	SECTION("cross-type multiplication at the hugeint_t boundary") {
+		REQUIRE_THROWS_AS(ci64(I64_MAX) * U64_MAX, OutOfRangeException);
+		REQUIRE_THROWS_AS(ci64(I64_MIN) * U64_MAX, OutOfRangeException);
+		REQUIRE_THROWS_AS(ci64(-1) * U64_MAX, OutOfRangeException);
+		ci64 a(I64_MIN);
+		REQUIRE_THROWS_AS(a *= uint64_t(U64_MAX), OutOfRangeException);
 	}
 
 	SECTION("int64 / uint64 wide-path correctness") {

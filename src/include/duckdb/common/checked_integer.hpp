@@ -437,7 +437,8 @@ private:
 public:
 	using value_type = duckdb::CheckedInteger<T, ExceptionT>;
 
-	atomic() noexcept = default;
+	atomic() noexcept : val(T(0)) {
+	}
 	constexpr atomic(value_type desired) noexcept : val(desired.GetValue()) { // NOLINT
 	}
 	constexpr atomic(T desired) noexcept : val(desired) { // NOLINT
