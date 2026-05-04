@@ -1,0 +1,94 @@
+# name: test/sql/storage/metadata/partial_column_metadata_reuse_v7.test
+# description: Test partial column metadata reuse with experimental_column_metadata_reuse on v1.5.0
+# group: [metadata]
+
+load {TEST_DIR}/partial_column_metadata_reuse_v7.test.db readwrite v1.5.0
+
+statement ok
+SET experimental_column_metadata_reuse=true
+
+# create a wide table with many columns
+statement ok
+CREATE TABLE wide_tbl AS SELECT
+    i AS c0, i AS c1, i AS c2, i AS c3, i AS c4,
+    i AS c5, i AS c6, i AS c7, i AS c8, i AS c9,
+    i AS c10, i AS c11, i AS c12, i AS c13, i AS c14,
+    i AS c15, i AS c16, i AS c17, i AS c18, i AS c19
+FROM range(200000) t(i);
+
+# first checkpoint
+restart
+
+# verify no columns are loaded after restart (all lazy)
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+----
+0
+
+# --- ADD COLUMN: should only load the new column ---
+statement ok
+ALTER TABLE wide_tbl ADD COLUMN c20 INTEGER DEFAULT 42
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+----
+c20
+
+# verify data
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900000	8400000
+
+restart
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900000	8400000
+
+# --- DROP COLUMN: should not load any columns ---
+restart
+
+statement ok
+ALTER TABLE wide_tbl DROP COLUMN c10
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(DISTINCT column_name) FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+----
+0
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900000	8400000
+
+restart
+
+# --- UPDATE single column: should only load that column ---
+statement ok
+UPDATE wide_tbl SET c0 = c0 + 1 WHERE c0 < 100
+
+query I
+SELECT DISTINCT column_name FROM pragma_storage_info('wide_tbl', scan_type='only_loaded_segments')
+----
+c0
+
+query II
+SELECT COUNT(*), SUM(c0) FROM wide_tbl
+----
+200000	19999900100
+
+# verify data survives restart
+restart
+
+query III
+SELECT COUNT(*), SUM(c0), SUM(c20) FROM wide_tbl
+----
+200000	19999900100	8400000
