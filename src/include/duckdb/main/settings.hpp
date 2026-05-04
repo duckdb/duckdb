@@ -925,6 +925,17 @@ struct ErrorsAsJSONSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ExperimentalColumnMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "experimental_column_metadata_reuse";
+	static constexpr const char *Description =
+	    "EXPERIMENTAL: Re-use column-level metadata when checkpointing, even when targeting storage version 6 or 7.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct ExperimentalMetadataReuseSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "experimental_metadata_reuse";

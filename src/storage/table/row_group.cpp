@@ -1356,29 +1356,33 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	if (can_reuse_metadata && !HasChanges()) {
 		RowGroupWriteData result;
 		result.fully_reuse_existing_metadata_blocks = true;
-		auto support_per_column_writes = GetCollection().SupportsPerColumnWrites();
-
-		if (has_per_column_metadata_blocks) {
+		if (GetCollection().SupportsPerColumnWrites()) {
 			result.has_per_column_metadata_blocks = true;
-			result.existing_per_column_metadata_blocks = per_column_metadata_blocks;
-			return result;
-		}
-
-		if (support_per_column_writes) {
-			result.has_per_column_metadata_blocks = true;
+			if (has_per_column_metadata_blocks) {
+				result.existing_per_column_metadata_blocks = per_column_metadata_blocks;
+				return result;
+			}
 			result.existing_per_column_metadata_blocks = ComputePerColumnMetadataBlocks();
 			return result;
 		}
 
+		result.has_per_column_metadata_blocks = false;
+
 		if (has_metadata_blocks) {
-			result.has_per_column_metadata_blocks = false;
 			result.existing_extra_metadata_blocks = extra_metadata_blocks;
 			return result;
 		}
 
-		result.has_per_column_metadata_blocks = true;
-		result.existing_per_column_metadata_blocks = ComputePerColumnMetadataBlocks();
-		return result;
+		if (!has_per_column_metadata_blocks) {
+			auto meta_blocks = ComputePerColumnMetadataBlocks();
+			meta_blocks.ForEachBlock(
+			    [&](idx_t block_id) { result.existing_extra_metadata_blocks.emplace_back(block_id); });
+			return result;
+		}
+
+		D_ASSERT(has_per_column_metadata_blocks && !GetCollection().SupportsPerColumnWrites());
+		// we loaded column-level metadata from disk, but don't support writing it anymore, so we need to fall back to a
+		// full checkpoint as we need to write out the metadata in a single go
 	}
 
 	// determine which columns can be reused
@@ -1589,8 +1593,14 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_extra_blocks);
 	}
 
-	row_group_pointer.has_metadata_blocks = false;
-	row_group_pointer.has_per_column_metadata_blocks = true;
+	auto supports_per_column_writes = GetCollection().SupportsPerColumnWrites();
+	row_group_pointer.has_metadata_blocks = !supports_per_column_writes;
+	row_group_pointer.has_per_column_metadata_blocks = supports_per_column_writes;
+	if (row_group_pointer.has_metadata_blocks) {
+		row_group_pointer.per_column_metadata_blocks.ForEachBlock(
+		    [&](idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
+		row_group_pointer.per_column_metadata_blocks = {};
+	}
 
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
@@ -1681,20 +1691,20 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	if (serializer.ShouldSerialize(6) && !serializer.ShouldSerialize(8)) {
 		// legacy metadata blocks for v1.4 and v1.5
 		if (!pointer.has_metadata_blocks && pointer.has_per_column_metadata_blocks) {
-			vector<MetaBlockPointer> extra_metadata_block_pointers;
+			vector<idx_t> extra_metadata_block_ids;
 			pointer.per_column_metadata_blocks.ForEachBlock(
-			    [&](idx_t block_id) { extra_metadata_block_pointers.emplace_back(block_id, 0); });
+			    [&](idx_t block_id) { extra_metadata_block_ids.push_back(block_id); });
 			serializer.WriteProperty(104, "has_metadata_blocks", true);
-			serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", extra_metadata_block_pointers);
+			serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", extra_metadata_block_ids);
 		} else {
 			serializer.WriteProperty(104, "has_metadata_blocks", pointer.has_metadata_blocks);
 			serializer.WritePropertyWithDefault(105, "extra_metadata_blocks", pointer.extra_metadata_blocks);
 		}
 	}
-	if (serializer.ShouldSerialize(8)) {
-		serializer.WritePropertyWithDefault(106, "has_per_column_metadata_blocks",
-		                                    pointer.has_per_column_metadata_blocks);
-		serializer.WriteProperty(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
+	if (serializer.ShouldSerialize(8) || pointer.has_per_column_metadata_blocks) {
+		D_ASSERT(serializer.ShouldSerialize(6));
+		serializer.WriteProperty(106, "has_per_column_metadata_blocks", pointer.has_per_column_metadata_blocks);
+		serializer.WritePropertyWithDefault(107, "per_column_metadata_blocks", pointer.per_column_metadata_blocks.data);
 	}
 }
 
@@ -1708,9 +1718,13 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.extra_metadata_blocks = deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "extra_metadata_blocks");
 	result.has_per_column_metadata_blocks =
 	    deserializer.ReadPropertyWithExplicitDefault<bool>(106, "has_per_column_metadata_blocks", false);
-	result.per_column_metadata_blocks = {
-	    deserializer.ReadPropertyWithDefault<vector<PerColumnMetadataBlock>>(107, "per_column_metadata_blocks")};
-	D_ASSERT(!result.has_metadata_blocks || !result.has_per_column_metadata_blocks); // cannot have both
+	if (result.has_per_column_metadata_blocks) {
+		result.per_column_metadata_blocks = {
+		    deserializer.ReadPropertyWithDefault<vector<PerColumnMetadataBlock>>(107, "per_column_metadata_blocks")};
+		// per-column metadata supersedes legacy extra_metadata_blocks
+		result.has_metadata_blocks = false;
+		result.extra_metadata_blocks.clear();
+	}
 	return result;
 }
 

@@ -11,11 +11,11 @@ void PerColumnMetadataBlock::Serialize(Serializer &serializer) const {
 	if (is_column_index) {
 		packed |= COLUMN_INDEX_BIT;
 	}
-	serializer.WritePropertyWithDefault<idx_t>(100, "packed", packed);
+	serializer.WriteProperty<idx_t>(100, "packed", packed);
 }
 
 PerColumnMetadataBlock PerColumnMetadataBlock::Deserialize(Deserializer &deserializer) {
-	auto packed = deserializer.ReadPropertyWithDefault<idx_t>(100, "packed");
+	auto packed = deserializer.ReadProperty<idx_t>(100, "packed");
 	PerColumnMetadataBlock result;
 	result.is_column_index = (packed & COLUMN_INDEX_BIT) != 0;
 	result.index = packed & ~COLUMN_INDEX_BIT;
