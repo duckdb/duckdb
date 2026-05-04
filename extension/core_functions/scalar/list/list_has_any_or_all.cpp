@@ -95,7 +95,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto swap = func_expr.function.name == "<@";
+	const auto swap = func_expr.function.GetName() == "<@";
 
 	auto &l_vec = args.data[swap ? 1 : 0];
 	auto &r_vec = args.data[swap ? 0 : 1];

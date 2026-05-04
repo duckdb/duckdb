@@ -91,7 +91,7 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	return StructExtractAtFun::GetBindData(key_index);
 }
 
-static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> StructExtractBindInternal(ClientContext &context, BoundScalarFunction &bound_function,
                                                           vector<unique_ptr<Expression>> &arguments,
                                                           bool struct_extract) {
 	D_ASSERT(bound_function.GetArguments().size() == 2);

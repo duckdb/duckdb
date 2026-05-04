@@ -296,7 +296,7 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	string constant_string;
 	bool constant_pattern = TryParseConstantPattern(context, *arguments[1], constant_string);
 	if (!constant_pattern) {
-		throw BinderException("%s with LIST requires a constant pattern", function.name);
+		throw BinderException("%s with LIST requires a constant pattern", function.GetName());
 	}
 	if (arguments.size() >= 4) {
 		ParseRegexOptions(context, *arguments[3], options);
@@ -304,8 +304,8 @@ unique_ptr<FunctionData> RegexpExtractAllStruct::Bind(BindScalarFunctionInput &i
 	options.set_log_errors(false);
 	vector<string> group_names;
 	child_list_t<LogicalType> struct_children;
-	regexp_util::ParseGroupNameList(context, function.name, *arguments[2], constant_string, options, true, group_names,
-	                                struct_children);
+	regexp_util::ParseGroupNameList(context, function.GetName(), *arguments[2], constant_string, options, true,
+	                                group_names, struct_children);
 	function.SetReturnType(LogicalType::LIST(LogicalType::STRUCT(struct_children)));
 	return make_uniq<RegexpExtractAllStructBindData>(options, std::move(constant_string), constant_pattern,
 	                                                 std::move(group_names));

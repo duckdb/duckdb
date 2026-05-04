@@ -381,11 +381,12 @@ static unique_ptr<FunctionData> RegexExtractBind(BindScalarFunctionInput &input)
 			group_index = -1;
 		} else if (group.type().id() == LogicalTypeId::LIST) {
 			if (!constant_pattern) {
-				throw BinderException("%s with LIST of group names requires a constant pattern", bound_function.name);
+				throw BinderException("%s with LIST of group names requires a constant pattern",
+				                      bound_function.GetName());
 			}
 			vector<string> dummy_names; // not reused after bind
 			child_list_t<LogicalType> struct_children;
-			regexp_util::ParseGroupNameList(context, bound_function.name, *arguments[2], constant_string, options,
+			regexp_util::ParseGroupNameList(context, bound_function.GetName(), *arguments[2], constant_string, options,
 			                                constant_pattern, dummy_names, struct_children);
 			bound_function.SetReturnType(LogicalType::STRUCT(struct_children));
 		} else {

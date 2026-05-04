@@ -201,7 +201,7 @@ static bool TryGetProjectionIndex(const Expression &expr, ProjectionIndex &resul
 	}
 	case ExpressionType::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at") {
+		if (func.function.GetName() == "struct_extract" || func.function.GetName() == "struct_extract_at") {
 			auto &child_expr = func.children[0];
 			return TryGetProjectionIndex(*child_expr, result);
 		}
@@ -404,7 +404,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.function.name != "prefix") {
+	if (func.function.GetName() != "prefix") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
@@ -440,7 +440,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.function.name != "~~") {
+	if (func.function.GetName() != "~~") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||

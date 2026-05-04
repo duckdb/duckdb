@@ -118,7 +118,6 @@ static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &in
 	for (auto &arg : bound_function.GetArguments()) {
 		arg = LogicalType::VARCHAR;
 	}
-	bound_function.SetVarArgs(LogicalType::VARCHAR);
 	return nullptr;
 }
 

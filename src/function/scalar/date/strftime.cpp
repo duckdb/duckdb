@@ -223,7 +223,7 @@ struct StrpTimeFunction {
 				} else {
 					bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				}
-				if (bound_function.name == "strptime") {
+				if (bound_function.GetName() == "strptime") {
 					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
 					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);
@@ -264,7 +264,7 @@ struct StrpTimeFunction {
 				} else {
 					bound_function.SetReturnType(LogicalType::TIMESTAMP_NS);
 				}
-				if (bound_function.name == "strptime") {
+				if (bound_function.GetName() == "strptime") {
 					bound_function.SetFunctionCallback(Parse<timestamp_ns_t>);
 				} else {
 					bound_function.SetFunctionCallback(TryParse<timestamp_ns_t>);

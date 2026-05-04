@@ -152,28 +152,32 @@ struct ScalarFunctionExtractor {
 
 	static vector<Value> GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}
 
 	static Value GetParameterTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		vector<LogicalType> results;
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+		}
+		return results;
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -206,24 +210,28 @@ struct WindowFunctionExtractor {
 
 	static vector<Value> GetParameters(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}
 
 	static Value GetParameterTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(WindowFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		vector<LogicalType> results;
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+		}
+		return results;
 	}
 
 	static Value GetVarArgs(WindowFunctionCatalogEntry &entry, idx_t offset) {
@@ -258,28 +266,32 @@ struct AggregateFunctionExtractor {
 
 	static vector<Value> GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		for (idx_t i = 0; i < entry.functions.GetFunctionByOffset(offset).GetArguments().size(); i++) {
-			results.emplace_back("col" + to_string(i));
+		for (auto &param : entry.functions.GetFunctionByOffset(offset).GetSignature().GetParameters()) {
+			results.emplace_back(param.GetName());
 		}
 		return results;
 	}
 
 	static Value GetParameterTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
-			results.emplace_back(fun.GetArguments()[i].ToString());
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType().ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
-		return fun.GetArguments();
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
+		vector<LogicalType> results;
+		for (idx_t i = 0; i < fun.GetSignature().GetParameterCount(); i++) {
+			results.emplace_back(fun.GetSignature().GetParameter(i).GetType());
+		}
+		return results;
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -440,7 +452,7 @@ struct TableFunctionExtractor {
 
 	static vector<Value> GetParameters(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back("col" + to_string(i));
 		}
@@ -452,7 +464,7 @@ struct TableFunctionExtractor {
 
 	static Value GetParameterTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back(fun.GetArguments()[i].ToString());
@@ -464,12 +476,12 @@ struct TableFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return fun.GetArguments();
 	}
 
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
@@ -501,7 +513,7 @@ struct PragmaFunctionExtractor {
 
 	static vector<Value> GetParameters(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back("col" + to_string(i));
@@ -514,7 +526,7 @@ struct PragmaFunctionExtractor {
 
 	static Value GetParameterTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 
 		for (idx_t i = 0; i < fun.GetArguments().size(); i++) {
 			results.emplace_back(fun.GetArguments()[i].ToString());
@@ -526,12 +538,12 @@ struct PragmaFunctionExtractor {
 	}
 
 	static vector<LogicalType> GetParameterLogicalTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return fun.GetArguments();
 	}
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
-		auto fun = entry.functions.GetFunctionByOffset(offset);
+		const auto &fun = entry.functions.GetFunctionByOffset(offset);
 		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
 	}
 
