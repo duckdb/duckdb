@@ -75,9 +75,9 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 		ubigint_t remaining_count = new_size - copy_count;
 
-		if (default_vector && default_validity) {
+		if (default_vector) {
 			// if a default value is provided fill the list with the default value
-			if (default_validity->IsValid(row_idx)) {
+			if (default_validity && default_validity->IsValid(row_idx)) {
 				SelectionVector sel(remaining_count.value);
 				for (idx_t j = 0; j < remaining_count.value; j++) {
 					sel.set_index(j, row_idx);
