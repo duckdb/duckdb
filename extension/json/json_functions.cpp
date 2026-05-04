@@ -282,14 +282,18 @@ static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, C
 			continue;
 		}
 		// Compute len (start with [] and ,)
-		idx_t len = 0;
+		idx_t len = 2;
+		bool seen_value = false;
 		for (auto child : entry.GetChildValues()) {
+			if (seen_value) {
+				len += 2;
+			}
 			if (child.IsValid()) {
 				len += child.GetValue().GetSize();
 			} else {
 				len += NULL_STRING_LENGTH;
 			}
-			len += 2;
+			seen_value = true;
 		}
 
 		// Allocate string
@@ -298,7 +302,7 @@ static bool CastJSONListToVarchar(Vector &source, Vector &result, idx_t count, C
 
 		// Populate string
 		*ptr++ = '[';
-		bool seen_value = false;
+		seen_value = false;
 		for (auto child : entry.GetChildValues()) {
 			if (seen_value) {
 				*ptr++ = ',';
