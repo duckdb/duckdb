@@ -260,18 +260,16 @@ jobs:
       - name: Build DuckDB
         uses: duckdb/duckdb-ci/build-duckdb@main
         with:
-          working-directory: duckdb
           build: make release
           # TODO
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
           # vcpkg-commit: ${{ needs.prepare.outputs.vcpkg_commit }}
           # TODO
-          key: ccache-extension-main-manylinux_2_28_aarch64_cpp
+          cache-suffix: extension-main-manylinux_2_28_aarch64
           # cache-suffix: ${{ matrix.distro }}_${{ matrix.arch }}${{ needs.prepare.outputs.image_suffix }}
           save-cache: ${{ inputs.save_cache }}
 
       - name: Test DuckDB
-        working-directory: duckdb
         run:
           ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
 
