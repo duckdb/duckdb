@@ -182,7 +182,8 @@ public:
 	static LogicalType GetLogType();
 
 	static string ConstructLogMessage(const string &file_path, idx_t row_group_id, bool fully_filtered,
-	                                  const char *strategy, const vector<vector<string>> &prefetch_groups);
+	                                  const char *strategy, const vector<vector<string>> &prefetch_groups,
+	                                  const vector<string> &minimal_filters);
 };
 
 } // namespace duckdb

@@ -156,7 +156,8 @@ static void LogRowGroupPrefetch(ClientContext &context, const string &file_path,
                                 const ParquetReaderScanState &state) {
 	const bool fully_filtered = !state.current_group_had_match;
 	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
-	           ParquetPrefetchStrategyToString(state.current_group_strategy), state.current_group_prefetch_groups);
+	           ParquetPrefetchStrategyToString(state.current_group_strategy), state.current_group_prefetch_groups,
+	           state.current_group_minimal_filters);
 }
 
 using duckdb_parquet::ColumnChunk;
@@ -1452,7 +1453,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
 		}
 	}
-	state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
+	if (state.filter_eliminated_all_rows.size() != state.scan_filters.size()) {
+		state.filter_eliminated_all_rows.assign(state.scan_filters.size(), false);
+	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
@@ -1587,10 +1590,12 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 			}
 
 			bool filters_look_unselective = false;
-			if (filters && state.row_groups_executed > 0) {
-				if (static_cast<double>(state.row_groups_with_matches) /
-				        static_cast<double>(state.row_groups_executed) >
-				    ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
+			if (filters) {
+				if (state.row_groups_executed == 0) {
+					filters_look_unselective = true;
+				} else if (static_cast<double>(state.row_groups_with_matches) /
+				               static_cast<double>(state.row_groups_executed) >
+				           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
 					filters_look_unselective = true;
 				}
 			}
@@ -1638,13 +1643,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				if (lazy_fetch && !state.scan_filters.empty()) {
 					auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
 					const auto &permutation = adaptive_filter.GetPermutation();
-					bool did_split = false;
 					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]] && !did_split) {
-							// merge-boundary required for correctness of the split
+						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
 							FlushPhysicalPrefetchGroups(trans, pending_registrations, group.columns,
 							                            state.current_group_prefetch_groups);
-							did_split = true;
 						}
 						auto &scan_filter = state.scan_filters[permutation[i]];
 						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
@@ -1747,6 +1749,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
+				state.current_group_minimal_filters.push_back(child_reader.Schema().name);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 				if (filter_count == 0) {
