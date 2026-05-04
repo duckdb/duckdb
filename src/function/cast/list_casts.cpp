@@ -66,10 +66,11 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	// first cast the child vector to varchar
+	// first cast the child vector to varchar[]
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
+	// now construct the actual varchar vector
 	auto &child_vec = ListVector::GetChild(source);
 	auto child_is_nested = child_vec.GetType().IsNested();
 	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
@@ -77,62 +78,57 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto write_string_func =
 	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	// now construct the actual varchar vector
-	varchar_list.Flatten(count);
-	auto &child = ListVector::GetChildMutable(varchar_list);
-	auto list_data = FlatVector::GetData<list_entry_t>(varchar_list);
-	auto &validity = FlatVector::ValidityMutable(varchar_list);
+	auto values = varchar_list.Values<VectorListType<string_t>>(count);
 
-	child.Flatten(ListVector::GetListSize(varchar_list));
-	auto child_data = FlatVector::GetData<string_t>(child);
-	auto &child_validity = FlatVector::ValidityMutable(child);
-
-	static constexpr const idx_t SEP_LENGTH = 2;
-	static constexpr const idx_t NULL_LENGTH = 4;
+	static constexpr idx_t SEP_LENGTH = 2;
+	static constexpr idx_t NULL_LENGTH = 4;
 	unsafe_unique_array<bool> needs_quotes;
 	idx_t needs_quotes_length = DConstants::INVALID_INDEX;
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
-		if (!validity.RowIsValid(i)) {
+		auto list_entry = values[i];
+		if (!list_entry.IsValid()) {
 			result_data.WriteNull();
 			continue;
 		}
-		auto list = list_data[i];
+		auto list = list_entry.GetValue();
 		// figure out how long the result needs to be
-		idx_t list_length = 2; // "[" and "]"
 		if (!needs_quotes || list.length > needs_quotes_length) {
 			needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
 			needs_quotes_length = list.length;
 		}
-		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
-			auto idx = list.offset + list_idx;
+		idx_t list_length = 2; // "[" and "]"
+		idx_t list_idx = 0;
+		for(auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				list_length += SEP_LENGTH; // ", "
 			}
 			// string length, or "NULL"
-			if (child_validity.RowIsValid(idx)) {
-				list_length += string_length_func(child_data[idx], needs_quotes[list_idx]);
+			if (child_value.IsValid()) {
+				list_length += string_length_func(child_value.GetValue(), needs_quotes[list_idx]);
 			} else {
 				list_length += NULL_LENGTH;
 			}
+			list_idx++;
 		}
 		auto &result_str = result_data.WriteEmptyString(list_length);
 		auto dataptr = result_str.GetDataWriteable();
 		idx_t offset = 0;
 		dataptr[offset++] = '[';
-		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
-			auto idx = list.offset + list_idx;
+		list_idx = 0;
+		for(auto child_value : list_entry.GetChildValues()) {
 			if (list_idx > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			if (child_validity.RowIsValid(idx)) {
-				offset += write_string_func(dataptr + offset, child_data[idx], needs_quotes[list_idx]);
+			if (child_value.IsValid()) {
+				offset += write_string_func(dataptr + offset, child_value.GetValue(), needs_quotes[list_idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
 			}
+			list_idx++;
 		}
 		dataptr[offset] = ']';
 		result_str.Finalize();
