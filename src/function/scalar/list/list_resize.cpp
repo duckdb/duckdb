@@ -35,14 +35,10 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 	}
 
+	bool has_default_vector = args.ColumnCount() == 3 && args.data[2].GetType().id() != LogicalTypeId::SQLNULL;
+
 	ListVector::Reserve(result, total_child_size.value);
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
-
-	optional<VectorValidityIterator> default_validity;
-	if (args.ColumnCount() == 3) {
-		auto &default_vector = args.data[2];
-		default_validity = default_vector.Validity(row_count);
-	}
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto list_entry = list_entries[row_idx];
@@ -72,13 +68,13 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		ubigint_t remaining_count = new_size - copy_count;
 
 		// if a default value is provided fill the list with the default value
-		if (default_validity.has_value() && default_validity->IsValid(row_idx)) {
+		if (has_default_vector) {
 			SelectionVector sel(remaining_count.value);
 			for (idx_t j = 0; j < remaining_count.value; j++) {
 				sel.set_index(j, row_idx);
 			}
 			auto &default_vector = args.data[2];
-			list.Append(default_vector, sel, remaining_count.value, 0, remaining_count.value);
+			list.Append(default_vector, sel, args.size(), 0, remaining_count.value);
 			continue;
 		}
 
