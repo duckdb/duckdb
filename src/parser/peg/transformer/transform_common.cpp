@@ -93,10 +93,10 @@ int64_t PEGTransformerFactory::TransformSquareBracketsArray(PEGTransformer &tran
 		throw ParserException("Expected a constant number as array size");
 	}
 	auto &const_number = number_expr->Cast<ConstantExpression>();
-	if (!const_number.value.type().IsIntegral()) {
-		throw BinderException("Expected an integer as array bound instead of %s", const_number.value.ToString());
+	if (!const_number.GetValue().type().IsIntegral()) {
+		throw BinderException("Expected an integer as array bound instead of %s", const_number.GetValue().ToString());
 	}
-	auto number_val = const_number.value.GetValue<int64_t>();
+	auto number_val = const_number.GetValue().GetValue<int64_t>();
 	if (number_val < 0) {
 		throw ParserException("Array size must be greater than 0");
 	}
@@ -140,7 +140,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformTimeType(PEGTransfo
 		if (modifiers[0]->GetExpressionClass() != ExpressionClass::CONSTANT) {
 			throw ParserException("Expected a constant expression for timestamp precision");
 		}
-		auto timestamp_precision = modifiers[0]->Cast<ConstantExpression>().value.GetValue<int64_t>();
+		auto timestamp_precision = modifiers[0]->Cast<ConstantExpression>().GetValue().GetValue<int64_t>();
 		if (timestamp_precision > 10) {
 			throw ParserException("TIMESTAMP only supports until nano-second precision (9)");
 		}
@@ -418,54 +418,47 @@ DatePartSpecifier PEGTransformerFactory::TransformIntervalToInterval(PEGTransfor
 	                      EnumUtil::ToString(second_interval));
 }
 
-bool PEGTransformerFactory::TryNegateValue(Value &val) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TryNegateValue(const ConstantExpression &expr) {
+	auto &val = expr.GetValue();
+
 	switch (val.type().id()) {
 	case LogicalTypeId::INTEGER: {
 		auto raw = val.GetValue<int32_t>();
 		if (!NegateOperator::CanNegate<int32_t>(raw)) {
-			val = Value::BIGINT(-static_cast<int64_t>(raw));
-		} else {
-			val = Value::INTEGER(-raw);
+			return make_uniq<ConstantExpression>(Value::BIGINT(-static_cast<int64_t>(raw)));
 		}
-		return true;
+		return make_uniq<ConstantExpression>(Value::INTEGER(-raw));
 	}
 	case LogicalTypeId::BIGINT: {
 		auto raw = val.GetValue<int64_t>();
 		if (!NegateOperator::CanNegate<int64_t>(raw)) {
-			val = Value::HUGEINT(-static_cast<hugeint_t>(raw));
-		} else {
-			val = Value::BIGINT(-raw);
+			return make_uniq<ConstantExpression>(Value::HUGEINT(-static_cast<hugeint_t>(raw)));
 		}
-		return true;
+		return make_uniq<ConstantExpression>(Value::BIGINT(-raw));
 	}
 	case LogicalTypeId::HUGEINT: {
 		auto raw = val.GetValue<hugeint_t>();
 		if (!NegateOperator::CanNegate<hugeint_t>(raw)) {
-			return false;
+			return nullptr;
 		}
-		val = Value::HUGEINT(-raw);
-		return true;
+		return make_uniq<ConstantExpression>(Value::HUGEINT(-raw));
 	}
 	case LogicalTypeId::UHUGEINT: {
 		auto uval = val.GetValue<uhugeint_t>();
 		uhugeint_t abs_min_hugeint = static_cast<uhugeint_t>(NumericLimits<hugeint_t>::Maximum()) + 1;
 
 		if (uval == abs_min_hugeint) {
-			val = Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
-			return true;
+			return make_uniq<ConstantExpression>(Value::HUGEINT(NumericLimits<hugeint_t>::Minimum()));
 		}
 		if (uval < abs_min_hugeint) {
-			val = Value::HUGEINT(-static_cast<hugeint_t>(uval));
-			return true;
+			return make_uniq<ConstantExpression>(Value::HUGEINT(-static_cast<hugeint_t>(uval)));
 		}
-
-		return false;
+		return nullptr;
 	}
 	case LogicalTypeId::DOUBLE:
-		val = Value::DOUBLE(-val.GetValue<double>());
-		return true;
+		return make_uniq<ConstantExpression>(Value::DOUBLE(-val.GetValue<double>()));
 	default:
-		return false;
+		return nullptr;
 	}
 }
 

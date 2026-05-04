@@ -681,7 +681,7 @@ PivotColumn PEGTransformerFactory::TransformUnpivotValueList(PEGTransformer &tra
 void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result) {
 	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = expr->Cast<ConstantExpression>();
-		result.push_back(const_expr.value);
+		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
 		for (auto &col : col_ref_expr.column_names) {
@@ -1767,7 +1767,7 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 		throw ParserException(expr->GetQueryLocation(), "Only constants are supported in sample clause currently");
 	}
 	auto &const_expr = expr->Cast<ConstantExpression>();
-	auto &sample_value = const_expr.value;
+	auto &sample_value = const_expr.GetValue();
 	transformer.TransformOptional<bool>(list_pr, 1, result->is_percentage);
 	if (result->is_percentage) {
 		// sample size is given in sample_size: use system sampling
@@ -1825,7 +1825,7 @@ optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transfor
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto const_expr = expr->Cast<ConstantExpression>();
-	return optional_idx(const_expr.value.GetValue<idx_t>());
+	return optional_idx(const_expr.GetValue().GetValue<idx_t>());
 }
 
 } // namespace duckdb

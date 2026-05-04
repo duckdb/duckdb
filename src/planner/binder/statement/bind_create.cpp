@@ -327,7 +327,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().value.type();
+				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",

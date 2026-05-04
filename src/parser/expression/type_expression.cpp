@@ -79,7 +79,7 @@ string TypeExpression::ToString() const {
 		if (params.back()->HasAlias() && StringUtil::CIEquals(params.back()->GetAlias(), "collation")) {
 			// Special case for VARCHAR with collation
 			auto collate_expr = params.back()->Cast<ConstantExpression>();
-			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.value)));
+			return StringUtil::Format("VARCHAR COLLATE %s", SQLIdentifier(StringValue::Get(collate_expr.GetValue())));
 		}
 	}
 
