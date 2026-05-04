@@ -222,3 +222,10 @@ CREATE TRIGGER trg_union_body AFTER INSERT ON t FOR EACH ROW
     INSERT INTO audit SELECT NEW.id, 'a' FROM new UNION ALL SELECT NEW.id, 'b' FROM new;
 ----
 Not implemented Error: FOR EACH ROW trigger bodies only support a single SELECT or VALUES clause; UNION, INTERSECT, and EXCEPT are not supported
+
+# Self-referential body: INSERT INTO X reads FROM X - silently wrong in bulk, blocked
+statement error
+CREATE TRIGGER trg_self_ref AFTER INSERT ON t FOR EACH ROW
+    INSERT INTO audit SELECT count(*) FROM audit;
+----
+Not implemented Error: FOR EACH ROW trigger bodies cannot read from the INSERT target table

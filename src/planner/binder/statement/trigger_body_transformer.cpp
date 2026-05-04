@@ -77,6 +77,21 @@ static bool HasOldRef(QueryNode &node) {
 	return found;
 }
 
+static bool ReadsFromTable(QueryNode &body, const string &table_name) {
+	bool found = false;
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    body, [](unique_ptr<ParsedExpression> &) {},
+	    [&](TableRef &ref) {
+		    if (found || ref.type != TableReferenceType::BASE_TABLE) {
+			    return;
+		    }
+		    if (StringUtil::CIEquals(ref.Cast<BaseTableRef>().table_name, table_name)) {
+			    found = true;
+		    }
+	    });
+	return found;
+}
+
 static string BulkTransformError(QueryNode &body, TriggerEventType event_type) {
 	if (event_type != TriggerEventType::INSERT_EVENT) {
 		return "FOR EACH ROW is only supported for AFTER INSERT triggers";
@@ -96,6 +111,10 @@ static string BulkTransformError(QueryNode &body, TriggerEventType event_type) {
 	auto values_list = insert.GetValuesList();
 	if (values_list && values_list->values.size() > 1) {
 		return "Multi-row VALUES in FOR EACH ROW trigger bodies are not yet supported";
+	}
+	// Block INSERT INTO X ... SELECT ... FROM X: bulk reads X at pre-trigger snapshot, not per-row.
+	if (ReadsFromTable(body, insert.table)) {
+		return "FOR EACH ROW trigger bodies cannot read from the INSERT target table";
 	}
 	return "";
 }
