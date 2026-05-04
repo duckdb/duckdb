@@ -423,16 +423,6 @@ CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
 
-// Type alias.
-using i8_t = CheckedInteger<int8_t>;
-using i16_t = CheckedInteger<int16_t>;
-using i32_t = CheckedInteger<int32_t>;
-using i64_t = CheckedInteger<int64_t>;
-using u8_t = CheckedInteger<uint8_t>;
-using u16_t = CheckedInteger<uint16_t>;
-using u32_t = CheckedInteger<uint32_t>;
-using u64_t = CheckedInteger<uint64_t>;
-
 } // namespace duckdb
 
 namespace std { // NOLINT
