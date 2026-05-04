@@ -157,7 +157,6 @@ SELECT *,
 		ORDER BY train_number DESC
 		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
 		) as trains
-
 FROM services
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*

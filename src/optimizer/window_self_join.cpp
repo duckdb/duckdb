@@ -46,6 +46,14 @@ static unique_ptr<Expression> TranslateAggregate(const BoundWindowExpression &w_
 			auto order_copy = order.Copy();
 			orders.emplace_back(std::move(order_copy));
 		}
+	} else if (!w_expr.orders.empty()) {
+		//	If the frame was ordered, copy the frame ordering to the aggregate function
+		result->order_bys = make_uniq<BoundOrderModifier>();
+		auto &orders = result->order_bys->orders;
+		for (auto &order : w_expr.orders) {
+			auto order_copy = order.Copy();
+			orders.emplace_back(std::move(order_copy));
+		}
 	}
 
 	return std::move(result);
