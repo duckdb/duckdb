@@ -566,7 +566,6 @@ public:
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
-	const idx_t initial_radix_bits;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 
