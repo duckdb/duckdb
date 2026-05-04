@@ -154,7 +154,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 			// found a matching member
 			if (StringUtil::CIEquals(source_member_name, target_member_name)) {
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
-				tag_map[source_idx] = target_idx;
+				tag_map[source_idx] = static_cast<union_tag_t>(target_idx);
 				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
 				found = true;
 				break;
