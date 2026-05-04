@@ -764,6 +764,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	if (input.size() == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count);
 	result.Verify(count);
 }
 

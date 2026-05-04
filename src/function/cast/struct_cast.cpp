@@ -296,8 +296,8 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Slice the map keys to create the dictionary
 	SelectionVector slice_sel(total_count);
-	for(idx_t r = 0; r < count; r++) {
-		for(idx_t f = 0; f < field_count; f++) {
+	for (idx_t r = 0; r < count; r++) {
+		for (idx_t f = 0; f < field_count; f++) {
 			slice_sel.set_index(r * field_count + f, f);
 		}
 	}
