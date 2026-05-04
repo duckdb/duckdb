@@ -73,6 +73,11 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			first_valid_child_idx = child_idx;
 		}
 	}
+	if (invalid_offsets.empty()) {
+		// all entries found a match - we can just slice the child vector
+		result.Slice(child_vector, sel, count);
+		return;
+	}
 
 	if (first_valid_child_idx.IsValid()) {
 		// Only copy if we found at least one valid child
