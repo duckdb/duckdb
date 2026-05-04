@@ -43,11 +43,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 	auto list_entries = list.Values<list_entry_t>(count);
 	auto offsets_entries = offsets.Values<int64_t>(count);
-
-	UnifiedVectorFormat child_data;
 	auto &child_vector = ListVector::GetChild(list);
-	auto child_count = ListVector::GetListSize(list);
-	child_vector.ToUnifiedFormat(child_count, child_data);
 
 	SelectionVector sel(count);
 	vector<idx_t> invalid_offsets;
@@ -69,7 +65,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			continue;
 		}
 
-		const auto child_idx = child_data.sel->get_index(child_offset.GetIndex());
+		const auto child_idx = child_offset.GetIndex();
 		sel.set_index(i, child_idx);
 
 		if (!first_valid_child_idx.IsValid()) {
