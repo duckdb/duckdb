@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/parquet_row_group_outcome.test
+# name: test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test
 # description: ParquetPrefetch logs whether each row group was fully filtered out
 # group: [parquet]
 
@@ -39,7 +39,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	false	prefetch_filters	[[a, b], [c, g]]
+0	false	whole_group	[[a, b, c, g]]
 1	false	whole_group	[[a, b, c, g]]
 2	false	whole_group	[[a, b, c, g]]
 3	false	whole_group	[[a, b, c, g]]
@@ -60,7 +60,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[c], [a, b, *c*, g]]
+0	true	whole_group	[[a, b, c, g]]
 1	true	prefetch_filters	[[c], [a, b, *c*, g]]
 2	true	prefetch_filters	[[c], [a, b, *c*, g]]
 3	true	prefetch_filters	[[c], [a, b, *c*, g]]
@@ -81,7 +81,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[g], [a, b, c]]
+0	true	whole_group	[[a, b, c, g]]
 1	true	prefetch_filters	[[g], [a, b, c]]
 2	true	prefetch_filters	[[g], [a, b, c]]
 3	false	prefetch_filters	[[g], [a, b, c]]
@@ -103,12 +103,12 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
-1	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
-2	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
-3	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
-4	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
-5	true	prefetch_filters	[[a, *b*, c], [b, *c*, g]]
+0	true	whole_group	[[a, b, c, g]]
+1	true	prefetch_filters	[[a, *b*, c], [g]]
+2	true	prefetch_filters	[[a, *b*, c], [g]]
+3	true	prefetch_filters	[[a, *b*, c], [g]]
+4	true	prefetch_filters	[[a, *b*, c], [g]]
+5	true	prefetch_filters	[[a, *b*, c], [g]]
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -140,7 +140,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo2.parquet'
 ORDER BY row_group_id
 ----
-0	false	prefetch_filters	[[g], [a, b, c]]
+0	false	whole_group	[[a, b, c, g]]
 1	false	whole_group	[[a, b, c, g]]
 2	false	whole_group	[[a, b, c, g]]
 3	true	whole_group	[[a, b, c, g]]
@@ -177,7 +177,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo3.parquet'
 ORDER BY row_group_id
 ----
-0	true	prefetch_filters	[[g], [a, b, c]]
+0	true	whole_group	[[a, b, c, g]]
 1	false	prefetch_filters	[[g], [a, b, c]]
 2	false	prefetch_filters	[[g], [a, b, c]]
 3	false	prefetch_filters	[[g], [a, b, c]]

@@ -36,7 +36,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo_proj.parquet'
 ORDER BY row_group_id
 ----
-0	false	prefetch_filters	[[a, b], [g, d]]
+0	false	column_wise_eager	[[a, b, g, d]]
 1	false	column_wise_eager	[[a, b, g, d]]
 2	false	column_wise_eager	[[a, b, g, d]]
 3	false	column_wise_eager	[[a, b, g, d]]
@@ -70,7 +70,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo_proj_gap.parquet'
 ORDER BY row_group_id
 ----
-0	false	prefetch_filters	[[a, *b*, c], [b], [j]]
+0	false	column_wise_eager	[[a, b, c], [j]]
 1	false	column_wise_eager	[[a, b, c], [j]]
 2	false	column_wise_eager	[[a, b, c], [j]]
 3	false	column_wise_eager	[[a, b, c], [j]]
@@ -89,7 +89,7 @@ FROM duckdb_logs_parsed('ParquetPrefetch')
 WHERE file_path LIKE '%rgo_proj_gap.parquet'
 ORDER BY row_group_id
 ----
-0	false	prefetch_filters	[[a, *b*, c], [j]]
+0	false	column_wise_eager	[[a, *b*, c], [j]]
 1	false	column_wise_eager	[[a, *b*, c], [j]]
 2	false	column_wise_eager	[[a, *b*, c], [j]]
 3	false	column_wise_eager	[[a, *b*, c], [j]]
