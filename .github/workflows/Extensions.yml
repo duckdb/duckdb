@@ -237,6 +237,8 @@ jobs:
       - uses: actions/checkout@v6
         name: Checkout
         with:
+          ref: ${{ inputs.git_ref }}
+          path: 'duckdb'
           fetch-depth: 0
           submodules: 'recursive'
 
@@ -266,6 +268,7 @@ jobs:
       - name: Build DuckDB
         uses: duckdb/duckdb-ci/build-duckdb@main
         with:
+          working-directory: duckdb
           build: make release
           # TODO
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -276,6 +279,7 @@ jobs:
           save-cache: ${{ inputs.save_cache }}
 
       - name: Test DuckDB
+        working-directory: duckdb
         run:
           ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
 
