@@ -269,18 +269,6 @@ StructToMapBoundCastData::InitStructToMapCastLocalState(CastLocalStateParameters
 }
 
 static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// Optimization: if the source vector is constant, we only have a single physical element, so we can set the
-		// result vectortype to ConstantVector as well and set the (logical) count to 1
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		count = 1;
-		if (ConstantVector::IsNull(source)) {
-			// If there's only a null in there we don't need to cast anything
-			ConstantVector::SetNull(result, count_t(count));
-			return true;
-		}
-	}
-
 	auto &cast_data = parameters.cast_data->Cast<StructToMapBoundCastData>();
 	auto &local_state = parameters.local_state->Cast<StructToMapCastLocalState>();
 
@@ -292,21 +280,28 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 	// Allocate result
 	ListVector::Reserve(result, total_count);
 
-	// Create key vector with VARCHAR keys (could make this a dictionary vector as optimization)
-	Vector varchar_keys(LogicalType::VARCHAR, total_count);
+	// Create key vector with VARCHAR keys
+	Vector varchar_keys(LogicalType::VARCHAR, field_count);
 	auto &field_types = StructType::GetChildTypes(source.GetType());
-	auto key_data = FlatVector::Writer<string_t>(varchar_keys, total_count);
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
-			auto &field_name = field_types[field_idx].first;
-			key_data.WriteValue(field_name);
-		}
+	auto key_data = FlatVector::Writer<string_t>(varchar_keys, field_count);
+	for (idx_t field_idx = 0; field_idx < field_count; field_idx++) {
+		auto &field_name = field_types[field_idx].first;
+		key_data.WriteValue(field_name);
 	}
 
-	// Cast keys to result
+	// Cast keys to result type
 	auto &map_keys = MapVector::GetKeys(result);
 	CastParameters key_parameters(parameters, cast_data.key_cast.GetCastData(), local_state.key_state);
-	auto keys_converted = cast_data.key_cast.Cast(varchar_keys, map_keys, total_count, key_parameters);
+	auto keys_converted = cast_data.key_cast.Cast(varchar_keys, map_keys, field_count, key_parameters);
+
+	// Slice the map keys to create the dictionary
+	SelectionVector slice_sel(total_count);
+	for(idx_t r = 0; r < count; r++) {
+		for(idx_t f = 0; f < field_count; f++) {
+			slice_sel.set_index(r * field_count + f, f);
+		}
+	}
+	map_keys.Slice(slice_sel, total_count);
 
 	// Fill the values vector
 	bool values_converted = true;
@@ -331,22 +326,13 @@ static bool StructToMapCast(Vector &source, Vector &result, idx_t count, CastPar
 
 	// Check for nulls in the source rows, and set the list data
 	auto validity_entries = source.Validity(count);
-	list_entry_t *list_data;
-	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		list_data = ConstantVector::GetData<list_entry_t>(result);
-	} else {
-		list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-	}
+	auto list_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity_entries.IsValid(i)) { // is row null?
-			if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				ConstantVector::SetNull(result, count_t(count));
-			} else {
-				FlatVector::SetNull(result, i, true);
-			}
-		} else {
-			list_data[i] = list_entry_t(i * field_count, field_count);
+			list_data.WriteNull();
+			continue;
 		}
+		list_data.WriteValue(list_entry_t(i * field_count, field_count));
 	}
 	// Set the size
 	ListVector::SetListSize(result, total_count);
