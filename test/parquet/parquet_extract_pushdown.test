@@ -99,6 +99,28 @@ SELECT v.z FROM '{TEST_DIR}/{logical_type}_filter_pushdown.parquet' WHERE v.x = 
 
 endloop
 
+foreach disabled true false
+
+onlyif disabled=true
+statement ok
+COPY (
+	SELECT
+		{
+			'x': i,
+			'y': i * 100,
+			'z': i * 10000
+		}::VARIANT v
+	FROM range(100) t(i)
+	UNION ALL VALUES (
+		({
+			'x': 'test',
+			'y': 'hello',
+			'z': 'world'
+		}::VARIANT)
+	)
+) TO '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' (SHREDDING {'v': 'NULL'});
+
+onlyif disabled=false
 statement ok
 COPY (
 	SELECT
@@ -198,3 +220,5 @@ SELECT v.z FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE va
 ----
 40000
 50000
+
+endloop
