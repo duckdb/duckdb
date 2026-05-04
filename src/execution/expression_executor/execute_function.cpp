@@ -261,9 +261,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	if (all_constant) {
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			throw InternalException(
-			    "Error while executing function %s - function must return a flat or constant vector for count = 1",
-			    expr.function.GetName());
+			result.Flatten(1);
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}

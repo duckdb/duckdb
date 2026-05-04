@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/shared_ptr_ipp.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/thread_annotation.hpp"
@@ -31,10 +32,8 @@ class BufferManager;
 
 class ExternalFileCache {
 public:
-	static constexpr idx_t REMOTE_FILE_CACHE_BLOCK_SIZE = 2ULL * 1024 * 1024; // 2 MiB
-	static constexpr idx_t LOCAL_FILE_CACHE_BLOCK_SIZE = 16ULL * 1024;        // 16 KiB
-
-	DUCKDB_API static idx_t GetCacheBlockSize(const string &path);
+	//! Get the cache block size for a given file path.
+	DUCKDB_API idx_t GetCacheBlockSize(const string &path) const;
 
 	//! Cached files
 	struct CachedFile {
@@ -48,7 +47,9 @@ public:
 		const string path;
 
 		mutable annotated_mutex map_lock;
-		// Maps from block index to cached block.
+		//! The block size used to index the current block map. Invalid if no blocks have been cached yet.
+		optional_idx cached_block_size DUCKDB_GUARDED_BY(map_lock);
+		//! Maps from block index to cached block.
 		unordered_map<idx_t, shared_ptr<CacheBlock>> blocks DUCKDB_GUARDED_BY(map_lock);
 
 		mutable annotated_mutex meta_lock;
@@ -70,6 +71,11 @@ public:
 	void SetEnabled(bool enable);
 	vector<CachedFileInformation> GetCachedFileInformation() const;
 
+	//! Re-index to `current_block_size` if it differs from the cache block size.
+	//! Return the blocks cached for the given range.
+	vector<shared_ptr<CacheBlock>> ReindexAndAcquireBlocks(CachedFile &cached_file, idx_t current_block_size,
+	                                                       idx_t first_block, idx_t num_blocks);
+
 	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
@@ -78,6 +84,10 @@ public:
 	                               const string &current_version_tag, timestamp_t current_last_modified);
 
 private:
+	//! Re-index blocks of a single cached file.
+	void ReindexCachedFileCore(CachedFile &cached_file, idx_t file_size, idx_t old_block_size, idx_t new_block_size)
+	    DUCKDB_REQUIRES(cached_file.map_lock);
+
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled

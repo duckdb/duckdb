@@ -966,6 +966,30 @@ struct ExtensionDirectorySetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct ExternalFileCacheLocalBlockSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "external_file_cache_local_block_size";
+	static constexpr const char *Description =
+	    "Block size in bytes for the external file cache when reading local (non-remote) files.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "16384";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ExternalFileCacheRemoteBlockSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "external_file_cache_remote_block_size";
+	static constexpr const char *Description =
+	    "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr const char *DefaultValue = "2097152";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ExternalThreadsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_threads";

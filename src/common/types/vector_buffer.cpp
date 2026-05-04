@@ -298,7 +298,7 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			auto &dict_sel = DictionaryVector::SelVector(source);
 			// merge the selection vectors and verify the child
 			if (sel.IsSet()) {
-				auto new_buffer = dict_sel.Slice(sel, source_count);
+				auto new_buffer = dict_sel.Slice(sel, copy_count);
 				owned_sel.Initialize(new_buffer);
 				sel_ref = owned_sel;
 			} else {
