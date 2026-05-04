@@ -243,6 +243,12 @@ TEST_CASE("CheckedInteger cross-type arithmetic", "[checked_integer]") {
 }
 
 TEST_CASE("CheckedInteger atomic operations", "[checked_integer]") {
+	SECTION("is_lock_free / is_always_lock_free forward to underlying type") {
+		std::atomic<ci64> a(0);
+		REQUIRE(a.is_lock_free() == std::atomic<int64_t>().is_lock_free());
+		REQUIRE(std::atomic<ci64>::is_always_lock_free == std::atomic<int64_t>::is_always_lock_free);
+	}
+
 	SECTION("store and load via member functions") {
 		std::atomic<ci64> a = 50;
 		REQUIRE(a == 50);
@@ -296,6 +302,50 @@ TEST_CASE("CheckedInteger atomic operations", "[checked_integer]") {
 		using i32_invalid_t = CheckedInteger<int32_t, duckdb::InvalidInputException>;
 		std::atomic<i32_invalid_t> a(NumericLimits<int32_t>::Maximum());
 		REQUIRE_THROWS_AS(a.fetch_add(i32_invalid_t(1)), duckdb::InvalidInputException);
+	}
+
+	SECTION("compare_exchange_strong success and failure") {
+		std::atomic<ci32> a(10);
+		ci32 expected(10);
+		REQUIRE(a.compare_exchange_strong(expected, ci32(20)));
+		REQUIRE(a.load() == 20);
+
+		expected = ci32(99);
+		REQUIRE_FALSE(a.compare_exchange_strong(expected, ci32(7)));
+		REQUIRE(a.load() == 20);
+	}
+
+	SECTION("operator++ / operator-- ") {
+		std::atomic<ci32> a(10);
+		auto pre = ++a;
+		REQUIRE(pre == 11);
+		REQUIRE(a.load() == 11);
+
+		auto post = a++;
+		REQUIRE(post == 11);
+		REQUIRE(a.load() == 12);
+
+		auto pre_dec = --a;
+		REQUIRE(pre_dec == 11);
+		REQUIRE(a.load() == 11);
+
+		auto post_dec = a--;
+		REQUIRE(post_dec == 11);
+		REQUIRE(a.load() == 10);
+	}
+
+	SECTION("operator++ / operator-- throw at boundaries") {
+		std::atomic<ci8> hi(NumericLimits<int8_t>::Maximum());
+		REQUIRE_THROWS_AS(++hi, OutOfRangeException);
+		REQUIRE_THROWS_AS(hi++, OutOfRangeException);
+
+		std::atomic<ci8> lo(NumericLimits<int8_t>::Minimum());
+		REQUIRE_THROWS_AS(--lo, OutOfRangeException);
+		REQUIRE_THROWS_AS(lo--, OutOfRangeException);
+
+		std::atomic<cu8> u_lo(0);
+		REQUIRE_THROWS_AS(--u_lo, OutOfRangeException);
+		REQUIRE_THROWS_AS(u_lo--, OutOfRangeException);
 	}
 }
 

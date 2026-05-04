@@ -496,6 +496,72 @@ public:
 		return value_type(current);
 	}
 
+	static constexpr bool is_always_lock_free = std::atomic<T>::is_always_lock_free;
+
+	bool is_lock_free() const noexcept {
+		return val.is_lock_free();
+	}
+
+	value_type exchange(value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept {
+		return value_type(val.exchange(desired.GetValue(), order));
+	}
+
+	bool compare_exchange_weak(value_type &expected, value_type desired, std::memory_order success,
+	                           std::memory_order failure) noexcept {
+		T expected_raw = expected.GetValue();
+		const bool ok = val.compare_exchange_weak(expected_raw, desired.GetValue(), success, failure);
+		expected = value_type(expected_raw);
+		return ok;
+	}
+	bool compare_exchange_weak(value_type &expected, value_type desired,
+	                           std::memory_order order = std::memory_order_seq_cst) noexcept {
+		T expected_raw = expected.GetValue();
+		const bool ok = val.compare_exchange_weak(expected_raw, desired.GetValue(), order);
+		expected = value_type(expected_raw);
+		return ok;
+	}
+
+	bool compare_exchange_strong(value_type &expected, value_type desired, std::memory_order success,
+	                             std::memory_order failure) noexcept {
+		T expected_raw = expected.GetValue();
+		const bool ok = val.compare_exchange_strong(expected_raw, desired.GetValue(), success, failure);
+		expected = value_type(expected_raw);
+		return ok;
+	}
+	bool compare_exchange_strong(value_type &expected, value_type desired,
+	                             std::memory_order order = std::memory_order_seq_cst) noexcept {
+		T expected_raw = expected.GetValue();
+		const bool ok = val.compare_exchange_strong(expected_raw, desired.GetValue(), order);
+		expected = value_type(expected_raw);
+		return ok;
+	}
+
+	value_type operator++() {
+		T current = val.load(std::memory_order_relaxed);
+		T next;
+		do {
+			next = (value_type(current) + T(1)).GetValue();
+		} while (!val.compare_exchange_weak(current, next, std::memory_order_seq_cst, std::memory_order_relaxed));
+		return value_type(next);
+	}
+
+	value_type operator++(int) {
+		return fetch_add(value_type(T(1)));
+	}
+
+	value_type operator--() {
+		T current = val.load(std::memory_order_relaxed);
+		T next;
+		do {
+			next = (value_type(current) - T(1)).GetValue();
+		} while (!val.compare_exchange_weak(current, next, std::memory_order_seq_cst, std::memory_order_relaxed));
+		return value_type(next);
+	}
+
+	value_type operator--(int) {
+		return fetch_sub(value_type(T(1)));
+	}
+
 	template <typename U>
 	value_type operator+=(U arg) {
 		static_assert(std::is_integral_v<U>, "CheckedInteger only supports integral types");
