@@ -643,6 +643,32 @@
         "default_value": ""
     },
     {
+        "name": "external_file_cache_local_block_size",
+        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "16384",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_block_size",
+        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
         "name": "external_threads",
         "description": "The number of external threads that work on DuckDB tasks.",
         "type": "UBIGINT",

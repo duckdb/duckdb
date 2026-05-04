@@ -18,7 +18,8 @@
       "paths": [
         "test/sql/json/table/read_json.test",
         "test/sql/storage/external_file_cache/external_file_cache_validate.test",
-        "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow"
+        "test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow",
+        "test/sql/storage/external_file_cache/external_file_cache_block_size.test"
       ]
     },
     {
