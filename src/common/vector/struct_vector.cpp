@@ -226,14 +226,14 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type) const {
 	if (GetVectorType() == VectorType::FLAT_VECTOR) {
 		for (auto &child : children) {
-			child.Flatten(count);
+			child.Flatten();
 		}
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

@@ -156,12 +156,12 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,

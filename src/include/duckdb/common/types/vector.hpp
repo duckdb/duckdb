@@ -107,10 +107,11 @@ public:
 	DUCKDB_API string ToString() const;
 	DUCKDB_API void Print() const;
 
+	DUCKDB_API void Flatten(idx_t count) const;
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
-	DUCKDB_API void Flatten(idx_t count) const;
+	DUCKDB_API void Flatten() const;
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
