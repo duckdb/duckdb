@@ -42,26 +42,14 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
 	// only handle constant and flat vectors here for now
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(source.GetVectorType());
-		const bool is_null = ConstantVector::IsNull(source);
-		ConstantVector::SetNull(result, is_null);
+	source.Flatten(count);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
 
-		if (!is_null) {
-			auto ldata = ConstantVector::GetData<list_entry_t>(source);
-			auto tdata = ConstantVector::GetData<list_entry_t>(result);
-			*tdata = *ldata;
-		}
-	} else {
-		source.Flatten(count);
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::SetValidity(result, FlatVector::ValidityMutable(source));
-
-		auto ldata = FlatVector::GetData<list_entry_t>(source);
-		auto tdata = FlatVector::Writer<list_entry_t>(result, count);
-		for (idx_t i = 0; i < count; i++) {
-			tdata.WriteValue(ldata[i]);
-		}
+	auto ldata = FlatVector::GetData<list_entry_t>(source);
+	auto tdata = FlatVector::Writer<list_entry_t>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		tdata.WriteValue(ldata[i]);
 	}
 	auto &source_cc = ListVector::GetChildMutable(source);
 	auto source_size = ListVector::GetListSize(source);
