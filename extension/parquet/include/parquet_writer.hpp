@@ -146,16 +146,47 @@ public:
 	unique_ptr<ParquetWriteTransformData> transform_data;
 };
 
+struct ParquetWriterOptions {
+	//! The file path to use for the written parquet file
+	string file_name;
+	//! Types of the columns
+	vector<LogicalType> sql_types;
+	//! Names of the columns
+	vector<string> column_names;
+	//! The compression codec to use for the written file
+	duckdb_parquet::CompressionCodec::type codec;
+	//! The field-ids to assign to the column(s) and their fields
+	ChildFieldIDs field_ids;
+	//! The type to shred all VARIANT columns on, set explicitly by the user
+	ShreddingType shredding_types;
+	//! The encryption config for the file we're writing
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
+	//! The maximum amount of items that can be put in a dictionary, per column/field
+	optional_idx dictionary_size_limit;
+	//! The maximum bytes of string-data to put into the dictionary, per column/field
+	idx_t string_dictionary_page_size_limit;
+	//! Whether to use bloom filters or not
+	bool enable_bloom_filters;
+	//! Maximum ratio of false-positives to allow in the written bloom filter
+	double bloom_filter_false_positive_ratio;
+	//! For the given 'codec', the compression level to use
+	int64_t compression_level;
+	//! Parquet version to use, higher versions enable more advanced compression modes
+	ParquetVersion parquet_version;
+	//! GEO Parquet version to use
+	GeoParquetVersion geoparquet_version;
+	//! Whether timestamp columns should be written as the INT96 type in the parquet file
+	bool write_timestamp_as_int96;
+	//! Whether to adjust timestamp values to UTC when writing
+	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
+	//! Which columns should be marked as 'required' in the written parquet file
+	vector<bool> not_null_columns;
+};
+
 class ParquetWriter {
 public:
-	ParquetWriter(ClientContext &context, FileSystem &fs, string file_name, vector<LogicalType> types,
-	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
-	              ShreddingType shredding_types, const vector<pair<string, string>> &kv_metadata,
-	              shared_ptr<ParquetEncryptionConfig> encryption_config, optional_idx dictionary_size_limit,
-	              idx_t string_dictionary_page_size_limit, bool enable_bloom_filters,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, ParquetVersion parquet_version,
-	              GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96,
-	              TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc, vector<bool> not_null_columns);
+	ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options,
+	              const vector<pair<string, string>> &kv_metadata);
 	~ParquetWriter();
 
 public:
@@ -178,13 +209,13 @@ public:
 		return protocol.get();
 	}
 	duckdb_parquet::CompressionCodec::type GetCodec() {
-		return codec;
+		return options.codec;
 	}
 	duckdb_parquet::Type::type GetType(idx_t schema_idx) {
 		return file_meta_data.schema[schema_idx].type;
 	}
 	LogicalType GetSQLType(idx_t schema_idx) const {
-		return sql_types[schema_idx];
+		return options.sql_types[schema_idx];
 	}
 	BufferedFileWriter &GetWriter() {
 		return *writer;
@@ -193,37 +224,37 @@ public:
 		return writer->GetTotalWritten();
 	}
 	optional_idx DictionarySizeLimit() const {
-		return dictionary_size_limit;
+		return options.dictionary_size_limit;
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
-		return string_dictionary_page_size_limit;
+		return options.string_dictionary_page_size_limit;
 	}
 	bool EnableBloomFilters() const {
-		return enable_bloom_filters;
+		return options.enable_bloom_filters;
 	}
 	double BloomFilterFalsePositiveRatio() const {
-		return bloom_filter_false_positive_ratio;
+		return options.bloom_filter_false_positive_ratio;
 	}
 	int64_t CompressionLevel() const {
-		return compression_level;
+		return options.compression_level;
 	}
 	idx_t NumberOfRowGroups() const {
 		return file_meta_data.row_groups.size();
 	}
 	ParquetVersion GetParquetVersion() const {
-		return parquet_version;
+		return options.parquet_version;
 	}
 	GeoParquetVersion GetGeoParquetVersion() const {
-		return geoparquet_version;
+		return options.geoparquet_version;
 	}
 	bool WriteTimestampAsInt96() const {
-		return write_timestamp_as_int96;
+		return options.write_timestamp_as_int96;
 	}
 	TimeStampIsAdjustedToUTC TimestampIsAdjustedToUTC() const {
-		return timestamp_is_adjusted_to_utc;
+		return options.timestamp_is_adjusted_to_utc;
 	}
 	const string &GetFileName() const {
-		return file_name;
+		return options.file_name;
 	}
 	void AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_ptr<ColumnWriter>> &column_writers);
 
@@ -259,24 +290,8 @@ private:
 
 private:
 	ClientContext &context;
-	string file_name;
-	vector<LogicalType> sql_types;
-	vector<string> column_names;
-	duckdb_parquet::CompressionCodec::type codec;
-	ChildFieldIDs field_ids;
-	ShreddingType shredding_types;
-	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	optional_idx dictionary_size_limit;
-	idx_t string_dictionary_page_size_limit;
-	bool enable_bloom_filters;
-	double bloom_filter_false_positive_ratio;
-	int64_t compression_level;
+	ParquetWriterOptions options;
 	shared_ptr<EncryptionUtil> encryption_util;
-	ParquetVersion parquet_version;
-	GeoParquetVersion geoparquet_version;
-	bool write_timestamp_as_int96;
-	TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc;
-	vector<bool> not_null_columns;
 
 	unique_ptr<BufferedFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
