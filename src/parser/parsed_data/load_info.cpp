@@ -36,13 +36,13 @@ string LoadInfo::ToString() const {
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
 		if (repo_is_alias) {
-			result += " FROM " + KeywordHelper::WriteOptionallyQuoted(repository);
+			result += StringUtil::Format(" FROM %s", SQLIdentifier(repository));
 		} else {
-			result += " FROM " + KeywordHelper::WriteQuoted(repository);
+			result += StringUtil::Format(" FROM %s", SQLString(repository));
 		}
 	}
 	if (!alias.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
 
 	result += ";";
