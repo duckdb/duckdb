@@ -52,6 +52,38 @@ SELECT overlay('abcdef' PLACING NULL FROM 2)
 ----
 NULL
 
+# Test negative FROM (should leave more characters)
+query I
+SELECT overlay('33333rce' placing 'resou' from 1);
+----
+resource
+
+query I
+SELECT overlay('33333rce' placing 'resou' from 0);
+----
+resou3rce
+
+query I
+SELECT overlay('33333rce' placing 'resou' from -1);
+----
+resou33rce
+
+query I
+SELECT overlay('33333rce' placing 'resou' from -100);
+----
+resou33333rce
+
+# Test negative FOR (should be the same as noarg)
+query I
+SELECT overlay('33333rce' placing 'resou' from 1 FOR -1);
+----
+resource
+
+query I
+SELECT overlay('33333rce' placing 'resou' from 1 FOR -100);
+----
+resource
+
 # From a table
 statement ok
 CREATE TABLE t(s STRING);

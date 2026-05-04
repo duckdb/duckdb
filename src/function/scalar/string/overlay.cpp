@@ -97,8 +97,9 @@ void OverlayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 				result_validity.SetInvalid(i);
 				continue;
 			}
+			int64_t count_value = counts[count_idx] < 0 ? repls->GetSize() : counts[count_idx];
 			result_entries[i] =
-			    OverlayScalar(result, inputs[input_idx], repls[repl_idx], starts[start_idx], counts[count_idx]);
+			    OverlayScalar(result, inputs[input_idx], repls[repl_idx], starts[start_idx], count_value);
 		}
 	} else {
 		TernaryExecutor::Execute<string_t, string_t, int64_t, string_t>(
