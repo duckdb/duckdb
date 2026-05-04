@@ -1,0 +1,61 @@
+diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
+index 79ffb06b..129adb65 100644
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -306,7 +306,7 @@ unique_ptr<CreateMacroInfo> CreateMacroInfoFromDucklake(ClientContext &context,
+ 			auto &expression = expr_list[0]->Cast<ConstantExpression>();
+ 			auto expr_type = DuckLakeTypes::FromString(param.default_value_type);
+ 			if (expr_type.id() != LogicalTypeId::UNKNOWN) {
+-				expression.value = expression.value.CastAs(context, expr_type);
++				expr_list[0] = make_uniq<ConstantExpression>(expression.GetValue().CastAs(context, expr_type));
+ 				macro_function->default_parameters.insert(make_pair(param.parameter_name, std::move(expr_list[0])));
+ 			}
+ 			macro_function->types.push_back(DuckLakeTypes::FromString(param.parameter_type));
+diff --git a/src/storage/ducklake_field_data.cpp b/src/storage/ducklake_field_data.cpp
+index 81b7c5ae..e51868f0 100644
+--- a/src/storage/ducklake_field_data.cpp
++++ b/src/storage/ducklake_field_data.cpp
+@@ -67,7 +67,7 @@ static Value ExtractInitialValue(optional_ptr<const ParsedExpression> initial_ex
+ 		                              "then explicitly set the default for new values using \"ALTER ... SET DEFAULT\"");
+ 	}
+ 	auto &const_default = initial_expr->Cast<ConstantExpression>();
+-	return const_default.value.DefaultCastAs(type);
++	return const_default.GetValue().DefaultCastAs(type);
+ }
+ 
+ unique_ptr<DuckLakeFieldId> DuckLakeFieldId::FieldIdFromType(const string &name, const LogicalType &type,
+diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
+index 811fd68b..fd3917c5 100644
+--- a/src/storage/ducklake_table_entry.cpp
++++ b/src/storage/ducklake_table_entry.cpp
+@@ -613,7 +613,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 			auto &default_expr = info.new_column.DefaultValue();
+ 			if (default_expr.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+ 				auto &constant_expr = default_expr.Cast<ConstantExpression>();
+-				default_value = constant_expr.value.DefaultCastAs(new_col.Type());
++				default_value = constant_expr.GetValue().DefaultCastAs(new_col.Type());
+ 			}
+ 		}
+ 
+@@ -965,7 +965,7 @@ static void ExtractDefaultValue(const DuckLakeColumnData &col_data, DuckLakeColu
+ 	if (col_data.default_value) {
+ 		if (col_data.default_value->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+ 			auto &constant_value = col_data.default_value->Cast<ConstantExpression>();
+-			info.default_value = constant_value.value;
++			info.default_value = constant_value.GetValue();
+ 			info.default_value_type = "literal";
+ 		} else {
+ 			info.default_value = col_data.default_value->ToString();
+diff --git a/src/storage/ducklake_transaction.cpp b/src/storage/ducklake_transaction.cpp
+index 71b71922..a1b298c0 100644
+--- a/src/storage/ducklake_transaction.cpp
++++ b/src/storage/ducklake_transaction.cpp
+@@ -1140,7 +1140,7 @@ void DuckLakeTransaction::GetNewMacroInfo(DuckLakeCommitState &commit_state, ref
+ 				parameter.default_value = value;
+ 
+ 				parameter.default_value_type = DuckLakeTypes::ToString(
+-				    impl->default_parameters[parameter.parameter_name]->Cast<ConstantExpression>().value.type());
++				    impl->default_parameters[parameter.parameter_name]->Cast<ConstantExpression>().GetValue().type());
+ 			} else {
+ 				parameter.default_value_type = "unknown";
+ 			}

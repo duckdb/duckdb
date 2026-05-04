@@ -1,0 +1,13 @@
+diff --git a/src/storage/iceberg_table_information.cpp b/src/storage/iceberg_table_information.cpp
+index 1b5682eb..9f9bdf8e 100644
+--- a/src/storage/iceberg_table_information.cpp
++++ b/src/storage/iceberg_table_information.cpp
+@@ -362,7 +362,7 @@ void IcebergTableInformation::SetPartitionedBy(IcebergTransaction &transaction,
+ 					throw InvalidInputException("%s second argument must be a constant integer", transform_name);
+ 				}
+ 				auto &const_expr = param_expr.Cast<ConstantExpression>();
+-				bucket_modulo_val = const_expr.value.GetValue<int32_t>();
++				bucket_modulo_val = const_expr.GetValue().GetValue<int32_t>();
+ 				transform_name = StringUtil::Format("%s[%d]", transform_name, bucket_modulo_val);
+ 			}
+ 		} else {
