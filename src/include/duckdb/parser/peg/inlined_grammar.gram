@@ -735,20 +735,15 @@ CastExpression <- CastOrTryCast Parens(Expression 'AS' Type)
 CastOrTryCast <- 'CAST' / 'TRY_CAST'
 
 StarExpression <- (ColId '.')* '*' ExcludeList? ReplaceList? RenameList?
-ExcludeList <- 'EXCLUDE' ExcludeNameList / ExcludeNameSingle
+ExcludeList <- 'EXCLUDE' ExcludeNameList
 ExcludeNameList <- Parens(List(ExcludeName))
-ExcludeNameSingle <- ExcludeName
 ExcludeName <- DottedIdentifier / ColIdOrString
-ReplaceList <- 'REPLACE' ReplaceEntries
-ReplaceEntries <- ReplaceEntrySingle / ReplaceEntryList
-ReplaceEntrySingle <- ReplaceEntry
+ReplaceList <- 'REPLACE' ReplaceEntryList
 ReplaceEntryList <- Parens(List(AliasedExpression))
-ReplaceEntry <- AliasedExpression
-RenameList <- 'RENAME' (RenameEntryList / SingleRenameEntry)
+RenameList <- 'RENAME' RenameEntryList
 RenameEntryList <- Parens(List(RenameEntry))
-SingleRenameEntry <- RenameEntry
 RenameEntry <- ColonRenameEntry / RenameEntryAs
-ColonRenameEntry <- ExcludeName ':' Identifier
+ColonRenameEntry <- Identifier ':' ExcludeName
 RenameEntryAs <- ExcludeName 'AS'? Identifier
 SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
 CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'

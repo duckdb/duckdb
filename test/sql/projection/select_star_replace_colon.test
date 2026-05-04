@@ -9,7 +9,7 @@ statement ok
 INSERT INTO t VALUES (10, 20, 30), (100, 200, 300)
 
 query III
-SELECT * REPLACE a: a+1 FROM t ORDER BY a
+SELECT * REPLACE (a: a+1) FROM t ORDER BY a
 ----
 11	20	30
 101	200	300
@@ -21,7 +21,7 @@ SELECT * REPLACE (a: a+1) FROM t ORDER BY a
 101	200	300
 
 query III
-SELECT * REPLACE a+1 AS a FROM t ORDER BY a
+SELECT * REPLACE (a+1 AS a) FROM t ORDER BY a
 ----
 11	20	30
 101	200	300
@@ -57,60 +57,60 @@ SELECT * REPLACE (a: a+b, b: b+c, c: a+b+c) FROM t ORDER BY a
 300	500	600
 
 query III
-SELECT * REPLACE a: NULL FROM t ORDER BY b
+SELECT * REPLACE (a: NULL) FROM t ORDER BY b
 ----
 NULL	20	30
 NULL	200	300
 
 query III
-SELECT * REPLACE NULL AS a FROM t ORDER BY b
+SELECT * REPLACE (NULL AS a) FROM t ORDER BY b
 ----
 NULL	20	30
 NULL	200	300
 
 query III
-SELECT * REPLACE a: (SELECT 42) FROM t ORDER BY b
+SELECT * REPLACE (a: (SELECT 42)) FROM t ORDER BY b
 ----
 42	20	30
 42	200	300
 
 query II
-SELECT * EXCLUDE(c) REPLACE a: a*3 FROM t ORDER BY a
+SELECT * EXCLUDE(c) REPLACE (a: a*3) FROM t ORDER BY a
 ----
 30	20
 300	200
 
 query III
-SELECT * REPLACE a: a+1 RENAME (c AS new_c) FROM t ORDER BY a
+SELECT * REPLACE (a: a+1) RENAME (c AS new_c) FROM t ORDER BY a
 ----
 11	20	30
 101	200	300
 
 query III
-SELECT t.* REPLACE a: a-1 FROM t ORDER BY a
+SELECT t.* REPLACE (a: a-1) FROM t ORDER BY a
 ----
 9	20	30
 99	200	300
 
 statement error
-SELECT * REPLACE a FROM t
+SELECT * REPLACE (a) FROM t
 ----
-<REGEX>:.*Expected an alias for REPLACE expression.*
+Parser Error: All REPLACE entries must have an alias
 
 statement error
-SELECT * REPLACE NULL FROM t
+SELECT * REPLACE (NULL) FROM t
 ----
-<REGEX>:.*Expected an alias for REPLACE expression.*
+Parser Error: All REPLACE entries must have an alias
 
 statement error
 SELECT * REPLACE (a) FROM t
 ----
-<REGEX>:.*Expected an alias for REPLACE expression.*
+Parser Error: All REPLACE entries must have an alias
 
 statement error
-SELECT * REPLACE a+1 FROM t
+SELECT * REPLACE (a+1) FROM t
 ----
-<REGEX>:.*Expected an alias for REPLACE expression.*
+Parser Error: All REPLACE entries must have an alias
 
 statement error
 SELECT * REPLACE (a: 1, a: 2) FROM t
@@ -128,16 +128,16 @@ SELECT * REPLACE (1 AS a, 2 a) FROM t
 <REGEX>:.*Duplicate entry.*
 
 statement error
-SELECT * REPLACE nonexistent: 5 FROM t
+SELECT * REPLACE (nonexistent: 5) FROM t
 ----
 <REGEX>:.*Binder Error.*not found.*
 
 statement error
-SELECT * EXCLUDE(a) REPLACE a: 5 FROM t
+SELECT * EXCLUDE(a) REPLACE (a: 5) FROM t
 ----
 <REGEX>:.*cannot occur in both.*
 
 statement error
-SELECT * REPLACE a: FROM t
+SELECT * REPLACE (a:) FROM t
 ----
 <REGEX>:.*syntax error.*

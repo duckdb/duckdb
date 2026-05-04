@@ -788,18 +788,11 @@ private:
 	static unique_ptr<ParsedExpression> TransformStarExpression(PEGTransformer &transformer, ParseResult &parse_result);
 	static qualified_column_set_t TransformExcludeList(PEGTransformer &transformer, ParseResult &parse_result);
 	static qualified_column_set_t TransformExcludeNameList(PEGTransformer &transformer, ParseResult &parse_result);
-	static qualified_column_set_t TransformExcludeNameSingle(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedColumnName TransformExcludeName(PEGTransformer &transformer, ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceList(PEGTransformer &transformer,
 	                                                                                 ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntries(PEGTransformer &transformer,
-	                                                                                    ParseResult &parse_result);
-	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntrySingle(PEGTransformer &transformer,
-	                                                                                        ParseResult &parse_result);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>> TransformReplaceEntryList(PEGTransformer &transformer,
 	                                                                                      ParseResult &parse_result);
-	static pair<string, unique_ptr<ParsedExpression>> TransformReplaceEntry(PEGTransformer &transformer,
-	                                                                        ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformOverClause(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformWindowFrame(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<WindowExpression> TransformParensIdentifier(PEGTransformer &transformer,
@@ -892,8 +885,6 @@ private:
 	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer, ParseResult &parse_result);
 	static qualified_column_map_t<string> TransformRenameEntryList(PEGTransformer &transformer,
 	                                                               ParseResult &parse_result);
-	static qualified_column_map_t<string> TransformSingleRenameEntry(PEGTransformer &transformer,
-	                                                                 ParseResult &parse_result);
 	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static pair<QualifiedColumnName, string> TransformColonRenameEntry(PEGTransformer &transformer,
