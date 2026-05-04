@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 using duckdb::CheckedInteger;
 using duckdb::NumericLimits;
@@ -295,5 +296,52 @@ TEST_CASE("CheckedInteger atomic operations", "[checked_integer]") {
 		using i32_invalid_t = CheckedInteger<int32_t, duckdb::InvalidInputException>;
 		std::atomic<i32_invalid_t> a(NumericLimits<int32_t>::Maximum());
 		REQUIRE_THROWS_AS(a.fetch_add(i32_invalid_t(1)), duckdb::InvalidInputException);
+	}
+}
+
+TEST_CASE("std::numeric_limits<CheckedInteger> specialization", "[checked_integer]") {
+	SECTION("min / max / lowest match underlying type") {
+		REQUIRE(std::numeric_limits<ci8>::min() == NumericLimits<int8_t>::Minimum());
+		REQUIRE(std::numeric_limits<ci8>::max() == NumericLimits<int8_t>::Maximum());
+		REQUIRE(std::numeric_limits<ci8>::lowest() == std::numeric_limits<int8_t>::lowest());
+
+		REQUIRE(std::numeric_limits<cu8>::min() == 0u);
+		REQUIRE(std::numeric_limits<cu8>::max() == NumericLimits<uint8_t>::Maximum());
+
+		REQUIRE(std::numeric_limits<ci64>::min() == NumericLimits<int64_t>::Minimum());
+		REQUIRE(std::numeric_limits<ci64>::max() == NumericLimits<int64_t>::Maximum());
+		REQUIRE(std::numeric_limits<cu64>::max() == NumericLimits<uint64_t>::Maximum());
+	}
+
+	SECTION("inherited integer traits forward to underlying type") {
+		REQUIRE(std::numeric_limits<ci8>::is_specialized);
+		REQUIRE(std::numeric_limits<ci8>::is_signed == std::numeric_limits<int8_t>::is_signed);
+		REQUIRE(std::numeric_limits<ci8>::is_integer);
+		REQUIRE(std::numeric_limits<ci8>::digits == std::numeric_limits<int8_t>::digits);
+		REQUIRE(std::numeric_limits<ci8>::radix == std::numeric_limits<int8_t>::radix);
+
+		REQUIRE_FALSE(std::numeric_limits<cu32>::is_signed);
+		REQUIRE(std::numeric_limits<cu32>::is_integer);
+		REQUIRE(std::numeric_limits<cu32>::digits == std::numeric_limits<uint32_t>::digits);
+	}
+
+	SECTION("min / max are constexpr-usable") {
+		constexpr auto lo = std::numeric_limits<ci32>::min();
+		constexpr auto hi = std::numeric_limits<ci32>::max();
+		REQUIRE(lo == NumericLimits<int32_t>::Minimum());
+		REQUIRE(hi == NumericLimits<int32_t>::Maximum());
+	}
+}
+
+TEST_CASE("std::hash<CheckedInteger> specialization", "[checked_integer]") {
+	SECTION("usable as a key in duckdb::unordered_set") {
+		duckdb::unordered_set<ci32> s;
+		s.insert(ci32(1));
+		s.insert(ci32(2));
+		s.insert(ci32(1));
+		REQUIRE(s.size() == 2);
+		REQUIRE(s.count(ci32(1)) == 1);
+		REQUIRE(s.count(ci32(2)) == 1);
+		REQUIRE(s.count(ci32(3)) == 0);
 	}
 }

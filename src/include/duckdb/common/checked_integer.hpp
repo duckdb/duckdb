@@ -15,6 +15,8 @@
 #include "duckdb/common/operator/subtract.hpp"
 
 #include <atomic>
+#include <functional>
+#include <limits>
 #include <type_traits>
 
 namespace duckdb {
@@ -39,20 +41,20 @@ private:
 public:
 	using value_type = T;
 
-	CheckedInteger() : value(0) {
+	constexpr CheckedInteger() : value(0) {
 	}
-	CheckedInteger(T v) : value(v) { // NOLINT
+	constexpr CheckedInteger(T v) : value(v) { // NOLINT
 	}
 
 	template <typename U, std::enable_if_t<std::is_integral_v<U> && !std::is_same_v<U, T>, int> = 0>
 	CheckedInteger(U v) : value(ValidateAndCast<U>(v)) { // NOLINT
 	}
 
-	operator T() const { // NOLINT
+	constexpr operator T() const { // NOLINT
 		return value;
 	}
 
-	T GetValue() const {
+	constexpr T GetValue() const {
 		return value;
 	}
 
@@ -551,6 +553,46 @@ public:
 	template <typename U, typename = std::enable_if_t<std::is_integral_v<U>>>
 	bool operator>=(U other) const noexcept {
 		return load() >= other;
+	}
+};
+
+template <typename T, typename ExceptionT>
+struct numeric_limits<duckdb::CheckedInteger<T, ExceptionT>> : public numeric_limits<T> {
+	using value_type = duckdb::CheckedInteger<T, ExceptionT>;
+
+	static constexpr value_type min() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::min());
+	}
+	static constexpr value_type max() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::max());
+	}
+	static constexpr value_type lowest() noexcept {
+		return value_type(numeric_limits<T>::lowest());
+	}
+	static constexpr value_type epsilon() noexcept {
+		return value_type(numeric_limits<T>::epsilon());
+	}
+	static constexpr value_type round_error() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::round_error());
+	}
+	static constexpr value_type infinity() noexcept {
+		return value_type(numeric_limits<T>::infinity());
+	}
+	static constexpr value_type quiet_NaN() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::quiet_NaN());
+	}
+	static constexpr value_type signaling_NaN() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::signaling_NaN());
+	}
+	static constexpr value_type denorm_min() noexcept { // NOLINT: mimic std casing
+		return value_type(numeric_limits<T>::denorm_min());
+	}
+};
+
+template <typename T, typename ExceptionT>
+struct hash<duckdb::CheckedInteger<T, ExceptionT>> {
+	size_t operator()(const duckdb::CheckedInteger<T, ExceptionT> &v) const noexcept {
+		return hash<T> {}(v.GetValue());
 	}
 };
 
