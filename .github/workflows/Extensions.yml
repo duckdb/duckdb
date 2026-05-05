@@ -53,7 +53,7 @@ on:
         description: 'Semicolon-separated list of architectures to opt into'
         type: string
         required: false
-        default: 'windows_arm64;'
+        default: ''
       skip_tests:
         description: 'Set to true to skip all testing'
         type: boolean

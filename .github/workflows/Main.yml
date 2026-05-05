@@ -450,7 +450,7 @@ jobs:
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
-      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'windows_arm64;linux_amd64_musl;linux_arm64_musl' || '' }}
+      opt_in_archs: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch') && 'linux_amd64_musl;linux_arm64_musl' || '' }}
       runners: ${{ needs.prepare.outputs.runners }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
 
