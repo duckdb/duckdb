@@ -279,3 +279,25 @@ CALL disable_logging()
 statement ok
 RESET logging_storage
 
+# storage_config={path:...} without an explicit storage= must auto-promote to file storage
+# (mirroring the storage_path= sugar) — not silently apply a file-only config to the current storage.
+statement ok
+CALL enable_logging(storage_config:={path:'__TEST_DIR__/auto_promote.csv'})
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+file
+
+statement ok
+CALL disable_logging()
+
+statement ok
+RESET logging_storage
+
+# storage_config keys that no storage recognises must error, not silently pass.
+statement error
+CALL enable_logging(storage_config:={aaaargh:'blaargh'})
+----
+Unrecognized log storage config option
+

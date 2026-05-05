@@ -83,8 +83,9 @@ void LogStorage::Truncate() {
 }
 
 void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
-	if (config.size() > 1) {
-		throw InvalidInputException("LogStorage does not support passing configuration");
+	if (!config.empty()) {
+		throw InvalidInputException("Log storage '%s' does not support passing configuration",
+		                            GetStorageName());
 	}
 }
 
