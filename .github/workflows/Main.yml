@@ -454,7 +454,8 @@ jobs:
       # - linux-release
     with:
       override_git_describe: ${{ github.event_name == 'workflow_dispatch' && inputs.override_git_describe || '' }}
-      git_ref: ${{ needs.prepare.outputs.git_sha }}
+      git_ref: ${{ github.ref }}
+      git_sha: ${{ needs.prepare.outputs.git_sha }}
       extra_exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
