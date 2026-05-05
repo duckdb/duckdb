@@ -23,7 +23,7 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 //! Evaluate `func` at the lo/hi corner of each child's value range to derive output min/max.
 //! Decreasing args are swapped so f(lo_args) and f(hi_args) bracket the output range.
 static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &context, BoundFunctionExpression &func,
-                                                             const vector<BaseStatistics> &child_stats) {
+                                                             vector<BaseStatistics> &child_stats) {
 	if (!func.function.HasArgProperties() || func.children.empty()) {
 		return nullptr;
 	}
@@ -39,6 +39,10 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	vector<Value> hi_args(func.children.size());
 	// SPECIAL_HANDLING means the function may produce nulls on non-null inputs (e.g. try_cast).
 	bool output_can_have_null = (func.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	// per-arg injective only composes into joint injectivity when at most one arg varies; track
+	// the lone non-foldable arg so we can carry its distinct_count when it is injective
+	idx_t non_foldable_count = 0;
+	idx_t non_foldable_idx = 0;
 
 	for (idx_t i = 0; i < func.children.size(); i++) {
 		auto &child = *func.children[i];
@@ -54,6 +58,8 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 			hi_args[i] = std::move(v);
 			continue;
 		}
+		non_foldable_count++;
+		non_foldable_idx = i;
 
 		auto m = props.monotonicity;
 		if (cs.CanHaveNull()) {
@@ -89,15 +95,20 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	    !TryEvaluateAtConstants(context, func, hi_args, out_hi)) {
 		return nullptr;
 	}
+	// distinct_count carries when exactly one arg varies and is injective; e.g. f(a,b)=a+b is
+	// per-arg injective but jointly collides — f(0,5)=f(5,0) — so multi-varying args must bail
+	optional_ptr<BaseStatistics> distinct_source;
+	if (non_foldable_count == 1 && func.function.GetArgProperties(non_foldable_idx).injective) {
+		distinct_source = &child_stats[non_foldable_idx];
+	}
 	return StatisticsPropagator::BuildMonotoneBoundsStats(func.GetReturnType(), out_lo, out_hi, output_can_have_null,
-	                                                      func.function.GetName());
+	                                                      func.function.GetName(), distinct_source);
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::BuildMonotoneBoundsStats(const LogicalType &target,
-                                                                          const Value &out_lo, const Value &out_hi,
-                                                                          bool can_have_null,
-                                                                          const string &error_context,
-                                                                          optional_ptr<const BaseStatistics> base) {
+unique_ptr<BaseStatistics>
+StatisticsPropagator::BuildMonotoneBoundsStats(const LogicalType &target, const Value &out_lo, const Value &out_hi,
+                                               bool can_have_null, const string &error_context,
+                                               optional_ptr<BaseStatistics> distinct_source) {
 	// NaN-at-corner is unusable: NaN orders above all values, but negate(NaN)=NaN breaks NON_INCREASING.
 	const auto is_unusable = [](const Value &v) {
 		if (v.IsNull()) {
@@ -121,16 +132,17 @@ unique_ptr<BaseStatistics> StatisticsPropagator::BuildMonotoneBoundsStats(const 
 	}
 
 	auto result = NumericStats::CreateEmpty(target);
-	if (base) {
-		// carry distinct_count + base flags; per-bound Set below overrides has_null
-		result.CopyBase(*base);
-	}
 	NumericStats::SetMin(result, out_lo);
 	NumericStats::SetMax(result, out_hi);
 
+	// validity is recomputed from can_have_null; distinct_count only carries when the mapping is
+	// injective (caller passes distinct_source then, nullptr otherwise)
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
 	if (can_have_null) {
 		result.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
+	if (distinct_source) {
+		result.SetDistinctCount(distinct_source->GetDistinctCount());
 	}
 	return result.ToUnique();
 }

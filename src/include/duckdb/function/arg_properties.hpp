@@ -25,9 +25,14 @@ enum class Monotonicity : uint8_t {
 //! Per-argument metadata for a scalar function.
 struct ArgProperties {
 	Monotonicity monotonicity = Monotonicity::UNKNOWN;
+	//! Distinct inputs map to distinct outputs (preserves cardinality).
+	//! Strict monotonicity implies it; also true for non-monotonic mappings like reverse(s) or for
+	//! invertible casts. Non-strict monotonicity does NOT imply it (truncation collapses values).
+	bool injective = false;
 
 	ArgProperties &StrictlyIncreasing() {
 		monotonicity = Monotonicity::STRICTLY_INCREASING;
+		injective = true;
 		return *this;
 	}
 	ArgProperties &NonDecreasing() {
@@ -36,6 +41,7 @@ struct ArgProperties {
 	}
 	ArgProperties &StrictlyDecreasing() {
 		monotonicity = Monotonicity::STRICTLY_DECREASING;
+		injective = true;
 		return *this;
 	}
 	ArgProperties &NonIncreasing() {
@@ -44,6 +50,10 @@ struct ArgProperties {
 	}
 	ArgProperties &Constant() {
 		monotonicity = Monotonicity::CONSTANT;
+		return *this;
+	}
+	ArgProperties &Injective() {
+		injective = true;
 		return *this;
 	}
 };

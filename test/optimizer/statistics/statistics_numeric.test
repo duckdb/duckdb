@@ -177,6 +177,12 @@ SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
 ----
 1.0	2.718281828459045
 
+# floor is NonDecreasing (not injective): bounds propagate but distinct_count must not
+query III
+SELECT s.min, s.max, s.approx_unique FROM (SELECT STATS(floor(x)) s FROM mixed LIMIT 1)
+----
+0.0	1.0	NULL
+
 # cast forward-bounds
 
 statement ok
@@ -210,6 +216,27 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(t::TIMESTAMP_MS) s FROM tstamps LIMIT 1)
 ----
 2024-01-01 00:00:00	2024-01-05 03:00:00
+
+# distinct_count: non-injective casts must not carry it forward — 100 distinct microseconds
+# collapse to 1 millisecond. (#22439 review; exact-value coverage in statistics_distinct_count.test)
+statement ok
+CREATE TABLE micros AS SELECT (TIMESTAMP '2024-01-01' + INTERVAL (i) MICROSECOND) AS t FROM range(100) _(i)
+
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(t::TIMESTAMP_MS) s FROM micros LIMIT 1)
+----
+2024-01-01 00:00:00	2024-01-01 00:00:00	NULL
+
+# DECIMAL -> INTEGER drops the fractional part; NonDecreasing, not injective
+statement ok
+CREATE TABLE decs AS SELECT v::DECIMAL(10, 2) AS d FROM (VALUES (1.10), (1.20), (1.50), (1.99)) _(v)
+
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(d::INTEGER) s FROM decs LIMIT 1)
+----
+1	2	NULL
 
 # TIMESTAMP -> TIME: UNKNOWN, no bounds
 query II

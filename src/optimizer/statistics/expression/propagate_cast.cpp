@@ -261,9 +261,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 		std::swap(out_lo, out_hi);
 	}
 	const bool can_have_null = child_stats->CanHaveNull() || cast.try_cast;
+	// only carry distinct_count when the cast is injective; truncation / precision-loss can collapse values
+	auto distinct_source = props.injective ? child_stats.get() : nullptr;
 	return BuildMonotoneBoundsStats(target, out_lo, out_hi, can_have_null,
 	                                StringUtil::Format("cast %s -> %s", source.ToString(), target.ToString()),
-	                                child_stats.get());
+	                                distinct_source);
 }
 
 } // namespace duckdb

@@ -41,9 +41,12 @@ public:
 	                                                   const LogicalType &target);
 
 	//! Assemble numeric stats from monotone-derived bounds; throws on `out_hi < out_lo`.
-	static unique_ptr<BaseStatistics>
-	BuildMonotoneBoundsStats(const LogicalType &target, const Value &out_lo, const Value &out_hi, bool can_have_null,
-	                         const string &error_context, optional_ptr<const BaseStatistics> base_to_copy = nullptr);
+	//! `distinct_source`: pass the input stats only when the mapping is injective so distinct_count
+	//! is preserved; pass nullptr otherwise so distinct_count remains UNKNOWN.
+	static unique_ptr<BaseStatistics> BuildMonotoneBoundsStats(const LogicalType &target, const Value &out_lo,
+	                                                           const Value &out_hi, bool can_have_null,
+	                                                           const string &error_context,
+	                                                           optional_ptr<BaseStatistics> distinct_source = nullptr);
 
 private:
 	//! Propagate statistics through an operator
