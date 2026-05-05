@@ -247,6 +247,8 @@ jobs:
       # TODO: set correct git ref for extension-ci-tools
       - name: Set git ref
         run: |
+          git -C duckdb fetch --prune --tags origin
+          git -C extension-ci-tools fetch --prune --tags origin
           git -C duckdb checkout "${{ inputs.git_ref }}"
           git -C extension-ci-tools checkout "main"
 
