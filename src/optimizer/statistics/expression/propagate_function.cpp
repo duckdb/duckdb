@@ -16,8 +16,7 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 		children.push_back(make_uniq<BoundConstantExpression>(v));
 	}
 	auto bind_info_clone = func.bind_info ? func.bind_info->Copy() : nullptr;
-	BoundFunctionExpression clone(func.GetReturnType(), func.function, std::move(children), std::move(bind_info_clone),
-	                              func.is_operator);
+	BoundFunctionExpression clone(func.function, std::move(children), std::move(bind_info_clone), func.is_operator);
 	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
 }
 
@@ -111,7 +110,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.name);
+		                        func.function.GetName());
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());

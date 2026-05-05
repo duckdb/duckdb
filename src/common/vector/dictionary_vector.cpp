@@ -132,9 +132,9 @@ Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return entry->data.GetValue(resolved_index);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type) const {
 	// flatten the child based on the selection vector stored in the dictionary
-	return entry->data.Buffer().FlattenSlice(type, sel_vector, count);
+	return entry->data.Buffer().FlattenSlice(type, sel_vector, Size());
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalType &type,

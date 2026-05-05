@@ -682,14 +682,14 @@ struct MedianFunction {
 		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
 		auto &input_type = function.GetArguments()[0];
-		function = GetAggregate(input_type);
+		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->GetReturnType());
+		function.ReplaceImplementation(GetAggregate(arguments[0]->GetReturnType()));
 		return make_uniq<QuantileBindData>(Value::DECIMAL(int16_t(5), 2, 1));
 	}
 };
@@ -702,7 +702,7 @@ struct DiscreteQuantileListFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetArguments().emplace_back(LogicalType::LIST(LogicalType::DOUBLE));
+		fun.GetSignature().AddParameter(LogicalType::LIST(LogicalType::DOUBLE));
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -711,14 +711,14 @@ struct DiscreteQuantileListFunction {
 		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
 		auto &input_type = function.GetArguments()[0];
-		function = GetAggregate(input_type);
+		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->GetReturnType());
+		function.ReplaceImplementation(GetAggregate(arguments[0]->GetReturnType()));
 		return BindQuantile(input);
 	}
 };
@@ -731,7 +731,7 @@ struct DiscreteQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetArguments().emplace_back(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -742,9 +742,9 @@ struct DiscreteQuantileFunction {
 
 		auto &input_type = function.GetArguments()[0];
 		if (quantile_data.quantiles.size() == 1) {
-			function = GetAggregate(input_type);
+			function.ReplaceImplementation(GetAggregate(input_type));
 		} else {
-			function = DiscreteQuantileListFunction::GetAggregate(input_type);
+			function.ReplaceImplementation(DiscreteQuantileListFunction::GetAggregate(input_type));
 		}
 		return bind_data;
 	}
@@ -752,7 +752,7 @@ struct DiscreteQuantileFunction {
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function = GetAggregate(arguments[0]->GetReturnType());
+		function.ReplaceImplementation(GetAggregate(arguments[0]->GetReturnType()));
 		return BindQuantile(input);
 	}
 };
@@ -765,7 +765,7 @@ struct ContinuousQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetArguments().emplace_back(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -774,16 +774,17 @@ struct ContinuousQuantileFunction {
 		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
 		auto &input_type = function.GetArguments()[0];
-		function = GetAggregate(input_type);
+		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function =
+		auto impl =
 		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
 		                                                                           : function.GetArguments()[0]);
+		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}
 };
@@ -797,7 +798,7 @@ struct ContinuousQuantileListFunction {
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
 		auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-		fun.GetArguments().push_back(list_of_double);
+		fun.GetSignature().AddParameter(list_of_double);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 		return fun;
 	}
@@ -806,16 +807,17 @@ struct ContinuousQuantileListFunction {
 		auto bind_data = QuantileBindData::Deserialize(deserializer, function);
 
 		auto &input_type = function.GetArguments()[0];
-		function = GetAggregate(input_type);
+		function.ReplaceImplementation(GetAggregate(input_type));
 		return bind_data;
 	}
 
 	static unique_ptr<FunctionData> Bind(BindAggregateFunctionInput &input) {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		function =
+		auto impl =
 		    GetAggregate(function.GetArguments()[0].id() == LogicalTypeId::DECIMAL ? arguments[0]->GetReturnType()
 		                                                                           : function.GetArguments()[0]);
+		function.ReplaceImplementation(impl);
 		return BindQuantile(input);
 	}
 };
@@ -825,7 +827,7 @@ static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalT
                                                const LogicalType &extra_arg) {
 	AggregateFunction fun({std::move(input)}, result, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, OP::Bind);
 	if (extra_arg.id() != LogicalTypeId::INVALID) {
-		fun.GetArguments().push_back(extra_arg);
+		fun.GetSignature().AddParameter(extra_arg);
 	}
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);

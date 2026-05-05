@@ -6,7 +6,7 @@ namespace duckdb {
 
 namespace {
 
-LogicalType GetStddevStateType(const AggregateFunction &) {
+LogicalType GetStddevStateType(const BoundAggregateFunction &) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("count", LogicalType::UBIGINT);
 	child_types.emplace_back("mean", LogicalType::DOUBLE);

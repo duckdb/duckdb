@@ -54,7 +54,7 @@ struct RegrAvgYFunction : RegrAvgFunction {
 	}
 };
 
-LogicalType GetRegrAvgStateType(const AggregateFunction &) {
+LogicalType GetRegrAvgStateType(const BoundAggregateFunction &) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("sum", LogicalType::DOUBLE);
 	child_types.emplace_back("count", LogicalType::UBIGINT);

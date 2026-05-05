@@ -554,9 +554,9 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 		by_type = by_types[best_target];
 	}
 
-	auto name = std::move(function.name);
-	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING);
-	function.name = std::move(name);
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
+	function.SetName(std::move(name));
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -719,7 +719,7 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 // Bind
 //------------------------------------------------------------------------------
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -733,7 +733,7 @@ void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 }
 
 template <class VAL_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -759,7 +759,7 @@ void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &func
 }
 
 template <class COMPARATOR>
-void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -785,7 +785,7 @@ void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, 
 }
 
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -798,7 +798,7 @@ void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
 }
 
 template <class VAL_TYPE, bool NULLS_LAST, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -824,7 +824,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 }
 
 template <bool NULLS_LAST, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:

@@ -141,10 +141,9 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
-	count = v_size;
-	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
-	if (result && (result->Size() != count)) {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type) const {
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), Size());
+	if (result && (result->Size() != Size())) {
 		throw InternalException("FlattenSliceInternal did not set size correctly");
 	}
 	return result;
@@ -298,7 +297,7 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 			auto &dict_sel = DictionaryVector::SelVector(source);
 			// merge the selection vectors and verify the child
 			if (sel.IsSet()) {
-				auto new_buffer = dict_sel.Slice(sel, source_count);
+				auto new_buffer = dict_sel.Slice(sel, copy_count);
 				owned_sel.Initialize(new_buffer);
 				sel_ref = owned_sel;
 			} else {

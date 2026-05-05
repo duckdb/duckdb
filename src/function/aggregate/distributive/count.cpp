@@ -222,7 +222,7 @@ struct CountFunction : public BaseCountFunction {
 	}
 };
 
-LogicalType GetCountStateType(const AggregateFunction &function) {
+LogicalType GetCountStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::BIGINT);
 	return LogicalType::STRUCT(std::move(children));
@@ -232,8 +232,8 @@ unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggr
                                                AggregateStatisticsInput &input) {
 	if (!expr.IsDistinct() && !input.child_stats[0].CanHaveNull()) {
 		// count on a column without null values: use count star
-		expr.function = CountStarFun::GetFunction();
-		expr.function.name = "count_star";
+		expr.function.ReplaceImplementation(CountStarFun::GetFunction());
+		expr.function.SetName("count_star");
 		expr.children.clear();
 	}
 	return nullptr;

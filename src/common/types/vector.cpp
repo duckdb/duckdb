@@ -390,7 +390,11 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), count);
+	Flatten();
+}
+
+void Vector::Flatten() const {
+	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}

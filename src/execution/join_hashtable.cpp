@@ -267,16 +267,12 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
-		UnifiedVectorFormat hashes_unified_v;
-		hashes_v.ToUnifiedFormat(count, hashes_unified_v);
-
-		auto hashes_unified = UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v);
+		auto hashes_unified = hashes_v.Values<hash_t>(count);
 		auto hashes_dense = FlatVector::GetDataMutable<idx_t>(state.hashes_dense_v);
 
 		for (idx_t i = 0; i < count; i++) {
 			const auto row_index = row_sel->get_index(i);
-			const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
-			hashes_dense[i] = hashes_unified[uvf_index];
+			hashes_dense[i] = hashes_unified[row_index].GetValue();
 		}
 	} else {
 		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);

@@ -38,6 +38,9 @@ public:
 	bool CanHaveNull() const {
 		return format.validity.CanHaveNull();
 	}
+	bool CannotHaveNull() const {
+		return format.validity.CannotHaveNull();
+	}
 	idx_t size() const {
 		return count;
 	}

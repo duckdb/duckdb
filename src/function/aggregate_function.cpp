@@ -33,4 +33,46 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::Bind(ClientContext &cont
 	return func_binder.BindAggregateFunction(*this, std::move(arguments));
 }
 
+BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function) {
+	name = function.name;
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
+	extra_info = function.extra_info;
+	return_type = function.GetReturnType();
+	properties = function.GetProperties();
+	callbacks = function.GetCallbacks();
+	function_info = function.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
+}
+
+bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
+	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
+	       return_type == rhs.return_type;
+}
+bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
+	return !(*this == rhs);
+}
+
+void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
+	this->name = function.name;
+	this->schema_name = function.schema_name;
+	this->catalog_name = function.catalog_name;
+	this->return_type = function.GetReturnType();
+	this->properties = function.GetProperties();
+	this->callbacks = function.GetCallbacks();
+	this->function_info = function.GetFunctionInfo();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	arguments.clear();
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
+}
+
 } // namespace duckdb
