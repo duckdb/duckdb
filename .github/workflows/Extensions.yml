@@ -10,6 +10,8 @@ on:
         type: string
       git_ref:
         type: string
+      git_sha:
+        type: string
       extra_exclude_archs:
         type: string
         required: false
@@ -41,6 +43,11 @@ on:
         type: string
       git_ref:
         description: 'Set to override the DuckDB version, leave empty for current commit'
+        type: string
+        required: false
+        default: ''
+      git_sha:
+        description: 'Set to override the exact DuckDB commit SHA for checkout'
         type: string
         required: false
         default: ''
@@ -247,9 +254,9 @@ jobs:
       # TODO: set correct git ref for extension-ci-tools
       - name: Set git ref
         run: |
-          git -C duckdb fetch --prune --tags origin
+          git -C duckdb fetch --prune --tags origin "${{ inputs.git_ref }}"
           git -C extension-ci-tools fetch --prune --tags origin
-          git -C duckdb checkout "${{ inputs.git_ref }}"
+          git -C duckdb checkout "${{ inputs.git_sha }}"
           git -C extension-ci-tools checkout "main"
 
       # - uses: actions/checkout@v6
