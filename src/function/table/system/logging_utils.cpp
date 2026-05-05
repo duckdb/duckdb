@@ -87,6 +87,12 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 		result->config.storage = LogConfig::FILE_STORAGE_NAME;
 	}
 
+	// If the user did not specify a storage, preserve the currently configured one. Otherwise the
+	// default LogConfig would silently reset logging_storage back to 'memory'.
+	if (!storage_isset && !storage_path_isset) {
+		result->config.storage = context.db->GetLogManager().GetConfig().storage;
+	}
+
 	// Process positional params
 	if (!input.inputs.empty()) {
 		if (input.inputs[0].type() == LogicalType::VARCHAR) {

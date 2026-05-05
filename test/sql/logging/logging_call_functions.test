@@ -154,9 +154,10 @@ logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	file
 
-# Reset
+# Reset — explicitly pass storage='memory' since enable_logging() with no args now preserves
+# the previous logging_storage instead of silently resetting it.
 statement ok
-CALL enable_logging()
+CALL enable_logging(storage='memory')
 
 #### 
 # Some invalid invocations throw nice errors
@@ -220,4 +221,68 @@ enabled_log_types	(empty)
 logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	memory
+
+####
+# Regression: CALL enable_logging() must not silently reset logging_storage.
+# Previously, calling enable_logging() with no storage= / storage_path= argument
+# would reset logging_storage back to 'memory' even if the user had set it
+# explicitly via SET logging_storage=... or a previous CALL enable_logging(storage=...).
+###
+
+statement ok
+CALL disable_logging()
+
+statement ok
+SET logging_storage='stdout'
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+stdout
+
+# enable_logging() with no args must preserve the user's previous storage choice
+statement ok
+CALL enable_logging()
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+stdout
+
+# Explicitly passing storage= still works and overrides the current setting
+statement ok
+CALL enable_logging(storage='memory')
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+memory
+
+statement ok
+RESET logging_storage
+
+# Same regression with file storage: storage configured via a prior enable_logging(storage='file', ...)
+# must survive a subsequent no-arg enable_logging() call.
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL enable_logging(storage='file', storage_path='__TEST_DIR__/preserve_storage.log')
+
+statement ok
+CALL disable_logging()
+
+statement ok
+CALL enable_logging()
+
+query I
+SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
+----
+file
+
+statement ok
+CALL disable_logging()
+
+statement ok
+RESET logging_storage
 
