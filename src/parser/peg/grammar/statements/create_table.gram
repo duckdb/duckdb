@@ -37,7 +37,7 @@ ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint 
 NotNullConstraint <- 'NOT'? 'NULL'
 UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
-DefaultValue <- 'DEFAULT' Expression
+DefaultValue <- 'DEFAULT' ColumnDefaultExpr
 CheckConstraint <- 'CHECK' Parens(Expression)
 ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
 ColumnCollation <- 'COLLATE' DottedIdentifier

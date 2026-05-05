@@ -50,6 +50,7 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return true;

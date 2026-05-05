@@ -60,7 +60,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 
 	//! NOTE: The catalog is explicitly not set here
 	if (exported_table.schema_name != DEFAULT_SCHEMA && !exported_table.schema_name.empty()) {
-		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
+		ss << SQLIdentifier(exported_table.schema_name) << ".";
 	}
 
 	auto file_path = StringUtil::Replace(exported_table.file_path, "\\", "/");

@@ -14,12 +14,12 @@ string ShowRef::ToString() const {
 		result += "SHOW TABLES FROM ";
 		string name = "";
 		if (!catalog_name.empty()) {
-			name += KeywordHelper::WriteOptionallyQuoted(catalog_name, '"');
+			name += SQLIdentifier(catalog_name);
 			if (!schema_name.empty()) {
 				name += ".";
 			}
 		}
-		name += KeywordHelper::WriteOptionallyQuoted(schema_name, '"');
+		name += SQLIdentifier(schema_name);
 		result += name;
 	} else {
 		result += "DESCRIBE ";

@@ -11,6 +11,7 @@
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -201,7 +202,7 @@ void WALWriteState::WriteDelete(DeleteInfo &info) {
 			rows[i] = UnsafeNumericCast<int64_t>(info.base_row) + delete_rows[i];
 		}
 	}
-	delete_chunk->SetCardinality(info.count);
+	delete_chunk->SetChildCardinality(info.count);
 	log.WriteDelete(*delete_chunk);
 }
 

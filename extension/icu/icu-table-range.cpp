@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -225,7 +226,7 @@ struct ICUTableRange {
 				state.initialized_row = false;
 				continue;
 			}
-			output.SetCardinality(size);
+			output.SetChildCardinality(size);
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 	}

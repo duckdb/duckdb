@@ -139,7 +139,7 @@ void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, Metadat
 	auto new_block = new_buffer.GetBlockHandle();
 
 	// copy the data to the transient block
-	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), block_manager.GetBlockSize());
+	memcpy(new_buffer.GetDataMutable(), old_buffer.Ptr(), block_manager.GetBlockSize());
 
 	// unregister the old block
 	block_manager.UnregisterBlock(metadata_block.block_id);
@@ -162,7 +162,7 @@ block_id_t MetadataManager::AllocateNewBlock(unique_lock<mutex> &block_lock) {
 	}
 	new_block.dirty = true;
 	// zero-initialize the handle
-	memset(handle.Ptr(), 0, block_manager.GetBlockSize());
+	memset(handle.GetDataMutable(), 0, block_manager.GetBlockSize());
 
 	block_lock.lock();
 	AddBlock(block_lock, std::move(new_block));
@@ -279,7 +279,7 @@ void MetadataManager::Flush() {
 		auto block_handle = block.block;
 		auto handle = buffer_manager.Pin(block_handle);
 		// zero-initialize the few leftover bytes
-		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
+		memset(handle.GetDataMutable() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
 		if (block_handle->BlockId() >= MAXIMUM_BLOCK) {
 			// Convert the temporary block to a persistent block.

@@ -36,13 +36,13 @@ string LoadInfo::ToString() const {
 	result += StringUtil::Format(" '%s'", filename);
 	if (!repository.empty()) {
 		if (repo_is_alias) {
-			result += StringUtil::Format(" FROM %s", SQLIdentifier(repository));
+			result += " FROM " + SQLIdentifier(repository);
 		} else {
-			result += StringUtil::Format(" FROM %s", SQLString(repository));
+			result += " FROM " + SQLString(repository);
 		}
 	}
 	if (!alias.empty()) {
-		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
+		result += " AS %s", SQLIdentifier(alias);
 	}
 
 	result += ";";

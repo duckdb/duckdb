@@ -476,11 +476,8 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
                                                          const string &path, const string &select_clause,
                                                          const string &csv_columns) {
-	string sub_query_string;
-
-	string escaped_path = KeywordHelper::WriteOptionallyQuoted(path);
-	sub_query_string =
-	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, escaped_path, csv_columns);
+	string sub_query_string =
+	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sub_query_string);

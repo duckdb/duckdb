@@ -7,7 +7,7 @@
 
 namespace duckdb {
 StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
 	if (capacity > 0) {
 		if (type_size == 0) {
@@ -18,23 +18,20 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capa
 		// resize the validity
 		validity.Resize(capacity);
 	}
-	v_size = 0ULL;
 }
 StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
 StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
       type_size(type_size_p), capacity(count) {
-	SetVectorSize(count);
 }
 StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
       type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
 	if (count > capacity) {
 		throw InternalException("Count is out of range for capacity");
 	}
-	SetVectorSize(count);
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
@@ -53,18 +50,19 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
-	}
+	D_ASSERT(type_size == GetTypeIdSize(type.InternalType()));
 	// verify all entries in the sel fit within the validity
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(sel.get_index(i) < validity.Capacity());
+			auto sel_idx = sel.get_index(i);
+			D_ASSERT(sel_idx <= validity.Capacity());
+			D_ASSERT(sel_idx <= Capacity());
 		}
-	} else {
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
 		D_ASSERT(count <= validity.Capacity());
+		D_ASSERT(count <= Capacity());
 	}
 }
 
@@ -354,6 +352,8 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(reinterpret_cast<const timestamp_tz_ns_t *>(data_ptr)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
 	case LogicalTypeId::UHUGEINT:

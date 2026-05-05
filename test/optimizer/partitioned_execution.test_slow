@@ -1,0 +1,301 @@
+# name: test/optimizer/partitioned_execution.test_slow
+# description: Test the PartitionedExecution optimizer
+# group: [optimizer]
+
+load {TEST_DIR}/partitioned_execution.duckdb
+
+# create test table with doubles instead of integers to avoid compressed materialization
+statement ok
+CREATE TABLE test AS
+SELECT
+    CAST(range // 2_000_000 AS DOUBLE) AS t_low_cardinality_ordered,
+    CAST(range // 10 AS DOUBLE) AS t_high_cardinality_ordered,
+    CAST(range % 10 AS DOUBLE) AS t_low_cardinality_recurring,
+    CAST(range % 3_000_000 AS DOUBLE) AS t_high_cardinality_recurring,
+    CAST(42 AS DOUBLE) AS t_const
+FROM range(10_000_000);
+
+# compute order-agnostic hash, is used to make sure we don't scan rows multiple times or miss scanning rows
+query I nosort h
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM test;
+----
+
+# order-preserving hash functions
+query I nosort asc_h
+SELECT hash(list(test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC))
+FROM test;
+----
+
+
+query I nosort desc_h
+SELECT hash(list(test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC))
+FROM test;
+----
+
+
+statement ok
+pragma explain_output='optimized_only'
+
+# this optimizer splits pipelines based on the number of active threads
+# if there are many pipelines, we want larger splits to achieve good parallel CPU utilization
+# we set threads to 1 so we can test the functionality with a relatively small amount of data
+statement ok
+SET threads=1;
+
+# optimization works when ordering/grouping/windowing by these columns individually
+foreach c t_low_cardinality_ordered t_high_cardinality_ordered t_high_cardinality_recurring
+
+# ORDER BY, test both sort orders
+foreach order_type ASC DESC
+
+# should see a union here
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY {c} {order_type}
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+# hash should be the same
+query I nosort h
+WITH cte AS (
+    FROM test ORDER BY {c} {order_type}
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+
+endloop
+
+# no tests for single-column GROUP BY here because the optimization doesn't trigger due to low estimated cardinality
+
+# WINDOW
+query II
+EXPLAIN WITH cte AS (
+    SELECT ROW_NUMBER() OVER (PARTITION BY {c}) AS idx, *
+    FROM test
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I nosort h
+WITH cte AS (
+    SELECT ROW_NUMBER() OVER (PARTITION BY {c}) AS idx, *
+    FROM test
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+
+
+endloop
+
+# continue with multi-column stuff
+# we can split by t_high_cardinality_recurring in the following tests, but not by the other columns
+# we can still do the optimization!
+
+# ORDER BY
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I nosort h
+WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+
+# TODO more tests, make sure the order is correct too
+
+# GROUP BY
+query II
+EXPLAIN WITH cte1 AS (
+    SELECT t_const, t_high_cardinality_recurring, t_low_cardinality_recurring, list(test) l
+    FROM test GROUP BY ALL
+), cte2 AS (
+    SELECT unnest(l, recursive := true)
+    FROM cte1
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte2;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I nosort h
+WITH cte1 AS (
+    SELECT t_const, t_high_cardinality_recurring, t_low_cardinality_recurring, list(test) l
+    FROM test GROUP BY ALL
+), cte2 AS (
+    SELECT unnest(l, recursive := true)
+    FROM cte1
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte2;
+----
+
+# WINDOW
+query II
+EXPLAIN WITH cte AS (
+    SELECT ROW_NUMBER() OVER (PARTITION BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring) AS idx, *
+    FROM test
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I nosort h
+WITH cte AS (
+    SELECT ROW_NUMBER() OVER (PARTITION BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring) AS idx, *
+    FROM test
+)
+SELECT bit_xor(hash(*COLUMNS('^t_')))
+FROM cte;
+----
+
+
+# make sure the order is correct for the order by stuff with the order-preserving hash
+query I nosort asc_h
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
+)
+SELECT hash(list(cte))
+FROM cte;
+----
+
+query I nosort desc_h
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
+)
+SELECT hash(list(cte))
+FROM cte;
+----
+
+# make sure the order is correct for the order by stuff with lag
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring > t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered > t_high_cardinality_ordered);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring ASC, t_high_cardinality_ordered ASC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring > t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered > t_high_cardinality_ordered);
+----
+0
+
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring < t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered < t_high_cardinality_ordered);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_high_cardinality_recurring DESC, t_high_cardinality_ordered DESC
+), cte2 AS (
+    SELECT
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_high_cardinality_ordered) OVER () prev_ordered,
+        t_high_cardinality_recurring,
+        t_high_cardinality_ordered
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_recurring < t_high_cardinality_recurring
+   OR (prev_recurring = t_high_cardinality_recurring AND prev_ordered < t_high_cardinality_ordered);
+----
+0
+
+query II
+EXPLAIN WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+), cte2 AS (
+    SELECT
+        lag(t_const) OVER () prev_const,
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_low_cardinality_recurring) OVER () prev_low_recurring,
+        t_const,
+        t_high_cardinality_recurring,
+        t_low_cardinality_recurring
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_const > t_const
+   OR (prev_const = t_const AND prev_recurring > t_high_cardinality_recurring)
+   OR (prev_const = t_const AND prev_recurring = t_high_cardinality_recurring AND
+       prev_low_recurring > t_low_cardinality_recurring);
+----
+logical_opt	<REGEX>:.*UNION.*
+
+query I
+WITH cte AS (
+    FROM test ORDER BY t_const, t_high_cardinality_recurring, t_low_cardinality_recurring
+), cte2 AS (
+    SELECT
+        lag(t_const) OVER () prev_const,
+        lag(t_high_cardinality_recurring) OVER () prev_recurring,
+        lag(t_low_cardinality_recurring) OVER () prev_low_recurring,
+        t_const,
+        t_high_cardinality_recurring,
+        t_low_cardinality_recurring
+    FROM cte
+)
+SELECT count(*)
+FROM cte2
+WHERE prev_const > t_const
+   OR (prev_const = t_const AND prev_recurring > t_high_cardinality_recurring)
+   OR (prev_const = t_const AND prev_recurring = t_high_cardinality_recurring AND
+       prev_low_recurring > t_low_cardinality_recurring);
+----
+0

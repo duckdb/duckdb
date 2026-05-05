@@ -261,6 +261,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	auto &sorted_vec = sort_chunk.data.back();
 	auto sorted = FlatVector::GetDataMutable<idx_t>(sorted_vec);
 	std::iota(sorted, sorted + count, input_idx);
+	FlatVector::SetSize(sorted_vec, count_t(count));
 
 	// Our arguments are being fully materialised,
 	// but we also need them as sort keys.

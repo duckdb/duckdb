@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, idx_t count)
-    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER),
+ShreddedVectorBuffer::ShreddedVectorBuffer(Vector &shredded_data_p, count_t count_p)
+    : VectorBuffer(VectorType::SHREDDED_VECTOR, VectorBufferType::SHREDDED_BUFFER, count_p),
       shredded_data(make_uniq<Vector>(Vector::Ref(shredded_data_p))) {
-	v_size = count;
 }
 
 ShreddedVectorBuffer::~ShreddedVectorBuffer() {
@@ -23,10 +22,11 @@ idx_t ShreddedVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void ShreddedVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void ShreddedVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.id() == LogicalTypeId::VARIANT);
 	D_ASSERT(vector_type == VectorType::SHREDDED_VECTOR);
 	shredded_data->Verify(sel, count);
+	D_ASSERT(shredded_data->size() == Size());
 }
 
 string ShreddedVectorBuffer::ToString(const LogicalType &type, idx_t count) const {

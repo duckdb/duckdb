@@ -198,6 +198,7 @@ bool SupportsOtherBucket(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -229,6 +230,7 @@ Value OtherBucketValue(const LogicalType &type) {
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -398,7 +400,7 @@ unique_ptr<FunctionData> HistogramBinBindFunction(BindAggregateFunctionInput &in
 		}
 	}
 
-	function = GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(GetHistogramBinFunction<HIST>(arguments[0]->GetReturnType()));
 	return nullptr;
 }
 

@@ -33,9 +33,9 @@ string CreateTriggerInfo::ToString() const {
 		ss << "IF NOT EXISTS ";
 	}
 	if (!IsInvalidSchema(schema)) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema) << ".";
+		ss << SQLIdentifier(schema) << ".";
 	}
-	ss << KeywordHelper::WriteOptionallyQuoted(trigger_name);
+	ss << SQLIdentifier(trigger_name);
 	ss << " ";
 	ss << EnumUtil::ToString(timing);
 	ss << " ";
@@ -46,7 +46,7 @@ string CreateTriggerInfo::ToString() const {
 			if (i > 0) {
 				ss << ", ";
 			}
-			ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
+			ss << SQLIdentifier(columns[i]);
 		}
 	}
 	ss << " ON ";

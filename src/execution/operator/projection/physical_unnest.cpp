@@ -219,6 +219,10 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 		}
 		idx_t col_offset = 0;
 		chunk.SetCardinality(result_length);
+		if (result_length == 0) {
+			// nothing to unnest - skip column processing entirely
+			continue;
+		}
 		if (include_input) {
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
 				if (unnest_list_count == 1) {

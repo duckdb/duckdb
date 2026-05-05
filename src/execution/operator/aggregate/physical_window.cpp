@@ -103,7 +103,10 @@ public:
 			}
 			return false;
 		case WindowGroupStage::SINK:
-			if (sunk == count) {
+			// Gate on blocks (not rows): every SINK task must have completed before FINALIZE
+			// can run, otherwise a FINALIZE task can read a thread_states[thread_idx] entry
+			// that the matching SINK task hasn't initialised yet.
+			if (sunk == blocks) {
 				stage = WindowGroupStage::FINALIZE;
 				return true;
 			}
@@ -180,7 +183,7 @@ public:
 	atomic<idx_t> materialized;
 	//! Count of masked blocks
 	atomic<idx_t> masked;
-	//! Count of sunk rows
+	//! Count of sunk blocks (one per completed SINK task block, not per row)
 	atomic<idx_t> sunk;
 	//! Count of finalized blocks
 	atomic<idx_t> finalized;
@@ -762,9 +765,14 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 		}
 	}
 
+	//	The block range owned by this task. Counted whole so that the SINK -> FINALIZE
+	//	transition waits for every SINK task to run, even ones whose blocks contain no rows.
+	const idx_t task_blocks = task->end_idx - task->begin_idx;
+
 	//	First pass over the input without flushing
 	scanner = window_hash_group->GetScanner(task->begin_idx);
 	if (!scanner) {
+		window_hash_group->sunk += task_blocks;
 		return;
 	}
 	for (; task->begin_idx < task->end_idx; ++task->begin_idx) {
@@ -800,10 +808,9 @@ void WindowLocalSourceState::Sink(ExecutionContext &context, InterruptState &int
 			OperatorSinkInput sink {*gestates[w], *local_states[w], interrupt};
 			executors[w]->Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 		}
-
-		window_hash_group->sunk += input_chunk.size();
 	}
 	scanner.reset();
+	window_hash_group->sunk += task_blocks;
 }
 
 void WindowLocalSourceState::Finalize(ExecutionContext &context, InterruptState &interrupt) {

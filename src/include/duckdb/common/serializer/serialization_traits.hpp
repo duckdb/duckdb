@@ -356,7 +356,7 @@ struct SerializationDefaultValue {
 
 	template <typename T = void>
 	static inline bool IsDefault(const typename std::enable_if<is_duckdb_optional<T>::value, T>::type &value) {
-		return !value.IsValid();
+		return !value;
 	}
 
 	template <typename T = void>

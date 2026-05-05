@@ -73,6 +73,23 @@ SELECT GROUPING(course, type), course, type, COUNT(*) FROM students GROUP BY CUB
 2	NULL	PhD	1
 3	NULL	NULL	7
 
+# GROUPING() with no args should use all group columns (course, type)
+query IIII
+SELECT GROUPING(), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
+----
+0	CS	NULL	2
+0	CS	Bachelor	2
+0	CS	PhD	1
+0	Math	NULL	1
+0	Math	Masters	1
+1	CS	NULL	5
+1	Math	NULL	2
+2	NULL	NULL	3
+2	NULL	Bachelor	2
+2	NULL	Masters	1
+2	NULL	PhD	1
+3	NULL	NULL	7
+
 query IIIIII
 SELECT GROUPING(course), GROUPING(type), GROUPING(course)+GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
 ----
@@ -183,12 +200,12 @@ NULL	NULL	7
 statement error
 SELECT GROUPING();
 ----
-Parser Error: syntax error at or near ")"
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT GROUPING() FROM students;
 ----
-Parser Error: syntax error at or near ")"
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT GROUPING(NULL) FROM students;

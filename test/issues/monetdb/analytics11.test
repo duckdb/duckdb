@@ -29,12 +29,14 @@ GROUP BY ()
 ----
 1
 
-statement error
+query I
 SELECT
     GROUPING()
 FROM tbl_ProductSales
 GROUP BY Product_Category
 ----
+0
+0
 
 statement error
 SELECT

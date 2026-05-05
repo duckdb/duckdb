@@ -61,6 +61,8 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	//! Sets the cardinality of all child vectors of this chunk
+	void SetChildCardinality(idx_t count_p);
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
 	[[deprecated("Use Vector::Append on data[col_idx] instead (or Vector::SetValue for write-at-index "

@@ -144,9 +144,11 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 		max_value.Append(Value::BIGINT(seq_data.max_value));
 		increment_by.Append(Value::BIGINT(seq_data.increment));
 		cycle.Append(Value::BOOLEAN(seq_data.cycle));
-		last_value.Append((seq_data.usage_count == 0) || !seq_data.last_value.IsValid()
-		                      ? Value()
-		                      : Value::BIGINT(seq_data.last_value.GetValue()));
+		if (seq_data.usage_count == 0 || !seq_data.last_value) {
+			last_value.Append(Value());
+		} else {
+			last_value.Append(Value::BIGINT(seq_data.last_value.value()));
+		}
 		sql.Append(Value(seq.ToSQL()));
 
 		count++;

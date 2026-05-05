@@ -4,6 +4,12 @@
 
 require parquet
 
+# AdaptiveFilter swap timing depends on vector size, and parquet row group layout
+# depends on block size
+require vector_size 2048
+
+require block_size 262144
+
 # Deterministic file order
 statement ok
 SET threads=1

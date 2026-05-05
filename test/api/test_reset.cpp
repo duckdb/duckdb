@@ -127,6 +127,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
+	    {"external_file_cache_local_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_remote_block_size", {Value::UBIGINT(4096)}},
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},
@@ -136,7 +138,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"checkpoint_on_detach", {"ENABLED"}},
 	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
 	    {"debug_verify_statement", {"copy_statement"}},
-	    {"enable_caching_operators", {false}}};
+	    {"enable_caching_operators", {false}},
+	    {"parallelize_sequential_sources", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {

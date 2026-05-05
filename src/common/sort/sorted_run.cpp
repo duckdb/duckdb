@@ -67,7 +67,7 @@ static void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY
 			payload_ptrs[i] = sort_key.GetPayload();
 		}
 	}
-	key.SetCardinality(count);
+	key.SetChildCardinality(count);
 }
 
 template <class SORT_KEY>
@@ -145,7 +145,7 @@ void SortedRunScanState::TemplatedScan(const SortedRun &sorted_run, const Vector
 		}
 	}
 
-	chunk.SetCardinality(count);
+	chunk.SetChildCardinality(count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -243,7 +243,7 @@ struct SkaExtractKey {
 };
 
 template <SortKeyType SORT_KEY_TYPE>
-static void TemplatedSort(ClientContext &context, const TupleDataCollection &key_data, const bool is_index_sort) {
+static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data, const bool is_index_sort) {
 	const auto &layout = key_data.GetLayout();
 	D_ASSERT(SORT_KEY_TYPE == layout.GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
@@ -269,7 +269,7 @@ static void TemplatedSort(ClientContext &context, const TupleDataCollection &key
 	context.InterruptCheck();
 }
 
-static void SortSwitch(ClientContext &context, const TupleDataCollection &key_data, bool is_index_sort) {
+static void SortSwitch(ClientContext &context, TupleDataCollection &key_data, bool is_index_sort) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:

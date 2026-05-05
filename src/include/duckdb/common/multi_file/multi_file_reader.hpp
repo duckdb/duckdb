@@ -157,6 +157,13 @@ public:
 
 	static void PruneReaders(MultiFileBindData &data, MultiFileList &file_list);
 
+	//! Returns true iff pre-open-knowable filters (filename, file_index, hive) reject this file.
+	DUCKDB_API static bool CanSkipFileFromFilters(ClientContext &context, const OpenFileInfo &file, idx_t file_list_idx,
+	                                              const MultiFileOptions &file_options,
+	                                              const MultiFileReaderBindData &reader_bind,
+	                                              const vector<ColumnIndex> &global_column_ids,
+	                                              optional_ptr<TableFilterSet> filters);
+
 	DUCKDB_API virtual shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                                           BaseUnionData &union_data,
 	                                                           const MultiFileBindData &bind_data);

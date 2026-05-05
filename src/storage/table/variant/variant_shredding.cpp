@@ -62,6 +62,8 @@ struct VariantStatsVisitor {
 	}
 	static void VisitTimestampTZ(timestamp_tz_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
 	static void WriteStringInternal(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
 	static void VisitString(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
@@ -178,6 +180,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIME_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -357,6 +361,8 @@ static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
 		return LogicalTypeId::TIME_TZ;
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
 		return LogicalTypeId::TIMESTAMP_TZ;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ_NS;
 	case VariantLogicalType::INTERVAL:
 		return LogicalTypeId::INTERVAL;
 	case VariantLogicalType::BIGNUM:

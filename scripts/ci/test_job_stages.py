@@ -123,9 +123,9 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(job_ids, "failed to parse any top-level jobs from .github/workflows/Main.yml")
         return job_ids
 
-    def test_merge_queue_push_minimal_jobs(self):
-        selection = self._compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
-        required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+    def test_merge_group_minimal_jobs(self):
+        selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+        required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertTrue(selection.save_cache)
 
@@ -168,7 +168,7 @@ class JobStagesTest(unittest.TestCase):
         self.assertEqual(parsed, {"julia", "tests_slow", "extensions"})
 
     def test_writes_github_output(self):
-        selection = job_stages.JobSelection(enabled_jobs=["linux-debug"], save_cache=False)
+        selection = job_stages.JobSelection(enabled_jobs=["linux-relassert"], save_cache=False)
         with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False) as tmp:
             output_path = tmp.name
         try:
@@ -179,7 +179,7 @@ class JobStagesTest(unittest.TestCase):
         finally:
             os.unlink(output_path)
 
-        self.assertEqual(lines[0], "enabled_jobs=[\"linux-debug\"]")
+        self.assertEqual(lines[0], "enabled_jobs=[\"linux-relassert\"]")
         self.assertEqual(lines[1], "save_cache=false")
 
     def test_main_prints_and_writes_outputs(self):
@@ -193,7 +193,7 @@ class JobStagesTest(unittest.TestCase):
             sys.argv = [
                 "job_stages.py",
                 "--event",
-                "push",
+                "merge_group",
                 "--ref_name",
                 "gh-readonly-queue/main/pr-1-abc",
                 "--repository",
@@ -207,7 +207,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertIn("save_cache=true", out)
             payload = out.splitlines()[0].split("=", 1)[1]
             selected_jobs = json.loads(payload)
-            required_jobs = {"linux-debug", "linux-release", "linux-release-tests", "tidy-check"}
+            required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
             self.assertTrue(required_jobs.issubset(set(selected_jobs)))
         finally:
             sys.argv = old_argv

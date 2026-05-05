@@ -98,7 +98,7 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	// copy over the NULL values from the input vector
+	// copy over the list_entry_t values from the input vector, preserving top-level validity
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
 			ConstantVector::SetNull(result, count_t(result_size));
@@ -108,18 +108,13 @@ void RemapMap(Vector &input, Vector &default_vector, Vector &result, idx_t resul
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Values<list_entry_t>(result_size);
-		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (!entries[i].IsValid()) {
-					result_validity.SetInvalid(i);
-				}
+		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
+		for (const auto entry : input.Values<list_entry_t>(result_size)) {
+			if (entry.IsValid()) {
+				writer.WriteValue(entry.GetValueUnsafe());
+			} else {
+				writer.WriteNull();
 			}
-		}
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 	// set up the correct vector references
@@ -145,7 +140,7 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 	ListVector::Reserve(result, list_size);
 	ListVector::SetListSize(result, list_size);
 
-	// copy over the NULL values from the input vector
+	// copy over the list_entry_t values from the input vector, preserving top-level validity
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
 			ConstantVector::SetNull(result, count_t(result_size));
@@ -155,18 +150,13 @@ void RemapList(Vector &input, Vector &default_vector, Vector &result, idx_t resu
 		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
 		memcpy(result_list_data, list_data, sizeof(list_entry_t));
 	} else {
-		auto entries = input.Values<list_entry_t>(result_size);
-		if (entries.CanHaveNull()) {
-			auto &result_validity = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (!entries[i].IsValid()) {
-					result_validity.SetInvalid(i);
-				}
+		auto writer = FlatVector::Writer<list_entry_t>(result, result_size);
+		for (const auto entry : input.Values<list_entry_t>(result_size)) {
+			if (entry.IsValid()) {
+				writer.WriteValue(entry.GetValueUnsafe());
+			} else {
+				writer.WriteNull();
 			}
-		}
-		auto result_list_data = FlatVector::GetDataMutable<list_entry_t>(result);
-		for (idx_t i = 0; i < result_size; i++) {
-			result_list_data[i] = entries.GetValueUnsafe(i);
 		}
 	}
 

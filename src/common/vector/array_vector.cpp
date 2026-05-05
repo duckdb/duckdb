@@ -7,7 +7,7 @@
 namespace duckdb {
 
 VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, capacity_t initial_capacity)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)),
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER, count_t(0)), child(std::move(child_vector)),
       array_size(array_size), capacity(initial_capacity) {
 	D_ASSERT(array_size != 0);
 	validity.Resize(initial_capacity);
@@ -33,6 +33,15 @@ idx_t VectorArrayBuffer::GetChildSize() const {
 	return capacity * array_size;
 }
 
+void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		FlatVector::SetSize(*child, array_size);
+		return;
+	}
+	FlatVector::SetSize(*child, new_size * array_size);
+}
+
 void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
@@ -56,20 +65,10 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		if (!validity.RowIsValid(0)) {
-			// NULL constant array - verify child is also NULL constant
-			if (child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				D_ASSERT(ConstantVector::IsNull(*child));
-			}
-			return;
-		}
-		child->Verify(array_size);
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
 		return;
 	}
 	// flat vector case - only verify children for valid (non-NULL) entries
@@ -91,6 +90,7 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 		}
 	}
 	child->Verify(child_sel, child_count);
+	// FIXME: verify NULL-ness in child
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
