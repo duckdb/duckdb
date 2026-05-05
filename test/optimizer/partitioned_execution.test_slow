@@ -299,3 +299,20 @@ WHERE prev_const > t_const
        prev_low_recurring > t_low_cardinality_recurring);
 ----
 0
+
+# stats with non-UTF-8 bytes (truncated multibyte sequence) must not crash PartitionedExecution
+statement ok
+CREATE TABLE test_non_utf8 AS
+SELECT CASE WHEN i < 2500000 THEN lpad(i::VARCHAR, 8, '0')
+            ELSE chr(26085) || chr(26412) || chr(35486) || lpad(i::VARCHAR, 7, '0')
+       END AS k,
+       (i % 7)::INTEGER AS g
+FROM range(5000000) t(i);
+
+query I
+WITH cte AS (
+    FROM test_non_utf8 ORDER BY k
+)
+SELECT count(*) FROM cte;
+----
+5000000

@@ -110,7 +110,7 @@ physical_plan	<REGEX>:.*Join Type: INNER.*
 # 9. Case with non-COUNT aggregate
 # Should be optimized to INNER JOIN
 query II
-EXPLAIN 
+EXPLAIN
 FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 101;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
@@ -123,15 +123,15 @@ FROM services QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 
 # 10. Case with multiple aggregates
 # Should be optimized to INNER JOIN
 query II
-EXPLAIN 
-FROM services 
+EXPLAIN
+FROM services
 QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query II
-FROM services 
+FROM services
 QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
 ----
@@ -140,8 +140,8 @@ QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
 # 11. Case filter clause
 # Should be optimized to INNER JOIN
 query II
-EXPLAIN 
-FROM services 
+EXPLAIN
+FROM services
 WHERE date > '2024-06-30'::DATE
 QUALIFY max(train_number) OVER(PARTITION BY date, train_number) = 100
     AND count(*) OVER(PARTITION BY date, train_number) = 1;
@@ -150,27 +150,26 @@ physical_plan	<REGEX>:.*Join Type: INNER.*
 
 # 12. Case ORDER BY clause
 query II
-EXPLAIN 
-SELECT *, 
+EXPLAIN
+SELECT *,
 	list(train_number) OVER(
-		PARTITION BY date 
+		PARTITION BY date
 		ORDER BY train_number DESC
 		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
 		) as trains
-		
-FROM services 
+FROM services
 ----
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 query III rowsort
-SELECT 
+SELECT
 	*,
 	list(train_number) OVER(
-		PARTITION BY date 
+		PARTITION BY date
 		ORDER BY train_number DESC
 		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
 		) as trains
-FROM services 
+FROM services
 ----
 2024-01-01	100	[101, 100, 100]
 2024-01-01	100	[101, 100, 100]
@@ -199,9 +198,6 @@ ORDER BY grp, seq;
 physical_plan	<REGEX>:.*Join Type: INNER.*
 
 endloop
-
-# FIXME: broken in merge
-mode skip
 
 statement ok
 CREATE

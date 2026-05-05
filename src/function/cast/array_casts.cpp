@@ -78,6 +78,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 		FlatVector::SetSize(result, count_t(count));
 		return all_ok;
 	}
+	source.Flatten();
 	FlatVector::CopyValidity(result, source, count);
 	auto &source_cc = ArrayVector::GetChildMutable(source);
 	auto &result_cc = ArrayVector::GetChildMutable(result);

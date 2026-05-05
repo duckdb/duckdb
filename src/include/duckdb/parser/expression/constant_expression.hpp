@@ -21,8 +21,9 @@ public:
 public:
 	DUCKDB_API explicit ConstantExpression(Value val);
 
-	//! The constant value referenced
-	Value value;
+	auto GetValue() const -> const Value & {
+		return value;
+	}
 
 public:
 	string ToString() const override;
@@ -37,6 +38,9 @@ public:
 
 private:
 	ConstantExpression();
+
+	//! The constant value referenced
+	Value value;
 };
 
 } // namespace duckdb

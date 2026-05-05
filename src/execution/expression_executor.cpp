@@ -179,23 +179,32 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			return;
 		}
 
-		Vector intermediate(LogicalType::VARIANT(), count);
+		// preserve the input vector type if it was constant - the cast roundtrip below would otherwise flatten it,
+		// breaking callers that rely on constant-value defaults staying constant (e.g. remap_struct)
+		const bool input_is_constant = vector.GetVectorType() == VectorType::CONSTANT_VECTOR;
+		const idx_t cast_count = input_is_constant ? 1 : count;
+
+		Vector intermediate(LogicalType::VARIANT(), cast_count);
 
 		//! First cast to VARIANT
 		if (HasContext()) {
-			VectorOperations::Cast(GetContext(), vector, intermediate, count, true);
+			VectorOperations::Cast(GetContext(), vector, intermediate, cast_count, true);
 		} else {
-			VectorOperations::DefaultCast(vector, intermediate, count, true);
+			VectorOperations::DefaultCast(vector, intermediate, cast_count, true);
 		}
-		intermediate.Verify(count);
+		intermediate.Verify(cast_count);
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
-		Vector result(vector.GetType(), count);
+		Vector result(vector.GetType(), cast_count);
 		//! Then cast back into the original type
 		if (HasContext()) {
-			VectorOperations::Cast(GetContext(), intermediate, result, count, true);
+			VectorOperations::Cast(GetContext(), intermediate, result, cast_count, true);
 		} else {
-			VectorOperations::DefaultCast(intermediate, result, count, true);
+			VectorOperations::DefaultCast(intermediate, result, cast_count, true);
+		}
+		if (input_is_constant) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			FlatVector::SetSize(result, count_t(count));
 		}
 		vector.Reference(result);
 		vector.Verify(count);
