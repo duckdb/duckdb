@@ -680,6 +680,12 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 			FlatVector::SetNull(typed_value, result_sel ? result_sel->get_index(i) : i, true);
 		}
 	}
+	//! Propagate NULL values from the input variant to the shredded child struct
+	for (idx_t row = 0; row < count; row++) {
+		if (!variant.RowIsValid(row)) {
+			FlatVector::SetNull(result, row, true);
+		}
+	}
 }
 
 void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count) {

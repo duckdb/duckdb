@@ -119,8 +119,10 @@ void VectorStructBuffer::VerifyInternal(const LogicalType &type, const Selection
 				for (idx_t r = 0; r < Size(); r++) {
 					if (!validity.RowIsValid(r)) {
 						if (child_validity.IsValid(r)) {
-							throw InternalException(
-							    "Struct NULL mismatch - a child of a NULL struct must always be NULL");
+							throw InternalException("Struct NULL mismatch - a child of a NULL struct must always be "
+							                        "NULL\nStruct type: %s\nChild idx: %llu, Child type: %s\nRow: %llu",
+							                        type.ToString(), (uint64_t)child_idx,
+							                        child_types[child_idx].second.ToString(), (uint64_t)r);
 						}
 					}
 				}
