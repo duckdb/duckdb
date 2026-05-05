@@ -1,8 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/client_data.hpp"
-
-#include <duckdb/catalog/catalog_search_path.hpp>
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
