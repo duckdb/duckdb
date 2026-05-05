@@ -1951,7 +1951,7 @@ bool RowGroupCollection::SupportsPerColumnWrites() {
 		return true;
 	}
 	if (version.serialization_version >= SerializationCompatibility::FromString("v1.4.0").serialization_version) {
-		return Settings::Get<ExperimentalColumnMetadataReuseSetting>(GetAttached().GetDatabase());
+		return Settings::Get<ForceColumnMetadataReuseSetting>(GetAttached().GetDatabase());
 	}
 	return false;
 }
