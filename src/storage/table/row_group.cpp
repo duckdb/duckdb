@@ -426,11 +426,13 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 
 unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count) {
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	if (owned_version_info) {
-		row_group->SetVersionInfo(owned_version_info);
+	if (HasUnloadedDeletes()) {
+		row_group->deletes_pointers = deletes_pointers;
+		row_group->deletes_is_loaded = false;
+	} else {
+		row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
+		row_group->deletes_is_loaded = true;
 	}
-	row_group->deletes_pointers = deletes_pointers;
-	row_group->deletes_is_loaded = deletes_is_loaded.load();
 	row_group->columns.resize(new_column_count);
 	if (is_loaded) {
 		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
