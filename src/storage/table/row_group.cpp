@@ -1345,7 +1345,7 @@ bool RowGroup::CanReuseMetadata(RowGroupWriter &writer) const {
 
 bool RowGroup::HasUnchangedColumns() const {
 	for (idx_t c = 0; c < columns.size(); c++) {
-		if (is_loaded && !is_loaded[c]) {
+		if (!ColumnIsLoaded(c)) {
 			return true;
 		}
 		if (!columns[c]->HasAnyChanges()) {
@@ -1421,7 +1421,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		bool column_has_changes = true;
 		if (partial_reuse) {
-			if (is_loaded && !is_loaded[column_idx]) {
+			if (!ColumnIsLoaded(column_idx)) {
 				column_has_changes = false;
 			} else if (!columns[column_idx]->HasAnyChanges()) {
 				column_has_changes = false;
@@ -1434,7 +1434,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 			result.states.push_back(nullptr);
 			result.keep_column_loaded.push_back(true);
 			// carry forward existing column data and statistics
-			if (is_loaded && !is_loaded[column_idx]) {
+			if (!ColumnIsLoaded(column_idx)) {
 				result_row_group->columns[column_idx] = nullptr;
 				result_row_group->is_loaded[column_idx] = false;
 				// column not loaded - stats will be merged from previous table stats during Checkpoint
@@ -1535,7 +1535,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 			bool is_reused = has_reuse && write_data.reuse_column[column_idx];
 			if (is_reused) {
-				if (is_loaded && !is_loaded[column_idx] &&
+				if (!ColumnIsLoaded(column_idx) &&
 				    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
 					writer.SetHasUnloadedColumn(column_idx);
 					continue;
@@ -1792,7 +1792,7 @@ PartitionStatistics RowGroup::GetPartitionStats(SegmentNode<RowGroup> &row_group
 void RowGroup::GetColumnSegmentInfo(const QueryContext &context, idx_t row_group_index,
                                     vector<ColumnSegmentInfo> &result, ColumnSegmentInfoScanType scan_type) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
-		if (scan_type == ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS && is_loaded && !is_loaded[col_idx]) {
+		if (scan_type == ColumnSegmentInfoScanType::ONLY_LOADED_SEGMENTS && !ColumnIsLoaded(col_idx)) {
 			// column is not loaded - skip it
 			continue;
 		}
@@ -1843,7 +1843,7 @@ idx_t RowGroup::Delete(TransactionData transaction, DuckTableEntry &table_entry,
 void RowGroup::Verify() {
 #ifdef DEBUG
 	for (idx_t c = 0; c < columns.size(); c++) {
-		if (is_loaded && !is_loaded[c]) {
+		if (!ColumnIsLoaded(c)) {
 			continue;
 		}
 		if (columns[c]) {
