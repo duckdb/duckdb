@@ -18,8 +18,6 @@ install(
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-add_extension_definitions()
-
 configure_file(
   generated_extension_headers.hpp.in
   "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand")

@@ -815,6 +815,11 @@ endfunction()
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
+# Must run before add_subdirectory(src) / add_subdirectory(extension) so that DUCKDB_EXTENSION_<NAME>_LINKED is defined
+# for the core files. Important for e.g. DUCKDB_EXTENSION_JEMALLOC_LINKED otherwise allocator.cpp falls back to glibc
+# malloc for all targets, including extensions.
+add_extension_definitions()
+
 if(PREBUILT_BINARY)
   message("Using pre-built static library from file ${PREBUILT_BINARY}")
   add_library(duckdb_static STATIC IMPORTED GLOBAL)
