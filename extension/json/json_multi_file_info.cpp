@@ -517,13 +517,12 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
-		auto strings = FlatVector::GetDataMutable<string_t>(output.data[0]);
-		auto &validity = FlatVector::ValidityMutable(output.data[0]);
+		auto strings = FlatVector::Writer<string_t>(output.data[0], count);
 		for (idx_t i = 0; i < count; i++) {
 			if (objects[i]) {
-				strings[i] = string_t(units[i].pointer, units[i].size);
+				strings.WriteStringRef(string_t(units[i].pointer, units[i].size));
 			} else {
-				validity.SetInvalid(i);
+				strings.WriteNull();
 			}
 		}
 	}

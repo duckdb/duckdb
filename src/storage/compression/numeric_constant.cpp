@@ -81,6 +81,7 @@ void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto data = FlatVector::GetDataMutable<T>(result);
 	data[0] = NumericStats::GetMin<T>(nstats);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(result, count_t(scan_count));
 }
 
 //===--------------------------------------------------------------------===//

@@ -390,7 +390,11 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), count);
+	Flatten();
+}
+
+void Vector::Flatten() const {
+	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -404,14 +408,18 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	ToUnifiedFormat(format);
+}
+
+void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
 		// FSST/SEQUENCE/SHREDDED: flatten first so the buffer can provide unified format
-		Flatten(count);
+		Flatten();
 	}
-	Buffer().ToUnifiedFormat(count, format);
+	Buffer().ToUnifiedFormat(format);
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
@@ -835,7 +843,14 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
+void Vector::Verify(idx_t) const {
+	Verify();
+}
+
 void Vector::Verify() const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
@@ -843,14 +858,13 @@ void Vector::Verify() const {
 }
 
 void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
 	buffer->Verify(GetType(), sel, count);
-}
-
-void Vector::Verify(idx_t count) const {
-	Verify();
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
@@ -891,7 +905,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	} else {
 		vector.Dictionary(reusable_dict, original_sel, count);
 	}
-	vector.Verify(count);
+	vector.Verify();
 }
 
 void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {

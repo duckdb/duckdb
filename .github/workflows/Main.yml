@@ -122,6 +122,11 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            capi:
+              - src/include/duckdb.h
+              - src/common/types.cpp
+              - src/include/duckdb/common/types.hpp
+              - src/function/table/system/test_all_types.cpp
             julia:
               - tools/juliapkg/**
 
@@ -255,10 +260,6 @@ jobs:
             echo "linux_musl_cli_matrix=$linux_musl_cli_matrix"
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
-
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(steps.config.outputs.save_cache) }}
 
       - name: Install tools
         timeout-minutes: 10
@@ -1383,6 +1384,18 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
+
+    - name: test/configs/internal_vector_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_serialization.json ./build/release/test/unittest
+
+    - name: test/configs/internal_vector_verification.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_verification.json ./build/release/test/unittest
 
     - name: test/configs/force_external.json
       if: success() || failure()

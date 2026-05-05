@@ -449,16 +449,16 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
 	auto &dictionary_addresses = *dict_state.dictionary_addresses;
-	auto dict_addresses = FlatVector::GetDataMutable<uintptr_t>(dictionary_addresses);
+	auto dict_addresses = FlatVector::ScatterWriter<uintptr_t>(dictionary_addresses);
 	for (idx_t i = 0; i < unique_count; i++) {
 		auto dict_idx = unique_entries.get_index(i);
 		dict_addresses[dict_idx] = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
 	}
 	// now set up the addresses for the aggregates
-	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
+	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
-		result_addresses[i] = dict_addresses[dict_idx];
+		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
 
 	// finally process the aggregates
@@ -499,10 +499,10 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	}
 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
-	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
+	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, payload.size());
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	for (idx_t i = 0; i < payload.size(); i++) {
-		result_addresses[i] = aggregate_address;
+		result_addresses.WriteValue(aggregate_address);
 	}
 
 	// process the aggregates
@@ -685,8 +685,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		hll.Update(group_hashes_v, group_hashes_v, groups.size());
 	}
 
-	group_hashes_v.Flatten(chunk_size);
-	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);
 
 	addresses_v.Flatten(chunk_size);
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
@@ -720,7 +719,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	// So, by doing the lookups here, we better amortize cache misses.
 	idx_t occupied_count = 0;
 	for (idx_t r = 0; r < chunk_size; r++) {
-		const auto &hash = hashes[r];
+		const auto &hash = hashes[r].GetValue();
 		auto &ht_offset = ht_offsets[r];
 		ht_offset = ApplyBitMask(hash);
 		occupied_count += entries[ht_offset].IsOccupied(); // Lookup

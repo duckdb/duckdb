@@ -1154,7 +1154,7 @@ void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, Colum
 	lstate.current_chunk_state.properties = state.scan_state.properties;
 	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
 	lstate.current_row_index = row_index;
-	result.Verify();
+	result.Verify(state.scan_state.db);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
@@ -1175,7 +1175,7 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	auto &segment = *segments[segment_index];
 	state.current_chunk_state.properties = state.properties;
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
-	result.Verify();
+	result.Verify(state.db);
 	return true;
 }
 
@@ -1207,7 +1207,7 @@ bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, Data
 	auto &segment = *segments[segment_index];
 	state.current_chunk_state.properties = state.properties;
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
-	result.Verify();
+	result.Verify(state.db);
 	return true;
 }
 
