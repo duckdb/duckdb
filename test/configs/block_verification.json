@@ -8,7 +8,9 @@
     {
       "reason": "Block verification loads all columns, which conflicts with only_loaded_segments checks",
       "paths": [
-        "test/sql/storage/metadata/partial_column_metadata_reuse.test"
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
       ]
     }
   ]
