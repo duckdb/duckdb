@@ -42,7 +42,7 @@ string LoadInfo::ToString() const {
 		}
 	}
 	if (!alias.empty()) {
-		result += " AS %s", SQLIdentifier(alias);
+		result += " AS " + SQLIdentifier(alias);
 	}
 
 	result += ";";

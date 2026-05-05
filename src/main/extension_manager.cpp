@@ -34,6 +34,7 @@ void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
 		callback->OnExtensionLoadFail(db, extension_name, error);
 	}
 	if (!alias.empty()) {
+		load_lock.unlock();
 		ExtensionManager::Get(db).RemoveExtensionInfo(alias);
 	}
 	DUCKDB_LOG_INFO(db, "Failed to load extension '%s': %s", extension_name, error.Message());
