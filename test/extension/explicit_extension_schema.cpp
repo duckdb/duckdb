@@ -14,7 +14,6 @@ static void LoadableExtensionFunInit(ExtensionLoader &loader) {
 
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(explicit_extension_schema, loader) {
-	auto &db = loader.GetDatabaseInstance();
 	// set the schema for the extension
 	loader.SetExtensionSchema("explicit_schema");
 	LoadableExtensionFunInit(loader);
