@@ -1,0 +1,10 @@
+# name: benchmark/micro/zonemaps/append_numeric_stats_tinyint.benchmark
+# description: Benchmark SQL append while computing TINYINT zonemap statistics
+# group: [zonemaps]
+
+template benchmark/micro/zonemaps/append_numeric_stats.benchmark.in
+FILE_PATH=benchmark/micro/zonemaps/append_numeric_stats_tinyint.benchmark
+DESCRIPTION=Benchmark SQL append while computing TINYINT zonemap statistics
+TYPE_NAME=TINYINT
+TYPE=TINYINT
+VALUE_MODULUS=100

@@ -1,0 +1,24 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [zonemaps]
+#
+# VALUE_MODULUS is the repeat period for the row values. It needs to fit in the physical type, but doesn't need to match it.
+
+argument rows 50_000_000
+
+name Append ${TYPE_NAME} Zonemap Stats
+group zonemaps
+subgroup append_numeric_stats
+storage transient
+
+load
+SET threads=1;
+CREATE TABLE source AS SELECT ((i % ${VALUE_MODULUS})::${TYPE}) AS value FROM range(${rows}) tbl(i);
+CREATE TABLE target(value ${TYPE});
+
+run
+INSERT INTO target SELECT value FROM source;
+
+cleanup
+DROP TABLE target;
+CREATE TABLE target(value ${TYPE});
