@@ -41,6 +41,9 @@ vector<idx_t> PerColumnMetadataBlocks::GetBlocksForColumn(idx_t col_idx) const {
 }
 
 void PerColumnMetadataBlocks::AddColumn(idx_t col_idx, const vector<idx_t> &blocks) {
+	if (blocks.empty()) {
+		return;
+	}
 	PerColumnMetadataBlock marker;
 	marker.is_column_index = true;
 	marker.index = col_idx;

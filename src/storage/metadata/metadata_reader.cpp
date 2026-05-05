@@ -57,6 +57,9 @@ vector<MetaBlockPointer> MetadataReader::GetRemainingBlocks(MetaBlockPointer las
 	vector<MetaBlockPointer> result;
 	while (has_next_block) {
 		if (last_block.IsValid() && next_pointer.block_pointer == last_block.block_pointer) {
+			if (next_pointer.offset != last_block.offset) {
+				result.push_back(next_pointer);
+			}
 			break;
 		}
 		result.push_back(next_pointer);
