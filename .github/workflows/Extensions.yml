@@ -294,6 +294,7 @@ jobs:
       - name: Build DuckDB
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
+          EXTENSION_CONFIGS: ../extension_config.cmake
           DUCKDB_EXTENSION_CONFIGS: ../extension_config.cmake
         with:
           working-directory: duckdb
