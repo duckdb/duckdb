@@ -426,13 +426,10 @@ bool RowGroup::InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> 
 
 unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count) {
 	auto row_group = make_uniq<RowGroup>(new_collection, this->count);
-	if (HasUnloadedDeletes()) {
-		row_group->deletes_pointers = deletes_pointers;
-		row_group->deletes_is_loaded = false;
-	} else {
-		row_group->SetVersionInfo(owned_version_info);
-		row_group->deletes_is_loaded = deletes_is_loaded.load();
-	}
+	row_group->deletes_pointers = deletes_pointers;
+	row_group->deletes_is_loaded = deletes_is_loaded.load();
+	row_group->owned_version_info = owned_version_info;
+	row_group->version_info = version_info.load();
 	row_group->columns.resize(new_column_count);
 	if (is_loaded) {
 		row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[new_column_count]);
@@ -913,7 +910,7 @@ optional_ptr<RowVersionManager> RowGroup::GetVersionInfo() {
 	if (!HasUnloadedDeletes()) {
 		return version_info;
 	}
-	// deletes are not loaded - reload
+	D_ASSERT(!deletes_pointers.empty());
 	auto root_delete = deletes_pointers[0];
 	auto loaded_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager());
 	SetVersionInfo(std::move(loaded_info));
@@ -1402,13 +1399,10 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
-	if (HasUnloadedDeletes()) {
-		result_row_group->deletes_pointers = deletes_pointers;
-		result_row_group->deletes_is_loaded = false;
-	} else {
-		result_row_group->SetVersionInfo(owned_version_info);
-		result_row_group->deletes_is_loaded = deletes_is_loaded.load();
-	}
+	result_row_group->deletes_pointers = deletes_pointers;
+	result_row_group->deletes_is_loaded = deletes_is_loaded.load();
+	result_row_group->owned_version_info = owned_version_info;
+	result_row_group->version_info = version_info.load();
 	// copy metadata pointers so checkpoint can access them for reused columns
 	result.existing_column_pointers = column_pointers;
 	result.has_per_column_metadata_blocks = has_per_column_metadata_blocks;
@@ -1503,7 +1497,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 			}
 			metadata_manager->ClearModifiedBlocks(column_pointers);
 			metadata_manager->ClearModifiedBlocks(metadata_block_pointers_to_be_cleared);
-			metadata_manager->ClearModifiedBlocks(deletes_pointers);
 
 			// remember metadata_blocks to avoid loading them on future checkpoints
 			has_metadata_blocks = row_group_pointer.has_metadata_blocks;
@@ -1619,9 +1612,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	extra_metadata_blocks = row_group_pointer.extra_metadata_blocks;
 	has_per_column_metadata_blocks = row_group_pointer.has_per_column_metadata_blocks;
 	per_column_metadata_blocks = row_group_pointer.per_column_metadata_blocks;
-	if (metadata_manager) {
-		deletes_pointers = row_group_pointer.deletes_pointers;
-	}
 
 	for (idx_t c = 0; c < columns.size(); c++) {
 		if (!write_data.keep_column_loaded[c]) {
