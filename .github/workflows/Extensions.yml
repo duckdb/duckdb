@@ -224,11 +224,11 @@ jobs:
     # TODO select correct container (based on toolchain) and runner.
     # runs-on: ${{ fromJSON(inputs.runners).runner_linux_arm64 }}
     runs-on: namespace-profile-linux-arm64
-    container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_main:20260505-8f894a64
+    container: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_aarch64_main:20260505-a13d95cf
 
     env:
       # VCPKG config
-      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      # VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       VCPKG_TARGET_TRIPLET: "arm64-linux-release" # ${{ matrix.vcpkg_target_triplet }}
       VCPKG_HOST_TRIPLET: "arm64-linux-release" # ${{ matrix.vcpkg_host_triplet }}
 
@@ -280,14 +280,16 @@ jobs:
           echo -e "\n# Injected Extension Config\n${EXTENSION_CONFIGS}" >> ./extension_config.cmake
           cat ./extension_config.cmake
 
-      - name: Build DuckDB
+      - name: Build
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
-          EXTENSION_CONFIGS: ../extension_config.cmake
-          DUCKDB_EXTENSION_CONFIGS: ../extension_config.cmake
+          EXTENSION_CONFIGS: ./extension_config.cmake
         with:
-          working-directory: duckdb
+          # TODO use inputs.build-type in build and test command
           build: make release
+          test: |
+            ./duckdb/build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+            make test_release
           # TODO
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
           # vcpkg-commit: ${{ needs.prepare.outputs.vcpkg_commit }}
@@ -295,11 +297,10 @@ jobs:
           cache-suffix: extension-main-manylinux_2_28_aarch64
           # cache-suffix: ${{ matrix.distro }}_${{ matrix.arch }}${{ needs.prepare.outputs.image_suffix }}
           save-cache: ${{ inputs.save_cache }}
-
-      - name: Test DuckDB
-        working-directory: duckdb
-        run:
-          ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+          upload-name: main-extensions-${{ inputs.git_sha }}-extension-linux_arm64
+          # TODO
+          # ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
+          upload-path: build/release/repository/**/*.duckdb_extension
 
   deploy-repository:
     name: Deploy extensions
