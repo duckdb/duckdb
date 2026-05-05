@@ -17,7 +17,7 @@
 
 namespace duckdb {
 class Expression;
-class DynamicFilterData;
+struct DynamicFilterData;
 
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class LegacyDynamicFilter : public TableFilter {
