@@ -55,7 +55,6 @@ jobs:
          python-version: '3.12'
 
      - name: Install Ninja
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -91,10 +90,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -175,7 +171,6 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install
-      shell: bash
       run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
@@ -219,10 +214,7 @@ jobs:
     - uses: ./.github/actions/cleanup_runner
 
     - name: Install
-      shell: bash
-      run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq llvm libcurl4-openssl-dev
+      run: python3 scripts/ci/retry.py -- make toolsci
 
     - uses: ./.github/actions/ccache-action
 
@@ -334,7 +326,6 @@ jobs:
           path: duckdb-httpfs
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: actions/setup-python@v6
@@ -343,7 +334,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: python3 scripts/ci/retry.py -- pip install awscli
+        run: curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 https://rclone.org/install.sh | sudo bash
 
       - uses: ./.github/actions/ccache-action
 
@@ -402,11 +393,7 @@ jobs:
          python-version: '3.12'
 
      - name: Install
-       shell: bash
-       run: |
-        python3 scripts/ci/retry.py -- make toolsci
-        python3 scripts/ci/retry.py -- sudo apt-get install -y -qq libcurl4-openssl-dev
-        python3 scripts/ci/retry.py -- pip install requests
+       run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
 
@@ -470,7 +457,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -497,43 +483,6 @@ jobs:
         shell: bash
         run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
 
-  linux-debug-configs:
-    name: Tests different configurations with a debug build
-    runs-on: ubuntu-24.04
-    env:
-      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-    needs: linux-memory-leaks
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - name: Install
-        shell: bash
-        run: python3 scripts/ci/retry.py -- make toolsci
-
-      - uses: ./.github/actions/ccache-action
-
-      - uses: ./.github/actions/cleanup_runner
-
-      - uses: ./.github/actions/swap_space
-
-      - name: Build
-        id: build
-        shell: bash
-        env:
-          CORE_EXTENSIONS: "json;parquet;icu;tpch;tpcds"
-          GEN: ninja
-        run: make debug
-
-      - name: test/configs/enable_verification_for_debug.json
-        if: (success() || failure()) && steps.build.conclusion == 'success'
-        shell: bash
-        run: python3 scripts/ci/run_tests.py --test-config=test/configs/enable_verification_for_debug.json ./build/debug/test/unittest
-
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04
@@ -549,7 +498,6 @@ jobs:
           fetch-depth: 0
 
       - name: Install
-        shell: bash
         run: python3 scripts/ci/retry.py -- make toolsci
 
       - uses: ./.github/actions/ccache-action
@@ -666,7 +614,6 @@ jobs:
          fetch-depth: 0
 
      - name: Install
-       shell: bash
        run: python3 scripts/ci/retry.py -- make toolsci
 
      - uses: ./.github/actions/ccache-action
@@ -681,7 +628,7 @@ jobs:
 
      - name: Test
        shell: bash
-       run: build/relassert/test/unittest --test-config test/configs/hash_zero.json
+       run: python3 scripts/ci/run_tests.py --test-config=test/configs/hash_zero.json build/relassert/test/unittest
 
 
   bwc_build:
@@ -692,8 +639,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+      - name: Install
+        run: python3 scripts/ci/retry.py -- make toolsci
 
       - name: Setup ccache
         uses: ./.github/actions/ccache-action

@@ -2,9 +2,6 @@
 # description: Test COUNT operator with different vector types
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 foreach flatten false true
 
 query I nosort count_int

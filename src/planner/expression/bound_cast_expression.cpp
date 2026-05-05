@@ -76,6 +76,13 @@ static unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr,
 			parameter.SetReturnType(parameter.parameter_data->return_type);
 			return expr;
 		}
+		// If this occurrence's own return_type still matches parameter_data->return_type, the
+		// parameter was pinned by an inner cast on this same occurrence (e.g. CAST(CAST($1 AS A) AS B)).
+		// Add a regular cast on top instead of invalidating.
+		if (parameter.GetReturnType() == parameter.parameter_data->return_type) {
+			auto cast_function = cast_functions.GetCastFunction(parameter.GetReturnType(), target_type, get_input);
+			return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
+		}
 		// invalidate the type
 		parameter.parameter_data->return_type = LogicalType::INVALID;
 		parameter.SetReturnType(target_type);
@@ -150,6 +157,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 	switch (source_type.id()) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -169,6 +177,9 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 			return false;
 		case LogicalTypeId::TIMESTAMP_TZ:
 			return source_type.id() == LogicalTypeId::TIMESTAMP_TZ;
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return LogicalTypeId::TIMESTAMP_TZ <= source_type.id() &&
+			       source_type.id() <= LogicalTypeId::TIMESTAMP_TZ_NS;
 		default:
 			break;
 		}
@@ -191,6 +202,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return true;
 		default:
 			return false;

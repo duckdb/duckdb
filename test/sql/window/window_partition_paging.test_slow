@@ -20,7 +20,7 @@ statement ok
 PRAGMA memory_limit='1GB'
 
 statement ok
-PRAGMA verify_external
+SET debug_force_external=true;
 
 query II
 WITH new_table as (SELECT

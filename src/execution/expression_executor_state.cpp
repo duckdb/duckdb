@@ -34,7 +34,8 @@ bool ExpressionState::HasContext() {
 
 ClientContext &ExpressionState::GetContext() {
 	if (!HasContext()) {
-		throw BinderException("Cannot use %s in this context", (expr.Cast<BoundFunctionExpression>()).function.name);
+		throw BinderException("Cannot use %s in this context",
+		                      (expr.Cast<BoundFunctionExpression>()).function.GetName());
 	}
 	return root.executor->GetContext();
 }

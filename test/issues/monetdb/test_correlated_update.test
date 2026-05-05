@@ -3,9 +3,6 @@
 # group: [monetdb]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table t1284791b (id2 int, val2 varchar(255))
 
 statement ok

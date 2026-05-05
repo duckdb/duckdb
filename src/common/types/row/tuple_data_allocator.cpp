@@ -834,11 +834,11 @@ BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, con
 }
 
 data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinRowBlock(pin_state, part).Ptr() + part.row_block_offset;
+	return PinRowBlock(pin_state, part).GetDataMutable() + part.row_block_offset;
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinHeapBlock(pin_state, part).Ptr();
+	return PinHeapBlock(pin_state, part).GetDataMutable();
 }
 
 } // namespace duckdb

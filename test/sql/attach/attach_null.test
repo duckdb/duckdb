@@ -2,9 +2,6 @@
 # description: Tests NULL as an attach option
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 ATTACH '{TEST_DIR}/test_new_compression.db' AS db1 (TYPE NULL);
 ----

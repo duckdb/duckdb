@@ -4,6 +4,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -50,6 +51,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(ExecutionContext &context, DataCh
 		has_null += keys.size();
 	} else {
 		VectorOperations::Copy(keys.data[0], primary, keys.size(), 0, 0);
+		FlatVector::SetSize(primary, count_t(keys.size()));
 		// Count the NULLs so we can exclude them later
 		has_null += MergeNulls(primary, global_table.op.conditions);
 	}

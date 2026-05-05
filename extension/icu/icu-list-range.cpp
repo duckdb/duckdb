@@ -6,9 +6,8 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 
 namespace duckdb {
@@ -144,37 +143,24 @@ struct ICUListRange : public ICUDateFunc {
 				break;
 			}
 		}
-		auto result_data = FlatVector::Writer<list_entry_t>(result, args_size);
-		int64_t total_size = 0;
-		vector<int64_t> list_lengths(args_size, 0);
+		auto list_writer = FlatVector::Writer<VectorListType<timestamp_t>>(result, args_size);
 		for (idx_t i = 0; i < args_size; i++) {
 			if (!info.RowIsValid(i)) {
-				result_data.WriteNull(list_entry_t(NumericCast<uint64_t>(total_size), 0));
-			} else {
-				const auto length = info.ListLength(i, calendar);
-				list_lengths[i] = length;
-				result_data.WriteValue(list_entry_t(NumericCast<uint64_t>(total_size), NumericCast<uint64_t>(length)));
-				total_size += length;
+				list_writer.WriteNull();
+				continue;
 			}
-		}
+			const auto length = info.ListLength(i, calendar);
+			auto list = list_writer.WriteDynamicList();
 
-		// now construct the child vector of the list
-		ListVector::Reserve(result, total_size);
-		auto range_data = FlatVector::Writer<timestamp_t>(ListVector::GetChildMutable(result), total_size);
-		for (idx_t i = 0; i < args_size; i++) {
-			timestamp_t start_value = info.StartListValue(i);
+			timestamp_t range_value = info.StartListValue(i);
 			interval_t increment = info.ListIncrementValue(i);
-
-			timestamp_t range_value = start_value;
-			for (idx_t range_idx = 0; range_idx < NumericCast<idx_t>(list_lengths[i]); range_idx++) {
+			for (idx_t range_idx = 0; range_idx < NumericCast<idx_t>(length); range_idx++) {
 				if (range_idx > 0) {
 					info.Increment(range_value, increment, calendar);
 				}
-				range_data.WriteValue(range_value);
+				list.WriteElement().WriteValue(range_value);
 			}
 		}
-
-		ListVector::SetListSize(result, total_size);
 		result.SetVectorType(result_type);
 
 		result.Verify(args.size());

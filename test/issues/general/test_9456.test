@@ -20,9 +20,6 @@ insert into u values(null, 20);
 statement ok
 insert into t values(null, 21);
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT t0, t1, EXISTS (SELECT * FROM u WHERE u0 = t0 AND u1 < t1) FROM t ORDER BY t0, t1;
 ----

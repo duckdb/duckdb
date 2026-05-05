@@ -2,9 +2,6 @@
 # description: Test LATERAL joins with large arrays (inspired by #3593 but with a lateral join)
 # group: [lateral]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT total_seats
 FROM (

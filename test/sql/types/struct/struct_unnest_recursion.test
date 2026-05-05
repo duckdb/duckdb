@@ -2,9 +2,6 @@
 # description: Test struct unnest recursion
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 SELECT UNNEST ( ( '1,2,3,4,,6' , ( 1 ) ) ) , x x;
 ----

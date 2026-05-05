@@ -143,7 +143,7 @@ A keyword must appear in exactly one list. The build script validates this.
 After modifying `.gram` files or keyword lists, regenerate the inlined grammar files:
 
 ```bash
-./scripts/build_peg_grammar.sh
+./scripts/build_grammar.sh
 ```
 
 This script runs `extension/autocomplete/inline_grammar.py` twice:
@@ -170,7 +170,7 @@ Each grammar rule that produces a parse result needs a corresponding transformer
 Run the coverage checker to see which rules need transformers:
 
 ```bash
-python scripts/generate_peg_transformer.py
+python scripts/generate_transformer.py
 ```
 
 Output labels:
@@ -186,7 +186,7 @@ Output labels:
 Use `-s` to skip `[ FOUND ]` and `[ ENUM ]` rules for a cleaner view:
 
 ```bash
-python scripts/generate_peg_transformer.py -s
+python scripts/generate_transformer.py -s
 ```
 
 ### Generating Stubs
@@ -194,7 +194,7 @@ python scripts/generate_peg_transformer.py -s
 Use the `-g` flag to generate skeleton code for missing rules:
 
 ```bash
-python scripts/generate_peg_transformer.py -g
+python scripts/generate_transformer.py -g
 ```
 
 For each missing rule, this generates three pieces of code:

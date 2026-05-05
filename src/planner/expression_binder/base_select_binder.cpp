@@ -71,24 +71,28 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 }
 
 BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
-	if (op.children.empty()) {
-		throw InternalException("GROUPING requires at least one child");
-	}
 	if (node.groups.group_expressions.empty()) {
 		return BindResult(BinderException(op, "GROUPING statement cannot be used without groups"));
 	}
-	if (op.children.size() >= 64) {
-		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
-	}
 	vector<ProjectionIndex> group_indexes;
-	group_indexes.reserve(op.children.size());
-	for (auto &child : op.children) {
-		ExpressionBinder::QualifyColumnNames(binder, child);
-		auto idx = TryBindGroup(*child);
-		if (!idx.IsValid()) {
-			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
+	if (op.children.empty()) {
+		// No arguments provided - use all group columns
+		for (idx_t i = 0; i < node.groups.group_expressions.size(); i++) {
+			group_indexes.push_back(ProjectionIndex(i));
 		}
-		group_indexes.push_back(idx);
+	} else {
+		for (auto &child : op.children) {
+			ExpressionBinder::QualifyColumnNames(binder, child);
+			auto idx = TryBindGroup(*child);
+			if (!idx.IsValid()) {
+				return BindResult(
+				    BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
+			}
+			group_indexes.push_back(idx);
+		}
+	}
+	if (group_indexes.size() >= 64) {
+		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
 	}
 	ProjectionIndex col_idx(node.grouping_functions.size());
 	node.grouping_functions.push_back(std::move(group_indexes));

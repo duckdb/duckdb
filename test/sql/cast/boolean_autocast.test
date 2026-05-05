@@ -2,9 +2,6 @@
 # description: Test boolean auto casts
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # boolean <-> integer
 query T
 SELECT true=1;

@@ -2,9 +2,6 @@
 # description: Test bug from issue 10273
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query IIII
 FROM read_csv('{DATA_DIR}/csv/inconsistencies/inconsistent_columns_3.csv')
 ----

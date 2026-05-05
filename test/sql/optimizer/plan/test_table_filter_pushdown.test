@@ -3,9 +3,6 @@
 # group: [plan]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers AS SELECT i AS i, i AS j FROM range(0, 100) tbl(i)
 
 query I

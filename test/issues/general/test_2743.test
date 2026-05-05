@@ -2,9 +2,6 @@
 # description: Issue 2743: RuntimeError: Not implemented Error: UNIONS are not supported in recursive CTEs yet
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 WITH RECURSIVE t(x, y) AS
 (

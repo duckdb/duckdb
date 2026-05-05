@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # issue #7727
 query T
 SELECT TRY_CAST('{{P{P{{{{ASD{AS{D{' AS JSON);

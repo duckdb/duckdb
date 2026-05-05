@@ -8,10 +8,9 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO
 
-PULL_REQUEST_JOBS = [
-    "linux-debug",
-    "linux-debug-tests",
-    "regression",
+COMMON_JOBS = [
+    "linux-relassert",
+    "linux-relassert-tests",
     "tidy-check",
     "extensions",
     "wasm-eh",
@@ -19,7 +18,6 @@ PULL_REQUEST_JOBS = [
     "linux-release-tests",
     "linux-release-cli",
     "linux-musl-release-cli",
-    "upload-libduckdb-src",
     "swift",
     "windows",
     "no-string-inline",
@@ -29,21 +27,25 @@ PULL_REQUEST_JOBS = [
     "static-libs-linux",
 ]
 
+PULL_REQUEST_ONLY_JOBS = [
+    "regression",
+]
+
+PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
+
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    "check-clangd-tidy",
     "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
 ]
 
-NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
+NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
-    "linux-debug",
+    "linux-relassert",
     "linux-release",
     "linux-release-tests",
-    "check-clangd-tidy",
     "tidy-check",
 ]
 
@@ -55,7 +57,7 @@ RELEASE_JOBS = [
 ]
 
 SKIP_TESTS_JOBS = {
-    "linux-debug-tests",
+    "linux-relassert-tests",
     "regression",
     "swift",
     "linux-configs",
@@ -98,12 +100,12 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
         selection_input.repository != "duckdb/duckdb"
         or selection_input.ref_name == "main"
         or selection_input.ref_name == "v1.5-variegata"
-        or (selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"))
+        or selection_input.event_name == "merge_group"
     )
 
 
 def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
-    if selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"):
+    if selection_input.event_name == "merge_group":
         selected_jobs = MERGE_GROUP_JOBS.copy()
     elif selection_input.ref_name == "main":
         selected_jobs = NIGHTLY_JOBS.copy()

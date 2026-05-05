@@ -221,7 +221,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 			result_data[result_idx].offset += offset;
 		}
 
-		result.Verify(sel, count);
+		result.Verify();
 		break;
 	}
 	default:

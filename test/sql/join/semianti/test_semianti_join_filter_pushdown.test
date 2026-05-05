@@ -3,9 +3,6 @@
 # group: [semianti]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE left_table (id INTEGER, val INTEGER, amount INTEGER);
 
 statement ok

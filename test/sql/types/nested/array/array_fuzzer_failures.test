@@ -1,9 +1,6 @@
 # name: test/sql/types/nested/array/array_fuzzer_failures.test
 # group: [array]
 
-statement ok
-PRAGMA enable_verification;
-
 # Case 1 #1420
 statement ok
 create table tbl(c8 UTINYINT);

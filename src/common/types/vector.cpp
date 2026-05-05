@@ -86,13 +86,6 @@ Vector::Vector(const Value &value, count_t count) : type(value.type()) {
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
 }
 
-bool Vector::HasSize() const {
-	if (!buffer) {
-		return true;
-	}
-	return buffer->HasSize();
-}
-
 idx_t Vector::size() const {
 	if (!buffer) {
 		return 0;
@@ -184,34 +177,43 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && count == size()) {
+		// no-op: no selection vector, and the requested count matches the current size
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->Slice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && count == size()) {
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!HasSize() || dictionary_size != size()) {
+	if (dictionary_size != size()) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Slice(sel, count);
 }
 
 void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!dict.HasSize() || dict.size() != dictionary_size) {
+	if (dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Reference(dict);
@@ -269,9 +271,6 @@ void Vector::AddHeapReference(const Vector &other) {
 }
 
 void Vector::Reserve(idx_t to_reserve) {
-	if (!HasSize()) {
-		throw InternalException("Vector::Reserve can only be called on vectors with a size");
-	}
 	Resize(buffer ? buffer->Capacity() : 0, to_reserve);
 }
 
@@ -391,7 +390,11 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), count);
+	Flatten();
+}
+
+void Vector::Flatten() const {
+	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -444,7 +447,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 }
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
-	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
+	this->buffer = make_buffer<SequenceBuffer>(start, increment, count_t(count));
 }
 
 void Vector::Shred(Vector &shredded_data, idx_t capacity) {
@@ -455,7 +458,7 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, count_t(capacity));
 }
 
 // FIXME: This should ideally be const
@@ -836,36 +839,22 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
-void Vector::Verify(idx_t count) const {
-	Verify(*FlatVector::IncrementalSelectionVector(), count);
-}
-
-void Vector::Verify(const SelectionVector &sel, idx_t count) const {
-#ifdef DEBUG
+void Vector::Verify() const {
 	if (!buffer) {
 		return;
 	}
-	Buffer().Verify(GetType(), sel, count);
-	// type-specific verification that requires access to the full Vector
-	// these functions may call ToUnifiedFormat which mutates the vector, hence the const_cast
-	auto &self = const_cast<Vector &>(*this);
-	if (GetType().id() == LogicalTypeId::MAP) {
-		auto valid_check = MapVector::CheckMapValidity(self, count, sel);
-		D_ASSERT(valid_check == MapInvalidReason::VALID);
+	buffer->Verify(GetType());
+}
+
+void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (!buffer) {
+		return;
 	}
-	if (GetType().id() == LogicalTypeId::UNION) {
-		auto valid_check = UnionVector::CheckUnionValidity(self, count, sel);
-		if (valid_check != UnionInvalidReason::VALID) {
-			throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
-		}
-	}
-	// FIXME: re-add variant verification once VariantUtils::Verify handles shredded variants correctly
-	// if (GetType().id() == LogicalTypeId::VARIANT) {
-	// 	if (!VariantUtils::Verify(self, sel, count)) {
-	// 		throw InternalException("Variant not valid");
-	// 	}
-	// }
-#endif
+	buffer->Verify(GetType(), sel, count);
+}
+
+void Vector::Verify(idx_t count) const {
+	Verify();
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {

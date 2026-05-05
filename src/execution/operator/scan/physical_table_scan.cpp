@@ -411,6 +411,10 @@ bool PhysicalTableScan::ParallelSource() const {
 	return true;
 }
 
+TableFunctionParallelism PhysicalTableScan::SourceParallelism() const {
+	return function.parallelism;
+}
+
 InsertionOrderPreservingMap<string> PhysicalTableScan::ExtraSourceParams(GlobalSourceState &gstate_p,
                                                                          LocalSourceState &lstate) const {
 	if (!function.dynamic_to_string) {

@@ -2,9 +2,6 @@
 # description: Tests list_resize for large padding counts.
 # group: [list]
 
-statement ok
-PRAGMA enable_verification;
-
 # Issue 12816
 
 statement ok

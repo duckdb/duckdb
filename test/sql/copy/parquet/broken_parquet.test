@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/missingmagicatfront.parquet')
 ----

@@ -1,4 +1,5 @@
 #include "duckdb/common/type_visitor.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -174,13 +175,13 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk &args, ExpressionState &state,
                                   Vector &result) {
 	if (expr.GetReturnType() != LogicalType::BOOLEAN) {
-		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.name,
+		throw InvalidInputException("Function %s only has a select callback but returns %s", expr.function.GetName(),
 		                            expr.GetReturnType().ToString());
 	}
 	if (expr.function.GetNullHandling() == FunctionNullHandling::SPECIAL_HANDLING) {
 		throw InvalidInputException("Function %s only has a select callback with SPECIAL_HANDLING but projected "
 		                            "execution requires a scalar callback to produce NULL results",
-		                            expr.function.name);
+		                            expr.function.GetName());
 	}
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -236,8 +237,13 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 			}
 		}
 	}
-	arguments.SetCardinality(all_constant ? 1 : count);
-	arguments.Verify(context ? context->db : nullptr);
+	const idx_t arg_count = all_constant ? 1 : count;
+	arguments.SetCardinality(arg_count);
+	if (!all_constant) {
+		// when all-constant we execute the function on a single row but keep argument vectors at outer size
+		// (the buffers are shared with the input chunk so we cannot resize them) - skip verification in that case
+		arguments.Verify(context ? context->db : nullptr);
+	}
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
@@ -250,17 +256,16 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		D_ASSERT(expr.function.HasFunctionCallback());
 	} else {
 		throw InternalException("Scalar function %s has neither an execution nor a select callback",
-		                        expr.function.name);
+		                        expr.function.GetName());
 	}
 	if (all_constant) {
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			throw InternalException(
-			    "Error while executing function %s - function must return a flat or constant vector for count = 1",
-			    expr.function.name);
+			result.Flatten(1);
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+	FlatVector::SetSize(result, count_t(count));
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.GetReturnType());

@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE planes(tailnum VARCHAR, "year" INTEGER, "type" VARCHAR, manufacturer VARCHAR, model VARCHAR, engines INTEGER, seats INTEGER, speed INTEGER, engine VARCHAR);
 
 statement ok

@@ -69,9 +69,12 @@ public:
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
 
-	//! Enable aggressive verification/testing of queries, should only be used in testing
-	DUCKDB_API void EnableQueryVerification();
-	DUCKDB_API void DisableQueryVerification();
+	[[deprecated("Query verification has been replaced by individual verification routines - this method does nothing "
+	             "anymore")]] DUCKDB_API void
+	EnableQueryVerification();
+	[[deprecated("Query verification has been replaced by individual verification routines - this method does nothing "
+	             "anymore")]] DUCKDB_API void
+	DisableQueryVerification();
 	//! Force parallel execution, even for smaller tables. Should only be used in testing.
 	DUCKDB_API void ForceParallelism();
 

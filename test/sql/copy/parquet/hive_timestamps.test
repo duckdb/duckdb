@@ -7,9 +7,6 @@ require parquet
 # requires notwindows for embedded spaces in the path
 require notwindows
 
-statement ok
-PRAGMA enable_verification
-
 set seed 0.8675309
 
 statement ok

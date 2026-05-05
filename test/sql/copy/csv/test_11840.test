@@ -2,9 +2,6 @@
 # description: Test CSV Sniffing detects correct typesfor issue 11840
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 FROM '{DATA_DIR}/csv/date_specificity.csv'
 ----

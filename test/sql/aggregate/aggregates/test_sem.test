@@ -2,9 +2,6 @@
 # description: Test SEM operator
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 #Corner cases
 statement error
 select sem()

@@ -2,8 +2,6 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/box_renderer.hpp"
-#include "duckdb/common/box_renderer_context.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/parser.hpp"

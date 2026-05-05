@@ -2,9 +2,6 @@
 # description: Test SQL pivot with transaction
 # group: [statement-preprocessor]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 PIVOT VALUES(1,2),(1,3) x(y,z) ON x USING FIRST(y) ORDER BY 1;
 ----

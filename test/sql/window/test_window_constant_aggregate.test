@@ -2,9 +2,6 @@
 # description: Test "constant" aggregation (single result for each partition)
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 # Mix of constant/non-constant aggregate (sum and lead over same OVER clause)
 query IIII
 SELECT part, id, sum(val) OVER(PARTITION BY part ORDER BY id), lead(val) OVER(PARTITION BY part ORDER BY id)

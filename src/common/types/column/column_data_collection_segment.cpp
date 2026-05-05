@@ -188,6 +188,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 			FlatVector::SetData(result, base_ptr, count_t(vdata.count));
 		}
 		FlatVector::ValidityMutable(result).Initialize(validity_data, STANDARD_VECTOR_SIZE);
+		FlatVector::SetSize(result, count_t(vdata.count));
 		return vdata.count;
 	}
 
@@ -220,6 +221,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}
+	FlatVector::SetSize(result, count_t(vector_count));
 	return vector_count;
 }
 
@@ -229,6 +231,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto internal_type = vector_type.InternalType();
 	auto &vdata = GetVectorData(vector_index);
 	if (vdata.count == 0) {
+		FlatVector::SetSize(result, 0);
 		return 0;
 	}
 	auto vcount = ReadVectorInternal(state, vector_index, result);

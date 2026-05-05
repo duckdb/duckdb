@@ -754,6 +754,13 @@ public:
 			sink.hash_table->MergePrefixRangeBuildState(*prefix_range_state);
 		}
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
+
+		// chains are final; materialize dict_arrays and overwrite NEXT_PTR with the dict index
+		if (sink.hash_table->CanUseDictionaryEmission(sink.op, sink.external,
+		                                              sink.op.children[0].get().estimated_cardinality)) {
+			sink.hash_table->BuildDictionaryArrays(sink.op);
+		}
+
 		sink.hash_table->finalized = true;
 	}
 

@@ -3,10 +3,9 @@
 
 namespace duckdb {
 
-SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, idx_t count_p)
-    : VectorBuffer(VectorType::SEQUENCE_VECTOR, VectorBufferType::SEQUENCE_BUFFER), start(start_p),
+SequenceBuffer::SequenceBuffer(int64_t start_p, int64_t increment_p, count_t count_p)
+    : VectorBuffer(VectorType::SEQUENCE_VECTOR, VectorBufferType::SEQUENCE_BUFFER, count_p), start(start_p),
       increment(increment_p) {
-	this->v_size = count_p;
 }
 
 idx_t SequenceBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -17,13 +16,6 @@ idx_t SequenceBuffer::GetAllocationSize() const {
 	idx_t size = VectorBuffer::GetAllocationSize();
 	size += sizeof(int64_t) * 3;
 	return size;
-}
-
-void SequenceBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
-	D_ASSERT(vector_type == VectorType::SEQUENCE_VECTOR);
 }
 
 string SequenceBuffer::ToString(const LogicalType &type, idx_t count) const {

@@ -7,9 +7,6 @@ SET default_null_order='nulls_first';
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 # we run this twice, once with multi threading and once without
 loop i 0 2
 

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/main/config.hpp"
@@ -229,10 +230,14 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	auto &allocator = Allocator::Get(context.client);
 	limit_chunk.Initialize(allocator, types);
 	ExpressionExecutor limit_executor(context.client, &expr);
-	auto input_size = input.size();
-	input.SetCardinality(1);
-	limit_executor.Execute(input, limit_chunk);
-	input.SetCardinality(input_size);
+	// only evaluate the expression on the first row of the input
+	DataChunk single_row_input;
+	single_row_input.InitializeEmpty(input.GetTypes());
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		ConstantVector::Reference(single_row_input.data[c], count_t(1), input.data[c], 0, input.size());
+	}
+	single_row_input.SetCardinality(1);
+	limit_executor.Execute(single_row_input, limit_chunk);
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
 }

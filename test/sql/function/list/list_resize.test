@@ -2,9 +2,6 @@
 # description: test for list_resize()
 # group: [list]
 
-statement ok
-PRAGMA enable_verification;
-
 query I
 SELECT list_resize([1, 2, 4], 2);
 ----

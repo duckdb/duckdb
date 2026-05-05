@@ -2,9 +2,6 @@
 # description: Test expressions in UNPIVOT
 # group: [pivot]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 unpivot (select 42 as col1, 'woot' as col2)
     on col1::VARCHAR, col2;

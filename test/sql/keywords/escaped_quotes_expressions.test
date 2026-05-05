@@ -3,9 +3,6 @@
 # group: [keywords]
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 CREATE SCHEMA "SCH""EMA";
 
 statement ok

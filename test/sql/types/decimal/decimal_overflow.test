@@ -2,9 +2,6 @@
 # description: Test overflow in various decimal computations
 # group: [decimal]
 
-statement ok
-PRAGMA enable_verification
-
 # decimals can also overflow at the bigint boundary, because we don't perform automatic upcasting to hugeint
 statement error
 select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1));

@@ -124,6 +124,7 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
+		FlatVector::SetSize(shredded_vector, count_t(count));
 		result.Shred(shredded_vector, count);
 		return true;
 	}
@@ -284,6 +285,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
@@ -311,10 +313,11 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
 	                               VariantExtractPropagateStats);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetSignature().AddParameter(variant_type);
+	variant_extract.GetSignature().AddParameter(LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

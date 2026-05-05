@@ -15,12 +15,12 @@
 
 namespace duckdb {
 
-Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
-           vector<idx_t> projection_map, bool is_index_sort_p)
-    : context(context_p), key_layout(make_shared_ptr<TupleDataLayout>()),
+Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orders,
+           const vector<LogicalType> &input_types, vector<idx_t> projection_map, bool is_index_sort_p)
+    : client_context(client_context_p), key_layout(make_shared_ptr<TupleDataLayout>()),
       payload_layout(make_shared_ptr<TupleDataLayout>()), is_index_sort(is_index_sort_p) {
 	// Convert orders to a single "create_sort_key" expression (and corresponding "decode_sort_key")
-	FunctionBinder binder(context);
+	FunctionBinder binder(client_context);
 	vector<unique_ptr<Expression>> create_children;
 	vector<unique_ptr<Expression>> decode_children;
 	child_list_t<LogicalType> decode_child_list;
@@ -365,9 +365,7 @@ class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
 	    : sink(sink_p), merger(sort, std::move(sink.sorted_runs), sink.partition_size, sink.external, false),
-	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
-		// TODO: we want to pass "sort.is_index_sort" instead of just "false" here
-		//  so that we can do an approximate sort, but that causes issues in the ART
+	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)), registered(0) {
 	}
 
 public:
@@ -390,6 +388,8 @@ public:
 	//! Sorted run merger and associated global state
 	SortedRunMerger merger;
 	unique_ptr<GlobalSourceState> merger_global_state;
+	//! How many local states have been registered
+	atomic<idx_t> registered;
 
 	//! Materialized column data (optional)
 	unique_ptr<BatchedDataCollection> column_data;
@@ -401,6 +401,7 @@ public:
 	    : merger_local_state(gstate.merger.total_count == 0
 	                             ? nullptr
 	                             : gstate.merger.GetLocalSourceState(context, *gstate.merger_global_state)) {
+		gstate.registered++;
 	}
 
 public:
@@ -422,7 +423,14 @@ SourceResultType Sort::GetData(ExecutionContext &context, DataChunk &chunk, Oper
 	}
 	auto &lstate = input.local_state.Cast<SortLocalSourceState>();
 	OperatorSourceInput merger_input {*gstate.merger_global_state, *lstate.merger_local_state, input.interrupt_state};
-	return gstate.merger.GetData(context, chunk, merger_input);
+	const auto res = gstate.merger.GetData(context, chunk, merger_input);
+	if (res == SourceResultType::FINISHED) {
+		lstate.merger_local_state.reset();
+		if (--gstate.registered == 0) {
+			gstate.Destroy();
+		}
+	}
+	return res;
 }
 
 ProgressData Sort::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

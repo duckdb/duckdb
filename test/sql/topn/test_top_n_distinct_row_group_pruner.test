@@ -2,9 +2,6 @@
 # description: DISTINCT should invalidate row group pruning limits for persisted top-n plans
 # group: [topn]
 
-statement ok
-PRAGMA enable_verification
-
 load {TEST_DIR}/top_n_distinct_row_group_pruner_main.duckdb
 
 statement ok

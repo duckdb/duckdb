@@ -2,9 +2,6 @@
 # description: Test jaro and jaro_winkler function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query T
 select jaro_winkler_similarity('CRATE', 'TRACE')
 ----

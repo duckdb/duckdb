@@ -127,6 +127,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
 		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 		return all_converted;
 	}
@@ -134,6 +135,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	source.Flatten(count);
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	result_validity = FlatVector::Validity(source);
+	FlatVector::SetSize(result, count);
 	result.Verify(count);
 	return all_converted;
 }
@@ -143,6 +145,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	// first cast all child elements to varchar
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
+	FlatVector::SetSize(varchar_struct, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
 	auto &base_children = StructVector::GetEntries(source);
 

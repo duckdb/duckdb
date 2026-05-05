@@ -5,9 +5,6 @@
 # load the DB from disk
 load {TEST_DIR}/array_compression.db
 
-statement ok
-PRAGMA enable_verification
-
 foreach compression <compression>
 
 statement ok

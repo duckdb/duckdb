@@ -2,9 +2,6 @@
 # description: Smallint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # smallint casts
 statement ok
 CREATE TABLE smallints AS SELECT i::SMALLINT i FROM (VALUES (-32768), (0), (32767)) tbl(i)

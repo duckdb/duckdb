@@ -45,7 +45,7 @@ string JoinRef::ToString() const {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(using_columns[i]);
+			result += SQLIdentifier(using_columns[i]);
 		}
 		result += ")";
 	}

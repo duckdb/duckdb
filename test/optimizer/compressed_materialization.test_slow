@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-pragma enable_verification
-
-statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY
 
 # these functions live in the catalog, but cannot be called directly

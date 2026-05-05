@@ -28,7 +28,7 @@ string SetColumnCommentInfo::ToString() const {
 	D_ASSERT(catalog_entry_type == CatalogType::INVALID);
 	result += "COMMENT ON COLUMN ";
 	result += QualifierToString(catalog, schema, name);
-	result += "." + KeywordHelper::WriteOptionallyQuoted(column_name);
+	result += "." + SQLIdentifier(column_name);
 	result += " IS ";
 	result += comment_value.ToSQLString();
 	result += ";";

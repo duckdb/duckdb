@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # there was a bug with infinity handling in yyjson, therefore we have these tests
 # it has since been fixed
 query T

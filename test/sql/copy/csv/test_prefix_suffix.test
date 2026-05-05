@@ -2,9 +2,6 @@
 # description: Test prefix/suffix options
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 copy (select 42) to '{TEST_DIR}/file.csv' (prefix 'a');
 ----

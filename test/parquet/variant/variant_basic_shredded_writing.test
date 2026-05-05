@@ -16,10 +16,33 @@ create macro data() AS TABLE (
 	) t(a)
 )
 
+foreach disabled true false
+
 query I nosort expected_res
 select * from data();
 ----
 
+onlyif disabled=true
+statement ok
+COPY (
+	from data() t(a)
+) TO '{TEST_DIR}/shredded_struct.parquet' (
+	shredding {
+		a: 'NULL'
+	}
+)
+
+onlyif disabled=true
+statement ok
+COPY (
+	select a from data()
+) TO '{TEST_DIR}/shredded_list.parquet' (
+	shredding {
+		a: 'NULL'
+	}
+)
+
+onlyif disabled=false
 statement ok
 COPY (
 	from data() t(a)
@@ -29,10 +52,7 @@ COPY (
 	}
 )
 
-query I nosort expected_res
-select * from '{TEST_DIR}/shredded_struct.parquet';
-----
-
+onlyif disabled=false
 statement ok
 COPY (
 	select a from data()
@@ -43,5 +63,11 @@ COPY (
 )
 
 query I nosort expected_res
+select * from '{TEST_DIR}/shredded_struct.parquet';
+----
+
+query I nosort expected_res
 select * from '{TEST_DIR}/shredded_list.parquet';
 ----
+
+endloop

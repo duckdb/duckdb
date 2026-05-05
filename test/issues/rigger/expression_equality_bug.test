@@ -3,9 +3,6 @@
 # group: [rigger]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0(c0 BOOLEAN DEFAULT(1168904737), c1 BOOLEAN DEFAULT(DATE '1969-12-28'), c2 DATE, PRIMARY KEY(c1, c2, c0));
 
 statement error

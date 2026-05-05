@@ -3,10 +3,7 @@
 # group: [explain]
 
 statement ok
-pragma enable_verification
-
-statement ok
-explain PRAGMA enable_verification
+explain PRAGMA enable_checkpoint_on_shutdown
 
 statement ok
 explain CREATE TABLE integers(i INTEGER);

@@ -4,9 +4,6 @@
 load {TEST_DIR}/temp_array_storage.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t1(i INT, a INT[3]);
 
 statement ok

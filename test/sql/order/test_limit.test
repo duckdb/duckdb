@@ -3,9 +3,6 @@
 # group: [order]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -199,9 +196,6 @@ SELECT * FROM integers as int LIMIT (SELECT 'ab');
 # Test use subquery in limit and offset
 statement ok
 CREATE OR REPLACE TABLE t AS SELECT range x FROM range(10);
-
-statement ok
-PRAGMA enable_verification;
 
 query I
 SELECT * FROM t ORDER BY x;

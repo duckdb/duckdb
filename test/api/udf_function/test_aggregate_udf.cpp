@@ -11,7 +11,6 @@ TEST_CASE("Aggregate UDFs", "[coverage][.]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	SECTION("Testing a binary aggregate UDF using only template parameters") {
 		// using DOUBLEs

@@ -316,6 +316,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		return Value::TIMESTAMP(timestamp_value);
 	}
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_NS: {
 		timestamp_ns_t timestamp_value;
 		if (schema_ele.type_info == ParquetExtraTypeInfo::IMPALA_TIMESTAMP) {
@@ -340,6 +341,9 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				timestamp_value = ParquetTimestampUsToTimestampNs(val);
 				break;
 			}
+		}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
+			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value));
 		}
 		return Value::TIMESTAMPNS(timestamp_value);
 	}
@@ -437,6 +441,7 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
                                                    const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan,
                                                    optional_ptr<const ColumnChunk> column_chunk) {
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
@@ -450,10 +455,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UUID:
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
