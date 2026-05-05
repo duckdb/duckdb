@@ -1,0 +1,30 @@
+# name: benchmark/micro/parquet/row_group_skip_count.benchmark
+# description: count(*) with a filter-only column whose per-row-group stats prove the predicate always-true on most groups.
+# group: [parquet]
+
+name Row Group Skip Filter-Only Count
+group micro
+subgroup parquet
+
+require parquet
+
+storage persistent
+
+load
+COPY (
+  SELECT
+    (i % 20)::INTEGER AS id,
+    CASE WHEN i < 100000 AND (i % 2 = 0)
+         THEN 'a' || lpad(i::VARCHAR, 33, '0')
+         ELSE 'b' || lpad(i::VARCHAR, 33, '0')
+    END AS s
+  FROM range(100000000) t(i)
+) TO '${BENCHMARK_DIR}/row_group_skip_count.parquet' (
+  ROW_GROUP_SIZE 100000, COMPRESSION 'snappy', OVERWRITE_OR_IGNORE
+);
+
+run
+SELECT count(*) FROM '${BENCHMARK_DIR}/row_group_skip_count.parquet' WHERE s >= 'a800000000000000000000000000000000'
+
+result I
+99950000
