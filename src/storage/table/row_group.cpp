@@ -1491,22 +1491,18 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		if (metadata_manager) {
 			row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 
-			vector<MetaBlockPointer> extra_metadata_block_pointers;
+			vector<MetaBlockPointer> metadata_block_pointers_to_be_cleared;
 			if (write_data.has_per_column_metadata_blocks) {
 				write_data.existing_per_column_metadata_blocks.ForEachBlock(
-				    [&](idx_t block_id) { extra_metadata_block_pointers.emplace_back(block_id, 0); });
+				    [&](idx_t block_id) { metadata_block_pointers_to_be_cleared.emplace_back(block_id, 0); });
 			} else {
-				extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
+				metadata_block_pointers_to_be_cleared.reserve(write_data.existing_extra_metadata_blocks.size());
 				for (auto &block_pointer : write_data.existing_extra_metadata_blocks) {
-					extra_metadata_block_pointers.emplace_back(block_pointer, 0);
+					metadata_block_pointers_to_be_cleared.emplace_back(block_pointer, 0);
 				}
 			}
-			extra_metadata_block_pointers.reserve(write_data.existing_extra_metadata_blocks.size());
-			for (auto &block_pointer : write_data.existing_extra_metadata_blocks) {
-				extra_metadata_block_pointers.emplace_back(block_pointer, 0);
-			}
 			metadata_manager->ClearModifiedBlocks(column_pointers);
-			metadata_manager->ClearModifiedBlocks(extra_metadata_block_pointers);
+			metadata_manager->ClearModifiedBlocks(metadata_block_pointers_to_be_cleared);
 			metadata_manager->ClearModifiedBlocks(deletes_pointers);
 
 			// remember metadata_blocks to avoid loading them on future checkpoints
@@ -1603,10 +1599,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		row_group_pointer.per_column_metadata_blocks.AddColumn(column_idx, col_extra_blocks);
 	}
 
-	auto supports_per_column_writes = GetCollection().SupportsPerColumnWrites();
-	row_group_pointer.has_metadata_blocks = !supports_per_column_writes;
-	row_group_pointer.has_per_column_metadata_blocks = supports_per_column_writes;
-	if (row_group_pointer.has_metadata_blocks) {
+	if (GetCollection().SupportsPerColumnWrites()) {
+		row_group_pointer.has_per_column_metadata_blocks = true; // blocks already populated above
+	} else {
+		row_group_pointer.has_metadata_blocks = true;
 		row_group_pointer.per_column_metadata_blocks.ForEachBlock(
 		    [&](idx_t block_id) { row_group_pointer.extra_metadata_blocks.push_back(block_id); });
 		row_group_pointer.per_column_metadata_blocks = {};
@@ -1730,9 +1726,9 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.extra_metadata_blocks = deserializer.ReadPropertyWithDefault<vector<idx_t>>(105, "extra_metadata_blocks");
 	result.has_per_column_metadata_blocks =
 	    deserializer.ReadPropertyWithExplicitDefault<bool>(106, "has_per_column_metadata_blocks", false);
+	result.per_column_metadata_blocks = {
+	    deserializer.ReadPropertyWithDefault<vector<PerColumnMetadataBlock>>(107, "per_column_metadata_blocks")};
 	if (result.has_per_column_metadata_blocks) {
-		result.per_column_metadata_blocks = {
-		    deserializer.ReadPropertyWithDefault<vector<PerColumnMetadataBlock>>(107, "per_column_metadata_blocks")};
 		// per-column metadata supersedes legacy extra_metadata_blocks
 		result.has_metadata_blocks = false;
 		result.extra_metadata_blocks.clear();
