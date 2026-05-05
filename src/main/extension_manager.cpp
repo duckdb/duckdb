@@ -147,7 +147,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const ExtensionLoadO
 
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
-	auto result = make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, extension_name);
+	auto result = make_uniq<ExtensionActiveLoad>(db, *info, original_extension_name, options.alias);
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
