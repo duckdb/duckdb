@@ -83,6 +83,15 @@ void VariantColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Col
 	}
 }
 
+unique_ptr<BaseStatistics> VariantColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	auto result = ColumnReader::Stats(row_group_idx_p, columns);
+	if (result && index.IsPushdownExtract()) {
+		auto storage_index = StorageIndex::FromColumnIndex(index);
+		return result->PushdownExtract(storage_index.GetChildIndexes()[0]);
+	}
+	return result;
+}
+
 static LogicalType GetIntermediateGroupType(optional_ptr<ColumnReader> typed_value) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("value", LogicalType::BLOB);

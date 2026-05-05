@@ -34,6 +34,8 @@ public:
 
 	idx_t Read(ColumnReaderInput &input, Vector &result) override;
 
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) override;
+
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
 	uint64_t TotalCompressedSize() override;

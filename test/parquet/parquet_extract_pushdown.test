@@ -134,7 +134,7 @@ COPY (
 		({
 			'x': 'test',
 			'y': 'hello',
-			'z': 'world'
+			'z': 0::BIGINT
 		}::VARIANT)
 	)
 ) TO '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet';
@@ -222,3 +222,23 @@ SELECT v.z FROM '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' WHERE va
 50000
 
 endloop
+
+query I
+select stats(v.z) from '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' limit 1;
+----
+{'fully_shredded': {'stats': {'has_no_null': true, 'has_null': false, 'max': 990000, 'min': 0}, 'type': BIGINT}, 'has_no_null': true, 'has_null': true, 'shredding_state': SHREDDED}
+
+query I
+select stats(v.y::UINTEGER) from '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' where variant_typeof(v.x) == 'INT64' and v.x = 5 limit 1;
+----
+{'has_no_null': true, 'has_null': true}
+
+query II
+select stats(v.y::UINTEGER), stats(v.y) from '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' where variant_typeof(v.x) == 'INT64' and v.x = 5 limit 1;
+----
+{'has_no_null': true, 'has_null': true}	{'has_no_null': true, 'has_null': true, 'shredding_state': INCONSISTENT}
+
+query IIII
+select stats(v), stats(v.y::UINTEGER), stats(v.y), stats(v.z) from '{TEST_DIR}/variant_unshredded_filter_pushdown.parquet' where variant_typeof(v.x) == 'INT64' and v.x = 5 limit 1;
+----
+{'fully_shredded': {'z': {'stats': {'has_no_null': true, 'has_null': false, 'max': 990000, 'min': 0}, 'type': BIGINT}}, 'has_no_null': true, 'has_null': true, 'shredding_state': SHREDDED}	{'has_no_null': true, 'has_null': true}	{'has_no_null': true, 'has_null': true, 'shredding_state': INCONSISTENT}	{'fully_shredded': {'stats': {'has_no_null': true, 'has_null': false, 'max': 990000, 'min': 0}, 'type': BIGINT}, 'has_no_null': true, 'has_null': true, 'shredding_state': SHREDDED}
