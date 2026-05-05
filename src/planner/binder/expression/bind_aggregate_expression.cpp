@@ -159,7 +159,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		for (auto &order : aggr.order_bys->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
-				if (!const_expr.value.type().IsIntegral()) {
+				if (!const_expr.GetValue().type().IsIntegral()) {
 					auto order_by_non_integer_literal = Settings::Get<OrderByNonIntegerLiteralSetting>(context);
 					if (!order_by_non_integer_literal) {
 						throw BinderException(

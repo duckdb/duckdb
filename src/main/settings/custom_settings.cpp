@@ -11,6 +11,7 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -771,6 +772,31 @@ void EnableExternalAccessSetting::OnSet(SettingCallbackInfo &info, Value &input)
 void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (info.db) {
 		ExternalFileCache::Get(*info.db).SetEnabled(input.GetValue<bool>());
+	}
+}
+
+//===----------------------------------------------------------------------===//
+// External File Cache Block Sizes
+//===----------------------------------------------------------------------===//
+void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
+	}
+}
+
+void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	const auto bytes = input.GetValue<uint64_t>();
+	if (bytes == 0) {
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+	}
+	if (!IsPowerOfTwo(bytes)) {
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		                            bytes);
 	}
 }
 
