@@ -122,6 +122,11 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            capi:
+              - src/include/duckdb.h
+              - src/common/types.cpp
+              - src/include/duckdb/common/types.hpp
+              - src/function/table/system/test_all_types.cpp
             julia:
               - tools/juliapkg/**
 
