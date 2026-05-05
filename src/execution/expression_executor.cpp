@@ -212,8 +212,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
-	case ExpressionClass::BOUND_BETWEEN:
-		return InitializeState(expr.Cast<BoundBetweenExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
 		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
 	case ExpressionClass::BOUND_CAST:
@@ -224,8 +222,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
 		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
+	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		return InitializeState(expr.Cast<BoundFunctionExpression>(), state);
+		return InitializeState((BoundFunctionExpression &)expr, state); // NOLINT: use C-style cast
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -259,9 +258,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		    result.GetType(), expr.GetReturnType());
 	}
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_BETWEEN:
-		Execute(expr.Cast<BoundBetweenExpression>(), state, sel, count, result);
-		break;
 	case ExpressionClass::BOUND_REF:
 		Execute(expr.Cast<BoundReferenceExpression>(), state, sel, count, result);
 		break;
@@ -280,8 +276,9 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_CONSTANT:
 		Execute(expr.Cast<BoundConstantExpression>(), state, sel, count, result);
 		break;
+	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result);
+		Execute((BoundFunctionExpression &)expr, state, sel, count, result); // NOLINT: use C-style cast
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);
@@ -308,16 +305,13 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
-#ifndef DUCKDB_SMALLER_BINARY
-	case ExpressionClass::BOUND_BETWEEN:
-		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
-#endif
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
+	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel);
+		return Select((BoundFunctionExpression &)expr, state, sel, count, true_sel, false_sel); // NOLINT: c-style cast
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

@@ -1,11 +1,37 @@
-#include "duckdb/common/uhugeint.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/scalar/comparison_functions.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
 
 namespace duckdb {
+
+void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &between_expr = state.expr.Cast<BoundBetweenExpression>();
+	bool upper_inclusive = between_expr.UpperInclusive();
+	bool lower_inclusive = between_expr.LowerInclusive();
+
+	Vector intermediate1(LogicalType::BOOLEAN);
+	Vector intermediate2(LogicalType::BOOLEAN);
+
+	auto &input = args.data[0];
+	auto &lower = args.data[1];
+	auto &upper = args.data[2];
+	auto count = args.size();
+
+	if (upper_inclusive && lower_inclusive) {
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
+		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+	} else if (lower_inclusive) {
+		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
+		VectorOperations::LessThan(input, upper, intermediate2, count);
+	} else if (upper_inclusive) {
+		VectorOperations::GreaterThan(input, lower, intermediate1, count);
+		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
+	} else {
+		VectorOperations::GreaterThan(input, lower, intermediate1, count);
+		VectorOperations::LessThan(input, upper, intermediate2, count);
+	}
+	VectorOperations::And(intermediate1, intermediate2, result, count);
+}
 
 #ifndef DUCKDB_SMALLER_BINARY
 struct BothInclusiveBetweenOperator {
@@ -37,7 +63,7 @@ struct ExclusiveBetweenOperator {
 };
 
 template <class OP>
-static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, const SelectionVector *sel, idx_t count,
+static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -86,81 +112,44 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 		throw InvalidTypeException(input.GetType(), "Invalid type for BETWEEN");
 	}
 }
-#endif
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetweenExpression &expr,
-                                                                ExpressionExecutorState &root) {
-	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(expr.Input());
-	result->AddChild(expr.LowerBound());
-	result->AddChild(expr.UpperBound());
+idx_t BetweenSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel, SelectionVector *false_sel) {
+	auto &between_expr = state.expr.Cast<BoundBetweenExpression>();
+	bool upper_inclusive = between_expr.UpperInclusive();
+	bool lower_inclusive = between_expr.LowerInclusive();
 
-	result->Finalize();
-	return result;
-}
+	auto &input = args.data[0];
+	auto &lower = args.data[1];
+	auto &upper = args.data[2];
+	auto count = args.size();
 
-void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
-	// resolve the children
-	state->intermediate_chunk.Reset();
-
-	auto &input = state->intermediate_chunk.data[0];
-	auto &lower = state->intermediate_chunk.data[1];
-	auto &upper = state->intermediate_chunk.data[2];
-
-	Execute(expr.Input(), state->child_states[0].get(), sel, count, input);
-	Execute(expr.LowerBound(), state->child_states[1].get(), sel, count, lower);
-	Execute(expr.UpperBound(), state->child_states[2].get(), sel, count, upper);
-
-	Vector intermediate1(LogicalType::BOOLEAN);
-	Vector intermediate2(LogicalType::BOOLEAN);
-
-	if (expr.UpperInclusive() && expr.LowerInclusive()) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
-	} else if (expr.LowerInclusive()) {
-		VectorOperations::GreaterThanEquals(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
-	} else if (expr.UpperInclusive()) {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThanEquals(input, upper, intermediate2, count);
-	} else {
-		VectorOperations::GreaterThan(input, lower, intermediate1, count);
-		VectorOperations::LessThan(input, upper, intermediate2, count);
-	}
-	VectorOperations::And(intermediate1, intermediate2, result, count);
-}
-
-idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
-#ifdef DUCKDB_SMALLER_BINARY
-	throw InternalException("ExpressionExecutor::Select not available with DUCKDB_SMALLER_BINARY");
-#else
-	// resolve the children
-	// reset intermediate vectors to undo any type changes from previous calls
-	// (e.g. SetVectorType(CONSTANT) modifies the shared buffer)
-	state->intermediate_chunk.Reset();
-	Vector input(Vector::Ref(state->intermediate_chunk.data[0]));
-	Vector lower(Vector::Ref(state->intermediate_chunk.data[1]));
-	Vector upper(Vector::Ref(state->intermediate_chunk.data[2]));
-
-	Execute(expr.Input(), state->child_states[0].get(), sel, count, input);
-	Execute(expr.LowerBound(), state->child_states[1].get(), sel, count, lower);
-	Execute(expr.UpperBound(), state->child_states[2].get(), sel, count, upper);
-
-	if (expr.UpperInclusive() && expr.LowerInclusive()) {
-		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+	if (upper_inclusive && lower_inclusive) {
+		return BetweenLoopTypeSwitch<BothInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
 		                                                           false_sel);
-	} else if (expr.LowerInclusive()) {
-		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+	} else if (lower_inclusive) {
+		return BetweenLoopTypeSwitch<LowerInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
 		                                                            false_sel);
-	} else if (expr.UpperInclusive()) {
-		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel,
+	} else if (upper_inclusive) {
+		return BetweenLoopTypeSwitch<UpperInclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
 		                                                            false_sel);
 	} else {
-		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, sel, count, true_sel, false_sel);
+		return BetweenLoopTypeSwitch<ExclusiveBetweenOperator>(input, lower, upper, nullptr, count, true_sel,
+		                                                       false_sel);
 	}
+}
 #endif
+
+unique_ptr<FunctionData> BindBetweenFun(BindScalarFunctionInput &input) {
+	throw InvalidInputException("Between function cannot be called directly");
+}
+
+ScalarFunction BetweenFun::GetFunction() {
+	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
+	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
+#ifndef DUCKDB_SMALLER_BINARY
+	between_fun.SetSelectCallback(BetweenSelect);
+#endif
+	return between_fun;
 }
 
 } // namespace duckdb

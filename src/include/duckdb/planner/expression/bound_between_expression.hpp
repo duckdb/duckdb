@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
-class BoundBetweenExpression : public Expression {
+class BoundBetweenExpression : public BoundFunctionExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_BETWEEN;
 
@@ -39,22 +39,31 @@ public:
 	}
 
 	const Expression &Input() const {
-		return *input;
+		return *children[0];
 	}
 	const Expression &LowerBound() const {
-		return *lower;
+		return *children[1];
 	}
 	const Expression &UpperBound() const {
-		return *upper;
+		return *children[2];
+	}
+	const unique_ptr<Expression> &InputRef() const {
+		return children[0];
+	}
+	const unique_ptr<Expression> &LowerBoundRef() const {
+		return children[1];
+	}
+	const unique_ptr<Expression> &UpperBoundRef() const {
+		return children[2];
 	}
 	unique_ptr<Expression> &InputMutable() {
-		return input;
+		return children[0];
 	}
 	unique_ptr<Expression> &LowerBoundMutable() {
-		return lower;
+		return children[1];
 	}
 	unique_ptr<Expression> &UpperBoundMutable() {
-		return upper;
+		return children[2];
 	}
 	bool LowerInclusive() const {
 		return lower_inclusive;
@@ -64,12 +73,6 @@ public:
 	}
 
 private:
-	BoundBetweenExpression();
-
-private:
-	unique_ptr<Expression> input;
-	unique_ptr<Expression> lower;
-	unique_ptr<Expression> upper;
 	bool lower_inclusive;
 	bool upper_inclusive;
 };

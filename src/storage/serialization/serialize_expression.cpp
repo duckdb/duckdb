@@ -86,20 +86,20 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 
 void BoundBetweenExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", input);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", lower);
-	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", upper);
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", InputRef());
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", LowerBoundRef());
+	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", UpperBoundRef());
 	serializer.WritePropertyWithDefault<bool>(203, "lower_inclusive", lower_inclusive);
 	serializer.WritePropertyWithDefault<bool>(204, "upper_inclusive", upper_inclusive);
 }
 
 unique_ptr<Expression> BoundBetweenExpression::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<BoundBetweenExpression>(new BoundBetweenExpression());
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "input", result->input);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "lower", result->lower);
-	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "upper", result->upper);
-	deserializer.ReadPropertyWithDefault<bool>(203, "lower_inclusive", result->lower_inclusive);
-	deserializer.ReadPropertyWithDefault<bool>(204, "upper_inclusive", result->upper_inclusive);
+	auto input = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "input");
+	auto lower = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(201, "lower");
+	auto upper = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "upper");
+	auto lower_inclusive = deserializer.ReadPropertyWithDefault<bool>(203, "lower_inclusive");
+	auto upper_inclusive = deserializer.ReadPropertyWithDefault<bool>(204, "upper_inclusive");
+	auto result = duckdb::unique_ptr<BoundBetweenExpression>(new BoundBetweenExpression(std::move(input), std::move(lower), std::move(upper), lower_inclusive, upper_inclusive));
 	return std::move(result);
 }
 

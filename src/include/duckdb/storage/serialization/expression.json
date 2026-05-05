@@ -40,17 +40,20 @@
       {
         "id": 200,
         "name": "input",
-        "type": "Expression*"
+        "type": "Expression*",
+        "serialize_property": "InputRef()"
       },
       {
         "id": 201,
         "name": "lower",
-        "type": "Expression*"
+        "type": "Expression*",
+        "serialize_property": "LowerBoundRef()"
       },
       {
         "id": 202,
         "name": "upper",
-        "type": "Expression*"
+        "type": "Expression*",
+        "serialize_property": "UpperBoundRef()"
       },
       {
         "id": 203,
@@ -62,7 +65,8 @@
         "name": "upper_inclusive",
         "type": "bool"
       }
-    ]
+    ],
+    "constructor": ["input", "lower", "upper", "lower_inclusive", "upper_inclusive"]
   },
   {
     "class": "BoundCaseExpression",
