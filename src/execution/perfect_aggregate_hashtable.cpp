@@ -182,6 +182,9 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 		}
 		group_ids_ptr = group_ids_buf;
 	}
+	if (total_groups >= ClusteredAggr::MAX_GID_COUNT) {
+		return false;
+	}
 	if (!clustered_state.TryBuild(clustered, group_ids_ptr, count)) {
 		return false;
 	}

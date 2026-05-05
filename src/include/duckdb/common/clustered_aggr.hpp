@@ -19,11 +19,15 @@ class Vector;
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
 //! regular scatter path over input-order addresses.
 struct ClusteredAggr {
-	static constexpr idx_t MAX_GROUPS = 256;
-	static constexpr idx_t HASH_SLOTS = 8192;
-	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << 24;
-	static constexpr uint32_t GID_MASK = (uint32_t(1) << 24) - 1;
-	static constexpr idx_t POSITION_SHIFT = 24;
+	static constexpr idx_t MIN_AVG_RUNLENGTH = 3;
+	static constexpr idx_t LOG2_MAX_GROUPS = 5;
+	static constexpr idx_t MAX_GROUPS = 1 << LOG2_MAX_GROUPS;
+	static constexpr idx_t MAX_RUNS = 2 * STANDARD_VECTOR_SIZE / MIN_AVG_RUNLENGTH; 
+	static constexpr idx_t HASH_SLOTS = 1 << (LOG2_MAX_GROUPS + 7);
+	static constexpr idx_t FIRST_GROUP = ((MAX_RUNS - 1)  - MAX_GROUPS) / 2;
+	static constexpr idx_t POSITION_SHIFT = 32 - LOG2_MAX_GROUPS;
+	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << POSITION_SHIFT;
+	static constexpr uint32_t GID_MASK = uint32_t(MAX_GID_COUNT - 1);
 	static constexpr uint32_t INVALID_SLOT = uint32_t(-1);
 
 	struct GroupRun {
@@ -33,12 +37,13 @@ struct ClusteredAggr {
 		idx_t count;      //! number of tuples in this group
 	};
 
+	idx_t run_begin = 0;
 	idx_t n_group_runs = 0;
-	GroupRun group_runs[MAX_GROUPS];
+	GroupRun group_runs[MAX_RUNS];
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! On success fills group_runs[].sel/gid/count.
-	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE sel_t),
+	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE sel_t),
 	//! and encoded mini-hash slots mapping raw gids to active-group positions.
 	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
 
@@ -51,7 +56,7 @@ struct ClusteredAggr {
 	template <class GET_STATE>
 	void InitializeStates(GET_STATE &&get_state) {
 		for (idx_t r = 0; r < n_group_runs; r++) {
-			group_runs[r].state = get_state(group_runs[r].gid);
+			group_runs[run_begin + r].state = get_state(group_runs[run_begin + r].gid);
 		}
 	}
 

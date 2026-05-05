@@ -209,8 +209,7 @@ idx_t GroupedAggregateHashTable::Count() const {
 }
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {
-	// Keep small HTs clusterable; the first growth jumps past this.
-	return ClusteredAggr::MAX_GROUPS;
+	return STANDARD_VECTOR_SIZE * 2ULL;
 }
 
 idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
@@ -295,7 +294,6 @@ idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
-	D_ASSERT(size >= ClusteredAggr::MAX_GROUPS);
 	D_ASSERT(IsPowerOfTwo(size));
 	if (Count() != 0 && size < capacity) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
@@ -550,6 +548,9 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	if (skip_lookups || !ht_offsets_valid) {
 		return false;
 	}
+	if (capacity >= ClusteredAggr::MAX_GID_COUNT) {
+		return false;
+	}
 	ClusteredAggr clustered;
 	if (!clustered_state.TryBuild(clustered, FlatVector::GetData<uint64_t>(state.ht_offsets), payload.size())) {
 		return false;
@@ -693,8 +694,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	const auto chunk_size = groups.size();
 	if (Count() + chunk_size > capacity || Count() + chunk_size > ResizeThreshold()) {
 		Verify();
-		// Jump from the small clustered capacity straight to the normal HT size.
-		Resize(MaxValue<idx_t>(capacity * 2, static_cast<idx_t>(STANDARD_VECTOR_SIZE) * 2));
+		Resize(capacity * 2);
 	}
 	D_ASSERT(capacity - Count() >= chunk_size); // we need to be able to fit at least one vector of data
 
