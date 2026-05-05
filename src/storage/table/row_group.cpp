@@ -430,8 +430,8 @@ unique_ptr<RowGroup> RowGroup::CreateNewRowGroupCopy(RowGroupCollection &new_col
 		row_group->deletes_pointers = deletes_pointers;
 		row_group->deletes_is_loaded = false;
 	} else {
-		row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
-		row_group->deletes_is_loaded = true;
+		row_group->SetVersionInfo(owned_version_info);
+		row_group->deletes_is_loaded = deletes_is_loaded.load();
 	}
 	row_group->columns.resize(new_column_count);
 	if (is_loaded) {
@@ -1406,8 +1406,8 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		result_row_group->deletes_pointers = deletes_pointers;
 		result_row_group->deletes_is_loaded = false;
 	} else {
-		result_row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
-		result_row_group->deletes_is_loaded = true;
+		result_row_group->SetVersionInfo(owned_version_info);
+		result_row_group->deletes_is_loaded = deletes_is_loaded.load();
 	}
 	// copy metadata pointers so checkpoint can access them for reused columns
 	result.existing_column_pointers = column_pointers;
