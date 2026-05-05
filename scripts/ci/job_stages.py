@@ -8,10 +8,9 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO
 
-PULL_REQUEST_JOBS = [
+COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
-    "regression",
     "tidy-check",
     "extensions",
     "wasm-eh",
@@ -28,6 +27,12 @@ PULL_REQUEST_JOBS = [
     "static-libs-linux",
 ]
 
+PULL_REQUEST_ONLY_JOBS = [
+    "regression",
+]
+
+PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
+
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
     "valgrind",
@@ -35,7 +40,7 @@ NIGHTLY_ONLY_JOBS = [
     "static-libs-windows-mingw",
 ]
 
-NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
+NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
     "linux-relassert",
@@ -110,7 +115,7 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
-    if "julia" in selection_input.changed_keys:
+    if "julia" in selection_input.changed_keys or "capi" in selection_input.changed_keys:
         selected_jobs.append("main_julia")
 
     if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:

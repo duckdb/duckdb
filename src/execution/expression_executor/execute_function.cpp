@@ -260,6 +260,9 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	}
 	if (all_constant) {
 		// restore the input cardinality
+		for (auto &arg : arguments.data) {
+			arg.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 		arguments.SetChildCardinality(count);
 		// ensure the result type is constant
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&

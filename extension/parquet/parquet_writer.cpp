@@ -351,16 +351,16 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 }
 
 uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
-	if (encryption_config) {
-		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
+	if (options.encryption_config) {
+		return ParquetCrypto::Write(object, *protocol, options.encryption_config->GetFooterKey(), *encryption_util);
 	} else {
 		return object.write(protocol.get());
 	}
 }
 
 uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
-	if (encryption_config) {
-		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
+	if (options.encryption_config) {
+		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, options.encryption_config->GetFooterKey(),
 		                                *encryption_util);
 	} else {
 		protocol->getTransport()->write(buffer, buffer_size);
@@ -433,30 +433,14 @@ ColumnDataCollection &ParquetWriteTransformData::ApplyTransform(ColumnDataCollec
 	return buffer;
 }
 
-ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
-                             vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
-                             ShreddingType shredding_types_p, const vector<pair<string, string>> &kv_metadata,
-                             shared_ptr<ParquetEncryptionConfig> encryption_config_p,
-                             optional_idx dictionary_size_limit_p, idx_t string_dictionary_page_size_limit_p,
-                             bool enable_bloom_filters_p, double bloom_filter_false_positive_ratio_p,
-                             int64_t compression_level_p, ParquetVersion parquet_version,
-                             GeoParquetVersion geoparquet_version, bool write_timestamp_as_int96_p,
-                             TimeStampIsAdjustedToUTC timestamp_is_adjusted_to_utc_p, vector<bool> not_null_columns_p)
-    : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
-      column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
-      shredding_types(std::move(shredding_types_p)), encryption_config(std::move(encryption_config_p)),
-      dictionary_size_limit(dictionary_size_limit_p),
-      string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
-      enable_bloom_filters(enable_bloom_filters_p),
-      bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
-      parquet_version(parquet_version), geoparquet_version(geoparquet_version),
-      write_timestamp_as_int96(write_timestamp_as_int96_p),
-      timestamp_is_adjusted_to_utc(timestamp_is_adjusted_to_utc_p), not_null_columns(std::move(not_null_columns_p)) {
+ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWriterOptions &&options_p,
+                             const vector<pair<string, string>> &kv_metadata)
+    : context(context), options(std::move(options_p)) {
 	// initialize the file writer
-	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
+	writer = make_uniq<BufferedFileWriter>(fs, options.file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 
-	if (encryption_config) {
+	if (options.encryption_config) {
 		// Get the encryption util
 		encryption_util = context.db->GetEncryptionUtil(false);
 		// encrypted parquet files start with the string "PARE"
@@ -472,7 +456,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*writer));
 
 	file_meta_data.num_rows = 0;
-	file_meta_data.version = UnsafeNumericCast<int32_t>(parquet_version);
+	file_meta_data.version = UnsafeNumericCast<int32_t>(options.parquet_version);
 
 	file_meta_data.__isset.created_by = true;
 	file_meta_data.created_by =
@@ -490,21 +474,23 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 }
 
 void ParquetWriter::InitializeColumnWriters() {
-	auto &unique_names = column_names;
+	auto &unique_names = options.column_names;
 	VerifyUniqueNames(unique_names);
 
+	auto &types = options.sql_types;
+
 	// V1 GeoParquet stores geometries as blobs, no logical type
-	auto allow_geometry = geoparquet_version != GeoParquetVersion::V1;
+	auto allow_geometry = options.geoparquet_version != GeoParquetVersion::V1;
 
 	// construct the column writers
 	column_writers.clear();
-	D_ASSERT(sql_types.size() == unique_names.size());
-	for (idx_t i = 0; i < sql_types.size(); i++) {
+	D_ASSERT(options.sql_types.size() == unique_names.size());
+	for (idx_t i = 0; i < options.sql_types.size(); i++) {
 		vector<string> path_in_schema;
-		const bool can_have_nulls = not_null_columns.empty() || !not_null_columns[i];
-		column_writers.push_back(ColumnWriter::CreateWriterRecursive(context, *this, path_in_schema, sql_types[i],
-		                                                             unique_names[i], allow_geometry, &field_ids,
-		                                                             &shredding_types, 0, 1, can_have_nulls));
+		const bool can_have_nulls = options.not_null_columns.empty() || !options.not_null_columns[i];
+		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
+		    context, *this, path_in_schema, types[i], unique_names[i], allow_geometry, &options.field_ids,
+		    &options.shredding_types, 0, 1, can_have_nulls));
 	}
 }
 
@@ -606,7 +592,7 @@ void ParquetWriter::InitializePreprocessing(unique_ptr<ParquetWriteTransformData
 	vector<unique_ptr<Expression>> transform_expressions;
 	for (idx_t col_idx = 0; col_idx < column_writers.size(); col_idx++) {
 		auto &column_writer = *column_writers[col_idx];
-		auto &original_type = sql_types[col_idx];
+		auto &original_type = options.sql_types[col_idx];
 		auto expr = make_uniq<BoundReferenceExpression>(original_type, col_idx);
 		if (!column_writer.HasTransform()) {
 			transformed_types.push_back(original_type);
@@ -764,12 +750,12 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		col_writer->FinalizeWrite(*write_state);
 	}
 	// let's make sure all offsets are ay-okay
-	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
+	ValidateColumnOffsets(options.file_name, writer->GetTotalWritten(), row_group);
 
 	row_group.total_compressed_size = NumericCast<int64_t>(writer->GetTotalWritten()) - row_group.file_offset;
 	row_group.__isset.total_compressed_size = true;
 
-	if (encryption_config) {
+	if (options.encryption_config) {
 		const auto row_group_ordinal = file_meta_data.row_groups.size();
 		if (row_group_ordinal > std::numeric_limits<int16_t>::max()) {
 			throw InvalidInputException("RowGroup ordinal exceeds 32767 when encryption enabled");
@@ -1201,7 +1187,7 @@ idx_t ParquetWriter::InitializeColumnWriterSchemaIndices() {
 	// populate root schema object
 	file_meta_data.schema.resize(1);
 	file_meta_data.schema[0].name = "duckdb_schema";
-	file_meta_data.schema[0].num_children = NumericCast<int32_t>(sql_types.size());
+	file_meta_data.schema[0].num_children = NumericCast<int32_t>(options.sql_types.size());
 	file_meta_data.schema[0].__isset.num_children = true;
 	file_meta_data.schema[0].repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
 	file_meta_data.schema[0].__isset.repetition_type = true;
@@ -1243,7 +1229,7 @@ void ParquetWriter::InitializeSchemaFromPreparedRowGroup(const PreparedRowGroup 
 			throw InternalException("Prepared Parquet row group is missing schema");
 		}
 		if (HasPreparedShreddingTypes(layout.shredding_types)) {
-			shredding_types = layout.shredding_types.Copy();
+			options.shredding_types = layout.shredding_types.Copy();
 			InitializeColumnWriters();
 		}
 		auto unique_columns = InitializeColumnWriterSchemaIndices();
@@ -1261,7 +1247,7 @@ void ParquetWriter::Finalize() {
 	// dump the bloom filters right before footer, not if stuff is encrypted
 
 	for (auto &bloom_filter_entry : bloom_filters) {
-		D_ASSERT(!encryption_config);
+		D_ASSERT(!options.encryption_config);
 		// write nonsense bloom filter header
 		duckdb_parquet::BloomFilterHeader filter_header;
 		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
@@ -1287,7 +1273,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	const auto metadata_start_offset = writer->GetTotalWritten();
-	if (encryption_config) {
+	if (options.encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
 		duckdb_parquet::AesGcmV1 aes_gcm_v1;
@@ -1299,7 +1285,7 @@ void ParquetWriter::Finalize() {
 
 	// Add geoparquet metadata to the file metadata
 	if (geoparquet_data && GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context) &&
-	    geoparquet_version != GeoParquetVersion::NONE) {
+	    GetGeoParquetVersion() != GeoParquetVersion::NONE) {
 		geoparquet_data->Write(file_meta_data);
 	}
 
@@ -1308,7 +1294,7 @@ void ParquetWriter::Finalize() {
 	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
 	writer->Write<uint32_t>(footer_size);
 
-	if (encryption_config) {
+	if (options.encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 	} else {
@@ -1329,13 +1315,13 @@ void ParquetWriter::Finalize() {
 
 GeoParquetFileMetadata &ParquetWriter::GetGeoParquetData() {
 	if (!geoparquet_data) {
-		geoparquet_data = make_uniq<GeoParquetFileMetadata>(geoparquet_version);
+		geoparquet_data = make_uniq<GeoParquetFileMetadata>(GetGeoParquetVersion());
 	}
 	return *geoparquet_data;
 }
 
 void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter) {
-	if (encryption_config) {
+	if (options.encryption_config) {
 		return;
 	}
 	ParquetBloomFilterEntry new_entry;
