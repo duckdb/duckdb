@@ -80,24 +80,23 @@ void ListLengthFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
+	auto array_size = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
+	auto validity_entries = input.Validity(args.size());
 
-	auto validity_entries = args.data[0].Validity(args.size());
-
-	// for arrays the length is constant
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	ConstantVector::GetData<int64_t>(result)[0] = static_cast<int64_t>(ArrayType::GetSize(input.GetType()));
-
-	// but we do need to take null values into account
 	if (!validity_entries.CanHaveNull()) {
-		// if there are no null values we can just return the constant
+		// for arrays the length is constant
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::GetData<int64_t>(result)[0] = array_size;
+		FlatVector::SetSize(result, args.size());
 		return;
 	}
-	// otherwise we flatten and inherit the null values of the parent
-	result.Flatten(args.size());
-	auto &result_validity = FlatVector::ValidityMutable(result);
+	// we need to inherit the null values of the parent
+	auto result_data = FlatVector::Writer<int64_t>(result, args.size());
 	for (idx_t r = 0; r < args.size(); r++) {
 		if (!validity_entries.IsValid(r)) {
-			result_validity.SetInvalid(r);
+			result_data.WriteNull();
+		} else {
+			result_data.WriteValue(array_size);
 		}
 	}
 }

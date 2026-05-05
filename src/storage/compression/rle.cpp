@@ -342,6 +342,7 @@ template <class T>
 static void RLEScanConstant(RLEScanState<T> &scan_state, const rle_count_t *const index_pointer,
                             const T *const data_pointer, idx_t scan_count, Vector &result) {
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	FlatVector::SetSize(result, count_t(scan_count));
 	auto result_data = ConstantVector::GetData<T>(result);
 	result_data[0] = data_pointer[scan_state.entry_pos];
 	scan_state.position_in_entry += scan_count;

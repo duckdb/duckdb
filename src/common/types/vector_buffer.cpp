@@ -141,10 +141,9 @@ void VectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) con
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
-	count = v_size;
-	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), count);
-	if (result && (result->Size() != count)) {
+buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type) const {
+	auto result = FlattenSliceInternal(type, *FlatVector::IncrementalSelectionVector(), Size());
+	if (result && (result->Size() != Size())) {
 		throw InternalException("FlattenSliceInternal did not set size correctly");
 	}
 	return result;

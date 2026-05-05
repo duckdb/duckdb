@@ -124,7 +124,7 @@ struct FieldIdMapper : public ColumnMapper {
 		}
 		auto &constant_expr = default_val->Cast<ConstantExpression>();
 		// return only the expression
-		return make_uniq<BoundConstantExpression>(constant_expr.value);
+		return make_uniq<BoundConstantExpression>(constant_expr.GetValue());
 	}
 
 	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, bool is_root) const override {

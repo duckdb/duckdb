@@ -532,8 +532,8 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		min = Value(StringStats::Min(stats));
-		max = Value(StringStats::Max(stats));
+		min = Value::BLOB_RAW(StringStats::Min(stats));
+		max = Value::BLOB_RAW(StringStats::Max(stats));
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
