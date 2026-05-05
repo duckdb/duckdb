@@ -423,7 +423,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	if (grouping_set.empty()) {
 		FlatVector::SetSize(group_chunk.data[0], count_t(input_chunk.size()));
 	}
-	group_chunk.Verify(DebugVerificationMode::DEFAULT);
+	group_chunk.Verify();
 }
 
 void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
