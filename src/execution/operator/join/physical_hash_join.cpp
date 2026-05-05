@@ -1042,7 +1042,7 @@ void JoinFilterPushdownInfo::PushBloomFilter(const PhysicalOperator &op, JoinHas
 	vector<unique_ptr<Expression>> children;
 	children.push_back(make_uniq<BoundReferenceExpression>(key_type, idx_t(0)));
 	auto filter_expr = make_uniq<BoundFunctionExpression>(
-	    LogicalType::BOOLEAN, BloomFilterScalarFun::GetFunction(key_type), std::move(children),
+	    BoundScalarFunction(BloomFilterScalarFun::GetFunction(key_type)), std::move(children),
 	    make_uniq<BloomFilterFunctionData>(ht.GetBloomFilter(), filters_null_values, key_name, key_type,
 	                                       selectivity_threshold, n_vectors_to_check));
 	info.dynamic_filters->PushFilter(
@@ -1062,7 +1062,7 @@ void JoinFilterPushdownInfo::PushPerfectHashJoinFilter(const PhysicalOperator &o
 	vector<unique_ptr<Expression>> children;
 	children.push_back(make_uniq<BoundReferenceExpression>(key_type, idx_t(0)));
 	auto filter_expr = make_uniq<BoundFunctionExpression>(
-	    LogicalType::BOOLEAN, PerfectHashJoinScalarFun::GetFunction(key_type), std::move(children),
+	    BoundScalarFunction(PerfectHashJoinScalarFun::GetFunction(key_type)), std::move(children),
 	    make_uniq<PerfectHashJoinFunctionData>(perfect_join_executor, key_name, selectivity_threshold,
 	                                           n_vectors_to_check));
 	info.dynamic_filters->PushFilter(op, filter_col_idx,
@@ -1089,7 +1089,7 @@ void JoinFilterPushdownInfo::RegisterPrefixRangeFilter(const JoinFilterPushdownF
 	vector<unique_ptr<Expression>> children;
 	children.push_back(make_uniq<BoundReferenceExpression>(key_type, idx_t(0)));
 	auto filter_expr = make_uniq<BoundFunctionExpression>(
-	    LogicalType::BOOLEAN, PrefixRangeScalarFun::GetFunction(key_type), std::move(children),
+	    BoundScalarFunction(PrefixRangeScalarFun::GetFunction(key_type)), std::move(children),
 	    make_uniq<PrefixRangeFunctionData>(ht.GetPrefixRangeFilter(), key_name, key_type, selectivity_threshold,
 	                                       n_vectors_to_check));
 	info.dynamic_filters->PushFilter(op, filter_col_idx,
@@ -1184,7 +1184,7 @@ JoinFilterPushdownInfo::FinalizeFilters(ClientContext &context, const PhysicalCo
 			if (perfect_join_executor) {
 				runtime_filter_type_matches = condition_type == perfect_join_executor->GetKeyType();
 			} else if (ht) {
-				runtime_filter_type_matches = condition_type == ht->conditions[0].GetLHS().return_type;
+				runtime_filter_type_matches = condition_type == ht->conditions[0].GetLHS().GetReturnType();
 			}
 
 			// if the HT is small we can generate a complete "OR" filter

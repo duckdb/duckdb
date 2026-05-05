@@ -61,8 +61,8 @@ unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Ex
 }
 
 static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
-	return func.function.name == OptionalFilterScalarFun::NAME ||
-	       func.function.name == SelectivityOptionalFilterScalarFun::NAME;
+	return func.function.GetName() == OptionalFilterScalarFun::NAME ||
+	       func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME;
 }
 
 static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_through_and) {
@@ -70,7 +70,7 @@ static bool IsOptionalExpressionInternal(const Expression &expr, bool recurse_th
 		return IsOptionalInternalFunction(expr.Cast<BoundFunctionExpression>());
 	}
 	if (!recurse_through_and || expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION ||
-	    expr.type != ExpressionType::CONJUNCTION_AND) {
+	    expr.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
 		return false;
 	}
 	auto &conj = expr.Cast<BoundConjunctionExpression>();
@@ -91,13 +91,13 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return true;
 		}
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
 				return true;
 			}
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
 				return true;
@@ -355,16 +355,16 @@ FilterPropagateResult ExpressionFilter::CheckExpressionStatistics(const Expressi
 bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const string &func_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == func_name) {
+		if (func.function.GetName() == func_name) {
 			return true;
 		}
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
 				return true;
 			}
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
 				return true;
@@ -413,7 +413,7 @@ unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter
 }
 
 string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression &func_expr, const string &column_name) {
-	auto &func_name = func_expr.function.name;
+	auto &func_name = func_expr.function.GetName();
 	if (func_name == BloomFilterScalarFun::NAME) {
 		auto &data = func_expr.bind_info->Cast<BloomFilterFunctionData>();
 		return BloomFilterScalarFun::ToString(column_name, data.key_column_name);
@@ -463,7 +463,7 @@ string ExpressionFilter::ExpressionToFriendlyString(const Expression &expression
 			string result = "(";
 			for (idx_t i = 0; i < conj.children.size(); i++) {
 				if (i > 0) {
-					result += conj.type == ExpressionType::CONJUNCTION_AND ? " AND " : " OR ";
+					result += conj.GetExpressionType() == ExpressionType::CONJUNCTION_AND ? " AND " : " OR ";
 				}
 				result += ExpressionToFriendlyString(*conj.children[i], column_name);
 			}

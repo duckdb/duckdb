@@ -72,7 +72,7 @@ static unique_ptr<Expression> CreateSingleArgumentFunctionExpression(ScalarFunct
                                                                      unique_ptr<FunctionData> bind_data) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(make_uniq<BoundReferenceExpression>(target_type, storage_t(0)));
-	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(function), std::move(arguments),
+	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments),
 	                                          std::move(bind_data));
 }
 
@@ -101,25 +101,25 @@ unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterDat
 }
 
 void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                  const ScalarFunction &function) {
+                                  const BoundScalarFunction &function) {
 	// Runtime state cannot be serialized - write nothing
 }
 
-unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> TableFilterFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	auto key_type = function.GetArguments().empty() ? LogicalType::ANY : function.GetArguments()[0];
-	if (function.name == BloomFilterScalarFun::NAME) {
+	if (function.GetName() == BloomFilterScalarFun::NAME) {
 		return make_uniq<BloomFilterFunctionData>(nullptr, false, string(), key_type, 0.0f, idx_t(0));
 	}
-	if (function.name == PerfectHashJoinScalarFun::NAME) {
+	if (function.GetName() == PerfectHashJoinScalarFun::NAME) {
 		return make_uniq<PerfectHashJoinFunctionData>(nullptr, string(), 0.0f, idx_t(0));
 	}
-	if (function.name == PrefixRangeScalarFun::NAME) {
+	if (function.GetName() == PrefixRangeScalarFun::NAME) {
 		return make_uniq<PrefixRangeFunctionData>(nullptr, string(), key_type, 0.0f, idx_t(0));
 	}
-	if (function.name == DynamicFilterScalarFun::NAME) {
+	if (function.GetName() == DynamicFilterScalarFun::NAME) {
 		return make_uniq<DynamicFilterFunctionData>(nullptr);
 	}
-	throw InternalException("Unsupported table filter function \"%s\" during deserialization", function.name);
+	throw InternalException("Unsupported table filter function \"%s\" during deserialization", function.GetName());
 }
 
 } // namespace duckdb

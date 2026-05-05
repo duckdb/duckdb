@@ -1177,7 +1177,7 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
 	auto &expr = *expr_filter.expr;
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.type == ExpressionType::CONJUNCTION_AND) {
+	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		for (auto &child : conjunction.children) {

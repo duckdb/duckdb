@@ -26,7 +26,7 @@ static optional_ptr<const BoundFunctionExpression> TryGetFunctionExpression(cons
 }
 
 static bool IsSimpleFilterColumnRef(const Expression &expression) {
-	return expression.type == ExpressionType::BOUND_REF ||
+	return expression.GetExpressionType() == ExpressionType::BOUND_REF ||
 	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
@@ -34,9 +34,11 @@ static bool TryComparisonFiltersNullValues(const BoundComparisonExpression &comp
                                            bool &filters_valid_values) {
 	optional_ptr<const BoundConstantExpression> constant_expr;
 	auto comparison_type = comparison.GetExpressionType();
-	if (IsSimpleFilterColumnRef(*comparison.left) && comparison.right->type == ExpressionType::VALUE_CONSTANT) {
+	if (IsSimpleFilterColumnRef(*comparison.left) &&
+	    comparison.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		constant_expr = comparison.right->Cast<BoundConstantExpression>();
-	} else if (IsSimpleFilterColumnRef(*comparison.right) && comparison.left->type == ExpressionType::VALUE_CONSTANT) {
+	} else if (IsSimpleFilterColumnRef(*comparison.right) &&
+	           comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		constant_expr = comparison.left->Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else {
@@ -75,7 +77,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 		auto &conjunction = expression.Cast<BoundConjunctionExpression>();
-		if (conjunction.type == ExpressionType::CONJUNCTION_AND) {
+		if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 			for (auto &child : conjunction.children) {
 				bool child_filters_nulls = false;
 				bool child_filters_valid_values = false;
@@ -87,7 +89,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 			}
 			return true;
 		}
-		if (conjunction.type == ExpressionType::CONJUNCTION_OR) {
+		if (conjunction.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 			filters_nulls = true;
 			filters_valid_values = true;
 			for (auto &child : conjunction.children) {
@@ -114,7 +116,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		if (op.children.size() != 1 || !IsSimpleFilterColumnRef(*op.children[0])) {
 			return false;
 		}
-		switch (expression.type) {
+		switch (expression.GetExpressionType()) {
 		case ExpressionType::OPERATOR_IS_NULL:
 			filters_valid_values = true;
 			return true;
@@ -131,7 +133,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return false;
 	}
 
-	auto &function_name = func_expr->function.name;
+	auto &function_name = func_expr->function.GetName();
 	if (function_name == OptionalFilterScalarFun::NAME) {
 		return true;
 	}

@@ -524,7 +524,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == OptionalFilterScalarFun::NAME) {
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
 			if (!func.bind_info) {
 				return true;
 			}
@@ -532,7 +532,7 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 			return !data.child_filter_expr ||
 			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME) {
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
 			if (!func.bind_info) {
 				return true;
 			}

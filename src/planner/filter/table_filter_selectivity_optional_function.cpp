@@ -43,7 +43,7 @@ bool SelectivityOptionalFilterFunctionData::Equals(const FunctionData &other_p) 
 }
 
 static void SelectivityOptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                               const ScalarFunction &function) {
+                                               const BoundScalarFunction &function) {
 	if (!bind_data) {
 		return;
 	}
@@ -54,7 +54,7 @@ static void SelectivityOptionalFilterSerialize(Serializer &serializer, const opt
 }
 
 static unique_ptr<FunctionData> SelectivityOptionalFilterDeserialize(Deserializer &deserializer,
-                                                                     ScalarFunction &function) {
+                                                                     BoundScalarFunction &function) {
 	auto child_filter_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr");
 	auto selectivity_threshold =
 	    deserializer.ReadPropertyWithExplicitDefault<float>(201, "selectivity_threshold", 0.5f);

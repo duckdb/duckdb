@@ -13,11 +13,11 @@ LegacyPerfectHashJoinFilter::LegacyPerfectHashJoinFilter(
 }
 
 unique_ptr<Expression> LegacyPerfectHashJoinFilter::ToExpression(const Expression &column) const {
-	auto function = PerfectHashJoinScalarFun::GetFunction(column.return_type);
+	auto function = PerfectHashJoinScalarFun::GetFunction(column.GetReturnType());
 	auto bind_data = make_uniq<PerfectHashJoinFunctionData>(perfect_join_executor, key_column_name, 0.0f, idx_t(0));
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
-	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(function), std::move(arguments),
+	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments),
 	                                          std::move(bind_data));
 }
 

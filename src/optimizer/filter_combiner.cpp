@@ -611,7 +611,7 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 		if (!proj_id.IsValid()) {
 			proj_id = column_ref->binding.column_index;
-			col_type = column_ref->return_type;
+			col_type = column_ref->GetReturnType();
 		} else if (proj_id != column_ref->binding.column_index) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}

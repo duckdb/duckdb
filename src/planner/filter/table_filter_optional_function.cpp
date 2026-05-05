@@ -33,7 +33,7 @@ bool OptionalFilterFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                    const ScalarFunction &function) {
+                                    const BoundScalarFunction &function) {
 	if (!bind_data) {
 		return;
 	}
@@ -41,7 +41,7 @@ static void OptionalFilterSerialize(Serializer &serializer, const optional_ptr<F
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr", data.child_filter_expr);
 }
 
-static unique_ptr<FunctionData> OptionalFilterDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+static unique_ptr<FunctionData> OptionalFilterDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
 	auto child_filter_expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "child_filter_expr");
 	return make_uniq<OptionalFilterFunctionData>(std::move(child_filter_expr));
 }

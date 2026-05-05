@@ -11,7 +11,7 @@ LegacyOptionalFilter::LegacyOptionalFilter(unique_ptr<TableFilter> filter)
 
 unique_ptr<Expression> LegacyOptionalFilter::ToExpression(const Expression &column) const {
 	auto child_expr = child_filter ? child_filter->ToExpression(column) : nullptr;
-	return CreateOptionalFilterExpression(std::move(child_expr), column.return_type);
+	return CreateOptionalFilterExpression(std::move(child_expr), column.GetReturnType());
 }
 
 } // namespace duckdb

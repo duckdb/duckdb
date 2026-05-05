@@ -42,7 +42,7 @@ idx_t GetQualifyingTupleCount(RowGroup &row_group, BaseStatistics &stats, const 
 }
 
 template <typename It, typename End>
-void AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, const End &end,
+bool AddRowGroups(multimap<Value, RowGroupSegmentNodeEntry> &row_group_map, It it, const End &end,
                   vector<reference<SegmentNode<RowGroup>>> &ordered_row_groups, const idx_t row_limit,
                   const OrderByColumnType column_type, const OrderByStatistics stat_type) {
 	const auto opposite_stat_type =

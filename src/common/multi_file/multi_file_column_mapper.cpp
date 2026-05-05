@@ -779,7 +779,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping(MultiFileColumnMa
 
 static unique_ptr<Expression> GetFilterExpression(const TableFilter &filter);
 
-bool MultiFileColumnMapper::EvaluateFilterAgainstConstant(const TableFilter &filter, const Value &constant) {
+bool EvaluateTableFilterAgainstConstant(ClientContext &context, const TableFilter &filter, const Value &constant) {
 	auto expression = GetFilterExpression(filter);
 	return ExpressionFilter(std::move(expression)).EvaluateWithConstant(context, constant);
 }

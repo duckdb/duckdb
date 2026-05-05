@@ -35,13 +35,13 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return true;
 		}
-		if (func.function.name == OptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
 				return true;
 			}
 		}
-		if (func.function.name == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
 			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
 				return true;
@@ -222,7 +222,7 @@ static unique_ptr<TableFilter> SerializeOptionalChild(const optional_ptr<const E
 }
 
 static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const BoundFunctionExpression &func_expr) {
-	auto &func_name = func_expr.function.name;
+	auto &func_name = func_expr.function.GetName();
 	if (func_name == OptionalFilterScalarFun::NAME) {
 		unique_ptr<TableFilter> child_filter;
 		if (func_expr.bind_info) {
@@ -291,7 +291,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.GetName())) {
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}

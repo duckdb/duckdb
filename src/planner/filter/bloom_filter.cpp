@@ -80,12 +80,12 @@ inline bool BloomFilter::LookupOne(const uint64_t hash) const {
 }
 
 unique_ptr<Expression> LegacyBFTableFilter::ToExpression(const Expression &column) const {
-	auto function = BloomFilterScalarFun::GetFunction(column.return_type);
+	auto function = BloomFilterScalarFun::GetFunction(column.GetReturnType());
 	auto bind_data =
 	    make_uniq<BloomFilterFunctionData>(filter, filters_null_values, key_column_name, key_type, 0.0f, idx_t(0));
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
-	return make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, std::move(function), std::move(arguments),
+	return make_uniq<BoundFunctionExpression>(BoundScalarFunction(function), std::move(arguments),
 	                                          std::move(bind_data));
 }
 

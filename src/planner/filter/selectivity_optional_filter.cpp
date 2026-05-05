@@ -87,8 +87,8 @@ unique_ptr<TableFilter> LegacySelectivityOptionalFilter::Deserialize(Deserialize
 
 unique_ptr<Expression> LegacySelectivityOptionalFilter::ToExpression(const Expression &column) const {
 	auto child_expr = child_filter ? child_filter->ToExpression(column) : nullptr;
-	return CreateSelectivityOptionalFilterExpression(std::move(child_expr), column.return_type, selectivity_threshold,
-	                                                 n_vectors_to_check);
+	return CreateSelectivityOptionalFilterExpression(std::move(child_expr), column.GetReturnType(),
+	                                                 selectivity_threshold, n_vectors_to_check);
 }
 
 } // namespace duckdb

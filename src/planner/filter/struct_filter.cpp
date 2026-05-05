@@ -13,7 +13,7 @@ LegacyStructFilter::LegacyStructFilter(idx_t child_idx_p, string child_name_p, u
 }
 
 unique_ptr<Expression> LegacyStructFilter::ToExpression(const Expression &column) const {
-	auto &child_type = StructType::GetChildType(column.return_type, child_idx);
+	auto &child_type = StructType::GetChildType(column.GetReturnType(), child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
