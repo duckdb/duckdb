@@ -408,14 +408,18 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	ToUnifiedFormat(format);
+}
+
+void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
 		// FSST/SEQUENCE/SHREDDED: flatten first so the buffer can provide unified format
-		Flatten(count);
+		Flatten();
 	}
-	Buffer().ToUnifiedFormat(count, format);
+	Buffer().ToUnifiedFormat(format);
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {

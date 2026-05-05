@@ -56,14 +56,14 @@ void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 	}
 }
 
-void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.owned_sel.Initialize(sel_vector);
 	format.sel = &format.owned_sel;
 
 	auto &child = entry->data;
 	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// flatten the child in-place
-		entry->data.Flatten(count);
+		entry->data.Flatten();
 	}
 	format.data = FlatVector::GetData(entry->data);
 	format.validity = FlatVector::ValidityMutable(entry->data);
