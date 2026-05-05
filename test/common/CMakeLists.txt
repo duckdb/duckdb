@@ -16,6 +16,7 @@ add_library_unity(
   test_parse_expression.cpp
   test_parse_logical_type.cpp
   test_utf.cpp
+  test_vectors.cpp
   test_allocator_debug_info.cpp
   test_buffer_pool_reservation.cpp
   test_storage_fuzz.cpp
