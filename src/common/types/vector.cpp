@@ -843,7 +843,14 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
+void Vector::Verify(idx_t) const {
+	Verify();
+}
+
 void Vector::Verify() const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
@@ -851,14 +858,13 @@ void Vector::Verify() const {
 }
 
 void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
 	buffer->Verify(GetType(), sel, count);
-}
-
-void Vector::Verify(idx_t count) const {
-	Verify();
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
@@ -899,7 +905,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	} else {
 		vector.Dictionary(reusable_dict, original_sel, count);
 	}
-	vector.Verify(count);
+	vector.Verify();
 }
 
 void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {

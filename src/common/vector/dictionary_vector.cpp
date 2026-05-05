@@ -42,7 +42,10 @@ idx_t DictionaryBuffer::GetAllocationSize() const {
 void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::DICTIONARY_VECTOR);
 	auto &child = GetEntry().data;
-	D_ASSERT(type == child.GetType());
+	if (type != child.GetType()) {
+		throw InternalException("Dictionary expression type mismatch - type %s does not match child type %s", type,
+		                        child.GetType());
+	}
 	if (!sel.IsSet()) {
 		// sel is not set - directly pass in the dictionary
 		child.Verify(sel_vector, count);

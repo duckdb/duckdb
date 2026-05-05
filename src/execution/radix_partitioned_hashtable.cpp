@@ -1,6 +1,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
 #include "duckdb/common/radix_partitioning.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -422,7 +423,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	if (grouping_set.empty()) {
 		FlatVector::SetSize(group_chunk.data[0], count_t(input_chunk.size()));
 	}
-	group_chunk.Verify();
+	group_chunk.Verify(DebugVerificationMode::DEFAULT);
 }
 
 void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {

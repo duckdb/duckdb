@@ -681,7 +681,7 @@ struct SortedAggregateFunction {
 			}
 		}
 
-		result.Verify(count);
+		result.Verify();
 	}
 };
 

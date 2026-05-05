@@ -765,7 +765,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	FlatVector::SetSize(result, count);
-	result.Verify(count);
+	result.Verify();
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {

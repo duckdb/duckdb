@@ -101,10 +101,15 @@ void VectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, i
 void VectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < Size(); i++) {
-			D_ASSERT(sel.get_index(i) < Size());
+			if (sel.get_index(i) >= Size()) {
+				throw InternalException("Selection vector entry %d out of range for vector of size %d",
+				                        sel.get_index(i), Size());
+			}
 		}
 	} else {
-		D_ASSERT(count <= Size());
+		if (count > Size()) {
+			throw InternalException("Count %d out of range for vector of size %d", count, Size());
+		}
 	}
 }
 

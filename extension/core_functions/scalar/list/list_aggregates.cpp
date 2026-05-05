@@ -173,7 +173,7 @@ struct DistinctFunctor {
 		}
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
-		result.Verify(count);
+		result.Verify();
 	}
 };
 
@@ -194,7 +194,7 @@ struct UniqueFunctor {
 			}
 			result_data.WriteValue(state->hist->size());
 		}
-		result.Verify(count);
+		result.Verify();
 	}
 };
 

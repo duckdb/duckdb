@@ -81,29 +81,51 @@ void VectorStructBuffer::VerifyInternal(const LogicalType &type, const Selection
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(child_types.size() == children.size());
+	if (child_types.size() != children.size()) {
+		throw InternalException("Struct child count mismatch - expected %d children but found %d", child_types.size(),
+		                        children.size());
+	}
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
-		D_ASSERT(child.GetType() == child_types[child_idx].second);
+		if (child.GetType() != child_types[child_idx].second) {
+			throw InternalException("Struct child type mismatch - expected child of type %s but found child of type %s",
+			                        child_types[child_idx].second, child.GetType());
+		}
 		if (!sel.IsSet() && count == Size()) {
 			child.Verify();
 		} else {
 			child.Verify(sel, count);
 		}
-		D_ASSERT(child.size() == Size());
+		if (child.size() != Size()) {
+			throw InternalException("Struct child size mismatch - parent struct had size %d but child has size %d",
+			                        Size(), child.size());
+		}
+		// for any NULL entry in the struct, the child should be NULL as well
+		// may produce structs where parent NULLs are not propagated to all children
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
-			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+				throw InternalException(
+				    "Struct constant mismatch - expected a child of a constant struct to also be constant");
+			}
 			if (!validity.RowIsValid(0)) {
-				D_ASSERT(ConstantVector::IsNull(child));
+				if (!ConstantVector::IsNull(child)) {
+					throw InternalException("Struct NULL mismatch - a child of a NULL struct must always be NULL");
+				}
+			}
+		} else {
+			if (child.GetVectorType() == VectorType::FLAT_VECTOR ||
+			    child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				auto child_validity = child.Validity(child.size());
+				for (idx_t r = 0; r < Size(); r++) {
+					if (!validity.RowIsValid(r)) {
+						if (child_validity.IsValid(r)) {
+							throw InternalException(
+							    "Struct NULL mismatch - a child of a NULL struct must always be NULL");
+						}
+					}
+				}
 			}
 		}
-		if (vector_type != VectorType::FLAT_VECTOR) {
-			continue;
-		}
-		// FIXME: re-add struct NULL propagation check
-		// for any NULL entry in the struct, the child should be NULL as well
-		// this check is currently disabled because projection pushdown and other optimizations
-		// may produce structs where parent NULLs are not propagated to all children
 	}
 }
 

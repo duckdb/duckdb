@@ -55,6 +55,10 @@ ClientContext &ExpressionExecutor::GetContext() {
 	return *context;
 }
 
+optional_ptr<ClientContext> ExpressionExecutor::GetContextPtr() {
+	return context;
+}
+
 Allocator &ExpressionExecutor::GetAllocator() {
 	return context ? Allocator::Get(*context) : Allocator::DefaultAllocator();
 }
@@ -86,7 +90,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 		ExecuteExpression(i, result.data[i]);
 	}
 	result.SetCardinality(input ? input->size() : 1);
-	result.Verify(context ? context->db : nullptr);
+	result.Verify(context);
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
