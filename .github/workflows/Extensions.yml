@@ -288,7 +288,9 @@ jobs:
           # TODO use inputs.build-type in build and test command
           build: make release
           test: |
-            ./duckdb/build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+            pwd
+            ls -lh build build/release || true
+            ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
             make test_release
           # TODO
           vcpkg-commit: 84bab45d415d22042bd0b9081aea57f362da3f35
@@ -296,7 +298,9 @@ jobs:
           # TODO
           cache-suffix: extension-main-manylinux_2_28_aarch64
           # cache-suffix: ${{ matrix.distro }}_${{ matrix.arch }}${{ needs.prepare.outputs.image_suffix }}
-          save-cache: ${{ inputs.save_cache }}
+          # TODO
+          save-cache: true
+          # save-cache: ${{ inputs.save_cache }}
           upload-name: main-extensions-${{ inputs.git_sha }}-extension-linux_arm64
           # TODO
           # ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
