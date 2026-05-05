@@ -139,6 +139,10 @@ void CatalogSearchPath::Reset() {
 	SetPathsInternal(empty);
 }
 
+void CatalogSearchPath::RefreshSetPaths() {
+	SetPathsInternal(set_paths);
+}
+
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 	switch (set_type) {
 	case CatalogSetPathType::SET_SCHEMA:
@@ -289,6 +293,10 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
 	for (auto &path : set_paths) {
 		paths.push_back(path);
+	}
+	// set extension schemas on the search path, if any
+	for (auto &schema : DatabaseManager::Get(context).GetExtensionSchemas()) {
+		paths.emplace_back(SYSTEM_CATALOG, schema);
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);

@@ -18,6 +18,8 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
 
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+
 namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
@@ -35,8 +37,23 @@ void ExtensionLoader::SetDescription(const string &description) {
 	extension_description = description;
 }
 
-void ExtensionLoader::SetExtensionSchema(const string &schema) {
-	extension_schema = schema;
+void ExtensionLoader::CreateExtensionSchema() const {
+	if (extension_schema == DEFAULT_SCHEMA) {
+		return;
+	}
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+
+	CreateSchemaInfo info;
+	info.schema = extension_schema;
+	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateSchema(data, info);
+}
+
+void ExtensionLoader::SetExtensionSchema(const string &name) {
+	extension_schema = name;
+	CreateExtensionSchema();
 }
 
 void ExtensionLoader::FinalizeLoad() {
@@ -45,6 +62,10 @@ void ExtensionLoader::FinalizeLoad() {
 		auto info = make_uniq<ExtensionLoadedInfo>();
 		info->description = extension_description;
 		extension_info->load_info = std::move(info);
+	}
+
+	if (extension_schema != DEFAULT_SCHEMA) {
+		DatabaseManager::Get(db).AddExtensionSchema(extension_schema);
 	}
 }
 
@@ -56,6 +77,7 @@ void ExtensionLoader::RegisterFunction(ScalarFunction function) {
 
 void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 	CreateScalarFunctionInfo info(std::move(function));
+	info.schema = extension_schema;
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
 }
@@ -76,6 +98,7 @@ void ExtensionLoader::RegisterFunction(AggregateFunction function) {
 
 void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 	CreateAggregateFunctionInfo info(std::move(function));
+	info.schema = extension_schema;
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
 }
@@ -96,6 +119,7 @@ void ExtensionLoader::RegisterFunction(WindowFunction function) {
 
 void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
 	CreateWindowFunctionInfo info(std::move(function));
+	info.schema = extension_schema;
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
 }
@@ -123,6 +147,7 @@ void ExtensionLoader::RegisterFunction(TableFunction function) {
 void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 	D_ASSERT(!function.name.empty());
 	CreateTableFunctionInfo info(std::move(function));
+	info.schema = extension_schema;
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
 }
@@ -130,6 +155,7 @@ void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = extension_name;
+	info.schema = extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -146,6 +172,7 @@ void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 	D_ASSERT(!function.name.empty());
 	auto function_name = function.name;
 	CreatePragmaFunctionInfo info(std::move(function_name), std::move(function));
+	info.schema = extension_schema;
 	info.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
@@ -155,6 +182,7 @@ void ExtensionLoader::RegisterFunction(PragmaFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CopyFunction function) {
 	CreateCopyFunctionInfo info(std::move(function));
 	info.extension_name = extension_name;
+	info.schema = extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateCopyFunction(data, info);
@@ -162,6 +190,7 @@ void ExtensionLoader::RegisterFunction(CopyFunction function) {
 
 void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
 	info.extension_name = extension_name;
+	info.schema = extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -171,12 +200,14 @@ void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
 	info.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
+	info.schema = extension_schema;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateCollation(data, info);
 
 	// Also register as a function for serialisation
 	CreateScalarFunctionInfo finfo(info.function);
 	finfo.extension_name = extension_name;
+	finfo.schema = extension_schema;
 	finfo.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateFunction(data, finfo);
 }
@@ -247,6 +278,7 @@ void ExtensionLoader::RegisterType(string type_name, LogicalType type, bind_logi
 	info.temporary = true;
 	info.internal = true;
 	info.extension_name = extension_name;
+	info.schema = extension_schema;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateType(data, info);

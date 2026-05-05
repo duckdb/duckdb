@@ -1,5 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/client_data.hpp"
+
+#include <duckdb/catalog/catalog_search_path.hpp>
 
 namespace duckdb {
 
@@ -40,6 +43,8 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 
 	} else {
 		ExtensionHelper::LoadExternalExtension(context.client, info->filename);
+		// adds an explicitly set extension schema to the search path
+		ClientData::Get(context.client).catalog_search_path->RefreshSetPaths();
 	}
 
 	return SourceResultType::FINISHED;

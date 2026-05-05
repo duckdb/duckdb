@@ -60,6 +60,10 @@ public:
 	shared_ptr<AttachedDatabase> DetachInternal(const string &name);
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
+	//! Adds a new extension schema to the schema list
+	void AddExtensionSchema(const string &schema);
+	//! Extension schemas list
+	vector<string> GetExtensionSchemas() const;
 
 	static const string &GetDefaultDatabase(ClientContext &context);
 	void SetDefaultDatabase(ClientContext &context, const string &new_value);
@@ -128,6 +132,10 @@ private:
 	string default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
+	//! Lock for the extension schema list
+	mutable mutex schemas_lock;
+	//! list of explicitly added extension schema's
+	vector<string> extension_schemas;
 
 private:
 	//! Rename an existing database
