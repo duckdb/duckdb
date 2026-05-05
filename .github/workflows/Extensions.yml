@@ -259,20 +259,9 @@ jobs:
           git -C duckdb checkout "${{ inputs.git_sha }}"
           git -C extension-ci-tools checkout "main"
 
-      # - uses: actions/checkout@v6
-      #   name: Checkout
-      #   with:
-      #     ref: ${{ inputs.git_ref }}
-      #     path: 'duckdb'
-      #     fetch-depth: 0
-      #     submodules: 'recursive'
-
-      # - uses: actions/checkout@v6
-      #   name: Checkout Extension CI tools
-      #   with:
-      #     path: 'extension-ci-tools'
-      #     ref: main
-      #     repository: duckdb/extension-ci-tools
+          git config --global --add safe.directory "$PWD"
+          git config --global --add safe.directory "$PWD/duckdb"
+          git config --global --add safe.directory "$PWD/extension-ci-tools"
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
