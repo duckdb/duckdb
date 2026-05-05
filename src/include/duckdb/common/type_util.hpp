@@ -18,14 +18,25 @@
 
 namespace duckdb {
 struct bignum_t;
-struct ubigint_t;
+
+template <typename T, typename ExceptionT>
+class CheckedInteger;
+
+namespace internal {
+template <typename T>
+struct is_checked_integer : std::false_type {};
+template <typename T, typename ExceptionT>
+struct is_checked_integer<CheckedInteger<T, ExceptionT>> : std::true_type {};
+} // namespace internal
 
 //! Returns the PhysicalType for the given type
 template <class T>
 PhysicalType GetTypeId() {
 	using TYPE = typename std::remove_cv<T>::type;
 
-	if (std::is_same<TYPE, bool>()) {
+	if constexpr (internal::is_checked_integer<TYPE>::value) {
+		return GetTypeId<typename TYPE::value_type>();
+	} else if (std::is_same<TYPE, bool>()) {
 		return PhysicalType::BOOL;
 	} else if (std::is_same<TYPE, int8_t>()) {
 		return PhysicalType::INT8;
@@ -41,7 +52,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT16;
 	} else if (std::is_same<TYPE, uint32_t>()) {
 		return PhysicalType::UINT32;
-	} else if (std::is_same<TYPE, uint64_t>() || std::is_same<TYPE, ubigint_t>()) {
+	} else if (std::is_same<TYPE, uint64_t>()) {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<TYPE, idx_t>() || std::is_same<TYPE, const idx_t>()) {
 		return PhysicalType::UINT64;

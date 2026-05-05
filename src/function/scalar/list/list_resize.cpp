@@ -1,4 +1,4 @@
-#include "duckdb/common/ubigint.hpp"
+#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
@@ -44,8 +44,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 			child_vector_size += new_size_entries[new_size_idx];
 		}
 	}
-	ListVector::Reserve(result, child_vector_size.value);
-	ListVector::SetListSize(result, child_vector_size.value);
+	ListVector::Reserve(result, child_vector_size.GetValue());
+	ListVector::SetListSize(result, child_vector_size.GetValue());
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
@@ -80,14 +80,14 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto copy_count = MinValue<ubigint_t>(list_entries[list_idx].length, new_size);
 
 		// Set the result entry.
-		result_entries.WriteValue(list_entry_t(offset.value, new_size.value));
+		result_entries.WriteValue(list_entry_t(offset.GetValue(), new_size.GetValue()));
 
 		// Copy the child vector's values.
 		// The number of elements to copy is later determined like so: source_count - source_offset.
 		ubigint_t source_offset = list_entries[list_idx].offset;
 		ubigint_t source_count = source_offset + copy_count;
-		VectorOperations::Copy(child_vector, result_child_vector, source_count.value, source_offset.value,
-		                       offset.value);
+		VectorOperations::Copy(child_vector, result_child_vector, source_count.GetValue(), source_offset.GetValue(),
+		                       offset.GetValue());
 		offset += copy_count;
 
 		// Fill the remaining space with the default values.
@@ -97,20 +97,20 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 			if (default_vector) {
 				auto default_idx = default_data.sel->get_index(row_idx);
 				if (default_data.validity.RowIsValid(default_idx)) {
-					SelectionVector sel(remaining_count.value);
-					for (idx_t j = 0; j < remaining_count.value; j++) {
+					SelectionVector sel(remaining_count.GetValue());
+					for (idx_t j = 0; j < remaining_count.GetValue(); j++) {
 						sel.set_index(j, row_idx);
 					}
-					VectorOperations::Copy(*default_vector, result_child_vector, sel, remaining_count.value, 0,
-					                       offset.value);
+					VectorOperations::Copy(*default_vector, result_child_vector, sel, remaining_count.GetValue(), 0,
+					                       offset.GetValue());
 					offset += remaining_count;
 					continue;
 				}
 			}
 
 			// Fill the remaining space with NULL.
-			for (idx_t j = copy_count.value; j < new_size.value; j++) {
-				FlatVector::SetNull(result_child_vector, offset.value, true);
+			for (idx_t j = copy_count.GetValue(); j < new_size.GetValue(); j++) {
+				FlatVector::SetNull(result_child_vector, offset.GetValue(), true);
 				offset += 1;
 			}
 		}

@@ -1,10 +1,12 @@
 #include "catch.hpp"
 #include "duckdb/common/checked_integer.hpp"
+#include "duckdb/common/type_util.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 using duckdb::CheckedInteger;
 using duckdb::NumericLimits;
 using duckdb::OutOfRangeException;
+using duckdb::PhysicalType;
 
 namespace {
 template <typename T>
@@ -394,4 +396,20 @@ TEST_CASE("std::hash<CheckedInteger> specialization", "[checked_integer]") {
 		REQUIRE(s.count(ci32(2)) == 1);
 		REQUIRE(s.count(ci32(3)) == 0);
 	}
+}
+
+TEST_CASE("GetTypeId recurses through CheckedInteger", "[checked_integer]") {
+	REQUIRE(duckdb::GetTypeId<duckdb::tinyint_t>() == PhysicalType::INT8);
+	REQUIRE(duckdb::GetTypeId<duckdb::smallint_t>() == PhysicalType::INT16);
+	REQUIRE(duckdb::GetTypeId<duckdb::integer_t>() == PhysicalType::INT32);
+	REQUIRE(duckdb::GetTypeId<duckdb::bigint_t>() == PhysicalType::INT64);
+
+	REQUIRE(duckdb::GetTypeId<duckdb::utinyint_t>() == PhysicalType::UINT8);
+	REQUIRE(duckdb::GetTypeId<duckdb::usmallint_t>() == PhysicalType::UINT16);
+	REQUIRE(duckdb::GetTypeId<duckdb::uinteger_t>() == PhysicalType::UINT32);
+	REQUIRE(duckdb::GetTypeId<duckdb::ubigint_t>() == PhysicalType::UINT64);
+
+	REQUIRE(duckdb::GetTypeId<CheckedInteger<int32_t, duckdb::InternalException>>() == PhysicalType::INT32);
+	REQUIRE(duckdb::GetTypeId<CheckedInteger<int32_t, duckdb::InvalidInputException>>() == PhysicalType::INT32);
+	REQUIRE(duckdb::GetTypeId<const duckdb::ubigint_t>() == PhysicalType::UINT64);
 }

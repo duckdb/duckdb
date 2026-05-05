@@ -196,7 +196,7 @@ protected:
 	//! Block manager for temp data
 	unique_ptr<BlockManager> temp_block_manager;
 	//! Temporary evicted memory data per tag
-	atomic<CheckedInteger<idx_t>> evicted_data_per_tag[MEMORY_TAG_COUNT];
+	atomic<CheckedInteger<idx_t, InternalException>> evicted_data_per_tag[MEMORY_TAG_COUNT];
 };
 
 } // namespace duckdb

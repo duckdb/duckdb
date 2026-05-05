@@ -32,7 +32,7 @@ namespace duckdb {
 //! - For all the operations, only integral template arguments are accepted.
 //! - It doesn't support bit operations.
 //! - Modulo operation is not supported.
-template <typename T, typename ExceptionT = InternalException>
+template <typename T, typename ExceptionT = OutOfRangeException>
 class CheckedInteger {
 	static_assert(std::is_integral_v<T>, "CheckedInteger only supports integral types");
 
@@ -425,6 +425,15 @@ template <typename TL, typename TR, typename E, std::enable_if_t<std::is_integra
 CheckedInteger<TR, E> operator/(TL lhs, const CheckedInteger<TR, E> &rhs) {
 	return CheckedInteger<TR, E>(lhs) / rhs.GetValue();
 }
+
+using tinyint_t = CheckedInteger<int8_t>;
+using smallint_t = CheckedInteger<int16_t>;
+using integer_t = CheckedInteger<int32_t>;
+using bigint_t = CheckedInteger<int64_t>;
+using utinyint_t = CheckedInteger<uint8_t>;
+using usmallint_t = CheckedInteger<uint16_t>;
+using uinteger_t = CheckedInteger<uint32_t>;
+using ubigint_t = CheckedInteger<uint64_t>;
 
 } // namespace duckdb
 
