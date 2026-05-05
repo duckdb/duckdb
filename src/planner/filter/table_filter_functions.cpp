@@ -67,7 +67,7 @@ void GetThresholdAndVectorsToCheck(SelectivityOptionalFilterType type, float &se
 	}
 }
 
-static unique_ptr<Expression> CreateSingleArgumentFunctionExpression(ScalarFunction function,
+static unique_ptr<Expression> CreateSingleArgumentFunctionExpression(const ScalarFunction &function,
                                                                      const LogicalType &target_type,
                                                                      unique_ptr<FunctionData> bind_data) {
 	vector<unique_ptr<Expression>> arguments;
