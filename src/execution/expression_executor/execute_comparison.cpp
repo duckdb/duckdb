@@ -2,6 +2,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -269,9 +271,319 @@ idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, optional_ptr
 	                                 [](int8_t v) { return v <= 0; });
 }
 
+template <bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+static inline idx_t SelectAllFalse(const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+                                   SelectionVector *false_sel) {
+	idx_t false_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto input_idx = sel.get_index(i);
+		if (HAS_FALSE_SEL) {
+			false_sel->set_index(false_count++, input_idx);
+		}
+	}
+	if (HAS_TRUE_SEL) {
+		return 0;
+	}
+	return count;
+}
+
+static inline idx_t SelectAllFalseSwitch(const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+                                         SelectionVector *false_sel) {
+	if (true_sel && false_sel) {
+		return SelectAllFalse<true, true>(sel, count, true_sel, false_sel);
+	} else if (true_sel) {
+		return SelectAllFalse<true, false>(sel, count, true_sel, false_sel);
+	} else {
+		D_ASSERT(false_sel);
+		return SelectAllFalse<false, true>(sel, count, true_sel, false_sel);
+	}
+}
+
+template <bool SELECT_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+static inline idx_t SelectNullLoop(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
+                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+	auto &mask = vdata.validity;
+	idx_t true_count = 0;
+	idx_t false_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto input_idx = sel.get_index(i);
+		// The current selection stores chunk-local row ids. UnifiedVectorFormat::sel resolves those row ids to the
+		// physical entry in the referenced vector (e.g. after dictionary slicing).
+		auto vector_idx = vdata.sel->get_index(input_idx);
+		bool comparison_result = mask.RowIsValid(vector_idx) != SELECT_NULL;
+		if (HAS_TRUE_SEL) {
+			true_sel->set_index(true_count, input_idx);
+			true_count += comparison_result;
+		}
+		if (HAS_FALSE_SEL) {
+			false_sel->set_index(false_count, input_idx);
+			false_count += !comparison_result;
+		}
+	}
+	if (HAS_TRUE_SEL) {
+		return true_count;
+	}
+	return count - false_count;
+}
+
+template <bool SELECT_NULL>
+static inline idx_t SelectNullLoopSwitch(const UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
+                                         SelectionVector *true_sel, SelectionVector *false_sel) {
+	if (vdata.validity.CannotHaveNull()) {
+		if (SELECT_NULL) {
+			return SelectAllFalseSwitch(sel, count, true_sel, false_sel);
+		}
+		if (true_sel) {
+			for (idx_t i = 0; i < count; i++) {
+				true_sel->set_index(i, sel.get_index(i));
+			}
+			return count;
+		}
+		return count;
+	}
+	if (true_sel && false_sel) {
+		return SelectNullLoop<SELECT_NULL, true, true>(vdata, sel, count, true_sel, false_sel);
+	} else if (true_sel) {
+		return SelectNullLoop<SELECT_NULL, true, false>(vdata, sel, count, true_sel, false_sel);
+	} else {
+		D_ASSERT(false_sel);
+		return SelectNullLoop<SELECT_NULL, false, true>(vdata, sel, count, true_sel, false_sel);
+	}
+}
+
+template <class T, class OP, bool HAS_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+static inline idx_t SelectConstantComparisonLoop(const UnifiedVectorFormat &vdata, T constant,
+                                                 const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+                                                 SelectionVector *false_sel) {
+	const auto data = UnifiedVectorFormat::GetData<const T>(vdata);
+	auto &mask = vdata.validity;
+	idx_t true_count = 0;
+	idx_t false_count = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto input_idx = sel.get_index(i);
+		auto vector_idx = vdata.sel->get_index(input_idx);
+		bool comparison_result =
+		    (!HAS_NULL || mask.RowIsValidUnsafe(vector_idx)) && OP::Operation(data[vector_idx], constant);
+		if (HAS_TRUE_SEL) {
+			true_sel->set_index(true_count, input_idx);
+			true_count += comparison_result;
+		}
+		if (HAS_FALSE_SEL) {
+			false_sel->set_index(false_count, input_idx);
+			false_count += !comparison_result;
+		}
+	}
+	if (HAS_TRUE_SEL) {
+		return true_count;
+	}
+	return count - false_count;
+}
+
+template <class T, class OP, bool HAS_NULL>
+static inline idx_t SelectConstantComparisonLoopSwitch(const UnifiedVectorFormat &vdata, T constant,
+                                                       const SelectionVector &sel, idx_t count,
+                                                       SelectionVector *true_sel, SelectionVector *false_sel) {
+	if (true_sel && false_sel) {
+		return SelectConstantComparisonLoop<T, OP, HAS_NULL, true, true>(vdata, constant, sel, count, true_sel,
+		                                                                 false_sel);
+	} else if (true_sel) {
+		return SelectConstantComparisonLoop<T, OP, HAS_NULL, true, false>(vdata, constant, sel, count, true_sel,
+		                                                                  false_sel);
+	} else {
+		D_ASSERT(false_sel);
+		return SelectConstantComparisonLoop<T, OP, HAS_NULL, false, true>(vdata, constant, sel, count, true_sel,
+		                                                                  false_sel);
+	}
+}
+
+template <class T>
+static inline idx_t SelectConstantComparison(const UnifiedVectorFormat &vdata, T constant,
+                                             ExpressionType comparison_type, const SelectionVector &sel, idx_t count,
+                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+	const bool has_null = vdata.validity.CanHaveNull();
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+		return has_null ? SelectConstantComparisonLoopSwitch<T, duckdb::Equals, true>(vdata, constant, sel, count,
+		                                                                              true_sel, false_sel)
+		                : SelectConstantComparisonLoopSwitch<T, duckdb::Equals, false>(vdata, constant, sel, count,
+		                                                                               true_sel, false_sel);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return has_null ? SelectConstantComparisonLoopSwitch<T, duckdb::NotEquals, true>(vdata, constant, sel, count,
+		                                                                                 true_sel, false_sel)
+		                : SelectConstantComparisonLoopSwitch<T, duckdb::NotEquals, false>(vdata, constant, sel, count,
+		                                                                                  true_sel, false_sel);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return has_null ? SelectConstantComparisonLoopSwitch<T, duckdb::LessThan, true>(vdata, constant, sel, count,
+		                                                                                true_sel, false_sel)
+		                : SelectConstantComparisonLoopSwitch<T, duckdb::LessThan, false>(vdata, constant, sel, count,
+		                                                                                 true_sel, false_sel);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return has_null ? SelectConstantComparisonLoopSwitch<T, duckdb::GreaterThan, true>(vdata, constant, sel, count,
+		                                                                                   true_sel, false_sel)
+		                : SelectConstantComparisonLoopSwitch<T, duckdb::GreaterThan, false>(vdata, constant, sel, count,
+		                                                                                    true_sel, false_sel);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return has_null
+		           ? SelectConstantComparisonLoopSwitch<T, duckdb::LessThanEquals, true>(vdata, constant, sel, count,
+		                                                                                 true_sel, false_sel)
+		           : SelectConstantComparisonLoopSwitch<T, duckdb::LessThanEquals, false>(vdata, constant, sel, count,
+		                                                                                  true_sel, false_sel);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return has_null ? SelectConstantComparisonLoopSwitch<T, duckdb::GreaterThanEquals, true>(
+		                      vdata, constant, sel, count, true_sel, false_sel)
+		                : SelectConstantComparisonLoopSwitch<T, duckdb::GreaterThanEquals, false>(
+		                      vdata, constant, sel, count, true_sel, false_sel);
+	default:
+		throw InternalException("Unsupported constant comparison type in SelectConstantComparison");
+	}
+}
+
+struct ReferenceConstantComparison {
+	optional_ptr<const BoundReferenceExpression> ref_expr;
+	optional_ptr<const BoundConstantExpression> const_expr;
+	ExpressionType comparison_type;
+};
+
+static bool TryGetReferenceConstantComparison(const BoundComparisonExpression &expr,
+                                              ReferenceConstantComparison &comparison) {
+	comparison.comparison_type = expr.GetExpressionType();
+	if (expr.left->GetExpressionClass() == ExpressionClass::BOUND_REF &&
+	    expr.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		comparison.ref_expr = expr.left->Cast<BoundReferenceExpression>();
+		comparison.const_expr = expr.right->Cast<BoundConstantExpression>();
+		return true;
+	}
+	if (expr.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+	    expr.right->GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		comparison.ref_expr = expr.right->Cast<BoundReferenceExpression>();
+		comparison.const_expr = expr.left->Cast<BoundConstantExpression>();
+		comparison.comparison_type = FlipComparisonExpression(comparison.comparison_type);
+		return true;
+	}
+	return false;
+}
+
+static ExpressionType NormalizeConstantComparisonType(ExpressionType comparison_type) {
+	switch (comparison_type) {
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return comparison_type;
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		// Once the constant is known to be non-NULL, NOT DISTINCT FROM is the same as =.
+		return ExpressionType::COMPARE_EQUAL;
+	default:
+		return ExpressionType::INVALID;
+	}
+}
+
+static bool TrySelectReferenceConstantComparison(DataChunk &chunk, const ReferenceConstantComparison &comparison,
+                                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                                 SelectionVector *false_sel, idx_t &result_count) {
+	if (!comparison.ref_expr || !comparison.const_expr || comparison.ref_expr->index >= chunk.ColumnCount()) {
+		return false;
+	}
+	auto &reference_input = chunk.data[comparison.ref_expr->index];
+	const auto &result_sel = sel ? *sel : *FlatVector::IncrementalSelectionVector();
+	const auto &constant = comparison.const_expr->value;
+	UnifiedVectorFormat vdata;
+	// This avoids materializing the reference and constant children into temporary vectors for the common
+	// "column <cmp> constant" scan predicate shape.
+	reference_input.ToUnifiedFormat(chunk.size(), vdata);
+	if (constant.IsNull()) {
+		switch (comparison.comparison_type) {
+		case ExpressionType::COMPARE_DISTINCT_FROM:
+			result_count = SelectNullLoopSwitch<false>(vdata, result_sel, count, true_sel, false_sel);
+			return true;
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+			result_count = SelectNullLoopSwitch<true>(vdata, result_sel, count, true_sel, false_sel);
+			return true;
+		default:
+			result_count = SelectAllFalseSwitch(result_sel, count, true_sel, false_sel);
+			return true;
+		}
+	}
+
+	auto comparison_type = NormalizeConstantComparisonType(comparison.comparison_type);
+	if (comparison_type == ExpressionType::INVALID) {
+		return false;
+	}
+
+	switch (reference_input.GetType().InternalType()) {
+	case PhysicalType::BOOL:
+		result_count = SelectConstantComparison<bool>(vdata, constant.GetValueUnsafe<bool>(), comparison_type,
+		                                              result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::INT8:
+		result_count = SelectConstantComparison<int8_t>(vdata, constant.GetValueUnsafe<int8_t>(), comparison_type,
+		                                                result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::INT16:
+		result_count = SelectConstantComparison<int16_t>(vdata, constant.GetValueUnsafe<int16_t>(), comparison_type,
+		                                                 result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::INT32:
+		result_count = SelectConstantComparison<int32_t>(vdata, constant.GetValueUnsafe<int32_t>(), comparison_type,
+		                                                 result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::INT64:
+		result_count = SelectConstantComparison<int64_t>(vdata, constant.GetValueUnsafe<int64_t>(), comparison_type,
+		                                                 result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::INT128:
+		result_count = SelectConstantComparison<hugeint_t>(vdata, constant.GetValueUnsafe<hugeint_t>(), comparison_type,
+		                                                   result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::UINT8:
+		result_count = SelectConstantComparison<uint8_t>(vdata, constant.GetValueUnsafe<uint8_t>(), comparison_type,
+		                                                 result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::UINT16:
+		result_count = SelectConstantComparison<uint16_t>(vdata, constant.GetValueUnsafe<uint16_t>(), comparison_type,
+		                                                  result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::UINT32:
+		result_count = SelectConstantComparison<uint32_t>(vdata, constant.GetValueUnsafe<uint32_t>(), comparison_type,
+		                                                  result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::UINT64:
+		result_count = SelectConstantComparison<uint64_t>(vdata, constant.GetValueUnsafe<uint64_t>(), comparison_type,
+		                                                  result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::UINT128:
+		result_count = SelectConstantComparison<uhugeint_t>(vdata, constant.GetValueUnsafe<uhugeint_t>(),
+		                                                    comparison_type, result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::FLOAT:
+		result_count = SelectConstantComparison<float>(vdata, constant.GetValueUnsafe<float>(), comparison_type,
+		                                               result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::DOUBLE:
+		result_count = SelectConstantComparison<double>(vdata, constant.GetValueUnsafe<double>(), comparison_type,
+		                                                result_sel, count, true_sel, false_sel);
+		return true;
+	case PhysicalType::VARCHAR:
+		result_count = SelectConstantComparison<string_t>(vdata, constant.GetValueUnsafe<string_t>(), comparison_type,
+		                                                  result_sel, count, true_sel, false_sel);
+		return true;
+	default:
+		return false;
+	}
+}
+
 idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
+	ReferenceConstantComparison comparison;
+	idx_t result_count;
+	if (chunk && TryGetReferenceConstantComparison(expr, comparison) &&
+	    TrySelectReferenceConstantComparison(*chunk, comparison, sel, count, true_sel, false_sel, result_count)) {
+		return result_count;
+	}
+
 	// resolve the children
 	state->intermediate_chunk.Reset();
 	auto &left = state->intermediate_chunk.data[0];
