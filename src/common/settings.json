@@ -615,13 +615,6 @@
         "struct": "ErrorsAsJSONSetting"
     },
     {
-        "name": "experimental_column_metadata_reuse",
-        "description": "EXPERIMENTAL: Re-use row group metadata on a column-level when checkpointing.",
-        "type": "BOOLEAN",
-        "scope": "global",
-        "default_value": "false"
-    },
-    {
         "name": "experimental_metadata_reuse",
         "description": "EXPERIMENTAL: Re-use row group and table metadata when checkpointing.",
         "type": "BOOLEAN",
@@ -672,6 +665,13 @@
         "type": "ENUM<BitpackingMode>",
         "scope": "global",
         "default_value": "AUTO"
+    },
+    {
+        "name": "force_column_metadata_reuse",
+        "description": "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. This breaks storage backward-compatibility with older DuckDB versions.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "false"
     },
     {
         "name": "force_compression",

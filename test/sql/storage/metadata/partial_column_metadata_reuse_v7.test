@@ -1,11 +1,11 @@
 # name: test/sql/storage/metadata/partial_column_metadata_reuse_v7.test
-# description: Test partial column metadata reuse with experimental_column_metadata_reuse on v1.5.0
+# description: Test partial column metadata reuse with force_column_metadata_reuse on v1.5.0
 # group: [metadata]
 
 load {TEST_DIR}/partial_column_metadata_reuse_v7.test.db readwrite v1.5.0
 
 statement ok
-SET experimental_column_metadata_reuse=true
+SET force_column_metadata_reuse=true
 
 # create a wide table with many columns
 statement ok

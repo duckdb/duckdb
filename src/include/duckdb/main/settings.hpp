@@ -925,17 +925,6 @@ struct ErrorsAsJSONSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
-struct ExperimentalColumnMetadataReuseSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "experimental_column_metadata_reuse";
-	static constexpr const char *Description =
-	    "EXPERIMENTAL: Re-use row group metadata on a column-level when checkpointing.";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct ExperimentalMetadataReuseSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "experimental_metadata_reuse";
@@ -1007,6 +996,18 @@ struct ForceBitpackingModeSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ForceColumnMetadataReuseSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "force_column_metadata_reuse";
+	static constexpr const char *Description =
+	    "Force re-use of row group metadata on a column-level when checkpointing on older storage versions 6 and 7. "
+	    "This breaks storage backward-compatibility with older DuckDB versions.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct ForceCompressionSetting {
