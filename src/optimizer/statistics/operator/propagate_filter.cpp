@@ -157,7 +157,8 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &left, const Expression &right,
+                                                  ExpressionType comparison_type) {
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
@@ -168,8 +169,8 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
-	optional_ptr<BoundConstantExpression> constant;
-	optional_ptr<BoundColumnRefExpression> columnref;
+	optional_ptr<const BoundConstantExpression> constant;
+	optional_ptr<const BoundColumnRefExpression> columnref;
 	if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
 	    right.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		constant = &left.Cast<BoundConstantExpression>();
@@ -204,14 +205,14 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
+void StatisticsPropagator::UpdateFilterStatistics(const Expression &condition) {
 	// in filters, we check for constant comparisons with bound columns
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
 	switch (condition.GetExpressionClass()) {
 	case ExpressionClass::BOUND_BETWEEN: {
 		auto &between = condition.Cast<BoundBetweenExpression>();
-		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
-		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
+		UpdateFilterStatistics(between.Input(), between.LowerBound(), between.LowerComparisonType());
+		UpdateFilterStatistics(between.Input(), between.UpperBound(), between.UpperComparisonType());
 		break;
 	}
 	case ExpressionClass::BOUND_COMPARISON: {

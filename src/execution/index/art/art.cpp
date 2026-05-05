@@ -196,23 +196,23 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		}
 	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		auto &between = filter_expr.Cast<BoundBetweenExpression>();
-		if (!between.input->Equals(expr)) {
+		if (!between.Input().Equals(expr)) {
 			// The expression does not match the index expression.
 			return nullptr;
 		}
 
-		if (between.lower->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-		    between.upper->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		if (between.LowerBound().GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		    between.UpperBound().GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			// Not a constant expression.
 			return nullptr;
 		}
 
-		low_value = between.lower->Cast<BoundConstantExpression>().value;
-		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
-		                                              : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		low_value = between.LowerBound().Cast<BoundConstantExpression>().value;
+		low_comparison_type = between.LowerInclusive() ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                               : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (between.UpperBound().Cast<BoundConstantExpression>()).value;
 		high_comparison_type =
-		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+		    between.UpperInclusive() ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
 	// FIXME: add another if...else... to match rewritten BETWEEN,
 	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.

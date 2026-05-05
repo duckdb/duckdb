@@ -34,11 +34,21 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
+	const ParsedExpression &Input() const {
+		return *input;
+	}
+	const ParsedExpression &LowerBound() const {
+		return *lower;
+	}
+	const ParsedExpression &UpperBound() const {
+		return *upper;
+	}
+
 public:
 	template <class T, class BASE>
 	static string ToString(const T &entry) {
-		return "(" + entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " +
-		       entry.upper->ToString() + ")";
+		return "(" + entry.Input().ToString() + " BETWEEN " + entry.LowerBound().ToString() + " AND " +
+		       entry.UpperBound().ToString() + ")";
 	}
 
 private:
