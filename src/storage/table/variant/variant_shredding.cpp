@@ -773,6 +773,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		unshredded.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(unshredded, count_t(count));
 	}
 
 #ifdef DEBUG
