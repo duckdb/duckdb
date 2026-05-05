@@ -37,9 +37,6 @@ void ExtensionLoader::SetDescription(const string &description) {
 }
 
 void ExtensionLoader::CreateExtensionSchema() const {
-	if (extension_schema == DEFAULT_SCHEMA) {
-		return;
-	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -51,6 +48,9 @@ void ExtensionLoader::CreateExtensionSchema() const {
 }
 
 void ExtensionLoader::SetExtensionSchema(const string &name) {
+	if (name == DEFAULT_SCHEMA || name == "pg_catalog" || name == INVALID_SCHEMA) {
+		return;
+	}
 	extension_schema = name;
 	CreateExtensionSchema();
 }
