@@ -251,6 +251,7 @@ public:
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count);
 	void AnalyzeVariantValues(UnifiedVariantVectorData &variant, optional_ptr<Vector> untyped_values,
 	                          optional_ptr<const SelectionVector> sel,
 	                          optional_ptr<const SelectionVector> value_index_sel,
@@ -680,7 +681,12 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 			FlatVector::SetNull(typed_value, result_sel ? result_sel->get_index(i) : i, true);
 		}
 	}
-	//! Propagate NULL values from the input variant to the shredded child struct
+}
+
+void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count) {
+	// write the top-level variant values
+	WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+	//! Propagate NULL values from the top-level input variant to the shredded child struct
 	for (idx_t row = 0; row < count; row++) {
 		if (!variant.RowIsValid(row)) {
 			FlatVector::SetNull(result, row, true);
@@ -697,7 +703,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
 	DuckDBVariantShredding shredding(count);
-	shredding.WriteVariantValues(variant, child_vectors[1], nullptr, nullptr, nullptr, count);
+	shredding.WriteVariantValues(variant, child_vectors[1], count);
 
 	//! Now we can write the unshredded values
 	auto &unshredded = child_vectors[0];
