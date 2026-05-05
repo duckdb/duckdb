@@ -40,6 +40,8 @@ public:
 public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
+	//! Explicitly set the schema in the catalog for this extension
+	DUCKDB_API void SetExtensionSchema(const string &description);
 
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
@@ -113,6 +115,7 @@ private:
 	DatabaseInstance &db;
 	string extension_name;
 	string extension_description;
+	string extension_schema;
 	optional_ptr<ExtensionInfo> extension_info;
 };
 

@@ -35,6 +35,10 @@ void ExtensionLoader::SetDescription(const string &description) {
 	extension_description = description;
 }
 
+void ExtensionLoader::SetExtensionSchema(const string &schema) {
+	extension_schema = schema;
+}
+
 void ExtensionLoader::FinalizeLoad() {
 	// Set extension description, if provided
 	if (!extension_description.empty() && extension_info) {
