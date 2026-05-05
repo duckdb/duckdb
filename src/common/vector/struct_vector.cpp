@@ -4,6 +4,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 
 namespace duckdb {
 
@@ -76,10 +77,7 @@ idx_t VectorStructBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorStructBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	auto &child_types = StructType::GetChildTypes(type);
@@ -87,7 +85,12 @@ void VectorStructBuffer::Verify(const LogicalType &type, const SelectionVector &
 	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 		auto &child = children[child_idx];
 		D_ASSERT(child.GetType() == child_types[child_idx].second);
-		child.Verify(sel, count);
+		if (!sel.IsSet() && count == Size()) {
+			child.Verify();
+		} else {
+			child.Verify(sel, count);
+		}
+		D_ASSERT(child.size() == Size());
 		if (vector_type == VectorType::CONSTANT_VECTOR) {
 			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
 			if (!validity.RowIsValid(0)) {
@@ -133,9 +136,9 @@ buffer_ptr<VectorBuffer> VectorStructBuffer::ConstantSliceInternal(const Logical
 	return result;
 }
 
-void VectorStructBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorStructBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -223,14 +226,14 @@ void VectorStructBuffer::CopyInternal(const Vector &source, const SelectionVecto
 	}
 }
 
-buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorStructBuffer::Flatten(const LogicalType &type) const {
 	if (GetVectorType() == VectorType::FLAT_VECTOR) {
 		for (auto &child : children) {
-			child.Flatten(count);
+			child.Flatten();
 		}
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorStructBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -267,6 +270,14 @@ vector<Vector> &StructVector::GetEntries(Vector &vector) {
 
 const vector<Vector> &StructVector::GetEntries(const Vector &vector) {
 	return GetEntries((Vector &)vector);
+}
+
+const vector<Vector> &VectorIteratorGetStructEntries(const Vector &vector) {
+	return StructVector::GetEntries(vector);
+}
+
+vector<Vector> &VectorWriterGetStructEntries(Vector &vector) {
+	return StructVector::GetEntries(vector);
 }
 
 } // namespace duckdb

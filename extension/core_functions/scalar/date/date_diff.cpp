@@ -448,6 +448,8 @@ ScalarFunctionSet DateDiffFun::GetFunctions() {
 	                                     LogicalType::BIGINT, DateDiffFunction<timestamp_t>));
 	date_diff.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
 	                                     LogicalType::BIGINT, DateDiffFunction<dtime_t>));
+	date_diff.SetArgProperties(1, ArgProperties().NonIncreasing());
+	date_diff.SetArgProperties(2, ArgProperties().NonDecreasing());
 	return date_diff;
 }
 

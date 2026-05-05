@@ -166,7 +166,14 @@ static bool PartitionedExecutionCanUseStats(const unique_ptr<BaseStatistics> &st
 		return NumericStats::HasMinMax(*stats);
 	case StatisticsType::STRING_STATS:
 		// Let's not mess with BLOB for now
-		return stats->GetType() == LogicalType::VARCHAR;
+		if (stats->GetType() != LogicalType::VARCHAR) {
+			return false;
+		}
+		if (!StringStats::HasMinMax(*stats)) {
+			return false;
+		}
+		// Truncated multibyte UTF-8 sequences produce invalid string bytes in min/max; skip those row groups
+		return Value::StringIsValid(StringStats::Min(*stats)) && Value::StringIsValid(StringStats::Max(*stats));
 	default:
 		return false; // Only numeric/string supported for now
 	}

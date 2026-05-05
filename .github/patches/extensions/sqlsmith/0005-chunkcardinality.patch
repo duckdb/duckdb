@@ -9,5 +9,5 @@ index c5f2274..1542369 100644
 -	output.SetCardinality(count);
 +	output.SetChildCardinality(count);
  }
-
+ 
  struct FuzzyDuckFunctionData : public TableFunctionData {

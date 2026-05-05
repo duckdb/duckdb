@@ -30,7 +30,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 }
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
-unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
+unique_ptr<FunctionData> ListAggregatesBindFailure(BoundScalarFunction &bound_function) {
 	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
@@ -379,9 +379,10 @@ void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 template <bool IS_AGGR = false>
-unique_ptr<FunctionData>
-ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function, const LogicalType &list_child_type,
-                           AggregateFunction &aggr_function, vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, BoundScalarFunction &bound_function,
+                                                    const LogicalType &list_child_type,
+                                                    const AggregateFunction &aggr_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
@@ -471,14 +472,14 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		bound_function.SetErrorMode(best_function.GetErrorMode());
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 
 	// create the unordered map histogram function
-	D_ASSERT(best_function.GetArguments().size() == 1);
+	D_ASSERT(best_function.GetSignature().GetParameterCount() == 1);
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }

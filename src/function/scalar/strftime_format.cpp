@@ -742,7 +742,8 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 }
 
 void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
-	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS ||
+	         input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<timestamp_ns_t, string_t>(

@@ -5,7 +5,7 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ConstantExpression &expr, idx_t depth) {
-	return BindResult(make_uniq<BoundConstantExpression>(expr.value));
+	return BindResult(make_uniq<BoundConstantExpression>(expr.GetValue()));
 }
 
 } // namespace duckdb

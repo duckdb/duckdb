@@ -304,6 +304,8 @@ enum class MetricGroup : uint8_t;
 
 enum class MetricType : uint8_t;
 
+enum class Monotonicity : uint8_t;
+
 enum class MultiFileColumnMappingMode : uint8_t;
 
 enum class MultiFileFileState : uint8_t;
@@ -467,6 +469,8 @@ enum class SuggestionState : uint8_t;
 enum class TableColumnType : uint8_t;
 
 enum class TableFilterType : uint8_t;
+
+enum class TableFunctionParallelism : uint8_t;
 
 enum class TablePartitionInfo : uint8_t;
 
@@ -942,6 +946,9 @@ template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value);
 
 template<>
+const char* EnumUtil::ToChars<Monotonicity>(Monotonicity value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
 
 template<>
@@ -1186,6 +1193,9 @@ const char* EnumUtil::ToChars<TableColumnType>(TableColumnType value);
 
 template<>
 const char* EnumUtil::ToChars<TableFilterType>(TableFilterType value);
+
+template<>
+const char* EnumUtil::ToChars<TableFunctionParallelism>(TableFunctionParallelism value);
 
 template<>
 const char* EnumUtil::ToChars<TablePartitionInfo>(TablePartitionInfo value);
@@ -1693,6 +1703,9 @@ template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value);
 
 template<>
+Monotonicity EnumUtil::FromString<Monotonicity>(const char *value);
+
+template<>
 MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
 
 template<>
@@ -1937,6 +1950,9 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value);
 
 template<>
 TableFilterType EnumUtil::FromString<TableFilterType>(const char *value);
+
+template<>
+TableFunctionParallelism EnumUtil::FromString<TableFunctionParallelism>(const char *value);
 
 template<>
 TablePartitionInfo EnumUtil::FromString<TablePartitionInfo>(const char *value);

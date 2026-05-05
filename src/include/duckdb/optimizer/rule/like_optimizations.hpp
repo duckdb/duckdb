@@ -22,7 +22,7 @@ public:
 	                             bool is_root) override;
 
 	unique_ptr<Expression> ApplyRule(BoundFunctionExpression &expr, const ScalarFunction &function, string pattern,
-	                                 bool is_not_like);
+	                                 bool is_not_like) const;
 };
 
 } // namespace duckdb

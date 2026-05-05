@@ -160,6 +160,16 @@ SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;
 1992-02-02 00:00:00
 infinity
 
+# Infinity passes through every fixed-width unit unchanged
+foreach unit day hour minute second millisecond microsecond
+
+query II
+SELECT date_trunc('{unit}', '-infinity'::TIMESTAMP), date_trunc('{unit}', 'infinity'::TIMESTAMP);
+----
+-infinity	infinity
+
+endloop
+
 # Test week operator special cases
 query T
 SELECT date_trunc('week', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;

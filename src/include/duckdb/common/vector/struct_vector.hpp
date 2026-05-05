@@ -46,11 +46,10 @@ public:
 public:
 	idx_t GetDataSize(const LogicalType &type, idx_t count) const override;
 	idx_t GetAllocationSize() const override;
-	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const override;
-	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type, idx_t count) const override;
+	void ToUnifiedFormat(UnifiedVectorFormat &format) const override;
+	buffer_ptr<VectorBuffer> Flatten(const LogicalType &type) const override;
 	Value GetValue(const LogicalType &type, idx_t index) const override;
 	void SetValue(const LogicalType &type, idx_t index, const Value &val) override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 	void Resize(idx_t current_size, idx_t new_size) override;
 
 protected:
@@ -61,6 +60,7 @@ protected:
 	                  idx_t target_offset, idx_t copy_count) override;
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	ValidityMask validity;

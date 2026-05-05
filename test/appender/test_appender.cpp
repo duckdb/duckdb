@@ -573,12 +573,6 @@ TEST_CASE("Test appending to different database files", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("COMMIT TRANSACTION"));
 }
 
-void setDataChunkInt32(DataChunk &chunk, idx_t col_idx, idx_t row_idx, int32_t value) {
-	auto &col = chunk.data[col_idx];
-	auto data = FlatVector::GetDataMutable<int32_t>(col);
-	data[row_idx] = value;
-}
-
 TEST_CASE("Test appending with an active default column", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
@@ -593,9 +587,8 @@ TEST_CASE("Test appending with an active default column", "[appender]") {
 	const duckdb::vector<LogicalType> types = {LogicalType::INTEGER};
 	chunk.Initialize(*con.context, types);
 
-	setDataChunkInt32(chunk, 0, 0, 42);
-	setDataChunkInt32(chunk, 0, 1, 43);
-
+	chunk.data[0].Append(Value::INTEGER(42));
+	chunk.data[0].Append(Value::INTEGER(43));
 	chunk.SetCardinality(2);
 	appender.AppendDataChunk(chunk);
 	appender.Close();
@@ -628,11 +621,11 @@ TEST_CASE("Test appending with two active normal columns", "[appender]") {
 	for (idx_t i = 0; i < 4; i++) {
 		for (idx_t j = 0; j < 2; j++) {
 			auto &col = chunk.data[j];
-			auto col_data = FlatVector::GetDataMutable<int32_t>(col);
+			auto col_data = FlatVector::Writer<int32_t>(col, STANDARD_VECTOR_SIZE);
 
 			auto offset = i * STANDARD_VECTOR_SIZE;
 			for (idx_t k = 0; k < STANDARD_VECTOR_SIZE; k++) {
-				col_data[k] = int32_t(offset + k);
+				col_data.WriteValue(static_cast<int32_t>(offset + k));
 			}
 		}
 		chunk.SetCardinality(STANDARD_VECTOR_SIZE);
@@ -663,9 +656,9 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> all_types = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER};
 	chunk_all_types.Initialize(*con.context, all_types);
 
-	setDataChunkInt32(chunk_all_types, 0, 0, 42);
-	setDataChunkInt32(chunk_all_types, 1, 0, 111);
-	setDataChunkInt32(chunk_all_types, 2, 0, 50);
+	chunk_all_types.data[0].Append(Value::INTEGER(42));
+	chunk_all_types.data[1].Append(Value::INTEGER(111));
+	chunk_all_types.data[2].Append(Value::INTEGER(50));
 
 	chunk_all_types.SetCardinality(1);
 	appender.AppendDataChunk(chunk_all_types);
@@ -677,8 +670,8 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> types_j_i = {LogicalType::INTEGER, LogicalType::INTEGER};
 	chunk_j_i.Initialize(*con.context, types_j_i);
 
-	setDataChunkInt32(chunk_j_i, 0, 0, 111);
-	setDataChunkInt32(chunk_j_i, 1, 0, 42);
+	chunk_j_i.data[0].Append(Value::INTEGER(111));
+	chunk_j_i.data[1].Append(Value::INTEGER(42));
 
 	chunk_j_i.SetCardinality(1);
 	appender.AppendDataChunk(chunk_j_i);
@@ -692,7 +685,7 @@ TEST_CASE("Test changing the active column configuration", "[appender]") {
 	const duckdb::vector<LogicalType> types_k = {LogicalType::INTEGER};
 	chunk_k.Initialize(*con.context, types_k);
 
-	setDataChunkInt32(chunk_k, 0, 0, 50);
+	chunk_k.data[0].Append(Value::INTEGER(50));
 
 	chunk_k.SetCardinality(1);
 	appender.AppendDataChunk(chunk_k);

@@ -8,10 +8,9 @@ import sys
 from dataclasses import dataclass
 from typing import TextIO
 
-PULL_REQUEST_JOBS = [
+COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
-    "regression",
     "tidy-check",
     "extensions",
     "wasm-eh",
@@ -28,21 +27,25 @@ PULL_REQUEST_JOBS = [
     "static-libs-linux",
 ]
 
+PULL_REQUEST_ONLY_JOBS = [
+    "regression",
+]
+
+PULL_REQUEST_JOBS = COMMON_JOBS + PULL_REQUEST_ONLY_JOBS
+
 NIGHTLY_ONLY_JOBS = [
     "main_julia",
-    "check-clangd-tidy",
     "valgrind",
     "static-libs-osx",
     "static-libs-windows-mingw",
 ]
 
-NIGHTLY_JOBS = PULL_REQUEST_JOBS + NIGHTLY_ONLY_JOBS
+NIGHTLY_JOBS = COMMON_JOBS + NIGHTLY_ONLY_JOBS
 
 MERGE_GROUP_JOBS = [
     "linux-relassert",
     "linux-release",
     "linux-release-tests",
-    "check-clangd-tidy",
     "tidy-check",
 ]
 
@@ -97,12 +100,12 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
         selection_input.repository != "duckdb/duckdb"
         or selection_input.ref_name == "main"
         or selection_input.ref_name == "v1.5-variegata"
-        or (selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"))
+        or selection_input.event_name == "merge_group"
     )
 
 
 def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
-    if selection_input.event_name == "push" and selection_input.ref_name.startswith("gh-readonly-queue/"):
+    if selection_input.event_name == "merge_group":
         selected_jobs = MERGE_GROUP_JOBS.copy()
     elif selection_input.ref_name == "main":
         selected_jobs = NIGHTLY_JOBS.copy()
@@ -112,7 +115,7 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
-    if "julia" in selection_input.changed_keys:
+    if "julia" in selection_input.changed_keys or "capi" in selection_input.changed_keys:
         selected_jobs.append("main_julia")
 
     if selection_input.event_name in {"workflow_dispatch", "repository_dispatch"}:

@@ -40,10 +40,6 @@ using namespace duckdb; // NOLINT
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-static inline int32_t hello_fun(string_t what) {
-	return UnsafeNumericCast<int32_t>(what.GetSize() + 5);
-}
-
 static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"), count_t(args.size()));
 }
@@ -883,7 +879,9 @@ public:
 		// Construct the bound expression (column index 0: the filter chunk contains only the filtered column)
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, 0));
-		auto expr = make_uniq<BoundFunctionExpression>(LogicalType::BOOLEAN, func, std::move(children),
+
+		BoundScalarFunction bound_func(func);
+		auto expr = make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(children),
 		                                               make_uniq<RowIdFilterBindData>(vector<int64_t> {3, 4, 5, 7, 9}));
 
 		// Ensure ROW_ID is in the scan's column list
@@ -916,8 +914,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto &client_context = *con.context;
 	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
-	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
-	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type

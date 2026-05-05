@@ -9,7 +9,8 @@ enum class PEGKeywordCategory : uint8_t {
 	KEYWORD_UNRESERVED,
 	KEYWORD_RESERVED,
 	KEYWORD_TYPE_FUNC,
-	KEYWORD_COL_NAME
+	KEYWORD_COL_NAME,
+	KEYWORD_TYPE_NAME
 };
 
 class PEGKeywordHelper {
@@ -33,5 +34,6 @@ private:
 	case_insensitive_set_t unreserved_keyword_map;
 	case_insensitive_set_t colname_keyword_map;
 	case_insensitive_set_t typefunc_keyword_map;
+	case_insensitive_set_t typename_keyword_map;
 };
 } // namespace duckdb

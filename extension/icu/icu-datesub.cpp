@@ -4,7 +4,7 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -136,6 +136,8 @@ struct ICUCalendarSub : public ICUDateFunc {
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetArgProperties(1, ArgProperties().NonIncreasing());
+		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
 };
@@ -268,6 +270,8 @@ struct ICUCalendarDiff : public ICUDateFunc {
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetArgProperties(1, ArgProperties().NonIncreasing());
+		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
 };

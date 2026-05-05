@@ -103,6 +103,8 @@ idx_t StructColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 			validity.SetInvalid(i);
 		}
 	}
+	// set the parent struct's size so it matches its children (each child reader sets its own size)
+	FlatVector::SetSize(result, count_t(read_count.GetIndex()));
 
 	return read_count.GetIndex();
 }

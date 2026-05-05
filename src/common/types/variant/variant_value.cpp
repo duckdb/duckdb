@@ -183,6 +183,10 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			data_offset += sizeof(timestamp_tz_ns_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
 			data_offset += sizeof(timestamp_t);
 			break;
@@ -470,6 +474,13 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_NANOS_TZ);
+			Store(primitive.GetValueUnsafe<timestamp_tz_ns_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_tz_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
 			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_MICROS);
@@ -748,11 +759,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	keys_entry.Flatten(keys_selvec_size);
-
-	if (input.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	FlatVector::SetSize(result, count);
 	result.Verify(count);
 }
 
@@ -793,6 +800,10 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
+			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
 			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}

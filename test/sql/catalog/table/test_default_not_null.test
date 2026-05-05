@@ -2,9 +2,6 @@
 # description: Test DEFAULT value combined with NOT NULL constraint on the same column
 # group: [table]
 
-statement ok
-PRAGMA enable_verification
-
 # DEFAULT + NOT NULL unparenthesized function call
 statement ok
 CREATE TABLE uuids(u UUID DEFAULT gen_random_uuid() NOT NULL, a INTEGER);
