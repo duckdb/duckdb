@@ -98,8 +98,8 @@ struct DateTrunc {
 
 	// Truncate a UTC timestamp to the nearest fixed-width interval boundary.
 	// Applies to any unit whose length is a constant number of microseconds
-	// (second, minute, hour). Variable-length units (month, year, etc.) must
-	// use the calendar-decomposition path above.
+	// (second, minute, hour, day). Variable-length units (month, year, etc.)
+	// must use the calendar-decomposition path above.
 	static inline timestamp_t TruncFixed(timestamp_t ts, int64_t interval_us) {
 		const int64_t v = ts.value;
 		// Round towards negative infinity instead of 0
@@ -231,7 +231,7 @@ timestamp_t DateTrunc::DayOperator::Operation(date_t input) {
 
 template <>
 timestamp_t DateTrunc::DayOperator::Operation(timestamp_t input) {
-	return DayOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+	return TruncFixed(input, Interval::MICROS_PER_DAY);
 }
 
 template <>
