@@ -1688,7 +1688,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		new_row_groups->AppendSegment(l, std::move(new_row_group));
 
 		if (debug_verify_blocks) {
-			if (!pointer_copy.has_metadata_blocks && !pointer.has_per_column_metadata_blocks) {
+			if (!pointer_copy.has_metadata_blocks && !pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
 			if (full_metadata_reuse || !pointer.has_per_column_metadata_blocks) {
