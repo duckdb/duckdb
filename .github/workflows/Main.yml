@@ -261,10 +261,6 @@ jobs:
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(steps.config.outputs.save_cache) }}
-
       - name: Install tools
         timeout-minutes: 10
         run: python3 scripts/ci/retry.py -- make -j4 format_tools
