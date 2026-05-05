@@ -30,7 +30,6 @@ add_library_unity(
   table_macro_function.cpp
   scalar_function.cpp
   table_function.cpp
-  udf_function.cpp
   window_function.cpp
   copy_blob.cpp)
 set(ALL_OBJECT_FILES

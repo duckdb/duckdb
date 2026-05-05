@@ -132,7 +132,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	// Create a Vector of pointers to the start of the TupleDataLayout of the STRUCT
 	Vector rhs_struct_row_locations(LogicalType::POINTER);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
-	auto rhs_struct_locations = FlatVector::GetDataMutable<data_ptr_t>(rhs_struct_row_locations);
+	auto rhs_struct_locations = FlatVector::ScatterWriter<data_ptr_t>(rhs_struct_row_locations);
 	for (idx_t i = 0; i < match_count; i++) {
 		const auto idx = sel.get_index(i);
 		rhs_struct_locations[idx] = rhs_locations[idx] + rhs_offset_in_row;
