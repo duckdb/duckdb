@@ -498,16 +498,15 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		return new_group_count;
 	}
 
+	// process the aggregates
+	// we use simple_update here if the aggregates support it
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
-	for (idx_t i = 0; i < payload.size(); i++) {
-		result_addresses[i] = aggregate_address;
-	}
-
-	// process the aggregates
-	// FIXME: we can use simple_update here if the aggregates support it
+	result_addresses[0] = aggregate_address;
+	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
+	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
 }
@@ -557,6 +556,11 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
 			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
 			                                    payload, payload_idx);
+		} else if (state.addresses.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.row_state.allocator);
+			aggr.function.GetStateSimpleUpdateCallback()(
+			    aggr.child_count == 0 ? nullptr : &payload.data[payload_idx], aggr_input_data, aggr.child_count,
+			    FlatVector::GetData<data_ptr_t>(state.addresses)[0], payload.size());
 		} else {
 			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}
