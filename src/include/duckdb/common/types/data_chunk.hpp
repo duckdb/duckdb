@@ -166,7 +166,7 @@ public:
 	DUCKDB_API void Verify(shared_ptr<DatabaseInstance> &db);
 	DUCKDB_API void Verify(ClientContext &context);
 	DUCKDB_API void Verify(optional_ptr<ClientContext> context);
-	DUCKDB_API void Verify(DebugVerificationMode mode);
+	DUCKDB_API void Verify();
 
 private:
 	//! The amount of tuples stored in the data chunk

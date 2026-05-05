@@ -389,7 +389,7 @@ void DataChunk::Verify(shared_ptr<DatabaseInstance> &db) {
 	if (db) {
 		Verify(*db);
 	} else {
-		Verify(DebugVerificationMode::DEFAULT);
+		Verify();
 	}
 }
 
@@ -397,7 +397,7 @@ void DataChunk::Verify(optional_ptr<ClientContext> context) {
 	if (context) {
 		Verify(*context);
 	} else {
-		Verify(DebugVerificationMode::DEFAULT);
+		Verify();
 	}
 }
 
@@ -405,8 +405,8 @@ void DataChunk::Verify(DatabaseInstance &database_instance) {
 	VerifyInternal(DebugVerificationMode::DEFAULT, database_instance);
 }
 
-void DataChunk::Verify(DebugVerificationMode mode) {
-	VerifyInternal(mode, nullptr);
+void DataChunk::Verify() {
+	VerifyInternal(DebugVerificationMode::DEFAULT, nullptr);
 }
 
 void DataChunk::VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db) {
