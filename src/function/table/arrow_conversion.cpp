@@ -357,6 +357,7 @@ static void SetVectorStringView(Vector &vector, idx_t size, ArrowArray &array, i
 
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
+			strings.WriteNull();
 			continue;
 		}
 		auto length = UnsafeNumericCast<uint32_t>(arrow_string[row_idx].Length());
@@ -407,6 +408,7 @@ static void TimeConversion(Vector &vector, ArrowArray &array, idx_t chunk_offset
 	} else {
 		for (idx_t row = 0; row < size; row++) {
 			if (!validity_mask.RowIsValid(row)) {
+				tgt_writer.WriteNull();
 				continue;
 			}
 			int64_t result;
