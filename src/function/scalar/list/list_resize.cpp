@@ -1,4 +1,4 @@
-#include "duckdb/common/ubigint.hpp"
+#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
@@ -37,7 +37,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 	bool has_default_vector = args.ColumnCount() == 3 && args.data[2].GetType().id() != LogicalTypeId::SQLNULL;
 
-	ListVector::Reserve(result, total_child_size.value);
+	ListVector::Reserve(result, total_child_size.GetValue());
 	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
@@ -59,8 +59,8 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto list = result_entries.WriteDynamicList();
 		ubigint_t source_offset = source_list.offset;
 		ubigint_t source_count = source_offset + copy_count;
-		list.Append(child_vector, *FlatVector::IncrementalSelectionVector(), source_count.value, source_offset.value,
-		            copy_count.value);
+		list.Append(child_vector, *FlatVector::IncrementalSelectionVector(), source_count.GetValue(),
+		            source_offset.GetValue(), copy_count.GetValue());
 
 		if (copy_count >= new_size) {
 			continue;
@@ -69,17 +69,17 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 		// if a default value is provided fill the list with the default value
 		if (has_default_vector) {
-			SelectionVector sel(remaining_count.value);
-			for (idx_t j = 0; j < remaining_count.value; j++) {
+			SelectionVector sel(remaining_count.GetValue());
+			for (idx_t j = 0; j < remaining_count.GetValue(); j++) {
 				sel.set_index(j, row_idx);
 			}
 			auto &default_vector = args.data[2];
-			list.Append(default_vector, sel, args.size(), 0, remaining_count.value);
+			list.Append(default_vector, sel, args.size(), 0, remaining_count.GetValue());
 			continue;
 		}
 
 		// Fill the remaining space with NULL.
-		list.AppendNulls(remaining_count.value);
+		list.AppendNulls(remaining_count.GetValue());
 	}
 }
 
