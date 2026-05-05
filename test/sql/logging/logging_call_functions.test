@@ -154,8 +154,6 @@ logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	file
 
-# Reset — explicitly pass storage='memory' since enable_logging() with no args now preserves
-# the previous logging_storage instead of silently resetting it.
 statement ok
 CALL enable_logging(storage='memory')
 
@@ -222,12 +220,7 @@ logging_level	INFO
 logging_mode	LEVEL_ONLY
 logging_storage	memory
 
-####
 # Regression: CALL enable_logging() must not silently reset logging_storage.
-# Previously, calling enable_logging() with no storage= / storage_path= argument
-# would reset logging_storage back to 'memory' even if the user had set it
-# explicitly via SET logging_storage=... or a previous CALL enable_logging(storage=...).
-###
 
 statement ok
 CALL disable_logging()
