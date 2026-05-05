@@ -291,7 +291,7 @@ static unique_ptr<TableFilter> SerializeExpressionToLegacyFilter(const Expressio
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (TableFilterFunctions::IsTableFilterFunction(func.GetName())) {
+		if (TableFilterFunctions::IsTableFilterFunction(func.function)) {
 			return SerializeInternalFunctionToLegacyFilter(func);
 		}
 	}
