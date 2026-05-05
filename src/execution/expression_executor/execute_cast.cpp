@@ -55,8 +55,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	expr.bound_cast.Cast(child, result, cast_count, parameters);
 	if (all_constant) {
 		if (child.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			throw InternalException("Cast function from %s to %s flattened a constant input vector", child.GetType(),
-			                        result.GetType());
+			child.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 		// restore the size of the input vector
 		FlatVector::SetSize(child, count);
