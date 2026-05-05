@@ -16,10 +16,10 @@
 namespace duckdb {
 
 struct BetweenFun {
-	static constexpr const char *Name = "between";
+	static constexpr const char *Name = "__between";
 	static constexpr const char *Parameters = "input,lower,upper";
 	static constexpr const char *Description = "Returns whether or not input is between lower and upper.";
-	static constexpr const char *Example = "between(3, 0, 10)";
+	static constexpr const char *Example = "__between(3, 0, 10)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
