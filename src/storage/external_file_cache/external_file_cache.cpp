@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 
@@ -170,7 +171,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 	}
 
 	// If the modified time is not assigned (i.e., storage backend does not provide it), we can't validate it.
-	if (!Timestamp::IsFinite(current_last_modified) || !Timestamp::IsFinite(cached_last_modified)) {
+	if (!current_last_modified.IsFinite() || !cached_last_modified.IsFinite()) {
 		return false;
 	}
 
@@ -183,7 +184,7 @@ bool ExternalFileCache::IsValid(bool validate, const string &cached_version_tag,
 		return false; // Last modified in the future?
 	}
 	int64_t last_modified_time;
-	if (!access_time.TrySubtract(current_last_modified, last_modified_time)) {
+	if (!TrySubtractOperator::Operation(access_time, current_last_modified, last_modified_time)) {
 		// out of range
 		return false;
 	}

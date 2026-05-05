@@ -2,7 +2,6 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -68,7 +67,7 @@ struct TimestampRangeInfo {
 			return 0;
 		}
 		// We don't allow infinite bounds because they generate errors or infinite loops
-		if (!Timestamp::IsFinite(start_value) || !Timestamp::IsFinite(end_value)) {
+		if (!start_value.IsFinite() || !end_value.IsFinite()) {
 			throw InvalidInputException("Interval infinite bounds not supported");
 		}
 

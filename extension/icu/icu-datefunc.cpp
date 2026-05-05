@@ -88,17 +88,17 @@ void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, st
 	}
 }
 
-timestamp_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros) {
+timestamp_tz_t ICUDateFunc::GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros) {
 	// Extract the new time
 	UErrorCode status = U_ZERO_ERROR;
 	const auto millis = int64_t(calendar->getTime(status));
 	if (U_FAILURE(status)) {
 		throw InternalException("Unable to get ICU calendar time.");
 	}
-	return timestamp_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
+	return timestamp_tz_t(millis * Interval::MICROS_PER_MSEC + int64_t(micros));
 }
 
-bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result) {
+bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_tz_t &result) {
 	// Extract the new time
 	UErrorCode status = U_ZERO_ERROR;
 	auto millis = int64_t(calendar->getTime(status));
@@ -115,40 +115,46 @@ bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp
 	}
 
 	// Now make sure the value is in range
-	result = timestamp_t(millis);
-	date_t out_date = Timestamp::GetDate(result);
+	result.value = millis;
+	date_t out_date = Timestamp::GetDate(timestamp_t(millis));
 	int64_t days_micros;
 	return TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(out_date.days, Interval::MICROS_PER_DAY,
 	                                                                 days_micros);
 }
 
-timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
-	timestamp_t result;
+timestamp_tz_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
+	timestamp_tz_t result;
 	if (!TryGetTime(calendar, micros, result)) {
 		throw ConversionException("ICU date overflows timestamp range");
 	}
 	return result;
 }
 
-bool ICUDateFunc::TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestamp_ns_t &result) {
-	timestamp_t ts_micros;
-	if (!TryGetTime(calendar, nanos / Interval::NANOS_PER_MICRO, ts_micros)) {
+bool ICUDateFunc::TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestamp_tz_ns_t &result) {
+	timestamp_tz_t tstz_micros;
+	if (!TryGetTime(calendar, nanos / Interval::NANOS_PER_MICRO, tstz_micros)) {
 		return false;
 	}
 
 	nanos %= Interval::NANOS_PER_MICRO;
-	return Timestamp::TryFromTimestampNanos(ts_micros, nanos, result);
+	timestamp_t us(tstz_micros.value);
+	timestamp_ns_t ns;
+	if (!Timestamp::TryFromTimestampNanos(us, nanos, ns)) {
+		return false;
+	}
+	result.value = ns.value;
+	return true;
 }
 
-timestamp_ns_t ICUDateFunc::GetTimeNS(icu::Calendar *calendar, uint64_t nanos) {
-	timestamp_ns_t result;
+timestamp_tz_ns_t ICUDateFunc::GetTimeNS(icu::Calendar *calendar, uint64_t nanos) {
+	timestamp_tz_ns_t result;
 	if (!TryGetTimeNS(calendar, nanos, result)) {
 		throw ConversionException("ICU date overflows timestamp_ns range");
 	}
 	return result;
 }
 
-uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
+uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_tz_t date) {
 	int64_t millis = date.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = date.value % Interval::MICROS_PER_MSEC;
 	if (micros < 0) {
@@ -165,7 +171,7 @@ uint64_t ICUDateFunc::SetTime(icu::Calendar *calendar, timestamp_t date) {
 	return uint64_t(micros);
 }
 
-uint64_t ICUDateFunc::SetTimeNS(icu::Calendar *calendar, timestamp_ns_t date) {
+uint64_t ICUDateFunc::SetTimeNS(icu::Calendar *calendar, timestamp_tz_ns_t date) {
 	int64_t millis = date.value / Interval::NANOS_PER_MSEC;
 	int64_t nanos = date.value % Interval::NANOS_PER_MSEC;
 	if (nanos < 0) {
@@ -191,7 +197,7 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 	return result;
 }
 
-int32_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
+int32_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_tz_t end_date) {
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto when = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;

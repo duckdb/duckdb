@@ -221,7 +221,8 @@ duckdb::string_t StringCast::Operation(timestamp_t input, StringHeap &heap) {
 
 template <>
 duckdb::string_t StringCast::Operation(timestamp_ns_t input, StringHeap &heap) {
-	return StringFromTimestamp<true>(input, heap);
+	timestamp_t us(input.value);
+	return StringFromTimestamp<true>(us, heap);
 }
 
 template <>
@@ -334,10 +335,10 @@ string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap) {
 
 template <>
 string_t StringCastTZ::Operation(timestamp_ns_t input, StringHeap &heap) {
-	if (input == timestamp_t::infinity()) {
+	if (input == input.infinity()) {
 		return heap.AddString(Date::PINF.str);
 	}
-	if (input == timestamp_t::ninfinity()) {
+	if (input == input.ninfinity()) {
 		return heap.AddString(Date::NINF.str);
 	}
 

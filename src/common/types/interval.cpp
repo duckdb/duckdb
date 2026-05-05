@@ -435,7 +435,7 @@ interval_t Interval::GetAge(TimestampComponents ts1, TimestampComponents ts2, bo
 }
 
 interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	D_ASSERT(Timestamp::IsFinite(timestamp_1) && Timestamp::IsFinite(timestamp_2));
+	D_ASSERT(timestamp_1.IsFinite() && timestamp_2.IsFinite());
 
 	auto ts_component1 = Timestamp::GetComponents(timestamp_1);
 	auto ts_component2 = Timestamp::GetComponents(timestamp_2);
@@ -444,7 +444,7 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
-	if (!Timestamp::IsFinite(timestamp_1) || !Timestamp::IsFinite(timestamp_2)) {
+	if (!timestamp_1.IsFinite() || !timestamp_2.IsFinite()) {
 		throw InvalidInputException("Cannot subtract infinite timestamps");
 	}
 	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
@@ -473,7 +473,7 @@ interval_t Interval::Invert(interval_t interval) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
-	if (!Date::IsFinite(left)) {
+	if (!left.IsFinite()) {
 		return left;
 	}
 	date_t result;
@@ -505,7 +505,7 @@ date_t Interval::Add(date_t left, interval_t right) {
 			throw OutOfRangeException("Date out of range");
 		}
 	}
-	if (!Date::IsFinite(result)) {
+	if (!result.IsFinite()) {
 		throw OutOfRangeException("Date out of range");
 	}
 	return result;
@@ -529,7 +529,7 @@ dtime_tz_t Interval::Add(dtime_tz_t left, interval_t right, date_t &date) {
 }
 
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {
-	if (!Timestamp::IsFinite(left)) {
+	if (!left.IsFinite()) {
 		return left;
 	}
 	date_t date;

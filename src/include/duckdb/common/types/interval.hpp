@@ -9,14 +9,14 @@
 #pragma once
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/timebase.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 
 namespace duckdb {
 
-struct dtime_t;     // NOLINT: literal casing
-struct date_t;      // NOLINT: literal casing
-struct dtime_tz_t;  // NOLINT: literal casing
-struct timestamp_t; // NOLINT: literal casing
+struct dtime_t;    // NOLINT: literal casing
+struct date_t;     // NOLINT: literal casing
+struct dtime_tz_t; // NOLINT: literal casing
 struct TimestampComponents;
 
 class Serializer;
@@ -81,6 +81,10 @@ struct interval_t { // NOLINT
 
 	inline bool operator>=(const interval_t &right) const {
 		return !(*this < right);
+	}
+
+	inline bool IsFinite() const {
+		return true;
 	}
 
 	// Serialization
