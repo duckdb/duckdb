@@ -490,4 +490,30 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	}
 }
 
+void FlatVector::CopyValidity(Vector &target, const Vector &source, idx_t count) {
+	if (source.GetVectorType() == VectorType::FLAT_VECTOR) {
+		SetValidity(target, Validity(source));
+		return;
+	}
+	auto &result_validity = ValidityMutable(target);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(source)) {
+			result_validity.SetAllInvalid(count);
+		} else {
+			result_validity.Reset(count);
+		}
+		return;
+	}
+	auto validity = source.Validity(count);
+	if (!validity.CanHaveNull()) {
+		result_validity.Reset(count);
+		return;
+	}
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.IsValid(r)) {
+			result_validity.SetInvalid(r);
+		}
+	}
+}
+
 } // namespace duckdb

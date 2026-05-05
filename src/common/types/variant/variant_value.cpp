@@ -759,11 +759,7 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	keys_entry.Flatten(keys_selvec_size);
-
-	if (input.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
+	FlatVector::SetSize(result, count);
 	result.Verify(count);
 }
 

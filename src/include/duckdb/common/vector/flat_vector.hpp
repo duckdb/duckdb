@@ -171,6 +171,7 @@ struct FlatVector {
 		auto &validity = vector.BufferMutable().GetValidityMask();
 		validity.Initialize(new_validity);
 	}
+	static void CopyValidity(Vector &vector, const Vector &source, idx_t count);
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
