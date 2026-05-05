@@ -500,11 +500,13 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
+	state.addresses.Reference(Value::POINTER(aggregate_address), count_t(payload.size()));
 
 	// process the aggregates
-	state.addresses.Reference(Value::POINTER(aggregate_address), count_t(payload.size()));
 	UpdateAggregates(payload, filter);
-	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
+
+	// FIXME: subsequent operations assume a flat vector
+	state.addresses.Flatten();
 
 	return new_group_count;
 }
