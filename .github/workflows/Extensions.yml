@@ -225,6 +225,8 @@ jobs:
       VCPKG_TARGET_TRIPLET: "arm64-linux-release" # ${{ matrix.vcpkg_target_triplet }}
       VCPKG_HOST_TRIPLET: "arm64-linux-release" # ${{ matrix.vcpkg_host_triplet }}
 
+      USE_MERGED_VCPKG_MANIFEST: 1
+
       # Misc
       # GEN: ninja
       BUILD_SHELL: 1
