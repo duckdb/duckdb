@@ -269,8 +269,10 @@ jobs:
 
       - name: Inject extra extension config
         if: ${{ matrix.extension_config }}
+        env:
+          EXTENSION_CONFIGS: ${{ matrix.extension_config }}
         run: |
-          echo -e "\n# Injected Extension Config\n${{ matrix.extension_config }}" >> ./extension_config.cmake
+          echo -e "\n# Injected Extension Config\n${EXTENSION_CONFIGS}" >> ./extension_config.cmake
           cat ./extension_config.cmake
 
       - name: Build DuckDB
