@@ -105,7 +105,7 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	}
 
 	FlatVector::SetSize(result, count_t(count));
-	result.Verify(count);
+	result.Verify();
 	return true;
 }
 

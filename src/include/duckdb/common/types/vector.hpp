@@ -131,6 +131,7 @@ public:
 	//! Turn the vector into a shredded variant vector
 	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
+	//[[deprecated("Verify no longer requires a count - use Verify() without count instead")]]
 	DUCKDB_API void Verify(idx_t count) const;
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!

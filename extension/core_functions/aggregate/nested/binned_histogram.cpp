@@ -336,7 +336,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class HIST>

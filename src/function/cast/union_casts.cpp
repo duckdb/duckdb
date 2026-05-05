@@ -332,7 +332,6 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 }
 
 static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all union members to varchar
 	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
 	Vector varchar_union(cast_data.type, count);
@@ -362,12 +361,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			result_data.WriteValue("NULL");
 		}
 	}
-
-	if (constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(count);
+	result.Verify();
 	return true;
 }
 

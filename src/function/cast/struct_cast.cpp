@@ -134,7 +134,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 
 	FlatVector::CopyValidity(result, source, count);
 	FlatVector::SetSize(result, count);
-	result.Verify(count);
+	result.Verify();
 	return all_converted;
 }
 

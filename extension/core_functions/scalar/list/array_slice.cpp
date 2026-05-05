@@ -245,7 +245,7 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
 	ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE, OP>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
 	                                             count, sel, sel_idx, result_child_vector, begin_is_empty,
 	                                             end_is_empty);
-	result.Verify(count);
+	result.Verify();
 }
 
 void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {

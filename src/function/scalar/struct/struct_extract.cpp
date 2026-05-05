@@ -18,12 +18,12 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];
 
-	vec.Verify(args.size());
+	vec.Verify();
 	auto &children = StructVector::GetEntries(vec);
 	D_ASSERT(info.index < children.size());
 	auto &struct_child = children[info.index];
 	result.Reference(struct_child);
-	result.Verify(args.size());
+	result.Verify();
 }
 
 static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input) {
