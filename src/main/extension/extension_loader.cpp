@@ -48,7 +48,7 @@ void ExtensionLoader::CreateExtensionSchema() const {
 }
 
 void ExtensionLoader::SetExtensionSchema(const string &name) {
-	if (name == DEFAULT_SCHEMA || name == "pg_catalog" || name == INVALID_SCHEMA) {
+	if (name == DEFAULT_SCHEMA || name == "pg_catalog" || name.empty()) {
 		return;
 	}
 	extension_schema = name;
