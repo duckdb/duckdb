@@ -3,10 +3,7 @@
 #include "duckdb/common/type_util.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
-using duckdb::CheckedInteger;
-using duckdb::NumericLimits;
-using duckdb::OutOfRangeException;
-using duckdb::PhysicalType;
+using namespace duckdb; // NOLINT
 
 namespace {
 template <typename T>
@@ -301,9 +298,9 @@ TEST_CASE("CheckedInteger atomic operations", "[checked_integer]") {
 
 	SECTION("custom exception type propagates through atomic") {
 		// Verify that selecting a non-default ExceptionT actually changes the thrown type.
-		using i32_invalid_t = CheckedInteger<int32_t, duckdb::InvalidInputException>;
+		using i32_invalid_t = CheckedInteger<int32_t, InvalidInputException>;
 		std::atomic<i32_invalid_t> a(NumericLimits<int32_t>::Maximum());
-		REQUIRE_THROWS_AS(a.fetch_add(i32_invalid_t(1)), duckdb::InvalidInputException);
+		REQUIRE_THROWS_AS(a.fetch_add(i32_invalid_t(1)), InvalidInputException);
 	}
 
 	SECTION("compare_exchange_strong success and failure") {
@@ -386,8 +383,8 @@ TEST_CASE("std::numeric_limits<CheckedInteger> specialization", "[checked_intege
 }
 
 TEST_CASE("std::hash<CheckedInteger> specialization", "[checked_integer]") {
-	SECTION("usable as a key in duckdb::unordered_set") {
-		duckdb::unordered_set<ci32> s;
+	SECTION("usable as a key in unordered_set") {
+		unordered_set<ci32> s;
 		s.insert(ci32(1));
 		s.insert(ci32(2));
 		s.insert(ci32(1));
@@ -399,17 +396,17 @@ TEST_CASE("std::hash<CheckedInteger> specialization", "[checked_integer]") {
 }
 
 TEST_CASE("GetTypeId recurses through CheckedInteger", "[checked_integer]") {
-	REQUIRE(duckdb::GetTypeId<duckdb::tinyint_t>() == PhysicalType::INT8);
-	REQUIRE(duckdb::GetTypeId<duckdb::smallint_t>() == PhysicalType::INT16);
-	REQUIRE(duckdb::GetTypeId<duckdb::integer_t>() == PhysicalType::INT32);
-	REQUIRE(duckdb::GetTypeId<duckdb::bigint_t>() == PhysicalType::INT64);
+	REQUIRE(GetTypeId<tinyint_t>() == PhysicalType::INT8);
+	REQUIRE(GetTypeId<smallint_t>() == PhysicalType::INT16);
+	REQUIRE(GetTypeId<integer_t>() == PhysicalType::INT32);
+	REQUIRE(GetTypeId<bigint_t>() == PhysicalType::INT64);
 
-	REQUIRE(duckdb::GetTypeId<duckdb::utinyint_t>() == PhysicalType::UINT8);
-	REQUIRE(duckdb::GetTypeId<duckdb::usmallint_t>() == PhysicalType::UINT16);
-	REQUIRE(duckdb::GetTypeId<duckdb::uinteger_t>() == PhysicalType::UINT32);
-	REQUIRE(duckdb::GetTypeId<duckdb::ubigint_t>() == PhysicalType::UINT64);
+	REQUIRE(GetTypeId<utinyint_t>() == PhysicalType::UINT8);
+	REQUIRE(GetTypeId<usmallint_t>() == PhysicalType::UINT16);
+	REQUIRE(GetTypeId<uinteger_t>() == PhysicalType::UINT32);
+	REQUIRE(GetTypeId<ubigint_t>() == PhysicalType::UINT64);
 
-	REQUIRE(duckdb::GetTypeId<CheckedInteger<int32_t, duckdb::InternalException>>() == PhysicalType::INT32);
-	REQUIRE(duckdb::GetTypeId<CheckedInteger<int32_t, duckdb::InvalidInputException>>() == PhysicalType::INT32);
-	REQUIRE(duckdb::GetTypeId<const duckdb::ubigint_t>() == PhysicalType::UINT64);
+	REQUIRE(GetTypeId<CheckedInteger<int32_t, InternalException>>() == PhysicalType::INT32);
+	REQUIRE(GetTypeId<CheckedInteger<int32_t, InvalidInputException>>() == PhysicalType::INT32);
+	REQUIRE(GetTypeId<const ubigint_t>() == PhysicalType::UINT64);
 }

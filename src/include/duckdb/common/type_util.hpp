@@ -54,7 +54,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT32;
 	} else if (std::is_same<TYPE, uint64_t>()) {
 		return PhysicalType::UINT64;
-	} else if (std::is_same<TYPE, idx_t>() || std::is_same<TYPE, const idx_t>()) {
+	} else if (std::is_same<TYPE, idx_t>()) {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<TYPE, hugeint_t>()) {
 		return PhysicalType::INT128;
