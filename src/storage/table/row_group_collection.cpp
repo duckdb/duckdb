@@ -1691,12 +1691,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (!pointer_copy.has_metadata_blocks && !pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
+			if (SupportsPerColumnWrites() == pointer_copy.has_per_column_metadata_blocks) {
+				throw InternalException(
+				    "Checkpointing should always remember per-column metadata blocks when supporting it");
+			}
 			if (full_metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
 				throw InternalException("Column start pointers changed during full metadata reuse");
-			}
-
-			if (SupportsPerColumnWrites() && !pointer_copy.has_per_column_metadata_blocks) {
-				throw InternalException("Checkpointing should always remember per column metadata blocks");
 			}
 
 			// Verify per_column_metadata_blocks matches full deserialization
