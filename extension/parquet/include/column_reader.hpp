@@ -246,11 +246,12 @@ private:
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr,
-	                      optional_ptr<TableFilterState> filter_state = nullptr);
+	                      optional_ptr<TableFilterState> filter_state = nullptr,
+	                      optional_ptr<const SelectionVector> sel = nullptr, idx_t approved_tuple_count = 0,
+	                      idx_t result_offset = 0);
 	idx_t ReadInternal(ColumnReaderInput &input, Vector &result);
-	bool PageRangeHasSelectedRows(const ColumnReaderInput &input, idx_t result_offset, idx_t read_now,
-	                              const SelectionVector &sel, idx_t approved_tuple_count);
-	void SkipPageValues(idx_t skip_now);
+	bool PageRangeHasSelectedRows(const SelectionVector &sel, idx_t approved_tuple_count, idx_t result_offset,
+	                              idx_t read_now);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
 	//! Returns whether all values are valid (i.e., not NULL)
 	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
@@ -356,7 +357,9 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state);
+	void PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+	                 optional_ptr<const SelectionVector> sel = nullptr, idx_t approved_tuple_count = 0,
+	                 idx_t result_offset = 0);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);

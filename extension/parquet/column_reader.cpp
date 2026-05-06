@@ -326,7 +326,9 @@ void ColumnReader::ReadData(const data_ptr_t buffer, const uint32_t buffer_size,
 	}
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state,
+                               optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
+                               idx_t result_offset) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -354,6 +356,18 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	if (PageIsFilteredOut(page_hdr, filter)) {
 		// this page has been filtered out so we don't need to read it
 		return;
+	}
+
+	if (sel && (page_hdr.type == PageType::DATA_PAGE || page_hdr.type == PageType::DATA_PAGE_V2)) {
+		bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+		idx_t page_num_values =
+		    is_v1 ? idx_t(page_hdr.data_page_header.num_values) : idx_t(page_hdr.data_page_header_v2.num_values);
+		if (!PageRangeHasSelectedRows(*sel, approved_tuple_count, result_offset, page_num_values)) {
+			trans.Skip(page_hdr.compressed_page_size);
+			page_is_filtered_out = true;
+			page_rows_available = page_num_values;
+			return;
+		}
 	}
 
 	switch (page_hdr.type) {
@@ -634,11 +648,13 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 }
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
-                                    optional_ptr<TableFilterState> filter_state) {
+                                    optional_ptr<TableFilterState> filter_state,
+                                    optional_ptr<const SelectionVector> sel, idx_t approved_tuple_count,
+                                    idx_t result_offset) {
 	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
 		aad_crypto_metadata.page_ordinal = page_ordinal;
-		PrepareRead(filter, filter_state);
+		PrepareRead(filter, filter_state, sel, approved_tuple_count, result_offset);
 		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
@@ -746,9 +762,8 @@ idx_t ColumnReader::ReadInternal(ColumnReaderInput &input, Vector &result) {
 	return num_values;
 }
 
-bool ColumnReader::PageRangeHasSelectedRows(const ColumnReaderInput &input, idx_t result_offset, idx_t read_now,
-                                            const SelectionVector &sel, idx_t approved_tuple_count) {
-	D_ASSERT(input.filter_sel);
+bool ColumnReader::PageRangeHasSelectedRows(const SelectionVector &sel, idx_t approved_tuple_count, idx_t result_offset,
+                                            idx_t read_now) {
 	if (approved_tuple_count == 0) {
 		return false;
 	}
@@ -762,43 +777,7 @@ bool ColumnReader::PageRangeHasSelectedRows(const ColumnReaderInput &input, idx_
 			hi = mid;
 		}
 	}
-	// If that entry exists and is within [result_offset, result_offset + read_now), there's overlap
 	return lo < approved_tuple_count && sel.get_index(lo) < result_offset + read_now;
-}
-
-void ColumnReader::SkipPageValues(idx_t skip_now) {
-	D_ASSERT(!page_is_filtered_out);
-	data_t skip_defines[STANDARD_VECTOR_SIZE] = {};
-	data_t skip_repeats[STANDARD_VECTOR_SIZE];
-	data_ptr_t skip_define_out = HasDefines() ? skip_defines : nullptr;
-	data_ptr_t skip_repeat_out = HasRepeats() ? skip_repeats : nullptr;
-
-	const auto all_valid = PrepareRead(skip_now, skip_define_out, skip_repeat_out, 0);
-	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(skip_define_out);
-	switch (encoding) {
-	case ColumnEncoding::DICTIONARY:
-		dictionary_decoder.Skip(define_ptr, skip_now);
-		break;
-	case ColumnEncoding::DELTA_BINARY_PACKED:
-		delta_binary_packed_decoder.Skip(define_ptr, skip_now);
-		break;
-	case ColumnEncoding::RLE:
-		rle_decoder.Skip(define_ptr, skip_now);
-		break;
-	case ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY:
-		delta_length_byte_array_decoder.Skip(define_ptr, skip_now);
-		break;
-	case ColumnEncoding::DELTA_BYTE_ARRAY:
-		delta_byte_array_decoder.Skip(define_ptr, skip_now);
-		break;
-	case ColumnEncoding::BYTE_STREAM_SPLIT:
-		byte_stream_split_decoder.Skip(define_ptr, skip_now);
-		break;
-	default:
-		PlainSkip(*block, define_ptr, skip_now);
-		break;
-	}
-	page_rows_available -= skip_now;
 }
 
 idx_t ColumnReader::Read(ColumnReaderInput &input, Vector &result) {
@@ -823,17 +802,9 @@ void ColumnReader::Select(ColumnReaderInput &input, Vector &result, const Select
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
-		auto read_now = ReadPageHeaders(to_read);
+		auto read_now = ReadPageHeaders(to_read, nullptr, nullptr, &sel, approved_tuple_count, result_offset);
 
-		if (!PageRangeHasSelectedRows(input, result_offset, read_now, sel, approved_tuple_count)) {
-			auto &validity = FlatVector::ValidityMutable(result);
-			for (idx_t i = 0; i < read_now; i++) {
-				validity.SetInvalid(result_offset + i);
-			}
-			SkipPageValues(read_now);
-		} else {
-			ReadData(read_now, define_out, repeat_out, result, result_offset);
-		}
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
 		result_offset += read_now;
 		to_read -= read_now;
