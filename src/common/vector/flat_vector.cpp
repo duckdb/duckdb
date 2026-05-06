@@ -516,7 +516,7 @@ void FlatVector::CopyValidity(Vector &target, const Vector &source, idx_t count)
 		}
 		return;
 	}
-	auto validity = source.Validity(count);
+	auto validity = source.Validity();
 	if (!validity.CanHaveNull()) {
 		result_validity.Reset(count);
 		return;

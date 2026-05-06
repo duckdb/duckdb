@@ -68,8 +68,8 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	Vector pos_vec(LogicalType::INTEGER, count);
 	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
-	auto pos_entries = pos_vec.Values<int32_t>(count);
-	auto map_entries = map_vec.Values<list_entry_t>(count);
+	auto pos_entries = pos_vec.Values<int32_t>();
+	auto map_entries = map_vec.Values<list_entry_t>();
 	const auto val_size = ListVector::GetListSize(map_vec);
 	auto out_list_data = FlatVector::Writer<list_entry_t>(result, count);
 

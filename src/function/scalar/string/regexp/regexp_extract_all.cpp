@@ -86,7 +86,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 		result = 0;
 		return true;
 	}
-	auto entries = args.data[2].Values<int32_t>(args.size());
+	auto entries = args.data[2].Values<int32_t>();
 	auto entry = entries[row];
 	if (!entry.IsValid()) {
 		return false;
@@ -113,8 +113,8 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 	auto &patterns = args.data[1];
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto strings_entries = strings.Values<string_t>(args.size());
-	auto pattern_entries = patterns.Values<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>();
+	auto pattern_entries = patterns.Values<string_t>();
 
 	// Reference the 'strings' StringBuffer, because we won't need to allocate new data
 	// for the result, all returned strings are substrings of the originals
@@ -262,7 +262,7 @@ void RegexpExtractAllStruct::Execute(DataChunk &args, ExpressionState &state, Ve
 		child.SetVectorType(VectorType::FLAT_VECTOR);
 	}
 
-	auto strings_entries = strings.Values<string_t>(args.size());
+	auto strings_entries = strings.Values<string_t>();
 	ListVector::Reserve(result, STANDARD_VECTOR_SIZE);
 
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RegexLocalState>();

@@ -166,7 +166,7 @@ static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParame
 	// NULL keys are not allowed, so NULL out those map entries.
 	auto &keys = MapVector::GetKeys(result);
 	auto maps_length = ListVector::GetListSize(result);
-	auto key_validity = keys.Validity(maps_length);
+	auto key_validity = keys.Validity();
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (!ConstantVector::IsNull(result)) {

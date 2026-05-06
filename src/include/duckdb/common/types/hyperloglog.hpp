@@ -79,8 +79,8 @@ public:
 public:
 	//! Add data to this HLL
 	void Update(Vector &input, Vector &hash_vec, const idx_t count) {
-		auto idata = input.Validity(count);
-		const auto hashes = hash_vec.Values<hash_t>(count);
+		auto idata = input.Validity();
+		const auto hashes = hash_vec.Values<hash_t>();
 
 		if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (idata.IsValid(0)) {

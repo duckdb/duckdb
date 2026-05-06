@@ -93,7 +93,7 @@ void WindowValueLocalState::Sinker(ExecutionContext &context, DataChunk &sink_ch
 		// then build an SV to hold them
 		const auto coll_count = coll_chunk.size();
 		auto &values = coll_chunk.data[gvstate.value_idx];
-		auto validity = values.Validity(coll_count);
+		auto validity = values.Validity();
 		auto &sort_nulls = lvstate.sort_nulls;
 		if (gvstate.executor.wexpr.ignore_nulls && validity.CanHaveNull()) {
 			for (sel_t i = 0; i < coll_count; ++i) {
@@ -1619,7 +1619,7 @@ void WindowFillExecutor::GetData(ExecutionContext &context, DataChunk &eval_chun
 	WindowFillCopy(cursor, result, count, row_idx, 0);
 
 	//	If all are valid, we are done
-	auto validity = result.Validity(count);
+	auto validity = result.Validity();
 	if (!validity.CanHaveNull()) {
 		return;
 	}

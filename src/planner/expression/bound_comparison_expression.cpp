@@ -9,6 +9,11 @@ BoundComparisonExpression::BoundComparisonExpression(ExpressionType type, unique
       right(std::move(right)) {
 }
 
+unique_ptr<Expression> BoundComparisonExpression::Create(ExpressionType type, unique_ptr<Expression> left,
+                                                         unique_ptr<Expression> right) {
+	return make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
+}
+
 string BoundComparisonExpression::ToString() const {
 	return ComparisonExpression::ToString<BoundComparisonExpression, Expression>(*this);
 }

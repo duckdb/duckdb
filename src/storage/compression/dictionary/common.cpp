@@ -46,7 +46,7 @@ DictionaryCompressionState::~DictionaryCompressionState() {
 bool DictionaryCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	Verify();
 
-	for (auto entry : scan_vector.Values<string_t>(count)) {
+	for (auto entry : scan_vector.Values<string_t>()) {
 		idx_t string_size = 0;
 		bool new_string = false;
 		auto row_is_valid = entry.IsValid();

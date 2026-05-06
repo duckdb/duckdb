@@ -380,7 +380,7 @@ struct ICUDatePart : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		auto entries = input.Values<INPUT_TYPE>(count);
+		auto entries = input.Values<INPUT_TYPE>();
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto &child_entries = StructVector::GetEntries(result);

@@ -79,8 +79,8 @@ static bool TryPrimitiveSelectOperation(Vector &left, Vector &right, optional_pt
 	return false;
 #else
 	if (null_mask) {
-		auto left_validity = left.Validity(count);
-		auto right_validity = right.Validity(count);
+		auto left_validity = left.Validity();
+		auto right_validity = right.Validity();
 		if (left_validity.CanHaveNull() || right_validity.CanHaveNull()) {
 			if (!sel) {
 				sel = FlatVector::IncrementalSelectionVector();
@@ -163,7 +163,7 @@ static idx_t ComparatorSelectOperation(Vector &left, Vector &right, optional_ptr
                                        PREDICATE predicate) {
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::Comparator(left, right, comparator_result, count);
-	auto cmp_data = comparator_result.Values<int8_t>(count);
+	auto cmp_data = comparator_result.Values<int8_t>();
 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();

@@ -109,7 +109,7 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 
 	QueryContext query_context(context.client);
 
-	for (auto entry : input.data[0].Values<string_t>(input.size())) {
+	for (auto entry : input.data[0].Values<string_t>()) {
 		if (entry.IsValid()) {
 			auto &blob = entry.GetValue();
 			WriteBlobData(query_context, *handle, data_ptr_cast(blob.GetDataWriteable()), blob.GetSize());
@@ -131,7 +131,7 @@ unique_ptr<PreparedBatchData> WriteBlobPrepareBatch(ClientContext &context, Func
 
 	for (auto &chunk : collection->Chunks()) {
 		D_ASSERT(chunk.ColumnCount() == 1);
-		for (auto entry : chunk.data[0].Values<string_t>(chunk.size())) {
+		for (auto entry : chunk.data[0].Values<string_t>()) {
 			if (!entry.IsValid()) {
 				continue;
 			}

@@ -13,9 +13,9 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 
 	const auto input_count = ListVector::GetListSize(input_list);
 
-	const auto list_entries = input_list.Values<list_entry_t>(count);
-	const auto child_data = list_child.Values<T>(input_count);
-	const auto target_data = target.Values<T>(count);
+	const auto list_entries = input_list.Values<list_entry_t>();
+	const auto child_data = list_child.Values<T>();
+	const auto target_data = target.Values<T>();
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<RETURN_TYPE>(result, count);
