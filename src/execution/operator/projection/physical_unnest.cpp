@@ -89,17 +89,17 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 	// both for the vector itself and its child vector
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
 		auto &list_vector = list_data.data[col_idx];
-		list_vector.ToUnifiedFormat(list_data.size(), list_vector_data[col_idx]);
+		list_vector.ToUnifiedFormat(list_vector_data[col_idx]);
 
 		if (list_vector.GetType() == LogicalType::SQLNULL) {
 			// UNNEST(NULL): SQLNULL vectors don't have child vectors, but we need to point to the child vector of
 			// each vector, so we just get the UnifiedVectorFormat of the vector itself
 			auto &child_vector = list_vector;
-			child_vector.ToUnifiedFormat(0, list_child_data[col_idx]);
+			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		} else {
 			auto list_size = ListVector::GetListSize(list_vector);
 			auto &child_vector = ListVector::GetChild(list_vector);
-			child_vector.ToUnifiedFormat(list_size, list_child_data[col_idx]);
+			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		}
 	}
 	// get the unnest lengths
@@ -251,7 +251,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten
-				result_vector.Flatten(result_length);
+				result_vector.Flatten();
 				auto &null_sel = state.null_sels[col_idx];
 				for (idx_t idx = 0; idx < state.null_counts[col_idx]; idx++) {
 					auto null_index = null_sel.get_index(idx);

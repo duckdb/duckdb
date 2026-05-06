@@ -34,12 +34,12 @@ void UnionExtractFunction(DataChunk &args, ExpressionState &state, Vector &resul
 
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];
-	vec.Verify(args.size());
+	vec.Verify();
 
 	D_ASSERT(info.index < UnionType::GetMemberCount(vec.GetType()));
 	auto &member = UnionVector::GetMember(vec, info.index);
 	result.Reference(member);
-	result.Verify(args.size());
+	result.Verify();
 }
 
 unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {

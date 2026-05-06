@@ -30,7 +30,7 @@ void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEn
 		ColumnScanState data_scan_state(nullptr);
 		auto fetch_count =
 		    base.Fetch(data_scan_state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-		base_vector.Flatten(fetch_count);
+		base_vector.Flatten();
 	}
 
 	UpdateInternal(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,

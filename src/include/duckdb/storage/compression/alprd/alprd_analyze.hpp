@@ -63,7 +63,7 @@ bool AlpRDAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 	alp::AlpSamplingParameters sampling_params = alp::AlpUtils::GetSamplingParameters(count);

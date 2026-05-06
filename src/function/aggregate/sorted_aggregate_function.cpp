@@ -243,7 +243,7 @@ struct SortedAggregateState {
 			auto &func = functions[c];
 			auto &linked_list = linked[c];
 			RecursiveUnifiedVectorFormat input_data;
-			Vector::RecursiveToUnifiedFormat(input.data[c], count, input_data);
+			Vector::RecursiveToUnifiedFormat(input.data[c], input_data);
 			for (idx_t i = 0; i < nsel; ++i) {
 				idx_t sidx = sel.get_index(i);
 				func.AppendRow(allocator, linked_list, input_data, sidx);
@@ -471,7 +471,7 @@ struct SortedAggregateFunction {
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
 		UnifiedVectorFormat svdata;
-		states.ToUnifiedFormat(count, svdata);
+		states.ToUnifiedFormat(svdata);
 
 		// Size the selection vector for each state.
 		auto sdata = UnifiedVectorFormat::GetData<SortedAggregateState *>(svdata);

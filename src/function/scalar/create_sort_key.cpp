@@ -86,7 +86,7 @@ struct SortKeyVectorData {
 
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
-			input.ToUnifiedFormat(size, format);
+			input.ToUnifiedFormat(format);
 		} else {
 			format.physical_type = input.GetType().InternalType();
 		}
@@ -774,7 +774,7 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
                                                      const idx_t count) {
 	CreateSortKey(input, count, modifiers, result);
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(count, format);
+	input.ToUnifiedFormat(format);
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -1188,7 +1188,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto count = args.size();
 	auto &sort_key_vec = args.data[0];
 	UnifiedVectorFormat sort_key_vec_format;
-	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
+	sort_key_vec.ToUnifiedFormat(sort_key_vec_format);
 
 	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that

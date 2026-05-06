@@ -119,7 +119,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 				struct_entries[child_idx].Slice(ListVector::GetChild(args.data[child_idx]), selections[child_idx],
 				                                result_size);
 			}
-			struct_entries[child_idx].Flatten(result_size);
+			struct_entries[child_idx].Flatten();
 			FlatVector::SetValidity((struct_entries[child_idx]), masks[child_idx]);
 		}
 	}

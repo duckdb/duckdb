@@ -138,7 +138,7 @@ struct DistinctFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 
 		auto old_len = ListVector::GetListSize(result);
@@ -181,7 +181,7 @@ struct UniqueFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 
 		auto result_data = FlatVector::Writer<uint64_t>(result, count);
@@ -224,13 +224,13 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetChildMutable(lists);
-	child_vector.Flatten(lists_size);
+	child_vector.Flatten();
 
 	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(lists_size, child_data);
+	child_vector.ToUnifiedFormat(child_data);
 
 	UnifiedVectorFormat lists_data;
-	lists.ToUnifiedFormat(count, lists_data);
+	lists.ToUnifiedFormat(lists_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk

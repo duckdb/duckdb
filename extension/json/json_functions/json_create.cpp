@@ -266,7 +266,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector &key_v, yyjson_mut_val *vals[],
                              idx_t count) {
 	UnifiedVectorFormat key_data;
-	key_v.ToUnifiedFormat(count, key_data);
+	key_v.ToUnifiedFormat(key_data);
 	auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -294,7 +294,7 @@ static void CreateValuesNull(yyjson_mut_doc *doc, yyjson_mut_val *vals[], idx_t 
 template <class INPUT_TYPE, class TARGET_TYPE>
 static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<INPUT_TYPE>(value_data);
 
 	const auto type_is_json = value_v.GetType().IsJSONType();
@@ -313,7 +313,7 @@ static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], V
 
 static void CreateRawValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	auto values = UnifiedVectorFormat::GetData<string_t>(value_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t val_idx = value_data.sel->get_index(i);
@@ -345,7 +345,7 @@ static void CreateValuesStruct(const StructNames &names, yyjson_mut_doc *doc, yy
 	}
 	// Whole struct can be NULL
 	UnifiedVectorFormat struct_data;
-	value_v.ToUnifiedFormat(count, struct_data);
+	value_v.ToUnifiedFormat(struct_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = struct_data.sel->get_index(i);
 		if (!struct_data.validity.RowIsValid(idx)) {
@@ -370,7 +370,7 @@ static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjso
 	CreateValues(names, doc, nested_vals, map_val_v, map_val_count);
 	// Add the key/value pairs to the values
 	UnifiedVectorFormat map_data;
-	value_v.ToUnifiedFormat(count, map_data);
+	value_v.ToUnifiedFormat(map_data);
 	auto map_key_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(map_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = map_data.sel->get_index(i);
@@ -394,7 +394,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
                               idx_t count) {
 	// Structs become values, therefore we initialize vals to JSON values
 	UnifiedVectorFormat value_data;
-	value_v.ToUnifiedFormat(count, value_data);
+	value_v.ToUnifiedFormat(value_data);
 	if (value_data.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			vals[i] = yyjson_mut_obj(doc);
@@ -416,7 +416,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 
 	auto &tag_v = UnionVector::GetTags(value_v);
 	UnifiedVectorFormat tag_data;
-	tag_v.ToUnifiedFormat(count, tag_data);
+	tag_v.ToUnifiedFormat(tag_data);
 
 	// Add the key/value pairs to the values
 	for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(value_v.GetType()); member_idx++) {
@@ -431,7 +431,7 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 		// This is a inlined copy of AddKeyValuePairs but we also skip null tags
 		// and the rows where the member is not matching the tag
 		UnifiedVectorFormat key_data;
-		member_key_v.ToUnifiedFormat(count, key_data);
+		member_key_v.ToUnifiedFormat(key_data);
 		auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -468,7 +468,7 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 	CreateValues(names, doc, nested_vals, child_v, child_count);
 	// Now we add the values to the appropriate JSON arrays
 	UnifiedVectorFormat list_data;
-	value_v.ToUnifiedFormat(count, list_data);
+	value_v.ToUnifiedFormat(list_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
@@ -486,7 +486,7 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 
 static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
-	value_v.Flatten(count);
+	value_v.Flatten();
 
 	// Initialize array for the nested values
 	auto &child_v = ArrayVector::GetChildMutable(value_v);
@@ -498,7 +498,7 @@ static void CreateValuesArray(const StructNames &names, yyjson_mut_doc *doc, yyj
 	CreateValues(names, doc, nested_vals, child_v, child_count);
 	// Now we add the values to the appropriate JSON arrays
 	UnifiedVectorFormat list_data;
-	value_v.ToUnifiedFormat(count, list_data);
+	value_v.ToUnifiedFormat(list_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
 		if (!list_data.validity.RowIsValid(idx)) {
@@ -706,7 +706,7 @@ static void ToJSONFunctionInternal(const StructNames &names, Vector &input, cons
 	auto objects = FlatVector::GetDataMutable<string_t>(result);
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
