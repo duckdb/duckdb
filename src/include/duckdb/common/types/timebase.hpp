@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-template<int64_t P, bool Z>
+template <int64_t P, bool Z>
 struct timebase_t { // NOLINT
 	// NOTE: The unit of value is microseconds for timestamp_t, but it can be
 	// different for subclasses (e.g. it's nanos for timestamp_ns, etc).
@@ -57,10 +57,10 @@ struct timebase_t { // NOLINT
 	// special values
 	static constexpr timebase_t infinity() { // NOLINT
 		return timebase_t(NumericLimits<int64_t>::Maximum());
-	}                                          // NOLINT
+	}                                         // NOLINT
 	static constexpr timebase_t ninfinity() { // NOLINT
 		return timebase_t(-NumericLimits<int64_t>::Maximum());
-	}                                             // NOLINT
+	}                                            // NOLINT
 	static constexpr inline timebase_t epoch() { // NOLINT
 		return timebase_t(0);
 	} // NOLINT
@@ -69,7 +69,6 @@ struct timebase_t { // NOLINT
 	inline bool IsFinite() const {
 		return *this != infinity() && *this != ninfinity();
 	}
-
 };
 
 //! Type used to represent TIMESTAMP_S. timestamp_sec_t holds the seconds since 1970-01-01.
