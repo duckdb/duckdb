@@ -14,6 +14,7 @@ static void LoadableExtensionExplicitSchemaFunInit(ExtensionLoader &loader) {
 
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(explicit_extension_schema, loader) {
+	vector<LogicalType> i_might_be_needed_for_linking;
 	// set the schema for the extension
 	loader.SetExtensionSchema("explicit_schema");
 	LoadableExtensionExplicitSchemaFunInit(loader);
