@@ -129,7 +129,19 @@ interval_parse_number:
 			goto interval_parse_identifier;
 		}
 	}
-	goto end_of_string;
+	{
+		if (pos == start_pos) {
+			return false;
+		}
+		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
+		number = Cast::Operation<string_t, int64_t>(nr_string);
+		fraction = 0;
+		if (negative) {
+			number = -number;
+			fraction = -fraction;
+		}
+		goto interval_parse_identifier;
+	}
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;
