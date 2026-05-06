@@ -1761,12 +1761,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 			// Deserialize all columns to check if what's on disk matches our metadata
 			vector<MetaBlockPointer> all_full_read_blocks;
-			auto column_start_pointers = row_group.GetColumnStartPointers();
-			auto &types = row_group.GetCollection().GetTypes();
+			const auto &column_start_pointers = row_group.GetColumnStartPointers();
+			auto &column_types = row_group.GetCollection().GetTypes();
 			auto &metadata_manager = row_group.GetCollection().GetMetadataManager();
 			for (idx_t i = 0; i < column_start_pointers.size(); i++) {
 				MetadataReader reader(metadata_manager, column_start_pointers[i], &all_full_read_blocks);
-				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, types[i]);
+				ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, reader, column_types[i]);
 			}
 
 			// Derive sets of blocks to compare
