@@ -3,40 +3,40 @@
 
 namespace duckdb {
 
-VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, unique_ptr<Vector> vector)
+VectorListBuffer::VectorListBuffer(Allocator &allocator, capacity_t capacity, unique_ptr<Vector> vector)
     : StandardVectorBuffer(allocator, capacity, sizeof(list_entry_t)), child(std::move(vector)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	FlatVector::SetSize(*child, 0ULL);
 }
-VectorListBuffer::VectorListBuffer(Allocator &allocator, idx_t capacity, const LogicalType &list_type,
-                                   idx_t child_capacity)
+VectorListBuffer::VectorListBuffer(Allocator &allocator, capacity_t capacity, const LogicalType &list_type,
+                                   capacity_t child_capacity)
     : VectorListBuffer(allocator, capacity, make_uniq<Vector>(ListType::GetChildType(list_type), child_capacity)) {
 }
 
-VectorListBuffer::VectorListBuffer(idx_t capacity, const LogicalType &list_type, idx_t child_capacity)
+VectorListBuffer::VectorListBuffer(capacity_t capacity, const LogicalType &list_type, capacity_t child_capacity)
     : VectorListBuffer(Allocator::DefaultAllocator(), capacity, list_type, child_capacity) {
 }
 
-VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const Vector &vector)
-    : StandardVectorBuffer(data, capacity, sizeof(list_entry_t)) {
+VectorListBuffer::VectorListBuffer(data_ptr_t data, count_t count, const Vector &vector)
+    : StandardVectorBuffer(data, count, sizeof(list_entry_t)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(vector));
 }
 
-VectorListBuffer::VectorListBuffer(data_ptr_t data, idx_t capacity, const VectorListBuffer &parent)
-    : StandardVectorBuffer(data, capacity, sizeof(list_entry_t)) {
+VectorListBuffer::VectorListBuffer(data_ptr_t data, count_t count, const VectorListBuffer &parent)
+    : StandardVectorBuffer(data, count, sizeof(list_entry_t)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
-VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, const VectorListBuffer &parent)
-    : StandardVectorBuffer(std::move(allocated_data_p), capacity, sizeof(list_entry_t)) {
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, count_t count, const VectorListBuffer &parent)
+    : StandardVectorBuffer(std::move(allocated_data_p), count, sizeof(list_entry_t)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	child = make_uniq<Vector>(Vector::Ref(parent.GetChild()));
 }
 
-VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, idx_t capacity, VectorListBuffer &parent)
-    : StandardVectorBuffer(std::move(allocated_data_p), capacity, sizeof(list_entry_t)) {
+VectorListBuffer::VectorListBuffer(AllocatedData allocated_data_p, count_t count, VectorListBuffer &parent)
+    : StandardVectorBuffer(std::move(allocated_data_p), count, sizeof(list_entry_t)) {
 	buffer_type = VectorBufferType::LIST_BUFFER;
 	auto &parent_child = parent.GetChildMutable();
 	child = std::move(parent_child);
@@ -48,15 +48,15 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, idx_t to_append_size) {
-	child->Append(to_append, to_append_size);
+	child->Append(to_append, to_append_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void VectorListBuffer::AppendToChild(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size) {
-	child->Append(to_append, sel, to_append_size);
+	child->Append(to_append, sel, to_append_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
 void VectorListBuffer::PushBack(const Value &insert) {
-	child->Append(insert);
+	child->Append(insert, VectorAppendMode::ALLOW_RESIZE);
 }
 
 idx_t VectorListBuffer::GetChildCapacity() const {
@@ -82,12 +82,10 @@ idx_t VectorListBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+	StandardVectorBuffer::VerifyInternal(type, sel, count);
+
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
 	if (type.id() == LogicalTypeId::MAP) {
 		// FIXME: verify map
 		// auto &child = ListType::GetChildType(vector_p.GetType());
@@ -98,9 +96,7 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		// auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
 		// D_ASSERT(valid_check == MapInvalidReason::VALID);
 	}
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		count = 1;
-	}
+
 	// NOTE: size > capacity can occur in valid intermediate states (e.g. after SetListSize before Reserve)
 	// D_ASSERT(size <= capacity);
 	idx_t total_size = 0;
@@ -110,9 +106,16 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
 		auto &le = list_data[idx];
 		if (validity.RowIsValid(idx)) {
-			D_ASSERT(le.offset + le.length <= child->size());
+			if (le.offset + le.length > child->size()) {
+				throw InternalException("List entry offset + length out of range (offset %d, size %d, child size %d)",
+				                        le.offset, le.length, child->size());
+			}
 			total_size += le.length;
 		}
+	}
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
+		return;
 	}
 	SelectionVector child_sel(total_size);
 	idx_t child_count = 0;
@@ -133,15 +136,24 @@ void VectorListBuffer::Verify(const LogicalType &type, const SelectionVector &se
 buffer_ptr<VectorBuffer> VectorListBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	auto type_size = GetTypeIdSize(type.InternalType());
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<VectorListBuffer>(offset_ptr, end - offset, *this);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
-	result->SetVectorSize(end - offset);
+	auto count = count_t(end - offset);
+	auto result = make_buffer<VectorListBuffer>(offset_ptr, count, *this);
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 
-void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<VectorListBuffer>(data_ptr, count, *child);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
+}
+
+void VectorListBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -149,8 +161,8 @@ void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format)
 	format.validity = validity;
 }
 
-buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, idx_t capacity) const {
-	return make_buffer<VectorListBuffer>(std::move(new_data), capacity, *this);
+buffer_ptr<VectorBuffer> VectorListBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
+	return make_buffer<VectorListBuffer>(std::move(new_data), count, *this);
 }
 
 void VectorListBuffer::CopyInternal(const Vector &source, const SelectionVector &source_sel, idx_t source_count,
@@ -189,13 +201,13 @@ void VectorListBuffer::CopyInternal(const Vector &source, const SelectionVector 
 	AppendToChild(source_child, child_sel, child_rows.size());
 }
 
-buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorListBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - flatten the child
-		child->Flatten(GetChildSize());
+		child->Flatten();
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -440,6 +452,30 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 	//	result.Slice(child_sel, info.second.length);
 	//	result.Flatten(info.second.length);
 	//	info.second.offset = 0;
+}
+
+const Vector &VectorIteratorGetListChild(const Vector &vector) {
+	return ListVector::GetChild(vector);
+}
+
+idx_t VectorIteratorGetListSize(const Vector &vector) {
+	return ListVector::GetListSize(vector);
+}
+
+Vector &VectorWriterGetListChild(Vector &vector) {
+	return ListVector::GetChildMutable(vector);
+}
+
+idx_t VectorWriterGetListSize(const Vector &vector) {
+	return ListVector::GetListSize(vector);
+}
+
+void VectorWriterReserveList(Vector &vector, idx_t required_capacity) {
+	ListVector::Reserve(vector, required_capacity);
+}
+
+void VectorWriterSetListSize(Vector &vector, idx_t size) {
+	ListVector::SetListSize(vector, size);
 }
 
 } // namespace duckdb

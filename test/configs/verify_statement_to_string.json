@@ -1,0 +1,37 @@
+{
+  "description": "Run with debug_verify_statement set to reparse_statement - forcing all statements to be converted to a string and reparsed using the parser prior to being used",
+  "on_init": "SET debug_verify_statement='reparse_statement';",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Different error message",
+      "paths": [
+        "test/sql/error/lineitem_errors.test",
+        "test/sql/subquery/scalar/array_order_subquery.test",
+        "test/fuzzer/duckfuzz/list_try_cast.test"
+      ]
+    },
+    {
+      "reason": "main schema qualification is not stringified, which breaks when it's not on the search path",
+      "paths": [
+        "test/sql/catalog/test_set_search_path.test",
+        "test/sql/catalog/test_set_schema.test"
+      ]
+    },
+    {
+      "reason": "Literal types not preserved in ToString",
+      "paths": [
+        "test/sql/types/hugeint/test_hugeint_conversion.test",
+        "test/sql/types/uhugeint/test_uhugeint_conversion.test",
+        "test/sql/types/decimal/large_decimal_constants.test",
+        "test/sql/cast/cast_error_location.test"
+      ]
+    },
+    {
+      "reason": "RESPECT NULLS in Window functions is not stringified as it's the default",
+      "paths": [
+        "test/sql/window/test_ignore_nulls.test"
+      ]
+    }
+  ]
+}

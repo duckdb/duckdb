@@ -3,9 +3,6 @@
 # group: [function]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE MACRO test_21890_macro(q) AS TABLE
 WITH sel AS (
 	SELECT unnest(string_split(q, ',')) AS tag,

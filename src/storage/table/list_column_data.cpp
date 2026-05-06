@@ -138,6 +138,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	state.last_offset = last_entry;
 
 	ListVector::SetListSize(result, child_scan_count);
+	FlatVector::SetSize(result, count_t(scan_count));
 	return scan_count;
 }
 

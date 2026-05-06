@@ -517,7 +517,7 @@ static yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yyjson_mu
 	}
 }
 
-static string_t JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &, idx_t) {
+static optional<string_t> JSONStructureFunction(yyjson_val *val, yyjson_alc *alc, Vector &) {
 	return JSONCommon::WriteVal<yyjson_mut_val>(
 	    ConvertStructure(ExtractStructureInternal(val, true), yyjson_mut_doc_new(alc)), alc);
 }

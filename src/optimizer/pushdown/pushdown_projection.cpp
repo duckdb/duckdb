@@ -27,8 +27,8 @@ static unique_ptr<Expression> ReplaceProjectionBindings(LogicalProjection &proj,
 		    // replace the binding with a copy to the expression at the referenced index
 		    auto &proj_expr = proj.GetExpression(colref.binding);
 		    auto copy = proj_expr.Copy();
-		    if (!colref.alias.empty()) {
-			    copy->alias = colref.alias;
+		    if (!colref.GetAlias().empty()) {
+			    copy->SetAlias(colref.GetAlias());
 		    }
 		    expr = std::move(copy);
 	    });

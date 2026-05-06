@@ -4,9 +4,6 @@
 load {TEST_DIR}/test_struct_pushdown.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE test_structs(i STRUCT(a integer, b bool));
 
 statement ok

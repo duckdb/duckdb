@@ -9,8 +9,8 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	const auto &lhs_type = arguments[0]->return_type;
-	const auto &rhs_type = arguments[1]->return_type;
+	const auto &lhs_type = arguments[0]->GetReturnType();
+	const auto &rhs_type = arguments[1]->GetReturnType();
 
 	if (lhs_type.IsUnknown() && rhs_type.IsUnknown()) {
 		bound_function.GetArguments()[0] = rhs_type;
@@ -25,14 +25,14 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	if (bound_function.GetArguments()[0].id() != LogicalTypeId::ARRAY ||
 	    bound_function.GetArguments()[1].id() != LogicalTypeId::ARRAY) {
 		throw InvalidInputException(
-		    StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.name));
+		    StringUtil::Format("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.GetName()));
 	}
 
 	const auto lhs_size = ArrayType::GetSize(bound_function.GetArguments()[0]);
 	const auto rhs_size = ArrayType::GetSize(bound_function.GetArguments()[1]);
 
 	if (lhs_size != rhs_size) {
-		throw BinderException("%s: Array arguments must be of the same size", bound_function.name);
+		throw BinderException("%s: Array arguments must be of the same size", bound_function.GetName());
 	}
 
 	const auto &lhs_element_type = ArrayType::GetChildType(bound_function.GetArguments()[0]);
@@ -41,13 +41,13 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	// Resolve common type
 	LogicalType common_type;
 	if (!LogicalType::TryGetMaxLogicalType(context, lhs_element_type, rhs_element_type, common_type)) {
-		throw BinderException("%s: Cannot infer common element type (left = '%s', right = '%s')", bound_function.name,
-		                      lhs_element_type.ToString(), rhs_element_type.ToString());
+		throw BinderException("%s: Cannot infer common element type (left = '%s', right = '%s')",
+		                      bound_function.GetName(), lhs_element_type.ToString(), rhs_element_type.ToString());
 	}
 
 	// Ensure it is float or double
 	if (common_type.id() != LogicalTypeId::FLOAT && common_type.id() != LogicalTypeId::DOUBLE) {
-		throw BinderException("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.name);
+		throw BinderException("%s: Arguments must be arrays of FLOAT or DOUBLE", bound_function.GetName());
 	}
 
 	// The important part is just that we resolve the size of the input arrays
@@ -87,7 +87,7 @@ template <class TYPE, class OP, idx_t N>
 static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.name;
+	const auto &func_name = expr.function.GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
@@ -149,7 +149,7 @@ template <class TYPE, class OP>
 static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.name;
+	const auto &func_name = expr.function.GetName();
 
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);

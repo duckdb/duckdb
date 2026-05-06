@@ -504,7 +504,7 @@ bool PrefixRangeTableFilter::FilterValue(const Value &value) const {
 		return true;
 	}
 
-	Vector keys(cast_value);
+	Vector keys(cast_value, count_t(1));
 	SelectionVector sel;
 	idx_t approved_tuple_count = 1;
 	return filter->LookupKeys(keys, sel, approved_tuple_count) == 1;
@@ -532,8 +532,8 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		min = Value(StringStats::Min(stats));
-		max = Value(StringStats::Max(stats));
+		min = Value::BLOB_RAW(StringStats::Min(stats));
+		max = Value::BLOB_RAW(StringStats::Max(stats));
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

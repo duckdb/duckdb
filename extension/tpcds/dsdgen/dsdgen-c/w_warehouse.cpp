@@ -77,25 +77,25 @@ int mk_w_warehouse(void *info_arr, ds_key_t index) {
 	void *info = append_info_get(info_arr, WAREHOUSE);
 	append_row_start(info);
 
-	append_key(info, r->w_warehouse_sk);
-	append_varchar(info, r->w_warehouse_id);
-	append_varchar(info, &r->w_warehouse_name[0]);
-	append_integer(info, r->w_warehouse_sq_ft);
-	append_integer(info, r->w_address.street_num);
+	append_key(info, r->w_warehouse_sk, W_WAREHOUSE_SK);
+	append_varchar(info, r->w_warehouse_id, W_WAREHOUSE_ID);
+	append_varchar(info, &r->w_warehouse_name[0], W_WAREHOUSE_NAME);
+	append_integer(info, r->w_warehouse_sq_ft, W_WAREHOUSE_SQ_FT);
+	append_integer(info, r->w_address.street_num, W_ADDRESS_STREET_NUM);
 	if (r->w_address.street_name2 != NULL) {
 		sprintf(szTemp, "%s %s", r->w_address.street_name1, r->w_address.street_name2);
-		append_varchar(info, szTemp);
+		append_varchar(info, szTemp, W_ADDRESS_STREET_NAME1);
 	} else
-		append_varchar(info, r->w_address.street_name1);
-	append_varchar(info, r->w_address.street_type);
-	append_varchar(info, r->w_address.suite_num);
-	append_varchar(info, r->w_address.city);
-	append_varchar(info, r->w_address.county);
-	append_varchar(info, r->w_address.state);
+		append_varchar(info, r->w_address.street_name1, W_ADDRESS_STREET_NAME1);
+	append_varchar(info, r->w_address.street_type, W_ADDRESS_STREET_TYPE);
+	append_varchar(info, r->w_address.suite_num, W_ADDRESS_SUITE_NUM);
+	append_varchar(info, r->w_address.city, W_ADDRESS_CITY);
+	append_varchar(info, r->w_address.county, W_ADDRESS_COUNTY);
+	append_varchar(info, r->w_address.state, W_ADDRESS_STATE);
 	sprintf(szTemp, "%05d", r->w_address.zip);
-	append_varchar(info, szTemp);
-	append_varchar(info, r->w_address.country);
-	append_integer_decimal(info, r->w_address.gmt_offset);
+	append_varchar(info, szTemp, W_ADDRESS_ZIP);
+	append_varchar(info, r->w_address.country, W_ADDRESS_COUNTRY);
+	append_integer_decimal(info, r->w_address.gmt_offset, W_ADDRESS_GMT_OFFSET);
 
 	append_row_end(info);
 

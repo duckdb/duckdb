@@ -139,7 +139,7 @@ public:
 	const sel_t *data() const { // NOLINT: allow casing for legacy reasons
 		return sel_vector;
 	}
-	buffer_ptr<SelectionData> sel_data() { // NOLINT: allow casing for legacy reasons
+	const buffer_ptr<SelectionData> &sel_data() { // NOLINT: allow casing for legacy reasons
 		return selection_data;
 	}
 	idx_t Capacity() const {

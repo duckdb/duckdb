@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/storage_index.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
+#include "duckdb/common/enums/row_group_append_mode.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,7 @@ struct CollectionCheckpointState;
 struct PersistentCollectionData;
 class CheckpointTask;
 class TableIOManager;
+class CommitDropState;
 class DataTable;
 class DuckTableEntry;
 class RowGroupIterationHelper;
@@ -123,7 +125,13 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
+	//! Accumulates block drops for every row group's copy of the column into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
+	//! Accumulates block drops for every row group into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Drops every row group's copy of the column and immediately marks the blocks as modified.
 	void CommitDropColumn(const idx_t column_index);
+	//! Drops every row group and immediately marks the blocks as modified.
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
@@ -143,11 +151,15 @@ public:
 	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	AttachedDatabase &GetAttached();
-	BlockManager &GetBlockManager() {
+	AttachedDatabase &GetAttached() const;
+	DatabaseInstance &GetDatabase() const;
+	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
 	MetadataManager &GetMetadataManager();
+	const DataTableInfo &GetTableInfo() const {
+		return *info;
+	}
 	DataTableInfo &GetTableInfo() {
 		return *info;
 	}
@@ -159,7 +171,7 @@ public:
 	idx_t GetRowGroupSize() const {
 		return row_group_size;
 	}
-	void SetAppendRequiresNewRowGroup();
+	void SetRowGroupAppendMode(RowGroupAppendMode mode);
 	//! Returns the total amount of segments - use sparingly, as this forces all segments to be loaded
 	idx_t GetSegmentCount();
 
@@ -193,8 +205,8 @@ private:
 	MetaBlockPointer metadata_pointer;
 	//! Other metadata pointers
 	vector<MetaBlockPointer> metadata_pointers;
-	//! Whether or not we need to append a new row group prior to appending
-	bool requires_new_row_group;
+	//! Controls whether the next append creates a new row group or reuses the existing one
+	RowGroupAppendMode row_group_append_mode;
 };
 
 class RowGroupIterationHelper {

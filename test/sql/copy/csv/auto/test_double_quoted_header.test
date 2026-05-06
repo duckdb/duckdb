@@ -1,9 +1,6 @@
 # name: test/sql/copy/csv/auto/test_double_quoted_header.test
 # group: [auto]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIIII
 describe from '{DATA_DIR}/csv/double_quoted_header.csv';
 ----

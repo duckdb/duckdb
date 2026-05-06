@@ -17,7 +17,15 @@ using Filter = FilterPushdown::Filter;
 
 void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<TableIndex> &table_bindings) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::MARK) {
+			// Duplicate-eliminated correlated subqueries must keep MARK semantics; converting to SEMI can drop
+			// correlation for nested RHS shapes (issue #22267).
+			join.convert_mark_to_semi = false;
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.join_type != JoinType::MARK) {

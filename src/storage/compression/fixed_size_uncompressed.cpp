@@ -158,7 +158,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto data = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	// copy the data from the base table
@@ -171,11 +171,11 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 	auto &scan_state = state.scan_state->template Cast<FixedSizeScanState>();
 	auto start = state.GetPositionInSegment();
 
-	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto data = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, source_data, scan_count);
+	FlatVector::SetData(result, source_data, count_t(scan_count));
 }
 
 //===--------------------------------------------------------------------===//
@@ -188,7 +188,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
-	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
+	auto data_ptr = handle.GetDataMutable() + segment.GetBlockOffset() + NumericCast<idx_t>(row_id) * sizeof(T);
 
 	memcpy(FlatVector::GetDataMutable(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
@@ -255,7 +255,7 @@ idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segme
                       UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
-	auto target_ptr = append_state.handle.Ptr();
+	auto target_ptr = append_state.handle.GetDataMutable();
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 

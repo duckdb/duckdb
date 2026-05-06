@@ -2,9 +2,6 @@
 # description: Test that we revert the global storage correctly after a constraint violation
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 statement ok con1
 CREATE TABLE integers(i INTEGER UNIQUE);
 

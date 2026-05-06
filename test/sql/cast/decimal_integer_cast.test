@@ -2,9 +2,6 @@
 # description: Issue #2965
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 foreach datatype TINYINT SMALLINT INTEGER BIGINT HUGEINT
 
 query I

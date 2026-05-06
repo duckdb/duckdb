@@ -86,12 +86,12 @@ struct ApproximateQuantileBindData : public FunctionData {
 	}
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                      const AggregateFunction &function) {
+	                      const BoundAggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ApproximateQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundAggregateFunction &function) {
 		auto result = make_uniq<ApproximateQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		return std::move(result);
@@ -283,7 +283,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimal(BindAggregateFunctionInput &i
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalFunction(arguments[0]->return_type);
+	function.ReplaceImplementation(ApproxQuantileDecimalFunction(arguments[0]->GetReturnType()));
 	return bind_data;
 }
 
@@ -293,7 +293,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetArguments().emplace_back(LogicalType::FLOAT);
+	fun.GetSignature().AddParameter(LogicalType::FLOAT);
 	return fun;
 }
 
@@ -404,7 +404,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimalList(BindAggregateFunctionInpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalListFunction(arguments[0]->return_type);
+	function.ReplaceImplementation(ApproxQuantileDecimalListFunction(arguments[0]->GetReturnType()));
 	return bind_data;
 }
 
@@ -415,17 +415,18 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetArguments().push_back(list_of_float);
+	fun.GetSignature().AddParameter(list_of_float);
 	return fun;
 }
 
-unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserializer,
+                                                          BoundAggregateFunction &function) {
 	auto bind_data = ApproximateQuantileBindData::Deserialize(deserializer, function);
 	auto &return_type = deserializer.Get<const LogicalType &>();
 	if (return_type.id() == LogicalTypeId::LIST) {
-		function = ApproxQuantileDecimalListFunction(function.GetArguments()[0]);
+		function.ReplaceImplementation(ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
 	} else {
-		function = ApproxQuantileDecimalFunction(function.GetArguments()[0]);
+		function.ReplaceImplementation(ApproxQuantileDecimalFunction(function.GetArguments()[0]));
 	}
 	return bind_data;
 }

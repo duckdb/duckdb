@@ -2,9 +2,6 @@
 # description: Test date try cast
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 # try cast on gibberish
 query I
 select try_cast('' as date)

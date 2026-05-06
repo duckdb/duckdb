@@ -2,9 +2,6 @@
 # description: Test generated columns with the COLLATE option
 # group: [virtual]
 
-statement ok
-PRAGMA enable_verification
-
 #Add a collation to a generated column
 statement error
 CREATE TABLE tbl (
@@ -12,6 +9,8 @@ CREATE TABLE tbl (
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
 ----
+Parser Error: Collations are not supported on generated columns
+
 
 statement ok
 CREATE TABLE coll (

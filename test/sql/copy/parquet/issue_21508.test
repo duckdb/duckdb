@@ -9,9 +9,6 @@ require noforcestorage
 require httpfs
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
 
 statement ok

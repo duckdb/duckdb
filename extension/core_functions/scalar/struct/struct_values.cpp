@@ -30,7 +30,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 		}
 	} else {
 		// set only the struct buffer's type - do not propagate to children
@@ -56,7 +56,7 @@ static void StructValuesFunction(DataChunk &args, ExpressionState &state, Vector
 static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	const auto arg_type = arguments[0]->return_type;
+	const auto arg_type = arguments[0]->GetReturnType();
 	if (arg_type == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -67,7 +67,7 @@ static unique_ptr<FunctionData> StructValuesBind(BindScalarFunctionInput &input)
 
 	// Build unnamed children list using only types, with empty names
 	child_list_t<LogicalType> unnamed_children;
-	auto &children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	unnamed_children.reserve(children.size());
 	for (auto &child : children) {
 		unnamed_children.emplace_back("", child.second);

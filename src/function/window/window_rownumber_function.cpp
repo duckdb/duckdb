@@ -88,7 +88,7 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 //===--------------------------------------------------------------------===//
 class WindowRowNumberStreamingState : public WindowExecutorStreamingState {
 public:
-	WindowRowNumberStreamingState() : vec(Value((int64_t)1)) {
+	WindowRowNumberStreamingState() : vec(Value((int64_t)1), count_t(1)) {
 	}
 
 	void Evaluate(idx_t count, Vector &result) {

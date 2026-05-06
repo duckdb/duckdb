@@ -1,0 +1,35 @@
+diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
+index ec69387..8f7ed76 100644
+--- a/src/spatial/modules/proj/proj_module.cpp
++++ b/src/spatial/modules/proj/proj_module.cpp
+@@ -1476,7 +1476,7 @@ struct DuckDB_Proj_Version {
+ 		PJ_INFO pj_info = proj_info();
+ 		string_t version(pj_info.version);
+ 		auto val = Value(version);
+-		result.Reference(val);
++		result.Reference(val, count_t(args.size()));
+ 	}
+ 
+ 	static constexpr auto DESCRIPTION = R"(
+@@ -1517,7 +1517,7 @@ struct DuckDB_Proj_Compiled_Version {
+ 		D_ASSERT(args.ColumnCount() == 0);
+ 		string_t version(pj_release);
+ 		auto val = Value(version);
+-		result.Reference(val);
++		result.Reference(val, count_t(args.size()));
+ 	}
+ 
+ 	static constexpr auto DESCRIPTION = R"(
+diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
+index bd8b172..c9f55a4 100644
+--- a/src/spatial/operators/spatial_join_physical.cpp
++++ b/src/spatial/operators/spatial_join_physical.cpp
+@@ -624,7 +624,7 @@ SinkResultType PhysicalSpatialJoin::Sink(ExecutionContext &context, DataChunk &c
+ 	}
+ 
+ 	if (PropagatesBuildSide(join_type)) {
+-		lstate.build_side_row_chunk.data[layout_col_idx++].Reference(Value::BOOLEAN(false));
++		lstate.build_side_row_chunk.data[layout_col_idx++].Reference(Value::BOOLEAN(false), count_t(chunk.size()));
+ 	}
+ 
+ 	// Set the cardinality to match the input

@@ -170,7 +170,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	bool all_valid_and_truly_constant = true;
 	for (idx_t order_idx = 0; order_idx < orders.size(); order_idx++) {
 		const auto &order = orders[order_idx];
-		const auto &logical_type = order.expression->return_type;
+		const auto &logical_type = order.expression->GetReturnType();
 		const auto physical_type = logical_type.InternalType();
 
 		if (all_valid_and_truly_constant && order.stats && !order.stats->CanHaveNull() &&

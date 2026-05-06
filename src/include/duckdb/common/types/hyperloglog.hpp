@@ -79,28 +79,24 @@ public:
 public:
 	//! Add data to this HLL
 	void Update(Vector &input, Vector &hash_vec, const idx_t count) {
-		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
-
-		UnifiedVectorFormat hdata;
-		hash_vec.ToUnifiedFormat(count, hdata);
-		const auto hashes = UnifiedVectorFormat::GetData<hash_t>(hdata);
+		auto idata = input.Validity(count);
+		const auto hashes = hash_vec.Values<hash_t>(count);
 
 		if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (idata.validity.RowIsValid(0)) {
-				InsertElement(hashes[0]);
+			if (idata.IsValid(0)) {
+				InsertElement(hashes[0].GetValue());
 			}
 		} else {
 			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			if (idata.validity.CannotHaveNull()) {
+			if (idata.CannotHaveNull()) {
 				for (idx_t i = 0; i < count; ++i) {
-					const auto hash = hashes[i];
+					const auto hash = hashes[i].GetValue();
 					InsertElement(hash);
 				}
 			} else {
 				for (idx_t i = 0; i < count; ++i) {
-					if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
-						const auto hash = hashes[i];
+					if (idata.IsValid(i)) {
+						const auto hash = hashes[i].GetValue();
 						InsertElement(hash);
 					}
 				}

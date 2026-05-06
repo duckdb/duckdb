@@ -26,6 +26,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	auto varchar_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 	Vector varchar_map(varchar_type, count);
+	FlatVector::SetSize(varchar_map, count);
 
 	// since map's physical type is a list, the ListCast can be utilized
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
@@ -172,7 +173,7 @@ static bool MapToMapCast(Vector &source, Vector &result, idx_t count, CastParame
 			auto list_data = ConstantVector::GetData<list_entry_t>(result);
 			for (idx_t j = 0; j < list_data->length; j++) {
 				if (!key_validity.IsValid(list_data->offset + j)) {
-					ConstantVector::SetNull(result);
+					ConstantVector::SetNull(result, count_t(count));
 					break;
 				}
 			}

@@ -56,10 +56,10 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr, idx_t count) : type(std::
 		throw InternalException("Cannot create a nested vector from a single data pointer");
 	}
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		buffer = make_buffer<VectorStringBuffer>(dataptr, count);
+		buffer = make_buffer<VectorStringBuffer>(dataptr, count_t(count));
 	} else {
 		auto type_size = GetTypeIdSize(type.InternalType());
-		buffer = make_buffer<StandardVectorBuffer>(dataptr, count, type_size);
+		buffer = make_buffer<StandardVectorBuffer>(dataptr, count_t(count), type_size);
 	}
 }
 
@@ -79,18 +79,11 @@ Vector::Vector(const Vector &other, idx_t offset, idx_t end) : type(other.type) 
 	Slice(other, offset, end);
 }
 
-Vector::Vector(const Value &value) : type(value.type()) {
-	Reference(value);
+Vector::Vector(const Value &value, count_t count) : type(value.type()) {
+	Reference(value, count);
 }
 
 Vector::Vector(Vector &&other) noexcept : type(std::move(other.type)), buffer(std::move(other.buffer)) {
-}
-
-bool Vector::HasSize() const {
-	if (!buffer) {
-		return true;
-	}
-	return buffer->HasSize();
 }
 
 idx_t Vector::size() const {
@@ -120,8 +113,8 @@ Vector Vector::Ref(const Vector &other) {
 	return Vector(other, VectorConstructorAction::REFERENCE_VECTOR);
 }
 
-void Vector::Reference(const Value &value) {
-	ConstantVector::Reference(*this, value);
+void Vector::Reference(const Value &value, count_t count) {
+	ConstantVector::Reference(*this, value, count);
 }
 
 void Vector::Reference(const Vector &other) {
@@ -184,34 +177,43 @@ void Vector::Slice(const Vector &other, const SelectionVector &sel, idx_t count)
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && count == size()) {
+		// no-op: no selection vector, and the requested count matches the current size
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->Slice(GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (!sel.IsSet() || count == 0) {
+	if (!sel.IsSet() && count == size()) {
+		return;
+	}
+	if (!buffer) {
 		return;
 	}
 	auto new_buffer = buffer->SliceWithCache(cache, GetType(), sel, count);
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
+	FlatVector::SetSize(*this, count_t(count));
 }
 
 void Vector::Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!HasSize() || dictionary_size != size()) {
+	if (dictionary_size != size()) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Slice(sel, count);
 }
 
 void Vector::Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count) {
-	if (!dict.HasSize() || dict.size() != dictionary_size) {
+	if (dict.size() != dictionary_size) {
 		throw InternalException("Vector::Dictionary called with mismatching dictionary size");
 	}
 	Reference(dict);
@@ -226,9 +228,9 @@ void Vector::Dictionary(buffer_ptr<DictionaryEntry> reusable_dict, const Selecti
 	buffer = make_buffer<DictionaryBuffer>(sel, sel_count, std::move(reusable_dict));
 }
 
-void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity) {
-	auto &type = GetType();
+void Vector::Initialize(VectorDataInitialization data_initialize, idx_t capacity_p) {
 	auto internal_type = type.InternalType();
+	auto capacity = capacity_t(capacity_p);
 	if (internal_type == PhysicalType::STRUCT) {
 		buffer = make_buffer<VectorStructBuffer>(type, capacity);
 	} else if (internal_type == PhysicalType::LIST) {
@@ -268,45 +270,33 @@ void Vector::AddHeapReference(const Vector &other) {
 	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 }
 
-void Vector::Resize(idx_t current_size, idx_t new_size) {
-	if (!buffer) {
-		// The vector does not contain any data - initialize
-		if (current_size != 0) {
-			throw InternalException("Vector::Resize - buffer does not contain any data but current_size is not 0");
-		}
-		Initialize(VectorDataInitialization::UNINITIALIZED, new_size);
-	} else {
-		// resize the buffer
-		buffer->Resize(current_size, new_size);
-	}
-}
-
 void Vector::Reserve(idx_t to_reserve) {
-	if (!HasSize()) {
-		throw InternalException("Vector::Reserve can only be called on vectors with a size");
-	}
+	Resize(buffer ? buffer->Capacity() : 0, to_reserve);
+}
+
+void Vector::Resize(idx_t size, idx_t to_reserve_p) {
+	auto reserve_size = VectorBuffer::GetReserveSize(to_reserve_p);
 	if (!buffer) {
-		Initialize(VectorDataInitialization::UNINITIALIZED, VectorBuffer::GetReserveSize(to_reserve));
+		Initialize(VectorDataInitialization::UNINITIALIZED, reserve_size);
 		return;
 	}
-	to_reserve = VectorBuffer::GetReserveSize(to_reserve);
 	auto capacity = buffer->Capacity();
-	if (to_reserve <= capacity) {
+	if (reserve_size <= capacity) {
 		return;
 	}
-	buffer->Resize(capacity, to_reserve);
+	buffer->Resize(size, reserve_size);
 }
 
-void Vector::Append(const Value &value) {
-	buffer->AppendValue(GetType(), value, VectorAppendMode::ALLOW_RESIZE);
+void Vector::Append(const Value &value, VectorAppendMode append_mode) {
+	buffer->AppendValue(GetType(), value, append_mode);
 }
 
-void Vector::Append(const Vector &source, idx_t count) {
-	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, VectorAppendMode::ALLOW_RESIZE);
+void Vector::Append(const Vector &source, idx_t count, VectorAppendMode append_mode) {
+	buffer->Append(source, *FlatVector::IncrementalSelectionVector(), count, append_mode);
 }
 
-void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count) {
-	buffer->Append(source, sel, count, VectorAppendMode::ALLOW_RESIZE);
+void Vector::Append(const Vector &source, const SelectionVector &sel, idx_t count, VectorAppendMode append_mode) {
+	buffer->Append(source, sel, count, append_mode);
 }
 
 void Vector::Copy(const Vector &source, const SelectionVector &source_sel, idx_t source_count, idx_t source_offset,
@@ -400,7 +390,11 @@ void Vector::Print() const {
 // LCOV_EXCL_STOP
 
 void Vector::Flatten(idx_t count) const {
-	auto new_buffer = Buffer().Flatten(GetType(), count);
+	Flatten();
+}
+
+void Vector::Flatten() const {
+	auto new_buffer = Buffer().Flatten(GetType());
 	if (new_buffer) {
 		buffer = std::move(new_buffer);
 	}
@@ -414,14 +408,18 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) const {
 }
 
 void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+	ToUnifiedFormat(format);
+}
+
+void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.physical_type = GetType().InternalType();
 	auto vtype = GetVectorType();
 	if (vtype != VectorType::FLAT_VECTOR && vtype != VectorType::CONSTANT_VECTOR &&
 	    vtype != VectorType::DICTIONARY_VECTOR) {
 		// FSST/SEQUENCE/SHREDDED: flatten first so the buffer can provide unified format
-		Flatten(count);
+		Flatten();
 	}
-	Buffer().ToUnifiedFormat(count, format);
+	Buffer().ToUnifiedFormat(format);
 }
 
 void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
@@ -453,7 +451,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 }
 
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
-	this->buffer = make_buffer<SequenceBuffer>(start, increment, static_cast<int64_t>(count));
+	this->buffer = make_buffer<SequenceBuffer>(start, increment, count_t(count));
 }
 
 void Vector::Shred(Vector &shredded_data, idx_t capacity) {
@@ -464,7 +462,7 @@ void Vector::Shred(Vector &shredded_data, idx_t capacity) {
 	if (shredded_type.id() != LogicalTypeId::STRUCT || StructType::GetChildCount(shredded_type) != 2) {
 		throw InternalException("Vector::Shred parameter must be a struct with two children");
 	}
-	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, capacity);
+	this->buffer = make_buffer<ShreddedVectorBuffer>(shredded_data, count_t(capacity));
 }
 
 // FIXME: This should ideally be const
@@ -845,36 +843,28 @@ void Vector::SetVectorType(VectorType new_vector_type) {
 	}
 }
 
-void Vector::Verify(idx_t count) const {
-	Verify(*FlatVector::IncrementalSelectionVector(), count);
+void Vector::Verify(idx_t) const {
+	Verify();
 }
 
-void Vector::Verify(const SelectionVector &sel, idx_t count) const {
-#ifdef DEBUG
+void Vector::Verify() const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
+	}
 	if (!buffer) {
 		return;
 	}
-	Buffer().Verify(GetType(), sel, count);
-	// type-specific verification that requires access to the full Vector
-	// these functions may call ToUnifiedFormat which mutates the vector, hence the const_cast
-	auto &self = const_cast<Vector &>(*this);
-	if (GetType().id() == LogicalTypeId::MAP) {
-		auto valid_check = MapVector::CheckMapValidity(self, count, sel);
-		D_ASSERT(valid_check == MapInvalidReason::VALID);
+	buffer->Verify(GetType());
+}
+
+void Vector::Verify(const SelectionVector &sel, idx_t count) const {
+	if (DBConfigOptions::global_verification_mode != DebugVerificationMode::VERIFY_VECTORS) {
+		return;
 	}
-	if (GetType().id() == LogicalTypeId::UNION) {
-		auto valid_check = UnionVector::CheckUnionValidity(self, count, sel);
-		if (valid_check != UnionInvalidReason::VALID) {
-			throw InternalException("Union not valid, reason: %s", EnumUtil::ToString(valid_check));
-		}
+	if (!buffer) {
+		return;
 	}
-	// FIXME: re-add variant verification once VariantUtils::Verify handles shredded variants correctly
-	// if (GetType().id() == LogicalTypeId::VARIANT) {
-	// 	if (!VariantUtils::Verify(self, sel, count)) {
-	// 		throw InternalException("Variant not valid");
-	// 	}
-	// }
-#endif
+	buffer->Verify(GetType(), sel, count);
 }
 
 void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
@@ -915,7 +905,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	} else {
 		vector.Dictionary(reusable_dict, original_sel, count);
 	}
-	vector.Verify(count);
+	vector.Verify();
 }
 
 void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {

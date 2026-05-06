@@ -62,6 +62,8 @@ struct VariantStatsVisitor {
 	}
 	static void VisitTimestampTZ(timestamp_tz_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, VariantShreddingStats &stats, idx_t stats_column_index) {
+	}
 	static void WriteStringInternal(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
 	}
 	static void VisitString(const string_t &str, VariantShreddingStats &stats, idx_t stats_column_index) {
@@ -178,6 +180,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIME_MICROS_TZ};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -247,6 +251,7 @@ public:
 	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, optional_ptr<const SelectionVector> sel,
 	                        optional_ptr<const SelectionVector> value_index_sel,
 	                        optional_ptr<const SelectionVector> result_sel, idx_t count) override;
+	void WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count);
 	void AnalyzeVariantValues(UnifiedVariantVectorData &variant, optional_ptr<Vector> untyped_values,
 	                          optional_ptr<const SelectionVector> sel,
 	                          optional_ptr<const SelectionVector> value_index_sel,
@@ -357,6 +362,8 @@ static LogicalType ProduceShreddedType(VariantLogicalType type_id) {
 		return LogicalTypeId::TIME_TZ;
 	case VariantLogicalType::TIMESTAMP_MICROS_TZ:
 		return LogicalTypeId::TIMESTAMP_TZ;
+	case VariantLogicalType::TIMESTAMP_NANOS_TZ:
+		return LogicalTypeId::TIMESTAMP_TZ_NS;
 	case VariantLogicalType::INTERVAL:
 		return LogicalTypeId::INTERVAL;
 	case VariantLogicalType::BIGNUM:
@@ -676,6 +683,17 @@ void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &varian
 	}
 }
 
+void DuckDBVariantShredding::WriteVariantValues(UnifiedVariantVectorData &variant, Vector &result, idx_t count) {
+	// write the top-level variant values
+	WriteVariantValues(variant, result, nullptr, nullptr, nullptr, count);
+	//! Propagate NULL values from the top-level input variant to the shredded child struct
+	for (idx_t row = 0; row < count; row++) {
+		if (!variant.RowIsValid(row)) {
+			FlatVector::SetNull(result, row, true);
+		}
+	}
+}
+
 void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t count) {
 	RecursiveUnifiedVectorFormat recursive_format;
 	Vector::RecursiveToUnifiedFormat(input, count, recursive_format);
@@ -685,7 +703,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	//! First traverse the Variant to write the shredded values and collect the 'untyped_value_index'es
 	DuckDBVariantShredding shredding(count);
-	shredding.WriteVariantValues(variant, child_vectors[1], nullptr, nullptr, nullptr, count);
+	shredding.WriteVariantValues(variant, child_vectors[1], count);
 
 	//! Now we can write the unshredded values
 	auto &unshredded = child_vectors[0];
@@ -767,6 +785,7 @@ void VariantColumnData::ShredVariantData(Vector &input, Vector &output, idx_t co
 
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		unshredded.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(unshredded, count_t(count));
 	}
 
 #ifdef DEBUG

@@ -4,112 +4,61 @@
 
 namespace duckdb {
 
-static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const SelectionVector &sep_sel,
-                              const SelectionVector &rsel, idx_t count, Vector &result) {
-	vector<idx_t> result_lengths(args.size(), 0);
-	vector<bool> has_results(args.size(), false);
-
-	// we overallocate here, but this is important for static analysis
-	auto orrified_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(args.ColumnCount());
-
-	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		args.data[col_idx].ToUnifiedFormat(args.size(), orrified_data[col_idx - 1]);
-	}
-
-	// first figure out the lengths
-	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		auto &idata = orrified_data[col_idx - 1];
-
-		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = rsel.get_index(i);
-			auto sep_idx = sep_sel.get_index(ridx);
-			auto idx = idata.sel->get_index(ridx);
-			if (!idata.validity.RowIsValid(idx)) {
-				continue;
-			}
-			if (has_results[ridx]) {
-				result_lengths[ridx] += sep_data[sep_idx].GetSize();
-			}
-			result_lengths[ridx] += input_data[idx].GetSize();
-			has_results[ridx] = true;
-		}
-	}
-
-	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::ScatterWriter<string_t>(result);
-	for (idx_t i = 0; i < count; i++) {
-		auto ridx = rsel.get_index(i);
-		// allocate an empty string of the required size
-		result_data[ridx].EmptyString(result_lengths[ridx]);
-		// we reuse the result_lengths vector to store the currently appended size
-		result_lengths[ridx] = 0;
-		has_results[ridx] = false;
-	}
-
-	// now that the empty space for the strings has been allocated, perform the concatenation
-	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		auto &idata = orrified_data[col_idx - 1];
-		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
-		for (idx_t i = 0; i < count; i++) {
-			auto ridx = rsel.get_index(i);
-			auto sep_idx = sep_sel.get_index(ridx);
-			auto idx = idata.sel->get_index(ridx);
-			if (!idata.validity.RowIsValid(idx)) {
-				continue;
-			}
-			if (has_results[ridx]) {
-				auto sep_size = sep_data[sep_idx].GetSize();
-				auto sep_ptr = sep_data[sep_idx].GetData();
-				memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], sep_ptr, sep_size);
-				result_lengths[ridx] += sep_size;
-			}
-			auto input_ptr = input_data[idx].GetData();
-			auto input_len = input_data[idx].GetSize();
-			memcpy(result_data[ridx].GetDataWriteable() + result_lengths[ridx], input_ptr, input_len);
-			result_lengths[ridx] += input_len;
-			has_results[ridx] = true;
-		}
-	}
-	for (idx_t i = 0; i < count; i++) {
-		auto ridx = rsel.get_index(i);
-		result_data[ridx].Finalize();
-	}
-}
-
 static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &separator = args.data[0];
-	UnifiedVectorFormat vdata;
-	separator.ToUnifiedFormat(args.size(), vdata);
+	auto count = args.size();
+	auto sep_data = args.data[0].Values<string_t>(count);
+	vector<VectorIterator<string_t>> iterators;
+	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
+		iterators.emplace_back(args.data[col_idx].Values<string_t>(args.size()));
+	}
 
-	switch (separator.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR: {
-		if (ConstantVector::IsNull(separator)) {
-			// constant NULL as separator: return constant NULL vector
-			ConstantVector::SetNull(result);
-			return;
+	auto result_data = FlatVector::Writer<string_t>(result, count);
+	for (idx_t r = 0; r < count; r++) {
+		auto sep_entry = sep_data[r];
+		if (!sep_entry.IsValid()) {
+			result_data.WriteNull();
+			continue;
 		}
-		// no null values
-		auto sel = FlatVector::IncrementalSelectionVector();
-		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, *sel, args.size(), result);
-		return;
-	}
-	default: {
-		// default case: loop over nullmask and create a non-null selection vector
-		idx_t not_null_count = 0;
-		SelectionVector not_null_vector(STANDARD_VECTOR_SIZE);
-		auto &result_mask = FlatVector::ValidityMutable(result);
-		for (idx_t i = 0; i < args.size(); i++) {
-			if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
-				result_mask.SetInvalid(i);
-			} else {
-				not_null_vector.set_index(not_null_count++, i);
+		auto sep = sep_entry.GetValue();
+		auto sep_ptr = sep.GetData();
+		auto sep_size = sep.GetSize();
+
+		// first figure out the length of the result string
+		idx_t result_length = 0;
+		bool has_result = false;
+		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
+			auto &idata = iterators[col_idx - 1];
+			auto input = idata[r];
+			if (!input.IsValid()) {
+				continue;
 			}
+			if (has_result) {
+				result_length += sep.GetSize();
+			}
+			result_length += input.GetValue().GetSize();
+			has_result = true;
 		}
-		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, not_null_vector,
-		                  not_null_count, result);
-		return;
-	}
+		auto &result_str = result_data.WriteEmptyString(result_length);
+		auto result_ptr = result_str.GetDataWriteable();
+		// now write the result string
+		result_length = 0;
+		has_result = false;
+		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
+			auto &idata = iterators[col_idx - 1];
+			auto input = idata[r];
+			if (!input.IsValid()) {
+				continue;
+			}
+			if (has_result) {
+				memcpy(result_ptr + result_length, sep_ptr, sep_size);
+				result_length += sep.GetSize();
+			}
+			auto input_str = input.GetValue();
+			memcpy(result_ptr + result_length, input_str.GetData(), input_str.GetSize());
+			result_length += input.GetValue().GetSize();
+			has_result = true;
+		}
+		result_str.Finalize();
 	}
 }
 
@@ -118,7 +67,6 @@ static unique_ptr<FunctionData> BindConcatWSFunction(BindScalarFunctionInput &in
 	for (auto &arg : bound_function.GetArguments()) {
 		arg = LogicalType::VARCHAR;
 	}
-	bound_function.SetVarArgs(LogicalType::VARCHAR);
 	return nullptr;
 }
 

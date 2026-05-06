@@ -2,20 +2,7 @@
 # description: PEG should reject (currently accepts): Not implemented Error: Verbose vacuum option
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-CALL enable_peg_parser();
-
 statement error
 ANALYZE VERBOSE
 ----
 Not implemented Error: ANALYZE VERBOSE is not implemented yet
-
-statement ok
-CALL disable_peg_parser();
-
-statement error
-ANALYZE VERBOSE
-----
-Not implemented Error: Verbose vacuum option

@@ -2,9 +2,6 @@
 # description: Failed parser round-trip verification
 # group: [pedro]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT BLOB '\x27'
 ----

@@ -3,9 +3,6 @@
 # group: [pedro]
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE TABLE t0(c0 INT);
 
 require no_alternative_verify

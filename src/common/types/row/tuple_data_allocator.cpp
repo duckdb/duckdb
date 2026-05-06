@@ -146,10 +146,10 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	}
 
 	// We can do the fast path append!
-	auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
+	auto row_locations = FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_count, append_offset);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
 	for (idx_t i = 0; i < append_count; i++) {
-		row_locations[append_offset + i] = base_row_ptr + i * row_width;
+		row_locations.WriteValue(base_row_ptr + i * row_width);
 	}
 
 	// Increment counts and sizes
@@ -438,10 +438,10 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				lock_guard<mutex> guard(part.lock);
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
-					Vector old_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)));
-					Vector new_heap_ptrs(
-					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)));
+					Vector old_heap_ptrs(Value::POINTER(CastPointerToValue(old_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
+					Vector new_heap_ptrs(Value::POINTER(CastPointerToValue(new_base_heap_ptr + part.heap_block_offset)),
+					                     count_t(next));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part.base_heap_ptr = new_base_heap_ptr;
@@ -834,11 +834,11 @@ BufferHandle &TupleDataAllocator::PinHeapBlock(TupleDataPinState &pin_state, con
 }
 
 data_ptr_t TupleDataAllocator::GetRowPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinRowBlock(pin_state, part).Ptr() + part.row_block_offset;
+	return PinRowBlock(pin_state, part).GetDataMutable() + part.row_block_offset;
 }
 
 data_ptr_t TupleDataAllocator::GetBaseHeapPointer(TupleDataPinState &pin_state, const TupleDataChunkPart &part) {
-	return PinHeapBlock(pin_state, part).Ptr();
+	return PinHeapBlock(pin_state, part).GetDataMutable();
 }
 
 } // namespace duckdb

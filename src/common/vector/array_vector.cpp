@@ -6,14 +6,14 @@
 
 namespace duckdb {
 
-VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)),
+VectorArrayBuffer::VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, capacity_t initial_capacity)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::ARRAY_BUFFER, count_t(0)), child(std::move(child_vector)),
       array_size(array_size), capacity(initial_capacity) {
 	D_ASSERT(array_size != 0);
 	validity.Resize(initial_capacity);
 }
 
-VectorArrayBuffer::VectorArrayBuffer(const LogicalType &array, idx_t initial)
+VectorArrayBuffer::VectorArrayBuffer(const LogicalType &array, capacity_t initial)
     : VectorArrayBuffer(make_uniq<Vector>(ArrayType::GetChildType(array), initial * ArrayType::GetSize(array)),
                         ArrayType::GetSize(array), initial) {
 }
@@ -31,6 +31,15 @@ idx_t VectorArrayBuffer::GetArraySize() const {
 
 idx_t VectorArrayBuffer::GetChildSize() const {
 	return capacity * array_size;
+}
+
+void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
+	VectorBuffer::SetVectorSize(new_size);
+	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		FlatVector::SetSize(*child, array_size);
+		return;
+	}
+	FlatVector::SetSize(*child, new_size * array_size);
 }
 
 void VectorArrayBuffer::SetVectorType(VectorType new_vector_type) {
@@ -56,20 +65,10 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		if (!validity.RowIsValid(0)) {
-			// NULL constant array - verify child is also NULL constant
-			if (child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				D_ASSERT(ConstantVector::IsNull(*child));
-			}
-			return;
-		}
-		child->Verify(array_size);
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
 		return;
 	}
 	// flat vector case - only verify children for valid (non-NULL) entries
@@ -91,26 +90,20 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 		}
 	}
 	child->Verify(child_sel, child_count);
+	// FIXME: verify NULL-ness in child
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector
-		child->Flatten(GetChildSize());
+		child->Flatten();
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                                  idx_t count) const {
-	// now construct the result
-	auto result = make_buffer<VectorArrayBuffer>(nullptr, array_size, count);
-
-	// first copy over the validity
-	auto &result_validity = result->GetValidityMask();
-	result_validity.CopySel(validity, sel, 0, 0, count);
-
 	// now flatten the child vector
 	auto target_child_size = count * array_size;
 	auto child_result = make_uniq<Vector>(Vector::Ref(*child));
@@ -127,17 +120,33 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalTy
 	// flatten the child using the child selection vector
 	child_result->Flatten(child_sel, target_child_size);
 
-	result->child = std::move(child_result);
+	// construct the result
+	auto result = make_buffer<VectorArrayBuffer>(std::move(child_result), array_size, capacity_t(count));
+
+	// copy over the validity
+	auto &result_validity = result->GetValidityMask();
+	result_validity.CopySel(validity, sel, 0, 0, count);
+
 	result->SetVectorSize(count);
 	return result;
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
-	auto result = make_buffer<VectorArrayBuffer>(type, end - offset);
-	auto &result_child = result->GetChild();
-	result_child.Slice(*child, offset * array_size, end * array_size);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
-	result->SetVectorSize(end - offset);
+	auto count = count_t(end - offset);
+	auto new_child = make_uniq<Vector>(*child, offset * array_size, end * array_size);
+
+	auto result = make_buffer<VectorArrayBuffer>(std::move(new_child), array_size, capacity_t(count));
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->SetVectorSize(count);
+	return result;
+}
+
+buffer_ptr<VectorBuffer> VectorArrayBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto child_vector = make_uniq<Vector>(Vector::Ref(*child));
+	auto result = make_buffer<VectorArrayBuffer>(std::move(child_vector), array_size, capacity_t(1ULL));
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->SetVectorSize(count);
 	return result;
 }
 
@@ -149,9 +158,9 @@ void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
 	capacity = new_size;
 }
 
-void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorArrayBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}

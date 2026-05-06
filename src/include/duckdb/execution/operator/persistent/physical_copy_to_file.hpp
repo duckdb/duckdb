@@ -19,7 +19,6 @@
 namespace duckdb {
 
 struct GlobalFileState;
-enum class PhysicalCopyToFilePhase : uint8_t;
 
 struct CopyToFileInfo {
 	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
@@ -48,16 +47,20 @@ public:
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
 
-	unique_ptr<GlobalFileState> CreateFileState(ClientContext &context, GlobalSinkState &sink,
-	                                            const StorageLockKey &global_lock) const;
 	bool Rotate() const;
-	bool RotateNow(GlobalFileState &global_state) const;
-	void
-	FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
-	           const std::function<unique_ptr<GlobalFileState>(const StorageLockKey &guard)> &create_file_state_fun,
-	           unique_ptr<LocalFunctionData> &lstate, unique_ptr<ColumnDataCollection> batch,
-	           PhysicalCopyToFilePhase phase) const;
-	SinkFinalizeType FinalizeInternal(ClientContext &context, GlobalSinkState &gstate) const;
+
+	void PrepareAndFlushBatch(ClientContext &context, GlobalSinkState &gstate_p,
+	                          unique_ptr<GlobalFileState> &file_state_ptr,
+	                          const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	                          unique_ptr<ColumnDataCollection> batch) const;
+	pair<const CopyFunctionBatchAnalyzer, unique_ptr<PreparedBatchData>>
+	PrepareBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
+	             const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	             unique_ptr<ColumnDataCollection> batch) const;
+	void FlushBatch(ClientContext &context, GlobalSinkState &gstate_p, unique_ptr<GlobalFileState> &file_state_ptr,
+	                const std::function<unique_ptr<GlobalFileState>()> &create_file_state_fun,
+	                const CopyFunctionBatchAnalyzer &batch_analyzer,
+	                unique_ptr<PreparedBatchData> prepared_batch) const;
 
 public:
 	//===--------------------------------------------------------------------===//

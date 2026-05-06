@@ -3,9 +3,6 @@
 # group: [explain]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
 
 statement ok
@@ -50,3 +47,7 @@ query II
 EXPLAIN (FORMAT MERMAID) SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
 ----
 logical_opt	<REGEX>:.*node_0_.*\["`\*\*CROSS_PRODUCT\*\*.*
+
+# regression: PEG parser must not greedily consume (SELECT 42) as the option list
+statement ok
+EXPLAIN (SELECT 42) INTERSECT (SELECT 42)

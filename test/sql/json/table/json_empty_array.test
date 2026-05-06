@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # empty file
 query I
 select * from '{DATA_DIR}/json/empty.ndjson'

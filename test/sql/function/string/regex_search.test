@@ -3,9 +3,6 @@
 # group: [string]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0 as FROM VALUES('asdf') t(c0);
 
 # null

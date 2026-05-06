@@ -20,15 +20,15 @@ class FunctionSerializer {
 public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
-		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty(500, "name", function.name);
+		D_ASSERT(!function.GetName().empty());
+		serializer.WriteProperty(500, "name", function.GetName());
 		serializer.WriteProperty(501, "arguments", function.GetArguments());
 		serializer.WriteProperty(502, "original_arguments", function.GetOriginalArguments());
 		// These are optional fields that are written out of numeric order, older
 		// databases won't contain the fields, so the defaults will be used, but if
 		// the fields are present, they will be used.
-		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.catalog_name, "");
-		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.schema_name, "");
+		serializer.WritePropertyWithDefault<string>(505, "catalog_name", function.GetCatalogName(), "");
+		serializer.WritePropertyWithDefault<string>(506, "schema_name", function.GetSchemaName(), "");
 
 		bool has_serialize = function.HasSerializationCallbacks();
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
@@ -79,7 +79,7 @@ public:
 			// This can happen when we change a function that used to take varargs, to no longer do so.
 			arguments.reserve(children->size());
 			for (auto &child : *children) {
-				arguments.push_back(child->return_type);
+				arguments.push_back(child->GetReturnType());
 			}
 		}
 
@@ -97,7 +97,7 @@ public:
 	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
 		if (!function.HasSerializationCallbacks()) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
-			                             function.name);
+			                             function.GetName());
 		}
 		unique_ptr<FunctionData> result;
 		deserializer.ReadObject(504, "function_data",
@@ -147,41 +147,77 @@ public:
 	                                                        vector<unique_ptr<Expression>> &children,
 	                                                        LogicalType return_type) { // NOLINT: clang-tidy bug
 		auto &context = deserializer.Get<ClientContext &>();
-		auto entry = DeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type, children);
-		auto &function = entry.first;
-		auto has_serialize = entry.second;
 
-		unique_ptr<FunctionData> bind_data;
-		if (has_serialize) {
-			deserializer.Set<const LogicalType &>(return_type);
-			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
-			deserializer.Unset<LogicalType>();
-		} else {
-			FunctionBinder binder(context);
+		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
+		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
+		auto catalog_name = deserializer.ReadPropertyWithDefault<string>(505, "catalog_name");
+		auto schema_name = deserializer.ReadPropertyWithDefault<string>(506, "schema_name");
+		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 
-			// Resolve templates
-			binder.ResolveTemplateTypes(function, children);
+		if (catalog_name.empty()) {
+			catalog_name = SYSTEM_CATALOG;
+		}
+		if (schema_name.empty()) {
+			schema_name = DEFAULT_SCHEMA;
+		}
 
-			if (function.HasBindCallback()) {
-				try {
-					bind_data = function.Bind(context, children);
-				} catch (std::exception &ex) {
-					ErrorData error(ex);
-					throw SerializationException("Error during bind of function in deserialization: %s",
-					                             error.RawMessage());
-				}
+		if (arguments.empty() && original_arguments.empty() && !children.empty()) {
+			// The function is specified as having no arguments, but somehow expressions were passed anyway
+			// Assume this is a "varargs" function and use the types of the expressions as the arguments
+			// This can happen when we change a function that used to take varargs, to no longer do so.
+			arguments.reserve(children.size());
+			for (auto &child : children) {
+				arguments.push_back(child->GetReturnType());
 			}
-
-			// Verify that all templates are bound to concrete types.
-			binder.CheckTemplateTypesResolved(function);
-
-			binder.CastToFunctionArguments(function, children);
 		}
 
-		if (TypeRequiresAssignment(function.GetReturnType())) {
-			function.SetReturnType(std::move(return_type));
+		// Now lookup the function in the catalog.
+		EntryLookupInfo lookup_info(catalog_type, name);
+		auto &func_catalog = Catalog::GetEntry(context, catalog_type, catalog_name, schema_name, name);
+
+		if (func_catalog.type != catalog_type) {
+			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}
-		return make_pair(std::move(function), std::move(bind_data));
+		auto &functions = func_catalog.Cast<CATALOG_ENTRY>();
+		const auto &function = functions.functions.GetFunctionByArguments(
+		    context, original_arguments.empty() ? arguments : original_arguments);
+
+		// Does this function support serializing its bound data?
+		if (!has_serialize) {
+			// No, then just rebind the function
+			try {
+				FunctionBinder binder(context);
+
+				auto [bound_function, bound_data] = binder.ResolveFunction(function, children);
+
+				if (TypeRequiresAssignment(bound_function.GetReturnType())) {
+					bound_function.SetReturnType(std::move(return_type));
+				}
+
+				return make_pair(std::move(bound_function), std::move(bound_data));
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				throw SerializationException("Error during bind of function in deserialization: %s",
+				                             error.RawMessage());
+			}
+		}
+
+		// Otherwise, construct the bound function from its parts
+		FUNC bound_function(function);
+		bound_function.GetArguments() = std::move(arguments);
+		bound_function.GetOriginalArguments() = std::move(original_arguments);
+
+		// Invoke deserialization function
+		deserializer.Set<const LogicalType &>(return_type);
+		auto bound_data = FunctionDeserialize(deserializer, bound_function);
+		deserializer.Unset<LogicalType>();
+
+		if (TypeRequiresAssignment(bound_function.GetReturnType())) {
+			bound_function.SetReturnType(std::move(return_type));
+		}
+
+		return make_pair(std::move(bound_function), std::move(bound_data));
 	}
 };
 

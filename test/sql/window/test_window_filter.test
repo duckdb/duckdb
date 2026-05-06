@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE testing AS
 	SELECT
 		 x

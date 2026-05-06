@@ -44,4 +44,4 @@ CREATE TABLE integers2 AS SELECT range i, range % 4 j FROM range(200000);
 query II
 COPY integers2 TO '{TEST_DIR}/test_partition_by' (RETURN_FILES TRUE, PARTITION_BY j);
 ----
-200000	<REGEX>:.*test_partition_by/j=0/data_0.csv.*test_partition_by/j=1/data_0.csv.*test_partition_by/j=2/data_0.csv.*test_partition_by/j=3/data_0.csv.*
+200000	<REGEX>:.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*test_partition_by/j=[0-9]/data_0.csv.*

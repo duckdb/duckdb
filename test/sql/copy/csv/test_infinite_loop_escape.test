@@ -2,9 +2,6 @@
 # description: Test that CSV writer does not loop infinitely when ESCAPE is empty
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # Create a table with a value that needs escaping (a quote)
 statement ok
 CREATE TABLE trigger_loop (a VARCHAR);

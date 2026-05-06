@@ -2,9 +2,6 @@
 # description: Test bignum double
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 Select 85070591730234614260976917445211069672::BIGNUM ;
 ----

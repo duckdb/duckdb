@@ -16,19 +16,19 @@ namespace {
 // current_query
 void CurrentQueryFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	Value val(state.GetContext().GetCurrentQuery());
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 // current_schema
 void CurrentSchemaFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	Value val(ClientData::Get(state.GetContext()).catalog_search_path->GetDefault().schema);
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 // current_database
 void CurrentDatabaseFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	Value val(DatabaseManager::GetDefaultDatabase(state.GetContext()));
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 struct CurrentSchemasBindData : public FunctionData {
@@ -50,7 +50,7 @@ public:
 unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &arguments = input.GetArguments();
-	if (arguments[0]->return_type.id() != LogicalTypeId::BOOLEAN) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
 	if (!arguments[0]->IsFoldable()) {
@@ -77,7 +77,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
 void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<CurrentSchemasBindData>();
-	result.Reference(info.result);
+	result.Reference(info.result, count_t(input.size()));
 }
 
 // in_search_path
@@ -96,13 +96,13 @@ void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &resu
 	auto &catalog = Catalog::GetCatalog(context, DatabaseManager::GetDefaultDatabase(context));
 	auto &transaction = DuckTransaction::Get(context, catalog);
 	auto val = Value::UBIGINT(transaction.start_time);
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 // version
 void VersionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto val = Value(DuckDB::LibraryVersion());
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 } // namespace

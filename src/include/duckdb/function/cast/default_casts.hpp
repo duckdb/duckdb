@@ -185,6 +185,8 @@ private:
 	                                         const LogicalType &target);
 	static BoundCastInfo TimestampTzCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                           const LogicalType &target);
+	static BoundCastInfo TimestampTzNsCastSwitch(BindCastInput &input, const LogicalType &source,
+	                                             const LogicalType &target);
 	static BoundCastInfo TimestampNsCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                           const LogicalType &target);
 	static BoundCastInfo TimestampMsCastSwitch(BindCastInput &input, const LogicalType &source,

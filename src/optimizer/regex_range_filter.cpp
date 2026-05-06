@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 	for (auto &expr : op->expressions) {
 		if (expr->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 			auto &func = expr->Cast<BoundFunctionExpression>();
-			if (func.function.name != "regexp_full_match" || func.children.size() != 2) {
+			if (func.function.GetName() != "regexp_full_match" || func.children.size() != 2) {
 				continue;
 			}
 			auto &info = func.bind_info->Cast<RegexpMatchesBindData>();

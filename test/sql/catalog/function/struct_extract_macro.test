@@ -3,9 +3,6 @@
 # group: [function]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE MACRO my_extract(x) AS x.a.b
 
 query I

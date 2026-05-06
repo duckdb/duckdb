@@ -2,11 +2,6 @@
 # description: PEG parser throws internal exception here for create secret
 # group: [fuzzer]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 statement error
 CREATE SECRET ( x '\r' );
 ----

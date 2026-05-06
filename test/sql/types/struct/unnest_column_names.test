@@ -2,9 +2,6 @@
 # description: Test the retantion of column names when doing recursive unnest
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 SELECT unnest([{'a':{ 'aa': 42}, 'b':{'bb': 84}}], recursive := true, keep_parent_names := true);
 ----

@@ -34,7 +34,7 @@ struct SwitchFunctionBindData : FunctionData {
 
 idx_t FindMapArgumentIndex(const vector<unique_ptr<Expression>> &arguments) {
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->return_type.id() == LogicalTypeId::MAP) {
+		if (arguments[i]->GetReturnType().id() == LogicalTypeId::MAP) {
 			return i;
 		}
 	}
@@ -53,7 +53,7 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.function.name != "map") {
+	if (func.function.GetName() != "map") {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
@@ -66,7 +66,7 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 		throw BinderException("Expected a function for the cases");
 	}
 	auto &list_function = expr->Cast<BoundFunctionExpression>();
-	if (list_function.function.name != "list_value") {
+	if (list_function.function.GetName() != "list_value") {
 		throw BinderException("Expected a list function");
 	}
 	if (list_function.children.empty()) {
@@ -119,8 +119,8 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 	for (idx_t i = 0; i < keys_unpacked.size(); i++) {
 		BoundCaseCheck case_check;
 		if (base_expr) {
-			auto max_type =
-			    LogicalType::MaxLogicalType(input.context, base_expr->return_type, keys_unpacked[i]->return_type);
+			auto max_type = LogicalType::MaxLogicalType(input.context, base_expr->GetReturnType(),
+			                                            keys_unpacked[i]->GetReturnType());
 			case_check.when_expr = make_uniq<BoundComparisonExpression>(
 			    ExpressionType::COMPARE_EQUAL, base_expr->Copy(),
 			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), max_type));
@@ -128,7 +128,7 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 			case_check.when_expr =
 			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), LogicalType::BOOLEAN);
 		}
-		auto then_type = values_unpacked[i]->return_type;
+		auto then_type = values_unpacked[i]->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(input.context, function_data.return_type, then_type,
 		                                       function_data.return_type)) {
 			throw BinderException(

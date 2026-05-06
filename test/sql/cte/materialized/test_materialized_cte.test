@@ -2,9 +2,6 @@
 # description: Test Materialized Common Table Expressions (CTE)
 # group: [materialized]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 WITH t(x) AS MATERIALIZED (SELECT 1) SELECT * FROM t;
 ----

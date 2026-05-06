@@ -1015,6 +1015,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
+			// Reset before bind; the `_` replacement scan sets it to true if it fires.
+			last_result_referenced = false;
 			auto rc = ExecuteStatement(std::move(statement));
 			if (rc != SuccessState::SUCCESS) {
 				return rc;
@@ -3345,6 +3347,11 @@ int RunShell(int argc, const char **argv) {
 			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
+#if !defined(_WIN32) && !defined(WIN32)
+	signal(SIGINT, SIG_IGN);
+#else
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
+#endif
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();

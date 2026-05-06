@@ -4,6 +4,7 @@
 
 #include "parquet_reader.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -50,7 +51,7 @@ idx_t ExpressionColumnReader::Read(ColumnReaderInput &input, Vector &result) {
 
 	auto amount = child_reader->Read(input, intermediate_vector);
 	// Execute the expression
-	intermediate_chunk.SetCardinality(amount);
+	intermediate_chunk.SetChildCardinality(amount);
 	executor.ExecuteExpression(intermediate_chunk, result);
 	return amount;
 }

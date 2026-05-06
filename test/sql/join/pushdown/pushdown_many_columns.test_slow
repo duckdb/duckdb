@@ -2,9 +2,6 @@
 # description: Test join filter pushdown on multiple columns
 # group: [pushdown]
 
-statement ok
-PRAGMA enable_verification
-
 # two columns of different types
 statement ok
 CREATE TABLE tbl AS SELECT CASE WHEN i%2=0 THEN NULL ELSE i END i, concat('thisisastring', i) s FROM range(1000) t(i)

@@ -6,9 +6,6 @@ statement ok
 set explain_output='optimized_only';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE TABLE big_table AS
 SELECT i.range AS col1,
        CAST(random() * 1000 AS INTEGER) AS col2

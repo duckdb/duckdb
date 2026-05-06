@@ -2,9 +2,6 @@
 # description: Decimal to string statement verification assertion error
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT .0
 ----

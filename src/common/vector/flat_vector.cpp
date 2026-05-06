@@ -6,12 +6,12 @@
 #include "duckdb/common/types/bignum.hpp"
 
 namespace duckdb {
-StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity_p, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(nullptr),
+StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, capacity_t capacity_p, idx_t type_size_p)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count_t(0)), data_ptr(nullptr),
       type_size(type_size_p), capacity(capacity_p) {
 	if (capacity > 0) {
 		if (type_size == 0) {
-			throw InternalException("eek");
+			throw InternalException("StandardVectorBuffer: empty type size");
 		}
 		allocated_data = allocator.Allocate(capacity * type_size);
 		data_ptr = allocated_data.get();
@@ -19,24 +19,27 @@ StandardVectorBuffer::StandardVectorBuffer(Allocator &allocator, idx_t capacity_
 		validity.Resize(capacity);
 	}
 }
-StandardVectorBuffer::StandardVectorBuffer(idx_t capacity, idx_t type_size_p)
+StandardVectorBuffer::StandardVectorBuffer(capacity_t capacity, idx_t type_size_p)
     : StandardVectorBuffer(Allocator::DefaultAllocator(), capacity, type_size_p) {
 }
-StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, idx_t capacity_p, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_ptr_p),
-      type_size(type_size_p), capacity(capacity_p) {
+StandardVectorBuffer::StandardVectorBuffer(data_ptr_t data_ptr_p, count_t count, idx_t type_size_p)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_ptr_p),
+      type_size(type_size_p), capacity(count) {
 }
-StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, idx_t capacity_p, idx_t type_size_p)
-    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER), data_ptr(data_p.get()),
-      type_size(type_size_p), capacity(capacity_p), allocated_data(std::move(data_p)) {
+StandardVectorBuffer::StandardVectorBuffer(AllocatedData &&data_p, count_t count, idx_t type_size_p)
+    : VectorBuffer(VectorType::FLAT_VECTOR, VectorBufferType::STANDARD_BUFFER, count), data_ptr(data_p.get()),
+      type_size(type_size_p), capacity(data_p.GetSize() / type_size), allocated_data(std::move(data_p)) {
+	if (count > capacity) {
+		throw InternalException("Count is out of range for capacity");
+	}
 }
 
 void StandardVectorBuffer::SetVectorType(VectorType new_vector_type) {
 	vector_type = new_vector_type;
 }
 
-void StandardVectorBuffer::ResetCapacity(idx_t capacity) {
-	this->capacity = capacity;
+void StandardVectorBuffer::ResetCapacity(idx_t capacity_p) {
+	capacity = capacity_p;
 	validity.Reset(capacity);
 }
 
@@ -47,27 +50,49 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
+	if (type_size != GetTypeIdSize(type.InternalType())) {
+		throw InternalException("Type size mismatch in flat vector buffer");
 	}
 	// verify all entries in the sel fit within the validity
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(sel.get_index(i) < validity.Capacity());
+			auto sel_idx = sel.get_index(i);
+			if (sel_idx > validity.Capacity()) {
+				throw InternalException("Selection vector index %d out of range for validity capacity %d", sel_idx,
+				                        validity.Capacity());
+			}
+			if (sel_idx > Capacity()) {
+				throw InternalException("Selection vector index %d out of range for vector capacity %d", sel_idx,
+				                        Capacity());
+			}
 		}
-	} else {
-		D_ASSERT(count <= validity.Capacity());
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
+		if (count > validity.Capacity()) {
+			throw InternalException("Count %d out of range for validity capacity %d", count, validity.Capacity());
+		}
+		if (count > Capacity()) {
+			throw InternalException("Count %d out of range for capacity %d", count, Capacity());
+		}
 	}
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
 	D_ASSERT(end <= capacity);
+	auto count = count_t(end - offset);
 	auto offset_ptr = data_ptr + type_size * offset;
-	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, end - offset, type_size);
-	result->GetValidityMask().Slice(validity, offset, end - offset);
-	result->SetVectorSize(end - offset);
+	auto result = make_buffer<StandardVectorBuffer>(offset_ptr, count, type_size);
+	result->GetValidityMask().Slice(validity, offset, count);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
+	return result;
+}
+
+buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const LogicalType &type, count_t count) {
+	auto result = make_buffer<StandardVectorBuffer>(data_ptr, count, type_size);
+	result->GetValidityMask().Set(0, validity.RowIsValid(0));
+	result->SetVectorType(VectorType::CONSTANT_VECTOR);
+	result->AddAuxiliaryData(make_uniq<VectorBufferHolder>(shared_from_this()));
 	return result;
 }
 
@@ -78,8 +103,8 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, idx_t new_capacity) const {
-	return make_buffer<StandardVectorBuffer>(std::move(new_data), new_capacity, type_size);
+buffer_ptr<VectorBuffer> StandardVectorBuffer::CreateBuffer(AllocatedData &&new_data, count_t count) const {
+	return make_buffer<StandardVectorBuffer>(std::move(new_data), count, type_size);
 }
 
 void StandardVectorBuffer::Resize(idx_t current_size, idx_t new_size) {
@@ -143,12 +168,12 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -162,8 +187,7 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
 	// copy data using sel
 	FlattenVectorBuffer(new_data.get(), data_ptr, sel, count, type_size);
 
-	auto result = CreateBuffer(std::move(new_data), count);
-	result->SetVectorSize(count);
+	auto result = CreateBuffer(std::move(new_data), count_t(count));
 	// copy validity using sel
 	auto &result_validity = result->GetValidityMask();
 	result_validity.Resize(allocated_count);
@@ -171,9 +195,9 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
 	return result;
 }
 
-void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void StandardVectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -340,6 +364,8 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(reinterpret_cast<const timestamp_tz_ns_t *>(data_ptr)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
 	case LogicalTypeId::UHUGEINT:
@@ -421,7 +447,7 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 	}
 }
 
-void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
+void FlatVector::SetData(Vector &vector, data_ptr_t data, count_t count) {
 	VerifyFlatVector(vector);
 	if (vector.GetType().InternalType() == PhysicalType::ARRAY) {
 		throw InternalException("SetData not supported for array");
@@ -434,16 +460,16 @@ void FlatVector::SetData(Vector &vector, data_ptr_t data, idx_t capacity) {
 	auto old_validity = std::move(vector.BufferMutable().GetValidityMask());
 	if (vector.GetType().InternalType() == PhysicalType::LIST) {
 		auto &current_buffer = vector.BufferMutable().Cast<VectorListBuffer>();
-		vector.SetBuffer(make_buffer<VectorListBuffer>(data, capacity, current_buffer.GetChild()));
+		vector.SetBuffer(make_buffer<VectorListBuffer>(data, count, current_buffer.GetChild()));
 	} else if (vector.GetType().InternalType() == PhysicalType::VARCHAR) {
-		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, capacity));
+		vector.SetBuffer(make_buffer<VectorStringBuffer>(data, count));
 	} else {
 		auto type_size = GetTypeIdSize(vector.GetType().InternalType());
-		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, capacity, type_size));
+		vector.SetBuffer(make_buffer<StandardVectorBuffer>(data, count, type_size));
 	}
 	vector.BufferMutable().GetValidityMask() = std::move(old_validity);
 	// set the size of the new buffer so child->size() works for list parents using GetChildSize()
-	vector.BufferMutable().SetVectorSize(capacity);
+	vector.BufferMutable().SetVectorSize(count);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
@@ -472,6 +498,32 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 		auto child_offset = idx * array_size;
 		for (idx_t i = 0; i < array_size; i++) {
 			FlatVector::SetNull(child, child_offset + i, is_null);
+		}
+	}
+}
+
+void FlatVector::CopyValidity(Vector &target, const Vector &source, idx_t count) {
+	if (source.GetVectorType() == VectorType::FLAT_VECTOR) {
+		SetValidity(target, Validity(source));
+		return;
+	}
+	auto &result_validity = ValidityMutable(target);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(source)) {
+			result_validity.SetAllInvalid(count);
+		} else {
+			result_validity.Reset(count);
+		}
+		return;
+	}
+	auto validity = source.Validity(count);
+	if (!validity.CanHaveNull()) {
+		result_validity.Reset(count);
+		return;
+	}
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.IsValid(r)) {
+			result_validity.SetInvalid(r);
 		}
 	}
 }

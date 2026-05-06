@@ -20,6 +20,13 @@ namespace duckdb {
 TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext context)
     : table(table_p.Cast<DuckTableEntry>()), context(context.GetClientContext()) {
 	D_ASSERT(table_p.IsDuckTable());
+
+	auto serialization_version = SerializationCompatibility::FromDatabase(table_p.ParentCatalog().GetAttached());
+	if (serialization_version.serialization_version <
+	    SerializationCompatibility::FromString("v1.4.4").serialization_version) {
+		// older storage versions require legacy start row to be written
+		require_legacy_start_row = true;
+	}
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -32,6 +39,10 @@ void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> writer) {
 	row_group_pointers.push_back(std::move(row_group_pointer));
+}
+
+AttachedDatabase &TableDataWriter::GetAttached() {
+	return table.ParentCatalog().GetAttached();
 }
 
 DatabaseInstance &TableDataWriter::GetDatabase() {

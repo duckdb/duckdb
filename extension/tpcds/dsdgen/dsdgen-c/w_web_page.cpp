@@ -158,20 +158,20 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	void *info = append_info_get(info_arr, WEB_PAGE);
 	append_row_start(info);
 
-	append_key(info, r->wp_page_sk);
-	append_varchar(info, r->wp_page_id);
-	append_date(info, r->wp_rec_start_date_id);
-	append_date(info, r->wp_rec_end_date_id);
-	append_key(info, r->wp_creation_date_sk);
-	append_key(info, r->wp_access_date_sk);
-	append_varchar(info, r->wp_autogen_flag ? "Y" : "N");
-	append_key(info, r->wp_customer_sk);
-	append_varchar(info, &r->wp_url[0]);
-	append_varchar(info, &r->wp_type[0]);
-	append_integer(info, r->wp_char_count);
-	append_integer(info, r->wp_link_count);
-	append_integer(info, r->wp_image_count);
-	append_integer(info, r->wp_max_ad_count);
+	append_key(info, r->wp_page_sk, WP_PAGE_SK);
+	append_varchar(info, r->wp_page_id, WP_PAGE_ID);
+	append_date(info, r->wp_rec_start_date_id, WP_REC_START_DATE_ID);
+	append_date(info, r->wp_rec_end_date_id, WP_REC_END_DATE_ID);
+	append_key(info, r->wp_creation_date_sk, WP_CREATION_DATE_SK);
+	append_key(info, r->wp_access_date_sk, WP_ACCESS_DATE_SK);
+	append_varchar(info, r->wp_autogen_flag ? "Y" : "N", WP_AUTOGEN_FLAG);
+	append_key(info, r->wp_customer_sk, WP_CUSTOMER_SK);
+	append_varchar(info, &r->wp_url[0], WP_URL);
+	append_varchar(info, &r->wp_type[0], WP_TYPE);
+	append_integer(info, r->wp_char_count, WP_CHAR_COUNT);
+	append_integer(info, r->wp_link_count, WP_LINK_COUNT);
+	append_integer(info, r->wp_image_count, WP_IMAGE_COUNT);
+	append_integer(info, r->wp_max_ad_count, WP_MAX_AD_COUNT);
 	append_row_end(info);
 
 	return 0;

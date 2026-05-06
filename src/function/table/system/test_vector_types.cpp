@@ -130,10 +130,10 @@ struct TestVectorFlat {
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.Rows() - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				for (idx_t i = 0; i < cardinality; i++) {
-					result->data[c].SetValue(i, result_values.GetValue(cur_row + i, c));
+					result->data[c].Append(result_values.GetValue(cur_row + i, c));
 				}
 			}
-			result->SetCardinality(cardinality);
+			result->SetChildCardinality(cardinality);
 			info.entries.push_back(std::move(result));
 		}
 	}
@@ -147,8 +147,7 @@ struct TestVectorConstant {
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
-				result->data[c].SetValue(0, values.GetValue(0, c));
-				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
+				result->data[c].Reference(values.GetValue(0, c), count_t(cardinality));
 			}
 			result->SetCardinality(cardinality);
 
@@ -201,9 +200,9 @@ struct TestVectorSequence {
 			if (entry == info.test_type_map.end()) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
-			result.SetValue(0, entry->second.min_value);
-			result.SetValue(1, entry->second.max_value);
-			result.SetValue(2, Value(type));
+			result.Append(entry->second.min_value);
+			result.Append(entry->second.max_value);
+			result.Append(Value(type));
 			break;
 		}
 		}
@@ -223,7 +222,7 @@ struct TestVectorSequence {
 			}
 			GenerateVector(info, info.types[c], result->data[c]);
 		}
-		result->SetCardinality(SEQ_CARDINALITY);
+		result->SetChildCardinality(SEQ_CARDINALITY);
 #if STANDARD_VECTOR_SIZE > 2
 		info.entries.push_back(std::move(result));
 #else
@@ -308,12 +307,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify(context.db);
+		entry->Verify(context);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify(context.db);
+			entry->Verify(context);
 		}
 	}
 	return std::move(result);

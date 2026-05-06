@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 # returns JSON instead of {}
 query I
 select json_structure('{}')

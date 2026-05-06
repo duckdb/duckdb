@@ -2,9 +2,6 @@
 # description: Issue 3878: Small create table issues
 # group: [general]
 
-statement ok
-PRAGMA enable_verification
-
 #statement error
 #create table ups (primary key(x));
 #

@@ -6,9 +6,6 @@ statement ok
 SET default_null_order='nulls_first';
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps(d TIMESTAMP_NS);
 INSERT INTO timestamps VALUES 
 	('1992-01-01 01:20:30'), 

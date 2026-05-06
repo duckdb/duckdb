@@ -296,8 +296,8 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
-			col.ChangeGeneratedExpressionType(bound_expression->return_type);
-			col.SetType(bound_expression->return_type);
+			col.ChangeGeneratedExpressionType(bound_expression->GetReturnType());
+			col.SetType(bound_expression->GetReturnType());
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());

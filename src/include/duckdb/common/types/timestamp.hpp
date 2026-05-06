@@ -114,6 +114,16 @@ struct timestamp_tz_t : public timestamp_t { // NOLINT
 	}
 };
 
+//! Type used to represent TIMESTAMPTZ_NS. timestamp_tz_ns_t holds the nanooseconds since 1970-01-01 (UTC).
+//! It is physically the same as timestamp_ns_t, both hold nanoseconds since epoch.
+struct timestamp_tz_ns_t : public timestamp_ns_t { // NOLINT
+	timestamp_tz_ns_t() = default;
+	explicit inline constexpr timestamp_tz_ns_t(int64_t nanos) : timestamp_ns_t(nanos) {
+	}
+	explicit inline constexpr timestamp_tz_ns_t(timestamp_ns_t ts) : timestamp_ns_t(ts) {
+	}
+};
+
 enum class TimestampCastResult : uint8_t {
 	SUCCESS,
 	ERROR_INCORRECT_FORMAT,
@@ -131,6 +141,7 @@ struct TimestampComponents {
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
+	int16_t nanosecond;
 };
 
 //! The static Timestamp class holds helper functions for the timestamp types.
@@ -155,13 +166,15 @@ public:
 	                                                          const bool use_offset,
 	                                                          optional_ptr<int32_t> nanos = nullptr,
 	                                                          bool strict = false);
-	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
+	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result,
+	                                                          bool use_offset, bool strict = false);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, bool use_offset = false,
 	                                          optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	DUCKDB_API static string ToString(timestamp_t timestamp);
 
 	DUCKDB_API static date_t GetDate(timestamp_t timestamp);
+	DUCKDB_API static date_t GetDateNS(timestamp_ns_t timestamp);
 
 	DUCKDB_API static dtime_t GetTime(timestamp_t timestamp);
 	DUCKDB_API static dtime_ns_t GetTimeNs(timestamp_ns_t timestamp);
@@ -175,7 +188,7 @@ public:
 	//! Is the character a valid part of a time zone name?
 	static inline bool CharacterIsTimeZone(char c) {
 		return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/' || c == '+' ||
-		       c == '-';
+		       c == '-' || c == ':';
 	}
 
 	//! True, if the timestamp is finite, else false.
@@ -227,7 +240,8 @@ public:
 	DUCKDB_API static time_t ToTimeT(timestamp_t);
 	DUCKDB_API static timestamp_t FromTimeT(time_t);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss,
+	                                         bool strict = true);
 
 	DUCKDB_API static string FormatError(const string &str);
 	DUCKDB_API static string FormatError(string_t str);
@@ -277,4 +291,12 @@ struct hash<duckdb::timestamp_tz_t> {
 		return hash<int64_t>()((int64_t)k);
 	}
 };
+template <>
+struct hash<duckdb::timestamp_tz_ns_t> {
+	std::size_t operator()(const duckdb::timestamp_tz_ns_t &k) const {
+		using std::hash;
+		return hash<int64_t>()((int64_t)k);
+	}
+};
+
 } // namespace std

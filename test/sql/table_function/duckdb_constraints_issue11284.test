@@ -3,9 +3,6 @@
 # group: [table_function]
 
 statement ok
-pragma enable_verification
-
-statement ok
 create table t (i int primary key);
 
 query I

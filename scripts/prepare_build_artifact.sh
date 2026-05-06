@@ -42,7 +42,6 @@ if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
 	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
 	mkdir -p "$ARTIFACT_DIR"/test/sql/storage_version
 	cp -av "$BUILD_DIR/benchmark/benchmark_runner" "$ARTIFACT_DIR"/benchmark/
-	cp -av scripts/generate_storage_version.py "$ARTIFACT_DIR"/scripts/
 	cp -av test/sql/storage_version/. "$ARTIFACT_DIR"/test/sql/storage_version/
 else
 	echo "No $BUILD_DIR/benchmark/benchmark_runner file found"
@@ -56,18 +55,6 @@ if ((${#extension_files[@]} > 0)); then
 	done
 else
 	echo "No $BUILD_DIR/test/extension/*.duckdb_extension files found"
-fi
-
-# Required by regression tests using build/<type>/extension/*.duckdb_extension.
-extension_files=("$BUILD_DIR"/extension/*/*.duckdb_extension)
-if ((${#extension_files[@]} > 0)); then
-	for extension in "${extension_files[@]}"; do
-		relative_path="${extension#"$BUILD_DIR"/}"
-		mkdir -p "$ARTIFACT_DIR/$(dirname "$relative_path")"
-		cp -av "$extension" "$ARTIFACT_DIR/$relative_path"
-	done
-else
-	echo "No $BUILD_DIR/extension/*/*.duckdb_extension files found"
 fi
 
 # Required by tests that use the local extension repository under the build directory.

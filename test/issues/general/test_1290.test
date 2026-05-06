@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table a as select 42 as i, 80 as j;
 
 statement ok

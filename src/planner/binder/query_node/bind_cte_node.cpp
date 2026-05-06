@@ -36,7 +36,7 @@ BoundStatement Binder::BindNode(QueryNode &node) {
 	idx_t dml_cte_count = 0;
 	for (auto &cte : node.cte_map.map) {
 		if (IsDMLQueryNode(*cte.second)) {
-			if (parent) {
+			if (parent && !cte.second->is_trigger_generated) {
 				throw BinderException("WITH clause containing a data-modifying statement must be at the top level");
 			}
 			++dml_cte_count;

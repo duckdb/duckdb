@@ -58,7 +58,7 @@ static PhysicalOperator &AddProjection(PhysicalPlanGenerator &plan, LogicalCreat
 	auto select_exprs = vector<unique_ptr<Expression>>();
 
 	for (auto &expression : op.expressions) {
-		select_types.push_back(expression->return_type);
+		select_types.push_back(expression->GetReturnType());
 		select_exprs.push_back(std::move(expression));
 	}
 

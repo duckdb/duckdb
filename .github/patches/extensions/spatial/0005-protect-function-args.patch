@@ -88,7 +88,7 @@ index 34b85e1..4127b90 100644
  			}
  
 diff --git a/src/spatial/modules/proj/proj_module.cpp b/src/spatial/modules/proj/proj_module.cpp
-index 1a3a2ae..61429a7 100644
+index e3bc335..d5276e5 100644
 --- a/src/spatial/modules/proj/proj_module.cpp
 +++ b/src/spatial/modules/proj/proj_module.cpp
 @@ -301,7 +301,7 @@ struct ST_Transform {

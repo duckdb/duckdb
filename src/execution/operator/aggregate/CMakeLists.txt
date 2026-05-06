@@ -4,6 +4,7 @@ add_library_unity(
   aggregate_object.cpp
   distinct_aggregate_data.cpp
   physical_hash_aggregate.cpp
+  physical_limited_distinct.cpp
   grouped_aggregate_data.cpp
   physical_partitioned_aggregate.cpp
   physical_perfecthash_aggregate.cpp

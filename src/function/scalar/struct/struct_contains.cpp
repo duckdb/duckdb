@@ -42,7 +42,7 @@ static void TemplatedStructSearch(Vector &input_vector, vector<Vector> &members,
 
 	if (total_matches == 0 && return_pos) {
 		// if there are no members that match the target type, we cannot return a position
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		return;
 	}
 
@@ -179,7 +179,7 @@ static void StructSearchOp(Vector &input_vector, vector<Vector> &members, Vector
 template <class RETURN_TYPE, bool FIND_NULLS = false>
 static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(args.size()));
 		return;
 	}
 
@@ -196,7 +196,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	D_ASSERT(bound_function.GetArguments().size() == 2);
-	auto &child_type = arguments[0]->return_type;
+	auto &child_type = arguments[0]->GetReturnType();
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
@@ -208,17 +208,17 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		return nullptr;
 	}
 
-	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		throw InternalException("Can't check for containment in an empty struct");
 	}
 	if (!StructType::IsUnnamed(child_type)) {
-		throw BinderException("%s can only be used on unnamed structs", bound_function.name);
+		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
 	}
 	bound_function.GetArguments()[0] = child_type;
 
 	// the value type must match one of the struct's children
-	LogicalType max_child_type = arguments[1]->return_type;
+	LogicalType max_child_type = arguments[1]->GetReturnType();
 	vector<LogicalType> new_child_types;
 	for (auto &child : struct_children) {
 		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {

@@ -67,7 +67,7 @@ struct ConstantVector {
 		return !validity.RowIsValid(0);
 	}
 	//! Sets a vector to be a constant NULL vector
-	DUCKDB_API static void SetNull(Vector &vector);
+	DUCKDB_API static void SetNull(Vector &vector, count_t count);
 	DUCKDB_API static void SetNull(Vector &vector, bool is_null);
 	static inline ValidityMask &Validity(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
@@ -82,9 +82,10 @@ struct ConstantVector {
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector(idx_t count, SelectionVector &owned_sel);
 	DUCKDB_API static const SelectionVector *ZeroSelectionVector();
 	//! Turns "vector" into a constant vector by referencing a value
-	DUCKDB_API static void Reference(Vector &vector, const Value &value);
+	DUCKDB_API static void Reference(Vector &vector, const Value &value, count_t count);
 	//! Turns "vector" into a constant vector by referencing a value within the source vector
-	DUCKDB_API static void Reference(Vector &vector, const Vector &source, idx_t position, idx_t count);
+	DUCKDB_API static void Reference(Vector &vector, count_t count, const Vector &source, idx_t position,
+	                                 idx_t source_count);
 
 	static const sel_t ZERO_VECTOR[STANDARD_VECTOR_SIZE];
 };

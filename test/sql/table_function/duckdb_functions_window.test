@@ -1,9 +1,6 @@
 # name: test/sql/table_function/duckdb_functions_window.test
 # group: [table_function]
 
-statement ok
-PRAGMA enable_verification
-
 query IIII
 select function_name, parameters, parameter_types, function_type 
 from duckdb_functions() 

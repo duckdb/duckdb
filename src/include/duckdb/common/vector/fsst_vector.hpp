@@ -14,7 +14,7 @@ namespace duckdb {
 
 class VectorFSSTStringBuffer : public VectorStringBuffer {
 public:
-	explicit VectorFSSTStringBuffer(idx_t capacity);
+	explicit VectorFSSTStringBuffer(capacity_t capacity);
 
 public:
 	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p, const idx_t string_block_limit) {
@@ -28,24 +28,20 @@ public:
 		return decompress_buffer;
 	}
 	void SetCount(idx_t count) {
-		total_string_count = count;
-	}
-	idx_t GetCount() const {
-		return total_string_count;
+		v_size = count;
 	}
 	void SetVectorType(VectorType vector_type) override;
 
 public:
 	Value GetValue(const LogicalType &type, idx_t index) const override;
-	void Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 protected:
 	buffer_ptr<VectorBuffer> FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
 	                                              idx_t count) const override;
+	void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const override;
 
 private:
 	buffer_ptr<void> duckdb_fsst_decoder;
-	idx_t total_string_count = 0;
 	mutable vector<unsigned char> decompress_buffer;
 };
 
@@ -80,7 +76,6 @@ struct FSSTVector {
 	DUCKDB_API static vector<unsigned char> &GetDecompressBuffer(const Vector &vector);
 	//! Setting the string count is required to be able to correctly flatten the vector
 	DUCKDB_API static void SetCount(Vector &vector, idx_t count);
-	DUCKDB_API static idx_t GetCount(const Vector &vector);
 
 private:
 	static VectorFSSTStringBuffer &GetFSSTBuffer(const Vector &vector);

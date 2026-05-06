@@ -1,0 +1,55 @@
+diff --git a/src/httpfs_curl_client.cpp b/src/httpfs_curl_client.cpp
+index 8a641ce..83e0d1c 100644
+--- a/src/httpfs_curl_client.cpp
++++ b/src/httpfs_curl_client.cpp
+@@ -398,6 +398,34 @@ public:
+ 		return TransformResponseCurl(res);
+ 	}
+ 
++	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
++		ResetRequestInfo();
++		auto curl_headers = TransformHeadersCurl(info.headers, info.params);
++		request_info->url = info.url;
++
++		CURLcode res;
++		{
++			CURLU *url = curl_url_dup(base_url);
++
++			string normalized_path = NormalizePathToBeAdded(info.path);
++			curl_url_set(url, CURLUPART_URL, normalized_path.c_str(), 0);
++
++			curl_easy_setopt(*curl, CURLOPT_URL, nullptr);
++			curl_easy_setopt(*curl, CURLOPT_CURLU, url);
++
++			curl_easy_setopt(*curl, CURLOPT_CUSTOMREQUEST, "OPTIONS");
++
++			curl_easy_setopt(*curl, CURLOPT_HTTPHEADER, curl_headers ? curl_headers.headers : nullptr);
++
++			res = curl->Execute();
++			curl_easy_setopt(*curl, CURLOPT_CUSTOMREQUEST, nullptr);
++			curl_url_cleanup(url);
++		}
++
++		curl_easy_getinfo(*curl, CURLINFO_RESPONSE_CODE, &request_info->response_code);
++		return TransformResponseCurl(res);
++	}
++
+ 	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
+ 		ResetRequestInfo();
+ 		if (state) {
+diff --git a/src/httpfs_httplib_client.cpp b/src/httpfs_httplib_client.cpp
+index 63d7197..8027a37 100644
+--- a/src/httpfs_httplib_client.cpp
++++ b/src/httpfs_httplib_client.cpp
+@@ -87,6 +87,11 @@ public:
+ 		return TransformResult(client->Delete(info.path, headers));
+ 	}
+ 
++	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
++		auto headers = TransformHeaders(info.headers, info.params);
++		return TransformResult(client->Options(info.path, headers));
++	}
++
+ 	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
+ 		if (state) {
+ 			state->post_count++;

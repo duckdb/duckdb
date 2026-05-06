@@ -210,10 +210,10 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 	auto &arguments = input.GetArguments();
 	D_ASSERT(arguments.size() == 1);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->return_type);
+	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

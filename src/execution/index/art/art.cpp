@@ -19,6 +19,7 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
@@ -195,24 +196,29 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 			high_comparison_type = comparison_type;
 		}
 	} else if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
-		auto &between = filter_expr.Cast<BoundBetweenExpression>();
-		if (!between.input->Equals(expr)) {
+		auto &between = filter_expr.Cast<BoundFunctionExpression>();
+		auto &input = BoundBetweenExpression::Input(between);
+		if (!input.Equals(expr)) {
 			// The expression does not match the index expression.
 			return nullptr;
 		}
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
 
-		if (between.lower->GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
-		    between.upper->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		if (lower_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT ||
+		    upper_bound.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			// Not a constant expression.
 			return nullptr;
 		}
 
-		low_value = between.lower->Cast<BoundConstantExpression>().value;
-		low_comparison_type = between.lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
-		                                              : ExpressionType::COMPARE_GREATERTHAN;
-		high_value = (between.upper->Cast<BoundConstantExpression>()).value;
+		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
+		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
+		low_value = lower_bound.Cast<BoundConstantExpression>().value;
+		low_comparison_type =
+		    lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
+		high_value = (upper_bound.Cast<BoundConstantExpression>()).value;
 		high_comparison_type =
-		    between.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+		    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
 	// FIXME: add another if...else... to match rewritten BETWEEN,
 	// i.e., WHERE i BETWEEN 50 AND 1502 is rewritten to CONJUNCTION_AND.
@@ -615,7 +621,7 @@ void ART::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<Con
 // Drop and Delete
 //===--------------------------------------------------------------------===//
 
-void ART::CommitDrop(IndexLock &index_lock) {
+void ART::ResetStorage(IndexLock &index_lock) {
 	for (auto &allocator : *allocators) {
 		allocator->Reset();
 	}

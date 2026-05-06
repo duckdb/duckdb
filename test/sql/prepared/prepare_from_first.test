@@ -3,9 +3,6 @@
 # group: [prepared]
 
 statement ok
-pragma enable_verification
-
-statement ok
 prepare fromFirst as from (select ? fromV) select ? selectV,*;
 
 query II

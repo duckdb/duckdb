@@ -3,14 +3,12 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-datefunc.hpp"
 
 namespace duckdb {
@@ -289,11 +287,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 	};
 
 	struct OriginTernaryOperator {
-		static inline timestamp_t Operation(interval_t bucket_width, timestamp_t ts, timestamp_t origin,
-		                                    ValidityMask &mask, idx_t idx, TZCalendar &calendar) {
+		static inline optional<timestamp_t> Operation(interval_t bucket_width, timestamp_t ts, timestamp_t origin,
+		                                              TZCalendar &calendar) {
 			if (!Value::IsFinite(origin)) {
-				mask.SetInvalid(idx);
-				return timestamp_t(0);
+				return nullopt;
 			}
 			BucketWidthType bucket_width_type = ClassifyBucketWidthErrorThrow(bucket_width);
 			switch (bucket_width_type) {
@@ -494,7 +491,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		    origin_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(bucket_width_arg) || ConstantVector::IsNull(origin_arg) ||
 			    !Value::IsFinite(*ConstantVector::GetData<timestamp_t>(origin_arg))) {
-				ConstantVector::SetNull(result);
+				ConstantVector::SetNull(result, count_t(args.size()));
 			} else {
 				interval_t bucket_width = *ConstantVector::GetData<interval_t>(bucket_width_arg);
 				BucketWidthType bucket_width_type = ClassifyBucketWidth(bucket_width);
@@ -524,11 +521,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 					    });
 					break;
 				case BucketWidthType::UNCLASSIFIED:
-					TernaryExecutor::ExecuteWithNulls<interval_t, timestamp_t, timestamp_t, timestamp_t>(
+					TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 					    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-					    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin, ValidityMask &mask,
-					        idx_t idx) {
-						    return OriginTernaryOperator::Operation(bucket_width, ts, origin, mask, idx, calendar);
+					    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) -> optional<timestamp_t> {
+						    return OriginTernaryOperator::Operation(bucket_width, ts, origin, calendar);
 					    });
 					break;
 				default:
@@ -536,10 +532,10 @@ struct ICUTimeBucket : public ICUDateFunc {
 				}
 			}
 		} else {
-			TernaryExecutor::ExecuteWithNulls<interval_t, timestamp_t, timestamp_t, timestamp_t>(
+			TernaryExecutor::Execute<interval_t, timestamp_t, timestamp_t, timestamp_t>(
 			    bucket_width_arg, ts_arg, origin_arg, result, args.size(),
-			    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin, ValidityMask &mask, idx_t idx) {
-				    return OriginTernaryOperator::Operation(bucket_width, ts, origin, mask, idx, calendar);
+			    [&](interval_t bucket_width, timestamp_t ts, timestamp_t origin) -> optional<timestamp_t> {
+				    return OriginTernaryOperator::Operation(bucket_width, ts, origin, calendar);
 			    });
 		}
 	}
@@ -623,6 +619,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 		for (auto &func : set.functions) {
 			func.SetFallible();
+			func.SetArgProperties(1, ArgProperties().NonDecreasing());
 		}
 		loader.RegisterFunction(set);
 	}

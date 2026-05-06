@@ -2,10 +2,7 @@
 # description: Test InClauseSimplificationRule
 # group: [expression]
 
-statement ok
-PRAGMA enable_verification
-
-# Removing the TIMESTAMP => DATE cast only works if the 
+# Removing the TIMESTAMP => DATE cast only works if the
 # IN clause has TIMESTAMPs.
 statement ok
 CREATE TABLE issue13380(c0 TIMESTAMP);

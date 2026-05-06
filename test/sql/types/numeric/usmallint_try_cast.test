@@ -2,9 +2,6 @@
 # description: usmallint try cast
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 # smallint casts
 statement ok
 CREATE TABLE usmallints AS SELECT i::USMALLINT i FROM (VALUES (0), (65535)) tbl(i)

@@ -84,9 +84,9 @@ static unique_ptr<FunctionData> VariantExtractBind(BindScalarFunctionInput &inpu
 		throw BinderException("'variant_extract' expects two arguments, VARIANT column and VARCHAR path");
 	}
 	auto &path = *arguments[1];
-	if (path.return_type.id() != LogicalTypeId::VARCHAR && path.return_type.id() != LogicalTypeId::UINTEGER) {
+	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::UINTEGER) {
 		throw BinderException("'variant_extract' expects the second argument to be of type VARCHAR or UINTEGER, not %s",
-		                      path.return_type.ToString());
+		                      path.GetReturnType().ToString());
 	}
 
 	Value constant_arg;
@@ -118,12 +118,13 @@ static bool TryShreddedExtractRecursive(Vector &input, const vector<VariantPathC
 		// NULL out everything in the unshredded part
 		auto &unshredded_child = top_shredded[0];
 		for (auto &unshredded_entry : StructVector::GetEntries(unshredded_child)) {
-			ConstantVector::SetNull(unshredded_entry);
+			ConstantVector::SetNull(unshredded_entry, count_t(count));
 		}
-		ConstantVector::SetNull(unshredded_child);
+		ConstantVector::SetNull(unshredded_child, count_t(count));
 		auto &shredded_child = top_shredded[1];
 		shredded_child.Reference(input);
 
+		FlatVector::SetSize(shredded_vector, count_t(count));
 		result.Shred(shredded_vector, count);
 		return true;
 	}
@@ -284,6 +285,7 @@ void VariantUtils::VariantExtract(Vector &variant_vec, const vector<VariantPathC
 			}
 		}
 	}
+	FlatVector::SetSize(result, count_t(count));
 }
 
 //! FIXME: it could make sense to allow a third argument: 'default'
@@ -311,10 +313,11 @@ ScalarFunctionSet VariantExtractFun::GetFunctions() {
 	ScalarFunction variant_extract("variant_extract", {}, variant_type, VariantExtractFunction, VariantExtractBind,
 	                               VariantExtractPropagateStats);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::VARCHAR};
+	variant_extract.GetSignature().AddParameter(variant_type);
+	variant_extract.GetSignature().AddParameter(LogicalType::VARCHAR);
 	fun_set.AddFunction(variant_extract);
 
-	variant_extract.GetArguments() = {variant_type, LogicalType::UINTEGER};
+	variant_extract.GetSignature().GetParameter(1).SetType(LogicalType::UINTEGER);
 	fun_set.AddFunction(variant_extract);
 	return fun_set;
 }

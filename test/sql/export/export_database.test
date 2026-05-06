@@ -176,7 +176,7 @@ SELECT * FROM s2.table01 ORDER BY i;
 6	6
 
 statement ok
-PRAGMA verify_serializer
+SET debug_verify_serializer=true;
 
 # now export the db
 statement ok

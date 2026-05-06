@@ -8,29 +8,12 @@
 
 namespace duckdb {
 
-static idx_t CalculateMaxResultLength(idx_t row_count, const UnifiedVectorFormat &l_format,
-                                      const UnifiedVectorFormat &r_format, const list_entry_t *l_entries,
-                                      const list_entry_t *r_entries) {
-	idx_t max_result_length = 0;
-	for (idx_t i = 0; i < row_count; i++) {
-		const auto l_idx = l_format.sel->get_index(i);
-		const auto r_idx = r_format.sel->get_index(i);
-
-		if (l_format.validity.RowIsValid(l_idx) && r_format.validity.RowIsValid(r_idx)) {
-			const auto &l_list = l_entries[l_idx];
-			const auto &r_list = r_entries[r_idx];
-			max_result_length += MinValue(l_list.length, r_list.length);
-		}
-	}
-	return max_result_length;
-}
-
 static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto row_count = args.size();
 
 	// Handle NULL return type case
 	if (result.GetType() == LogicalType::SQLNULL) {
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(row_count));
 		return;
 	}
 
@@ -43,22 +26,8 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &l_child = ListVector::GetChildMutable(l_vec);
 	auto &r_child = ListVector::GetChildMutable(r_vec);
 
-	const auto current_left_child_type = l_child.GetType();
-
-	UnifiedVectorFormat l_format;
-	UnifiedVectorFormat r_format;
-
-	l_vec.ToUnifiedFormat(row_count, l_format);
-	r_vec.ToUnifiedFormat(row_count, r_format);
-
-	const auto l_entries = UnifiedVectorFormat::GetData<list_entry_t>(l_format);
-	const auto r_entries = UnifiedVectorFormat::GetData<list_entry_t>(r_format);
-
-	UnifiedVectorFormat l_child_format;
-	UnifiedVectorFormat r_child_format;
-
-	l_child.ToUnifiedFormat(l_size, l_child_format);
-	r_child.ToUnifiedFormat(r_size, r_child_format);
+	auto l_entries = l_vec.Values<list_entry_t>(row_count);
+	auto r_entries = r_vec.Values<list_entry_t>(row_count);
 
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
 	Vector r_sortkey_vec(LogicalType::BLOB, r_size);
@@ -68,74 +37,53 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 	CreateSortKeyHelpers::CreateSortKey(l_child, l_size, order_modifiers, l_sortkey_vec);
 	CreateSortKeyHelpers::CreateSortKey(r_child, r_size, order_modifiers, r_sortkey_vec);
 
-	const auto l_sortkey_ptr = FlatVector::GetData<string_t>(l_sortkey_vec);
-	const auto r_sortkey_ptr = FlatVector::GetData<string_t>(r_sortkey_vec);
-
-	auto &result_entry = ListVector::GetChildMutable(result);
-
-	string_set_t set;
-	string_set_t result_set;
-	string_map_t<idx_t> key_to_index_map;
-
-	const idx_t max_result_length = CalculateMaxResultLength(row_count, l_format, r_format, l_entries, r_entries);
-
-	ListVector::Reserve(result, max_result_length);
-	ListVector::SetListSize(result, max_result_length);
-
-	SelectionVector result_sel(max_result_length);
-	ValidityMask result_entry_validity_mask(max_result_length);
-	idx_t offset = 0;
+	const auto l_sortkey_ptr = l_sortkey_vec.Values<string_t>(l_size);
+	const auto r_sortkey_ptr = r_sortkey_vec.Values<string_t>(r_size);
+	auto l_validity = l_child.Validity(l_size);
+	auto r_validity = r_child.Validity(r_size);
 
 	auto result_data = FlatVector::Writer<list_entry_t>(result, row_count);
 	for (idx_t i = 0; i < row_count; i++) {
-		const auto l_idx = l_format.sel->get_index(i);
-		const auto r_idx = r_format.sel->get_index(i);
+		auto l_entry = l_entries[i];
+		auto r_entry = r_entries[i];
 
-		const bool l_valid = l_format.validity.RowIsValid(l_idx);
-		const bool r_valid = r_format.validity.RowIsValid(r_idx);
-
-		list_entry_t entry;
-		entry.offset = offset;
-
-		if (!l_valid) {
+		if (!l_entry.IsValid()) {
 			result_data.WriteNull();
 			continue;
 		}
-		if (!r_valid) {
-			entry.length = 0;
-			result_data.WriteValue(entry);
+
+		auto list = result_data.WriteDynamicList();
+		if (!r_entry.IsValid()) {
 			continue;
 		}
 
-		const auto &l_list = l_entries[l_idx];
-		const auto &r_list = r_entries[r_idx];
+		const auto &l_list = l_entry.GetValue();
+		const auto &r_list = r_entry.GetValue();
 
 		if (l_list.length == 0 || r_list.length == 0) {
-			entry.length = 0;
-			result_data.WriteValue(entry);
 			continue;
 		}
 
-		set.clear();
-		result_set.clear();
-		key_to_index_map.clear();
+		string_set_t set;
+		string_set_t result_set;
+		string_map_t<idx_t> key_to_index_map;
 
 		// Choose which side to hash and which to iterate
 		const bool use_l_for_hash = l_list.length <= r_list.length;
 		const auto &hash_list = use_l_for_hash ? l_list : r_list;
 		const auto &iter_list = use_l_for_hash ? r_list : l_list;
-		const auto &hash_fmt = use_l_for_hash ? l_child_format : r_child_format;
-		const auto &iter_fmt = use_l_for_hash ? r_child_format : l_child_format;
-		const auto *hash_keys = use_l_for_hash ? l_sortkey_ptr : r_sortkey_ptr;
-		const auto *iter_keys = use_l_for_hash ? r_sortkey_ptr : l_sortkey_ptr;
+		const auto &hash_fmt = use_l_for_hash ? l_validity : r_validity;
+		const auto &iter_fmt = use_l_for_hash ? r_validity : l_validity;
+		const auto &hash_keys = use_l_for_hash ? l_sortkey_ptr : r_sortkey_ptr;
+		const auto &iter_keys = use_l_for_hash ? r_sortkey_ptr : l_sortkey_ptr;
 
 		for (idx_t j = 0; j < hash_list.length; j++) {
 			const idx_t h_idx = hash_list.offset + j;
-			const idx_t h_entry = hash_fmt.sel->get_index(h_idx);
-			if (!hash_fmt.validity.RowIsValid(h_entry)) {
+			if (!hash_fmt.IsValid(h_idx)) {
+				// value is NULL - skip
 				continue;
 			}
-			const auto &key = hash_keys[h_entry];
+			const auto &key = hash_keys.GetValueUnsafe(h_idx);
 			set.insert(key);
 			if (use_l_for_hash) {
 				key_to_index_map[key] = h_idx;
@@ -143,15 +91,16 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 
 		// Iterate the chosen side, but ALWAYS emit a LEFT index
+		const idx_t row_max_length = MinValue(l_list.length, r_list.length);
+		SelectionVector row_sel(row_max_length);
 		idx_t row_result_length = 0;
 		for (idx_t j = 0; j < iter_list.length; j++) {
 			const idx_t it_idx = iter_list.offset + j;
-			const idx_t it_entry = iter_fmt.sel->get_index(it_idx);
-			if (!iter_fmt.validity.RowIsValid(it_entry)) {
+			if (!iter_fmt.IsValid(it_idx)) {
+				// value is NULL - skip
 				continue;
 			}
-
-			const auto &key = iter_keys[it_entry];
+			const auto &key = iter_keys.GetValueUnsafe(it_idx);
 			if (set.find(key) == set.end() || result_set.find(key) != result_set.end()) {
 				continue;
 			}
@@ -159,26 +108,17 @@ static void ListIntersectFunction(DataChunk &args, ExpressionState &state, Vecto
 
 			const idx_t emit_left_idx = use_l_for_hash ? key_to_index_map[key] : it_idx;
 
-			result_sel.set_index(offset + row_result_length, emit_left_idx);
+			row_sel.set_index(row_result_length, emit_left_idx);
 			row_result_length++;
 		}
 
-		entry.length = row_result_length;
-		offset += row_result_length;
-		result_data.WriteValue(entry);
+		list.Append(l_child, row_sel, l_size, 0, row_result_length);
 	}
-
-	ListVector::SetListSize(result, offset);
-
-	result_entry.Slice(l_child, result_sel, offset);
-	result_entry.Flatten(offset);
-	FlatVector::SetValidity(result_entry, result_entry_validity_mask);
 }
 static unique_ptr<FunctionData> ListIntersectBind(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.GetArguments().size() == 2);
+	D_ASSERT(input.GetBoundFunction().GetArguments().size() == 2);
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
 	arguments[1] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[1]));
 	return nullptr;

@@ -134,6 +134,7 @@ void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_data, Ve
 	}
 
 	ListVector::SetListSize(result, total_len);
+	FlatVector::SetSize(result, count_t(offset + count));
 }
 
 void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
@@ -170,7 +171,7 @@ void ListCombineFunction(Vector &states_vector, Vector &combined, AggregateInput
 unique_ptr<FunctionData> ListBindFunction(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 	return make_uniq<ListBindData>(function.GetReturnType());
 }
 

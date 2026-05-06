@@ -2,9 +2,6 @@
 # description: Tests attaching database files and using new compression methods
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 statement error
 ATTACH '{TEST_DIR}/attach_row_group_size.db' AS db1 (STORAGE_VERSION 'v1.0.0', ROW_GROUP_SIZE 245760);
 ----

@@ -43,11 +43,7 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 	auto list_entries = list.Values<list_entry_t>(count);
 	auto offsets_entries = offsets.Values<int64_t>(count);
-
-	UnifiedVectorFormat child_data;
 	auto &child_vector = ListVector::GetChild(list);
-	auto child_count = ListVector::GetListSize(list);
-	child_vector.ToUnifiedFormat(child_count, child_data);
 
 	SelectionVector sel(count);
 	vector<idx_t> invalid_offsets;
@@ -69,13 +65,18 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 			continue;
 		}
 
-		const auto child_idx = child_data.sel->get_index(child_offset.GetIndex());
+		const auto child_idx = child_offset.GetIndex();
 		sel.set_index(i, child_idx);
 
 		if (!first_valid_child_idx.IsValid()) {
 			// Save the first valid child as a dummy index to copy in VectorOperations::Copy later
 			first_valid_child_idx = child_idx;
 		}
+	}
+	if (invalid_offsets.empty()) {
+		// all entries found a match - we can just slice the child vector
+		result.Slice(child_vector, sel, count);
+		return;
 	}
 
 	if (first_valid_child_idx.IsValid()) {
@@ -113,7 +114,7 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 		ExecuteStringExtract(result, base, subscript, count);
 		break;
 	case LogicalTypeId::SQLNULL:
-		ConstantVector::SetNull(result);
+		ConstantVector::SetNull(result, count_t(count));
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");

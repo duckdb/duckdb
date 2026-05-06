@@ -14,21 +14,22 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
-class AggregateFunction;
-class WindowFunction;
+
+class BoundAggregateFunction;
+class BoundWindowFunction;
 
 class BoundWindowExpression : public Expression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_WINDOW;
 
 public:
-	BoundWindowExpression(LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
-	                      unique_ptr<WindowFunction> window, unique_ptr<FunctionData> bind_info);
+	BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
+	                      unique_ptr<BoundWindowFunction> window, unique_ptr<FunctionData> bind_info);
 
 	//! The bound aggregate function
-	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<BoundAggregateFunction> aggregate;
 	//! The bound window function
-	unique_ptr<WindowFunction> window;
+	unique_ptr<BoundWindowFunction> window;
 	//! The bound function info
 	unique_ptr<FunctionData> bind_info;
 	//! The child expressions of the main window function

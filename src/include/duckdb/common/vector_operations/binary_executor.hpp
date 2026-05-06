@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -47,25 +48,24 @@ struct BinarySingleArgumentOperatorWrapper {
 	}
 };
 
+template <bool ADDS_NULLS>
 struct BinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-		return fun(left, right);
+		if constexpr (ADDS_NULLS) {
+			auto result = fun(left, right);
+			if (!result.has_value()) {
+				mask.SetInvalid(idx);
+				return RESULT_TYPE();
+			}
+			return result.value();
+		} else {
+			return fun(left, right);
+		}
 	}
 
 	static bool AddsNulls() {
-		return false;
-	}
-};
-
-struct BinaryLambdaWrapperWithNulls {
-	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-		return fun(left, right, mask, idx);
-	}
-
-	static bool AddsNulls() {
-		return true;
+		return ADDS_NULLS;
 	}
 };
 
@@ -127,15 +127,16 @@ struct BinaryExecutor {
 #endif
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP, class FUNC>
-	static void ExecuteConstant(Vector &left, Vector &right, Vector &result, FUNC fun) {
+	static void ExecuteConstant(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count);
 
 		auto ldata = ConstantVector::GetData<LEFT_TYPE>(left);
 		auto rdata = ConstantVector::GetData<RIGHT_TYPE>(right);
 		auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
 
 		if (ConstantVector::IsNull(left) || ConstantVector::IsNull(right)) {
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return;
 		}
 		*result_data = OPWRAPPER::template Operation<FUNC, OP, LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE>(
@@ -152,7 +153,7 @@ struct BinaryExecutor {
 
 		if ((LEFT_CONSTANT && ConstantVector::IsNull(left)) || (RIGHT_CONSTANT && ConstantVector::IsNull(right))) {
 			// either left or right is constant NULL: result is constant NULL
-			ConstantVector::SetNull(result);
+			ConstantVector::SetNull(result, count_t(count));
 			return;
 		}
 
@@ -237,7 +238,7 @@ struct BinaryExecutor {
 		auto left_vector_type = left.GetVectorType();
 		auto right_vector_type = right.GetVectorType();
 		if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
-			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, fun);
+			ExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC>(left, right, result, count, fun);
 #ifndef DUCKDB_SMALLER_BINARY
 		} else if (left_vector_type == VectorType::FLAT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 			ExecuteFlat<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OPWRAPPER, OP, FUNC, false, true>(left, right, result,
@@ -258,8 +259,10 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC>(left, right, result, count,
-		                                                                                   fun);
+		constexpr bool adds_nulls = std::is_same<decltype(fun(std::declval<LEFT_TYPE>(), std::declval<RIGHT_TYPE>())),
+		                                         optional<RESULT_TYPE>>::value;
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper<adds_nulls>, bool, FUNC>(
+		    left, right, result, count, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
@@ -272,13 +275,6 @@ public:
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapperWithNulls, bool, FUNC>(left, right, result,
-		                                                                                            count, fun);
 	}
 
 public:

@@ -2,9 +2,6 @@
 # description: regex extract test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT regexp_extract_all('1a 2b 14m', '(\d+)', 1);
 ----

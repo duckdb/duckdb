@@ -2,12 +2,7 @@
 # description: Test lambda syntax in peg parser
 # group: [transformer]
 
-require autocomplete
-
 require icu
-
-statement ok
-call enable_peg_parser();
 
 statement ok
 SET threads=1;

@@ -1,5 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/trigger_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -15,6 +15,7 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -293,7 +294,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
-			if (param_expr->type == ExpressionType::VALUE_CONSTANT) {
+			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				continue;
 			}
 
@@ -310,7 +311,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 			// Save this back as a constant expression
 			auto const_expr = make_uniq<ConstantExpression>(default_val);
-			const_expr->alias = param_name;
+			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
 		}
 
@@ -326,7 +327,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
 			auto it = function->default_parameters.find(param_name);
 			if (it != function->default_parameters.end()) {
-				const auto &val_type = it->second->Cast<ConstantExpression>().value.type();
+				const auto &val_type = it->second->Cast<ConstantExpression>().GetValue().type();
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
 					auto msg =
 					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
@@ -423,9 +424,9 @@ LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &
 		throw BinderException(*type_expr, "Type expression is not constant");
 	}
 
-	if (expr->return_type != LogicalTypeId::TYPE) {
+	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
 		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
-		                      expr->return_type.ToString());
+		                      expr->GetReturnType().ToString());
 	}
 
 	// Shortcut for constant expressions
@@ -466,6 +467,9 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	                                   create_trigger_info.base_table->table_name);
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
+	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
+		throw BinderException("CREATE TRIGGER requires a base table, not a view or subquery");
+	}
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto table_ptr = get.GetTable();
 	if (!table_ptr) {
@@ -501,10 +505,28 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			}
 		}
 	}
+	if (create_trigger_info.for_each == TriggerForEach::ROW) {
+		throw NotImplementedException("FOR EACH ROW triggers are not yet supported");
+	}
 
-	// Bind a copy of the trigger body to validate it (keep original unbound for serialization)
+	if (create_trigger_info.on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+		table.ScanTriggers(table.ParentCatalog().GetCatalogTransaction(context), [&](CatalogEntry &entry) {
+			auto &t = entry.Cast<TriggerCatalogEntry>();
+			if (t.timing == create_trigger_info.timing && t.event_type == create_trigger_info.event_type) {
+				throw NotImplementedException("Multiple triggers per table event are not yet supported");
+			}
+		});
+	}
+
+	// Validate the trigger body using an isolated binder (own GlobalBinderState).
+	// Set up trigger_expanded_tables to match runtime behavior.
+	// Set up and trigger_creation_table to detect recursive triggers during the validation.
+	auto validation_binder = Binder::CreateBinder(context);
+	validation_binder->global_binder_state->trigger_expanded_tables.insert(table);
+	validation_binder->global_binder_state->trigger_creation_table = &table;
+	validation_binder->global_binder_state->trigger_creation_name = create_trigger_info.trigger_name;
 	auto body_copy = create_trigger_info.trigger_action->Copy();
-	Bind(*body_copy);
+	validation_binder->Bind(*body_copy);
 
 	// Add table dependency
 	create_trigger_info.dependencies.AddDependency(table);

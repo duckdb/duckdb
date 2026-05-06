@@ -25,7 +25,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		group_minima.push_back(NumericStats::Min(nstats));
 	}
 	for (auto &expr : groups) {
-		group_types.push_back(expr->return_type);
+		group_types.push_back(expr->GetReturnType());
 	}
 
 	vector<BoundAggregateExpression *> bindings;
@@ -39,10 +39,10 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		D_ASSERT(!aggr.IsDistinct());
 		D_ASSERT(aggr.function.HasStateCombineCallback());
 		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			payload_types.push_back(child->GetReturnType());
 		}
 		if (aggr.filter) {
-			payload_types_filters.push_back(aggr.filter->return_type);
+			payload_types_filters.push_back(aggr.filter->GetReturnType());
 		}
 	}
 	for (const auto &pay_filters : payload_types_filters) {

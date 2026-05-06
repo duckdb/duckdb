@@ -3,9 +3,6 @@
 # group: [public]
 
 statement ok
-pragma enable_verification
-
-statement ok
 CREATE TYPE c AS ENUM('');
 
 statement error

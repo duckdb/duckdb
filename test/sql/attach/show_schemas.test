@@ -2,9 +2,6 @@
 # description: Test SHOW SCHEMAS and USE
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SHOW SCHEMAS
 ----

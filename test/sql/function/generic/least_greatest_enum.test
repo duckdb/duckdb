@@ -3,9 +3,6 @@
 # group: [generic]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TYPE t AS ENUM ('z','y','x');
 
 query II

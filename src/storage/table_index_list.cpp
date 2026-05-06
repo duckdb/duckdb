@@ -103,18 +103,8 @@ void TableIndexList::RemoveIndex(const string &name) {
 			if (!index.IsBound()) {
 				unbound_count--;
 			}
+			index.ResetStorage();
 			index_entries.erase_at(i);
-			return;
-		}
-	}
-}
-
-void TableIndexList::CommitDrop(const string &name) {
-	lock_guard<mutex> lock(index_entries_lock);
-	for (auto &entry : index_entries) {
-		auto &index = *entry->index;
-		if (index.GetIndexName() == name) {
-			index.CommitDrop();
 			return;
 		}
 	}

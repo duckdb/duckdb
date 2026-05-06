@@ -86,7 +86,7 @@ template <>
 class BlockIteratorState<BlockIteratorStateType::IN_MEMORY>
     : public BlockIteratorStateBase<BlockIteratorState<BlockIteratorStateType::IN_MEMORY>> {
 public:
-	explicit BlockIteratorState(const TupleDataCollection &key_data)
+	explicit BlockIteratorState(TupleDataCollection &key_data)
 	    : BlockIteratorStateBase(key_data.Count()), block_ptrs(ConvertBlockPointers(key_data.GetRowBlockPointers())),
 	      fast_mod(key_data.TuplesPerBlock()) {
 	}

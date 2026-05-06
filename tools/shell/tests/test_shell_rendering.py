@@ -110,6 +110,18 @@ def test_mode_json_empty_result(shell):
     result = test.run()
     result.check_stdout("[]")
 
+
+def test_mode_json_boolean(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode json")
+        .statement("SELECT true AS pos, false AS neg;")
+    )
+
+    result = test.run()
+    result.check_stdout('"pos":true')
+    result.check_stdout('"neg":false')
+
 def test_long_type_empty_result(shell):
     test = (
         ShellTest(shell)

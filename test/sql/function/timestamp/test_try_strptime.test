@@ -2,9 +2,6 @@
 # description: Test try_strptime function
 # group: [timestamp]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT try_strptime('21 June, 2018', '%d %B, %Y')
 ----

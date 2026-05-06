@@ -98,7 +98,7 @@ void MetadataReader::ReadNextBlock(QueryContext context) {
 }
 
 data_ptr_t MetadataReader::BasePtr() {
-	return block.handle.Ptr() + index * GetMetadataManager().GetMetadataBlockSize();
+	return block.handle.GetDataMutable() + index * GetMetadataManager().GetMetadataBlockSize();
 }
 
 data_ptr_t MetadataReader::Ptr() {

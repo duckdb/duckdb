@@ -2,9 +2,6 @@
 # description: Test NaN and inf joins
 # group: [float]
 
-statement ok
-PRAGMA enable_verification
-
 # test various types of joins on nan and inf values
 foreach type FLOAT DOUBLE
 

@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -12,7 +13,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 #include <algorithm>
@@ -61,7 +61,7 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(bound_expr, root);
 
-			auto bound_type = bound_expr->return_type;
+			auto bound_type = bound_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(projection_expressions, std::move(bound_expr));
 
 			update_expressions.push_back(
@@ -109,7 +109,7 @@ void Binder::BindRowIdColumns(TableCatalogEntry &table, LogicalGet &get, vector<
 		}
 		auto row_id_expr = make_uniq<BoundColumnRefExpression>(
 		    row_id_entry->second.type, ColumnBinding(get.table_index, ProjectionIndex(column_idx)));
-		row_id_expr->alias = row_id_entry->second.name;
+		row_id_expr->SetAlias(row_id_entry->second.name);
 		expressions.push_back(std::move(row_id_expr));
 		if (column_idx == column_ids.size()) {
 			get.AddColumnId(row_id_column);
@@ -135,6 +135,10 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		throw BinderException("Can only update base table");
 	}
 	auto &table = *table_ptr;
+
+	if (auto expanded = TryExpandAfterTriggers(node, node.returning_list, table, TriggerEventType::UPDATE_EVENT)) {
+		return std::move(*expanded);
+	}
 
 	optional_ptr<LogicalGet> get;
 	if (node.from_table) {

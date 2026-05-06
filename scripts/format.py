@@ -139,6 +139,7 @@ parser.add_argument('--check', action='store_true', help='Only print differences
 parser.add_argument('--fix', action='store_true', help='Fix the files')
 parser.add_argument('-a', '--all', action='store_true', help='Format all files')
 parser.add_argument('-d', '--directories', nargs='*', default=[], help='Format specified directories')
+parser.add_argument('-C', '--workdir', type=str, help='Change work directory')
 parser.add_argument('-y', '--noconfirm', action='store_true', help='Skip confirmation prompt')
 parser.add_argument('-q', '--silent', action='store_true', help='Suppress output')
 parser.add_argument('-f', '--force', action='store_true', help='Force formatting')
@@ -148,6 +149,10 @@ revision = args.revision
 if args.check and args.fix:
     parser.print_usage()
     exit(1)
+
+if args.workdir:
+    os.chdir(args.workdir)
+
 check_only = not args.fix
 confirm = not args.noconfirm
 silent = args.silent
@@ -166,6 +171,9 @@ def get_typos_targets():
 def run_typos_check():
     typos_targets = get_typos_targets()
     if not typos_targets:
+        return 0
+    # Ignore typos check for non-duckdb code.
+    if not os.path.isfile('scripts/typos.toml'):
         return 0
     typos_command = ['typos', '--force-exclude']
     if not check_only:
