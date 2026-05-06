@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
@@ -251,14 +250,7 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		                      name);
 	}
 
-	shared_ptr<AttachedDatabase> attached_db;
-	{
-		lock_guard<mutex> guard(databases_lock);
-		auto entry = databases.find(name);
-		if (entry != databases.end()) {
-			attached_db = entry->second;
-		}
-	}
+	auto attached_db = DetachInternal(name);
 	if (!attached_db) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
 			throw BinderException("Failed to detach database with name \"%s\": database not found", name);
@@ -266,19 +258,6 @@ void DatabaseManager::DetachDatabase(ClientContext &context, const string &name,
 		return;
 	}
 
-	// Reject detach if current transaction already has outstanding work on the database.
-	if (attached_db->GetVisibility() != AttachVisibility::HIDDEN) {
-		auto &meta_transaction = MetaTransaction::Get(context);
-		if (meta_transaction.TryGetTransaction(*attached_db)) {
-			throw TransactionException("Cannot detach database \"%s\" because the current transaction has outstanding "
-			                           "work on it - commit or rollback first",
-			                           name);
-		}
-	}
-
-	// Detach the database.
-	attached_db = DetachInternal(name);
-	D_ASSERT(attached_db);
 	attached_db->OnDetach(context);
 
 	// DetachInternal removes the AttachedDatabase from the list of databases that can be referenced.
