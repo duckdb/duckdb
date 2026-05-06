@@ -231,12 +231,12 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 }
 
-void VectorStructBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorStructBuffer::ReserveInternal(idx_t new_size) {
 	// resize over the validity
 	validity.Resize(new_size);
 	// resize the struct children
 	for (auto &child : children) {
-		child.Resize(current_size, new_size);
+		child.Reserve(new_size);
 	}
 	capacity = new_size;
 }

@@ -163,7 +163,6 @@ public:
 
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
-	DUCKDB_API void Resize(idx_t size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
