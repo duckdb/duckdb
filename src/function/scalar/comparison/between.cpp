@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -195,12 +197,27 @@ unique_ptr<Expression> BetweenLegacySerializeCallback(FunctionToStringInput &inp
 	                                               between_info.upper_inclusive);
 }
 
+void BetweenFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                              const BoundScalarFunction &function) {
+	auto &bind_data = bind_data_p->Cast<BetweenFunctionData>();
+	serializer.WriteProperty(100, "lower_inclusive", bind_data.lower_inclusive);
+	serializer.WriteProperty(101, "upper_inclusive", bind_data.upper_inclusive);
+}
+
+unique_ptr<FunctionData> BetweenFunctionDeserialize(Deserializer &deserializer, BoundScalarFunction &function) {
+	auto lower_inclusive = deserializer.ReadProperty<bool>(100, "lower_inclusive");
+	auto upper_inclusive = deserializer.ReadProperty<bool>(101, "upper_inclusive");
+	return make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive);
+}
+
 ScalarFunction BetweenFun::GetFunction() {
 	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
 	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
 	between_fun.SetToStringCallback(BetweenToString);
 	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);
 	between_fun.SetLegacySerializeCallback(BetweenLegacySerializeCallback);
+	between_fun.SetSerializeCallback(BetweenFunctionSerialize);
+	between_fun.SetDeserializeCallback(BetweenFunctionDeserialize);
 #ifndef DUCKDB_SMALLER_BINARY
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
