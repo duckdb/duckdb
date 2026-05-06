@@ -47,6 +47,11 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	static ExpressionType GetFunctionExpressionType(const BoundScalarFunction &bound_function,
+	                                                const vector<unique_ptr<Expression>> &arguments,
+	                                                optional_ptr<FunctionData> bind_info);
 };
 
 } // namespace duckdb

@@ -38,7 +38,6 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	static idx_t ExpressionCost(const BoundBetweenExpression &expr);
 	static idx_t ExpressionCost(const BoundCaseExpression &expr);
 	static idx_t ExpressionCost(const BoundCastExpression &expr);
 	static idx_t ExpressionCost(const BoundComparisonExpression &expr);
@@ -47,5 +46,7 @@ private:
 	static idx_t ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type);
 	static idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
 	static idx_t Cost(const TableFilter &filter);
+
+	static idx_t BetweenExpressionCost(const BoundFunctionExpression &expr);
 };
 } // namespace duckdb

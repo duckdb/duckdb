@@ -33,9 +33,9 @@
     ]
   },
   {
-    "class": "BoundBetweenExpression",
+    "class": "LegacyBoundBetweenExpression",
     "base": "Expression",
-    "enum": "BOUND_BETWEEN",
+    "enum": "LEGACY_BOUND_BETWEEN",
     "members": [
       {
         "id": 200,
@@ -62,7 +62,8 @@
         "name": "upper_inclusive",
         "type": "bool"
       }
-    ]
+    ],
+    "constructor_method": "LegacyBoundBetweenExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundCaseExpression",

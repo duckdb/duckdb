@@ -11,11 +11,19 @@ namespace duckdb {
 
 BoundFunctionExpression::BoundFunctionExpression(BoundScalarFunction bound_function,
                                                  vector<unique_ptr<Expression>> arguments,
-                                                 unique_ptr<FunctionData> bind_info, bool is_operator)
-    : Expression(ExpressionType::BOUND_FUNCTION, ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
-      function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info)),
+                                                 unique_ptr<FunctionData> bind_info_p, bool is_operator)
+    : Expression(GetFunctionExpressionType(bound_function, arguments, bind_info_p.get()),
+                 ExpressionClass::BOUND_FUNCTION, bound_function.GetReturnType()),
+      function(std::move(bound_function)), children(std::move(arguments)), bind_info(std::move(bind_info_p)),
       is_operator(is_operator) {
 	D_ASSERT(!function.GetName().empty());
+}
+
+ExpressionType BoundFunctionExpression::GetFunctionExpressionType(const BoundScalarFunction &bound_function,
+                                                                  const vector<unique_ptr<Expression>> &arguments,
+                                                                  optional_ptr<FunctionData> bind_info_p) {
+	FunctionToStringInput input(bound_function, bind_info_p.get(), arguments);
+	return bound_function.GetExpressionType(input);
 }
 
 bool BoundFunctionExpression::IsVolatile() const {
@@ -50,6 +58,10 @@ bool BoundFunctionExpression::CanThrow() const {
 }
 
 string BoundFunctionExpression::ToString() const {
+	if (function.HasToStringCallback()) {
+		FunctionToStringInput input(function, bind_info.get(), children);
+		return function.FunctionToString(input);
+	}
 	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(),
 	                                                                         function.GetName(), is_operator);
 }
@@ -99,6 +111,13 @@ void BoundFunctionExpression::Verify() const {
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(8) && function.HasLegacySerializeCallback()) {
+		// serialize legacy expression for backwards compatibility
+		FunctionToStringInput input(function, bind_info.get(), children);
+		auto legacy_expr = function.GetLegacySerializeCallback()(input);
+		legacy_expr->Serialize(serializer);
+		return;
+	}
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
