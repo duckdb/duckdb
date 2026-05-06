@@ -1614,8 +1614,7 @@ static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 template <class V = VertexXY>
 static void FromMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count, idx_t result_offset) {
-	auto mult_iter =
-	    source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>();
+	auto mult_iter = source_vec.Values<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>();
 	auto result_data = FlatVector::Writer<string_t>(target_vec, row_count, result_offset);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
