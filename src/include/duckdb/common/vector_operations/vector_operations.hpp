@@ -8,8 +8,10 @@
 
 #pragma once
 
+// IWYU pragma: begin_exports
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+// IWYU pragma: end_exports
 
 #include <functional>
 
