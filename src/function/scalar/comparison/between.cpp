@@ -148,10 +148,15 @@ string BetweenToString(FunctionToStringInput &input) {
 	return BetweenExpression::ToString(*input.children[0], *input.children[1], *input.children[2]);
 }
 
+ExpressionType BetweenGetExpressionType(FunctionToStringInput &input) {
+	return ExpressionType::COMPARE_BETWEEN;
+}
+
 ScalarFunction BetweenFun::GetFunction() {
 	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
 	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
 	between_fun.SetToStringCallback(BetweenToString);
+	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);
 #ifndef DUCKDB_SMALLER_BINARY
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif

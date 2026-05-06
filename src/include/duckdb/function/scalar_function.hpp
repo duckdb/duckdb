@@ -162,6 +162,9 @@ typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpress
 //! Convert a scalar function to string
 typedef string (*function_to_string_t)(FunctionToStringInput &input);
 
+//! Get the expression type of a function
+typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
+
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
@@ -182,6 +185,8 @@ public:
 	get_modified_databases_t get_modified_databases = nullptr;
 	//! Convert a scalar function to string
 	function_to_string_t to_string = nullptr;
+	//! Get the expression type
+	function_get_expression_type_t get_expression_type = nullptr;
 
 	function_serialize_t serialize = nullptr;
 	function_deserialize_t deserialize = nullptr;
@@ -273,7 +278,15 @@ public: // Callbacks
 
 	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
 	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
-	auto GetToStringCallback() const -> function_to_string_t { return callbacks.to_string; }
+	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
+
+	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { callbacks.get_expression_type = callback; }
+	auto GetExpressionType(FunctionToStringInput &input) const -> ExpressionType {
+		if (callbacks.get_expression_type) {
+			return callbacks.get_expression_type(input);
+		}
+		return ExpressionType::BOUND_FUNCTION;
+	}
 	// clang-format on
 
 public:
