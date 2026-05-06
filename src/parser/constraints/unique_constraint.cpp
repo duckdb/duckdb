@@ -27,7 +27,7 @@ string UniqueConstraint::ToString() const {
 		if (i > 0) {
 			base += ", ";
 		}
-		base += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+		base += SQLIdentifier(columns[i]);
 	}
 	return base + ")";
 }

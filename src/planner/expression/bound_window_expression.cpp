@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<AggregateFunction> aggregate,
-                                             unique_ptr<WindowFunction> window, unique_ptr<FunctionData> bind_info)
+BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr<BoundAggregateFunction> aggregate,
+                                             unique_ptr<BoundWindowFunction> window, unique_ptr<FunctionData> bind_info)
     : Expression(window.get() ? window->window_enum : ExpressionType::WINDOW_AGGREGATE, ExpressionClass::BOUND_WINDOW,
                  std::move(return_type)),
       aggregate(std::move(aggregate)), window(std::move(window)), bind_info(std::move(bind_info)), ignore_nulls(false),
@@ -18,7 +18,7 @@ BoundWindowExpression::BoundWindowExpression(LogicalType return_type, unique_ptr
 }
 
 string BoundWindowExpression::ToString() const {
-	string function_name = aggregate.get() ? aggregate->name : window->name;
+	string function_name = aggregate.get() ? aggregate->GetName() : window->GetName();
 	return WindowExpression::ToString<BoundWindowExpression, Expression, BoundOrderByNode>(*this, string(),
 	                                                                                       function_name);
 }
@@ -142,13 +142,13 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() const {
-	unique_ptr<AggregateFunction> agg_copy;
+	unique_ptr<BoundAggregateFunction> agg_copy;
 	if (aggregate) {
-		agg_copy = make_uniq<AggregateFunction>(*aggregate);
+		agg_copy = make_uniq<BoundAggregateFunction>(*aggregate);
 	}
-	unique_ptr<WindowFunction> win_copy;
+	unique_ptr<BoundWindowFunction> win_copy;
 	if (window) {
-		win_copy = make_uniq<WindowFunction>(*window);
+		win_copy = make_uniq<BoundWindowFunction>(*window);
 	}
 	unique_ptr<FunctionData> bind_copy;
 	if (bind_info) {
@@ -202,7 +202,7 @@ vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Seriali
 	vector<unique_ptr<Expression>> result;
 	idx_t nargs = children.size();
 	if (!serializer.ShouldSerialize(8) && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			nargs = 1;
 		}
@@ -217,7 +217,7 @@ vector<unique_ptr<Expression>> BoundWindowExpression::SerializedChildren(Seriali
 
 unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(8) && children.size() > 1 && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[1]->Copy();
 		}
@@ -228,7 +228,7 @@ unique_ptr<Expression> BoundWindowExpression::SerializedOffset(Serializer &seria
 
 unique_ptr<Expression> BoundWindowExpression::SerializedDefault(Serializer &serializer) const {
 	if (!serializer.ShouldSerialize(8) && children.size() > 2 && window) {
-		const auto &function_name = window->name;
+		const auto &function_name = window->GetName();
 		if (function_name == "lead" || function_name == "lag") {
 			return children[2]->Copy();
 		}
@@ -269,19 +269,19 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	auto expression_type = deserializer.Get<ExpressionType>();
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	unique_ptr<AggregateFunction> aggregate;
-	unique_ptr<WindowFunction> window;
+	unique_ptr<BoundAggregateFunction> aggregate;
+	unique_ptr<BoundWindowFunction> window;
 	unique_ptr<FunctionData> bind_info;
 	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
-		auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		auto entry = FunctionSerializer::Deserialize<BoundAggregateFunction, AggregateFunctionCatalogEntry>(
 		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
-		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
+		aggregate = make_uniq<BoundAggregateFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);
 	} else if (expression_type == ExpressionType::WINDOW_FUNCTION) {
 		//	New window function
-		auto entry = FunctionSerializer::Deserialize<WindowFunction, WindowFunctionCatalogEntry>(
+		auto entry = FunctionSerializer::Deserialize<BoundWindowFunction, WindowFunctionCatalogEntry>(
 		    deserializer, CatalogType::WINDOW_FUNCTION_ENTRY, children, return_type);
-		window = make_uniq<WindowFunction>(std::move(entry.first));
+		window = make_uniq<BoundWindowFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);
 	}
 	auto result =
@@ -315,7 +315,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 		vector<LogicalType> arguments;
 		arguments.reserve(result->children.size());
 		for (auto &child : result->children) {
-			arguments.push_back(child->return_type);
+			arguments.push_back(child->GetReturnType());
 		}
 
 		auto &context = deserializer.Get<ClientContext &>();
@@ -331,15 +331,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 			error_win.Throw();
 		}
 
-		auto bound = func.functions.GetFunctionByOffset(best.GetIndex());
-		if (bound.HasBindCallback()) {
-			BindWindowFunctionInput bind_input(context, bound, result->children);
-			result->bind_info = bound.Bind(bind_input);
-			// Builtins do not change their argument counts
-		}
+		const auto &win_func = func.functions.GetFunctionByOffset(best.GetIndex());
 
+		auto [bound_func, bind_info] = function_binder.ResolveFunction(win_func, result->children);
+
+		result->bind_info = std::move(bind_info);
 		result->type = expression_type;
-		result->window = make_uniq<WindowFunction>(bound);
+		result->window = make_uniq<BoundWindowFunction>(std::move(bound_func));
 	}
 
 	return std::move(result);

@@ -671,19 +671,18 @@ void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t coun
 	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
-	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(input, result, count,
-	                                                  [&](date_t input, ValidityMask &mask, idx_t idx) {
-		                                                  if (Date::IsFinite(input)) {
-			                                                  dtime_t time(0);
-			                                                  idx_t len = GetLength(input, time, 0, nullptr);
-			                                                  string_t target = heap.EmptyString(len);
-			                                                  FormatString(input, time, target.GetDataWriteable());
-			                                                  target.Finalize();
-			                                                  return target;
-		                                                  } else {
-			                                                  return heap.AddString(Date::ToString(input));
-		                                                  }
-	                                                  });
+	UnaryExecutor::Execute<date_t, string_t>(input, result, count, [&](date_t input) {
+		if (Date::IsFinite(input)) {
+			dtime_t time(0);
+			idx_t len = GetLength(input, time, 0, nullptr);
+			string_t target = heap.EmptyString(len);
+			FormatString(input, time, target.GetDataWriteable());
+			target.Finalize();
+			return target;
+		} else {
+			return heap.AddString(Date::ToString(input));
+		}
+	});
 }
 
 string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, StringHeap &heap) const {
@@ -743,7 +742,8 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 }
 
 void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
-	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS ||
+	         input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<timestamp_ns_t, string_t>(

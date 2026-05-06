@@ -327,7 +327,7 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
                                                      const BaseStatistics &stats_before,
                                                      const BaseStatistics &stats_after) {
 	// Only do this for integral colref's that have stats
-	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->return_type.IsIntegral() ||
+	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->GetReturnType().IsIntegral() ||
 	    !NumericStats::HasMinMax(stats_before) || !NumericStats::HasMinMax(stats_after)) {
 		return;
 	}

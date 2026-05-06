@@ -35,9 +35,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_BETWEEN: {
 		auto &between_expr = expr.Cast<BoundBetweenExpression>();
-		callback(between_expr.input);
-		callback(between_expr.lower);
-		callback(between_expr.upper);
+		callback(between_expr.InputMutable());
+		callback(between_expr.LowerBoundMutable());
+		callback(between_expr.UpperBoundMutable());
 		break;
 	}
 	case ExpressionClass::BOUND_CASE: {

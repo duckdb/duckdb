@@ -104,7 +104,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		throw InternalException("Struct to union cast failed for unknown reason");
 	}
 
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 	return true;
 }
 

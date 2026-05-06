@@ -37,7 +37,7 @@ static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> root_
 		    if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			    // bound colref belongs to RHS
 			    // replace it with a constant NULL
-			    expr = make_uniq<BoundConstantExpression>(Value(expr->return_type));
+			    expr = make_uniq<BoundConstantExpression>(Value(expr->GetReturnType()));
 		    }
 	    });
 	return root_expr;

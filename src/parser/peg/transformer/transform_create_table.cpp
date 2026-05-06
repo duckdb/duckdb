@@ -540,7 +540,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColumnCollation(PEG
 	auto dotted_identifier = transformer.Transform<vector<string>>(list_pr.Child<ListParseResult>(1));
 	string collation = StringUtil::Join(dotted_identifier, ".");
 	auto expr = make_uniq<ConstantExpression>(Value(collation));
-	expr->alias = "collation";
+	expr->SetAlias("collation");
 	return std::move(expr);
 }
 

@@ -71,6 +71,7 @@ template <bool HAS_RSEL, class T, bool INPUT_IS_ALREADY_HASH = false>
 void TemplatedLoopHash(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		FlatVector::SetSize(result, count_t(count));
 
 		auto ldata = ConstantVector::GetData<T>(input);
 		auto result_data = ConstantVector::GetData<hash_t>(result);
@@ -78,6 +79,7 @@ void TemplatedLoopHash(Vector &input, Vector &result, const SelectionVector *rse
 		                                     : HashOp::Operation(*ldata, ConstantVector::IsNull(input));
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
+		FlatVector::SetSize(result, count_t(count));
 
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);

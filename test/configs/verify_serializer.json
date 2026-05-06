@@ -1,0 +1,44 @@
+{
+  "description": "Run with SET debug_verify_serializer=true to test logical plan serialization",
+  "on_init": "SET debug_verify_serializer=true",
+  "skip_compiled": "true",
+  "skip_tests": [
+    {
+      "reason": "Extension optimizer pass breaks logical plan serialization",
+      "paths": [
+        "test/extension/test_extensible_filter.test"
+      ]
+    },
+    {
+      "reason": "Stats aren't preserved for serialization",
+      "paths": [
+        "test/optimizer/statistics/statistics_numeric.test",
+        "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
+        "test/parquet/parquet_stats_function.test",
+        "test/parquet/variant/variant_stats_propagation.test",
+        "test/sql/types/geo/geometry_stats.test",
+        "test/sql/types/geo/geometry_compatability.test",
+        "test/sql/types/struct/struct_stats.test",
+        "test/sql/types/list/list_stats.test",
+        "test/sql/types/nested/array/array_statistics.test",
+        "test/sql/vacuum/test_analyze.test",
+        "test/sql/function/date/date_part_stats.test",
+        "test/sql/function/date/test_date_trunc.test",
+        "test/sql/function/time/test_extract_stats.test",
+        "test/sql/function/numeric/test_random.test",
+        "test/sql/function/generic/test_stats.test",
+        "test/sql/storage/types/variant/variant_extract_stats.test",
+        "test/sql/alter/alter_type/test_alter_type.test",
+        "test/sql/alter/add_col/test_add_col_stats.test",
+        "test/sql/copy/parquet/bloom_filters.test",
+        "test/sql/copy/parquet/parquet_filename_filter.test",
+        "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/copy/parquet/parquet_hive.test",
+        "test/sql/copy/parquet/writer/parquet_write_decimals.test",
+        "test/sql/copy/parquet/shredded_variant_stats.test",
+        "test/sql/copy/parquet/corrupt_stats.test",
+        "test/sql/copy/parquet/parquet_row_number.test"
+      ]
+    }
+  ]
+}

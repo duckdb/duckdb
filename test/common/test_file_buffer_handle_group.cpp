@@ -13,7 +13,7 @@ namespace duckdb {
 namespace {
 BufferHandle AllocateAndFill(BufferManager &bm, idx_t size, uint8_t fill) {
 	auto handle = bm.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, size);
-	memset(handle.Ptr(), fill, size);
+	memset(handle.GetDataMutable(), fill, size);
 	return handle;
 }
 } // namespace
@@ -26,7 +26,7 @@ TEST_CASE("FileBufferHandleGroup copy with single handle", "[file_buffer_handle_
 	auto handle = AllocateAndFill(bm, BUF_SIZE, 0);
 
 	for (idx_t i = 0; i < BUF_SIZE; i++) {
-		handle.Ptr()[i] = static_cast<uint8_t>(i & 0xFF);
+		handle.GetDataMutable()[i] = static_cast<uint8_t>(i & 0xFF);
 	}
 
 	vector<FileBufferHandleGroup::MemoryHandle> mem_handles;
@@ -48,7 +48,7 @@ TEST_CASE("FileBufferHandleGroup copy with single handle with offset", "[file_bu
 	constexpr idx_t BUF_SIZE = 256;
 	auto handle = AllocateAndFill(bm, BUF_SIZE, 0);
 	for (idx_t i = 0; i < BUF_SIZE; i++) {
-		handle.Ptr()[i] = static_cast<uint8_t>(i & 0xFF);
+		handle.GetDataMutable()[i] = static_cast<uint8_t>(i & 0xFF);
 	}
 
 	constexpr idx_t OFFSET = 50;

@@ -97,12 +97,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(false));
 				}
 
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr;
 				}
 
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc_add) {
 					return nullptr;
 				}
@@ -165,12 +165,12 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 					return make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 				}
 
-				auto trunc = CreateTrunc(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTrunc(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr;
 				}
 
-				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc_add = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc_add) {
 					return nullptr;
 				}
@@ -210,7 +210,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 			// use the rhs as-is, instead of using trunc(rhs + 1 date_part).
 			if (!is_truncated) {
 				// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
-				auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
+				auto trunc = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 				if (!trunc) {
 					return nullptr; // Something went wrong---don't do the optimization.
 				}
@@ -228,14 +228,14 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 				if (col_is_lhs) {
 					expr.left = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.return_type.id() != expr.left->return_type.id()) {
-						expr.right = CastAndEvaluate(std::move(expr.right), expr.left->return_type);
+					if (rhs.GetReturnType().id() != expr.left->GetReturnType().id()) {
+						expr.right = CastAndEvaluate(std::move(expr.right), expr.left->GetReturnType());
 					}
 				} else {
 					expr.right = column_part.Copy();
 					// Determine whether the RHS needs to be casted.
-					if (rhs.return_type.id() != expr.right->return_type.id()) {
-						expr.left = CastAndEvaluate(std::move(expr.left), expr.right->return_type);
+					if (rhs.GetReturnType().id() != expr.right->GetReturnType().id()) {
+						expr.left = CastAndEvaluate(std::move(expr.left), expr.right->GetReturnType());
 					}
 				}
 			}
@@ -252,7 +252,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 		//                                                                                    INTERVAL 1 part))
 		{
 			// Create date_trunc(part, date_add(rhs, INTERVAL 1 part)) and fold the constant.
-			auto trunc = CreateTruncAdd(date_part, rhs, column_part.return_type);
+			auto trunc = CreateTruncAdd(date_part, rhs, column_part.GetReturnType());
 			if (!trunc) {
 				return nullptr; // Something went wrong---don't do the optimization.
 			}
@@ -347,7 +347,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTrunc(const BoundConst
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args), error);
 
 	// Ensure that the RHS type matches the column type.
-	if (trunc->return_type.id() != return_type.id()) {
+	if (trunc->GetReturnType().id() != return_type.id()) {
 		trunc = BoundCastExpression::AddDefaultCastToType(std::move(trunc), return_type, true);
 	}
 
@@ -397,7 +397,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	auto trunc = binder.BindScalarFunction(DEFAULT_SCHEMA, "date_trunc", std::move(args3), error);
 
 	// Ensure that the RHS type matches the column type.
-	if (trunc->return_type.id() != return_type.id()) {
+	if (trunc->GetReturnType().id() != return_type.id()) {
 		trunc = BoundCastExpression::AddDefaultCastToType(std::move(trunc), return_type, true);
 	}
 
@@ -421,7 +421,7 @@ bool DateTruncSimplificationRule::DateIsTruncated(const BoundConstantExpression 
 	}
 
 	// Create the node date_trunc(date_part, rhs).
-	auto trunc = CreateTrunc(date_part, rhs, rhs.return_type);
+	auto trunc = CreateTrunc(date_part, rhs, rhs.GetReturnType());
 
 	Value trunc_result, result;
 	if (!ExpressionExecutor::TryEvaluateScalar(rewriter.context, *trunc, trunc_result)) {

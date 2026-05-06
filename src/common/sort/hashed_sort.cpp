@@ -318,13 +318,13 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	vector<LogicalType> group_types;
 	for (idx_t prt_idx = 0; prt_idx < hashed_sort.partitions.size(); prt_idx++) {
 		auto &pexpr = *hashed_sort.partitions[prt_idx].expression.get();
-		group_types.push_back(pexpr.return_type);
+		group_types.push_back(pexpr.GetReturnType());
 		hash_exec.AddExpression(pexpr);
 	}
 
 	vector<LogicalType> sort_types;
 	for (const auto &expr : hashed_sort.sort_exprs) {
-		sort_types.emplace_back(expr->return_type);
+		sort_types.emplace_back(expr->GetReturnType());
 		sort_exec.AddExpression(*expr);
 	}
 	sort_chunk.Initialize(context.client, sort_types);
@@ -539,7 +539,7 @@ HashedSort::HashedSort(ClientContext &client, const vector<unique_ptr<Expression
 
 		//	Real expression - replace with a ref and save the expression
 		auto saved = std::move(order.expression);
-		const auto type = saved->return_type;
+		const auto type = saved->GetReturnType();
 		const auto idx = payload_types.size();
 		order.expression = make_uniq<BoundReferenceExpression>(type, idx);
 		sort_ids.emplace_back(idx);

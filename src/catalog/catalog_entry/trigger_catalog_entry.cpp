@@ -44,7 +44,7 @@ unique_ptr<CreateInfo> TriggerCatalogEntry::GetInfo() const {
 string TriggerCatalogEntry::ToSQL() const {
 	duckdb::stringstream ss;
 	ss << "CREATE TRIGGER ";
-	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << SQLIdentifier(name);
 	ss << " ";
 	ss << EnumUtil::ToString(timing);
 	ss << " ";
@@ -55,7 +55,7 @@ string TriggerCatalogEntry::ToSQL() const {
 			if (i > 0) {
 				ss << ", ";
 			}
-			ss << KeywordHelper::WriteOptionallyQuoted(columns[i]);
+			ss << SQLIdentifier(columns[i]);
 		}
 	}
 	ss << " ON ";

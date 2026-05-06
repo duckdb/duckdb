@@ -2,9 +2,6 @@
 # description: Test LATERAL joins and QUALIFY clause interaction
 # group: [lateral]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 FROM (SELECT 42) t(x), (SELECT x, row_number() OVER () QUALIFY NULL);
 ----

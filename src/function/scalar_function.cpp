@@ -1,6 +1,19 @@
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
+
+bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
+	return bind == rhs.bind && init_local_state == rhs.init_local_state && statistics == rhs.statistics &&
+	       bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&
+	       get_modified_databases == rhs.get_modified_databases && serialize == rhs.serialize &&
+	       deserialize == rhs.deserialize && filter_prune == rhs.filter_prune;
+}
+
+bool ScalarFunctionCallbacks::operator!=(const ScalarFunctionCallbacks &rhs) const {
+	return !(*this == rhs);
+}
 
 FunctionLocalState::~FunctionLocalState() {
 }
@@ -13,11 +26,15 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), side_effects,
-                         std::move(varargs), null_handling),
-      function(std::move(function)), bind(bind), init_local_state(init_local_state), statistics(statistics),
-      bind_lambda(bind_lambda), bind_expression(nullptr), get_modified_databases(nullptr), serialize(nullptr),
-      deserialize(nullptr) {
+    : SimpleFunction(std::move(name), std::move(arguments), std::move(return_type), std::move(varargs)) {
+	properties.stability = side_effects;
+	properties.null_handling = null_handling;
+
+	callbacks.function = std::move(function);
+	callbacks.bind = bind;
+	callbacks.init_local_state = init_local_state;
+	callbacks.statistics = statistics;
+	callbacks.bind_lambda = bind_lambda;
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
@@ -29,9 +46,7 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return name == rhs.name && arguments == rhs.GetArguments() && return_type == rhs.return_type &&
-	       varargs == rhs.GetVarArgs() && bind == rhs.bind && statistics == rhs.statistics &&
-	       bind_lambda == rhs.bind_lambda;
+	return name == rhs.name && signature == rhs.signature && callbacks == rhs.callbacks && properties == rhs.properties;
 }
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
@@ -39,31 +54,51 @@ bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 }
 
 bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
-	// number of types
-	if (this->GetArguments().size() != rhs.GetArguments().size()) {
-		return false;
-	}
-	// argument types
-	for (idx_t i = 0; i < this->GetArguments().size(); ++i) {
-		if (this->GetArguments()[i] != rhs.GetArguments()[i]) {
-			return false;
-		}
-	}
-	// return type
-	if (this->return_type != rhs.return_type) {
-		return false;
-	}
-	// varargs
-	if (this->GetVarArgs() != rhs.GetVarArgs()) {
-		return false;
-	}
-
-	return true; // they are equal
+	return signature.Equal(rhs.signature);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	result.Reference(input.data[0]);
+}
+
+unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
+                                                         vector<unique_ptr<Expression>> arguments,
+                                                         optional_ptr<Binder> binder) const {
+	FunctionBinder func_binder(context);
+	auto expr = func_binder.BindScalarFunction(*this, std::move(arguments), binder);
+
+	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+		throw InvalidInputException("BindScalarFunction did not return a BoundFunctionExpression");
+	}
+
+	return unique_ptr_cast<Expression, BoundFunctionExpression>(std::move(expr));
+}
+
+BoundScalarFunction::BoundScalarFunction(const ScalarFunction &function) {
+	name = function.name;
+	schema_name = function.schema_name;
+	catalog_name = function.catalog_name;
+	extra_info = function.extra_info;
+	return_type = function.GetReturnType();
+	callbacks = function.GetCallbacks();
+	properties = function.GetProperties();
+	function_info = function.GetFunctionInfo();
+	arg_props = function.GetAllArgProperties();
+
+	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
+	// "bind" callback)
+	for (auto &param : function.GetSignature().GetParameters()) {
+		arguments.push_back(param.GetType());
+	}
+}
+
+bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
+	return callbacks == rhs.callbacks && properties == rhs.properties && name == rhs.name &&
+	       return_type == rhs.return_type && arguments == rhs.arguments;
+}
+bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {
+	return !(*this == rhs);
 }
 
 } // namespace duckdb

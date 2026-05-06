@@ -2,9 +2,6 @@
 # description: Issue 603
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # BETWEEN with COLLATE NOACCENT.NOCASE expression results in a segfault/ASan failure
 statement ok
 CREATE TABLE t0(c0 DATE, c1 VARCHAR);

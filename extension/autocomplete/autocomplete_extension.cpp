@@ -363,7 +363,7 @@ public:
 		return ::duckdb::SuggestSettingName(context);
 	}
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
-		return GetGlobalPEGMatcherCache().GetMatcher();
+		return PEGMatcher::Get(context);
 	}
 
 private:
@@ -462,7 +462,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	idx_t max_token_index = 0;
 	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->Root().Match(state);
 
 	return make_uniq<SQLTokenizeFunctionData>(tokenizer.tokens);
@@ -549,7 +549,7 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	idx_t max_token_index = 0;
 	MatchState state(root_tokens, suggestions, parse_allocator, max_token_index);
 
-	auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
+	auto peg_matcher = PEGMatcher::Get(context);
 	auto match_result = peg_matcher->Root().Match(state);
 	if (match_result != MatchResultType::SUCCESS || state.token_index < root_tokens.size()) {
 		string token_list;
@@ -571,46 +571,6 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 
 void CheckPEGParserFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 }
-
-class PEGParserExtension : public ParserExtension {
-public:
-	PEGParserExtension() {
-		parser_override = PEGParser;
-	}
-
-	static ParserOverrideResult PEGParser(ParserExtensionInfo *info, const string &query, ParserOptions &options) {
-		auto peg_matcher = GetGlobalPEGMatcherCache().GetMatcher();
-		auto &root_matcher = peg_matcher->Root();
-
-		vector<MatcherToken> root_tokens;
-
-		ParserTokenizer tokenizer(query, root_tokens);
-		tokenizer.TokenizeInput();
-
-		try {
-			vector<unique_ptr<SQLStatement>> result;
-			if (!root_tokens.empty()) {
-				result = PEGTransformerFactory::Transform(root_tokens, options, root_matcher);
-			}
-			if (!result.empty()) {
-				auto &last_statement = result.back();
-				last_statement->stmt_length = query.size() - last_statement->stmt_location;
-			}
-			for (auto &statement : result) {
-				statement->query = query.substr(statement->stmt_location, statement->stmt_length);
-				statement->stmt_location = 0;
-				statement->stmt_length = statement->query.size();
-				if (statement->type == StatementType::CREATE_STATEMENT) {
-					auto &create = statement->Cast<CreateStatement>();
-					create.info->sql = statement->query;
-				}
-			}
-			return ParserOverrideResult(std::move(result));
-		} catch (std::exception &e) {
-			return ParserOverrideResult(e);
-		}
-	}
-};
 
 struct FormatSQLBindData : public FunctionData {
 	FormatterConfig config;
@@ -713,8 +673,6 @@ static void LoadInternal(ExtensionLoader &loader) {
 	format_sql_set.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, map_config_type}, LogicalType::VARCHAR, FormatSQLExecute, FormatSQLBind));
 	loader.RegisterFunction(format_sql_set);
-	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	ParserExtension::Register(config, PEGParserExtension());
 }
 
 void AutocompleteExtension::Load(ExtensionLoader &loader) {

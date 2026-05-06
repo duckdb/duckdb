@@ -68,7 +68,7 @@ unique_ptr<FunctionData> CAPIAggregateBind(BindAggregateFunctionInput &input) {
 	return make_uniq<CAggregateFunctionBindData>(info);
 }
 
-idx_t CAPIAggregateStateSize(const AggregateFunction &function) {
+idx_t CAPIAggregateStateSize(const BoundAggregateFunction &function) {
 	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
@@ -79,7 +79,7 @@ idx_t CAPIAggregateStateSize(const AggregateFunction &function) {
 	return result;
 }
 
-void CAPIAggregateStateInit(const AggregateFunction &function, data_ptr_t state) {
+void CAPIAggregateStateInit(const BoundAggregateFunction &function, data_ptr_t state) {
 	auto &function_info = function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 	CAggregateExecuteInfo exec_info(function_info);
 	auto c_function_info = reinterpret_cast<duckdb_function_info>(&exec_info);
@@ -184,7 +184,7 @@ void duckdb_aggregate_function_add_parameter(duckdb_aggregate_function function,
 	}
 	auto &aggregate_function = GetCAggregateFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	aggregate_function.GetArguments().push_back(*logical_type);
+	aggregate_function.GetSignature().AddParameter(*logical_type);
 }
 
 void duckdb_aggregate_function_set_return_type(duckdb_aggregate_function function, duckdb_logical_type type) {
@@ -305,7 +305,7 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 	}
 	auto &set = duckdb::GetCAggregateFunctionSet(function_set);
 	for (idx_t idx = 0; idx < set.Size(); idx++) {
-		auto &aggregate_function = set.GetFunctionReferenceByOffset(idx);
+		const auto &aggregate_function = set.GetFunctionByOffset(idx);
 		auto &info = aggregate_function.GetExtraFunctionInfo().Cast<duckdb::CAggregateFunctionInfo>();
 
 		if (aggregate_function.name.empty() || !info.update || !info.combine || !info.finalize) {
@@ -315,8 +315,8 @@ duckdb_state duckdb_register_aggregate_function_set(duckdb_connection connection
 		    duckdb::TypeVisitor::Contains(aggregate_function.GetReturnType(), duckdb::LogicalTypeId::ANY)) {
 			return DuckDBError;
 		}
-		for (const auto &argument : aggregate_function.GetArguments()) {
-			if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
+		for (const auto &argument : aggregate_function.GetSignature().GetParameters()) {
+			if (duckdb::TypeVisitor::Contains(argument.GetType(), duckdb::LogicalTypeId::INVALID)) {
 				return DuckDBError;
 			}
 		}

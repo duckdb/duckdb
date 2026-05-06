@@ -2,9 +2,6 @@
 # description: regex replace test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # standard replace
 query T
 SELECT regexp_replace('foobarbaz', 'b..', 'X')
@@ -119,3 +116,76 @@ select regexp_replace(s, r, 'X') from regex;
 ----
 no argument for repetition operator: *
 
+# Anchored whole-input patterns with a single backreference replacement.
+# The optimizer rewrites these into regexp_extract with no_match_returns_input set.
+
+# Path-segment extraction. Match and no-match rows must behave identically to the un-rewritten form.
+query T
+SELECT regexp_replace(s, '^/([^/]+)/.*$', '\1') FROM (VALUES
+    ('/usr/local/bin/duckdb'),
+    ('/etc/hosts'),
+    ('/var/'),
+    ('relative/path/no/leading/slash')) t(s);
+----
+usr
+etc
+var
+relative/path/no/leading/slash
+
+# Multiple capture groups: rewrite must still resolve `\1` to group 1.
+query T
+SELECT regexp_replace('aXYbZW', '^(a)(XY)(b)(ZW).*$', '\1');
+----
+a
+
+# Non-`\1` backreferences work, and the pattern does not need to end in `.*$`.
+query T
+SELECT regexp_replace('left-right', '^([^-]+)-([^-]+)$', '\2');
+----
+right
+
+# Embedded newline in the remainder under default options: `.*$` cannot match `\n`,
+# so the result is the input unchanged. Result contains a newline so we check by JOIN.
+query T
+SELECT COUNT(*) FROM (SELECT E'https://www.example.com/path\nsecond-line') t1(a)
+  JOIN (SELECT regexp_replace(E'https://www.example.com/path\nsecond-line',
+                              '^https?://(?:www\.)?([^/]+)/.*$', '\1')) t2(a) USING (a);
+----
+1
+
+# DOTALL (`s` flag) lets `.*$` cross newlines, so the same input is replaced rather than left intact.
+query T
+SELECT regexp_replace(E'https://www.example.com/path\nsecond-line',
+                      '^https?://(?:www\.)?([^/]+)/.*$', '\1', 's');
+----
+example.com
+
+# Inline multiline mode makes the trailing `$` an end-of-line anchor. The match no longer spans the
+# whole input, so the optimizer must not rewrite this to regexp_extract and drop the unmatched tail.
+query T
+SELECT COUNT(*) FROM (SELECT E'a\nb') t1(a)
+  JOIN (SELECT regexp_replace(s, '^(?m)(a).*$', '\1') FROM (VALUES (E'a\nb')) v(s)) t2(a) USING (a);
+----
+1
+
+# A top-level alternation can pass a byte-level `^...*$` check without every branch being anchored.
+query T
+SELECT regexp_replace(s, '^a(.*)$|b(.*).*$', '\1') FROM (VALUES ('xxbzz'), ('azz')) v(s);
+----
+xx
+zz
+
+# Pattern whose trailing `.*$` is preceded by an escape (`\.*$` = literal-dot star, end-of-text).
+# Non-constant input bypasses constant folding so the optimizer rewrite path runs.
+query T
+SELECT regexp_replace(s, '^a(b)\.*$', '\1') FROM (VALUES ('ab'), ('ab.'), ('cd')) v(s);
+----
+b
+b
+cd
+
+# UTF-8 input: capture group must be returned on byte-aligned UTF-8 character boundaries.
+query T
+SELECT regexp_replace('héllo-café/rest', '^([^/]+)/.*$', '\1');
+----
+héllo-café

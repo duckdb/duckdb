@@ -210,19 +210,18 @@ public:
 
 class PEGTransformerFactory {
 public:
-	static PEGTransformerFactory &GetInstance();
 	explicit PEGTransformerFactory();
 
 	//! Helper functions
-	static vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
-	                                                  Matcher &root_matcher);
+	vector<unique_ptr<SQLStatement>> Transform(vector<MatcherToken> &tokens, ParserOptions &options,
+	                                           Matcher &root_matcher);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(ParsedExpression &expr);
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
-	static bool TryNegateValue(Value &val);
+	static unique_ptr<ParsedExpression> TryNegateValue(const ConstantExpression &expr);
 	static unique_ptr<ParsedExpression> ConvertNumberToValue(string val);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);

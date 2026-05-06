@@ -50,6 +50,7 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return true;
@@ -141,17 +142,17 @@ LogicalType BoundComparisonExpression::BindComparison(ClientContext &context, co
 
 LogicalType ExpressionBinder::GetExpressionReturnType(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-		if (expr.return_type == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.return_type).empty()) {
+		if (expr.GetReturnType() == LogicalTypeId::VARCHAR && StringType::GetCollation(expr.GetReturnType()).empty()) {
 			return LogicalTypeId::STRING_LITERAL;
 		}
-		if (expr.return_type.IsIntegral()) {
+		if (expr.GetReturnType().IsIntegral()) {
 			auto &constant = expr.Cast<BoundConstantExpression>();
 			if (!constant.value.IsNull()) {
 				return LogicalType::INTEGER_LITERAL(constant.value);
 			}
 		}
 	}
-	return expr.return_type;
+	return expr.GetReturnType();
 }
 
 BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t depth) {

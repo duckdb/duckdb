@@ -3,9 +3,6 @@
 # group: [window]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create table data(id integer, value integer, primary key(id));
 
 statement ok

@@ -24,7 +24,7 @@ string UpdateSetInfo::ToString() const {
 		if (i > 0) {
 			result += ", ";
 		}
-		result += KeywordHelper::WriteOptionallyQuoted(columns[i]);
+		result += SQLIdentifier(columns[i]);
 		result += " = ";
 		result += expressions[i]->ToString();
 	}

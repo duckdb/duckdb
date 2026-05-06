@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT * FROM '{DATA_DIR}/parquet-testing/byte_stream_split.parquet'
 ----

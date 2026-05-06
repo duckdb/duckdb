@@ -19,7 +19,8 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	return !wexpr.distinct && wexpr.arg_orders.empty();
+	//	We can't handle DISTINCT, ORDER BY args or () args (COUNT(*))
+	return !wexpr.distinct && wexpr.arg_orders.empty() && !wexpr.children.empty();
 }
 
 WindowSegmentTree::WindowSegmentTree(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
@@ -196,7 +197,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	if (combining) {
-		statel.Verify(flush_count);
+		statel.Verify();
 		aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 	} else {
 		auto &scanned = cursor->chunk;

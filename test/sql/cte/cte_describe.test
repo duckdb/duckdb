@@ -2,9 +2,6 @@
 # description: Test CTE describe
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification
-
 query I nosort describe
 DESCRIBE select 42 AS a
 

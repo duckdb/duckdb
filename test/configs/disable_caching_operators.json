@@ -1,0 +1,5 @@
+{
+  "description": "Run with SET enable_caching_operators=false.",
+  "on_init": "SET enable_caching_operators=false;",
+  "skip_compiled": "true"
+}

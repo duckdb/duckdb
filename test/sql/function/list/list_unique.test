@@ -4,9 +4,6 @@
 
 # test null or empty
 
-statement ok
-pragma enable_verification
-
 query I
 SELECT list_unique(NULL)
 ----

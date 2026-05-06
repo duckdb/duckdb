@@ -92,7 +92,7 @@ idx_t DictFSSTCompressionState::Finalize() {
 	D_ASSERT(info.GetBlockSize() >= required_space);
 
 	// calculate ptr and offsets
-	auto base_ptr = current_handle.Ptr();
+	auto base_ptr = current_handle.GetDataMutable();
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
 	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
 	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_offset);
@@ -158,7 +158,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 	vector<unsigned char *> fsst_string_ptrs;
 
 	data_ptr_t dictionary_start =
-	    AlignPointer<sizeof(void *)>(current_handle.Ptr() + sizeof(dict_fsst_compression_header_t));
+	    AlignPointer<sizeof(void *)>(current_handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
 	D_ASSERT(dictionary_encoding_buffer.size() == dict_count - string_lengths.size());
 	auto string_count = dictionary_encoding_buffer.size();
 	idx_t sum = 0;
@@ -446,8 +446,8 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		state.current_string_map.Insert(uncompressed_string);
 	} else {
 		state.string_lengths.push_back(str_len);
-		auto baseptr =
-		    AlignPointer<sizeof(data_ptr_t)>(state.current_handle.Ptr() + sizeof(dict_fsst_compression_header_t));
+		auto baseptr = AlignPointer<sizeof(data_ptr_t)>(state.current_handle.GetDataMutable() +
+		                                                sizeof(dict_fsst_compression_header_t));
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
 		state.dictionary_offset += str_len;
@@ -674,7 +674,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 
 	uint32_t offset = 0;
 	data_ptr_t dictionary_start =
-	    AlignPointer<sizeof(void *)>(current_handle.Ptr() + sizeof(dict_fsst_compression_header_t));
+	    AlignPointer<sizeof(void *)>(current_handle.GetDataMutable() + sizeof(dict_fsst_compression_header_t));
 	D_ASSERT(dictionary_offset > string_t::INLINE_BYTES && dictionary_offset <= string_t::MAX_STRING_SIZE);
 	auto dict_copy = uncompressed_dictionary_copy.EmptyString(dictionary_offset);
 	memcpy((void *)dict_copy.GetData(), (void *)dictionary_start, dictionary_offset);

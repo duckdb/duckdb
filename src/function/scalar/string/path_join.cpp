@@ -25,16 +25,16 @@ public:
 };
 
 // Process one output row; returns false if any input is NULL.
-static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs, idx_t col_count, FileSystem &fs,
+static bool ProcessRow(idx_t row_idx, const vector<VectorIterator<string_t>> &inputs, idx_t col_count,
                        string &out_result) {
 	Path out_path;
 	for (idx_t col_idx = 0; col_idx < col_count; col_idx++) {
 		auto &vdata = inputs[col_idx];
-		auto idx = vdata.sel->get_index(row_idx);
-		if (!vdata.validity.RowIsValid(idx)) {
+		auto input_val = vdata[row_idx];
+		if (!input_val.IsValid()) {
 			return false;
 		}
-		auto input_value = UnifiedVectorFormat::GetData<string_t>(vdata)[idx].GetString();
+		auto input_value = input_val.GetValue().GetString();
 		if (col_idx == 0) {
 			out_path = Path::FromString(input_value);
 		} else {
@@ -48,32 +48,15 @@ static bool ProcessRow(idx_t row_idx, const vector<UnifiedVectorFormat> &inputs,
 void PathJoinFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
 	auto col_count = args.ColumnCount();
-	auto &context = state.GetContext();
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	vector<UnifiedVectorFormat> inputs(args.ColumnCount());
+	vector<VectorIterator<string_t>> inputs;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		args.data[col_idx].ToUnifiedFormat(count, inputs[col_idx]);
-	}
-
-	// constant fast path
-	if (args.AllConstant() && count > 0) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto &validity = ConstantVector::Validity(result);
-		auto result_data = ConstantVector::GetData<string_t>(result);
-		string joined;
-		if (!ProcessRow(0, inputs, col_count, fs, joined)) {
-			validity.SetInvalid(0);
-		} else {
-			result_data[0] = StringVector::AddString(result, joined);
-		}
-		return;
+		inputs.emplace_back(args.data[col_idx].Values<string_t>(count));
 	}
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		string joined;
-		if (!ProcessRow(row_idx, inputs, col_count, fs, joined)) {
+		if (!ProcessRow(row_idx, inputs, col_count, joined)) {
 			result_data.WriteNull();
 			continue;
 		}

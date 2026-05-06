@@ -5,7 +5,7 @@
 namespace duckdb {
 
 bool ExpressionMatcher::Match(Expression &expr, vector<reference<Expression>> &bindings) {
-	if (type && !type->Match(expr.return_type)) {
+	if (type && !type->Match(expr.GetReturnType())) {
 		return false;
 	}
 	if (expr_type && !expr_type->Match(expr.GetExpressionType())) {
@@ -83,7 +83,7 @@ bool FunctionExpressionMatcher::Match(Expression &expr_p, vector<reference<Expre
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundFunctionExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.name)) {
+	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 		return false;
 	}
 	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
@@ -97,7 +97,7 @@ bool AggregateExpressionMatcher::Match(Expression &expr_p, vector<reference<Expr
 		return false;
 	}
 	auto &expr = expr_p.Cast<BoundAggregateExpression>();
-	if (!FunctionMatcher::Match(function, expr.function.name)) {
+	if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 		return false;
 	}
 	// we should create matchers for these in the future

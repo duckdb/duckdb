@@ -3,9 +3,6 @@
 # group: [array]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE tbl AS
 SELECT i%2000 sparse_id,
 		i%200 as avg_id,

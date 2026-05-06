@@ -94,14 +94,14 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 	// TODO(Dtenwolde) Rework to switch statement
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().value));
+		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
 	} else if (expression->GetExpressionType() == ExpressionType::PLACEHOLDER) {
 		auto &op_expr = expression->Cast<OperatorExpression>();
 		for (auto &child : op_expr.children) {
 			if (child->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().value));
+				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().GetValue()));
 			} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
 			} else {
@@ -117,9 +117,9 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 		auto &cast_expr = expression->Cast<CastExpression>();
 		if (cast_expr.child->GetExpressionClass() == ExpressionClass::CONSTANT) {
 			auto &const_expr = cast_expr.child->Cast<ConstantExpression>();
-			if (const_expr.value.GetValue<string>() == "t") {
+			if (const_expr.GetValue().GetValue<string>() == "t") {
 				copy_option.children.push_back(Value(true));
-			} else if (const_expr.value.GetValue<string>() == "f") {
+			} else if (const_expr.GetValue().GetValue<string>() == "f") {
 				copy_option.children.push_back(Value(false));
 			} else {
 				copy_option.expression = std::move(expression);

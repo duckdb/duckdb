@@ -3,9 +3,6 @@
 # group: [general]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE OR REPLACE VIEW view_1 AS
 SELECT
     i AS id,

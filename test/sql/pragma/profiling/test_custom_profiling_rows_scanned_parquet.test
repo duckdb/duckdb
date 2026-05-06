@@ -6,9 +6,6 @@ require json
 require parquet
 
 statement ok
-PRAGMA enable_verification;
-
-statement ok
 COPY (SELECT * FROM range(0, 10) as r(i)) TO '{TEST_DIR}/range.parquet' (FORMAT 'parquet');
 
 statement ok

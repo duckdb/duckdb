@@ -191,7 +191,7 @@ public:
 
 	//! Variables to iterate over the CSV buffers
 
-	char *buffer_ptr;
+	const char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t position_before_comment;
 

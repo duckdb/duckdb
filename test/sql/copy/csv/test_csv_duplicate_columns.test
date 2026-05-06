@@ -3,9 +3,6 @@
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 
 statement ok
 COPY (SELECT 1 as a, 2 as a, 3 as a) TO '{TEST_DIR}/dupe_cols.csv' (FORMAT CSV, HEADER);

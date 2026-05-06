@@ -3,9 +3,6 @@
 # group: [decimal]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE decimals(i DECIMAL(38,1))
 
 statement ok

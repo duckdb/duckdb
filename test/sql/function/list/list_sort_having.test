@@ -3,9 +3,6 @@
 # group: [list]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 create or replace table test1 as (
     select 'new_customers' as child, 'dim_model_7' as parent
     union all select 'exposure_1' as child, 'dim_model_7' as parent

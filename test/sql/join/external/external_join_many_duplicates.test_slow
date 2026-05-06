@@ -6,7 +6,7 @@
 require 64bit
 
 statement ok
-pragma verify_external
+SET debug_force_external=true;
 
 statement ok
 pragma verify_parallelism

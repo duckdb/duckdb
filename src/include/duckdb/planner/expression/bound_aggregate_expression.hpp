@@ -19,12 +19,12 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_AGGREGATE;
 
 public:
-	BoundAggregateExpression(AggregateFunction function, vector<unique_ptr<Expression>> children,
+	BoundAggregateExpression(BoundAggregateFunction function, vector<unique_ptr<Expression>> children,
 	                         unique_ptr<Expression> filter, unique_ptr<FunctionData> bind_info,
 	                         AggregateType aggr_type);
 
 	//! The bound function expression
-	AggregateFunction function;
+	BoundAggregateFunction function;
 	//! List of arguments to the function
 	vector<unique_ptr<Expression>> children;
 	//! The bound function data (if any)

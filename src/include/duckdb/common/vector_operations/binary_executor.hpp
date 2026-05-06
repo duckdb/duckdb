@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
@@ -47,25 +48,24 @@ struct BinarySingleArgumentOperatorWrapper {
 	}
 };
 
+template <bool ADDS_NULLS>
 struct BinaryLambdaWrapper {
 	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-		return fun(left, right);
+		if constexpr (ADDS_NULLS) {
+			auto result = fun(left, right);
+			if (!result.has_value()) {
+				mask.SetInvalid(idx);
+				return RESULT_TYPE();
+			}
+			return result.value();
+		} else {
+			return fun(left, right);
+		}
 	}
 
 	static bool AddsNulls() {
-		return false;
-	}
-};
-
-struct BinaryLambdaWrapperWithNulls {
-	template <class FUNC, class OP, class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, LEFT_TYPE left, RIGHT_TYPE right, ValidityMask &mask, idx_t idx) {
-		return fun(left, right, mask, idx);
-	}
-
-	static bool AddsNulls() {
-		return true;
+		return ADDS_NULLS;
 	}
 };
 
@@ -259,8 +259,10 @@ public:
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
 	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE)>>
 	static void Execute(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper, bool, FUNC>(left, right, result, count,
-		                                                                                   fun);
+		constexpr bool adds_nulls = std::is_same<decltype(fun(std::declval<LEFT_TYPE>(), std::declval<RIGHT_TYPE>())),
+		                                         optional<RESULT_TYPE>>::value;
+		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapper<adds_nulls>, bool, FUNC>(
+		    left, right, result, count, fun);
 	}
 
 	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP,
@@ -273,13 +275,6 @@ public:
 	static void ExecuteStandard(Vector &left, Vector &right, Vector &result, idx_t count) {
 		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryStandardOperatorWrapper, OP, bool>(left, right, result,
 		                                                                                           count, false);
-	}
-
-	template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE,
-	          class FUNC = std::function<RESULT_TYPE(LEFT_TYPE, RIGHT_TYPE, ValidityMask &, idx_t)>>
-	static void ExecuteWithNulls(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
-		ExecuteSwitch<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, BinaryLambdaWrapperWithNulls, bool, FUNC>(left, right, result,
-		                                                                                            count, fun);
 	}
 
 public:

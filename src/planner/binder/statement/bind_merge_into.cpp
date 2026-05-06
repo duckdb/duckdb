@@ -33,11 +33,11 @@ static void ValidateMergeColumns(const Expression &expr, MergeActionCondition co
 
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_TARGET && is_target_column) {
 			throw BinderException("Target column '%s' cannot be referenced in a WHEN NOT MATCHED BY TARGET clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 		if (condition == MergeActionCondition::WHEN_NOT_MATCHED_BY_SOURCE && is_source_column) {
 			throw BinderException("Source column '%s' cannot be referenced in a WHEN NOT MATCHED BY SOURCE clause",
-			                      colref.alias.empty() ? colref.ToString() : colref.alias);
+			                      colref.GetAlias().empty() ? colref.ToString() : colref.GetAlias());
 		}
 	});
 }
@@ -70,7 +70,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 			WhereBinder where_binder(*this, context);
 			auto cond = where_binder.Bind(action.condition);
 			PlanSubqueries(cond, root);
-			auto cond_type = cond->return_type;
+			auto cond_type = cond->GetReturnType();
 			auto cond_idx = ColumnBinding::PushExpression(expressions, std::move(cond));
 			result->condition = make_uniq<BoundColumnRefExpression>(cond_type, ColumnBinding(proj_index, cond_idx));
 		} else {
@@ -169,7 +169,7 @@ Binder::BindMergeAction(LogicalMergeInto &merge_into, TableCatalogEntry &table, 
 		}
 
 		for (auto &insert_expr : insert_expressions) {
-			auto insert_type = insert_expr->return_type;
+			auto insert_type = insert_expr->GetReturnType();
 			auto expr_index = ColumnBinding::PushExpression(expressions, std::move(insert_expr));
 			result->expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(insert_type, ColumnBinding(proj_index, expr_index)));
@@ -248,6 +248,15 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		throw BinderException("Can only merge into base tables!");
 	}
 	auto &table = *table_ptr;
+
+	bool has_triggers = false;
+	auto transaction = table.ParentCatalog().GetCatalogTransaction(context);
+	table.ScanTriggers(transaction, [&](CatalogEntry &) { has_triggers = true; });
+	if (has_triggers && !global_binder_state->trigger_expanded_tables.count(table)) {
+		// if the table is not in the trigger_expanded tables, it means that we're on a top level MERGE INTO
+		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
+	}
+
 	if (!table.temporary) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
@@ -374,7 +383,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
-		marker->alias = "source_marker";
+		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
 		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
@@ -395,7 +404,7 @@ BoundStatement Binder::Bind(MergeIntoStatement &stmt) {
 		// push a reference
 		merge_into->source_marker = projection_expressions.size();
 		auto marker_ref = make_uniq<BoundColumnRefExpression>(LogicalType::INTEGER, source_marker);
-		marker_ref->alias = "source_marker";
+		marker_ref->SetAlias("source_marker");
 		projection_expressions.push_back(std::move(marker_ref));
 	}
 

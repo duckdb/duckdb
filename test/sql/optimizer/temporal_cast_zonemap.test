@@ -2,9 +2,6 @@
 # description: Test that temporal cast filters generate OptionalFilter for zonemap pruning
 # group: [optimizer]
 
-statement ok
-PRAGMA enable_verification;
-
 # ---------------------------------------------------------------------------
 # Setup tables
 # ---------------------------------------------------------------------------

@@ -22,7 +22,8 @@ idx_t DictionaryCompression::RequiredSpace(idx_t current_count, idx_t index_coun
 }
 
 StringDictionaryContainer DictionaryCompression::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr =
+	    reinterpret_cast<dictionary_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
 	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));
@@ -31,7 +32,8 @@ StringDictionaryContainer DictionaryCompression::GetDictionary(ColumnSegment &se
 
 void DictionaryCompression::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
                                           StringDictionaryContainer container) {
-	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr =
+	    reinterpret_cast<dictionary_compression_header_t *>(handle.GetDataMutable() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }

@@ -151,39 +151,39 @@ unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, Functio
 	Value new_min, new_max;
 	bool potential_overflow = true;
 	if (NumericStats::HasMinMax(lstats) && NumericStats::HasMinMax(rstats)) {
-		switch (expr.return_type.InternalType()) {
+		switch (expr.GetReturnType().InternalType()) {
 		case PhysicalType::INT8:
 			potential_overflow =
-			    PROPAGATE::template Operation<int8_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int8_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT16:
 			potential_overflow =
-			    PROPAGATE::template Operation<int16_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int16_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT32:
 			potential_overflow =
-			    PROPAGATE::template Operation<int32_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int32_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		case PhysicalType::INT64:
 			potential_overflow =
-			    PROPAGATE::template Operation<int64_t, OP>(expr.return_type, lstats, rstats, new_min, new_max);
+			    PROPAGATE::template Operation<int64_t, OP>(expr.GetReturnType(), lstats, rstats, new_min, new_max);
 			break;
 		default:
 			return nullptr;
 		}
 	}
 	if (potential_overflow) {
-		new_min = Value(expr.return_type);
-		new_max = Value(expr.return_type);
+		new_min = Value(expr.GetReturnType());
+		new_max = Value(expr.GetReturnType());
 	} else {
 		// no potential overflow: replace with non-overflowing operator
 		if (input.bind_data) {
 			auto &bind_data = input.bind_data->Cast<DecimalArithmeticBindData>();
 			bind_data.check_overflow = false;
 		}
-		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType()));
+		expr.function.SetFunctionCallback(GetScalarIntegerFunction<BASEOP>(expr.GetReturnType().InternalType()));
 	}
-	auto result = NumericStats::CreateEmpty(expr.return_type);
+	auto result = NumericStats::CreateEmpty(expr.GetReturnType());
 	NumericStats::SetMin(result, new_min);
 	NumericStats::SetMax(result, new_max);
 	result.CombineValidity(lstats, rstats);
@@ -199,13 +199,14 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 	// get the max width and scale of the input arguments
 	uint8_t max_width = 0, max_scale = 0, max_width_over_scale = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
 		uint8_t width, scale;
-		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal.", arguments[i]->return_type.ToString());
+			throw InternalException("Could not convert type %s to a decimal.",
+			                        arguments[i]->GetReturnType().ToString());
 		}
 		max_width = MaxValue<uint8_t>(width, max_width);
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
@@ -233,7 +234,7 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		// first check if the cast is necessary
 		// if the argument has a matching scale and internal type as the output type, no casting is necessary
-		auto &argument_type = arguments[i]->return_type;
+		auto &argument_type = arguments[i]->GetReturnType();
 		uint8_t width, scale;
 		argument_type.GetDecimalProperties(width, scale);
 		if (scale == DecimalType::GetScale(result_type) && argument_type.InternalType() == result_type.InternalType()) {
@@ -272,7 +273,7 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(BindScalarFunctionInput &input) 
 }
 
 void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                const ScalarFunction &function) {
+                                const BoundScalarFunction &function) {
 	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
 	serializer.WriteProperty(100, "check_overflow", bind_data.check_overflow);
 	serializer.WriteProperty(101, "return_type", function.GetReturnType());
@@ -281,7 +282,7 @@ void SerializeDecimalArithmetic(Serializer &serializer, const optional_ptr<Funct
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, ScalarFunction &bound_function) {
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer, BoundScalarFunction &bound_function) {
 	//	// re-change the function pointers
 	auto check_overflow = deserializer.ReadProperty<bool>(100, "check_overflow");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
@@ -304,8 +305,8 @@ unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	bound_function.SetReturnType(arguments[0]->return_type);
-	bound_function.GetArguments()[0] = arguments[0]->return_type;
+	bound_function.SetReturnType(arguments[0]->GetReturnType());
+	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	return nullptr;
 }
 
@@ -313,11 +314,11 @@ unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
-	if (type.id() == LogicalTypeId::DECIMAL) {
-		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind);
-	} else {
-		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
-	}
+	auto fn = type.id() == LogicalTypeId::DECIMAL
+	              ? ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind)
+	              : ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
+	fn.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
+	return fn;
 }
 
 static void BignumAdd(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -352,6 +353,8 @@ static void BignumNegate(DataChunk &args, ExpressionState &state, Vector &result
 }
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
+	const auto inc = ArgProperties().StrictlyIncreasing();
+	const auto unset = ArgProperties();
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
 			auto function = ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
@@ -359,6 +362,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetFallible();
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>);
+			function.SetArgProperties({inc, inc});
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
@@ -366,11 +370,13 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			                        nullptr,
 			                        PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		} else {
 			ScalarFunction function("+", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		}
 	}
@@ -380,6 +386,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 		if (right_type.id() == LogicalTypeId::BIGNUM) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::BIGNUM, BignumAdd);
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		}
 		break;
@@ -389,11 +396,15 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::DATE,
 			                        ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, AddOperator>);
 			function.SetFallible();
+			// INTERVAL ordering uses 30-day months but DATE arithmetic uses calendar months,
+			// e.g. '2025-02-01' + INTERVAL '29 days' = '2025-03-02' > + INTERVAL '1 month' = '2025-03-01'.
+			function.SetArgProperties({inc, unset});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
@@ -401,6 +412,8 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			function.SetFallible();
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME_TZ) {
+			// DATE + TIME_TZ -> TIMESTAMP_TZ orders in UTC, but TIME_TZ ordering does not agree
+			// with UTC instant ordering — corner-evaluation picks the wrong extremum.
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP_TZ,
 			                        ScalarFunction::BinaryFunction<date_t, dtime_tz_t, timestamp_t, AddOperator>);
 			function.SetFallible();
@@ -412,6 +425,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, right_type,
 			                        ScalarFunction::BinaryFunction<int32_t, date_t, date_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		}
 		break;
@@ -420,13 +434,16 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::INTERVAL,
 			                        ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({inc, inc});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::DATE) {
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, date_t, timestamp_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({unset, inc});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::TIME) {
+			// TIME +/- INTERVAL wraps modulo 24h.
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIME,
 			                        ScalarFunction::BinaryFunction<interval_t, dtime_t, dtime_t, AddTimeOperator>);
 			function.SetFallible();
@@ -441,6 +458,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({unset, inc});
 			return function;
 		}
 		break;
@@ -476,6 +494,7 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 			ScalarFunction function("+", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
 			function.SetFallible();
+			function.SetArgProperties({inc, unset});
 			return function;
 		}
 		break;
@@ -567,7 +586,7 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 
 	auto bind_data = make_uniq<DecimalNegateBindData>();
 
-	auto &decimal_type = arguments[0]->return_type;
+	auto &decimal_type = arguments[0]->GetReturnType();
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
@@ -629,79 +648,26 @@ static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input
 	return nullptr;
 }
 
-struct NegatePropagateStatistics {
-	template <class T>
-	static bool Operation(const LogicalType &type, BaseStatistics &istats, Value &new_min, Value &new_max) {
-		auto max_value = NumericStats::GetMax<T>(istats);
-		auto min_value = NumericStats::GetMin<T>(istats);
-		if (!NegateOperator::CanNegate<T>(min_value) || !NegateOperator::CanNegate<T>(max_value)) {
-			return true;
-		}
-		// new min is -max
-		new_min = Value::Numeric(type, NegateOperator::Operation<T, T>(max_value));
-		// new max is -min
-		new_max = Value::Numeric(type, NegateOperator::Operation<T, T>(min_value));
-		return false;
-	}
-};
-
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-	auto &child_stats = input.child_stats;
-	auto &expr = input.expr;
-	D_ASSERT(child_stats.size() == 1);
-	// can only propagate stats if the children have stats
-	auto &istats = child_stats[0];
-	Value new_min, new_max;
-	bool potential_overflow = true;
-	if (NumericStats::HasMinMax(istats)) {
-		switch (expr.return_type.InternalType()) {
-		case PhysicalType::INT8:
-			potential_overflow =
-			    NegatePropagateStatistics::Operation<int8_t>(expr.return_type, istats, new_min, new_max);
-			break;
-		case PhysicalType::INT16:
-			potential_overflow =
-			    NegatePropagateStatistics::Operation<int16_t>(expr.return_type, istats, new_min, new_max);
-			break;
-		case PhysicalType::INT32:
-			potential_overflow =
-			    NegatePropagateStatistics::Operation<int32_t>(expr.return_type, istats, new_min, new_max);
-			break;
-		case PhysicalType::INT64:
-			potential_overflow =
-			    NegatePropagateStatistics::Operation<int64_t>(expr.return_type, istats, new_min, new_max);
-			break;
-		default:
-			return nullptr;
-		}
-	}
-	if (potential_overflow) {
-		new_min = Value(expr.return_type);
-		new_max = Value(expr.return_type);
-	}
-	auto stats = NumericStats::CreateEmpty(expr.return_type);
-	NumericStats::SetMin(stats, new_min);
-	NumericStats::SetMax(stats, new_max);
-	stats.CopyValidity(istats);
-	return stats.ToUnique();
-}
-
 ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		ScalarFunction func("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind, NegateBindStatistics);
+		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind);
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::BIGNUM) {
 		ScalarFunction func("+", {type}, LogicalType::BIGNUM, BignumNegate);
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else {
 		D_ASSERT(type.IsNumeric());
 		ScalarFunction func("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type),
-		                    IntegerNegateBind, NegateBindStatistics);
+		                    IntegerNegateBind);
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	}
 }
@@ -715,6 +681,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			function.SetSerializeCallback(SerializeDecimalArithmetic);
 			function.SetDeserializeCallback(
 			    DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>);
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (left_type.IsIntegral()) {
 			ScalarFunction function(
@@ -722,12 +689,14 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 
 		} else {
 			ScalarFunction function("-", {left_type, right_type}, left_type,
 			                        GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		}
 	}
@@ -735,6 +704,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 	switch (left_type.id()) {
 	case LogicalTypeId::BIGNUM: {
 		ScalarFunction function("-", {left_type, right_type}, left_type, BignumSubtract);
+		function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 		return function;
 	}
 	case LogicalTypeId::DATE:
@@ -742,17 +712,22 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::BIGINT,
 			                        ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 
 		} else if (right_type.id() == LogicalTypeId::INTEGER) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::DATE,
 			                        ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			                        ScalarFunction::BinaryFunction<date_t, interval_t, timestamp_t, SubtractOperator>);
 			function.SetFallible();
+			// Monotonic in DATE only; INTERVAL ordering uses 30-day months but DATE arithmetic uses
+			// calendar months so monotonicity in the INTERVAL arg is broken (see OperatorAddFun).
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
 			return function;
 		}
 		break;
@@ -762,12 +737,15 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::INTERVAL,
 			    ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			ScalarFunction function(
 			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
 			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 			function.SetFallible();
+			// Monotonic in TIMESTAMP only; see DATE - INTERVAL above.
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties()});
 			return function;
 		}
 		break;
@@ -777,6 +755,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::INTERVAL,
 			    ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
 			function.SetFallible();
+			function.SetArgProperties({ArgProperties().StrictlyIncreasing(), ArgProperties().StrictlyDecreasing()});
 			return function;
 		}
 		break;
@@ -785,6 +764,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			ScalarFunction function("-", {left_type, right_type}, LogicalType::TIME,
 			                        ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
 			function.SetFallible();
+			// TIME - INTERVAL wraps modulo 24h (e.g. 04:00 - INTERVAL '5 hours' = 23:00), so monotonicity
+			// in either argument does not hold.
 			return function;
 		}
 		break;
@@ -794,6 +775,7 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &left_type, const
 			    "-", {left_type, right_type}, LogicalType::TIME_TZ,
 			    ScalarFunction::BinaryFunction<dtime_tz_t, interval_t, dtime_tz_t, SubtractTimeOperator>);
 			function.SetFallible();
+			// TIME_TZ - INTERVAL wraps modulo 24h, same reasoning as TIME above.
 			return function;
 		}
 		break;
@@ -886,13 +868,14 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	uint8_t result_width = 0, result_scale = 0;
 	uint8_t max_width = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arguments[i]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			continue;
 		}
 		uint8_t width, scale;
-		auto can_convert = arguments[i]->return_type.GetDecimalProperties(width, scale);
+		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal?", arguments[i]->return_type.ToString());
+			throw InternalException("Could not convert type %s to a decimal?",
+			                        arguments[i]->GetReturnType().ToString());
 		}
 		if (width > max_width) {
 			max_width = width;
@@ -921,7 +904,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 	// since our scale is the summation of our input scales, we do not need to cast to the result scale
 	// however, we might need to cast to the correct internal type
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		auto &argument_type = arguments[i]->return_type;
+		auto &argument_type = arguments[i]->GetReturnType();
 		if (argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.GetArguments()[i] = argument_type;
 		} else {

@@ -5,9 +5,6 @@
 load {TEST_DIR}/test_metadata_info.db
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER)
 
 statement ok

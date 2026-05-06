@@ -2,9 +2,6 @@
 # description: Issue #2965
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select cast(100000000000000000000 as double) < cast(99999999999999999999.99999 as double);
 ----

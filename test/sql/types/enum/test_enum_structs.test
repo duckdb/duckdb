@@ -2,9 +2,6 @@
 # description: ENUM types used inside structs
 # group: [enum]
 
-statement ok
-PRAGMA enable_verification
-
 # FIXME: this test fails with the latest storage version due to the introduced dependencies
 statement ok
 SET storage_compatibility_version='v0.10.2';

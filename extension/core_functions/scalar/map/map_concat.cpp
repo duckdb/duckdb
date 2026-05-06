@@ -131,7 +131,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 		throw InvalidInputException("The provided amount of arguments is incorrect, please provide 2 or more maps");
 	}
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		// Prepared statement
 		bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);
 		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
@@ -144,7 +144,7 @@ unique_ptr<FunctionData> MapConcatBind(BindScalarFunctionInput &input) {
 	// Check and verify that all the maps are of the same type
 	for (idx_t i = 0; i < arg_count; i++) {
 		auto &arg = arguments[i];
-		auto &map = arg->return_type;
+		auto &map = arg->GetReturnType();
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
 			bound_function.GetArguments().emplace_back(LogicalTypeId::UNKNOWN);

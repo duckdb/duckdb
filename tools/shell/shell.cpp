@@ -1015,6 +1015,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
+			// Reset before bind; the `_` replacement scan sets it to true if it fires.
+			last_result_referenced = false;
 			auto rc = ExecuteStatement(std::move(statement));
 			if (rc != SuccessState::SUCCESS) {
 				return rc;

@@ -239,14 +239,14 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 	}
 };
 
-LogicalType GetAvgStateType(const AggregateFunction &function) {
+LogicalType GetAvgStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::UBIGINT);
 	children.emplace_back("value", function.GetArguments()[0]);
 	return LogicalType::STRUCT(std::move(children));
 }
 
-LogicalType GetKahanAvgStateType(const AggregateFunction &function) {
+LogicalType GetKahanAvgStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> children;
 	children.emplace_back("count", LogicalType::UBIGINT);
 	children.emplace_back("value", LogicalType::DOUBLE);
@@ -289,9 +289,9 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->return_type;
-	function = GetAverageAggregate(decimal_type.InternalType());
-	function.name = "avg";
+	auto decimal_type = arguments[0]->GetReturnType();
+	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
+	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
 	function.SetReturnType(LogicalType::DOUBLE);
 	return make_uniq<AverageDecimalBindData>(

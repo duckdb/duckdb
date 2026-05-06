@@ -3,9 +3,6 @@
 # group: [parquet]
 
 #
-statement ok
-PRAGMA enable_verification
-
 require parquet
 
 query IIII

@@ -85,6 +85,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -209,6 +210,7 @@ constexpr const LogicalTypeId LogicalType::TIME_NS;
 
 constexpr const LogicalTypeId LogicalType::TIME_TZ;
 constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ_NS;
 
 constexpr const LogicalTypeId LogicalType::HASH;
 constexpr const LogicalTypeId LogicalType::POINTER;
@@ -259,12 +261,12 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalTypeId::FLOAT,     LogicalTypeId::DOUBLE,        LogicalTypeId::CHAR,
 	    LogicalTypeId::VARCHAR,   LogicalTypeId::BLOB,          LogicalTypeId::INTERVAL,
 	    LogicalTypeId::UTINYINT,  LogicalTypeId::USMALLINT,     LogicalTypeId::UINTEGER,
-	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIME_TZ,
-	    LogicalTypeId::TIME_NS,   LogicalTypeId::BIT,           LogicalTypeId::BIGNUM,
-	    LogicalTypeId::UHUGEINT,  LogicalTypeId::HUGEINT,       LogicalTypeId::UUID,
-	    LogicalTypeId::GEOMETRY,  LogicalTypeId::STRUCT,        LogicalTypeId::LIST,
-	    LogicalTypeId::MAP,       LogicalTypeId::ENUM,          LogicalTypeId::UNION,
-	    LogicalTypeId::ARRAY,     LogicalTypeId::VARIANT,
+	    LogicalTypeId::UBIGINT,   LogicalTypeId::TIMESTAMP_TZ,  LogicalTypeId::TIMESTAMP_TZ_NS,
+	    LogicalTypeId::TIME_TZ,   LogicalTypeId::TIME_NS,       LogicalTypeId::BIT,
+	    LogicalTypeId::BIGNUM,    LogicalTypeId::UHUGEINT,      LogicalTypeId::HUGEINT,
+	    LogicalTypeId::UUID,      LogicalTypeId::GEOMETRY,      LogicalTypeId::STRUCT,
+	    LogicalTypeId::LIST,      LogicalTypeId::MAP,           LogicalTypeId::ENUM,
+	    LogicalTypeId::UNION,     LogicalTypeId::ARRAY,         LogicalTypeId::VARIANT,
 	};
 	return types;
 }
@@ -489,7 +491,7 @@ string LogicalType::ToString() const {
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += KeywordHelper::WriteQuoted(EnumType::GetString(*this, i).GetString(), '\'');
+			ret += SQLString(EnumType::GetString(*this, i).GetString());
 		}
 		ret += ")";
 		return ret;
@@ -500,7 +502,7 @@ string LogicalType::ToString() const {
 		}
 
 		auto &expr = UnboundType::GetTypeExpression(*this);
-		if (expr->type != ExpressionType::TYPE) {
+		if (expr->GetExpressionType() != ExpressionType::TYPE) {
 			return "(" + expr->ToString() + ")";
 		} else {
 			return expr->ToString();
@@ -526,7 +528,7 @@ string LogicalType::ToString() const {
 			return "GEOMETRY";
 		}
 		auto &crs = GeoType::GetCRS(*this);
-		auto crs_text = KeywordHelper::WriteQuoted(crs.GetDefinition(), '\'');
+		auto crs_text = SQLString(crs.GetDefinition());
 		return StringUtil::Format("GEOMETRY(%s)", crs_text);
 	}
 	default:
@@ -638,6 +640,7 @@ bool LogicalType::IsTemporal() const {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -1242,6 +1245,7 @@ static idx_t GetLogicalTypeScore(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return 55;
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return 56;
 	case LogicalTypeId::INTERVAL:
 		return 58;
@@ -2048,7 +2052,7 @@ LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
 }
 
 static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
-	if (expr.type != ExpressionType::TYPE) {
+	if (expr.GetExpressionType() != ExpressionType::TYPE) {
 		throw InvalidInputException("Cannot default bind unbound type with non-type expression");
 	}
 	const auto &type_expr = expr.Cast<TypeExpression>();
@@ -2066,7 +2070,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 		} break;
 		case ExpressionType::VALUE_CONSTANT: {
 			auto &const_expr = arg->Cast<ConstantExpression>();
-			bound_args.emplace_back(arg->GetName(), const_expr.value);
+			bound_args.emplace_back(arg->GetName(), const_expr.GetValue());
 		} break;
 		default:
 			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");

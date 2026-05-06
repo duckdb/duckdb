@@ -18,14 +18,14 @@ namespace duckdb {
 namespace {
 
 bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression &expr, const string &target_name) {
-	if (expr.function.name == target_name) {
-		D_ASSERT(!expr.children.empty() && expr.children[0]->return_type.id() == LogicalTypeId::LIST);
+	if (expr.function.GetName() == target_name) {
+		D_ASSERT(!expr.children.empty() && expr.children[0]->GetReturnType().id() == LogicalTypeId::LIST);
 		return true;
 	}
 
 	// Compare function name with catalog to recognize aliases
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.name,
+	auto entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, expr.function.GetName(),
 	                                                          OnEntryNotFound::RETURN_NULL);
 	if (!entry) {
 		return false;
@@ -37,7 +37,7 @@ bool IsTargetListFunction(ClientContext &context, const BoundFunctionExpression 
 }
 
 bool IsStructPack(const BoundFunctionExpression &expr) {
-	return expr.function.name == "struct_pack";
+	return expr.function.GetName() == "struct_pack";
 }
 
 optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
@@ -49,7 +49,7 @@ optional_ptr<Expression> UnwrapCasts(optional_ptr<Expression> expr) {
 }
 
 optional_ptr<Expression> FindStructPackChildByName(BoundFunctionExpression &struct_pack, const string &name) {
-	D_ASSERT(struct_pack.return_type.id() == LogicalTypeId::STRUCT);
+	D_ASSERT(struct_pack.GetReturnType().id() == LogicalTypeId::STRUCT);
 	for (auto &child : struct_pack.children) {
 		if (child->GetAlias() == name) {
 			return child.get();
@@ -98,7 +98,7 @@ bool MatchesStructFieldProjection(Expression &expr, const string &field_name) {
 		return false;
 	}
 	auto &extract_expr = base->Cast<BoundFunctionExpression>();
-	if (extract_expr.function.name != "struct_extract" || extract_expr.children.size() != 2) {
+	if (extract_expr.function.GetName() != "struct_extract" || extract_expr.children.size() != 2) {
 		return false;
 	}
 
@@ -230,11 +230,14 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 		filter_children.push_back(std::move(inner_apply.children[i]));
 	}
 
-	auto filter_return_type = filter_children[0]->return_type;
+	auto filter_return_type = filter_children[0]->GetReturnType();
 	auto filter_bind_info = make_uniq<ListLambdaBindData>(filter_return_type, filter_expr.Copy(), inner_bind.has_index);
-	auto new_filter =
-	    make_uniq<BoundFunctionExpression>(filter_return_type, list_filter_expr.function, std::move(filter_children),
-	                                       std::move(filter_bind_info), list_filter_expr.is_operator);
+
+	auto new_func = list_filter_expr.function;
+	new_func.SetReturnType(filter_return_type);
+
+	auto new_filter = make_uniq<BoundFunctionExpression>(std::move(new_func), std::move(filter_children),
+	                                                     std::move(filter_bind_info), list_filter_expr.is_operator);
 
 	// Build list_apply(list_filter(...), lambda result_expr)
 	vector<unique_ptr<Expression>> apply_children;
@@ -244,15 +247,15 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 		apply_children.push_back(std::move(captured_child));
 	}
 
-	auto apply_return_type = LogicalType::LIST(result_expr.return_type);
+	auto apply_return_type = LogicalType::LIST(result_expr.GetReturnType());
 	auto apply_lambda = result_expr.Copy();
 	if (inner_bind.has_index) {
 		// The apply function included an index but it was not used. Adapt references to exclude index
 		RemoveIndexInputSlot(apply_lambda);
 	}
 	auto apply_bind_info = make_uniq<ListLambdaBindData>(apply_return_type, std::move(apply_lambda));
-	return make_uniq<BoundFunctionExpression>(apply_return_type, root.function, std::move(apply_children),
-	                                          std::move(apply_bind_info), root.is_operator);
+	return make_uniq<BoundFunctionExpression>(root.function, std::move(apply_children), std::move(apply_bind_info),
+	                                          root.is_operator);
 }
 
 } // namespace

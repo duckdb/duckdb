@@ -130,7 +130,7 @@ void CompressedMaterialization::UpdateAggregateStats(unique_ptr<LogicalOperator>
 		if (!group_stats[group_idx]) {
 			continue;
 		}
-		if (colref.return_type == group_stats[group_idx]->GetType()) {
+		if (colref.GetReturnType() == group_stats[group_idx]->GetType()) {
 			continue;
 		}
 		auto it = statistics_map.find(colref.binding);

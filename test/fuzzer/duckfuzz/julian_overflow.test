@@ -3,9 +3,6 @@
 # group: [duckfuzz]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 SELECT julian(c1) 
 FROM test_vector_types(CAST(NULL AS DATE)) AS test_vector_types(c1);
 

@@ -2,9 +2,6 @@
 # description: Test the LAST function
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 #
 # Test all types
 #

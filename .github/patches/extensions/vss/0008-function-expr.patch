@@ -1,0 +1,37 @@
+diff --git a/src/hnsw/hnsw_optimize_expr.cpp b/src/hnsw/hnsw_optimize_expr.cpp
+index d470fb0..6456c64 100644
+--- a/src/hnsw/hnsw_optimize_expr.cpp
++++ b/src/hnsw/hnsw_optimize_expr.cpp
+@@ -64,8 +64,8 @@ unique_ptr<Expression> CosineDistanceRule::Apply(LogicalOperator &op, vector<ref
+ 		}
+ 
+ 		changes_made = true;
+-		auto func = func_entry->functions.GetFunctionByArguments(context, arg_types);
+-		return make_uniq<BoundFunctionExpression>(similarity_expr.GetReturnType(), func, std::move(args), nullptr);
++		const auto &func = func_entry->functions.GetFunctionByArguments(context, arg_types);
++		return func.Bind(context, std::move(args));
+ 	}
+ 	return nullptr;
+ }
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index afb70c8..7108536 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -32,7 +32,7 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
+ 		return nullptr;
+ 	}
+ 
+-	auto func = func_entry->functions.GetFunctionByOffset(0);
++	const auto &func = func_entry->functions.GetFunctionByOffset(0);
+ 	vector<unique_ptr<Expression>> arguments;
+ 	arguments.push_back(std::move(elem_expr));
+ 
+@@ -79,7 +79,7 @@ public:
+ 			return false;
+ 		}
+ 		auto &agg_func_expr = agg_expr->Cast<BoundAggregateExpression>();
+-		if (agg_func_expr.function.name != "min_by") {
++		if (agg_func_expr.function.GetName() != "min_by") {
+ 			return false;
+ 		}
+ 		if (agg_func_expr.children.size() != 3) {

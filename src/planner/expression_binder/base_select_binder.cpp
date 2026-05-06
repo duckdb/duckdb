@@ -71,24 +71,28 @@ BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_pt
 }
 
 BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
-	if (op.children.empty()) {
-		throw InternalException("GROUPING requires at least one child");
-	}
 	if (node.groups.group_expressions.empty()) {
 		return BindResult(BinderException(op, "GROUPING statement cannot be used without groups"));
 	}
-	if (op.children.size() >= 64) {
-		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
-	}
 	vector<ProjectionIndex> group_indexes;
-	group_indexes.reserve(op.children.size());
-	for (auto &child : op.children) {
-		ExpressionBinder::QualifyColumnNames(binder, child);
-		auto idx = TryBindGroup(*child);
-		if (!idx.IsValid()) {
-			return BindResult(BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
+	if (op.children.empty()) {
+		// No arguments provided - use all group columns
+		for (idx_t i = 0; i < node.groups.group_expressions.size(); i++) {
+			group_indexes.push_back(ProjectionIndex(i));
 		}
-		group_indexes.push_back(idx);
+	} else {
+		for (auto &child : op.children) {
+			ExpressionBinder::QualifyColumnNames(binder, child);
+			auto idx = TryBindGroup(*child);
+			if (!idx.IsValid()) {
+				return BindResult(
+				    BinderException(op, "GROUPING child \"%s\" must be a grouping column", child->GetName()));
+			}
+			group_indexes.push_back(idx);
+		}
+	}
+	if (group_indexes.size() >= 64) {
+		return BindResult(BinderException(op, "GROUPING statement cannot have more than 64 groups"));
 	}
 	ProjectionIndex col_idx(node.grouping_functions.size());
 	node.grouping_functions.push_back(std::move(group_indexes));
@@ -101,7 +105,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
-		const auto return_type = node.aggregates[aggr_index]->return_type;
+		const auto return_type = node.aggregates[aggr_index]->GetReturnType();
 		auto uncollated_first_expression = make_uniq<BoundColumnRefExpression>(
 		    expr.GetName(), return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 
@@ -115,7 +119,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		// otherwise you can return the "first" of the uncollated expression.
 		auto &group = node.groups.group_expressions[group_index];
 		auto collated_group_expression = make_uniq<BoundColumnRefExpression>(
-		    expr.GetName(), group->return_type, ColumnBinding(node.group_index, group_index), depth);
+		    expr.GetName(), group->GetReturnType(), ColumnBinding(node.group_index, group_index), depth);
 
 		auto sql_null = make_uniq<BoundConstantExpression>(Value(return_type));
 		auto when_expr = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
@@ -127,7 +131,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 		return BindResult(std::move(case_expr));
 	} else {
 		auto &group = node.groups.group_expressions[group_index];
-		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
+		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->GetReturnType(),
 		                                                      ColumnBinding(node.group_index, group_index), depth));
 	}
 }

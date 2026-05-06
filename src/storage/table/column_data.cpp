@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
@@ -33,7 +34,8 @@ static bool IsDirectNullCheckFilter(const TableFilter &filter) {
 			return false;
 		}
 		auto &op = expr->Cast<BoundOperatorExpression>();
-		if ((op.type != ExpressionType::OPERATOR_IS_NULL && op.type != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
 		    op.children.size() != 1) {
 			return false;
 		}
@@ -372,6 +374,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
                         SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
                         TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(scan_count, vdata);
@@ -380,7 +383,8 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                         SelectionVector &sel, idx_t s_count) {
-	Scan(transaction, vector_index, state, result);
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	FlatVector::SetSize(result, count_t(scan_count));
 	result.Slice(sel, s_count);
 }
 

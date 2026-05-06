@@ -44,6 +44,7 @@ private:
 	//! Propagate statistics through an operator
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalOperator &node, unique_ptr<LogicalOperator> &node_ptr);
 
+	unique_ptr<NodeStatistics> PropagateStatistics(LogicalCopyToFile &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalFilter &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalGet &op, unique_ptr<LogicalOperator> &node_ptr);
 	unique_ptr<NodeStatistics> PropagateStatistics(LogicalJoin &op, unique_ptr<LogicalOperator> &node_ptr);
@@ -70,9 +71,9 @@ private:
 	//! Update statistics from a filter between two stats
 	void UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type);
 	//! Update filter statistics from a generic comparison
-	void UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type);
+	void UpdateFilterStatistics(const Expression &left, const Expression &right, ExpressionType comparison_type);
 	//! Update filter statistics from an expression
-	void UpdateFilterStatistics(Expression &condition);
+	void UpdateFilterStatistics(const Expression &condition);
 	//! Set the statistics of a specific column binding to not contain null values
 	void SetStatisticsNotNull(ColumnBinding binding);
 	//! Propagate a filter condition

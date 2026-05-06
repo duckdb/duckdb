@@ -73,7 +73,7 @@ public:
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
-			update_types.push_back(expr->return_type);
+			update_types.push_back(expr->GetReturnType());
 		}
 		update_chunk.Initialize(allocator, update_types);
 

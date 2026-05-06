@@ -8,9 +8,6 @@ mode skip
 # This is especially noticeable for small tables and their samples
 require vector_size 2048
 
-statement ok
-PRAGMA enable_verification
-
 load {TEST_DIR}/test_samples_basic.db
 
 query I

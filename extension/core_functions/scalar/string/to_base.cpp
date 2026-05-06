@@ -12,6 +12,7 @@ static unique_ptr<FunctionData> ToBaseBind(BindScalarFunctionInput &input) {
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
 	if (arguments.size() == 2) {
 		arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::INTEGER(0)));
+		input.GetBoundFunction().GetArguments().push_back(LogicalType::INTEGER);
 	}
 	return nullptr;
 }

@@ -4,9 +4,6 @@
 
 require json
 
-statement ok
-pragma enable_verification
-
 query I
 SELECT data FROM read_ndjson('{DATA_DIR}/json/union.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----

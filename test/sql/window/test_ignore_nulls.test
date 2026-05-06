@@ -2,9 +2,6 @@
 # description: Test IGNORE NULLS window syntax
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 # Issue #2549
 statement ok
 CREATE TABLE issue2549 AS SELECT * FROM (VALUES

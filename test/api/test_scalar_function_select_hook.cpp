@@ -14,36 +14,30 @@ struct IsEvenOperator {
 };
 
 static void IsEvenFunction(DataChunk &args, ExpressionState &, Vector &result) {
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-
-	UnifiedVectorFormat data;
-	args.data[0].ToUnifiedFormat(args.size(), data);
-	auto input_data = UnifiedVectorFormat::GetData<int32_t>(data);
-	auto result_data = FlatVector::GetDataMutable<bool>(result);
-	auto &result_validity = FlatVector::ValidityMutable(result);
-
-	if (data.validity.CanHaveNull()) {
-		result_validity.Copy(data.validity, args.size());
-	} else {
-		result_validity.SetAllValid(args.size());
-	}
+	auto input_data = args.data[0].Values<int32_t>(args.size());
+	auto result_data = FlatVector::Writer<bool>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto idx = data.sel->get_index(i);
-		result_data[i] = data.validity.RowIsValid(idx) && IsEvenOperator::Operation(input_data[idx]);
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			result_data.WriteNull();
+			continue;
+		}
+		result_data.WriteValue(IsEvenOperator::Operation(input_val.GetValue()));
 	}
 }
 
 static idx_t IsEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionVector *true_sel,
                                   SelectionVector *false_sel) {
-	UnifiedVectorFormat data;
-	args.data[0].ToUnifiedFormat(args.size(), data);
-	auto input_data = UnifiedVectorFormat::GetData<int32_t>(data);
+	auto input_data = args.data[0].Values<int32_t>(args.size());
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto idx = data.sel->get_index(i);
-		if (data.validity.RowIsValid(idx) && IsEvenOperator::Operation(input_data[idx])) {
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			continue;
+		}
+		if (IsEvenOperator::Operation(input_val.GetValue())) {
 			if (true_sel) {
 				true_sel->set_index(true_count, i);
 			}
@@ -57,15 +51,20 @@ static idx_t IsEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionV
 
 static idx_t NullOrEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
-	UnifiedVectorFormat data;
-	args.data[0].ToUnifiedFormat(args.size(), data);
-	auto input_data = UnifiedVectorFormat::GetData<int32_t>(data);
+	auto input_data = args.data[0].Values<int32_t>(args.size());
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto idx = data.sel->get_index(i);
-		if (!data.validity.RowIsValid(idx) || IsEvenOperator::Operation(input_data[idx])) {
+		auto input_val = input_data[i];
+		if (!input_val.IsValid()) {
+			if (true_sel) {
+				true_sel->set_index(true_count, i);
+			}
+			true_count++;
+			continue;
+		}
+		if (IsEvenOperator::Operation(input_val.GetValue())) {
 			if (true_sel) {
 				true_sel->set_index(true_count, i);
 			}
@@ -88,7 +87,6 @@ static void RegisterScalarFunction(Connection &con, ScalarFunction function) {
 TEST_CASE("Test scalar function select hook fallback paths", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	RegisterScalarFunction(
 	    con, ScalarFunction("is_even_function_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN, IsEvenFunction));
@@ -115,7 +113,6 @@ TEST_CASE("Test scalar function select hook fallback paths", "[api]") {
 TEST_CASE("Test scalar function select hook with special null handling", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	ScalarFunction select_only_special("null_or_even_select_only", {LogicalType::INTEGER}, LogicalType::BOOLEAN,
 	                                   nullptr);

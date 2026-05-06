@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/union_vector.hpp"
 #include "duckdb/common/vector/dictionary_vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
@@ -81,6 +82,7 @@ void UnionVector::SetToMember(Vector &union_vector, union_tag_t tag, Vector &mem
 			ConstantVector::SetNull(member, true);
 		}
 	}
+	FlatVector::SetSize(union_vector, count_t(count));
 }
 
 bool UnionVector::TryGetTag(const Vector &vector, idx_t index, union_tag_t &result) {

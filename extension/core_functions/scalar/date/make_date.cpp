@@ -1,12 +1,10 @@
-#include "duckdb/common/vector/map_vector.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector_operations/senary_executor.hpp"
+#include "duckdb/common/vector_operations/variadic_executor.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cmath>
@@ -54,14 +52,20 @@ void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &res
 	// this should be guaranteed by the binder
 	D_ASSERT(input.ColumnCount() == 1);
 	auto &vec = input.data[0];
+	const auto count = input.size();
 
-	auto &children = StructVector::GetEntries(vec);
-	D_ASSERT(children.size() == 3);
-	auto &yyyy = children[0];
-	auto &mm = children[1];
-	auto &dd = children[2];
-
-	TernaryExecutor::Execute<T, T, T, date_t>(yyyy, mm, dd, result, input.size(), FromDateCast<T>);
+	auto iter = vec.Values<VectorStructType<T, T, T>>(count);
+	auto writer = FlatVector::Writer<date_t>(result, count);
+	for (const auto entry : iter) {
+		const auto y = entry.template GetChildValue<0>();
+		const auto m = entry.template GetChildValue<1>();
+		const auto d = entry.template GetChildValue<2>();
+		if (!entry.IsValid() || !y.IsValid() || !m.IsValid() || !d.IsValid()) {
+			writer.WriteNull();
+			continue;
+		}
+		writer.WriteValue(FromDateCast<T>(y.GetValueUnsafe(), m.GetValueUnsafe(), d.GetValueUnsafe()));
+	}
 }
 
 struct MakeTimeOperator {
@@ -125,7 +129,7 @@ void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vector &resu
 	D_ASSERT(input.ColumnCount() == 6);
 
 	auto func = MakeTimestampOperator::Operation<T, T, T, T, T, double, timestamp_t>;
-	SenaryExecutor::Execute<T, T, T, T, T, double, timestamp_t>(input, result, func);
+	VariadicExecutor::Execute<timestamp_t, T, T, T, T, T, double>(input, result, func);
 }
 
 template <typename T>
@@ -151,6 +155,7 @@ ScalarFunctionSet MakeDateFun::GetFunctions() {
 	    ScalarFunction({LogicalType::STRUCT(make_date_children)}, LogicalType::DATE, ExecuteStructMakeDate<int64_t>));
 	for (auto &func : make_date.functions) {
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	}
 	return make_date;
 }
@@ -172,6 +177,7 @@ ScalarFunctionSet MakeTimestampFun::GetFunctions() {
 
 	for (auto &func : operator_set.functions) {
 		func.SetFallible();
+		func.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	}
 	return operator_set;
 }
@@ -180,6 +186,7 @@ ScalarFunctionSet MakeTimestampNsFun::GetFunctions() {
 	ScalarFunctionSet operator_set("make_timestamp_ns");
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_NS, ExecuteMakeTimestampNs<int64_t>));
+	operator_set.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return operator_set;
 }
 

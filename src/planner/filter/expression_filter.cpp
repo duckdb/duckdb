@@ -140,11 +140,11 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpr
 	vector<unique_ptr<BaseStatistics>> owned_stats;
 	optional_ptr<const BaseStatistics> filter_stats;
 	optional_ptr<const BoundConstantExpression> constant_expr;
-	auto comparison_type = comp_expr.type;
-	if (comp_expr.right->type == ExpressionType::VALUE_CONSTANT) {
+	auto comparison_type = comp_expr.GetExpressionType();
+	if (comp_expr.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		filter_stats = TryGetFilterStats(*comp_expr.left, stats, owned_stats);
 		constant_expr = &comp_expr.right->Cast<BoundConstantExpression>();
-	} else if (comp_expr.left->type == ExpressionType::VALUE_CONSTANT) {
+	} else if (comp_expr.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		filter_stats = TryGetFilterStats(*comp_expr.right, stats, owned_stats);
 		constant_expr = &comp_expr.left->Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
@@ -208,7 +208,7 @@ static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpres
 	vector<Value> values;
 	values.reserve(op_expr.children.size() - 1);
 	for (idx_t i = 1; i < op_expr.children.size(); i++) {
-		if (op_expr.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+		if (op_expr.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		auto &value = op_expr.children[i]->Cast<BoundConstantExpression>().value;
@@ -231,10 +231,10 @@ static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpres
 }
 
 static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
-	switch (op_expr.type) {
+	switch (op_expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
-		return CheckNullOperatorStatistics(op_expr, stats, op_expr.type);
+		return CheckNullOperatorStatistics(op_expr, stats, op_expr.GetExpressionType());
 	case ExpressionType::COMPARE_IN:
 		return CheckInOperatorStatistics(op_expr, stats);
 	default:
@@ -243,7 +243,7 @@ static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpressi
 }
 
 static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionExpression &conj, BaseStatistics &stats) {
-	switch (conj.type) {
+	switch (conj.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		for (auto &child : conj.children) {
@@ -317,7 +317,7 @@ string ExpressionFilter::ToString(const string &column_name) const {
 
 void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
                                                   ExpressionType replace_type) {
-	if (expr->type == replace_type) {
+	if (expr->GetExpressionType() == replace_type) {
 		expr = column.Copy();
 		return;
 	}

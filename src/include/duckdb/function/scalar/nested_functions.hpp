@@ -67,12 +67,12 @@ struct VariableReturnBindData : public FunctionData {
 		return stype == other.stype;
 	}
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                      const ScalarFunction &function) {
+	                      const BoundScalarFunction &function) {
 		auto &info = bind_data->Cast<VariableReturnBindData>();
 		serializer.WriteProperty(100, "variable_return_type", info.stype);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, BoundScalarFunction &bound_function) {
 		auto stype = deserializer.ReadProperty<LogicalType>(100, "variable_return_type");
 		return make_uniq<VariableReturnBindData>(std::move(stype));
 	}

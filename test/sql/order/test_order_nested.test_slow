@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 # test all integral types and varchar, internal and external
 statement ok
 PRAGMA debug_force_external=true

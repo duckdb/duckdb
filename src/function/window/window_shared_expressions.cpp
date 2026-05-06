@@ -39,7 +39,7 @@ void WindowSharedExpressions::PrepareExecutors(Shared &shared, ExpressionExecuto
 	vector<LogicalType> types;
 	for (auto expr : sorted) {
 		exec.AddExpression(*expr);
-		types.emplace_back(expr->return_type);
+		types.emplace_back(expr->GetReturnType());
 	}
 
 	if (!types.empty()) {

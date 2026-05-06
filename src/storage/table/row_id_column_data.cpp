@@ -1,4 +1,6 @@
 #include "duckdb/storage/table/row_id_column_data.hpp"
+
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
@@ -82,6 +84,10 @@ void RowIdColumnData::Filter(TransactionData transaction, idx_t vector_index, Co
 	for (size_t sel_idx = 0; sel_idx < count; sel_idx++) {
 		result_data[sel.get_index(sel_idx)] = UnsafeNumericCast<int64_t>(current_row + sel.get_index(sel_idx));
 	}
+	// the writes above scatter into positions sel[0..count) which can be anywhere in [0, max_count),
+	// so the vector's logical size must cover the full max_count - using `count` would leave any
+	// sel index >= count looking out-of-bounds when later slices read through sel
+	FlatVector::SetSize(result, count_t(max_count));
 
 	// Was this filter always true? If so, we dont need to apply it
 	if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {

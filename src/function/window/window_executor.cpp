@@ -1,4 +1,6 @@
 #include "duckdb/function/window/window_executor.hpp"
+
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -38,6 +40,7 @@ void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChun
 
 	EvaluateInternal(context, eval_chunk, lbstate.state.bounds, result, row_idx, sink);
 
+	FlatVector::SetSize(result, count_t(eval_chunk.size()));
 	result.Verify(eval_chunk.size());
 }
 
@@ -47,7 +50,7 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, cons
     : client(client), executor(executor), payload_count(payload_count), partition_mask(partition_mask),
       order_mask(order_mask) {
 	for (const auto &child : executor.wexpr.children) {
-		arg_types.emplace_back(child->return_type);
+		arg_types.emplace_back(child->GetReturnType());
 	}
 }
 

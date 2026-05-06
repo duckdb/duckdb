@@ -3,9 +3,6 @@
 # group: [rigger]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE t0(c0 BOOLEAN UNIQUE, c1 TIMESTAMP, c2 VARCHAR, PRIMARY KEY(c1, c2, c0));;
 
 statement ok

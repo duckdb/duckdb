@@ -227,7 +227,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::DecorrelateIndependent(Binder
 	CorrelatedColumns correlated;
 	FlattenDependentJoins flatten(binder, correlated);
 	flatten.DecorrelateSubtree(plan, true, {});
-	return std::move(plan);
+	return plan;
 }
 
 vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<LogicalOperator> &plan,
@@ -285,13 +285,13 @@ vector<ColumnBinding> FlattenDependentJoins::DecorrelateSubtree(unique_ptr<Logic
 }
 
 // General-purpose Row Number Window Builder
-static unique_ptr<LogicalWindow> CreateRowNumberWindow(unique_ptr<LogicalOperator> child, TableIndex table_index,
+static unique_ptr<LogicalWindow> CreateRowNumberWindow(Binder &binder, unique_ptr<LogicalOperator> child,
+                                                       TableIndex table_index,
                                                        vector<unique_ptr<Expression>> partitions = {},
                                                        vector<BoundOrderByNode> orders = {}) {
 	auto window = make_uniq<LogicalWindow>(table_index);
-	auto rn_func = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
-	auto row_number = make_uniq<BoundWindowExpression>(LogicalType::BIGINT, nullptr, std::move(rn_func), nullptr);
 
+	auto row_number = RowNumberFun::GetFunction().Bind(binder.context);
 	row_number->partitions = std::move(partitions);
 	row_number->orders = std::move(orders);
 	row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
@@ -325,7 +325,7 @@ vector<ColumnBinding> FlattenDependentJoins::PrepareDependentJoinLeft(LogicalDep
 		// if we are not performing a delim join, we push a row_number() OVER() window operator on the LHS
 		// and perform all duplicate elimination on that row number instead
 		const auto &op_col = op.correlated_columns[op.correlated_columns.GetDelimIndex()];
-		op.children[0] = CreateRowNumberWindow(std::move(op.children[0]), op_col.binding.table_index);
+		op.children[0] = CreateRowNumberWindow(binder, std::move(op.children[0]), op_col.binding.table_index);
 	}
 	return state;
 }
@@ -520,8 +520,10 @@ void FlattenDependentJoins::AddCorrelatedFirstAggregates(LogicalAggregate &aggr,
 		auto colref = make_uniq<BoundColumnRefExpression>(col.name, col.type, state[i]);
 		vector<unique_ptr<Expression>> aggr_children;
 		aggr_children.push_back(std::move(colref));
-		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(first_aggregate), std::move(aggr_children),
-		                                                     nullptr, nullptr, AggregateType::NON_DISTINCT);
+
+		BoundAggregateFunction bound_func(first_aggregate);
+		auto first_fun = make_uniq<BoundAggregateExpression>(std::move(bound_func), std::move(aggr_children), nullptr,
+		                                                     nullptr, AggregateType::NON_DISTINCT);
 		aggr.expressions.push_back(std::move(first_fun));
 	}
 }
@@ -603,8 +605,18 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownAggregate(unique_ptr<Logica
 	}
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 		D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-		if (bound.function == CountFunctionBase::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+		auto &bound_func = aggr.expressions[i]->Cast<BoundAggregateExpression>().function;
+
+		auto count_fun = CountFunctionBase::GetFunction();
+		auto count_star_fun = CountStarFun::GetFunction();
+
+		const auto is_count_func =
+		    bound_func.GetName() == count_fun.name && bound_func.GetCallbacks() == count_fun.GetCallbacks();
+
+		const auto is_count_star_func =
+		    bound_func.GetName() == count_star_fun.name && bound_func.GetCallbacks() == count_star_fun.GetCallbacks();
+
+		if (is_count_func || is_count_star_func) {
 			replacement_map[ColumnBinding(aggr.aggregate_index, ProjectionIndex(i))] = i;
 		}
 	}
@@ -721,7 +733,7 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 		partitions.push_back(make_uniq<BoundColumnRefExpression>(col.name, col.type, state[GetDelimKeyIndex(i)]));
 	}
 
-	auto window = CreateRowNumberWindow(std::move(child), window_index, std::move(partitions),
+	auto window = CreateRowNumberWindow(binder, std::move(child), window_index, std::move(partitions),
 	                                    order_by ? std::move(order_by->orders) : vector<BoundOrderByNode>());
 
 	auto filter = make_uniq<LogicalFilter>();

@@ -2,9 +2,6 @@
 # description: Test handling of integer overflow in arithmetic
 # group: [overflow]
 
-statement ok
-PRAGMA enable_verification
-
 # addition
 # tinyint
 statement ok

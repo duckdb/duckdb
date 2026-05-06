@@ -3,9 +3,6 @@
 # group: [uhugeint]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE hugeints(g INTEGER, h UHUGEINT);
 
 statement ok

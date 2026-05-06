@@ -1,0 +1,13 @@
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index a6361c0..2828430 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -576,7 +576,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
+ 		auto name = Choose(names);
+ 		names.erase(std::find(names.begin(), names.end(), name));
+ 		auto expr = GenerateConstant();
+-		expr->alias = name;
++		expr->SetAlias(name);
+ 		children.push_back(std::move(expr));
+ 	}
+ 	result->function = make_uniq<FunctionExpression>(entry.name, std::move(children));

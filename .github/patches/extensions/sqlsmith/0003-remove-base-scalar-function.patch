@@ -1,0 +1,37 @@
+diff --git a/src/include/statement_generator.hpp b/src/include/statement_generator.hpp
+index 2b60c00..639860e 100644
+--- a/src/include/statement_generator.hpp
++++ b/src/include/statement_generator.hpp
+@@ -96,8 +96,8 @@ private:
+ 
+ 	void GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result);
+ 	void GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result);
+-	string GenerateTestAllTypes(BaseScalarFunction &base_function);
+-	string GenerateTestVectorTypes(BaseScalarFunction &base_function);
++	string GenerateTestAllTypes(SimpleFunction &base_function);
++	string GenerateTestVectorTypes(SimpleFunction &base_function);
+ 	string GenerateCast(const LogicalType &target, const string &source_name, bool add_varchar);
+ 	bool FunctionArgumentsAlwaysNull(const string &name);
+ 
+diff --git a/src/statement_generator.cpp b/src/statement_generator.cpp
+index ae18964..a6361c0 100644
+--- a/src/statement_generator.cpp
++++ b/src/statement_generator.cpp
+@@ -1277,7 +1277,7 @@ bool StatementGenerator::FunctionArgumentsAlwaysNull(const string &name) {
+ 
+ 	return always_null_functions.find(name) != always_null_functions.end();
+ }
+-string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_function) {
++string StatementGenerator::GenerateTestAllTypes(SimpleFunction &base_function) {
+ 	auto select = make_uniq<SelectStatement>();
+ 	auto node = make_uniq<SelectNode>();
+ 
+@@ -1310,7 +1310,7 @@ string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_functio
+ 	return select->ToString();
+ }
+ 
+-string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_function) {
++string StatementGenerator::GenerateTestVectorTypes(SimpleFunction &base_function) {
+ 	auto select = make_uniq<SelectStatement>();
+ 	auto node = make_uniq<SelectNode>();
+ 

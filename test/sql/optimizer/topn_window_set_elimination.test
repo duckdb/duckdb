@@ -3,9 +3,6 @@
 # group: [optimizer]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE or replace TABLE timeseries AS
 FROM (
     VALUES

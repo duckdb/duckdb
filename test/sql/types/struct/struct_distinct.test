@@ -2,9 +2,6 @@
 # description: Test STRUCT distinctions
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type <numeric>
 
 # Constant single integer column distinct

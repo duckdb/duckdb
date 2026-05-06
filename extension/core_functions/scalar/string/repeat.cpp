@@ -36,37 +36,38 @@ static void RepeatFunction(DataChunk &args, ExpressionState &, Vector &result) {
 static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	auto &list_vector = args.data[0];
 	auto &cnt_vector = args.data[1];
-
 	auto &source_child = ListVector::GetChildMutable(list_vector);
+	auto count = args.size();
 
-	idx_t current_size = ListVector::GetListSize(result);
-	BinaryExecutor::Execute<list_entry_t, int64_t, list_entry_t>(
-	    list_vector, cnt_vector, result, args.size(), [&](list_entry_t list_input, int64_t cnt) {
-		    idx_t copy_count = cnt <= 0 || list_input.length == 0 ? 0 : UnsafeNumericCast<idx_t>(cnt);
-		    idx_t result_length;
-		    if (!TryMultiplyOperator::Operation(list_input.length, copy_count, result_length)) {
-			    throw OutOfRangeException("Cannot create a list of size: '%d' * '%d', the result is too large",
-			                              list_input.length, copy_count);
-		    }
-		    idx_t new_size;
-		    if (!TryAddOperator::Operation(current_size, result_length, new_size)) {
-			    throw OutOfRangeException("Cannot create a list of size: '%d' + '%d', the result is too large",
-			                              current_size, result_length);
-		    }
-		    ListVector::Reserve(result, new_size);
-		    auto &result_child = ListVector::GetChildMutable(result);
-		    list_entry_t result_list;
-		    result_list.offset = current_size;
-		    result_list.length = result_length;
-		    for (idx_t i = 0; i < copy_count; i++) {
-			    // repeat the list contents "cnt" times
-			    VectorOperations::Copy(source_child, result_child, list_input.offset + list_input.length,
-			                           list_input.offset, current_size);
-			    current_size += list_input.length;
-		    }
-		    return result_list;
-	    });
-	ListVector::SetListSize(result, current_size);
+	auto list_entries = list_vector.Values<list_entry_t>(count);
+	auto cnt_entries = cnt_vector.Values<int64_t>(count);
+
+	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		auto list_entry = list_entries[i];
+		auto cnt_entry = cnt_entries[i];
+		if (!list_entry.IsValid() || !cnt_entry.IsValid()) {
+			result_writer.WriteNull();
+			continue;
+		}
+		const auto &list_input = list_entry.GetValue();
+		const auto cnt = cnt_entry.GetValue();
+		const idx_t copy_count = cnt <= 0 || list_input.length == 0 ? 0 : UnsafeNumericCast<idx_t>(cnt);
+		idx_t result_length;
+		if (!TryMultiplyOperator::Operation(list_input.length, copy_count, result_length)) {
+			throw OutOfRangeException("Cannot create a list of size: '%d' * '%d', the result is too large",
+			                          list_input.length, copy_count);
+		}
+		// reserve the worst-case child capacity up front so an absurd target
+		// size fails before we enter a 10^N-iteration Append loop
+		ListVector::Reserve(result, ListVector::GetListSize(result) + result_length);
+		auto list = result_writer.WriteDynamicList();
+		for (idx_t j = 0; j < copy_count; j++) {
+			list.Append(source_child, *FlatVector::IncrementalSelectionVector(), list_input.offset + list_input.length,
+			            list_input.offset, list_input.length);
+		}
+	}
+	result.Verify(count);
 }
 
 ScalarFunctionSet RepeatFun::GetFunctions() {

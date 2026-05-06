@@ -93,6 +93,9 @@ void VariantNormalizer::VisitTimestampNanos(timestamp_ns_t val, VariantNormalize
 void VariantNormalizer::VisitTimestampTZ(timestamp_tz_t val, VariantNormalizerState &state) {
 	VisitInteger(val, state);
 }
+void VariantNormalizer::VisitTimestampTZNanos(timestamp_tz_ns_t val, VariantNormalizerState &state) {
+	VisitInteger(val, state);
+}
 
 void VariantNormalizer::VisitString(const string_t &str, VariantNormalizerState &state) {
 	auto length = str.GetSize();

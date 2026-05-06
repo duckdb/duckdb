@@ -30,7 +30,8 @@ namespace duckdb {
 
 using ExpressionValueInformation = FilterCombiner::ExpressionValueInformation;
 
-ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, ExpressionValueInformation &right);
+static ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left,
+                                                     ExpressionValueInformation &right);
 
 FilterCombiner::FilterCombiner(ClientContext &context) : context(context) {
 }
@@ -200,7 +201,7 @@ static bool TryGetProjectionIndex(const Expression &expr, ProjectionIndex &resul
 	}
 	case ExpressionType::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.name == "struct_extract" || func.function.name == "struct_extract_at") {
+		if (func.function.GetName() == "struct_extract" || func.function.GetName() == "struct_extract_at") {
 			auto &child_expr = func.children[0];
 			return TryGetProjectionIndex(*child_expr, result);
 		}
@@ -307,7 +308,7 @@ bool FilterCombiner::FindNextLegalUTF8(string &prefix_string) {
 	return true;
 }
 
-bool TypeSupportsConstantFilter(const LogicalType &type) {
+static bool TypeSupportsConstantFilter(const LogicalType &type) {
 	if (TypeIsNumeric(type.InternalType())) {
 		return true;
 	}
@@ -362,7 +363,7 @@ FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &t
 void ReplaceWithBoundReference(unique_ptr<Expression> &root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &col_ref, unique_ptr<Expression> &expr) {
-		    expr = make_uniq<BoundReferenceExpression>(col_ref.alias, col_ref.return_type, 0ULL);
+		    expr = make_uniq<BoundReferenceExpression>(col_ref.GetAlias(), col_ref.GetReturnType(), 0ULL);
 	    });
 }
 
@@ -403,7 +404,7 @@ FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &tab
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.function.name != "prefix") {
+	if (func.function.GetName() != "prefix") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
@@ -439,7 +440,7 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.function.name != "~~") {
+	if (func.function.GetName() != "~~") {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
@@ -669,6 +670,7 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 			return -1;
 		}
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		// native unit: nanoseconds
 		switch (target) {
 		case LogicalTypeId::TIMESTAMP:
@@ -707,6 +709,7 @@ static int64_t GetTemporalCastMargin(LogicalTypeId source, LogicalTypeId target)
 		case LogicalTypeId::TIMESTAMP_NS:
 			return 0;
 		case LogicalTypeId::TIMESTAMP_TZ:
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
 			return 1;
 		default:
 			return -1;
@@ -723,6 +726,8 @@ static Value MakeTemporalValue(LogicalTypeId type_id, int64_t result) {
 		return Value::TIMESTAMP(timestamp_t(result));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(result));
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(result));
 	case LogicalTypeId::TIMESTAMP_MS:
 		return Value::TIMESTAMPMS(timestamp_ms_t(result));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -750,6 +755,9 @@ static bool AdjustTemporalValue(Value &val, int64_t margin) {
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
 		raw = val.GetValueUnsafe<timestamp_tz_t>().value;
+		break;
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		raw = val.GetValueUnsafe<timestamp_tz_ns_t>().value;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		raw = val.GetValueUnsafe<timestamp_ms_t>().value;
@@ -801,7 +809,7 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	auto &const_side = invert ? *comp.left : *comp.right;
 	auto &cast_expr = cast_side.Cast<BoundCastExpression>();
 	auto source_type = cast_expr.source_type();
-	auto &target_type = cast_expr.return_type;
+	auto &target_type = cast_expr.GetReturnType();
 	int64_t margin = GetTemporalCastMargin(source_type.id(), target_type.id());
 	if (margin < 0) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -951,7 +959,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// get the current bucket of constant values
 		D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
 		auto &info_list = constant_values.find(equivalence_set)->second;
-		if (node.return_type != info.constant.type()) {
+		if (node.GetReturnType() != info.constant.type()) {
 			return FilterResult::UNSUPPORTED;
 		}
 		// check the existing constant comparisons to see if we can do any pruning
@@ -1041,24 +1049,24 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
 		auto &comparison = expr.Cast<BoundBetweenExpression>();
 		//! check if one of the sides is a scalar value
-		bool lower_is_scalar = comparison.lower->IsFoldable();
-		bool upper_is_scalar = comparison.upper->IsFoldable();
+		bool lower_is_scalar = comparison.LowerBound().IsFoldable();
+		bool upper_is_scalar = comparison.UpperBound().IsFoldable();
 		if (lower_is_scalar || upper_is_scalar) {
 			//! comparison with scalar - break apart
-			auto &node = GetNode(*comparison.input);
+			auto &node = GetNode(*comparison.InputMutable());
 			idx_t equivalence_set = GetEquivalenceSet(node);
 			auto result = FilterResult::UNSATISFIABLE;
 
 			if (lower_is_scalar) {
-				auto scalar = comparison.lower.get();
+				auto &scalar = comparison.LowerBound();
 				Value constant_value;
-				if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
+				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
 				}
 
 				// create the ExpressionValueInformation
 				ExpressionValueInformation info;
-				if (comparison.lower_inclusive) {
+				if (comparison.LowerInclusive()) {
 					info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 				} else {
 					info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
@@ -1072,10 +1080,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(info_list, info);
 			} else {
 				D_ASSERT(upper_is_scalar);
-				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                             : ExpressionType::COMPARE_LESSTHAN;
-				auto left = comparison.lower->Copy();
-				auto right = comparison.input->Copy();
+				const auto type = comparison.UpperInclusive() ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                              : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.LowerBound().Copy();
+				auto right = comparison.Input().Copy();
 				auto lower_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*lower_comp);
 			}
@@ -1086,15 +1094,15 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 			}
 
 			if (upper_is_scalar) {
-				auto scalar = comparison.upper.get();
+				auto &scalar = comparison.UpperBound();
 				Value constant_value;
-				if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
+				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
 				}
 
 				// create the ExpressionValueInformation
 				ExpressionValueInformation info;
-				if (comparison.upper_inclusive) {
+				if (comparison.UpperInclusive()) {
 					info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 				} else {
 					info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
@@ -1107,10 +1115,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 			} else {
 				D_ASSERT(lower_is_scalar);
-				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                             : ExpressionType::COMPARE_LESSTHAN;
-				auto left = comparison.input->Copy();
-				auto right = comparison.upper->Copy();
+				const auto type = comparison.UpperInclusive() ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                              : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.Input().Copy();
+				auto right = comparison.UpperBound().Copy();
 				auto upper_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*upper_comp);
 			}
@@ -1146,7 +1154,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		}
 		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
 		for (auto &stored_exp : stored_expressions) {
-			reference<Expression> expr = stored_exp.first;
+			const_reference<Expression> expr = stored_exp.first;
 			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 				expr = *(right_node.get().Cast<BoundCastExpression>().child);
 			}
@@ -1157,7 +1165,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			if (st_col_ref.binding != col_ref.binding) {
 				continue;
 			}
-			if (bound_cast_expr.return_type != stored_exp.second->return_type) {
+			if (bound_cast_expr.GetReturnType() != stored_exp.second->GetReturnType()) {
 				continue;
 			}
 			bound_cast_expr.child = stored_exp.second->Copy();
@@ -1287,7 +1295,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 	return nullptr;
 }
 
-ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {
+static ValueComparisonResult InvertValueComparisonResult(ValueComparisonResult result) {
 	if (result == ValueComparisonResult::PRUNE_RIGHT) {
 		return ValueComparisonResult::PRUNE_LEFT;
 	}

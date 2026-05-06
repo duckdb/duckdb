@@ -4,9 +4,6 @@
 load {TEST_DIR}/mydb.db
 
 statement ok
-pragma enable_verification;
-
-statement ok
 CREATE TABLE test (x INT, y AS (x + 100));
 
 statement ok

@@ -2,9 +2,6 @@
 # description: Test aggregates on numeric limits
 # group: [group]
 
-statement ok
-PRAGMA enable_verification
-
 # TINYINT limits
 statement ok
 CREATE TABLE t(t_k0 TINYINT);

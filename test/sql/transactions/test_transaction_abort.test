@@ -2,9 +2,6 @@
 # description: Test transaction aborts after failures
 # group: [transactions]
 
-statement ok
-PRAGMA enable_verification
-
 # set up a table
 statement ok
 CREATE TABLE integers(i INTEGER PRIMARY KEY)

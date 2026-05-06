@@ -58,7 +58,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	bool all_constant = true;
 	idx_t constant_size = 0;
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		auto physical_type = arguments[i]->return_type.InternalType();
+		auto physical_type = arguments[i]->GetReturnType().InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
 		} else {
@@ -677,11 +677,11 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
+		auto result_data = FlatVector::Writer<string_t>(result, size);
 		for (idx_t r = 0; r < size; r++) {
 			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
-			result_data[r] = StringVector::EmptyString(result, blob_size);
-			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+			auto &empty_string = result_data.WriteEmptyString(blob_size);
+			data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
 #ifdef DEBUG
 			memset(data_pointers[r], 0xFF, blob_size);
 #endif
@@ -855,17 +855,17 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	}
 
 	const auto &sort_key_arg = *arguments[0];
-	if (sort_key_arg.return_type == LogicalType::BIGINT) {
+	if (sort_key_arg.GetReturnType() == LogicalType::BIGINT) {
 		if (!all_constant || constant_size > sizeof(int64_t)) {
 			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
 		}
-	} else if (sort_key_arg.return_type == LogicalType::BLOB) {
+	} else if (sort_key_arg.GetReturnType() == LogicalType::BLOB) {
 		if (all_constant && constant_size <= sizeof(int64_t)) {
 			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
 		}
 	} else {
 		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
-		                      sort_key_arg.return_type.ToString());
+		                      sort_key_arg.GetReturnType().ToString());
 	}
 	function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 

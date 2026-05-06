@@ -1,4 +1,5 @@
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -83,6 +84,17 @@ unique_ptr<LocalFunctionData> WriteBlobInitializeLocal(ExecutionContext &context
 	return make_uniq_base<LocalFunctionData, WriteBlobLocalState>();
 }
 
+void WriteBlobData(QueryContext &query_context, FileHandle &handle, data_ptr_t blob_ptr, idx_t blob_len) {
+	while (blob_len > 0) {
+		auto written = handle.Write(query_context, blob_ptr, blob_len);
+		if (written <= 0) {
+			throw IOException("Failed to write to file!");
+		}
+		blob_ptr += written;
+		blob_len -= written;
+	}
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Sink
 //----------------------------------------------------------------------------------------------------------------------
@@ -100,18 +112,49 @@ void WriteBlobSink(ExecutionContext &context, FunctionData &bind_data, GlobalFun
 	for (auto entry : input.data[0].Values<string_t>(input.size())) {
 		if (entry.IsValid()) {
 			auto &blob = entry.GetValue();
-			auto blob_len = blob.GetSize();
-			auto blob_ptr = blob.GetDataWriteable();
-			auto blob_end = blob_ptr + blob_len;
-
-			while (blob_ptr < blob_end) {
-				auto written = handle->Write(query_context, blob_ptr, blob_len);
-				if (written <= 0) {
-					throw IOException("Failed to write to file!");
-				}
-				blob_ptr += written;
-			}
+			WriteBlobData(query_context, *handle, data_ptr_cast(blob.GetDataWriteable()), blob.GetSize());
 		}
+	}
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Prepare Batch
+//----------------------------------------------------------------------------------------------------------------------
+struct WriteBlobPreparedBatch final : public PreparedBatchData {
+	vector<string> blobs;
+};
+
+unique_ptr<PreparedBatchData> WriteBlobPrepareBatch(ClientContext &context, FunctionData &bind_data,
+                                                    GlobalFunctionData &gstate,
+                                                    unique_ptr<ColumnDataCollection> collection) {
+	auto result = make_uniq<WriteBlobPreparedBatch>();
+
+	for (auto &chunk : collection->Chunks()) {
+		D_ASSERT(chunk.ColumnCount() == 1);
+		for (auto entry : chunk.data[0].Values<string_t>(chunk.size())) {
+			if (!entry.IsValid()) {
+				continue;
+			}
+			auto &blob = entry.GetValue();
+			result->blobs.emplace_back(blob.GetDataWriteable(), blob.GetSize());
+		}
+	}
+
+	return std::move(result);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Flush Batch
+//----------------------------------------------------------------------------------------------------------------------
+void WriteBlobFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                         PreparedBatchData &batch) {
+	auto &state = gstate.Cast<WriteBlobGlobalState>();
+	auto &blob_batch = batch.Cast<WriteBlobPreparedBatch>();
+	lock_guard<mutex> glock(state.lock);
+
+	QueryContext query_context(context);
+	for (auto &blob : blob_batch.blobs) {
+		WriteBlobData(query_context, *state.handle, data_ptr_cast(blob.data()), blob.size());
 	}
 }
 
@@ -145,6 +188,8 @@ void BuiltinFunctions::RegisterCopyFunctions() {
 	info.copy_to_sink = WriteBlobSink;
 	info.copy_to_combine = WriteBlobCombine;
 	info.copy_to_finalize = WriteBlobFinalize;
+	info.prepare_batch = WriteBlobPrepareBatch;
+	info.flush_batch = WriteBlobFlushBatch;
 	info.extension = "blob";
 
 	AddFunction(info);

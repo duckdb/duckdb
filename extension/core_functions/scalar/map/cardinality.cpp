@@ -29,7 +29,7 @@ static unique_ptr<FunctionData> CardinalityBind(BindScalarFunctionInput &input) 
 		throw BinderException("Cardinality must have exactly one arguments");
 	}
 
-	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::MAP) {
 		throw BinderException("Cardinality can only operate on MAPs");
 	}
 

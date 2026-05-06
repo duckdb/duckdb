@@ -2,6 +2,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -99,8 +100,12 @@ Allocator &RowGroupCollection::GetAllocator() const {
 	return Allocator::Get(info->GetDB());
 }
 
-AttachedDatabase &RowGroupCollection::GetAttached() {
+AttachedDatabase &RowGroupCollection::GetAttached() const {
 	return GetTableInfo().GetDB();
+}
+
+DatabaseInstance &RowGroupCollection::GetDatabase() const {
+	return GetAttached().GetDatabase();
 }
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
@@ -451,7 +456,7 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		                           result, count);
 		count++;
 	}
-	result.SetCardinality(count);
+	result.SetChildCardinality(count);
 }
 
 bool RowGroupCollection::CanFetch(TransactionData transaction, const row_t row_id) {
@@ -529,9 +534,8 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
-	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
-	chunk.Verify();
+	chunk.Verify(GetDatabase());
 
 	bool new_row_group = false;
 	idx_t total_append_count = chunk.size();
@@ -584,8 +588,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
-	const idx_t row_group_size = GetRowGroupSize();
-
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {

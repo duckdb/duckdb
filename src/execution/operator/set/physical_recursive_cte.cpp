@@ -42,7 +42,7 @@ public:
 			auto &bound_aggr_expr = op.payload_aggregates[i]->Cast<BoundAggregateExpression>();
 			for (auto &child_expr : bound_aggr_expr.children) {
 				executor.AddExpression(*child_expr);
-				aggr_input_types.push_back(child_expr->return_type);
+				aggr_input_types.push_back(child_expr->GetReturnType());
 			}
 			payload_aggregates_ptr.push_back(&bound_aggr_expr);
 		}
@@ -82,7 +82,8 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set, bool reference) {
+static void PopulateChunk(DataChunk &group_chunk, DataChunk &input_chunk, const vector<idx_t> &idx_set,
+                          bool reference) {
 	idx_t chunk_index = 0;
 	// Populate the group_chunk
 	for (auto &group_idx : idx_set) {

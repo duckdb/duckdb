@@ -30,6 +30,7 @@ class ColumnDataCollection;
 struct ColumnDataAppendState;
 struct ClientConfig;
 struct ResidualPredicateInfo;
+class PhysicalHashJoin;
 
 struct JoinHTScanState {
 public:
@@ -226,6 +227,30 @@ public:
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	static idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
 
+	//! Pre-materialize RHS output columns into dict_arrays and embed the dict index into NEXT_PTR;
+	//! called once from HashJoinFinalizeEvent::FinishEvent, after all finalize tasks have completed.
+	void BuildDictionaryArrays(const PhysicalHashJoin &op);
+	//! Emit dictionary vectors for row_ptrs[ptr_sel[0..count)]; pass
+	//! *FlatVector::IncrementalSelectionVector() when row_ptrs is already compacted
+	void EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count, DataChunk &result,
+	                     idx_t rhs_col_offset) const;
+	//! Emit RHS output columns for matched rows row_ptrs[ptr_sel[0..count)] into result starting at
+	//! result column rhs_col_offset; routes through EmitDictVectors when use_dict_emission is active.
+	void GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
+	               idx_t rhs_col_offset) const;
+	//! Follow the chain pointer; when USE_DICT_EMISSION, resolves via aux_next_ptrs
+	template <bool USE_DICT_EMISSION>
+	inline data_ptr_t GetNextPointer(data_ptr_t row_ptr) const {
+		if (USE_DICT_EMISSION) {
+			if (!chains_longer_than_one) {
+				// aux_next_ptrs is unallocated in this case
+				return nullptr;
+			}
+			return aux_next_ptrs_data[Load<uint32_t>(row_ptr + pointer_offset)];
+		}
+		return cast_uint64_to_pointer(Load<uint64_t>(row_ptr + pointer_offset));
+	}
+
 	idx_t Count() const {
 		return data_collection->Count();
 	}
@@ -317,6 +342,20 @@ public:
 	unique_ptr<ResidualPredicateInfo> residual_info;
 	//! Mapping from lhs_output_columns positions to lhs_probe_data positions
 	vector<idx_t> lhs_output_in_probe;
+
+	//! True once BuildDictionaryArrays has embedded dictionary indices into NEXT_PTR
+	bool use_dict_emission = false;
+	//! Pre-materialized columnar data, one entry per RHS output column
+	vector<buffer_ptr<DictionaryEntry>> dict_arrays;
+	//! Saved NEXT_PTR values, indexed by dict index; only allocated when chains_longer_than_one
+	AllocatedData aux_next_ptrs;
+	//! Typed pointer into aux_next_ptrs; set by BuildDictionaryArrays alongside the allocation
+	data_ptr_t *aux_next_ptrs_data = nullptr;
+
+	//! Total bytes the dict_arrays allocation would cost for the given RHS output types
+	idx_t ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const;
+	//! Returns true iff small-build-side dictionary emission should activate
+	bool CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const;
 
 	struct {
 		mutex mj_lock;

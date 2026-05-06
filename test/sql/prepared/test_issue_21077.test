@@ -3,9 +3,6 @@
 # group: [prepared]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 PREPARE pssmallint AS SELECT - ?
 
 query I

@@ -64,6 +64,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, count_t(count));
+			return true;
 		}
 
 		auto &source_cc = ArrayVector::GetChildMutable(source);
@@ -74,20 +75,17 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
 		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, source_array_size, child_parameters);
-		return all_ok;
-	} else {
-		// Flatten if not constant
-		source.Flatten(count);
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-
-		FlatVector::SetValidity(result, FlatVector::Validity(source));
-		auto &source_cc = ArrayVector::GetChildMutable(source);
-		auto &result_cc = ArrayVector::GetChildMutable(result);
-
-		CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
-		bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, count * source_array_size, child_parameters);
+		FlatVector::SetSize(result, count_t(count));
 		return all_ok;
 	}
+	source.Flatten();
+	FlatVector::CopyValidity(result, source, count);
+	auto &source_cc = ArrayVector::GetChildMutable(source);
+	auto &result_cc = ArrayVector::GetChildMutable(result);
+
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+	bool all_ok = cast_data.child_cast_info.Cast(source_cc, result_cc, count * source_array_size, child_parameters);
+	return all_ok;
 }
 
 //------------------------------------------------------------------------------
@@ -98,6 +96,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	auto size = ArrayType::GetSize(source.GetType());
 	Vector varchar_list(LogicalType::ARRAY(LogicalType::VARCHAR, size), count);
+	FlatVector::SetSize(varchar_list, count);
 	ArrayToArrayCast(source, varchar_list, count, parameters);
 
 	varchar_list.Flatten(count);
@@ -107,8 +106,8 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	auto in_data = FlatVector::GetData<string_t>(child);
 
-	static constexpr const idx_t SEP_LENGTH = 2;
-	static constexpr const idx_t NULL_LENGTH = 4;
+	static constexpr idx_t SEP_LENGTH = 2;
+	static constexpr idx_t NULL_LENGTH = 4;
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {

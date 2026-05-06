@@ -199,6 +199,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
+			if (!function.file_size_bytes) {
+				throw BinderException("FILE_SIZE_BYTES not implemented for %s", function.name);
+			}
 			file_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
 			if (option.second.empty()) {
@@ -295,7 +298,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			select_node.types.clear();
 			for (auto &expr : projection->expressions) {
 				select_node.names.push_back(expr->GetName());
-				select_node.types.push_back(expr->return_type);
+				select_node.types.push_back(expr->GetReturnType());
 			}
 			select_node.plan = std::move(projection);
 		}
@@ -454,7 +457,7 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 	if (!expr) {
 		return result;
 	}
-	if (expr->type == ExpressionType::STAR) {
+	if (expr->GetExpressionType() == ExpressionType::STAR) {
 		auto &star = expr->Cast<StarExpression>();
 		// for compatibility with previous copy implementation - turn a raw * into a * string literal
 		if (star.relation_name.empty() && star.exclude_list.empty() && star.replace_list.empty() &&

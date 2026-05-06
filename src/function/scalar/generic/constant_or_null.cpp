@@ -83,7 +83,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(BindScalarFunctionInput &input) {
 	}
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	function.SetReturnType(arguments[0]->return_type);
+	function.SetReturnType(arguments[0]->GetReturnType());
 	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
@@ -94,7 +94,7 @@ unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
-	if (expr.function.name != "constant_or_null") {
+	if (expr.function.GetName() != "constant_or_null") {
 		return false;
 	}
 	D_ASSERT(expr.bind_info);

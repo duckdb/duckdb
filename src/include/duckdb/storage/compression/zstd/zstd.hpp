@@ -206,7 +206,7 @@ public:
 		}
 		auto index = buffer_index.GetIndex();
 		auto &state = buffer_states[index];
-		return BufferHandleMutable().Ptr() + state.offset;
+		return BufferHandleMutable().GetDataMutable() + state.offset;
 	}
 	bool CanFlush() const {
 		if (!buffer_index.IsValid()) {
@@ -275,7 +275,7 @@ public:
 			throw InternalException("(ZSTDCompressionSegmentState::InitializeSegment) Can't InitializeSegment on a "
 			                        "non-segment buffer!");
 		}
-		auto base = buffer_collection.segment_handle.Ptr();
+		auto base = buffer_collection.segment_handle.GetDataMutable();
 		page_offset_t offset = 0;
 		page_ids = reinterpret_cast<page_id_t *>(base + offset);
 		offset += (sizeof(page_id_t) * vectors_in_segment);

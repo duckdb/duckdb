@@ -29,7 +29,7 @@ public:
 	//! Reorder the expressions of a filter
 	void ReorderExpressions(vector<unique_ptr<Expression>> &expressions);
 	//! Return the cost of an expression
-	static idx_t Cost(Expression &expr);
+	static idx_t Cost(const Expression &expr);
 
 	static vector<idx_t> GetInitialOrder(const TableFilterSet &table_filters);
 
@@ -38,13 +38,13 @@ public:
 	void VisitOperator(LogicalOperator &op) override;
 
 private:
-	static idx_t ExpressionCost(BoundBetweenExpression &expr);
-	static idx_t ExpressionCost(BoundCaseExpression &expr);
-	static idx_t ExpressionCost(BoundCastExpression &expr);
-	static idx_t ExpressionCost(BoundComparisonExpression &expr);
-	static idx_t ExpressionCost(BoundConjunctionExpression &expr);
-	static idx_t ExpressionCost(BoundFunctionExpression &expr);
-	static idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type);
+	static idx_t ExpressionCost(const BoundBetweenExpression &expr);
+	static idx_t ExpressionCost(const BoundCaseExpression &expr);
+	static idx_t ExpressionCost(const BoundCastExpression &expr);
+	static idx_t ExpressionCost(const BoundComparisonExpression &expr);
+	static idx_t ExpressionCost(const BoundConjunctionExpression &expr);
+	static idx_t ExpressionCost(const BoundFunctionExpression &expr);
+	static idx_t ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type);
 	static idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
 	static idx_t Cost(const TableFilter &filter);
 };

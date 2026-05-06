@@ -159,7 +159,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		for (auto &order : aggr.order_bys->orders) {
 			if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr = order.expression->Cast<ConstantExpression>();
-				if (!const_expr.value.type().IsIntegral()) {
+				if (!const_expr.GetValue().type().IsIntegral()) {
 					auto order_by_non_integer_literal = Settings::Get<OrderByNonIntegerLiteralSetting>(context);
 					if (!order_by_non_integer_literal) {
 						throw BinderException(
@@ -233,8 +233,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		if (aggr.children.size() < ordered_set_agg) {
 			for (auto &order : aggr.order_bys->orders) {
 				auto &child = BoundExpression::GetExpression(*order.expression);
-				types.push_back(child->return_type);
-				arguments.push_back(child->return_type);
+				types.push_back(child->GetReturnType());
+				arguments.push_back(child->GetReturnType());
 				if (order_sensitive) {
 					children.push_back(child->Copy());
 				} else {
@@ -249,8 +249,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
 		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
-		types.push_back(child->return_type);
-		arguments.push_back(child->return_type);
+		types.push_back(child->GetReturnType());
+		arguments.push_back(child->GetReturnType());
 		children.push_back(std::move(child));
 	}
 
@@ -262,10 +262,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		error.Throw();
 	}
 	// found a matching function!
-	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+	const auto &bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
 	if (!bound_function.CanAggregate() && bound_function.CanWindow()) {
-		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.name);
+		auto msg = StringUtil::Format("Function '%s' can only be used as a window function", bound_function.GetName());
 		error = BinderException(msg);
 		error.AddQueryLocation(aggr);
 		error.Throw();
@@ -278,7 +278,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = BoundExpression::GetExpression(*order.expression);
-			PushCollation(context, order_expr, order_expr->return_type);
+			PushCollation(context, order_expr, order_expr->GetReturnType());
 			const auto sense = config.ResolveOrder(context, order.type);
 			const auto null_order = config.ResolveNullOrder(context, sense, order.null_order);
 			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
@@ -321,7 +321,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	// now create a column reference referring to the aggregate
 	auto colref = make_uniq<BoundColumnRefExpression>(aggr.GetAlias().empty() ? bound_aggr.ToString() : aggr.GetAlias(),
-	                                                  bound_aggr.return_type,
+	                                                  bound_aggr.GetReturnType(),
 	                                                  ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
 	return BindResult(std::move(colref));

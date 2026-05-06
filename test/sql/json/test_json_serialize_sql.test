@@ -3,6 +3,9 @@
 
 require json
 
+statement ok
+SET storage_compatibility_version='v1.0.0'
+
 # Example with simple query
 statement ok
 SELECT json_serialize_sql('SELECT 1 + 2 FROM tbl1');

@@ -13,11 +13,13 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/common/enums/copy_option_mode.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
 struct BoundStatement;
 struct CopyFunctionFileStatistics;
+class BaseStatistics;
 class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
@@ -123,6 +125,12 @@ struct CopyOptionsInput {
 	case_insensitive_map_t<CopyOption> &options;
 };
 
+struct CopyToPropagateStatsInput {
+	ClientContext &context;
+	FunctionData &bind_data;
+	const vector<optional_ptr<BaseStatistics>> &column_stats;
+};
+
 enum class CopyFunctionExecutionMode { REGULAR_COPY_TO_FILE, PARALLEL_COPY_TO_FILE, BATCH_COPY_TO_FILE };
 
 typedef BoundStatement (*copy_to_plan_t)(Binder &binder, CopyStatement &stmt);
@@ -166,6 +174,8 @@ typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, Functio
 typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
 
 typedef void (*copy_to_initialize_operator_t)(GlobalFunctionData &gstate, const PhysicalOperator &op);
+
+typedef void (*copy_to_propagate_statistics_t)(CopyToPropagateStatsInput &input);
 
 enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS = 0,
@@ -237,6 +247,7 @@ public:
 	copy_to_finalize_t copy_to_finalize;
 	copy_to_execution_mode_t execution_mode;
 	copy_to_initialize_operator_t initialize_operator;
+	copy_to_propagate_statistics_t copy_to_propagate_statistics = nullptr;
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;

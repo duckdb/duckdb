@@ -25,8 +25,8 @@ EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewr
 	root = std::move(op);
 }
 
-bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
-	LogicalType *small_enum, *big_enum;
+static bool AreMatchesPossible(const LogicalType &left, const LogicalType &right) {
+	const LogicalType *small_enum, *big_enum;
 	if (EnumType::GetSize(left) < EnumType::GetSize(right)) {
 		small_enum = &left;
 		big_enum = &right;
@@ -51,7 +51,7 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 	auto &left_child = bindings[1].get().Cast<BoundCastExpression>();
 	auto &right_child = bindings[3].get().Cast<BoundCastExpression>();
 
-	if (!AreMatchesPossible(left_child.child->return_type, right_child.child->return_type)) {
+	if (!AreMatchesPossible(left_child.child->GetReturnType(), right_child.child->GetReturnType())) {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(root.left));
 		children.push_back(std::move(root.right));
@@ -62,8 +62,8 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 		return nullptr;
 	}
 
-	auto cast_left_to_right =
-	    BoundCastExpression::AddDefaultCastToType(std::move(left_child.child), right_child.child->return_type, true);
+	auto cast_left_to_right = BoundCastExpression::AddDefaultCastToType(std::move(left_child.child),
+	                                                                    right_child.child->GetReturnType(), true);
 	return make_uniq<BoundComparisonExpression>(root.GetExpressionType(), std::move(cast_left_to_right),
 	                                            std::move(right_child.child));
 }

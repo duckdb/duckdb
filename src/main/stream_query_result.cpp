@@ -91,11 +91,8 @@ unique_ptr<DataChunk> StreamQueryResult::FetchNextInternal(ClientContextLock &lo
 			invalidate_query = false;
 		} else if (Exception::InvalidatesDatabase(error.Type())) {
 			// fatal exceptions invalidate the entire database
-			auto &config = context->config;
-			if (!config.query_verification_enabled) {
-				auto &db_instance = DatabaseInstance::GetDatabase(*context);
-				ValidChecker::Invalidate(db_instance, error.RawMessage());
-			}
+			auto &db_instance = DatabaseInstance::GetDatabase(*context);
+			ValidChecker::Invalidate(db_instance, error.RawMessage());
 		}
 		context->ProcessError(error, context->GetCurrentQuery());
 		SetError(std::move(error));

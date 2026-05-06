@@ -2,9 +2,6 @@
 # description: Issue 505
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # A RIGHT JOIN unexpectedly fetches rows
 statement ok
 CREATE TABLE t0(c0 INT);

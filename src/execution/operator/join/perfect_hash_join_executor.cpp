@@ -78,7 +78,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin(const PhysicalHashJoin &op, c
 	}
 
 	// We only do this optimization for inner joins with one integer equality condition
-	const auto key_type = op.conditions[0].GetLHS().return_type;
+	const auto key_type = op.conditions[0].GetLHS().GetReturnType();
 	if (op.join_type != JoinType::INNER || op.conditions.size() != 1 ||
 	    op.conditions[0].GetComparisonType() != ExpressionType::COMPARE_EQUAL ||
 	    !TypeIsInteger(key_type.InternalType())) {

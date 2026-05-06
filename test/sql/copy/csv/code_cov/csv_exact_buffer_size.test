@@ -2,9 +2,6 @@
 # description: Test with exact buffer size being the file size
 # group: [code_cov]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 FROM read_csv('{DATA_DIR}/csv/auto/issue_1254_rn.csv', buffer_size=10)
 ----

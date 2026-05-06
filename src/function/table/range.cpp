@@ -374,7 +374,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			state.initialized_row = false;
 			continue;
 		}
-		output.SetCardinality(size);
+		output.SetChildCardinality(size);
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
 }
@@ -386,6 +386,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                             RangeFunctionLocalInit);
 	range_function.in_out_function = RangeFunction<false>;
 	range_function.cardinality = RangeCardinality;
+	range_function.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
 
 	// single argument range: (end) - implicit start = 0 and increment = 1
 	range.AddFunction(range_function);
@@ -399,6 +400,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                           RangeDateTimeBind<false>, nullptr, RangeDateTimeLocalInit);
 	range_in_out.in_out_function = RangeDateTimeFunction<false>;
 	range_in_out.cardinality = RangeDateTimeCardinality;
+	range_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
 	range.AddFunction(range_in_out);
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
@@ -414,6 +416,7 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction generate_series_in_out({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                     nullptr, RangeDateTimeBind<true>, nullptr, RangeDateTimeLocalInit);
 	generate_series_in_out.in_out_function = RangeDateTimeFunction<true>;
+	generate_series_in_out.parallelism = TableFunctionParallelism::FORCE_SINGLE_THREADED;
 	generate_series.AddFunction(generate_series_in_out);
 	set.AddFunction(generate_series);
 }

@@ -3,8 +3,6 @@
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "include/icu-current.hpp"
 #include "include/icu-casts.hpp"
@@ -30,7 +28,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 0);
 	auto instant = GetTransactionTimestamp(state);
 
-	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), instant));
+	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), timestamp_tz_t(instant)));
 	result.Reference(val, count_t(input.size()));
 }
 

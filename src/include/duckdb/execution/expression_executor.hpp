@@ -39,6 +39,7 @@ public:
 public:
 	bool HasContext();
 	ClientContext &GetContext();
+	optional_ptr<ClientContext> GetContextPtr();
 	Allocator &GetAllocator();
 
 	//! Add an expression to the set of to-be-executed expressions of the executor

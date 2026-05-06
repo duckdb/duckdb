@@ -10,34 +10,14 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/sql_identifier.hpp"
 
+#include <ostream>
 #include <vector>
 
 namespace duckdb {
 
 class String;
-
-// Helper class to support custom overloading
-// Escaping " and quoting the value with "
-class SQLIdentifier {
-public:
-	explicit SQLIdentifier(const string &raw_string) : raw_string(raw_string) {
-	}
-
-public:
-	string raw_string;
-};
-
-// Helper class to support custom overloading
-// Escaping ' and quoting the value with '
-class SQLString {
-public:
-	explicit SQLString(const string &raw_string) : raw_string(raw_string) {
-	}
-
-public:
-	string raw_string;
-};
 
 enum class PhysicalType : uint8_t;
 struct LogicalType;

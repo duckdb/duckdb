@@ -110,11 +110,11 @@ public:
 
 	Value GetDefaultValue() const {
 		D_ASSERT(default_expression);
-		if (default_expression->type != ExpressionType::VALUE_CONSTANT) {
+		if (default_expression->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw NotImplementedException("Default expression that isn't constant is not supported yet");
 		}
 		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.value;
+		return constant_expr.GetValue();
 	}
 
 public:

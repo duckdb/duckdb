@@ -3,9 +3,6 @@
 # group: [materialized]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE T0(C1 INT);
 
 statement ok

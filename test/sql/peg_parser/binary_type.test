@@ -1,0 +1,14 @@
+# name: test/sql/peg_parser/binary_type.test
+# description: Test the binary data type
+# group: [peg_parser]
+
+statement ok
+CREATE TABLE t(b binary, c blob, d varbinary);
+
+statement ok
+INSERT INTO t VALUES (NULL, NULL, NULL);
+
+query III
+SELECT typeof(b), typeof(c), typeof(d) FROM t;
+----
+BLOB	BLOB	BLOB

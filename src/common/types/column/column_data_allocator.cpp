@@ -213,7 +213,7 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 		}
 	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
-	return state.handles[block_id].Ptr() + offset;
+	return state.handles[block_id].GetDataMutable() + offset;
 }
 
 void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result,

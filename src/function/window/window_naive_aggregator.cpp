@@ -135,7 +135,7 @@ void WindowNaiveLocalState::Finalize(ExecutionContext &context, WindowAggregator
 		vector<BoundOrderByNode> orders;
 		for (const auto &order_by : aggregator.wexpr.arg_orders) {
 			auto order = order_by.Copy();
-			const auto &type = order.expression->return_type;
+			const auto &type = order.expression->GetReturnType();
 			order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 			orders.emplace_back(std::move(order));
 		}

@@ -451,7 +451,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 	auto cardinality_after_filters = cardinality;
 	auto expr_filter = ExpressionFilter::FromTableFilter(filter, base_stats.GetType());
 	auto &expr = *expr_filter->expr;
-	if (expr.type == ExpressionType::CONJUNCTION_AND) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj.children) {
 			ExpressionFilter child_filter(child->Copy());
@@ -464,7 +464,7 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 		return cardinality_after_filters;
 	}
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+	if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 		return cardinality_after_filters;
 	}
 	auto column_count = base_stats.GetDistinctCount();

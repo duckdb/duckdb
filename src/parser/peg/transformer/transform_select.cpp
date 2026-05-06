@@ -199,9 +199,9 @@ unique_ptr<SelectStatement> PEGTransformerFactory::TransformSimpleSelect(PEGTran
 		auto window_functions =
 		    transformer.Transform<vector<unique_ptr<ParsedExpression>>>(opt_window_clause.GetResult());
 		for (auto &window_func : window_functions) {
-			D_ASSERT(!window_func->alias.empty());
-			string window_name(window_func->alias);
-			window_func->alias = "";
+			D_ASSERT(!window_func->GetAlias().empty());
+			string window_name(window_func->GetAlias());
+			window_func->ClearAlias();
 			auto it = transformer.window_clauses.find(window_name);
 			if (it != transformer.window_clauses.end()) {
 				throw ParserException("window \"%s\" is already defined", window_name);
@@ -348,7 +348,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PE
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.name == "NamedParameter") {
 		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
-		parameter.expression->alias = parameter.name;
+		parameter.expression->SetAlias(parameter.name);
 		return std::move(parameter.expression);
 	}
 	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
@@ -507,7 +507,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionAsCollabe
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto &collabel_or_string = list_pr.Child<ListParseResult>(2);
-	expr->alias = transformer.Transform<string>(collabel_or_string);
+	expr->SetAlias(transformer.Transform<string>(collabel_or_string));
 	return expr;
 }
 
@@ -516,7 +516,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformColIdExpression(PEG
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &colid = list_pr.Child<ListParseResult>(0);
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
-	expr->alias = transformer.Transform<string>(colid);
+	expr->SetAlias(transformer.Transform<string>(colid));
 	return expr;
 }
 
@@ -526,7 +526,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformExpressionOptIdenti
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(0));
 	auto &opt_identifier = list_pr.Child<OptionalParseResult>(1);
 	if (opt_identifier.HasResult()) {
-		expr->alias = opt_identifier.GetResult().Cast<IdentifierParseResult>().identifier;
+		expr->SetAlias(opt_identifier.GetResult().Cast<IdentifierParseResult>().identifier);
 	}
 	return expr;
 }
@@ -681,7 +681,7 @@ PivotColumn PEGTransformerFactory::TransformUnpivotValueList(PEGTransformer &tra
 void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> &expr, vector<Value> &result) {
 	if (expr->GetExpressionClass() == ExpressionClass::CONSTANT) {
 		auto &const_expr = expr->Cast<ConstantExpression>();
-		result.push_back(const_expr.value);
+		result.push_back(const_expr.GetValue());
 	} else if (expr->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref_expr = expr->Cast<ColumnRefExpression>();
 		for (auto &col : col_ref_expr.column_names) {
@@ -738,7 +738,7 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformUnpivotTargetList(PEGTr
 	vector<PivotColumnEntry> result;
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
-		pivot_entry.alias = target->alias;
+		pivot_entry.alias = target->GetAlias();
 		pivot_entry.expr = std::move(target);
 		result.push_back(std::move(pivot_entry));
 	}
@@ -828,7 +828,7 @@ vector<PivotColumnEntry> PEGTransformerFactory::TransformPivotTargetList(PEGTran
 	auto target_list = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(extract_target_list);
 	for (auto &target : target_list) {
 		PivotColumnEntry pivot_entry;
-		pivot_entry.alias = target->alias;
+		pivot_entry.alias = target->GetAlias();
 		bool transformed = TransformPivotInList(target, pivot_entry);
 		if (!transformed) {
 			// For pivot we throw an exception
@@ -1704,7 +1704,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformWindowDefinition(PE
 	transformer.in_window_definition = true;
 	auto window_function = transformer.Transform<unique_ptr<WindowExpression>>(list_pr.Child<ListParseResult>(2));
 	transformer.in_window_definition = false;
-	window_function->alias = list_pr.Child<IdentifierParseResult>(0).identifier;
+	window_function->SetAlias(list_pr.Child<IdentifierParseResult>(0).identifier);
 	return std::move(window_function);
 }
 
@@ -1767,7 +1767,7 @@ unique_ptr<SampleOptions> PEGTransformerFactory::TransformSampleCount(PEGTransfo
 		throw ParserException(expr->GetQueryLocation(), "Only constants are supported in sample clause currently");
 	}
 	auto &const_expr = expr->Cast<ConstantExpression>();
-	auto &sample_value = const_expr.value;
+	auto &sample_value = const_expr.GetValue();
 	transformer.TransformOptional<bool>(list_pr, 1, result->is_percentage);
 	if (result->is_percentage) {
 		// sample size is given in sample_size: use system sampling
@@ -1825,7 +1825,7 @@ optional_idx PEGTransformerFactory::TransformSampleSeed(PEGTransformer &transfor
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.GetChild(0));
 	auto const_expr = expr->Cast<ConstantExpression>();
-	return optional_idx(const_expr.value.GetValue<idx_t>());
+	return optional_idx(const_expr.GetValue().GetValue<idx_t>());
 }
 
 } // namespace duckdb

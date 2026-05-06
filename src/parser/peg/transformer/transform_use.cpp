@@ -11,10 +11,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
 
 	string value_str;
 	if (IsInvalidSchema(qn.schema)) {
-		value_str = KeywordHelper::WriteOptionallyQuoted(qn.name);
+		value_str = SQLIdentifier::ToString(qn.name);
 	} else {
-		value_str =
-		    KeywordHelper::WriteOptionallyQuoted(qn.schema) + "." + KeywordHelper::WriteOptionallyQuoted(qn.name);
+		value_str = SQLIdentifier(qn.schema) + "." + SQLIdentifier(qn.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));

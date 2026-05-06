@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-static inline list_entry_t GetJSONKeys(yyjson_val *val, yyjson_alc *, Vector &result, ValidityMask &, idx_t) {
+static inline optional<list_entry_t> GetJSONKeys(yyjson_val *val, yyjson_alc *, Vector &result) {
 	auto num_keys = yyjson_obj_size(val);
 	auto current_size = ListVector::GetListSize(result);
 	auto new_size = current_size + num_keys;
@@ -23,7 +23,7 @@ static inline list_entry_t GetJSONKeys(yyjson_val *val, yyjson_alc *, Vector &re
 	// Update size
 	ListVector::SetListSize(result, current_size + num_keys);
 
-	return {current_size, num_keys};
+	return list_entry_t {current_size, num_keys};
 }
 
 static void UnaryJSONKeysFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -54,7 +54,8 @@ ScalarFunctionSet JSONFunctions::GetKeysFunction() {
 	GetJSONKeysFunctionsInternal(set, LogicalType::VARCHAR);
 	GetJSONKeysFunctionsInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		if (func.GetArguments().size() == 1 && func.GetArguments()[0].IsJSONType()) {
+		const auto &sig = func.GetSignature();
+		if (sig.GetParameterCount() == 1 && sig.GetParameter(0).GetType().IsJSONType()) {
 			continue;
 		}
 		func.SetFallible();

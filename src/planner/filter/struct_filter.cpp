@@ -33,11 +33,14 @@ unique_ptr<TableFilter> StructFilter::Copy() const {
 }
 
 unique_ptr<Expression> StructFilter::ToExpression(const Expression &column) const {
-	auto &child_type = StructType::GetChildType(column.return_type, child_idx);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(column.Copy());
 	arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(child_idx + 1))));
-	auto child = make_uniq<BoundFunctionExpression>(child_type, GetExtractAtFunction(), std::move(arguments),
+
+	BoundScalarFunction bound_func(GetExtractAtFunction());
+	bound_func.SetReturnType(StructType::GetChildType(column.GetReturnType(), child_idx));
+
+	auto child = make_uniq<BoundFunctionExpression>(std::move(bound_func), std::move(arguments),
 	                                                StructExtractAtFun::GetBindData(child_idx));
 	return child_filter->ToExpression(*child);
 }

@@ -1,5 +1,5 @@
 diff --git a/src/hnsw/hnsw_index.cpp b/src/hnsw/hnsw_index.cpp
-index b85f470..edb4d5a 100644
+index 4d16e3d..1eb697a 100644
 --- a/src/hnsw/hnsw_index.cpp
 +++ b/src/hnsw/hnsw_index.cpp
 @@ -408,7 +408,7 @@ void HNSWIndex::ResetMultiScan(IndexScanState &state) {

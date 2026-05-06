@@ -74,7 +74,8 @@ static TableDescription EvaluateTableDescription(ClientContext &context, const E
 		throw BinderException("index_key: path parameter must evaluate to a STRUCT");
 	}
 
-	return ExtractTableDescription(StructType::GetChildTypes(expr.return_type), StructValue::GetChildren(input_struct));
+	return ExtractTableDescription(StructType::GetChildTypes(expr.GetReturnType()),
+	                               StructValue::GetChildren(input_struct));
 }
 
 static string GetStringArgument(ClientContext &context, const Expression &expr, const string &param_name) {
@@ -178,8 +179,8 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	// that only references the key columns during execution. We could erase the first two arguments here, but
 	// that also requires some (de)serialization boilerplate, so for now we don't do it.
 	bound_function.GetArguments().clear();
-	bound_function.GetArguments().push_back(arguments[0]->return_type);
-	bound_function.GetArguments().push_back(arguments[1]->return_type);
+	bound_function.GetArguments().push_back(arguments[0]->GetReturnType());
+	bound_function.GetArguments().push_back(arguments[1]->GetReturnType());
 	for (auto &key_type : key_types) {
 		bound_function.GetArguments().push_back(key_type);
 	}

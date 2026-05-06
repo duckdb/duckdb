@@ -18,7 +18,7 @@ struct BitState {
 };
 
 template <class T>
-LogicalType GetBitStateType(const AggregateFunction &function) {
+LogicalType GetBitStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 
@@ -28,7 +28,7 @@ LogicalType GetBitStateType(const AggregateFunction &function) {
 	return LogicalType::STRUCT(std::move(child_types));
 }
 
-LogicalType GetBitStringStateType(const AggregateFunction &function) {
+LogicalType GetBitStringStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 	child_types.emplace_back("value", function.GetReturnType());

@@ -208,11 +208,11 @@ idx_t RoaringCompressState::GetContainerIndex() {
 }
 
 idx_t RoaringCompressState::GetUsedDataSpace() {
-	return static_cast<idx_t>(data_ptr - (handle.Ptr() + sizeof(idx_t)));
+	return static_cast<idx_t>(data_ptr - (handle.GetDataMutable() + sizeof(idx_t)));
 }
 
 idx_t RoaringCompressState::GetAvailableSpace() {
-	return static_cast<idx_t>(metadata_ptr - (handle.Ptr() + sizeof(idx_t)));
+	return static_cast<idx_t>(metadata_ptr - (handle.GetDataMutable() + sizeof(idx_t)));
 }
 
 bool RoaringCompressState::CanStore(idx_t container_size_in_tuples, const ContainerMetadata &metadata) {
@@ -297,14 +297,14 @@ void RoaringCompressState::CreateEmptySegment() {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	handle = buffer_manager.Pin(current_segment->block);
-	data_ptr = handle.Ptr();
+	data_ptr = handle.GetDataMutable();
 	data_ptr += sizeof(idx_t);
-	metadata_ptr = handle.Ptr() + info.GetBlockSize();
+	metadata_ptr = handle.GetDataMutable() + info.GetBlockSize();
 }
 
 void RoaringCompressState::FlushSegment() {
 	auto &state = checkpoint_data.GetCheckpointState();
-	auto base_ptr = handle.Ptr();
+	auto base_ptr = handle.GetDataMutable();
 	// +======================================+
 	// |x|ddddddddddddddd||mmm|               |
 	// +======================================+
@@ -339,7 +339,7 @@ void RoaringCompressState::FlushSegment() {
 		throw InternalException("metadata start outside of block size during RoaringCompressState::FlushSegment");
 	}
 
-	Store<idx_t>(metadata_start, handle.Ptr());
+	Store<idx_t>(metadata_start, handle.GetDataMutable());
 	auto total_segment_size = sizeof(idx_t) + data_size + metadata_size;
 	state.FlushSegment(std::move(current_segment), std::move(handle), total_segment_size);
 }

@@ -783,7 +783,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		if (i > 0) {
 			create_tbl += ", ";
 		}
-		create_tbl += KeywordHelper::WriteOptionallyQuoted(names[i]);
+		create_tbl += SQLIdentifier(names[i]);
 		create_tbl += " ";
 		create_tbl += types[i].ToString();
 	}
