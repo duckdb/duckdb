@@ -22,8 +22,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	auto &constant_expr = bindings[1].get();
 	auto &left = BoundComparisonExpression::LeftMutable(expr);
 	auto &right = BoundComparisonExpression::RightMutable(expr);
-	bool column_ref_left = RefersToSameObject(*left, constant_expr);
-	auto &column_ref_expr = !column_ref_left ? *right : *left;
+	bool column_ref_left = !RefersToSameObject(*left, constant_expr);
+	auto &column_ref_expr = column_ref_left ? *left : *right;
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr.IsFoldable());
