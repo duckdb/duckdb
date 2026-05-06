@@ -492,7 +492,7 @@ static bool TrySelectReferenceConstantComparison(DataChunk &chunk, const Referen
 	UnifiedVectorFormat vdata;
 	// This avoids materializing the reference and constant children into temporary vectors for the common
 	// "column <cmp> constant" scan predicate shape.
-	reference_input.ToUnifiedFormat(chunk.size(), vdata);
+	reference_input.ToUnifiedFormat(vdata);
 	if (constant.IsNull()) {
 		switch (comparison.comparison_type) {
 		case ExpressionType::COMPARE_DISTINCT_FROM:
