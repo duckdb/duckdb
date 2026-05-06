@@ -30,6 +30,7 @@ SELECT sum(g + d)
 FROM read_parquet('{TEST_DIR}/rgo_proj.parquet')
 WHERE a >= 0 AND b >= 0
 
+# We are requesting 4 consecutive columns as filtes and projections, the fitler is not fully selective
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -64,6 +65,7 @@ SELECT sum(b + j)
 FROM read_parquet('{TEST_DIR}/rgo_proj_gap.parquet')
 WHERE a >= 0 AND c >= 0
 
+# We are requesting 3 consecutive columns as filtes projections, and onde column with a big gap, we get two groups
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -83,6 +85,8 @@ SELECT sum(j)
 FROM read_parquet('{TEST_DIR}/rgo_proj_gap.parquet')
 WHERE a >= 0 AND c >= 0
 
+# We are requesting 2 close enough columns, with a small gap as filters, and onde column with a big gap, we get two groups
+# The gap column gets shown as **
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')

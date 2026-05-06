@@ -33,6 +33,7 @@ SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
 WHERE a > 5 AND b > 15
 
+# If we read all columns they all get together in one request of whole_group
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -54,6 +55,8 @@ SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
 WHERE c = 50
 
+# If our filter is fully selective we prefetch it
+# *c* is small enough that is still carried on the next request
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -91,8 +94,6 @@ ORDER BY row_group_id
 statement ok
 CALL truncate_duckdb_logs()
 
-# Three filter columns where c alone fully eliminates every row group; b > 100 is not
-# always-true on the column stats so it survives optimizer pruning and reaches the parquet reader
 statement ok
 SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo.parquet')
@@ -114,7 +115,6 @@ ORDER BY row_group_id
 statement ok
 CALL truncate_duckdb_logs()
 
-# groups 0-2 have matches, groups 3-5 are fully filtered
 statement ok
 COPY (
     SELECT i AS a,
@@ -135,6 +135,7 @@ SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo2.parquet')
 WHERE g = 500
 
+# Initial groups are not fully selective, but then it becomes, so strategy changes for prefetch_filters
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -151,7 +152,6 @@ ORDER BY row_group_id
 statement ok
 CALL truncate_duckdb_logs()
 
-# Test the 90% threshold to go back at whole_group
 statement ok
 COPY (
     SELECT i AS a,
@@ -172,6 +172,8 @@ SELECT sum(a + b + c + g)
 FROM read_parquet('{TEST_DIR}/rgo3.parquet')
 WHERE g = 500
 
+
+# prefetch_filters can also go back to whole_group if it crossed the 90% filtering
 query ITTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups
 FROM duckdb_logs_parsed('ParquetPrefetch')
@@ -194,10 +196,6 @@ ORDER BY row_group_id
 statement ok
 CALL truncate_duckdb_logs()
 
-# Three filter columns where (a, b) together fully eliminate every row group: a and b are
-# anti-correlated (a + b = 99) so a > 50 AND b > 50 is impossible per row, yet column-level
-# stats can't prove it - so all three filters reach the parquet reader and the scan loop should
-# stop after evaluating [a, b], never running c.
 statement ok
 COPY (
     SELECT i % 100 AS a,
@@ -212,6 +210,7 @@ SELECT sum(a + b + c + d)
 FROM read_parquet('{TEST_DIR}/rgo_ab.parquet')
 WHERE a > 50 AND b > 50 AND c = 0
 
+# We have 3 filters, but a subset of 2 is enough to fully eliminate the rowgroups, so we request them first.
 query ITTTT
 SELECT row_group_id, fully_filtered, strategy, prefetch_groups, minimal_filters
 FROM duckdb_logs_parsed('ParquetPrefetch')
