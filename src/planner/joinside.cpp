@@ -32,7 +32,7 @@ unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
 	if (cond.IsComparison()) {
 		auto bound_comparison = BoundComparisonExpression::Create(
 		    cond.GetComparisonType(), std::move(cond.LeftReference()), std::move(cond.RightReference()));
-		return std::move(bound_comparison);
+		return bound_comparison;
 	}
 	return std::move(cond.JoinExpressionReference());
 }
