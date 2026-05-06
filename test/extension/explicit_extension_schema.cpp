@@ -1,10 +1,16 @@
-#ifndef DUCKDB_STATIC_BUILD
-#define DUCKDB_STATIC_BUILD
-#endif
-
 #include "duckdb.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 using namespace duckdb;
 
