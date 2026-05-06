@@ -63,7 +63,8 @@ void ComparisonFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 }
 
-idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                       optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto expr_type = state.expr.GetExpressionType();
 	auto &left = args.data[0];
 	auto &right = args.data[1];
@@ -71,21 +72,21 @@ idx_t ComparisonSelect(DataChunk &args, ExpressionState &state, SelectionVector 
 
 	switch (expr_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::Equals(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::DistinctFrom(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return VectorOperations::NotDistinctFrom(left, right, nullptr, count, true_sel, false_sel);
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
 	default:
 		throw InternalException("Unknown comparison type!");
 	}
