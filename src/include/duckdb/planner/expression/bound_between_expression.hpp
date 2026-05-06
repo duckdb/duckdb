@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class BoundFunctionExpression;
 
 //! The BoundBetweenExpression has been moved to a function expression
 //! This class exists only as a set of helper methods
