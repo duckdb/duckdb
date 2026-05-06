@@ -18,13 +18,16 @@ SourceResultType PhysicalDetach::GetDataInternal(ExecutionContext &context, Data
 	auto &db_manager = DatabaseManager::Get(context.client);
 
 	// Reject detach if the current transaction already has outstanding work on the database.
-	auto attached_db = db_manager.GetDatabase(info->name);
-	if (attached_db) {
-		auto &meta_transaction = MetaTransaction::Get(context.client);
-		if (meta_transaction.TryGetTransaction(*attached_db)) {
-			throw TransactionException("Cannot detach database \"%s\" because the current transaction has outstanding "
-			                           "work on it - commit or rollback first",
-			                           info->name);
+	{
+		auto attached_db = db_manager.GetDatabase(info->name);
+		if (attached_db) {
+			auto &meta_transaction = MetaTransaction::Get(context.client);
+			if (meta_transaction.TryGetTransaction(*attached_db)) {
+				throw TransactionException(
+				    "Cannot detach database \"%s\" because the current transaction has outstanding "
+				    "work on it - commit or rollback first",
+				    info->name);
+			}
 		}
 	}
 
