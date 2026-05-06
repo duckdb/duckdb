@@ -16,7 +16,7 @@ BoundBetweenExpression::BoundBetweenExpression(unique_ptr<Expression> input, uni
 }
 
 string BoundBetweenExpression::ToString() const {
-	return BetweenExpression::ToString<BoundBetweenExpression, Expression>(*this);
+	return BetweenExpression::ToString<Expression>(Input(), LowerBound(), UpperBound());
 }
 
 bool BoundBetweenExpression::Equals(const BaseExpression &other_p) const {

@@ -115,6 +115,17 @@ struct FunctionBindExpressionInput {
 	vector<unique_ptr<Expression>> &children;
 };
 
+struct FunctionToStringInput {
+	FunctionToStringInput(const BoundScalarFunction &bound_function, optional_ptr<FunctionData> bind_data_p,
+	                      const vector<unique_ptr<Expression>> &children_p)
+	    : bound_function(bound_function), bind_data(bind_data_p), children(children_p) {
+	}
+
+	const BoundScalarFunction &bound_function;
+	optional_ptr<FunctionData> bind_data;
+	const vector<unique_ptr<Expression>> &children;
+};
+
 class BindScalarFunctionInput;
 
 //! The scalar function type
@@ -148,6 +159,9 @@ typedef FilterPropagateResult (*propagate_filter_t)(const FunctionStatisticsPrun
 //! The type to bind lambda-specific parameter types
 typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpressionInput &input);
 
+//! Convert a scalar function to string
+typedef string (*function_to_string_t)(FunctionToStringInput &input);
+
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
@@ -166,6 +180,8 @@ public:
 	function_bind_expression_t bind_expression = nullptr;
 	//! Gets the modified databases (if any)
 	get_modified_databases_t get_modified_databases = nullptr;
+	//! Convert a scalar function to string
+	function_to_string_t to_string = nullptr;
 
 	function_serialize_t serialize = nullptr;
 	function_deserialize_t deserialize = nullptr;
@@ -254,6 +270,10 @@ public: // Callbacks
 	auto HasFilterPruneCallback() const -> bool { return callbacks.filter_prune != nullptr; }
 	auto SetFilterPruneCallback(propagate_filter_t callback) -> void { callbacks.filter_prune = callback; }
 	auto GetFilterPruneCallback() const -> propagate_filter_t { return callbacks.filter_prune; }
+
+	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
+	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
+	auto GetToStringCallback() const -> function_to_string_t { return callbacks.to_string; }
 	// clang-format on
 
 public:

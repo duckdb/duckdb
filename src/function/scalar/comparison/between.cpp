@@ -1,5 +1,6 @@
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 
 namespace duckdb {
@@ -143,9 +144,14 @@ unique_ptr<FunctionData> BindBetweenFun(BindScalarFunctionInput &input) {
 	throw InvalidInputException("Between function cannot be called directly");
 }
 
+string BetweenToString(FunctionToStringInput &input) {
+	return BetweenExpression::ToString(*input.children[0], *input.children[1], *input.children[2]);
+}
+
 ScalarFunction BetweenFun::GetFunction() {
 	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
 	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
+	between_fun.SetToStringCallback(BetweenToString);
 #ifndef DUCKDB_SMALLER_BINARY
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif

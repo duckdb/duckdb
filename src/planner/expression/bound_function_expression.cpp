@@ -50,6 +50,10 @@ bool BoundFunctionExpression::CanThrow() const {
 }
 
 string BoundFunctionExpression::ToString() const {
+	if (function.HasToStringCallback()) {
+		FunctionToStringInput input(function, bind_info.get(), children);
+		return function.GetToStringCallback()(input);
+	}
 	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(),
 	                                                                         function.GetName(), is_operator);
 }
