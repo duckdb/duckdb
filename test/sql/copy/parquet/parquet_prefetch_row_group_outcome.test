@@ -221,3 +221,35 @@ ORDER BY row_group_id
 1	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
 2	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
 3	true	prefetch_filters	[[a, b], [c], [d]]	[a, b]
+
+statement ok
+CALL truncate_duckdb_logs()
+
+statement ok
+COPY (
+    SELECT i AS a,
+        hash(i)::VARCHAR AS pad1,
+        hash(i + 1)::VARCHAR AS pad2,
+        CASE WHEN i % 100 = 50 THEN 51 ELSE i % 100 END AS c,
+        hash(i + 2)::VARCHAR AS pad3,
+        hash(i + 3)::VARCHAR AS pad4,
+        i AS d
+    FROM RANGE(8192) t(i)
+) TO '{TEST_DIR}/rgo_lazy_gap.parquet' (ROW_GROUP_SIZE 2048, WRITE_BLOOM_FILTER FALSE)
+
+statement ok
+SELECT sum(a + d)
+FROM read_parquet('{TEST_DIR}/rgo_lazy_gap.parquet')
+WHERE c = 50
+
+# due to the order and gaps, we should have 3 separete requests
+query ITTT
+SELECT row_group_id, fully_filtered, strategy, prefetch_groups
+FROM duckdb_logs_parsed('ParquetPrefetch')
+WHERE file_path LIKE '%rgo_lazy_gap.parquet'
+ORDER BY row_group_id
+----
+0	true	column_wise_eager	[[c], [a], [d]]
+1	true	prefetch_filters	[[c], [a], [d]]
+2	true	prefetch_filters	[[c], [a], [d]]
+3	true	prefetch_filters	[[c], [a], [d]]

@@ -100,12 +100,21 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 		return;
 	}
 
+	// Let's use ReadHead to bucket registrations so we are use we are getting whatever the ThriftFileTransport does
+	vector<const ReadHead *> bucket_order;
+	std::map<const ReadHead *, vector<ParquetPrefetchColumn>> buckets;
 	set<idx_t> registered_offsets;
-	// actual columns is requested_columns + hippie hitchhiker columns
-	vector<ParquetPrefetchColumn> actual_columns;
 	for (auto &requested_column : requested_columns) {
 		registered_offsets.insert(requested_column.offset);
-		actual_columns.push_back(requested_column);
+		auto rh = trans.GetReadHead(requested_column.offset).get();
+		if (!rh) {
+			continue;
+		}
+		auto inserted = buckets.emplace(rh, vector<ParquetPrefetchColumn> {});
+		if (inserted.second) {
+			bucket_order.push_back(rh);
+		}
+		inserted.first->second.push_back(requested_column);
 	}
 
 	for (auto &chunk : all_chunks) {
@@ -116,37 +125,32 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 		}
 		idx_t chunk_end = chunk_start + NumericCast<idx_t>(chunk.meta_data.total_compressed_size);
 		// Figure out what physical I/O this file offset lives in
-		auto rh = trans.GetReadHead(chunk_start);
+		auto rh = trans.GetReadHead(chunk_start).get();
 		if (!rh || chunk_end > rh->GetEnd()) {
 			continue;
 		}
-		if (registered_offsets.count(rh->location) == 0) {
-			// Hitchhiker only counts if the ReadHead was created for one of our registrations.
-			bool covers_registered = false;
-			for (auto offset : registered_offsets) {
-				if (offset >= rh->location && offset < rh->GetEnd()) {
-					covers_registered = true;
-					break;
-				}
-			}
-			if (!covers_registered) {
-				continue;
-			}
+		// Hitchhiker only counts if the ReadHead was created for one of our registrations.
+		auto bucket_it = buckets.find(rh);
+		if (bucket_it == buckets.end()) {
+			continue;
 		}
-		// figure out his name
 		auto &path = chunk.meta_data.path_in_schema;
 		string name = path.empty() ? string() : StringUtil::Join(path, ".");
 		// we tag hitchhikers with *column_name*
-		actual_columns.push_back({"*" + std::move(name) + "*", chunk_start});
+		bucket_it->second.emplace_back("*" + std::move(name) + "*", chunk_start);
 	}
 
-	std::sort(actual_columns.begin(), actual_columns.end());
-	vector<string> names;
-	names.reserve(actual_columns.size());
-	for (auto &col : actual_columns) {
-		names.push_back(std::move(col.name));
+	// Issue one log group per ReadHead, on the order they were registered
+	for (auto rh : bucket_order) {
+		auto &bucket = buckets[rh];
+		std::sort(bucket.begin(), bucket.end());
+		vector<string> names;
+		names.reserve(bucket.size());
+		for (auto &col : bucket) {
+			names.push_back(std::move(col.name));
+		}
+		prefetch_groups.push_back(std::move(names));
 	}
-	prefetch_groups.push_back(std::move(names));
 	requested_columns.clear();
 }
 
