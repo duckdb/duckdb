@@ -116,16 +116,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
 			break;
 		case 2:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
 			break;
 		case 3:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
-			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
+			args.data[2].ToUnifiedFormat(vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");

@@ -332,27 +332,27 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 		if (string_data.has_max_string_length && len > string_data.max_string_length) {
 			throw InternalException(
 			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
-			    stats.ToString(), vector.ToString(count));
+			    stats.ToString(), vector.ToString());
 		}
 		if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
 			auto unicode = Utf8Proc::Analyze(data, len);
 			if (unicode == UnicodeType::UTF8) {
 				throw InternalException("Statistics mismatch: string value contains unicode, but statistics says it "
 				                        "shouldn't.\nStatistics: %s\nVector: %s",
-				                        stats.ToString(), vector.ToString(count));
+				                        stats.ToString(), vector.ToString());
 			} else if (unicode == UnicodeType::INVALID) {
-				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
+				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString());
 			}
 		}
 		if (StringValueComparison(const_data_ptr_cast(data),
 		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString(count));
+			                        stats.ToString(), vector.ToString());
 		}
 		if (StringValueComparison(const_data_ptr_cast(data),
 		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
-			                        stats.ToString(), vector.ToString(count));
+			                        stats.ToString(), vector.ToString());
 		}
 		// LCOV_EXCL_STOP
 	}

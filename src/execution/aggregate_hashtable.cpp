@@ -687,7 +687,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);
 
-	addresses_v.Flatten(chunk_size);
+	addresses_v.Flatten();
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
 
 	if (skip_lookups) {

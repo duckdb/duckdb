@@ -187,7 +187,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			result_data.WriteStringRef(FetchStringFromDict(result, decompress_offset, string_number));
 		}
 	}
-	result.Verify(result_offset + scan_count);
+	result.Verify();
 }
 
 void CompressedStringScanState::Select(Vector &result, idx_t start, const SelectionVector &sel, idx_t sel_count) {
@@ -228,7 +228,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 
 	auto &selvec = GetSelVec(start, scan_count);
 	result.Dictionary(dictionary, selvec, scan_count);
-	result.Verify(result_offset + scan_count);
+	result.Verify();
 }
 
 } // namespace dict_fsst

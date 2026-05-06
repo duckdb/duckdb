@@ -250,7 +250,7 @@ void RoaringScanPartialBoolean(ColumnSegment &segment, ColumnScanState &state, i
 	ExtractValidityMaskToData(mask, result, result_offset, scan_count);
 }
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten(scan_count);
+	result.Flatten();
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 

@@ -380,7 +380,7 @@ void ApproxTopKFinalize(Vector &state_vector, AggregateInputData &, Vector &resu
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {

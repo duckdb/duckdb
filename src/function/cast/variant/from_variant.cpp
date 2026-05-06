@@ -720,7 +720,7 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
 	FromVariantConversionData conversion_data(variant_format);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());

@@ -29,7 +29,7 @@ DUCKDB_API idx_t VectorIteratorGetListSize(const Vector &vector);
 class VectorValidityIterator {
 public:
 	VectorValidityIterator(const Vector &vector, idx_t count) : count(count) {
-		vector.ToUnifiedFormat(count, format);
+		vector.ToUnifiedFormat(format);
 	}
 
 	bool IsValid(idx_t i) const {
@@ -54,7 +54,7 @@ template <class T>
 class VectorIterator {
 public:
 	VectorIterator(const Vector &vector, idx_t count) : count(count) {
-		vector.ToUnifiedFormat(count, format);
+		vector.ToUnifiedFormat(format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
 
@@ -212,7 +212,7 @@ public:
 
 	VectorIterator(const Vector &vector, idx_t count)
 	    : children(MakeChildren(vector, count, std::index_sequence_for<Args...> {})), count(count) {
-		vector.ToUnifiedFormat(count, format);
+		vector.ToUnifiedFormat(format);
 	}
 
 public:
@@ -337,7 +337,7 @@ private:
 public:
 	VectorIterator(const Vector &vector, idx_t count)
 	    : child_iter(VectorIteratorGetListChild(vector), VectorIteratorGetListSize(vector)), count(count) {
-		vector.ToUnifiedFormat(count, format);
+		vector.ToUnifiedFormat(format);
 		list_data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 	}
 
@@ -499,7 +499,7 @@ template <class T>
 class VectorValidValueIterator {
 public:
 	VectorValidValueIterator(const Vector &vector, idx_t count) : count(count) {
-		vector.ToUnifiedFormat(count, format);
+		vector.ToUnifiedFormat(format);
 		data = UnifiedVectorFormat::GetData<T>(format);
 	}
 

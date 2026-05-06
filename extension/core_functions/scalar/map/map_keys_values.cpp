@@ -19,7 +19,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 		return;
 	}
 	auto count = args.size();
-	map.Flatten(count);
+	map.Flatten();
 
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	auto &child = get_child_vector(map);
@@ -31,7 +31,7 @@ static void MapKeyValueFunction(DataChunk &args, ExpressionState &state, Vector 
 	FlatVector::SetValidity(result, FlatVector::ValidityMutable(map));
 	auto list_size = ListVector::GetListSize(map);
 	ListVector::SetListSize(result, list_size);
-	result.Verify(count);
+	result.Verify();
 }
 
 static void MapKeysFunction(DataChunk &args, ExpressionState &state, Vector &result) {

@@ -513,12 +513,12 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		if (row_is_valid && !has_no_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
-			    vector.ToString(count));
+			    vector.ToString());
 		}
 		if (!row_is_valid && !has_null && !ignore_has_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
-			    vector.ToString(count));
+			    vector.ToString());
 		}
 	}
 }
