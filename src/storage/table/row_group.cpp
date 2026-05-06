@@ -1604,6 +1604,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 		metadata_manager->ClearModifiedBlocks(reused_column_blocks);
+		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 	}
 
 	// cache metadata pointers for future checkpoint reuse

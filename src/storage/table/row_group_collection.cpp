@@ -1747,10 +1747,16 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 			// Capture blocks that have been written
 			vector<MetaBlockPointer> all_written_blocks = pointer_copy.data_pointers;
-			vector<MetaBlockPointer> all_metadata_blocks;
-			for (auto &block : pointer_copy.extra_metadata_blocks) {
-				all_written_blocks.emplace_back(block, 0);
-				all_metadata_blocks.emplace_back(block, 0);
+			if (pointer_copy.has_metadata_blocks) {
+				for (auto &block : pointer_copy.extra_metadata_blocks) {
+					all_written_blocks.emplace_back(block, 0);
+				}
+			} else {
+				if (!pointer_copy.has_per_column_metadata_blocks) {
+					throw InternalException("Checkpointing should always remember metadata blocks");
+				}
+				pointer_copy.per_column_metadata_blocks.ForEachBlock(
+				    [&](idx_t block) { all_written_blocks.emplace_back(block, 0); });
 			}
 
 			// Deserialize all columns to check if what's on disk matches our metadata
@@ -1796,8 +1802,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			set<idx_t> all_written_deletes_block_ids;
 			for (auto &ptr : pointer_copy.deletes_pointers) {
 				all_written_deletes_block_ids.insert(ptr.block_pointer);
-				// delete ptr should be cleared
-				if (!block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
+				// delete ptr should be cleared (unless it's been newly written)
+				if (block_manager.GetMetadataManager().BlockIsModified(ptr) &&
+				    !block_manager.GetMetadataManager().BlockHasBeenCleared(ptr)) {
 					throw InternalException("Delete ptr %llu was not cleared", ptr.block_pointer);
 				}
 			}

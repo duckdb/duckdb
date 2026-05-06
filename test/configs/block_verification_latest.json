@@ -1,0 +1,26 @@
+{
+  "description": "Run with block verification on latest persistent databases as storage.",
+  "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__block_verification_latest.db",
+  "settings": [
+    {
+      "name": "storage_compatibility_version",
+      "value": "latest"
+    },
+    {
+      "name": "debug_verify_blocks",
+      "value": "true"
+    }
+  ],
+  "skip_compiled": "true",
+  "inherit_skip_tests": "test/configs/latest_storage.json",
+  "skip_tests": [
+    {
+      "reason": "Block verification loads all columns, which conflicts with only_loaded_segments checks",
+      "paths": [
+        "test/sql/storage/metadata/partial_column_metadata_reuse.test",
+        "test/sql/storage/metadata/partial_column_metadata_reuse_v7.test",
+        "test/sql/storage/metadata/full_table_metadata_reuse_v7.test"
+      ]
+    }
+  ]
+}
