@@ -354,12 +354,16 @@ void Vector::Print(idx_t) const {
 	Print();
 }
 
-idx_t Vector::GetDataSize(idx_t cardinality) const {
-	return Buffer().GetDataSize(type, cardinality);
+idx_t Vector::GetDataSize() const {
+	return GetDataSize(size());
+}
+
+idx_t Vector::GetDataSize(idx_t count) const {
+	return Buffer().GetDataSize(type, count);
 }
 
 idx_t Vector::GetAllocationSize(idx_t cardinality) const {
-	return GetDataSize(cardinality);
+	return GetDataSize();
 }
 
 idx_t Vector::GetAllocationSize() const {

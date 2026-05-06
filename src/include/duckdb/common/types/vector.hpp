@@ -168,8 +168,9 @@ public:
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	//! Returns the uncompressed size of the data stored within this vector
-	idx_t GetDataSize(idx_t cardinality) const;
-	[[deprecated("This method is an alias for GetDataSize(cardinality) for legacy reasons - use either that or "
+	idx_t GetDataSize() const;
+	idx_t GetDataSize(idx_t count) const;
+	[[deprecated("This method is an alias for GetDataSize() for legacy reasons - use either that or "
 	             "GetAllocationSize() instead")]] idx_t
 	GetAllocationSize(idx_t cardinality) const;
 	//! Returns the data allocated by the vector buffers
