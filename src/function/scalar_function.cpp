@@ -68,7 +68,7 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::Bind(ClientContext &context,
 	FunctionBinder func_binder(context);
 	auto expr = func_binder.BindScalarFunction(*this, std::move(arguments), binder);
 
-	if (expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw InvalidInputException("BindScalarFunction did not return a BoundFunctionExpression");
 	}
 

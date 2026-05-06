@@ -14,7 +14,7 @@ BetweenExpression::BetweenExpression() : BetweenExpression(nullptr, nullptr, nul
 }
 
 string BetweenExpression::ToString() const {
-	return ToString<BetweenExpression, ParsedExpression>(*this);
+	return ToString<ParsedExpression>(Input(), LowerBound(), UpperBound());
 }
 
 bool BetweenExpression::Equal(const BetweenExpression &a, const BetweenExpression &b) {

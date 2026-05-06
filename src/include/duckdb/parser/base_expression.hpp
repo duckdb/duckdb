@@ -94,6 +94,13 @@ protected:
 	//! The location in the query (if any)
 	optional_idx query_location;
 
+protected:
+	//! Sets the class of the expression unsafely. In general expressions are immutable and should not be changed after
+	//! creation. Only use this if you know what you are doing.
+	void SetExpressionClassUnsafe(ExpressionClass new_class) {
+		expression_class = new_class;
+	}
+
 public:
 	//! Returns true if this expression is an aggregate or not.
 	/*!

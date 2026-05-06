@@ -536,7 +536,7 @@ void DataTable::Fetch(DuckTransaction &transaction, DataChunk &result, const vec
 	DataChunk local_chunk;
 	local_chunk.Initialize(allocator, result.GetTypes());
 	Vector local_row_ids(row_identifiers, local_sel, local_count);
-	local_row_ids.Flatten(local_count);
+	local_row_ids.Flatten();
 	ColumnFetchState local_fetch_state;
 	local_storage.FetchChunk(*this, local_row_ids, local_count, column_ids, local_chunk, local_fetch_state);
 
@@ -1572,7 +1572,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 	auto &local_storage = LocalStorage::Get(transaction);
 	auto storage = local_storage.GetStorage(*this);
 
-	row_identifiers.Flatten(count);
+	row_identifiers.Flatten();
 	auto ids = FlatVector::GetDataMutable<row_t>(row_identifiers);
 
 	idx_t pos = 0;
@@ -1750,7 +1750,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		updates_slice.Slice(updates, sel_local_update, n_local_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
-		row_ids_slice.Flatten(n_local_update);
+		row_ids_slice.Flatten();
 
 		LocalStorage::Get(context, db).Update(*this, table_entry, row_ids_slice, column_ids, updates_slice);
 	}
@@ -1761,7 +1761,7 @@ void DataTable::Update(TableUpdateState &state, ClientContext &context, DuckTabl
 		updates_slice.Slice(updates, sel_global_update, n_global_update);
 		updates_slice.Flatten();
 		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
-		row_ids_slice.Flatten(n_global_update);
+		row_ids_slice.Flatten();
 
 		row_groups->Update(transaction, table_entry, FlatVector::GetDataMutable<row_t>(row_ids_slice), column_ids,
 		                   updates_slice);
@@ -1787,7 +1787,7 @@ void DataTable::UpdateColumn(DuckTableEntry &table, ClientContext &context, Vect
 	auto &transaction = DuckTransaction::Get(context, db);
 
 	updates.Flatten();
-	row_ids.Flatten(updates.size());
+	row_ids.Flatten();
 	row_groups->UpdateColumn(transaction, table, row_ids, column_path, updates);
 }
 

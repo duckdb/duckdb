@@ -639,7 +639,7 @@ void VerifyNullHandling(DataChunk &chunk, UngroupedAggregateState &state,
 		    aggr.function.GetProperties().GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
 			UnifiedVectorFormat vdata;
-			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
+			chunk.data[aggr_idx].ToUnifiedFormat(vdata);
 			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
 		}
 	}

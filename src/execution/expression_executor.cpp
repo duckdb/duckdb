@@ -157,7 +157,7 @@ bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Express
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.GetReturnType().id() == vector.GetType().id());
-	vector.Verify(count);
+	vector.Verify();
 	if (expr.GetVerificationStats()) {
 		expr.GetVerificationStats()->Verify(vector, count);
 	}
@@ -192,7 +192,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		} else {
 			VectorOperations::DefaultCast(vector, intermediate, cast_count, true);
 		}
-		intermediate.Verify(cast_count);
+		intermediate.Verify();
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
 		Vector result(vector.GetType(), cast_count);
@@ -207,7 +207,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			FlatVector::SetSize(result, count_t(count));
 		}
 		vector.Reference(result);
-		vector.Verify(count);
+		vector.Verify();
 	}
 }
 
@@ -216,8 +216,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
-	case ExpressionClass::BOUND_BETWEEN:
-		return InitializeState(expr.Cast<BoundBetweenExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
 		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
 	case ExpressionClass::BOUND_CAST:
@@ -263,9 +261,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		    result.GetType(), expr.GetReturnType());
 	}
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_BETWEEN:
-		Execute(expr.Cast<BoundBetweenExpression>(), state, sel, count, result);
-		break;
 	case ExpressionClass::BOUND_REF:
 		Execute(expr.Cast<BoundReferenceExpression>(), state, sel, count, result);
 		break;
@@ -312,16 +307,13 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
-#ifndef DUCKDB_SMALLER_BINARY
-	case ExpressionClass::BOUND_BETWEEN:
-		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
-#endif
 	case ExpressionClass::BOUND_COMPARISON:
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_FUNCTION:
-		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel,
+		              false_sel); // NOLINT: c-style cast
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}
@@ -378,7 +370,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;
-	intermediate.ToUnifiedFormat(count, idata);
+	intermediate.ToUnifiedFormat(idata);
 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();

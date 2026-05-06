@@ -158,7 +158,7 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 
 	if (result_length > 0) {
 		result_entry.Slice(input_entry, result_selection_vec, offset);
-		result_entry.Flatten(offset);
+		result_entry.Flatten();
 
 		FlatVector::SetValidity(result_entry, entry_validity_mask);
 	}

@@ -248,15 +248,15 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
 	                           execute_function_state.TryExecuteDictionaryExpression(expr, arguments, *state, result);
-	if (expr.function.HasFunctionCallback() && !dictionary_executed) {
-		expr.function.GetFunctionCallback()(arguments, *state, result);
-	} else if (expr.function.HasSelectCallback()) {
-		ExecuteSelectFunction(expr, arguments, *state, result);
-	} else if (dictionary_executed) {
-		D_ASSERT(expr.function.HasFunctionCallback());
-	} else {
-		throw InternalException("Scalar function %s has neither an execution nor a select callback",
-		                        expr.function.GetName());
+	if (!dictionary_executed) {
+		if (expr.function.HasFunctionCallback()) {
+			expr.function.GetFunctionCallback()(arguments, *state, result);
+		} else if (expr.function.HasSelectCallback()) {
+			ExecuteSelectFunction(expr, arguments, *state, result);
+		} else {
+			throw InternalException("Scalar function %s has neither an execution nor a select callback",
+			                        expr.function.GetName());
+		}
 	}
 	if (all_constant) {
 		// restore the input cardinality
@@ -267,7 +267,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		// ensure the result type is constant
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten(1);
+			result.Flatten();
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}

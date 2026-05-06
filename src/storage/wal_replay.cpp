@@ -1197,7 +1197,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	auto &row_identifiers = chunk.data[0];
-	row_identifiers.Flatten(chunk.size());
+	row_identifiers.Flatten();
 	auto source_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// Delete the row IDs from the current table.

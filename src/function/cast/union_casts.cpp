@@ -282,7 +282,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		// This is not always the case, e.g. when a member is cast using the default TryNullCast function
 		// the resulting member vector will be a constant null vector.
 		for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
-			UnionVector::GetMember(result, target_member_idx).Flatten(count);
+			UnionVector::GetMember(result, target_member_idx).Flatten();
 		}
 
 		// We assume that a union tag vector validity matches the union vector validity.

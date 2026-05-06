@@ -390,7 +390,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		error.AddQueryLocation(function);
 		error.Throw();
 	}
-	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+	if (result->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
 		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();

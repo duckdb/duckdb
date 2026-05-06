@@ -111,7 +111,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	} else {
 		// Build the buffer space
 		state.chunk_state.heap_sizes.Slice(input.heap_sizes, state.partition_sel, append_count);
-		state.chunk_state.heap_sizes.Flatten(append_count);
+		state.chunk_state.heap_sizes.Flatten();
 		BuildBufferSpace(state);
 
 		// Copy the rows
