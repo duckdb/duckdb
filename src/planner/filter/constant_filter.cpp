@@ -28,7 +28,7 @@ string ConstantFilter::ToString(const string &column_name) const {
 unique_ptr<Expression> ConstantFilter::ToExpression(const Expression &column) const {
 	auto bound_constant = make_uniq<BoundConstantExpression>(constant);
 	auto result = BoundComparisonExpression::Create(comparison_type, column.Copy(), std::move(bound_constant));
-	return std::move(result);
+	return result;
 }
 
 bool ConstantFilter::Equals(const TableFilter &other_p) const {
