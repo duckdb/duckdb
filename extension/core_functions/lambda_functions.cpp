@@ -270,7 +270,6 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
-	auto child_vector_size = ListVector::GetListSize(args.data[0]);
 	LambdaFunctions::ColumnInfo child_info(*info.child_vector);
 	info.child_vector->ToUnifiedFormat(child_info.format);
 

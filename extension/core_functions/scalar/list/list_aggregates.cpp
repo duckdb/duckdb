@@ -222,7 +222,6 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	D_ASSERT(aggr.function.HasStateUpdateCallback());
 
-	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetChildMutable(lists);
 	child_vector.Flatten();
 

@@ -28,8 +28,7 @@ void ValidityColumnData::UpdateWithBase(TransactionData transaction, DuckTableEn
 	    CompressionType::COMPRESSION_EMPTY) {
 		// The validity is actually covered by the data, so we read it to get the validity for UpdateInternal.
 		ColumnScanState data_scan_state(nullptr);
-		auto fetch_count =
-		    base.Fetch(data_scan_state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
+		base.Fetch(data_scan_state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
 		base_vector.Flatten();
 	}
 

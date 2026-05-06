@@ -238,7 +238,6 @@ struct SortedAggregateState {
 
 	static void LinkedAppend(const LinkedChunkFunctions &functions, ArenaAllocator &allocator, DataChunk &input,
 	                         LinkedLists &linked, SelectionVector &sel, idx_t nsel) {
-		const auto count = input.size();
 		for (column_t c = 0; c < input.ColumnCount(); ++c) {
 			auto &func = functions[c];
 			auto &linked_list = linked[c];

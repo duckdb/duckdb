@@ -29,7 +29,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// Setup inner vec
 	auto &inner_vec = ListVector::GetChildMutable(outer_vec);
-	const auto inner_count = ListVector::GetListSize(outer_vec);
 	inner_vec.ToUnifiedFormat(inner_format);
 
 	// Special case: inner list is all-null
@@ -47,7 +46,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 	// Setup items vec
 	auto &items_vec = ListVector::GetChildMutable(inner_vec);
-	const auto items_count = ListVector::GetListSize(inner_vec);
 	items_vec.ToUnifiedFormat(items_format);
 
 	// First pass: Figure out the total amount of items.

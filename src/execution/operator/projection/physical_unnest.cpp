@@ -97,7 +97,6 @@ void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr
 			auto &child_vector = list_vector;
 			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		} else {
-			auto list_size = ListVector::GetListSize(list_vector);
 			auto &child_vector = ListVector::GetChild(list_vector);
 			child_vector.ToUnifiedFormat(list_child_data[col_idx]);
 		}
