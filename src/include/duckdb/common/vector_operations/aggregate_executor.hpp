@@ -311,8 +311,8 @@ public:
 		if (aggr_input_data.clustered) {
 			auto &cs = *aggr_input_data.clustered;
 			for (idx_t r = 0; r < cs.n_group_runs; r++) {
-				OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(cs.group_runs[r].state),
-				                                               aggr_input_data, cs.group_runs[r].count);
+				OP::template ConstantOperation<STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(cs.group_runs[cs.run_begin + r].state),
+				                                               aggr_input_data, cs.group_runs[cs.run_begin + r].count);
 			}
 			return;
 		}
@@ -337,8 +337,8 @@ public:
 		D_ASSERT(aggr_input_data.clustered.get() == &clustered);
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
 			OP::template ConstantOperation<STATE_TYPE, OP>(
-			    *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state), aggr_input_data,
-			    clustered.group_runs[r].count);
+			    *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin + r].state), aggr_input_data,
+			    clustered.group_runs[clustered.run_begin + r].count);
 		}
 	}
 
@@ -385,10 +385,12 @@ public:
 	template <bool CHECK_VALIDITY, class LOCAL_TYPE, class INPUT_TYPE, class OP, class INDEXER>
 	static inline bool UpdateUnaryClusteredOpt(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t count,
 	                                           const ValidityMask &mask, INDEXER indexer) {
-		bool saw_value = false;
+		bool saw_value = count != 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = indexer.GetIndex(i);
-			if (!CHECK_VALIDITY || mask.RowIsValidUnsafe(idx)) {
+			if constexpr (!CHECK_VALIDITY) {
+				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[idx]);
+			} else if (mask.RowIsValidUnsafe(idx)) {
 				OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[idx]);
 				saw_value = true;
 			}
@@ -416,10 +418,10 @@ public:
 		idx_t pos = 0;
 		using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin + r].state);
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-			auto run_count = clustered.group_runs[r].count;
+			auto run_count = clustered.group_runs[clustered.run_begin + r].count;
 			auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
 			    vals, local, run_count, validity, index_factory(r, pos));
 			OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
@@ -438,8 +440,8 @@ public:
 	}
 
 	static inline bool IsDenseSingleRun(const ClusteredAggr &clustered, idx_t count) {
-		return clustered.n_group_runs == 1 && clustered.group_runs[0].count == count &&
-		       clustered.group_runs[0].sel == nullptr;
+		return clustered.n_group_runs == 1 && clustered.group_runs[clustered.run_begin].count == count &&
+		       clustered.group_runs[clustered.run_begin].sel == nullptr;
 	}
 
 	template <bool SIMPLE_DICT, class STATE_TYPE, class INPUT_TYPE, class OP>
@@ -455,7 +457,7 @@ public:
 			    });
 		} else {
 			ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(vals, idata.validity, clustered, [&](idx_t r, idx_t) {
-				return SelectionIndexer<false, true> {clustered.group_runs[r].sel, idata.sel};
+				return SelectionIndexer<false, true> {clustered.group_runs[clustered.run_begin + r].sel, idata.sel};
 			});
 		}
 	}
@@ -465,7 +467,7 @@ public:
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
 		auto &validity = FlatVector::Validity(input);
 		if (IsDenseSingleRun(clustered, count)) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[0].state);
+			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin].state);
 			using local_type = clustered_local_state_t<OP, STATE_TYPE>;
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
@@ -482,7 +484,7 @@ public:
 			return;
 		}
 		ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(vals, validity, clustered, [&](idx_t r, idx_t) {
-			return SelectionIndexer<false, false> {clustered.group_runs[r].sel, nullptr};
+			return SelectionIndexer<false, false> {clustered.group_runs[clustered.run_begin + r].sel, nullptr};
 		});
 	}
 
@@ -495,10 +497,10 @@ public:
 		const auto &constant_input = *ConstantVector::GetData<INPUT_TYPE>(input);
 		using has_repeat_count = HasClusteredLocalRepeatCount<OP, INPUT_TYPE, local_type>;
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin + r].state);
 			local_type local;
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
-			auto run_count = clustered.group_runs[r].count;
+			auto run_count = clustered.group_runs[clustered.run_begin + r].count;
 			if (run_count != 0) {
 				UpdateUnaryClusteredLocalRepeat<local_type, INPUT_TYPE, OP>(local, constant_input, run_count,
 				                                                            has_repeat_count {});
@@ -515,7 +517,7 @@ public:
 		input.ToUnifiedFormat(count, idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(vals, idata.validity, clustered, [&](idx_t r, idx_t) {
-			return SelectionIndexer<false, true> {clustered.group_runs[r].sel, idata.sel};
+			return SelectionIndexer<false, true> {clustered.group_runs[clustered.run_begin + r].sel, idata.sel};
 		});
 	}
 
@@ -535,9 +537,9 @@ public:
 		auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 		AggregateUnaryInput unary_input(aggr_input_data, ConstantVector::Validity(input));
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
+			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin + r].state);
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(state, *idata, unary_input,
-			                                                           clustered.group_runs[r].count);
+			                                                           clustered.group_runs[clustered.run_begin + r].count);
 		}
 	}
 
@@ -554,10 +556,10 @@ public:
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[r].state);
-			OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>(state, vals, unary_input, clustered.group_runs[r].sel,
+			auto &state = *reinterpret_cast<STATE_TYPE *>(clustered.group_runs[clustered.run_begin + r].state);
+			OP::template ClusteredOp<INPUT_TYPE, STATE_TYPE, OP>(state, vals, unary_input, clustered.group_runs[clustered.run_begin + r].sel,
 			                                                     *idata.sel, idata.validity, 0,
-			                                                     clustered.group_runs[r].count);
+			                                                     clustered.group_runs[clustered.run_begin + r].count);
 		}
 	}
 

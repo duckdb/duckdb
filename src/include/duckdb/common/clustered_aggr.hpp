@@ -19,11 +19,11 @@ class Vector;
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
 //! regular scatter path over input-order addresses.
 struct ClusteredAggr {
-	static constexpr idx_t MIN_AVG_RUNLENGTH = 3;
+	static constexpr idx_t MAJORITY_RUNLENGTH_THRESHOLD = 8;
 	static constexpr idx_t LOG2_MAX_GROUPS = 5;
-	static constexpr idx_t MAX_GROUPS = 1 << LOG2_MAX_GROUPS;
-	static constexpr idx_t MAX_RUNS = 2 * STANDARD_VECTOR_SIZE / MIN_AVG_RUNLENGTH; 
-	static constexpr idx_t HASH_SLOTS = 1 << (LOG2_MAX_GROUPS + 7);
+	static constexpr idx_t MAX_GROUPS = idx_t(1) << LOG2_MAX_GROUPS;
+	static constexpr idx_t MAX_RUNS = STANDARD_VECTOR_SIZE + MAX_GROUPS + 1; 
+	static constexpr idx_t HASH_SLOTS = MAX_GROUPS*128;
 	static constexpr idx_t FIRST_GROUP = ((MAX_RUNS - 1)  - MAX_GROUPS) / 2;
 	static constexpr idx_t POSITION_SHIFT = 32 - LOG2_MAX_GROUPS;
 	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << POSITION_SHIFT;
@@ -45,6 +45,7 @@ struct ClusteredAggr {
 	//! On success fills group_runs[].sel/gid/count.
 	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE sel_t),
 	//! and encoded mini-hash slots mapping raw gids to active-group positions.
+	bool TryClustered2(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
 	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
 
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
