@@ -285,6 +285,8 @@ jobs:
         env:
           EXTENSION_CONFIGS: ./extension_config.cmake
           SUBSET_EXTENSIONS_TESTS: complete
+          ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
         with:
           # TODO use inputs.build-type in build and test command
           build: make release
@@ -305,6 +307,7 @@ jobs:
           upload-name: main-extensions-${{ inputs.git_sha }}-extension-linux_arm64
           # TODO
           # ${{ inputs.extension_name }}-${{ inputs.duckdb_version }}-extension-${{matrix.duckdb_arch}}${{inputs.artifact_postfix}}
+          # upload-path: build/${{ input.build_type }}/repository/**/*.duckdb_extension
           upload-path: build/release/repository/**/*.duckdb_extension
 
   deploy-repository:
