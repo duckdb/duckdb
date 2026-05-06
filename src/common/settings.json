@@ -16,6 +16,13 @@
         ]
     },
     {
+        "name": "adaptive_segment_allocation",
+        "description": "When enabled, transient column segments start small and double in size with each overflow, up to the block size",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "allocator_background_threads",
         "description": "Whether to enable the allocator background thread.",
         "type": "BOOLEAN",
@@ -811,6 +818,13 @@
         "on_callbacks": [
             "set"
         ]
+    },
+    {
+        "name": "initial_segment_rows",
+        "description": "Number of rows allocated for the first transient column segment when adaptive_segment_allocation is enabled. Subsequent segments double this until reaching the block size.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2048"
     },
     {
         "name": "integer_division",

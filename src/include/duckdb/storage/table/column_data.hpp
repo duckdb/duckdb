@@ -254,6 +254,8 @@ protected:
 	mutable mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+	//! Size of the last transient segment - drives the adaptive doubling in AppendTransientSegment
+	idx_t last_transient_segment_size = 0;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 

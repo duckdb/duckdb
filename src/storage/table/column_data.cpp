@@ -1,6 +1,8 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -637,24 +639,41 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	const auto block_size = block_manager.GetBlockSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
-	auto vector_segment_size = block_size;
-
-	if (data_type == ColumnDataType::INITIAL_TRANSACTION_LOCAL && start_row == 0) {
-#if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * type_size;
-#else
-		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
-#endif
-	}
-
-	// The segment size is bound by the block size, but can be smaller.
-	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
-	allocation_size += segment_size;
 
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
+	idx_t segment_size;
+	if (Settings::Get<AdaptiveSegmentAllocationSetting>(config)) {
+		if (last_transient_segment_size == 0) {
+			const auto initial_rows = Settings::Get<InitialSegmentRowsSetting>(config);
+			segment_size = MinValue<idx_t>(block_size, MaxValue<idx_t>(type_size, initial_rows * type_size));
+		} else {
+			segment_size = MinValue<idx_t>(block_size, last_transient_segment_size * 2);
+		}
+		// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
+		// any segment below STANDARD_MASK_SIZE triggering a dead-segment overflow chain
+		if (type.InternalType() == PhysicalType::BIT) {
+			segment_size = MaxValue(segment_size, ValidityMask::STANDARD_MASK_SIZE);
+		}
+		last_transient_segment_size = segment_size;
+	} else {
+		auto vector_segment_size = block_size;
+
+		if (data_type == ColumnDataType::INITIAL_TRANSACTION_LOCAL && start_row == 0) {
+#if STANDARD_VECTOR_SIZE < 1024
+			vector_segment_size = 1024 * type_size;
+#else
+			vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
+#endif
+		}
+
+		// The segment size is bound by the block size, but can be smaller.
+		segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
+	}
+	allocation_size += segment_size;
+
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	auto new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
