@@ -1,0 +1,36 @@
+diff --git a/src/deletes/equality_delete.cpp b/src/deletes/equality_delete.cpp
+index 09fe97dc..a0e0c788 100644
+--- a/src/deletes/equality_delete.cpp
++++ b/src/deletes/equality_delete.cpp
+@@ -111,8 +111,8 @@ void IcebergMultiFileList::ScanEqualityDeleteFile(const IcebergManifestEntry &ma
+ 			if (!constant.IsNull()) {
+ 				//! Create a COMPARE_NOT_EQUAL expression
+ 				equality_filter =
+-				    make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, std::move(bound_ref),
+-				                                         make_uniq<BoundConstantExpression>(constant));
++				    BoundComparisonExpression::Create(ExpressionType::COMPARE_NOTEQUAL, std::move(bound_ref),
++				                                      make_uniq<BoundConstantExpression>(constant));
+ 			} else {
+ 				//! Construct an OPERATOR_IS_NOT_NULL expression instead
+ 				auto is_not_null =
+diff --git a/src/iceberg_predicate.cpp b/src/iceberg_predicate.cpp
+index 880bfa46..e34bcace 100644
+--- a/src/iceberg_predicate.cpp
++++ b/src/iceberg_predicate.cpp
+@@ -209,12 +209,12 @@ bool MatchBoundsTemplated(ClientContext &context, const TableFilter &filter, con
+ 		case ExpressionType::COMPARE_LESSTHAN:
+ 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+ 		case ExpressionType::COMPARE_EQUAL: {
+-			D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
+-			auto &compare_expr = expr.Cast<BoundComparisonExpression>();
++			D_ASSERT(expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION);
++			auto &compare_expr = expr.Cast<BoundFunctionExpression>();
+ 			if (transform.Type() == IcebergTransformType::IDENTITY) {
+ 				//! No further processing has been done on the stats (lower/upper bounds)
+-				auto &left = compare_expr.Left();
+-				auto &right = compare_expr.Right();
++				auto &left = BoundComparisonExpression::Left(compare_expr);
++				auto &right = BoundComparisonExpression::Right(compare_expr);
+
+ 				bool left_foldable = left.IsFoldable();
+ 				bool right_foldable = right.IsFoldable();
