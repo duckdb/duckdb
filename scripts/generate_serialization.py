@@ -132,7 +132,7 @@ SERIALIZE_ELEMENT_FORMAT = (
     '\tserializer.WriteProperty<{property_type}>({property_id}, "{property_key}", {property_name}{property_default});\n'
 )
 
-BASE_SERIALIZE_FORMAT = '\t{base_class_name}::Serialize(serializer);\n'
+BASE_SERIALIZE_FORMAT = '\t{base_class_name}::Serialize(serializer);{nolint}\n'
 
 POINTER_RETURN_FORMAT = '{pointer}<{class_name}>'
 
@@ -379,6 +379,7 @@ supported_serialize_entries = [
     'includes',
     'finalize_deserialization',
     'ignore_clang_tidy_rules',
+    'inheritance_ignore_lint',
 ]
 
 
@@ -421,6 +422,7 @@ class SerializableClass:
         self.ignore_clang_tidy_rules: List[ClangTidyIgnoreRule] = []
         if 'ignore_clang_tidy_rules' in entry:
             self.ignore_clang_tidy_rules = ClangTidyIgnoreRule.from_entries(entry['ignore_clang_tidy_rules'])
+        self.inheritance_ignore_lint: bool = entry.get('inheritance_ignore_lint', False)
         if 'finalize_deserialization' in entry:
             self.finalize_deserialization = entry['finalize_deserialization']
         if self.is_base_class:
@@ -635,7 +637,8 @@ def generate_base_class_code(base_class: SerializableClass):
     base_class_generation = ''
     serialization = ''
     if base_class.base is not None:
-        serialization += BASE_SERIALIZE_FORMAT.format(base_class_name=base_class.base)
+        nolint = ' // NOLINT' if base_class.inheritance_ignore_lint else ''
+        serialization += BASE_SERIALIZE_FORMAT.format(base_class_name=base_class.base, nolint=nolint)
     base_class_generation += SERIALIZE_BASE_FORMAT.format(
         class_name=base_class.name, members=serialization + base_class_serialize
     )
@@ -732,7 +735,8 @@ def generate_class_code(class_entry: SerializableClass):
                 constructor_parameters.append(entry.deserialize_property)
 
     if class_entry.base is not None:
-        class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
+        nolint = ' // NOLINT' if class_entry.inheritance_ignore_lint else ''
+        class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base, nolint=nolint)
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
         class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type='unique_ptr')

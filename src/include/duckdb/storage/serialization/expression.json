@@ -66,7 +66,8 @@
         "type": "bool"
       }
     ],
-    "constructor": ["input", "lower", "upper", "lower_inclusive", "upper_inclusive"]
+    "constructor": ["input", "lower", "upper", "lower_inclusive", "upper_inclusive"],
+    "inheritance_ignore_lint": true
   },
   {
     "class": "BoundCaseExpression",

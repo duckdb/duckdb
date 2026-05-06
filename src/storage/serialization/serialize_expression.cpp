@@ -85,7 +85,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &deserializer) {
 }
 
 void BoundBetweenExpression::Serialize(Serializer &serializer) const {
-	Expression::Serialize(serializer);
+	Expression::Serialize(serializer); // NOLINT
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "input", InputRef());
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(201, "lower", LowerBoundRef());
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "upper", UpperBoundRef());
