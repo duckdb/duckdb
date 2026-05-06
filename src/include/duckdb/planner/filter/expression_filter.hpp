@@ -16,6 +16,7 @@
 
 namespace duckdb {
 class ExpressionExecutor;
+struct DynamicFilterData;
 
 class BoundFunctionExpression;
 
@@ -57,6 +58,9 @@ public:
 	static bool IsOptionalFilter(const TableFilter &filter);
 	//! Check if the root of a table filter tree is an optional filter wrapper
 	static bool IsRootOptionalFilter(const TableFilter &filter);
+	//! If this is an optional/selectivity-optional wrapper around a root dynamic filter,
+	//! return the shared dynamic filter state.
+	static shared_ptr<DynamicFilterData> GetRootOptionalDynamicFilterData(const TableFilter &filter);
 
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) const;
 	string ToString(const string &column_name) const;

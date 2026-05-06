@@ -398,6 +398,34 @@ bool ExpressionFilter::IsRootOptionalFilter(const TableFilter &filter) {
 	return IsRootOptionalExpression(*expr_filter.expr);
 }
 
+static shared_ptr<DynamicFilterData> TryGetRootDynamicFilterData(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (func.function.GetName() != DynamicFilterScalarFun::NAME || !func.bind_info) {
+		return nullptr;
+	}
+	return func.bind_info->Cast<DynamicFilterFunctionData>().filter_data;
+}
+
+shared_ptr<DynamicFilterData> ExpressionFilter::GetRootOptionalDynamicFilterData(const TableFilter &filter) {
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::GetRootOptionalDynamicFilterData");
+	if (expr_filter.expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
+	if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
+		auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
+	}
+	if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
+		auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
+	}
+	return nullptr;
+}
+
 unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter &filter, const LogicalType &col_type) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
