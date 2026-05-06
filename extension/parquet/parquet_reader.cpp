@@ -1525,6 +1525,101 @@ void ParquetReader::GetPartitionStats(const duckdb_parquet::FileMetaData &metada
 	}
 }
 
+void ParquetReader::WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                       const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span,
+                                       bool log_prefetch) {
+	if (!state.current_group_prefetched) {
+		auto total_compressed_size = GetGroupCompressedSize(state);
+		if (total_compressed_size > 0) {
+			trans.Prefetch(GetGroupOffset(state), total_row_group_span);
+		}
+		state.current_group_prefetched = true;
+	}
+	if (log_prefetch) {
+		state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
+		vector<ParquetPrefetchColumn> pending_registrations;
+		for (auto &column_chunk : group.columns) {
+			auto &path = column_chunk.meta_data.path_in_schema;
+			string name = path.empty() ? string() : StringUtil::Join(path, ".");
+			pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
+		}
+		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+	}
+}
+
+void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+                                       const duckdb_parquet::RowGroup &group, bool filters_look_unselective,
+                                       bool log_prefetch) {
+	bool has_non_optional_filter = false;
+	if (filters) {
+		for (auto &entry : *filters) {
+			if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+				has_non_optional_filter = true;
+			}
+		}
+	}
+	const bool lazy_fetch = has_non_optional_filter && !filters_look_unselective;
+
+	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+	vector<bool> already_registered(column_ids.size(), false);
+	vector<ParquetPrefetchColumn> pending_registrations;
+
+	if (lazy_fetch && !state.scan_filters.empty()) {
+		auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
+		const auto &permutation = adaptive_filter.GetPermutation();
+		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+			// We must do the filter grouping based on the set that excludes all rows
+			if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
+
+				trans.FinalizeRegistration();
+				if (log_prefetch) {
+					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+				}
+			}
+			auto &scan_filter = state.scan_filters[permutation[i]];
+			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+			auto file_col_idx = column_ids[local_idx];
+			auto &child = root_reader.GetChildReader(file_col_idx);
+			child.RegisterPrefetch(trans, true);
+			if (log_prefetch) {
+				pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+			}
+			already_registered[local_idx.GetIndex()] = true;
+		}
+		// Done with the filter columns, time to merge the non-filter columns
+		trans.FinalizeRegistration();
+		if (log_prefetch) {
+			state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+		}
+	}
+
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		// We do the remaining columns that have not yet been prefetched by the previous steps
+		// These can be the remaining projections, or all columns if the filters were not selective
+		if (already_registered[i]) {
+			continue;
+		}
+		auto col_idx = MultiFileLocalIndex(i);
+		auto file_col_idx = column_ids[col_idx];
+		auto &child = root_reader.GetChildReader(file_col_idx);
+		child.RegisterPrefetch(trans, true);
+		if (log_prefetch) {
+			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
+		}
+	}
+	trans.FinalizeRegistration();
+	if (log_prefetch) {
+		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+		state.prefetch_metrics.logger.strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS
+		                                                    : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+	}
+
+	if (!lazy_fetch) {
+		trans.PrefetchRegistered();
+	}
+}
+
+
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	result.Reset();
 	if (state.finished) {
@@ -1598,96 +1693,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				}
 			}
 
-			// Collected only when ParquetPrefetch logging is enabled.
-			vector<ParquetPrefetchColumn> pending_registrations;
-
 			if ((!filters || filters_look_unselective) &&
 			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
-				// Prefetch the whole row group
-				if (!state.current_group_prefetched) {
-					auto total_compressed_size = GetGroupCompressedSize(state);
-					if (total_compressed_size > 0) {
-						trans.Prefetch(GetGroupOffset(state), total_row_group_span);
-					}
-					state.current_group_prefetched = true;
-				}
-				if (log_prefetch) {
-					state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
-					for (auto &column_chunk : group.columns) {
-						auto &path = column_chunk.meta_data.path_in_schema;
-						string name = path.empty() ? string() : StringUtil::Join(path, ".");
-						pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
-					}
-					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
-				}
+				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
-				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
-				// fetched on the first read to that buffer.
-				bool has_non_optional_filter = false;
-				if (filters) {
-					for (auto &entry : *filters) {
-						if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
-							has_non_optional_filter = true;
-						}
-					}
-				}
-				const bool lazy_fetch = has_non_optional_filter && !filters_look_unselective;
-
-				auto &root_reader = state.root_reader->Cast<StructColumnReader>();
-				vector<bool> already_registered(column_ids.size(), false);
-
-				if (lazy_fetch && !state.scan_filters.empty()) {
-					auto &adaptive_filter = state.adaptive_filter_cache.GetAdaptiveFilter();
-					const auto &permutation = adaptive_filter.GetPermutation();
-					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
-							trans.FinalizeRegistration();
-							if (log_prefetch) {
-								state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations,
-								                                                    group.columns);
-							}
-						}
-						auto &scan_filter = state.scan_filters[permutation[i]];
-						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
-						auto file_col_idx = column_ids[local_idx];
-						auto &child = root_reader.GetChildReader(file_col_idx);
-						child.RegisterPrefetch(trans, true);
-						if (log_prefetch) {
-							pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
-						}
-						already_registered[local_idx.GetIndex()] = true;
-					}
-					// merge-boundary between filter and non-filter batches
-					trans.FinalizeRegistration();
-					if (log_prefetch) {
-						state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations,
-						                                                    group.columns);
-					}
-				}
-
-				for (idx_t i = 0; i < column_ids.size(); i++) {
-					if (already_registered[i]) {
-						continue;
-					}
-					auto col_idx = MultiFileLocalIndex(i);
-					auto file_col_idx = column_ids[col_idx];
-					auto &child = root_reader.GetChildReader(file_col_idx);
-					child.RegisterPrefetch(trans, true);
-					if (log_prefetch) {
-						pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
-					}
-				}
-
-				trans.FinalizeRegistration();
-				if (log_prefetch) {
-					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
-					state.prefetch_metrics.logger.strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS
-					                                                    : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
-				}
-
-				if (!lazy_fetch) {
-					trans.PrefetchRegistered();
-				}
+				ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
 			}
 		}
 		result.Reset();

@@ -352,9 +352,15 @@ private:
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
-	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
+	//! Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	//! Whole-group prefetch strategy
+	void WholeGroupPrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                        const duckdb_parquet::RowGroup &group, uint64_t total_row_group_span, bool log_prefetch);
+	//! Column-wise prefetch strategy.
+	void ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFileTransport &trans,
+	                        const duckdb_parquet::RowGroup &group, bool filters_look_unselective, bool log_prefetch);
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
