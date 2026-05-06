@@ -54,6 +54,13 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Run only specific jobs in CI (separated by whitespace) and skip the rest.
+  #
+  # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
+  # and the dependent job is also skipped.
+  #
+  # For example, to run only "extensions", use:
+  # OVERRIDE_JOBS: linux-relassert linux-release extensions
 
 jobs:
  prepare:
