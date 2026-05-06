@@ -223,7 +223,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 	case ExpressionClass::BOUND_CONSTANT:
 		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
 	case ExpressionClass::BOUND_FUNCTION:
-		return InitializeState(expr.Cast<BoundFunctionExpression>(), state); // NOLINT: use C-style cast
+		return InitializeState(expr.Cast<BoundFunctionExpression>(), state);
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -276,7 +276,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		Execute(expr.Cast<BoundConstantExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result); // NOLINT: use C-style cast
+		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);
