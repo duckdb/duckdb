@@ -238,7 +238,7 @@ jobs:
       # GEN: ninja
       BUILD_SHELL: 1
       # BUILD_SHELL: ${{ inputs.build_duckdb_shell && '1' || '0' }}
-      DUCKDB_PLATFORM: linux_amd64_musl
+      DUCKDB_PLATFORM: linux_arm64
       # DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
 
@@ -284,6 +284,7 @@ jobs:
         uses: duckdb/duckdb-ci/build-duckdb@main
         env:
           EXTENSION_CONFIGS: ./extension_config.cmake
+          SUBSET_EXTENSIONS_TESTS: complete
         with:
           # TODO use inputs.build-type in build and test command
           build: make release
