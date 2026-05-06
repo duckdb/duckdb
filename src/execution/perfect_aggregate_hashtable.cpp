@@ -83,7 +83,7 @@ static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value
 
 static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
 	UnifiedVectorFormat vdata;
-	group.ToUnifiedFormat(count, vdata);
+	group.ToUnifiedFormat(vdata);
 
 	switch (group.GetType().InternalType()) {
 	case PhysicalType::INT8:

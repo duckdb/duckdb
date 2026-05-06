@@ -180,7 +180,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		return cast_data.child_cast_info.Cast(payload_vector, result_cc, array_size, child_parameters);
 
 	} else {
-		source.Flatten(count);
+		source.Flatten();
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		auto child_type = ArrayType::GetChildType(result.GetType());

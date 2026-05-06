@@ -217,7 +217,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalTyp
 	// now flatten the child
 	auto &list_result = result->Cast<VectorListBuffer>();
 	auto &list_child = list_result.GetChild();
-	list_child.Flatten(list_child.size());
+	list_child.Flatten();
 	return result;
 }
 
@@ -366,7 +366,7 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 		ListVector::GetConsecutiveChildSelVector(list, sel, offset, count);
 
 		result.Slice(sel, info.child_list_info.length);
-		result.Flatten(info.child_list_info.length);
+		result.Flatten();
 	}
 	return info.child_list_info.length;
 }

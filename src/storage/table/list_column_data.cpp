@@ -154,7 +154,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	D_ASSERT(scan_count > 0);
 
 	UnifiedVectorFormat offsets;
-	offset_vector.ToUnifiedFormat(scan_count, offsets);
+	offset_vector.ToUnifiedFormat(offsets);
 	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
 	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
 	idx_t child_scan_count = last_entry - state.last_offset;

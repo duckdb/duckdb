@@ -61,7 +61,7 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	}
 
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
-	filtered_addresses.Flatten(count);
+	filtered_addresses.Flatten();
 
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
 }

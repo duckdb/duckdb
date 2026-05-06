@@ -47,7 +47,7 @@ public:
 
 	static void AppendVector(STATE_TYPE &state, Vector &input, idx_t input_size) {
 		UnifiedVectorFormat unified;
-		input.ToUnifiedFormat(input_size, unified);
+		input.ToUnifiedFormat(unified);
 		auto &validity = unified.validity;
 
 		if (validity.CannotHaveNull()) {

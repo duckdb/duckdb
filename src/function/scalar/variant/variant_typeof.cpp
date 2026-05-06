@@ -17,7 +17,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 	D_ASSERT(variant_vec.GetType() == LogicalType::VARIANT());
 
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 
 	UnifiedVariantVectorData variant(source_format);
 

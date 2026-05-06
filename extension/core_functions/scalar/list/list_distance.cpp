@@ -28,8 +28,8 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lhs_child = ListVector::GetChildMutable(lhs_vec);
 	auto &rhs_child = ListVector::GetChildMutable(rhs_vec);
 
-	lhs_child.Flatten(lhs_count);
-	rhs_child.Flatten(rhs_count);
+	lhs_child.Flatten();
+	rhs_child.Flatten();
 
 	D_ASSERT(lhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rhs_child.GetVectorType() == VectorType::FLAT_VECTOR);

@@ -205,7 +205,7 @@ private:
 #endif
 		default: {
 			UnifiedVectorFormat vdata;
-			input.ToUnifiedFormat(count, vdata);
+			input.ToUnifiedFormat(vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
@@ -312,7 +312,7 @@ public:
 			sel = FlatVector::IncrementalSelectionVector();
 		}
 		UnifiedVectorFormat input_data;
-		input.ToUnifiedFormat(count, input_data);
+		input.ToUnifiedFormat(input_data);
 
 		return SelectLoopSwitch<INPUT_TYPE, FUNC>(input_data, sel, count, fun, true_sel, false_sel);
 	}

@@ -520,7 +520,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			// TODO: other compressed vector types (SHREDDED, FSST)
 		}
 	}
-	ToUnifiedFormat(count, vdata);
+	ToUnifiedFormat(vdata);
 
 	if (logical_type.id() == LogicalTypeId::GEOMETRY && serializer.ShouldSerialize(Geometry::VERSION_ADDED)) {
 		serializer.WriteProperty<GeometryStorageType>(99, "geometry_format", GeometryStorageType::WKB);
@@ -657,7 +657,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		}
 		case PhysicalType::ARRAY: {
 			Vector serialized_vector(Vector::Ref(*this));
-			serialized_vector.Flatten(count);
+			serialized_vector.Flatten();
 
 			auto &child = ArrayVector::GetChildMutable(serialized_vector);
 			auto array_size = ArrayType::GetSize(serialized_vector.GetType());
@@ -885,7 +885,7 @@ void Vector::DebugTransformToDictionary(Vector &vector, idx_t count) {
 	auto reusable_dict = DictionaryVector::CreateReusableDictionary(vector.type, verify_count);
 	auto &inverted_vector = reusable_dict->data;
 	inverted_vector.Slice(vector, inverted_sel, verify_count);
-	inverted_vector.Flatten(verify_count);
+	inverted_vector.Flatten();
 	// now insert the NULL values at every other position
 	for (idx_t i = 0; i < count; i++) {
 		FlatVector::SetNull(inverted_vector, i * 2, true);
@@ -949,7 +949,7 @@ void Vector::DebugShuffleNestedVector(Vector &vector, idx_t count) {
 			list_entries[r].offset = position;
 		}
 		child_vector.Slice(child_sel, child_count);
-		child_vector.Flatten(child_count);
+		child_vector.Flatten();
 		ListVector::SetListSize(vector, child_count);
 
 		// recurse into child elements

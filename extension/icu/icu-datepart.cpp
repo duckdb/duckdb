@@ -420,7 +420,7 @@ struct ICUDatePart : public ICUDateFunc {
 			}
 		}
 
-		result.Verify(count);
+		result.Verify();
 	}
 
 	template <typename BIND_TYPE>

@@ -324,7 +324,7 @@ void HivePartitionedColumnData::ComputePartitionIndices(PartitionedColumnDataApp
 	const auto count = input.size();
 
 	input.Hash(group_by_columns, hashes_v);
-	hashes_v.Flatten(count);
+	hashes_v.Flatten();
 
 	for (idx_t col_idx = 0; col_idx < group_by_columns.size(); col_idx++) {
 		auto &group_by_col = input.data[group_by_columns[col_idx]];
