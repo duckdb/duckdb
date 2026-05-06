@@ -80,7 +80,7 @@ unique_ptr<Expression> CreateOptionalFilterExpression(unique_ptr<Expression> chi
                                                       const LogicalType &target_type) {
 	auto function = OptionalFilterScalarFun::GetFunction(target_type);
 	auto bind_data = make_uniq<OptionalFilterFunctionData>(std::move(child_expr));
-	return CreateSingleArgumentFunctionExpression(std::move(function), target_type, std::move(bind_data));
+	return CreateSingleArgumentFunctionExpression(function, target_type, std::move(bind_data));
 }
 
 unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expression> child_expr,
@@ -90,14 +90,14 @@ unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expr
 	auto function = SelectivityOptionalFilterScalarFun::GetFunction(target_type);
 	auto bind_data = make_uniq<SelectivityOptionalFilterFunctionData>(std::move(child_expr), selectivity_threshold,
 	                                                                  n_vectors_to_check);
-	return CreateSingleArgumentFunctionExpression(std::move(function), target_type, std::move(bind_data));
+	return CreateSingleArgumentFunctionExpression(function, target_type, std::move(bind_data));
 }
 
 unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
                                                      const LogicalType &target_type) {
 	auto function = DynamicFilterScalarFun::GetFunction(target_type);
 	auto bind_data = make_uniq<DynamicFilterFunctionData>(std::move(filter_data));
-	return CreateSingleArgumentFunctionExpression(std::move(function), target_type, std::move(bind_data));
+	return CreateSingleArgumentFunctionExpression(function, target_type, std::move(bind_data));
 }
 
 void TableFilterFunctionSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
