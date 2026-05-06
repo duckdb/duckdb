@@ -93,71 +93,69 @@ static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chu
 	return offset;
 }
 
-//! Finalize the current merge group and emit one log entry per physical ReadHead the registrations
-//! ended up in. Columns sharing a ReadHead are grouped together and sorted by file offset, so the
-//! log reflects on-disk byte order. ReadHeads themselves are emitted in first-seen order. Any
-//! column chunk in `all_chunks` whose bytes happen to fall inside a ReadHead but was not explicitly
-//! registered (a free ride enabled by ALLOW_GAP merging) is included with its name wrapped in
-//! asterisks - e.g. `*b*` - to flag that its bytes were pulled along for the ride.
-static void FlushPhysicalPrefetchGroups(ThriftFileTransport &trans, vector<pair<string, idx_t>> &pending,
-                                        const vector<duckdb_parquet::ColumnChunk> &all_chunks,
-                                        vector<vector<string>> &out) {
-	trans.FinalizeRegistration();
-	vector<pair<const ReadHead *, vector<pair<string, idx_t>>>> physical;
-	std::set<idx_t> registered_offsets;
-	for (auto &reg : pending) {
-		registered_offsets.insert(reg.second);
-		auto rh = trans.GetReadHead(reg.second);
-		const ReadHead *key = rh.get();
-		bool found = false;
-		for (auto &entry : physical) {
-			if (entry.first == key) {
-				entry.second.push_back(std::move(reg));
-				found = true;
-				break;
+void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &trans,
+                                                         vector<ParquetPrefetchColumn> &requested_columns,
+                                                         const vector<duckdb_parquet::ColumnChunk> &all_chunks) {
+	if (requested_columns.empty()) {
+		return;
+	}
+
+	set<idx_t> registered_offsets;
+	// actual columns is requested_columns + hippie hitchhiker columns
+	vector<ParquetPrefetchColumn> actual_columns;
+	for (auto &requested_column : requested_columns) {
+		registered_offsets.insert(requested_column.offset);
+		actual_columns.push_back(requested_column);
+	}
+
+	for (auto &chunk : all_chunks) {
+		// We gotta figure out if we had any hitchhiker
+		idx_t chunk_start = ParquetColumnChunkFileOffset(chunk);
+		if (registered_offsets.count(chunk_start) > 0) {
+			continue;
+		}
+		idx_t chunk_end = chunk_start + NumericCast<idx_t>(chunk.meta_data.total_compressed_size);
+		// Figure out what physical I/O this file offset lives in
+		auto rh = trans.GetReadHead(chunk_start);
+		if (!rh || chunk_end > rh->GetEnd()) {
+			continue;
+		}
+		if (registered_offsets.count(rh->location) == 0) {
+			// Hitchhiker only counts if the ReadHead was created for one of our registrations.
+			bool covers_registered = false;
+			for (auto offset : registered_offsets) {
+				if (offset >= rh->location && offset < rh->GetEnd()) {
+					covers_registered = true;
+					break;
+				}
+			}
+			if (!covers_registered) {
+				continue;
 			}
 		}
-		if (!found) {
-			physical.emplace_back(key, vector<pair<string, idx_t>> {std::move(reg)});
-		}
+		// figure out his name
+		auto &path = chunk.meta_data.path_in_schema;
+		string name = path.empty() ? string() : StringUtil::Join(path, ".");
+		// we tag hitchhikers with *column_name*
+		actual_columns.push_back({"*" + std::move(name) + "*", chunk_start});
 	}
-	for (auto &entry : physical) {
-		auto rh = entry.first;
-		if (rh) {
-			const idx_t head_start = rh->location;
-			const idx_t head_end = rh->GetEnd();
-			for (auto &chunk : all_chunks) {
-				idx_t chunk_start = ParquetColumnChunkFileOffset(chunk);
-				idx_t chunk_end = chunk_start + NumericCast<idx_t>(chunk.meta_data.total_compressed_size);
-				if (chunk_start < head_start || chunk_end > head_end) {
-					continue;
-				}
-				if (registered_offsets.count(chunk_start) > 0) {
-					continue;
-				}
-				auto &path = chunk.meta_data.path_in_schema;
-				string name = path.empty() ? string() : StringUtil::Join(path, ".");
-				entry.second.emplace_back("*" + std::move(name) + "*", chunk_start);
-			}
-		}
-		std::sort(entry.second.begin(), entry.second.end(),
-		          [](const pair<string, idx_t> &a, const pair<string, idx_t> &b) { return a.second < b.second; });
-		vector<string> names;
-		names.reserve(entry.second.size());
-		for (auto &col : entry.second) {
-			names.push_back(std::move(col.first));
-		}
-		out.push_back(std::move(names));
+
+	std::sort(actual_columns.begin(), actual_columns.end());
+	vector<string> names;
+	names.reserve(actual_columns.size());
+	for (auto &col : actual_columns) {
+		names.push_back(std::move(col.name));
 	}
-	pending.clear();
+	prefetch_groups.push_back(std::move(names));
+	requested_columns.clear();
 }
 
 static void LogRowGroupPrefetch(ClientContext &context, const string &file_path, idx_t row_group_id,
                                 const ParquetReaderScanState &state) {
-	const bool fully_filtered = !state.current_group_had_match;
+	const bool fully_filtered = !state.prefetch_metrics.had_match;
 	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
-	           ParquetPrefetchStrategyToString(state.current_group_strategy), state.current_group_prefetch_groups,
-	           state.current_group_minimal_filters);
+	           ParquetPrefetchStrategyToString(state.prefetch_metrics.logger.strategy),
+	           state.prefetch_metrics.logger.prefetch_groups, state.prefetch_metrics.logger.minimal_filters);
 }
 
 using duckdb_parquet::ColumnChunk;
@@ -1545,10 +1543,10 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		const bool log_prefetch =
 		    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 
-		if (log_prefetch && state.current_group_filter_ran && state.current_group > 0) {
+		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
 			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
 		}
-		state.FinalizeRowGroupSelectivity();
+		state.prefetch_metrics.FinalizeRowGroupSelectivity();
 
 		if ((idx_t)state.current_group == state.group_idx_list.size()) {
 			state.finished = true;
@@ -1591,18 +1589,17 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 
 			bool filters_look_unselective = false;
 			if (filters) {
-				if (state.row_groups_executed == 0) {
+				if (state.prefetch_metrics.row_groups_executed == 0) {
 					filters_look_unselective = true;
-				} else if (static_cast<double>(state.row_groups_with_matches) /
-				               static_cast<double>(state.row_groups_executed) >
+				} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+				               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
 				           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
 					filters_look_unselective = true;
 				}
 			}
 
-			// Collected only when ParquetPrefetch logging is enabled; FlushPhysicalPrefetchGroups
-			// degenerates to a bare FinalizeRegistration when this stays empty.
-			vector<pair<string, idx_t>> pending_registrations;
+			// Collected only when ParquetPrefetch logging is enabled.
+			vector<ParquetPrefetchColumn> pending_registrations;
 
 			if ((!filters || filters_look_unselective) &&
 			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
@@ -1615,14 +1612,13 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					state.current_group_prefetched = true;
 				}
 				if (log_prefetch) {
-					state.current_group_strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
+					state.prefetch_metrics.logger.strategy = ParquetPrefetchStrategy::WHOLE_GROUP;
 					for (auto &column_chunk : group.columns) {
 						auto &path = column_chunk.meta_data.path_in_schema;
 						string name = path.empty() ? string() : StringUtil::Join(path, ".");
-						pending_registrations.emplace_back(std::move(name), ParquetColumnChunkFileOffset(column_chunk));
+						pending_registrations.push_back({name, ParquetColumnChunkFileOffset(column_chunk)});
 					}
-					FlushPhysicalPrefetchGroups(trans, pending_registrations, group.columns,
-					                            state.current_group_prefetch_groups);
+					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
 				}
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
@@ -1645,8 +1641,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					const auto &permutation = adaptive_filter.GetPermutation();
 					for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 						if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
-							FlushPhysicalPrefetchGroups(trans, pending_registrations, group.columns,
-							                            state.current_group_prefetch_groups);
+							trans.FinalizeRegistration();
+							if (log_prefetch) {
+								state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations,
+								                                                    group.columns);
+							}
 						}
 						auto &scan_filter = state.scan_filters[permutation[i]];
 						MultiFileLocalIndex local_idx(scan_filter.filter_idx);
@@ -1659,8 +1658,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 						already_registered[local_idx.GetIndex()] = true;
 					}
 					// merge-boundary between filter and non-filter batches
-					FlushPhysicalPrefetchGroups(trans, pending_registrations, group.columns,
-					                            state.current_group_prefetch_groups);
+					trans.FinalizeRegistration();
+					if (log_prefetch) {
+						state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations,
+						                                                    group.columns);
+					}
 				}
 
 				for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1676,13 +1678,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					}
 				}
 
+				trans.FinalizeRegistration();
 				if (log_prefetch) {
-					FlushPhysicalPrefetchGroups(trans, pending_registrations, group.columns,
-					                            state.current_group_prefetch_groups);
-					state.current_group_strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS
-					                                          : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
-				} else {
-					trans.FinalizeRegistration();
+					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
+					state.prefetch_metrics.logger.strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS
+					                                                    : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
 				}
 
 				if (!lazy_fetch) {
@@ -1749,7 +1749,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
-				state.current_group_minimal_filters.push_back(child_reader.Schema().name);
+				state.prefetch_metrics.logger.minimal_filters.push_back(child_reader.Schema().name);
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 				if (filter_count == 0) {
@@ -1757,9 +1757,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				}
 			}
 			adaptive_filter.EndFilter(filter_state);
-			state.current_group_filter_ran = true;
+			state.prefetch_metrics.filter_ran = true;
 			if (filter_count > 0) {
-				state.current_group_had_match = true;
+				state.prefetch_metrics.had_match = true;
 			}
 		}
 

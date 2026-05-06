@@ -81,6 +81,7 @@ class EncryptionUtil;
 class PhysicalOperator;
 class Serializer;
 class TableFilter;
+class ThriftFileTransport;
 struct CryptoMetaData;
 struct GlobalTableFunctionState;
 struct LocalTableFunctionState;
@@ -113,6 +114,62 @@ struct ParquetScanFilter {
 	unique_ptr<TableFilterState> filter_state;
 };
 
+struct ParquetPrefetchColumn {
+	string name;
+	idx_t offset;
+
+	ParquetPrefetchColumn(string name_p, idx_t offset_p) : name(std::move(name_p)), offset(offset_p) {
+	}
+
+	bool operator<(const ParquetPrefetchColumn &other) const {
+		return offset < other.offset;
+	}
+};
+//! Logger-only prefetch metrics: populated only when ParquetPrefetch logging is enabled.
+struct ParquetLoggerPrefetchMetrics {
+	//! Physical prefetch groups (column-name batches) issued for the current row group, in order
+	vector<vector<string>> prefetch_groups;
+	//! Names of columns whose filters were evaluated to drive selectivity in the current row group
+	vector<string> minimal_filters;
+	//! Prefetch strategy chosen for the current row group
+	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
+
+	void Reset() {
+		prefetch_groups.clear();
+		minimal_filters.clear();
+		strategy = ParquetPrefetchStrategy::NONE;
+	}
+
+	//! Build a prefetch group
+	void GeneratePrefetchGroup(ThriftFileTransport &trans, vector<ParquetPrefetchColumn> &requested_columns,
+	                           const vector<duckdb_parquet::ColumnChunk> &all_chunks);
+};
+
+struct ParquetPrefetchMetrics {
+	//! Whether any filter was evaluated against the current row group
+	bool filter_ran = false;
+	//! Whether the current row group produced at least one surviving row after filtering
+	bool had_match = false;
+	//! Total number of row groups for which filters were evaluated across the scan
+	idx_t row_groups_executed = 0;
+	//! Number of those row groups that produced at least one surviving row
+	idx_t row_groups_with_matches = 0;
+
+	ParquetLoggerPrefetchMetrics logger;
+
+	void FinalizeRowGroupSelectivity() {
+		if (filter_ran) {
+			row_groups_executed++;
+			if (had_match) {
+				row_groups_with_matches++;
+			}
+		}
+		filter_ran = false;
+		had_match = false;
+		logger.Reset();
+	}
+};
+
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
@@ -131,28 +188,7 @@ struct ParquetReaderScanState {
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
 
-	bool current_group_filter_ran = false;
-	bool current_group_had_match = false;
-	ParquetPrefetchStrategy current_group_strategy = ParquetPrefetchStrategy::NONE;
-	vector<vector<string>> current_group_prefetch_groups;
-	vector<string> current_group_minimal_filters;
-
-	idx_t row_groups_executed = 0;
-	idx_t row_groups_with_matches = 0;
-
-	void FinalizeRowGroupSelectivity() {
-		if (current_group_filter_ran) {
-			row_groups_executed++;
-			if (current_group_had_match) {
-				row_groups_with_matches++;
-			}
-		}
-		current_group_filter_ran = false;
-		current_group_had_match = false;
-		current_group_strategy = ParquetPrefetchStrategy::NONE;
-		current_group_prefetch_groups.clear();
-		current_group_minimal_filters.clear();
-	}
+	ParquetPrefetchMetrics prefetch_metrics;
 
 	//! Per-thread adaptive filter cache
 	MultiFileAdaptiveFilterCache adaptive_filter_cache;
