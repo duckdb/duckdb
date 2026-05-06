@@ -5,6 +5,25 @@
 
 namespace duckdb {
 
+struct BetweenFunctionData : public FunctionData {
+	BetweenFunctionData(bool lower_inclusive, bool upper_inclusive)
+	    : lower_inclusive(lower_inclusive), upper_inclusive(upper_inclusive) {
+	}
+
+	bool lower_inclusive;
+	bool upper_inclusive;
+
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive);
+	};
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<BetweenFunctionData>();
+		return lower_inclusive == other.lower_inclusive && upper_inclusive == other.upper_inclusive;
+	}
+};
+
 void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &between_expr = state.expr.Cast<BoundBetweenExpression>();
 	bool upper_inclusive = between_expr.UpperInclusive();
@@ -152,11 +171,19 @@ ExpressionType BetweenGetExpressionType(FunctionToStringInput &input) {
 	return ExpressionType::COMPARE_BETWEEN;
 }
 
+unique_ptr<Expression> BetweenLegacySerializeCallback(FunctionToStringInput &input) {
+	auto &between_info = input.bind_data->Cast<BetweenFunctionData>();
+	return make_uniq<BoundBetweenExpression>(input.GetChild(0).Copy(), input.GetChild(1).Copy(),
+	                                         input.GetChild(2).Copy(), between_info.lower_inclusive,
+	                                         between_info.upper_inclusive);
+}
+
 ScalarFunction BetweenFun::GetFunction() {
 	ScalarFunction between_fun("__between", {LogicalType::ANY, LogicalType::ANY, LogicalType::ANY},
 	                           LogicalType::BOOLEAN, BetweenFunction, BindBetweenFun);
 	between_fun.SetToStringCallback(BetweenToString);
 	between_fun.SetGetExpressionTypeCallback(BetweenGetExpressionType);
+	between_fun.SetLegacySerializeCallback(BetweenLegacySerializeCallback);
 #ifndef DUCKDB_SMALLER_BINARY
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif

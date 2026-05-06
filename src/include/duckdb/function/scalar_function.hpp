@@ -124,6 +124,10 @@ struct FunctionToStringInput {
 	const BoundScalarFunction &bound_function;
 	optional_ptr<FunctionData> bind_data;
 	const vector<unique_ptr<Expression>> &children;
+
+	const Expression &GetChild(idx_t i) const {
+		return *children[i];
+	}
 };
 
 class BindScalarFunctionInput;
@@ -165,6 +169,9 @@ typedef string (*function_to_string_t)(FunctionToStringInput &input);
 //! Get the expression type of a function
 typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
 
+//! Legacy serialize function for expressions that were converted into functions
+typedef unique_ptr<Expression> (*function_legacy_serialize_t)(FunctionToStringInput &input);
+
 class ScalarFunctionCallbacks {
 public:
 	//! The main scalar function to execute
@@ -190,6 +197,8 @@ public:
 
 	function_serialize_t serialize = nullptr;
 	function_deserialize_t deserialize = nullptr;
+
+	function_legacy_serialize_t legacy_serialize = nullptr;
 
 	//! The filter prune function (if any)
 	propagate_filter_t filter_prune = nullptr;
@@ -279,6 +288,10 @@ public: // Callbacks
 	auto HasToStringCallback() const -> bool { return callbacks.to_string != nullptr; }
 	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
+
+	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
+	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
+	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
 
 	auto SetGetExpressionTypeCallback(function_get_expression_type_t callback) -> void { callbacks.get_expression_type = callback; }
 	auto GetExpressionType(FunctionToStringInput &input) const -> ExpressionType {

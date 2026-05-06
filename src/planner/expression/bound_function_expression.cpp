@@ -111,6 +111,13 @@ void BoundFunctionExpression::Verify() const {
 }
 
 void BoundFunctionExpression::Serialize(Serializer &serializer) const {
+	if (!serializer.ShouldSerialize(8) && function.HasLegacySerializeCallback()) {
+		// serialize legacy expression for backwards compatibility
+		FunctionToStringInput input(function, bind_info.get(), children);
+		auto legacy_expr = function.GetLegacySerializeCallback()(input);
+		legacy_expr->Serialize(serializer);
+		return;
+	}
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
