@@ -350,16 +350,12 @@ string VectorTypeToString(VectorType type) {
 	}
 }
 
-string Vector::ToString(idx_t count) const {
-	string retval =
-	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
-	retval += Buffer().ToString(GetType(), count);
-	retval += "]";
-	return retval;
+string Vector::ToString(idx_t) const {
+	return ToString();
 }
 
-void Vector::Print(idx_t count) const {
-	Printer::Print(ToString(count));
+void Vector::Print(idx_t) const {
+	Print();
 }
 
 idx_t Vector::GetDataSize(idx_t cardinality) const {
@@ -378,8 +374,10 @@ idx_t Vector::GetAllocationSize() const {
 }
 
 string Vector::ToString() const {
-	string retval = VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": (UNKNOWN COUNT) [ ";
-	retval += Buffer().ToString(GetType());
+	auto count = size();
+	string retval =
+	    VectorTypeToString(GetVectorType()) + " " + GetType().ToString() + ": " + to_string(count) + " = [ ";
+	retval += Buffer().ToString(GetType(), count);
 	retval += "]";
 	return retval;
 }
@@ -422,22 +420,23 @@ void Vector::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	Buffer().ToUnifiedFormat(format);
 }
 
-void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
-	input.ToUnifiedFormat(count, data.unified);
+void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t, RecursiveUnifiedVectorFormat &data) {
+	RecursiveToUnifiedFormat(input, data);
+}
+
+void Vector::RecursiveToUnifiedFormat(const Vector &input, RecursiveUnifiedVectorFormat &data) {
+	input.ToUnifiedFormat(data.unified);
 	data.logical_type = input.GetType();
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
 		auto &child = ListVector::GetChild(input);
-		auto child_count = ListVector::GetListSize(input);
 		data.children.emplace_back();
-		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+		RecursiveToUnifiedFormat(child, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::ARRAY) {
 		auto &child = ArrayVector::GetChild(input);
-		auto array_size = ArrayType::GetSize(input.GetType());
-		auto child_count = count * array_size;
 		data.children.emplace_back();
-		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+		RecursiveToUnifiedFormat(child, data.children.back());
 
 	} else if (input.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(input);
@@ -445,7 +444,7 @@ void Vector::RecursiveToUnifiedFormat(const Vector &input, idx_t count, Recursiv
 			data.children.emplace_back();
 		}
 		for (idx_t i = 0; i < children.size(); i++) {
-			Vector::RecursiveToUnifiedFormat(children[i], count, data.children[i]);
+			RecursiveToUnifiedFormat(children[i], data.children[i]);
 		}
 	}
 }
