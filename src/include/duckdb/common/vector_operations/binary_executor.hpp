@@ -423,6 +423,113 @@ public:
 			    ldata, rdata, sel, count, combined_mask, true_sel, false_sel);
 		}
 	}
+
+	template <class CONSTANT_TYPE, class GENERIC_TYPE, class OP, bool RIGHT_CONSTANT, bool CAN_HAVE_NULL,
+	          bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
+	static idx_t SelectGenericConstant(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
+	                                   const SelectionVector &generic_sel, const ValidityMask &mask,
+	                                   const SelectionVector *result_sel, idx_t count, SelectionVector *true_sel,
+	                                   SelectionVector *false_sel) {
+		idx_t true_count = 0, false_count = 0;
+		for (idx_t r = 0; r < count; r++) {
+			auto result_idx = result_sel->get_index(r);
+			auto idx = generic_sel.get_index(r);
+			bool comparison_result = (!CAN_HAVE_NULL || mask.RowIsValid(idx));
+			if constexpr (RIGHT_CONSTANT) {
+				comparison_result = comparison_result && OP::Operation(data[idx], constant);
+			} else {
+				comparison_result = comparison_result && OP::Operation(constant, data[idx]);
+			}
+			if constexpr (HAS_TRUE_SEL) {
+				true_sel->set_index(true_count, result_idx);
+				true_count += comparison_result;
+			}
+			if constexpr (HAS_FALSE_SEL) {
+				false_sel->set_index(false_count, result_idx);
+				false_count += !comparison_result;
+			}
+		}
+		if constexpr (HAS_TRUE_SEL) {
+			return true_count;
+		} else {
+			return count - false_count;
+		}
+	}
+
+	template <class CONSTANT_TYPE, class GENERIC_TYPE, class OP, bool RIGHT_CONSTANT, bool CAN_HAVE_NULL>
+	static idx_t SelectGenericConstant(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
+	                                   const SelectionVector &generic_sel, const ValidityMask &mask,
+	                                   const SelectionVector *result_sel, idx_t count, SelectionVector *true_sel,
+	                                   SelectionVector *false_sel) {
+		if (true_sel && false_sel) {
+			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, CAN_HAVE_NULL, true, true>(
+			    constant, data, generic_sel, mask, result_sel, count, true_sel, false_sel);
+		} else if (true_sel) {
+			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, CAN_HAVE_NULL, true, false>(
+			    constant, data, generic_sel, mask, result_sel, count, true_sel, false_sel);
+		} else if (false_sel) {
+			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, CAN_HAVE_NULL, false, true>(
+			    constant, data, generic_sel, mask, result_sel, count, true_sel, false_sel);
+		} else {
+			throw InternalException("Either true or false sel must be set");
+		}
+	}
+
+	template <class CONSTANT_TYPE, class GENERIC_TYPE, class OP, bool RIGHT_CONSTANT>
+	static idx_t SelectGenericConstant(CONSTANT_TYPE constant, const GENERIC_TYPE *__restrict data,
+	                                   const SelectionVector &generic_sel, const ValidityMask &mask,
+	                                   const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+	                                   SelectionVector *false_sel) {
+		if (mask.CanHaveNull()) {
+			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, true>(
+			    constant, data, generic_sel, mask, sel, count, true_sel, false_sel);
+		} else {
+			return SelectGenericConstant<CONSTANT_TYPE, GENERIC_TYPE, OP, RIGHT_CONSTANT, false>(
+			    constant, data, generic_sel, mask, sel, count, true_sel, false_sel);
+		}
+	}
+
+	template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool RIGHT_CONSTANT>
+	static idx_t SelectGenericConstant(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+		constexpr bool LEFT_CONSTANT = !RIGHT_CONSTANT;
+		if (LEFT_CONSTANT && ConstantVector::IsNull(left)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, sel->get_index(i));
+				}
+			}
+			return 0;
+		}
+		if (RIGHT_CONSTANT && ConstantVector::IsNull(right)) {
+			if (false_sel) {
+				for (idx_t i = 0; i < count; i++) {
+					false_sel->set_index(i, sel->get_index(i));
+				}
+			}
+			return 0;
+		}
+
+		UnifiedVectorFormat format;
+		if (LEFT_CONSTANT) {
+		} else {
+			right.ToUnifiedFormat(format);
+		}
+
+		if (LEFT_CONSTANT) {
+			right.ToUnifiedFormat(format);
+			auto data = UnifiedVectorFormat::GetData<RIGHT_TYPE>(format);
+			return SelectGenericConstant<LEFT_TYPE, RIGHT_TYPE, OP, RIGHT_CONSTANT>(
+			    *ConstantVector::GetData<LEFT_TYPE>(left), data, *format.sel, format.validity, sel, count, true_sel,
+			    false_sel);
+		} else {
+			left.ToUnifiedFormat(format);
+			auto data = UnifiedVectorFormat::GetData<LEFT_TYPE>(format);
+			return SelectGenericConstant<RIGHT_TYPE, LEFT_TYPE, OP, RIGHT_CONSTANT>(
+			    *ConstantVector::GetData<RIGHT_TYPE>(right), data, *format.sel, format.validity, sel, count, true_sel,
+			    false_sel);
+		}
+	}
 #endif
 
 #ifndef DUCKDB_SMALLER_BINARY
@@ -536,6 +643,11 @@ public:
 		} else if (left.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           right.GetVectorType() == VectorType::FLAT_VECTOR) {
 			return SelectFlat<LEFT_TYPE, RIGHT_TYPE, OP, false, false>(left, right, sel, count, true_sel, false_sel);
+		} else if (left.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return SelectGenericConstant<LEFT_TYPE, RIGHT_TYPE, OP, false>(left, right, sel, count, true_sel,
+			                                                               false_sel);
+		} else if (right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			return SelectGenericConstant<LEFT_TYPE, RIGHT_TYPE, OP, true>(left, right, sel, count, true_sel, false_sel);
 #endif
 		} else {
 			return SelectGeneric<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
