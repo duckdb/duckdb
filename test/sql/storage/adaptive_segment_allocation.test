@@ -10,6 +10,10 @@ SET adaptive_segment_allocation = true
 statement ok
 SET initial_segment_rows = 2
 
+# disable auto-checkpoint so the transient segment structure is visible in pragma_storage_info
+statement ok
+SET wal_autocheckpoint='1TB'
+
 # with initial_segment_rows=2 and 5 rows, the doubling chain produces exactly 2 segments
 statement ok
 CREATE TABLE step_test (i INT NOT NULL)
