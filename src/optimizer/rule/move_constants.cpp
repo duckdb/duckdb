@@ -109,7 +109,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 			outer_constant.value = std::move(result_value);
 			// in this case, we should also flip the comparison
 			// e.g. if we have [4 - x < 2] then we should have [x > 2]
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 	} else {
 		D_ASSERT(op_type == "*");
@@ -141,7 +141,7 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		if (inner_value < 0) {
 			// multiply by negative value, need to flip expression
-			comparison.SetExpressionTypeUnsafe(FlipComparisonExpression(comparison.GetExpressionType()));
+			BoundComparisonExpression::FlipType(comparison);
 		}
 		// else divide the RHS by the LHS
 		// we need to do a range check on the cast even though we do a division

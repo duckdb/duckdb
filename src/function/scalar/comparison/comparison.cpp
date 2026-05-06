@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
@@ -129,6 +130,8 @@ ScalarFunction ComparisonFun::GetFunction() {
 	Comparison_fun.SetLegacySerializeCallback(ComparisonLegacySerializeCallback);
 	Comparison_fun.SetSerializeCallback(ComparisonFunctionSerialize);
 	Comparison_fun.SetDeserializeCallback(ComparisonFunctionDeserialize);
+	// DISTINCT FROM / NOT DISTINCT FROM handle NULLs specially - they must not be short-circuited on NULL input
+	Comparison_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 #ifndef DUCKDB_SMALLER_BINARY
 	Comparison_fun.SetSelectCallback(ComparisonSelect);
 #endif
@@ -188,6 +191,15 @@ unique_ptr<Expression> &BoundComparisonExpression::LeftMutable(BoundFunctionExpr
 
 unique_ptr<Expression> &BoundComparisonExpression::RightMutable(BoundFunctionExpression &comparison_expr) {
 	return comparison_expr.children[1];
+}
+
+void BoundComparisonExpression::SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type) {
+	comparison_expr.SetExpressionTypeUnsafe(new_type);
+	comparison_expr.bind_info->Cast<ComparisonFunctionData>().expression_type = new_type;
+}
+
+void BoundComparisonExpression::FlipType(BoundFunctionExpression &comparison_expr) {
+	SetType(comparison_expr, FlipComparisonExpression(comparison_expr.GetExpressionType()));
 }
 
 } // namespace duckdb

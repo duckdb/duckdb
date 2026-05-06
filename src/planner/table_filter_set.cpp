@@ -126,6 +126,9 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundF
 	auto &subject = rhs_constant ? left : right;
 	auto &constant_expr = rhs_constant ? right : left;
 	auto &constant = constant_expr.Cast<BoundConstantExpression>().value;
+	if (!rhs_constant) {
+		comparison_type = FlipComparisonType(comparison_type);
+	}
 
 	vector<LegacyStructPathEntry> struct_path;
 	if (!TryExtractLegacySubject(subject, struct_path)) {

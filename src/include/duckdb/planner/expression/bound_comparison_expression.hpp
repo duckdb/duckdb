@@ -26,6 +26,13 @@ struct BoundComparisonExpression {
 	static unique_ptr<Expression> &LeftMutable(BoundFunctionExpression &between_expr);
 	static unique_ptr<Expression> &RightMutable(BoundFunctionExpression &between_expr);
 
+	//! Flip the comparison type, updating both the expression type and the bind data.
+	//! Use instead of SetExpressionTypeUnsafe to keep the two in sync.
+	static void FlipType(BoundFunctionExpression &comparison_expr);
+	//! Set the comparison type, updating both the expression type and the bind data.
+	//! Use instead of SetExpressionTypeUnsafe to keep the two in sync.
+	static void SetType(BoundFunctionExpression &comparison_expr, ExpressionType new_type);
+
 	static LogicalType BindComparison(ClientContext &context, const LogicalType &left_type,
 	                                  const LogicalType &right_type, ExpressionType comparison_type);
 	static bool TryBindComparison(ClientContext &context, const LogicalType &left_type, const LogicalType &right_type,

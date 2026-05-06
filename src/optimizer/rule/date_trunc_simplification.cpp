@@ -271,15 +271,15 @@ unique_ptr<Expression> DateTruncSimplificationRule::Apply(LogicalOperator &op, v
 			// > needs to become >=, and <= needs to become <.
 			if (rhs_comparison_type == ExpressionType::COMPARE_GREATERTHAN) {
 				if (col_is_lhs) {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_GREATERTHANOREQUALTO);
 				} else {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHANOREQUALTO);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 				}
 			} else {
 				if (col_is_lhs) {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_LESSTHAN);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_LESSTHAN);
 				} else {
-					expr.SetExpressionTypeUnsafe(ExpressionType::COMPARE_GREATERTHAN);
+					BoundComparisonExpression::SetType(expr, ExpressionType::COMPARE_GREATERTHAN);
 				}
 			}
 
