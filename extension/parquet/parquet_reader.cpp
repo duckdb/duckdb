@@ -1607,7 +1607,6 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 	}
 	const bool lazy_fetch = has_non_optional_filter && !filters_look_unselective;
 
-	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 	vector<bool> already_registered(column_ids.size(), false);
 	vector<ParquetPrefetchColumn> pending_registrations;
 
@@ -1625,8 +1624,7 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 			}
 			auto &scan_filter = state.scan_filters[permutation[i]];
 			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
-			auto file_col_idx = column_ids[local_idx];
-			auto &child = root_reader.GetChildReader(file_col_idx);
+			auto &child = state.GetColumnReader(local_idx);
 			child.RegisterPrefetch(trans, true);
 			if (log_prefetch) {
 				pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
@@ -1647,8 +1645,7 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 			continue;
 		}
 		auto col_idx = MultiFileLocalIndex(i);
-		auto file_col_idx = column_ids[col_idx];
-		auto &child = root_reader.GetChildReader(file_col_idx);
+		auto &child = state.GetColumnReader(col_idx);
 		child.RegisterPrefetch(trans, true);
 		if (log_prefetch) {
 			pending_registrations.emplace_back(child.Schema().name, child.FileOffset());
