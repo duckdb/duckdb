@@ -33,27 +33,24 @@
     ]
   },
   {
-    "class": "BoundBetweenExpression",
+    "class": "LegacyBoundBetweenExpression",
     "base": "Expression",
-    "enum": "BOUND_BETWEEN",
+    "enum": "LEGACY_BOUND_BETWEEN",
     "members": [
       {
         "id": 200,
         "name": "input",
-        "type": "Expression*",
-        "serialize_property": "InputRef()"
+        "type": "Expression*"
       },
       {
         "id": 201,
         "name": "lower",
-        "type": "Expression*",
-        "serialize_property": "LowerBoundRef()"
+        "type": "Expression*"
       },
       {
         "id": 202,
         "name": "upper",
-        "type": "Expression*",
-        "serialize_property": "UpperBoundRef()"
+        "type": "Expression*"
       },
       {
         "id": 203,
@@ -66,8 +63,7 @@
         "type": "bool"
       }
     ],
-    "constructor": ["input", "lower", "upper", "lower_inclusive", "upper_inclusive"],
-    "inheritance_ignore_lint": true
+    "constructor_method": "LegacyBoundBetweenExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundCaseExpression",

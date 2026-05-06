@@ -222,9 +222,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
 		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
-	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		return InitializeState((BoundFunctionExpression &)expr, state); // NOLINT: use C-style cast
+		return InitializeState(expr.Cast<BoundFunctionExpression>(), state); // NOLINT: use C-style cast
 	case ExpressionClass::BOUND_OPERATOR:
 		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
@@ -276,9 +275,8 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_CONSTANT:
 		Execute(expr.Cast<BoundConstantExpression>(), state, sel, count, result);
 		break;
-	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute((BoundFunctionExpression &)expr, state, sel, count, result); // NOLINT: use C-style cast
+		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result); // NOLINT: use C-style cast
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
 		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);
@@ -309,9 +307,9 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
-	case ExpressionClass::BOUND_BETWEEN:
 	case ExpressionClass::BOUND_FUNCTION:
-		return Select((BoundFunctionExpression &)expr, state, sel, count, true_sel, false_sel); // NOLINT: c-style cast
+		return Select(expr.Cast<BoundFunctionExpression>(), state, sel, count, true_sel,
+		              false_sel); // NOLINT: c-style cast
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

@@ -126,6 +126,9 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFunctionExpression &func,
                                                                      unique_ptr<Expression> &expr_ptr) {
+	if (func.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		return PropagateBetween(func, expr_ptr);
+	}
 	vector<BaseStatistics> stats;
 	stats.reserve(func.children.size());
 	for (idx_t i = 0; i < func.children.size(); i++) {

@@ -1,7 +1,9 @@
 #include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/expression/between_expression.hpp"
+#include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -25,9 +27,9 @@ public:
 };
 
 void BetweenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &between_expr = state.expr.Cast<BoundBetweenExpression>();
-	bool upper_inclusive = between_expr.UpperInclusive();
-	bool lower_inclusive = between_expr.LowerInclusive();
+	auto &between_expr = state.expr.Cast<BoundFunctionExpression>();
+	bool upper_inclusive = BoundBetweenExpression::UpperInclusive(between_expr);
+	bool lower_inclusive = BoundBetweenExpression::LowerInclusive(between_expr);
 
 	Vector intermediate1(LogicalType::BOOLEAN);
 	Vector intermediate2(LogicalType::BOOLEAN);
@@ -134,9 +136,9 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 }
 
 idx_t BetweenSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel, SelectionVector *false_sel) {
-	auto &between_expr = state.expr.Cast<BoundBetweenExpression>();
-	bool upper_inclusive = between_expr.UpperInclusive();
-	bool lower_inclusive = between_expr.LowerInclusive();
+	auto &between_expr = state.expr.Cast<BoundFunctionExpression>();
+	bool upper_inclusive = BoundBetweenExpression::UpperInclusive(between_expr);
+	bool lower_inclusive = BoundBetweenExpression::LowerInclusive(between_expr);
 
 	auto &input = args.data[0];
 	auto &lower = args.data[1];
@@ -159,6 +161,21 @@ idx_t BetweenSelect(DataChunk &args, ExpressionState &state, SelectionVector *tr
 }
 #endif
 
+unique_ptr<Expression> BoundBetweenExpression::Create(unique_ptr<Expression> input, unique_ptr<Expression> lower,
+                                                      unique_ptr<Expression> upper, bool lower_inclusive,
+                                                      bool upper_inclusive) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(std::move(input));
+	children.push_back(std::move(lower));
+	children.push_back(std::move(upper));
+
+	auto function_data = make_uniq<BetweenFunctionData>(lower_inclusive, upper_inclusive);
+
+	auto result = make_uniq<BoundFunctionExpression>(BoundScalarFunction(BetweenFun::GetFunction()),
+	                                                 std::move(children), std::move(function_data), false);
+	return std::move(result);
+}
+
 unique_ptr<FunctionData> BindBetweenFun(BindScalarFunctionInput &input) {
 	throw InvalidInputException("Between function cannot be called directly");
 }
@@ -173,9 +190,9 @@ ExpressionType BetweenGetExpressionType(FunctionToStringInput &input) {
 
 unique_ptr<Expression> BetweenLegacySerializeCallback(FunctionToStringInput &input) {
 	auto &between_info = input.bind_data->Cast<BetweenFunctionData>();
-	return make_uniq<BoundBetweenExpression>(input.GetChild(0).Copy(), input.GetChild(1).Copy(),
-	                                         input.GetChild(2).Copy(), between_info.lower_inclusive,
-	                                         between_info.upper_inclusive);
+	return make_uniq<LegacyBoundBetweenExpression>(input.GetChild(0).Copy(), input.GetChild(1).Copy(),
+	                                               input.GetChild(2).Copy(), between_info.lower_inclusive,
+	                                               between_info.upper_inclusive);
 }
 
 ScalarFunction BetweenFun::GetFunction() {
@@ -188,6 +205,43 @@ ScalarFunction BetweenFun::GetFunction() {
 	between_fun.SetSelectCallback(BetweenSelect);
 #endif
 	return between_fun;
+}
+
+//===--------------------------------------------------------------------===//
+// BoundBetweenExpression
+//===--------------------------------------------------------------------===//
+bool BoundBetweenExpression::LowerInclusive(const BoundFunctionExpression &between_expr) {
+	auto &data = between_expr.bind_info->Cast<BetweenFunctionData>();
+	return data.lower_inclusive;
+}
+
+bool BoundBetweenExpression::UpperInclusive(const BoundFunctionExpression &between_expr) {
+	auto &data = between_expr.bind_info->Cast<BetweenFunctionData>();
+	return data.upper_inclusive;
+}
+
+const Expression &BoundBetweenExpression::Input(const BoundFunctionExpression &between_expr) {
+	return *between_expr.children[0];
+}
+
+const Expression &BoundBetweenExpression::LowerBound(const BoundFunctionExpression &between_expr) {
+	return *between_expr.children[1];
+}
+
+const Expression &BoundBetweenExpression::UpperBound(const BoundFunctionExpression &between_expr) {
+	return *between_expr.children[2];
+}
+
+unique_ptr<Expression> &BoundBetweenExpression::InputMutable(BoundFunctionExpression &between_expr) {
+	return between_expr.children[0];
+}
+
+unique_ptr<Expression> &BoundBetweenExpression::LowerBoundMutable(BoundFunctionExpression &between_expr) {
+	return between_expr.children[1];
+}
+
+unique_ptr<Expression> &BoundBetweenExpression::UpperBoundMutable(BoundFunctionExpression &between_expr) {
+	return between_expr.children[2];
 }
 
 } // namespace duckdb
