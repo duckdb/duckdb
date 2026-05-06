@@ -161,3 +161,59 @@ SELECT COUNT(*) FROM (
 ) WHERE (rn % 7 = 6) != (i IS NULL)
 ----
 0
+
+statement ok
+SET adaptive_segment_allocation = true
+
+statement ok
+SET initial_segment_rows = 2
+
+statement ok
+CREATE TABLE string_test (s VARCHAR)
+
+# even rows: short strings (stored inline)
+# odd rows: 50-char prefix + number (stored in overflow pages)
+statement ok
+INSERT INTO string_test
+    SELECT CASE WHEN range % 2 = 0
+                THEN range::VARCHAR
+                ELSE repeat('x', 50) || range::VARCHAR
+           END
+    FROM range(100)
+
+query I
+SELECT COUNT(*) FROM string_test
+----
+100
+
+# 50 short strings (inline) and 50 long strings (overflow)
+query I
+SELECT COUNT(*) FILTER (WHERE len(s) <= 12) FROM string_test
+----
+50
+
+query I
+SELECT COUNT(*) FILTER (WHERE len(s) > 50) FROM string_test
+----
+50
+
+# data must survive checkpoint
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM string_test
+----
+100
+
+# verify a specific short string is intact
+query I
+SELECT s FROM string_test WHERE s = '42'
+----
+42
+
+# verify a specific long string is intact and not truncated
+query I
+SELECT len(s) FROM string_test WHERE s = repeat('x', 50) || '1'
+----
+51
