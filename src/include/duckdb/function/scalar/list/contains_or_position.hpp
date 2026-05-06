@@ -11,8 +11,6 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
 
-	const auto input_count = ListVector::GetListSize(input_list);
-
 	const auto list_entries = input_list.Values<list_entry_t>();
 	const auto child_data = list_child.Values<T>();
 	const auto target_data = target.Values<T>();

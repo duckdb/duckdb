@@ -95,7 +95,6 @@ void ListSelectFunction(const DataChunk &args, ExpressionState &state, Vector &r
 
 	auto selection_list_data = selection_list.Values<list_entry_t>();
 	auto &selection_entry = ListVector::GetChild(selection_list);
-	auto child_size = ListVector::GetListSize(selection_list);
 	auto input_lists_data = list.Values<list_entry_t>();
 	auto &input_entry = ListVector::GetChild(list);
 	auto &input_validity = FlatVector::Validity(input_entry);

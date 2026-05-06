@@ -28,7 +28,6 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 
 	// unify the MAP vector, which is a physical LIST vector
 	auto map_entries = map.Values<list_entry_t>();
-	auto maps_length = ListVector::GetListSize(map);
 
 	// unify the child vector containing the keys
 	auto &keys = MapVector::GetKeys(map);

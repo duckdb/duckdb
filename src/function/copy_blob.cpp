@@ -91,7 +91,7 @@ void WriteBlobData(QueryContext &query_context, FileHandle &handle, data_ptr_t b
 			throw IOException("Failed to write to file!");
 		}
 		blob_ptr += written;
-		blob_len -= written;
+		blob_len -= static_cast<idx_t>(written);
 	}
 }
 
