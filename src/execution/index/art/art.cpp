@@ -258,7 +258,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	D_ASSERT(keys.size() >= count);
 
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -276,7 +276,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 template <class T, bool IS_NOT_NULL>
 static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {

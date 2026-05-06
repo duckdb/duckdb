@@ -550,6 +550,22 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verification Mode
+//===----------------------------------------------------------------------===//
+void DebugVerificationModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.global_verification_mode = EnumUtil::FromString<DebugVerificationMode>(input.ToString());
+}
+
+void DebugVerificationModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.global_verification_mode = DebugVerificationMode::NONE;
+}
+
+Value DebugVerificationModeSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return EnumUtil::ToString(config.options.global_verification_mode);
+}
+
+//===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
 void DefaultBlockSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {

@@ -1733,7 +1733,7 @@ string Value::ToSQLString() const {
 		string ret = "VARIANT(";
 		Vector tmp(*this, count_t(1));
 		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 		ret += val.ToString();

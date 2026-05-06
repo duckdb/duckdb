@@ -208,7 +208,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 		ArrowToDuckDB(state, data.arrow_table.GetColumns(), output);
 	}
 
-	output.Verify(context.db);
+	output.Verify(context);
 	state.chunk_offset += output.size();
 }
 

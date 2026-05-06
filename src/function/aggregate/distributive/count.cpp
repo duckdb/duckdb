@@ -144,8 +144,8 @@ struct CountFunction : public BaseCountFunction {
 			CountFlatLoop(sdata, FlatVector::ValidityMutable(input), count);
 		} else {
 			UnifiedVectorFormat idata, sdata;
-			input.ToUnifiedFormat(count, idata);
-			states.ToUnifiedFormat(count, sdata);
+			input.ToUnifiedFormat(idata);
+			states.ToUnifiedFormat(sdata);
 			CountScatterLoop(UnifiedVectorFormat::GetData<STATE *>(sdata), *idata.sel, *sdata.sel, idata.validity,
 			                 count);
 		}
@@ -214,7 +214,7 @@ struct CountFunction : public BaseCountFunction {
 		}
 		default: {
 			UnifiedVectorFormat idata;
-			input.ToUnifiedFormat(count, idata);
+			input.ToUnifiedFormat(idata);
 			CountUpdateLoop(result, idata.validity, count, *idata.sel);
 			break;
 		}

@@ -2,6 +2,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"

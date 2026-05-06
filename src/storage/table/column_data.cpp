@@ -295,7 +295,7 @@ void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, V
 	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	result.Flatten(scan_count);
+	result.Flatten();
 	updates->FetchUpdates(transaction, vector_index, result);
 }
 
@@ -353,10 +353,10 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
-	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result.Flatten(scan_count);
+		result.Flatten();
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
 }
@@ -377,7 +377,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	FlatVector::SetSize(result, count_t(scan_count));
 
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(scan_count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
@@ -394,7 +394,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 
 void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(append_count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	AppendData(append_stats, state, vdata, append_count);
 }
 
@@ -612,7 +612,7 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 		throw InternalException("ColumnData::FetchUpdateData out of range");
 	}
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-	base_vector.Flatten(fetch_count);
+	base_vector.Flatten();
 	return fetch_count;
 }
 

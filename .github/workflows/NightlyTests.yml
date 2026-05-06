@@ -115,7 +115,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   release-assert-osx-storage:
     name: Release Assertions OSX Storage
@@ -153,7 +153,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --force-storage --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   smaller-binary:
     name: Smaller Binary
@@ -239,7 +239,7 @@ jobs:
     - name: Test
       shell: bash
       run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --test-config test/configs/release_assertions.json --no-exit --timeout 600 --time_execution
+          python3 scripts/ci/run_tests.py --test-config test/configs/release_assertions.json --batch-timeout 600 build/relassert/test/unittest "*"
 
   sqllogic:
      name: Sqllogic tests
@@ -514,7 +514,7 @@ jobs:
 
       - name: Test
         shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --timeout 600 --time_execution
+        run: python3 scripts/ci/run_tests.py --batch-timeout 600 build/relassert/test/unittest
 
   linux-wasm-experimental:
     name: WebAssembly duckdb-wasm builds

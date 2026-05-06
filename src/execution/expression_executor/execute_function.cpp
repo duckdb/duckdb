@@ -244,7 +244,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	} else {
 		arguments.SetCardinality(count);
 	}
-	arguments.Verify(context ? context->db : nullptr);
+	arguments.Verify(context);
 
 	auto &execute_function_state = state->Cast<ExecuteFunctionState>();
 	auto dictionary_executed = expr.function.HasFunctionCallback() && !all_constant &&
@@ -268,7 +268,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 		// ensure the result type is constant
 		if (result.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    result.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.Flatten(1);
+			result.Flatten();
 		}
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
@@ -292,7 +292,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 	}
 	arguments.SetCardinality(count);
-	arguments.Verify(context ? context->db : nullptr);
+	arguments.Verify(context);
 
 	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }

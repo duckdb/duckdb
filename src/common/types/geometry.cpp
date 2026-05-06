@@ -1515,7 +1515,7 @@ static void FromMultiPoints(Vector &source_vec, Vector &target_vec, idx_t row_co
 
 template <class V = VertexXY>
 static void ToMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	source_vec.Flatten(row_count);
+	source_vec.Flatten();
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
 	auto mult_writer =
 	    FlatVector::Writer<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>(target_vec, row_count);
@@ -1586,7 +1586,7 @@ static void FromMultiLineStrings(Vector &source_vec, Vector &target_vec, idx_t r
 
 template <class V = VertexXY>
 static void ToMultiPolygons(Vector &source_vec, Vector &target_vec, idx_t row_count) {
-	source_vec.Flatten(row_count);
+	source_vec.Flatten();
 	const auto geom_data = FlatVector::GetData<string_t>(source_vec);
 	auto mult_writer = FlatVector::Writer<VectorListType<VectorListType<VectorListType<typename V::STRUCT_TYPE>>>>(
 	    target_vec, row_count);

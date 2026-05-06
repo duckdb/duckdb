@@ -148,15 +148,15 @@ void HandleVariantNull(ToVariantGlobalResultData &result, idx_t result_index, ui
 struct ToVariantSourceData {
 public:
 	ToVariantSourceData(Vector &source, idx_t source_size) : vec(source), source_size(source_size) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, const SelectionVector &sel)
 	    : vec(source), source_size(source_size), source_sel(sel) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, optional_ptr<const SelectionVector> sel)
 	    : vec(source), source_size(source_size), source_sel(sel) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 
 public:

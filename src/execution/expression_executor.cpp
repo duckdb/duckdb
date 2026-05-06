@@ -55,6 +55,10 @@ ClientContext &ExpressionExecutor::GetContext() {
 	return *context;
 }
 
+optional_ptr<ClientContext> ExpressionExecutor::GetContextPtr() {
+	return context;
+}
+
 Allocator &ExpressionExecutor::GetAllocator() {
 	return context ? Allocator::Get(*context) : Allocator::DefaultAllocator();
 }
@@ -86,7 +90,7 @@ void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
 		ExecuteExpression(i, result.data[i]);
 	}
 	result.SetCardinality(input ? input->size() : 1);
-	result.Verify(context ? context->db : nullptr);
+	result.Verify(context);
 }
 
 void ExpressionExecutor::ExecuteExpression(DataChunk &input, Vector &result) {
@@ -153,7 +157,7 @@ bool ExpressionExecutor::TryEvaluateScalar(ClientContext &context, const Express
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.GetReturnType().id() == vector.GetType().id());
-	vector.Verify(count);
+	vector.Verify();
 	if (expr.GetVerificationStats()) {
 		expr.GetVerificationStats()->Verify(vector, count);
 	}
@@ -188,7 +192,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 		} else {
 			VectorOperations::DefaultCast(vector, intermediate, cast_count, true);
 		}
-		intermediate.Verify(cast_count);
+		intermediate.Verify();
 		//! FIXME: this is probably also where we want to test 'variant_normalize'
 
 		Vector result(vector.GetType(), cast_count);
@@ -203,7 +207,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 			FlatVector::SetSize(result, count_t(count));
 		}
 		vector.Reference(result);
-		vector.Verify(count);
+		vector.Verify();
 	}
 }
 
@@ -359,7 +363,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;
-	intermediate.ToUnifiedFormat(count, idata);
+	intermediate.ToUnifiedFormat(idata);
 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();

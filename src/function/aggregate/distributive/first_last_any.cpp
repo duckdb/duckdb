@@ -146,10 +146,10 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		sel_t assign_sel[STANDARD_VECTOR_SIZE];
 		idx_t assign_count = 0;
@@ -237,7 +237,7 @@ void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_in
 		// This saves iterating through all elements when we only need the last one
 		D_ASSERT(input_count == 1);
 		UnifiedVectorFormat idata;
-		inputs[0].ToUnifiedFormat(count, idata);
+		inputs[0].ToUnifiedFormat(idata);
 		auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 
 		for (idx_t i = count; i-- > 0;) {

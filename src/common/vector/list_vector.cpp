@@ -106,7 +106,10 @@ void VectorListBuffer::VerifyInternal(const LogicalType &type, const SelectionVe
 		idx = vector_type == VectorType::CONSTANT_VECTOR ? 0 : idx;
 		auto &le = list_data[idx];
 		if (validity.RowIsValid(idx)) {
-			D_ASSERT(le.offset + le.length <= child->size());
+			if (le.offset + le.length > child->size()) {
+				throw InternalException("List entry offset + length out of range (offset %d, size %d, child size %d)",
+				                        le.offset, le.length, child->size());
+			}
 			total_size += le.length;
 		}
 	}
@@ -148,9 +151,9 @@ buffer_ptr<VectorBuffer> VectorListBuffer::ConstantSliceInternal(const LogicalTy
 	return result;
 }
 
-void VectorListBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorListBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -214,7 +217,7 @@ buffer_ptr<VectorBuffer> VectorListBuffer::FlattenSliceInternal(const LogicalTyp
 	// now flatten the child
 	auto &list_result = result->Cast<VectorListBuffer>();
 	auto &list_child = list_result.GetChild();
-	list_child.Flatten(list_child.size());
+	list_child.Flatten();
 	return result;
 }
 
@@ -363,7 +366,7 @@ idx_t ListVector::GetConsecutiveChildList(Vector &list, Vector &result, idx_t of
 		ListVector::GetConsecutiveChildSelVector(list, sel, offset, count);
 
 		result.Slice(sel, info.child_list_info.length);
-		result.Flatten(info.child_list_info.length);
+		result.Flatten();
 	}
 	return info.child_list_info.length;
 }

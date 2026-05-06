@@ -222,8 +222,8 @@ struct BinaryExecutor {
 	static void ExecuteGeneric(Vector &left, Vector &right, Vector &result, idx_t count, FUNC fun) {
 		UnifiedVectorFormat ldata, rdata;
 
-		left.ToUnifiedFormat(count, ldata);
-		right.ToUnifiedFormat(count, rdata);
+		left.ToUnifiedFormat(ldata);
+		right.ToUnifiedFormat(rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<RESULT_TYPE>(result);
@@ -509,8 +509,8 @@ public:
 	                           SelectionVector *true_sel, SelectionVector *false_sel) {
 		UnifiedVectorFormat ldata, rdata;
 
-		left.ToUnifiedFormat(count, ldata);
-		right.ToUnifiedFormat(count, rdata);
+		left.ToUnifiedFormat(ldata);
+		right.ToUnifiedFormat(rdata);
 
 		return SelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
