@@ -209,12 +209,12 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values() const;
 
 	template <class T>
-	VectorValidValueIterator<T> ValidValues(idx_t count) const;
+	VectorValidValueIterator<T> ValidValues() const;
 
-	VectorValidityIterator Validity(idx_t count) const;
+	VectorValidityIterator Validity() const;
 
 	//! This allows a vector to reference another vector while const
 	//! This is only used internally in `Flatten` - since referencing
