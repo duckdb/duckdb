@@ -97,8 +97,6 @@ protected:
 
 	static unique_ptr<ExpressionState> InitializeState(const BoundReferenceExpression &expr,
 	                                                   ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundBetweenExpression &expr,
-	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCaseExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCastExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundComparisonExpression &expr,
@@ -117,8 +115,6 @@ protected:
 	void Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 
-	void Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
 	void Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 	void Execute(const BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
@@ -146,8 +142,6 @@ protected:
 	idx_t DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
-	idx_t Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,

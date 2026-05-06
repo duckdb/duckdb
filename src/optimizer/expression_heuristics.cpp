@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
@@ -67,8 +68,11 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(const BoundBetweenExpression &expr) {
-	return Cost(expr.Input()) + Cost(expr.LowerBound()) + Cost(expr.UpperBound()) + 10;
+idx_t ExpressionHeuristics::BetweenExpressionCost(const BoundFunctionExpression &expr) {
+	auto &input = BoundBetweenExpression::Input(expr);
+	auto &lower_bound = BoundBetweenExpression::LowerBound(expr);
+	auto &upper_bound = BoundBetweenExpression::UpperBound(expr);
+	return Cost(input) + Cost(lower_bound) + Cost(upper_bound) + 10;
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundCaseExpression &expr) {
@@ -115,6 +119,9 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &exp
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		return BetweenExpressionCost(expr);
+	}
 	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
 	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
@@ -173,10 +180,6 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		return ExpressionCost(case_expr);
-	}
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between_expr = expr.Cast<BoundBetweenExpression>();
-		return ExpressionCost(between_expr);
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();

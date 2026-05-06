@@ -45,10 +45,9 @@ public:
 	}
 
 public:
-	template <class T, class BASE>
-	static string ToString(const T &entry) {
-		return "(" + entry.Input().ToString() + " BETWEEN " + entry.LowerBound().ToString() + " AND " +
-		       entry.UpperBound().ToString() + ")";
+	template <class T>
+	static string ToString(const T &input, const T &lower, const T &upper) {
+		return "(" + input.ToString() + " BETWEEN " + lower.ToString() + " AND " + upper.ToString() + ")";
 	}
 
 private:

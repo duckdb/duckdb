@@ -1960,7 +1960,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_REF), "BOUND_REF" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_SUBQUERY), "BOUND_SUBQUERY" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_WINDOW), "BOUND_WINDOW" },
-		{ static_cast<uint32_t>(ExpressionClass::BOUND_BETWEEN), "BOUND_BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_BETWEEN), "LEGACY_BOUND_BETWEEN" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_UNNEST), "BOUND_UNNEST" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA), "BOUND_LAMBDA" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },
