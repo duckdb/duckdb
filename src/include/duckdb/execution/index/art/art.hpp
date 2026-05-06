@@ -79,6 +79,10 @@ public:
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
 
+	//! Batch equality scan: looks up all keys in the DataChunk and appends matching row_ids to the output.
+	//! Acquires the lock once for the entire batch. Supports non-unique indexes (multiple row_ids per key).
+	void Scan(DataChunk &input, vector<row_t> &row_ids);
+
 	//! Simple merge: scan source ART and delete each (key, rowid) from this ART.
 	// FIXME: replace with structural tree delete merge.
 	void RemovalMerge(IndexLock &state, BoundIndex &source_index);
