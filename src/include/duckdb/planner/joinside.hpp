@@ -198,7 +198,7 @@ public:
 	static JoinSide CombineJoinSide(JoinSide left, JoinSide right);
 	static JoinSide GetJoinSide(TableIndex table_binding, const unordered_set<TableIndex> &left_bindings,
 	                            const unordered_set<TableIndex> &right_bindings);
-	static JoinSide GetJoinSide(Expression &expression, const unordered_set<TableIndex> &left_bindings,
+	static JoinSide GetJoinSide(const Expression &expression, const unordered_set<TableIndex> &left_bindings,
 	                            const unordered_set<TableIndex> &right_bindings);
 	static JoinSide GetJoinSide(const unordered_set<TableIndex> &bindings,
 	                            const unordered_set<TableIndex> &left_bindings,

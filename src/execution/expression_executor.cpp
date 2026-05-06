@@ -216,8 +216,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
 	case ExpressionClass::BOUND_CAST:
 		return InitializeState(expr.Cast<BoundCastExpression>(), state);
-	case ExpressionClass::BOUND_COMPARISON:
-		return InitializeState(expr.Cast<BoundComparisonExpression>(), state);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
@@ -266,9 +264,6 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_CAST:
 		Execute(expr.Cast<BoundCastExpression>(), state, sel, count, result);
 		break;
-	case ExpressionClass::BOUND_COMPARISON:
-		Execute(expr.Cast<BoundComparisonExpression>(), state, sel, count, result);
-		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
 		Execute(expr.Cast<BoundConjunctionExpression>(), state, sel, count, result);
 		break;
@@ -303,8 +298,6 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.GetReturnType().id() == LogicalTypeId::BOOLEAN);
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_COMPARISON:
-		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
 		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_FUNCTION:

@@ -55,8 +55,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		auto left_child =
 		    make_uniq<BoundColumnRefExpression>(idx_type, ColumnBinding(aggregate_index, ProjectionIndex(0)));
 		auto right_child = make_uniq<BoundConstantExpression>(Value::Numeric(idx_type, 1));
-		auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left_child),
-		                                                       std::move(right_child));
+		auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, std::move(left_child),
+		                                                    std::move(right_child));
 
 		vector<unique_ptr<Expression>> projection_list;
 		projection_list.push_back(std::move(comparison));
@@ -118,8 +118,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			                                                     ColumnBinding(aggr_index, ProjectionIndex(1)));
 
 			auto constant_one = make_uniq<BoundConstantExpression>(Value::BIGINT(1));
-			auto count_check = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
-			                                                        std::move(count_ref), std::move(constant_one));
+			auto count_check = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN,
+			                                                     std::move(count_ref), std::move(constant_one));
 
 			vector<unique_ptr<Expression>> error_children;
 			error_children.push_back(make_uniq<BoundConstantExpression>(

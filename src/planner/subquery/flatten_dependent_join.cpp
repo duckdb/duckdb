@@ -8,6 +8,7 @@
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -399,8 +400,8 @@ void FlattenDependentJoins::AddCorrelatedJoinConditions(LogicalJoin &join, const
 			comp_join.conditions.push_back(std::move(cond));
 		} else {
 			auto &logical_any_join = join.Cast<LogicalAnyJoin>();
-			auto comparison = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
-			                                                       std::move(left), std::move(right));
+			auto comparison = BoundComparisonExpression::Create(ExpressionType::COMPARE_NOT_DISTINCT_FROM,
+			                                                    std::move(left), std::move(right));
 			auto conjunction = make_uniq<BoundConjunctionExpression>(
 			    ExpressionType::CONJUNCTION_AND, std::move(comparison), std::move(logical_any_join.condition));
 			logical_any_join.condition = std::move(conjunction);
@@ -747,14 +748,14 @@ vector<ColumnBinding> FlattenDependentJoins::PushDownLimit(unique_ptr<LogicalOpe
 			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
 		}
 		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
-		condition = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
-		                                                 std::move(upper_bound));
+		condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
+		                                              std::move(upper_bound));
 	}
 
 	if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		auto lower_bound = make_uniq<BoundConstantExpression>(int64_t(limit.offset_val.GetConstantValue()));
-		auto lower_comp = make_uniq_base<Expression, BoundComparisonExpression>(
-		    ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(), std::move(lower_bound));
+		auto lower_comp = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHAN, row_num_ref->Copy(),
+		                                                    std::move(lower_bound));
 
 		// Stitch together with AND if both bounds exist
 		condition = condition ? make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,

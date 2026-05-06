@@ -98,8 +98,6 @@ protected:
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCaseExpression &expr, ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundCastExpression &expr, ExpressionExecutorState &state);
-	static unique_ptr<ExpressionState> InitializeState(const BoundComparisonExpression &expr,
-	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConjunctionExpression &expr,
 	                                                   ExpressionExecutorState &state);
 	static unique_ptr<ExpressionState> InitializeState(const BoundConstantExpression &expr,
@@ -119,8 +117,6 @@ protected:
 	void Execute(const BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	             Vector &result);
 
-	void Execute(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             Vector &result);
 	void Execute(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
 	             idx_t count, Vector &result);
 	void Execute(const BoundConstantExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
@@ -141,8 +137,6 @@ protected:
 	idx_t DefaultSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
 
-	idx_t Select(const BoundComparisonExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,
-	             SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundConjunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
 	             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 	idx_t Select(const BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel, idx_t count,

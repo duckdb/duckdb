@@ -9,64 +9,6 @@
 
 namespace duckdb {
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
-                                                                ExpressionExecutorState &root) {
-	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(*expr.left);
-	result->AddChild(*expr.right);
-
-	result->Finalize();
-	return result;
-}
-
-void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, ExpressionState *state,
-                                 const SelectionVector *sel, idx_t count, Vector &result) {
-	// resolve the children
-	state->intermediate_chunk.Reset();
-	auto &left = state->intermediate_chunk.data[0];
-	auto &right = state->intermediate_chunk.data[1];
-
-	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
-	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
-
-	bool all_constant = false;
-	if (state->intermediate_chunk.AllConstant()) {
-		count = 1;
-		all_constant = true;
-	}
-	switch (expr.GetExpressionType()) {
-	case ExpressionType::COMPARE_EQUAL:
-		VectorOperations::Equals(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_NOTEQUAL:
-		VectorOperations::NotEquals(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_LESSTHAN:
-		VectorOperations::LessThan(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_GREATERTHAN:
-		VectorOperations::GreaterThan(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		VectorOperations::LessThanEquals(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		VectorOperations::GreaterThanEquals(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		VectorOperations::DistinctFrom(left, right, result, count);
-		break;
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		VectorOperations::NotDistinctFrom(left, right, result, count);
-		break;
-	default:
-		throw InternalException("Unknown comparison type!");
-	}
-	if (all_constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // Select comparisons
 //===--------------------------------------------------------------------===//
@@ -267,39 +209,6 @@ idx_t VectorOperations::LessThanEquals(Vector &left, Vector &right, optional_ptr
 	}
 	return ComparatorSelectOperation(left, right, sel, count, true_sel, false_sel, null_mask,
 	                                 [](int8_t v) { return v <= 0; });
-}
-
-idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, ExpressionState *state,
-                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
-	// resolve the children
-	state->intermediate_chunk.Reset();
-	auto &left = state->intermediate_chunk.data[0];
-	auto &right = state->intermediate_chunk.data[1];
-
-	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
-	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
-
-	switch (expr.GetExpressionType()) {
-	case ExpressionType::COMPARE_EQUAL:
-		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
-	default:
-		throw InternalException("Unknown comparison type!");
-	}
 }
 
 } // namespace duckdb
