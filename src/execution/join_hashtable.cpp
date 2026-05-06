@@ -744,6 +744,7 @@ void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx
 	Vector build_keys(layout_ptr->GetTypes()[0], count);
 	auto &sel = *FlatVector::IncrementalSelectionVector();
 	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
+	FlatVector::SetSize(build_keys, count_t(count));
 	prefix_range_filter->InsertKeys(build_keys, count, state);
 }
 
