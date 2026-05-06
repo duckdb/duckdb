@@ -124,7 +124,7 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			D_ASSERT(filter_info->right_set);
 			D_ASSERT(filter_info->join_type == JoinType::SEMI || filter_info->join_type == JoinType::ANTI);
 			for (auto &child_comp : conjunction.children) {
-				if (BoundComparisonExpression::IsComparison(*child_comp)) {
+				if (!BoundComparisonExpression::IsComparison(*child_comp)) {
 					continue;
 				}
 				auto &comparison = child_comp->Cast<BoundFunctionExpression>();
