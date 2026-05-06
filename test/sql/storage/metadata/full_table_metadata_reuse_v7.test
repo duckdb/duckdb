@@ -2,7 +2,9 @@
 # description: Test that column metadata is not loaded when making no changes to a table (v1.5.0 / serialization version 7)
 # group: [metadata]
 
-load {TEST_DIR}/partial_column_metadata_reuse_v6.test.db readwrite v1.5.0
+require no_alternative_verify
+
+load {TEST_DIR}/full_table_metadata_reuse_v7.test.db readwrite v1.5.0
 
 # create a table with several columns
 statement ok

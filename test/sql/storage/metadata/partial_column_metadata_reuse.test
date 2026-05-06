@@ -2,7 +2,9 @@
 # description: Test partial column metadata reuse for UPDATE, INSERT, and ALTER operations
 # group: [metadata]
 
-load {TEST_DIR}/partial_column_metadata_reuse.test.db readwrite v2.0.0
+require no_alternative_verify
+
+load {TEST_DIR}/partial_column_metadata_reuse.test.db readwrite latest
 
 # create a wide table with many columns
 statement ok
