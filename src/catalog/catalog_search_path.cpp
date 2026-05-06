@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 
 #include "duckdb/common/exception/parser_exception.hpp"
 
@@ -294,13 +295,13 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	for (auto &path : set_paths) {
 		paths.push_back(path);
 	}
-	// set extension schemas on the search path, if any
-	for (auto &schema : DatabaseManager::Get(context).GetExtensionSchemas()) {
-		paths.emplace_back(SYSTEM_CATALOG, schema);
-	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+	// set extension schemas on the search path, if any
+	for (auto &schema : ExtensionCallbackManager::Get(context).GetExtensionSchemas()) {
+		paths.emplace_back(SYSTEM_CATALOG, schema);
+	}
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,

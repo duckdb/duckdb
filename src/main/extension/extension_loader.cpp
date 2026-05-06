@@ -19,6 +19,8 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
 
+#include "duckdb/main/extension_callback_manager.hpp"
+
 namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
@@ -64,7 +66,7 @@ void ExtensionLoader::FinalizeLoad() {
 	}
 
 	if (extension_schema != DEFAULT_SCHEMA) {
-		DatabaseManager::Get(db).AddExtensionSchema(extension_schema);
+		ExtensionCallbackManager::Get(db).AddExtensionSchema(extension_schema);
 	}
 }
 

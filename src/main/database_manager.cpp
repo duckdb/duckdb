@@ -460,14 +460,4 @@ Catalog &DatabaseManager::GetSystemCatalog() {
 	return system->GetCatalog();
 }
 
-void DatabaseManager::AddExtensionSchema(const string &schema) {
-	lock_guard<mutex> lock(schemas_lock);
-	extension_schemas.push_back(schema);
-}
-
-vector<string> DatabaseManager::GetExtensionSchemas() const {
-	lock_guard<mutex> lock(schemas_lock);
-	return extension_schemas;
-}
-
 } // namespace duckdb

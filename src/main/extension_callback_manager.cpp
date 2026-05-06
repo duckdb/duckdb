@@ -40,6 +40,14 @@ ExtensionCallbackManager::ExtensionCallbackManager() : callback_registry(make_sh
 ExtensionCallbackManager::~ExtensionCallbackManager() {
 }
 
+void ExtensionCallbackManager::AddExtensionSchema(const string &schema) {
+	extension_schemas.push_back(schema);
+}
+
+vector<string> ExtensionCallbackManager::GetExtensionSchemas() const {
+	return extension_schemas;
+}
+
 void ExtensionCallbackManager::Register(ParserExtension extension) {
 	lock_guard<mutex> guard(registry_lock);
 	auto new_registry = make_shared_ptr<ExtensionCallbackRegistry>(*callback_registry);
