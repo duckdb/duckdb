@@ -264,6 +264,46 @@ require windows: 2
         self.assertIn("require windows: 2", summary_block)
         self.assertNotIn("require windows: 7", summary_block)
 
+    def test_fail_require_skip_enabled_fails(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        helper_path = create_temp_file(
+            """
+            #!/bin/sh
+            cat <<'EOF'
+            Skipped tests for the following reasons:
+            require mysql_scanner: 56
+            require postgres_scanner: 2
+            require spatial: 124
+            EOF
+            exit 0
+            """
+        )
+        os.chmod(helper_path, 0o755)
+
+        try:
+            proc = start_runner(
+                [
+                    "--workers",
+                    "1",
+                    "--batch-size",
+                    "1",
+                    "--fail-require-skip",
+                    "--test-list",
+                    str(test_list_path),
+                    "--test-command",
+                    f"{helper_path} {{test_list}}",
+                    "unused-binary",
+                ]
+            )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+            helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("require mysql_scanner: 56", proc.stdout)
+        self.assertIn("require postgres_scanner: 2", proc.stdout)
+        self.assertIn("require spatial: 124", proc.stdout)
+
     def test_generate_list(self):
         listed_tests_path = create_temp_file(
             """
