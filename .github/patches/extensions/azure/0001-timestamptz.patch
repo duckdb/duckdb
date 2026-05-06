@@ -1,0 +1,13 @@
+diff --git a/src/http_logging_policy.cpp b/src/http_logging_policy.cpp
+index bdb2e5c..be0c213 100644
+--- a/src/http_logging_policy.cpp
++++ b/src/http_logging_policy.cpp
+@@ -93,7 +93,7 @@ void HttpLoggingPolicy::LogRequest(Azure::Core::Http::Request &request, timestam
+ 	child_list_t<Value> request_fields = {
+ 	    {"type", Value(request.GetMethod().ToString())},
+ 	    {"url", Value(logged_url)},
+-	    {"start_time", Value::TIMESTAMPTZ(timestamp_tz_t(start_time))},
++	    {"start_time", Value::TIMESTAMPTZ(timestamp_tz_t(start_time.value))},
+ 	    {"duration_ms", Value::BIGINT(duration_ms)},
+ 	    {"headers", CreateAzureHeadersValue(request.GetHeaders(), redact_headers)},
+ 	};
