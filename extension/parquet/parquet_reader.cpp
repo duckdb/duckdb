@@ -1616,7 +1616,6 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 			// We must do the filter grouping based on the set that excludes all rows
 			if (i > 0 && state.filter_eliminated_all_rows[permutation[i - 1]]) {
-
 				trans.FinalizeRegistration();
 				if (log_prefetch) {
 					state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
@@ -1654,15 +1653,14 @@ void ParquetReader::ColumnWisePrefetch(ParquetReaderScanState &state, ThriftFile
 	trans.FinalizeRegistration();
 	if (log_prefetch) {
 		state.prefetch_metrics.logger.GeneratePrefetchGroup(trans, pending_registrations, group.columns);
-		state.prefetch_metrics.logger.strategy = lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS
-		                                                    : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
+		state.prefetch_metrics.logger.strategy =
+		    lazy_fetch ? ParquetPrefetchStrategy::PREFETCH_FILTERS : ParquetPrefetchStrategy::COLUMN_WISE_EAGER;
 	}
 
 	if (!lazy_fetch) {
 		trans.PrefetchRegistered();
 	}
 }
-
 
 AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	result.Reset();
