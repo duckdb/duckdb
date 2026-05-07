@@ -25,11 +25,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
 	grouping_columns = group_types_p.size();
 	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
-	clustered_state.any_clustered = AnyAggregatesClustered(aggregate_objects_p);
+	clustered_state.n_clustered = CountAggregatesClustered(aggregate_objects_p);
 	layout_ptr->Initialize(std::move(aggregate_objects_p));
 	tuple_size = layout_ptr->GetRowWidth();
 
-	if (clustered_state.any_clustered) {
+	if (clustered_state.n_clustered > 1) {
 		clustered_state.Initialize();
 	}
 

@@ -317,9 +317,9 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
 	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
 	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
-		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[clustered.run_begin + r].state);
-		const auto *run_sel = clustered.group_runs[clustered.run_begin + r].sel;
-		const auto run_count = clustered.group_runs[clustered.run_begin + r].count;
+		auto &state = *reinterpret_cast<FirstState<T> *>(clustered.group_runs[r].state);
+		const auto *run_sel = clustered.group_runs[r].sel;
+		const auto run_count = clustered.group_runs[r].count;
 		FirstFunction<LAST, SKIP_NULLS>::template ClusteredOp<T, FirstState<T>, FirstFunction<LAST, SKIP_NULLS>>(
 		    state, input_data, unary_input, run_sel, *idata.sel, idata.validity, 0, run_count);
 	}

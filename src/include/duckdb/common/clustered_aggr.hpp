@@ -19,16 +19,15 @@ class Vector;
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
 //! regular scatter path over input-order addresses.
 struct ClusteredAggr {
-	static constexpr idx_t MAJORITY_RUNLENGTH_THRESHOLD = 8;
-	static constexpr idx_t LOG2_MAX_GROUPS = 5;
-	static constexpr idx_t MAX_GROUPS = idx_t(1) << LOG2_MAX_GROUPS;
-	static constexpr idx_t MAX_RUNS = STANDARD_VECTOR_SIZE + MAX_GROUPS + 1; 
-	static constexpr idx_t HASH_SLOTS = MAX_GROUPS*128;
-	static constexpr idx_t FIRST_GROUP = ((MAX_RUNS - 1)  - MAX_GROUPS) / 2;
-	static constexpr idx_t POSITION_SHIFT = 32 - LOG2_MAX_GROUPS;
-	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << POSITION_SHIFT;
-	static constexpr uint32_t GID_MASK = uint32_t(MAX_GID_COUNT - 1);
-	static constexpr uint32_t INVALID_SLOT = uint32_t(-1);
+	static constexpr idx_t HASH_RUNLENGTH_THRESHOLD = 16;
+	static constexpr idx_t MIXED_RUNLENGTH_THRESHOLD = 8;
+	static constexpr idx_t MERGE_RUNLENGTH_THRESHOLD = 4;
+	static constexpr idx_t MAX_RUNS = STANDARD_VECTOR_SIZE;
+	static constexpr idx_t MAX_HOT_KEYS = 15;
+	static constexpr idx_t HASHTAB_LOG2 = 11;
+	static constexpr idx_t HASHTAB_SZ = idx_t(1) << HASHTAB_LOG2;
+	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << 32;
+	static constexpr uint64_t FREE_SLOT = ~uint64_t(0);
 
 	struct GroupRun {
 		data_ptr_t state; //! caller fills this after TryClustered; advanced between aggregates
@@ -37,16 +36,12 @@ struct ClusteredAggr {
 		idx_t count;      //! number of tuples in this group
 	};
 
-	idx_t run_begin = 0;
 	idx_t n_group_runs = 0;
 	GroupRun group_runs[MAX_RUNS];
 
 	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
 	//! On success fills group_runs[].sel/gid/count.
-	//! Requires scratch buffers: arena (MAX_GROUPS * STANDARD_VECTOR_SIZE + STANDARD_VECTOR_SIZE sel_t),
-	//! and encoded mini-hash slots mapping raw gids to active-group positions.
-	bool TryClustered2(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
-	bool TryClustered(const uint64_t *group_ids, idx_t count, sel_t *arena, uint32_t *slots);
+	bool TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots);
 
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
 	void SetSingleRun(data_ptr_t state, idx_t count);
@@ -57,7 +52,7 @@ struct ClusteredAggr {
 	template <class GET_STATE>
 	void InitializeStates(GET_STATE &&get_state) {
 		for (idx_t r = 0; r < n_group_runs; r++) {
-			group_runs[run_begin + r].state = get_state(group_runs[run_begin + r].gid);
+			group_runs[r].state = get_state(group_runs[r].gid);
 		}
 	}
 
@@ -72,9 +67,9 @@ private:
 //! Scratch state shared by GroupedAggregateHashTable and PerfectAggregateHashTable.
 struct ClusteredAggrState {
 	unsafe_unique_array<sel_t> arena;
-	unsafe_unique_array<uint32_t> slots;
+	unsafe_unique_array<uint64_t> slots;
 	bool all_clustered = false;
-	bool any_clustered = false;
+	idx_t n_clustered = 0;
 	idx_t skipped_opportunities = 0;
 	idx_t retry_backoff = 1;
 

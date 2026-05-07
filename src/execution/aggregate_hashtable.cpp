@@ -11,36 +11,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include <cstdio>
-
-namespace {
-struct ClusteredGroupedGateDebugStats {
-	idx_t calls = 0;
-	idx_t rows = 0;
-	idx_t skip_lookups = 0;
-	idx_t skip_ht_offsets = 0;
-	idx_t skip_capacity = 0;
-	idx_t trybuild_fail = 0;
-	idx_t success = 0;
-	idx_t rows_success = 0;
-
-	~ClusteredGroupedGateDebugStats() {
-		if (!calls) {
-			return;
-		}
-		std::fprintf(stderr,
-		             "[clustered grouped gate] calls=%llu rows=%llu skip_lookups=%llu skip_ht_offsets=%llu "
-		             "skip_capacity=%llu trybuild_fail=%llu success=%llu rows_success=%llu\n",
-		             (unsigned long long)calls, (unsigned long long)rows, (unsigned long long)skip_lookups,
-		             (unsigned long long)skip_ht_offsets, (unsigned long long)skip_capacity,
-		             (unsigned long long)trybuild_fail, (unsigned long long)success,
-		             (unsigned long long)rows_success);
-	}
-};
-
-ClusteredGroupedGateDebugStats clustered_grouped_gate_debug;
-} // namespace
-
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -78,8 +48,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
 	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
-	clustered_state.any_clustered = AnyAggregatesClustered(aggregate_objects_p);
-	if (clustered_state.any_clustered) {
+	clustered_state.n_clustered = CountAggregatesClustered(aggregate_objects_p);
+	if (clustered_state.n_clustered > 1) {
 		clustered_state.Initialize();
 	}
 
@@ -574,38 +544,35 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 
 bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter,
                                                           bool ht_offsets_valid) {
-	clustered_grouped_gate_debug.calls++;
-	clustered_grouped_gate_debug.rows += payload.size();
-	if (skip_lookups || !ht_offsets_valid) {
-		if (skip_lookups) {
-			clustered_grouped_gate_debug.skip_lookups++;
-		}
-		if (!ht_offsets_valid) {
-			clustered_grouped_gate_debug.skip_ht_offsets++;
-		}
-		return false;
-	}
-	if (capacity >= ClusteredAggr::MAX_GID_COUNT) {
-		clustered_grouped_gate_debug.skip_capacity++;
+	if (skip_lookups) {
 		return false;
 	}
 	ClusteredAggr clustered;
-	if (!clustered_state.TryBuild(clustered, FlatVector::GetData<uint64_t>(state.ht_offsets), payload.size())) {
-		clustered_grouped_gate_debug.trybuild_fail++;
-		return false;
+	if (ht_offsets_valid) {
+		if (capacity >= ClusteredAggr::MAX_GID_COUNT) {
+			return false;
+		}
+		if (!clustered_state.TryBuild(clustered, FlatVector::GetData<uint64_t>(state.ht_offsets), payload.size())) {
+			return false;
+		}
+		const auto aggr_offset = layout_ptr->GetAggrOffset();
+		clustered.InitializeStates([&](uint64_t gid) {
+			auto slot = static_cast<idx_t>(gid);
+			return entries[slot].GetPointer() + aggr_offset;
+		});
+	} else {
+		// dictionary path: addresses are already resolved pointers — use them directly as gids
+		auto addrs = FlatVector::GetData<uint64_t>(state.addresses);
+		if (!clustered_state.TryBuild(clustered, addrs, payload.size())) {
+			return false;
+		}
+		clustered.InitializeStates([&](uint64_t gid) { return reinterpret_cast<data_ptr_t>(gid); });
 	}
-	const auto aggr_offset = layout_ptr->GetAggrOffset();
-	clustered.InitializeStates([&](uint64_t gid) {
-		auto slot = static_cast<idx_t>(gid);
-		return entries[slot].GetPointer() + aggr_offset;
-	});
 
 	const bool skip_addresses = clustered_state.all_clustered;
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
 	                                     payload.size(), clustered, skip_addresses);
-	clustered_grouped_gate_debug.success++;
-	clustered_grouped_gate_debug.rows_success += payload.size();
 	return true;
 }
 

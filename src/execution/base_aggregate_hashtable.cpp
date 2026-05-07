@@ -24,13 +24,14 @@ bool BaseAggregateHashTable::AllAggregatesClustered(const vector<AggregateObject
 	return true;
 }
 
-bool BaseAggregateHashTable::AnyAggregatesClustered(const vector<AggregateObject> &aggregates) {
+idx_t BaseAggregateHashTable::CountAggregatesClustered(const vector<AggregateObject> &aggregates) {
+	idx_t count = 0;
 	for (auto &aggregate : aggregates) {
 		if (!aggregate.filter && aggregate.function.GetStateClusterUpdateCallback()) {
-			return true;
+			count++;
 		}
 	}
-	return false;
+	return count;
 }
 
 } // namespace duckdb
