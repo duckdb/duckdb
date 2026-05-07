@@ -7,8 +7,9 @@ namespace duckdb {
 
 class ExpressionScanState : public OperatorState {
 public:
-	explicit ExpressionScanState(Allocator &allocator, const PhysicalExpressionScan &op) : expression_index(0) {
+	explicit ExpressionScanState(Allocator &allocator, const PhysicalExpressionScan &op) {
 		temp_chunk.Initialize(allocator, op.GetTypes());
+		ResetState();
 	}
 
 	//! The current position in the scan
@@ -16,13 +17,19 @@ public:
 	//! Temporary chunk for evaluating expressions
 	DataChunk temp_chunk;
 
+private:
+	void ResetState() {
+		expression_index = 0;
+		temp_chunk.Reset();
+	}
+
+public:
 	bool SupportsReuse() const override {
 		return true;
 	}
 
 	void Reset() override {
-		expression_index = 0;
-		temp_chunk.Reset();
+		ResetState();
 	}
 };
 
