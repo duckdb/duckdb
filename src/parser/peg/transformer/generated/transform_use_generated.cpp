@@ -10,4 +10,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatementInternal(
 	return TransformUseStatement(use_target);
 }
 
+QualifiedName PEGTransformerFactory::TransformUseTargetInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	return TransformUseTarget(transformer, choice_pr.GetResult());
+}
+
 } // namespace duckdb

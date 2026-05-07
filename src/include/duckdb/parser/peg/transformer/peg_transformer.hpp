@@ -1216,7 +1216,6 @@ private:
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// use.gram
-	static QualifiedName TransformUseTarget(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// vacuum.gram

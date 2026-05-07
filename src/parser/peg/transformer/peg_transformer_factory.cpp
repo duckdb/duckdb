@@ -884,7 +884,7 @@ void PEGTransformerFactory::RegisterSelect() {
 void PEGTransformerFactory::RegisterUse() {
 	// use.gram
 	Register("UseStatement", &PEGTransformerFactory::TransformUseStatementInternal);
-	REGISTER_TRANSFORM(TransformUseTarget);
+	Register("UseTarget", &PEGTransformerFactory::TransformUseTargetInternal);
 	REGISTER_TRANSFORM(TransformUseTargetCatalogSchema);
 }
 

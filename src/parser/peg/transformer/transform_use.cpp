@@ -17,15 +17,13 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(QualifiedN
 }
 
 // UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	if (choice_pr.GetResult().type == ParseResultType::IDENTIFIER) {
+QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transformer, ParseResult &pr) {
+	if (pr.type == ParseResultType::IDENTIFIER) {
 		QualifiedName result;
-		result.name = choice_pr.GetResult().Cast<IdentifierParseResult>().identifier;
+		result.name = pr.Cast<IdentifierParseResult>().identifier;
 		return result;
 	}
-	return transformer.Transform<QualifiedName>(choice_pr.GetResult());
+	return transformer.Transform<QualifiedName>(pr);
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
