@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class ParallelHyperLogLogLocalState;
+
 class HashedSort : public SortStrategy {
 public:
 	using Orders = vector<BoundOrderByNode>;
@@ -62,6 +64,8 @@ public:
 	SortedRunPtr GetSortedRun(ClientContext &client, idx_t hash_bin, OperatorSourceInput &source) const override;
 
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
+
+	void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const;
 
 public:
 	//! The host's estimated row count

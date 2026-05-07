@@ -138,4 +138,54 @@ public:
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
 };
 
+//! Utility for computing HLL in parallel
+class ParallelHyperLogLogLocalState {
+public:
+	ParallelHyperLogLogLocalState() {
+	}
+
+public:
+	void Update(Vector &hashes) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		hll.Update(hashes, hashes, hashes.size());
+	}
+
+	void Merge(HyperLogLog &other) const {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		other.Merge(hll);
+	}
+
+private:
+	mutable annotated_mutex lock;
+	HyperLogLog hll DUCKDB_GUARDED_BY(lock);
+};
+
+class ParallelHyperLogLogGlobalState {
+public:
+	ParallelHyperLogLogGlobalState() {
+	}
+
+public:
+	ParallelHyperLogLogLocalState &GetLocalState() {
+		auto state = make_uniq<ParallelHyperLogLogLocalState>();
+		auto &result = *state;
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		states.emplace_back(std::move(state));
+		return result;
+	}
+
+	idx_t GetCount() const {
+		HyperLogLog hll;
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		for (const auto &state : states) {
+			state->Merge(hll);
+		}
+		return hll.Count();
+	}
+
+private:
+	mutable annotated_mutex lock;
+	vector<unique_ptr<ParallelHyperLogLogLocalState>> states DUCKDB_GUARDED_BY(lock);
+};
+
 } // namespace duckdb

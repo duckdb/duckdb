@@ -371,6 +371,8 @@ public:
 	//! Lock for managing this state
 	mutable annotated_mutex lock;
 
+	//! To estimate how many partitions
+	ParallelHyperLogLogGlobalState hll_state;
 	//! Sink management
 	unique_ptr<GlobalSinkState> global_sink_state;
 	//! Sort management
@@ -1014,6 +1016,8 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 		}
 
 		lstate.hashed_sort_local_state = hashed_sort->GetLocalSinkState(execution_context);
+		hashed_sort->RegisterHyperLogLog(*lstate.hashed_sort_local_state,
+		                                 lstate.current_state->hll_state.GetLocalState());
 		lstate.append_count = 0;
 	}
 
