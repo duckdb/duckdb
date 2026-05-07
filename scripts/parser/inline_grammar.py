@@ -132,12 +132,16 @@ class PEGTokenType(Enum):
     REGEX = auto()
     OPERATOR = auto()
 
+    def __str__(self):
+        return self.value
+
 
 class PEGGrammarRule:
     def __init__(self):
         self.rule_name = None
         self.tokens = []
         self.parameters = {}
+        self.return_type = None
 
     def has_tokens(self):
         return bool(self.tokens)
@@ -145,10 +149,13 @@ class PEGGrammarRule:
     def clear(self):
         self.tokens = []
         self.parameters = {}
+        self.return_type = None
 
     def references(self):
         return [t.text for t in self.tokens if t.type in (PEGTokenType.REFERENCE, PEGTokenType.FUNCTION_CALL)]
 
+    def __str__(self):
+        return f"{self.rule_name} [{self.return_type}]<- {self.tokens}"
 
 class ParseState(Enum):
     RULE_NAME = auto()
