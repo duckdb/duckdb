@@ -30,13 +30,12 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 	return 0;
 }
 
-static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
-                                struct ArrowArray *out) {
+static int NextFromMaterialized(MaterializedQueryResult &res, bool big, struct ArrowArray *out) {
 	auto &types = res.types;
 	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
-		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast);
+		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, res.client_context, extension_type_cast);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = res.Fetch();
@@ -54,7 +53,7 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out, properties, extension_type_cast);
+		ArrowConverter::ToArrowArray(*chunk, out, *res.client_context, extension_type_cast);
 	}
 	return 0;
 }
@@ -83,7 +82,7 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 	auto &data = *((ArrowArrayStreamData *)stream->private_data);
 	if (data.factory.result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized_result = data.factory.result->Cast<MaterializedQueryResult>();
-		return NextFromMaterialized(materialized_result, data.factory.big_result, data.options, out);
+		return NextFromMaterialized(materialized_result, data.factory.big_result, out);
 	} else {
 		D_ASSERT(data.factory.result->type == QueryResultType::ARROW_RESULT);
 		return NextFromArrow(data.factory, out);
@@ -114,7 +113,7 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 
 	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
 	stream_wrapper->number_of_rows = -1;
-	auto private_data = make_uniq<ArrowArrayStreamData>(factory, factory.options);
+	auto private_data = make_uniq<ArrowArrayStreamData>(factory);
 	stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 	stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
 	stream_wrapper->arrow_array_stream.get_last_error = ArrowArrayStreamGetLastError;
@@ -130,8 +129,8 @@ void ArrowTestFactory::GetSchema(ArrowArrayStream *factory_ptr, ArrowSchema &sch
 	factory.ToArrowSchema(&schema);
 }
 
-void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, options);
+void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) const {
+	ArrowConverter::ToArrowSchema(out, types, names, context);
 }
 
 unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector<Value> &params) {
@@ -259,8 +258,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto types = initial_result->types;
 	auto names = initial_result->names;
 	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
-	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
-	                         client_properties, *con.context);
+	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result, *con.context);
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 
@@ -286,7 +284,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, A
 		vector<string> names;
 		auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		arrow_result = make_uniq<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties,
-		                                                  std::move(names), std::move(collection), ClientProperties());
+		                                                  std::move(names), std::move(collection), con.context);
 	} else {
 		// construct the arrow scan
 		auto params = ConstructArrowScan(arrow_stream);

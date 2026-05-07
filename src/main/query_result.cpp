@@ -1,6 +1,5 @@
 #include "duckdb/main/query_result.hpp"
 
-#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -55,14 +54,10 @@ idx_t BaseQueryResult::ColumnCount() {
 }
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
+                         vector<LogicalType> types_p, vector<string> names_p,
+                         const shared_ptr<ClientContext> &client_context)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
-      client_properties(std::move(client_properties_p)) {
-}
-
-QueryResult::QueryResult(QueryResultType type, ErrorData error)
-    : BaseQueryResult(type, std::move(error)),
-      client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr) {
+      client_context(client_context) {
 }
 
 QueryResult::~QueryResult() {

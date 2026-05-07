@@ -8,7 +8,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
-#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/chunk_scan_state/query_result.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
@@ -73,7 +72,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!my_stream->column_types.empty()) {
 		try {
 			ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-			                              my_stream->result->client_properties);
+			                              *my_stream->result->client_context);
 		} catch (std::runtime_error &e) {
 			my_stream->last_error = ErrorData(e);
 			return -1;
@@ -99,7 +98,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	try {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->result->client_properties);
+		                              *my_stream->result->client_context);
 	} catch (std::runtime_error &e) {
 		my_stream->last_error = ErrorData(e);
 		return -1;
@@ -134,7 +133,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	try {
 		idx_t result_count;
 		ErrorData error;
-		if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
+		if (!ArrowUtil::TryFetchChunk(scan_state, *result.client_context, my_stream->batch_size, out, result_count,
 		                              error, my_stream->extension_types)) {
 			D_ASSERT(error.HasError());
 			my_stream->last_error = error;
@@ -184,8 +183,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 
-	extension_types =
-	    ArrowTypeExtensionData::GetExtensionTypes(*result->client_properties.client_context, result->types);
+	extension_types = ArrowTypeExtensionData::GetExtensionTypes(*result->client_context, result->types);
 }
 
 } // namespace duckdb

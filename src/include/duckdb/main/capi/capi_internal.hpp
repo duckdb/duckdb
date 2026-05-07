@@ -18,9 +18,6 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 
-#include <cstring>
-#include <cassert>
-
 #ifdef _WIN32
 #ifndef strdup
 #define strdup _strdup
@@ -43,8 +40,9 @@ struct CClientContextWrapper {
 };
 
 struct CClientArrowOptionsWrapper {
-	explicit CClientArrowOptionsWrapper(ClientProperties &properties) : properties(properties) {};
-	ClientProperties properties;
+	explicit CClientArrowOptionsWrapper(const shared_ptr<ClientContext> &client_context)
+	    : client_context(client_context) {};
+	const shared_ptr<ClientContext> client_context;
 };
 
 struct PreparedStatementWrapper {

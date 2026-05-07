@@ -162,8 +162,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		arrow_schema.Init();
 		auto arrow_schema_ptr = &arrow_schema;
 
-		ClientProperties options = (reinterpret_cast<Connection *>(tester.connection)->context->GetClientProperties());
-		duckdb::ArrowConverter::ToArrowSchema(arrow_schema_ptr, logical_types, column_names, options);
+		auto client_context = (reinterpret_cast<Connection *>(tester.connection)->context);
+		duckdb::ArrowConverter::ToArrowSchema(arrow_schema_ptr, logical_types, column_names, *client_context);
 
 		ArrowArray arrow_array;
 		arrow_array.Init();
@@ -207,7 +207,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
 			unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
-			ArrowAppender appender(logical_types, size, options, extension_type_cast);
+			ArrowAppender appender(logical_types, size, client_context, extension_type_cast);
 			Allocator allocator;
 
 			auto data_chunks = std::vector<DataChunk>(num_buffers);

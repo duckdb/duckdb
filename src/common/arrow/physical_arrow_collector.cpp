@@ -40,10 +40,9 @@ SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk
 	do {
 		if (!appender) {
 			// Create the appender if we haven't started this chunk yet
-			auto properties = context.client.GetClientProperties();
 			D_ASSERT(processed < count);
 			auto initial_capacity = MinValue(record_batch_size, count - processed);
-			appender = make_uniq<ArrowAppender>(types, initial_capacity, properties,
+			appender = make_uniq<ArrowAppender>(types, initial_capacity, context.client.shared_from_this(),
 			                                    ArrowTypeExtensionData::GetExtensionTypes(context.client, types));
 		}
 
@@ -112,11 +111,11 @@ SinkFinalizeType PhysicalArrowCollector::Finalize(Pipeline &pipeline, Event &eve
 			    gstate.tuple_count);
 		}
 		gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types,
-		                                            context.GetClientProperties(), record_batch_size);
+		                                            context.shared_from_this(), record_batch_size);
 		return SinkFinalizeType::READY;
 	}
 
-	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.GetClientProperties(),
+	gstate.result = make_uniq<ArrowQueryResult>(statement_type, properties, names, types, context.shared_from_this(),
 	                                            record_batch_size);
 	auto &arrow_result = gstate.result->Cast<ArrowQueryResult>();
 	arrow_result.SetArrowData(std::move(gstate.chunks));

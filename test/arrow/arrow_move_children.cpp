@@ -87,7 +87,6 @@ TEST_CASE("Test move children", "[arrow]") {
 	DuckDB db(nullptr);
 	Connection conn(db);
 	auto initial_result = conn.Query(query);
-	auto client_properties = conn.context->GetClientProperties();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
 
@@ -103,11 +102,10 @@ TEST_CASE("Test move children", "[arrow]") {
 	}
 	auto res_names = initial_result->names;
 	auto res_types = initial_result->types;
-	auto res_properties = initial_result->client_properties;
 
 	// Create a test factory and produce a stream from it
-	auto factory = ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false,
-	                                client_properties, *conn.context);
+	auto factory =
+	    ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false, *conn.context);
 	auto stream = ArrowTestFactory::CreateStream((uintptr_t)&factory, parameters);
 
 	// For every array, extract the children and scan them
@@ -122,7 +120,7 @@ TEST_CASE("Test move children", "[arrow]") {
 			ArrowSchema schema;
 			vector<LogicalType> single_type {res_types[i]};
 			vector<string> single_name {res_names[i]};
-			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, res_properties);
+			ArrowConverter::ToArrowSchema(&schema, single_type, single_name, *conn.context);
 
 			if (i == 0) {
 				AssertExpectedResult<string>(&schema, children[i], "a");

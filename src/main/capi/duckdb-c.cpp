@@ -162,8 +162,7 @@ void duckdb_connection_get_arrow_options(duckdb_connection connection, duckdb_ar
 	}
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	try {
-		auto client_properties = conn->context->GetClientProperties();
-		auto wrapper = new CClientArrowOptionsWrapper(client_properties);
+		const auto wrapper = new CClientArrowOptionsWrapper(conn->context);
 		*out_arrow_options = reinterpret_cast<duckdb_arrow_options>(wrapper);
 	} catch (...) {
 		*out_arrow_options = nullptr;

@@ -222,12 +222,11 @@ TEST_CASE("Test Arrow Extension Types", "[arrow][.]") {
 	{
 		DuckDB db;
 		Connection con(db);
-		auto client_properties = con.context->GetClientProperties();
 		ArrowSchema schema;
 		schema.Init();
 		vector<LogicalType> types = {LogicalType::UHUGEINT};
 		vector<string> names = {"col"};
-		ArrowConverter::ToArrowSchema(&schema, types, names, client_properties);
+		ArrowConverter::ToArrowSchema(&schema, types, names, *con.context);
 		REQUIRE(schema.n_children == 1);
 		REQUIRE(string(schema.children[0]->format) == "d:38,0");
 		schema.release(&schema);

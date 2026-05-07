@@ -18,9 +18,9 @@ class ArrowTypeExtensionData;
 struct DBConfig;
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-	                                     const vector<string> &names, ClientProperties &options);
+	                                     const vector<string> &names, ClientContext &client_context);
 	DUCKDB_API static void
-	ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options,
+	ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientContext &client_context,
 	             const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &extension_type_cast);
 };
 

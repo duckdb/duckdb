@@ -14,8 +14,6 @@
 
 namespace duckdb {
 
-class ClientContext;
-
 class MaterializedQueryResult : public QueryResult {
 public:
 	static constexpr const QueryResultType TYPE = QueryResultType::MATERIALIZED_RESULT;
@@ -25,7 +23,7 @@ public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
 	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
-	                                   ClientProperties client_properties);
+	                                   const shared_ptr<ClientContext> &client_context);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(ErrorData error);
 
