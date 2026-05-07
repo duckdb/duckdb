@@ -5,7 +5,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/sorting/sort_strategy.hpp"
+#include "duckdb/common/sorting/hashed_sort.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/function/window/window_collection.hpp"
@@ -419,7 +419,7 @@ public:
 	string GetOrCreateDirectory(string path, const vector<Value> &values) DUCKDB_REQUIRES(copy_gstate.lock);
 
 private:
-	unique_ptr<const SortStrategy> ConstructSortStrategy() const;
+	unique_ptr<const HashedSort> ConstructHashedSort() const;
 	void CreateNextState();
 	bool ShouldStopFlushing() const;
 
@@ -432,8 +432,8 @@ public:
 	vector<column_t> write_columns;
 	vector<LogicalType> write_types;
 
-	//! Partition/sort strategy with PhysicalOperator-like interface
-	const unique_ptr<const SortStrategy> sort_strategy;
+	//! Hashed sort with PhysicalOperator-like interface
+	const unique_ptr<const HashedSort> hashed_sort;
 
 	//! Lock for managing states (sinking_state, flushing_state, flushing flag)
 	mutable annotated_mutex lock;
@@ -646,7 +646,7 @@ void PartitionedCopyHashGroup::Sort(ExecutionContext &execution_context, GlobalS
                                     InterruptState &interrupt, const PartitionedCopyTask &task) {
 	D_ASSERT(task.stage == PartitionedCopyStage::SORT);
 	OperatorSinkFinalizeInput finalize_input {sink, interrupt};
-	partitioned_copy.sort_strategy->SortColumnData(execution_context, group_idx, finalize_input);
+	partitioned_copy.hashed_sort->SortColumnData(execution_context, group_idx, finalize_input);
 	sorted += (task.end_idx - task.begin_idx);
 }
 
@@ -655,13 +655,13 @@ void PartitionedCopyHashGroup::Materialize(ExecutionContext &execution_context, 
 	D_ASSERT(task.stage == PartitionedCopyStage::MATERIALIZE);
 	auto unused = make_uniq<LocalSourceState>();
 	OperatorSourceInput source_input {source, *unused, interrupt};
-	partitioned_copy.sort_strategy->MaterializeColumnData(execution_context, group_idx, source_input);
+	partitioned_copy.hashed_sort->MaterializeColumnData(execution_context, group_idx, source_input);
 	materialized += (task.end_idx - task.begin_idx);
 
 	if (materialized >= blocks) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		if (!collection) {
-			collection = partitioned_copy.sort_strategy->GetColumnData(group_idx, source_input);
+			collection = partitioned_copy.hashed_sort->GetColumnData(group_idx, source_input);
 			collection->InitializeScan(batch_scan_state);
 
 			idx_t chunk_index;
@@ -693,7 +693,7 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 
 	// Only compare partition columns (not order columns)
 	const auto key_count = partitioned_copy.op.partition_columns.size();
-	auto &scan_cols = partitioned_copy.sort_strategy->sort_ids;
+	auto &scan_cols = partitioned_copy.hashed_sort->sort_ids;
 
 	WindowDeltaScanner(*collection, task.begin_idx, task.end_idx, scan_cols, key_count,
 	                   [&](const idx_t row_idx, DataChunk &, DataChunk &, const idx_t ndistinct,
@@ -804,8 +804,8 @@ PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
 
 void PartitionedCopyState::CreateTaskList() {
 	global_source_state =
-	    partitioned_copy.sort_strategy->GetGlobalSourceState(partitioned_copy.context, *global_sink_state);
-	const auto &chunk_rows = partitioned_copy.sort_strategy->GetHashGroups(*global_source_state);
+	    partitioned_copy.hashed_sort->GetGlobalSourceState(partitioned_copy.context, *global_sink_state);
+	const auto &chunk_rows = partitioned_copy.hashed_sort->GetHashGroups(*global_source_state);
 	hash_groups.resize(chunk_rows.size());
 
 	for (idx_t group_idx = 0; group_idx < hash_groups.size(); ++group_idx) {
@@ -933,13 +933,13 @@ void PartitionedCopyState::FinishTask(const PartitionedCopyTask &task) {
 class PartitionedCopyLocalState : public LocalSinkState {
 public:
 	shared_ptr<PartitionedCopyState> current_state;
-	unique_ptr<LocalSinkState> sort_strategy_local_state;
+	unique_ptr<LocalSinkState> hashed_sort_local_state;
 	idx_t append_count = 0;
 };
 
 PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &context_p,
                                  CopyToFileGlobalState &copy_gstate_p)
-    : op(op_p), context(context_p), copy_gstate(copy_gstate_p), sort_strategy(ConstructSortStrategy()), flushing(false),
+    : op(op_p), context(context_p), copy_gstate(copy_gstate_p), hashed_sort(ConstructHashedSort()), flushing(false),
       locals(0), combined(0), finalized(false) {
 	unordered_set<idx_t> part_col_set(op.partition_columns.begin(), op.partition_columns.end());
 	for (idx_t col_idx = 0; col_idx < op.expected_types.size(); col_idx++) {
@@ -950,7 +950,7 @@ PartitionedCopy::PartitionedCopy(const PhysicalCopyToFile &op_p, ClientContext &
 	}
 }
 
-unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
+unique_ptr<const HashedSort> PartitionedCopy::ConstructHashedSort() const {
 	vector<unique_ptr<Expression>> partition_bys;
 	for (auto &col : op.partition_columns) {
 		partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col], col));
@@ -958,12 +958,12 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	vector<BoundOrderByNode> order_bys;
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 
-	return SortStrategy::Factory(context, partition_bys, order_bys, op.children[0].get().GetTypes(), partition_stats,
+	return make_uniq<HashedSort>(context, partition_bys, order_bys, op.children[0].get().GetTypes(), partition_stats,
 	                             op.children[0].get().estimated_cardinality);
 }
 
 void PartitionedCopy::CreateNextState() {
-	auto global_sink_state = sort_strategy->GetGlobalSinkState(context);
+	auto global_sink_state = hashed_sort->GetGlobalSinkState(context);
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	D_ASSERT(!sinking_state);
 	sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
@@ -990,8 +990,8 @@ void PartitionedCopy::InitializeFlush() {
 
 void PartitionedCopy::FinalizeState(PartitionedCopyState &state, InterruptState &interrupt_state) {
 	D_ASSERT(state.combined == state.locals);
-	OperatorSinkFinalizeInput sort_strategy_finalize_input {*state.global_sink_state, interrupt_state};
-	sort_strategy->Finalize(context, sort_strategy_finalize_input);
+	OperatorSinkFinalizeInput hashed_sort_finalize_input {*state.global_sink_state, interrupt_state};
+	hashed_sort->Finalize(context, hashed_sort_finalize_input);
 	state.CreateTaskList();
 }
 
@@ -1002,7 +1002,7 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 		{
 			annotated_lock_guard<annotated_mutex> global_guard(lock);
 			if (!sinking_state) {
-				auto global_sink_state = sort_strategy->GetGlobalSinkState(context);
+				auto global_sink_state = hashed_sort->GetGlobalSinkState(context);
 				sinking_state = make_shared_ptr<PartitionedCopyState>(*this, std::move(global_sink_state));
 			}
 			lstate.current_state = sinking_state;
@@ -1013,14 +1013,14 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 			lstate.current_state->locals++;
 		}
 
-		lstate.sort_strategy_local_state = sort_strategy->GetLocalSinkState(execution_context);
+		lstate.hashed_sort_local_state = hashed_sort->GetLocalSinkState(execution_context);
 		lstate.append_count = 0;
 	}
 
-	// Sink into sort strategy
-	OperatorSinkInput sort_strategy_sink_input {*lstate.current_state->global_sink_state,
-	                                            *lstate.sort_strategy_local_state, interrupt_state};
-	sort_strategy->Sink(execution_context, chunk, sort_strategy_sink_input);
+	// Sink into hashed sort
+	OperatorSinkInput hashed_sort_sink_input {*lstate.current_state->global_sink_state, *lstate.hashed_sort_local_state,
+	                                          interrupt_state};
+	hashed_sort->Sink(execution_context, chunk, hashed_sort_sink_input);
 	lstate.append_count += chunk.size();
 
 	if (lstate.append_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(context) &&
@@ -1044,9 +1044,9 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 	}
 
 	if (combine_type == PartitionedCopyCombineType::DURING_PIPELINE_COMBINE) {
-		OperatorSinkCombineInput sort_strategy_combine_input {*lstate.current_state->global_sink_state,
-		                                                      *lstate.sort_strategy_local_state, interrupt_state};
-		sort_strategy->Combine(execution_context, sort_strategy_combine_input);
+		OperatorSinkCombineInput hashed_sort_combine_input {*lstate.current_state->global_sink_state,
+		                                                    *lstate.hashed_sort_local_state, interrupt_state};
+		hashed_sort->Combine(execution_context, hashed_sort_combine_input);
 
 		annotated_lock_guard<annotated_mutex> guard(lstate.current_state->lock);
 		++lstate.current_state->combined;
@@ -1062,9 +1062,9 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 		}
 	}
 
-	OperatorSinkCombineInput sort_strategy_combine_input {*lstate.current_state->global_sink_state,
-	                                                      *lstate.sort_strategy_local_state, interrupt_state};
-	sort_strategy->Combine(execution_context, sort_strategy_combine_input);
+	OperatorSinkCombineInput hashed_sort_combine_input {*lstate.current_state->global_sink_state,
+	                                                    *lstate.hashed_sort_local_state, interrupt_state};
+	hashed_sort->Combine(execution_context, hashed_sort_combine_input);
 
 	{
 		// Finalize if this is the last combine
@@ -1075,7 +1075,7 @@ void PartitionedCopy::Combine(ExecutionContext &execution_context, PartitionedCo
 	}
 
 	// Reset local state
-	lstate.sort_strategy_local_state.reset();
+	lstate.hashed_sort_local_state.reset();
 	lstate.current_state.reset();
 }
 
