@@ -142,15 +142,12 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		return;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
-		// Don't qualify within a function, or we will turn the positional reference into a named parameter argument
-		if (!within_function_expression) {
-			auto &ref = expr->Cast<PositionalReferenceExpression>();
-			if (ref.GetAlias().empty()) {
-				string table_name, column_name;
-				auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
-				if (error.empty()) {
-					ref.SetAlias(column_name);
-				}
+		auto &ref = expr->Cast<PositionalReferenceExpression>();
+		if (ref.GetAlias().empty()) {
+			string table_name, column_name;
+			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
+			if (error.empty()) {
+				ref.SetAlias(column_name);
 			}
 		}
 		break;
@@ -181,15 +178,15 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                   vector<unordered_set<string>> &lambda_params) {
 	for (auto &child : function.children) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
+		if (child.GetExpression()->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
-			QualifyColumnNames(child, lambda_params, true);
+			QualifyColumnNames(child.GetExpression(), lambda_params, true);
 			continue;
 		}
 
 		// special-handling for LHS lambda parameters
 		// we do not qualify them, and we add them to the lambda_params vector
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpression()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 

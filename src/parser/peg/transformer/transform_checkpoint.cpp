@@ -18,7 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformCheckpointStatement(PEG
 
 	auto &catalog_name_pr = list_pr.Child<OptionalParseResult>(2);
 	if (catalog_name_pr.HasResult()) {
-		function->children.push_back(
+		function->children.emplace_back(
 		    make_uniq<ConstantExpression>(catalog_name_pr.GetResult().Cast<IdentifierParseResult>().identifier));
 	}
 	result->function = std::move(function);

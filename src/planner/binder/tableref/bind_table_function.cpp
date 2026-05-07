@@ -401,8 +401,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	BoundStatement subquery;
 	ErrorData error;
-	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
-	                                 error)) {
+
+	vector<unique_ptr<ParsedExpression>> children;
+	for (auto &child : fexpr.children) {
+		children.push_back(std::move(child.GetExpression()));
+	}
+
+	if (!BindTableFunctionParameters(function, children, arguments, parameters, named_parameters, subquery, error)) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}

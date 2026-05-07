@@ -147,14 +147,14 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			child_list_t<Value> values;
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
-				if (!unique_names.insert(child->GetAlias()).second) {
+				if (!unique_names.insert(child.GetExpression()->GetAlias()).second) {
 					return false;
 				}
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(*child.GetExpression(), child_value)) {
 					return false;
 				}
-				values.emplace_back(child->GetAlias(), std::move(child_value));
+				values.emplace_back(child.GetExpression()->GetAlias(), std::move(child_value));
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
@@ -163,7 +163,7 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			values.reserve(function.children.size());
 			for (const auto &child : function.children) {
 				Value child_value;
-				if (!TryFoldConstantForBackwardsCompatibility(*child, child_value)) {
+				if (!TryFoldConstantForBackwardsCompatibility(*child.GetExpression(), child_value)) {
 					return false;
 				}
 				values.emplace_back(std::move(child_value));
@@ -180,12 +180,12 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 			return true;
 		} else if (function.function_name == "map") {
 			Value keys;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[0], keys)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.children[0].GetExpression(), keys)) {
 				return false;
 			}
 
 			Value values;
-			if (!TryFoldConstantForBackwardsCompatibility(*function.children[1], values)) {
+			if (!TryFoldConstantForBackwardsCompatibility(*function.children[1].GetExpression(), values)) {
 				return false;
 			}
 
@@ -254,7 +254,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 			return false;
 		}
 		for (auto &child : function.children) {
-			if (!TryFoldForBackwardsCompatibility(child, values)) {
+			if (!TryFoldForBackwardsCompatibility(child.GetExpression(), values)) {
 				return false;
 			}
 		}

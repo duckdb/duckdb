@@ -195,11 +195,11 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	transformer.TransformOptional<bool>(extract_parens, 0, distinct);
 
 	auto &function_arg_opt = extract_parens.Child<OptionalParseResult>(1);
-	vector<unique_ptr<ParsedExpression>> function_children;
+	vector<FunctionArgument> function_children;
 	if (function_arg_opt.HasResult()) {
 		auto function_argument_list = ExtractParseResultsFromList(function_arg_opt.GetResult());
 		for (auto function_argument : function_argument_list) {
-			function_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(function_argument));
+			function_children.push_back(transformer.Transform<FunctionArgument>(function_argument));
 		}
 	}
 	auto order_modifier = make_uniq<OrderModifier>();
@@ -212,7 +212,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	transformer.TransformOptional<bool>(extract_parens, 3, ignore_nulls);
 
 	auto &export_opt = list_pr.Child<OptionalParseResult>(4);
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0]) && !distinct &&
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpression()) && !distinct &&
 	    order_modifier->orders.empty()) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
@@ -240,7 +240,13 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		expr->schema = qualified_function.schema;
 		expr->SetFunctionName(lowercase_name);
 
-		expr->children = std::move(function_children);
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in window functions");
+			}
+			expr->children.push_back(std::move(arg.GetExpression()));
+		}
+
 		expr->has_ignore_nulls = has_ignore_nulls_result;
 		expr->ignore_nulls = ignore_nulls;
 		expr->filter_expr = std::move(filter_expr);
@@ -257,46 +263,77 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 		if (function_children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
 		}
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in IF expressions");
+			}
+		}
+
 		auto expr = make_uniq<CaseExpression>();
 		CaseCheck check;
-		check.when_expr = std::move(function_children[0]);
-		check.then_expr = std::move(function_children[1]);
+		check.when_expr = std::move(function_children[0].GetExpression());
+		check.then_expr = std::move(function_children[1].GetExpression());
 		expr->case_checks.push_back(std::move(check));
-		expr->else_expr = std::move(function_children[2]);
+		expr->else_expr = std::move(function_children[2].GetExpression());
 		return std::move(expr);
-	} else if (lowercase_name == "unpack") {
+	}
+	if (lowercase_name == "unpack") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments to the UNPACK operator");
 		}
 		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
-		expr->children = std::move(function_children);
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in UNPACK operator");
+			}
+			expr->children.push_back(std::move(arg.GetExpression()));
+		}
 		return std::move(expr);
-	} else if (lowercase_name == "try") {
+	}
+	if (lowercase_name == "try") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to TRY expression");
 		}
 		auto try_expression = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_TRY);
-		try_expression->children = std::move(function_children);
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in TRY expression");
+			}
+			try_expression->children.push_back(std::move(arg.GetExpression()));
+		}
 		return std::move(try_expression);
-	} else if (lowercase_name == "construct_array") {
+	}
+	if (lowercase_name == "construct_array") {
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-		construct_array->children = std::move(function_children);
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in array constructors");
+			}
+			construct_array->children.push_back(std::move(arg.GetExpression()));
+		}
 		return std::move(construct_array);
-	} else if (lowercase_name == "ifnull") {
+	}
+	if (lowercase_name == "ifnull") {
 		if (function_children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+		for (auto &arg : function_children) {
+			if (arg.HasName()) {
+				throw ParserException("Named arguments are not supported in IFNULL expressions");
+			}
 		}
 
 		//  Two-argument COALESCE
 		auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-		coalesce_op->children.push_back(std::move(function_children[0]));
-		coalesce_op->children.push_back(std::move(function_children[1]));
+		coalesce_op->children.push_back(std::move(function_children[0].GetExpression()));
+		coalesce_op->children.push_back(std::move(function_children[1].GetExpression()));
 		return std::move(coalesce_op);
-	} else if (lowercase_name == "date") {
+	}
+	if (lowercase_name == "date") {
 		if (function_children.size() != 1) {
 			throw ParserException("Wrong number of arguments provided to DATE function");
 		}
-		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0])));
+		return std::move(make_uniq<CastExpression>(LogicalType::DATE, std::move(function_children[0].GetExpression())));
 	}
 	if (has_ignore_nulls_result) {
 		throw ParserException("RESPECT/IGNORE NULLS is not supported for non-window functions");
@@ -536,22 +573,22 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructExpression(PE
                                                                               ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto func_name = "struct_pack";
-	vector<unique_ptr<ParsedExpression>> struct_children;
+	vector<FunctionArgument> struct_children;
 	auto struct_children_list = ExtractParseResultsFromList(list_pr.GetChild(1));
 	for (auto struct_child : struct_children_list) {
-		struct_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(struct_child));
+		struct_children.push_back(transformer.Transform<FunctionArgument>(struct_child));
 	}
 
 	return make_uniq<FunctionExpression>(INVALID_CATALOG, "main", func_name, std::move(struct_children));
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformStructField(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
+FunctionArgument PEGTransformerFactory::TransformStructField(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto alias = transformer.Transform<string>(list_pr.Child<ListParseResult>(0));
 	auto expr = transformer.Transform<unique_ptr<ParsedExpression>>(list_pr.Child<ListParseResult>(2));
 	expr->SetAlias(alias);
-	return expr;
+
+	return FunctionArgument(std::move(alias), std::move(expr));
 }
 
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformBoundedListExpression(PEGTransformer &transformer,
@@ -1583,14 +1620,14 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMethodExpression(PE
 	bool distinct = false;
 	transformer.TransformOptional<bool>(extract_parens, 0, distinct);
 	auto &function_arg_opt = extract_parens.Child<OptionalParseResult>(1);
-	vector<unique_ptr<ParsedExpression>> function_children;
+	vector<FunctionArgument> function_children;
 	if (function_arg_opt.HasResult()) {
 		auto function_argument_list = ExtractParseResultsFromList(function_arg_opt.GetResult());
 		for (auto function_argument : function_argument_list) {
-			function_children.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(function_argument));
+			function_children.push_back(transformer.Transform<FunctionArgument>(function_argument));
 		}
 	}
-	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0])) {
+	if (function_children.size() == 1 && ExpressionIsEmptyStar(*function_children[0].GetExpression())) {
 		// COUNT(*) gets converted into COUNT()
 		function_children.clear();
 	}

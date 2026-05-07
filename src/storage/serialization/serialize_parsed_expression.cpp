@@ -201,11 +201,22 @@ unique_ptr<ParsedExpression> DefaultExpression::Deserialize(Deserializer &deseri
 	return std::move(result);
 }
 
+void FunctionArgument::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(100, "name", name);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression", expression);
+}
+
+FunctionArgument FunctionArgument::Deserialize(Deserializer &deserializer) {
+	auto name = deserializer.ReadPropertyWithDefault<string>(100, "name");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(101, "expression");
+	return FunctionArgument(std::move(name), std::move(expression));
+}
+
 void FunctionExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<string>(200, "function_name", function_name);
 	serializer.WritePropertyWithDefault<string>(201, "schema", schema);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
+	serializer.WritePropertyWithDefault<vector<FunctionArgument>>(202, "children", children);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", filter);
 	serializer.WritePropertyWithDefault<unique_ptr<OrderModifier>>(204, "order_bys", order_bys);
 	serializer.WritePropertyWithDefault<bool>(205, "distinct", distinct);
@@ -218,7 +229,7 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(Deserializer &deser
 	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
 	deserializer.ReadPropertyWithDefault<string>(200, "function_name", result->function_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "schema", result->schema);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", result->children);
+	deserializer.ReadPropertyWithDefault<vector<FunctionArgument>>(202, "children", result->children);
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(203, "filter", result->filter);
 	auto order_bys = deserializer.ReadPropertyWithDefault<unique_ptr<ResultModifier>>(204, "order_bys");
 	result->order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(std::move(order_bys));

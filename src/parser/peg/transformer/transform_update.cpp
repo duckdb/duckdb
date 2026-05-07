@@ -78,7 +78,9 @@ unique_ptr<UpdateSetInfo> PEGTransformerFactory::TransformUpdateSetTuple(PEGTran
 			throw ParserException("Could not perform assignment, expected %d values, got %d", result->columns.size(),
 			                      func_expr.children.size());
 		}
-		result->expressions = std::move(func_expr.children);
+		for (auto &arg : func_expr.children) {
+			result->expressions.push_back(std::move(arg.GetExpression()));
+		}
 	} else {
 		result->expressions.reserve(result->columns.size());
 		for (idx_t i = 0; i < result->columns.size(); i++) {

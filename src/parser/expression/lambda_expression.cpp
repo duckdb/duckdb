@@ -51,11 +51,11 @@ vector<reference<const ParsedExpression>> LambdaExpression::ExtractColumnRefExpr
 		}
 
 		for (auto &child : func_expr.children) {
-			if (child->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+			if (child.GetExpression()->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
 				error_message = InvalidParametersErrorMessage();
 				return column_refs;
 			}
-			column_refs.emplace_back(*child);
+			column_refs.emplace_back(*child.GetExpression());
 		}
 	}
 

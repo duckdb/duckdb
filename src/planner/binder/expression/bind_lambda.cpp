@@ -71,11 +71,12 @@ static bool IsDoubleArrowRHS(const ParsedExpression &expr) {
 
 static unique_ptr<ParsedExpression> RestructureArrowChain(LambdaExpression &expr) {
 	auto &rhs_func = expr.expr->Cast<FunctionExpression>();
-	auto inner_lambda = make_uniq<LambdaExpression>(std::move(expr.lhs), std::move(rhs_func.children[0]));
+	auto inner_lambda =
+	    make_uniq<LambdaExpression>(std::move(expr.lhs), std::move(rhs_func.children[0].GetExpression()));
 	inner_lambda->syntax_type = expr.syntax_type;
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(inner_lambda));
-	children.push_back(std::move(rhs_func.children[1]));
+	children.push_back(std::move(rhs_func.children[1].GetExpression()));
 	auto restructured = make_uniq<FunctionExpression>("->>", std::move(children));
 	restructured->is_operator = true;
 	return std::move(restructured);

@@ -13,14 +13,14 @@ namespace duckdb {
 void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &function,
                                                       vector<unordered_set<string>> &lambda_params) {
 	for (auto &child : function.children) {
-		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			ReplaceMacroParameters(child, lambda_params);
+		if (child.GetExpression()->GetExpressionClass() != ExpressionClass::LAMBDA) {
+			ReplaceMacroParameters(child.GetExpression(), lambda_params);
 			continue;
 		}
 
 		// Special-handling for LHS lambda parameters.
 		// We do not replace them, and we add them to the lambda_params vector.
-		auto &lambda_expr = child->Cast<LambdaExpression>();
+		auto &lambda_expr = child.GetExpression()->Cast<LambdaExpression>();
 		string error_message;
 		auto column_ref_expressions = lambda_expr.ExtractColumnRefExpressions(error_message);
 
@@ -123,7 +123,12 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		window_expr.catalog = macro_expr.catalog;
 		window_expr.schema = macro_expr.schema;
 		window_expr.function_name = macro_expr.function_name;
-		window_expr.children = std::move(macro_expr.children);
+
+		window_expr.children.clear();
+		for (auto &arg : macro_expr.children) {
+			window_expr.children.push_back(std::move(arg.GetExpression()));
+		}
+
 		if (!window_expr.distinct) {
 			window_expr.distinct = macro_expr.distinct;
 		}

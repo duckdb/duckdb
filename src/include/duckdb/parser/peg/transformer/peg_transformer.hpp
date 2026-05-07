@@ -758,7 +758,7 @@ private:
 	                                                               ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformStructExpression(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformStructField(PEGTransformer &transformer, ParseResult &parse_result);
+	static FunctionArgument TransformStructField(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformBoundedListExpression(PEGTransformer &transformer,
 	                                                                           ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformFunctionExpression(PEGTransformer &transformer,
@@ -1024,8 +1024,7 @@ private:
 	static vector<unique_ptr<ParsedExpression>> TransformDistinctOnTargets(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static DistinctClause TransformDistinctAll(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<ParsedExpression> TransformFunctionArgument(PEGTransformer &transformer,
-	                                                              ParseResult &parse_result);
+	static FunctionArgument TransformFunctionArgument(PEGTransformer &transformer, ParseResult &parse_result);
 	static MacroParameter TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<unique_ptr<ParsedExpression>> TransformTableFunctionArguments(PEGTransformer &transformer,
 	                                                                            ParseResult &parse_result);

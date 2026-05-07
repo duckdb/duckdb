@@ -342,16 +342,17 @@ vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformDistinctOnT
 	return result;
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
-                                                                              ParseResult &parse_result) {
+FunctionArgument PEGTransformerFactory::TransformFunctionArgument(PEGTransformer &transformer,
+                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0).GetResult();
 	if (choice_pr.name == "NamedParameter") {
 		auto parameter = transformer.Transform<MacroParameter>(choice_pr);
 		parameter.expression->SetAlias(parameter.name);
-		return std::move(parameter.expression);
+		return FunctionArgument(parameter.name, std::move(parameter.expression));
 	}
-	return transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr);
+
+	return FunctionArgument(transformer.Transform<unique_ptr<ParsedExpression>>(choice_pr));
 }
 
 MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &transformer, ParseResult &parse_result) {
@@ -367,16 +368,24 @@ MacroParameter PEGTransformerFactory::TransformNamedParameter(PEGTransformer &tr
 vector<unique_ptr<ParsedExpression>> PEGTransformerFactory::TransformTableFunctionArguments(PEGTransformer &transformer,
                                                                                             ParseResult &parse_result) {
 	// TableFunctionArguments <- Parens(List(FunctionArgument)?)
-	vector<unique_ptr<ParsedExpression>> result;
+	vector<FunctionArgument> result;
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &stripped_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0)).Cast<OptionalParseResult>();
 	if (stripped_parens.HasResult()) {
 		auto argument_list = ExtractParseResultsFromList(stripped_parens.GetResult());
 		for (auto &argument : argument_list) {
-			result.push_back(transformer.Transform<unique_ptr<ParsedExpression>>(argument));
+			result.push_back(transformer.Transform<FunctionArgument>(argument));
 		}
 	}
-	return result;
+
+	// TODO: Pass this further
+	vector<unique_ptr<ParsedExpression>> expressions;
+	for (auto &argument : result) {
+		expressions.push_back(std::move(argument.GetExpression()));
+		expressions.back()->SetAlias(argument.GetName());
+	}
+
+	return expressions;
 }
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformBaseTableName(PEGTransformer &transformer,
@@ -691,7 +700,7 @@ void PEGTransformerFactory::GetValueFromExpression(unique_ptr<ParsedExpression> 
 		auto &func_expr = expr->Cast<FunctionExpression>();
 		if (func_expr.function_name == "row") {
 			for (auto &col : func_expr.children) {
-				GetValueFromExpression(col, result);
+				GetValueFromExpression(col.GetExpression(), result);
 			}
 		}
 	}
@@ -713,7 +722,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 			return false;
 		}
 		for (auto &child : function.children) {
-			if (!TransformPivotInList(child, entry)) {
+			if (!TransformPivotInList(child.GetExpression(), entry)) {
 				return false;
 			}
 		}
@@ -807,7 +816,9 @@ PivotColumn PEGTransformerFactory::TransformPivotValueList(PEGTransformer &trans
 		}
 	}
 	if (has_tuple_entries) {
-		result.pivot_expressions = std::move(func_expr.children);
+		for (auto &child : func_expr.children) {
+			result.pivot_expressions.emplace_back(std::move(child.GetExpression()));
+		}
 	} else {
 		result.pivot_expressions.push_back(std::move(pivot_expression));
 	}
@@ -1411,7 +1422,7 @@ void PEGTransformerFactory::AddGroupByExpression(unique_ptr<ParsedExpression> ex
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {
-				AddGroupByExpression(std::move(child), map, result, result_set);
+				AddGroupByExpression(std::move(child.GetExpression()), map, result, result_set);
 			}
 			return;
 		}

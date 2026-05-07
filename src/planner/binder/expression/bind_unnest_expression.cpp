@@ -86,18 +86,18 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	if (function.children.size() != 1) {
 		bool supported_argument = false;
 		for (idx_t i = 1; i < function.children.size(); i++) {
-			if (function.children[i]->HasParameter()) {
+			if (function.children[i].GetExpression()->HasParameter()) {
 				throw ParameterNotAllowedException("Parameter not allowed in unnest parameter");
 			}
-			if (!function.children[i]->IsScalar()) {
+			if (!function.children[i].GetExpression()->IsScalar()) {
 				break;
 			}
-			auto alias = StringUtil::Lower(function.children[i]->GetAlias());
-			BindChild(function.children[i], depth, error);
+			auto alias = StringUtil::Lower(function.children[i].GetExpression()->GetAlias());
+			BindChild(function.children[i].GetExpression(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
-			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
+			auto &const_child = BoundExpression::GetExpression(*function.children[i].GetExpression());
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
@@ -125,18 +125,18 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		}
 	}
 	unnest_level++;
-	BindChild(function.children[0], depth, error);
+	BindChild(function.children[0].GetExpression(), depth, error);
 	if (error.HasError()) {
 		// failed to bind
 		// try to bind correlated columns manually
-		auto result = BindCorrelatedColumns(function.children[0], error);
+		auto result = BindCorrelatedColumns(function.children[0].GetExpression(), error);
 		if (result.HasError()) {
 			return BindResult(result.error);
 		}
-		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
+		auto &bound_expr = BoundExpression::GetExpression(*function.children[0].GetExpression());
 		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
-	auto &child = BoundExpression::GetExpression(*function.children[0]);
+	auto &child = BoundExpression::GetExpression(*function.children[0].GetExpression());
 	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	auto &child_type = child->GetReturnType();
 	unnest_level--;

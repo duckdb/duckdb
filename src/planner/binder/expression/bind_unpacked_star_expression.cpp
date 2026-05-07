@@ -47,9 +47,13 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : function_expr.children) {
-		AddChild(child, new_children, star_list, star, regex);
+		AddChild(child.GetExpression(), new_children, star_list, star, regex);
 	}
-	function_expr.children = std::move(new_children);
+
+	function_expr.children.clear();
+	for (auto &child : new_children) {
+		function_expr.children.emplace_back(std::move(child));
+	}
 
 	// Replace ORDER_BY
 	if (function_expr.order_bys) {

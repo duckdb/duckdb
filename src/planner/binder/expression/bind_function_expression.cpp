@@ -303,7 +303,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 				}
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
-				function.children.insert(function.children.begin(), std::move(colref));
+				function.children.insert(function.children.begin(), FunctionArgument(std::move(colref)));
 				function.catalog = INVALID_CATALOG;
 				function.schema = INVALID_SCHEMA;
 			}
@@ -365,7 +365,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	// bind of each child
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		BindChild(function.children[i], depth, error);
+		BindChild(function.children[i].GetExpression(), depth, error);
 	}
 
 	if (error.HasError()) {
@@ -381,19 +381,17 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	vector<unique_ptr<Expression>> children;
 	vector<pair<string, unique_ptr<Expression>>> keyword_children;
 
-	for (idx_t i = 0; i < function.children.size(); i++) {
-		if (function.children[i]->HasAlias()) {
-			auto alias = function.children[i]->GetAlias();
-			auto &child = BoundExpression::GetExpression(*function.children[i]);
-			keyword_children.emplace_back(alias, std::move(child));
+	for (auto &arg : function.children) {
+		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpression());
+
+		if (arg.HasName()) {
+			keyword_children.emplace_back(arg.GetName(), std::move(bound_arg));
+		} else if (keyword_children.empty()) {
+			children.push_back(std::move(bound_arg));
 		} else {
-			auto &child = BoundExpression::GetExpression(*function.children[i]);
-			if (!keyword_children.empty()) {
-				throw BinderException(child->GetQueryLocation(),
-				                      "Positional argument '%s' cannot follow named arguments in a function call.",
-				                      child->ToString());
-			}
-			children.push_back(std::move(child));
+			throw BinderException(bound_arg->GetQueryLocation(),
+			                      "Positional argument '%s' cannot follow named arguments in a function call.",
+			                      bound_arg->ToString());
 		}
 	}
 
@@ -426,7 +424,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// constexpr idx_t list_ix = 0;
 	constexpr idx_t list_idx = 0;
 	constexpr idx_t lambda_expr_idx = 1;
-	D_ASSERT(function.children[lambda_expr_idx]->GetExpressionClass() == ExpressionClass::LAMBDA);
+	D_ASSERT(function.children[lambda_expr_idx].GetExpression()->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	vector<LogicalType> function_child_types;
 	// bind the list
@@ -437,22 +435,22 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			continue;
 		}
 
-		if (function.children[i]->GetExpressionClass() == ExpressionClass::LAMBDA) {
+		if (function.children[i].GetExpression()->GetExpressionClass() == ExpressionClass::LAMBDA) {
 			return BindResult("No function matches the given name and argument types: '" + function.ToString() +
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		BindChild(function.children[i], depth, error);
+		BindChild(function.children[i].GetExpression(), depth, error);
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
 
-		const auto &child = BoundExpression::GetExpression(*function.children[i]);
+		const auto &child = BoundExpression::GetExpression(*function.children[i].GetExpression());
 		function_child_types.push_back(child->GetReturnType());
 	}
 
 	// get the logical type of the children of the list
-	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx]);
+	auto &list_child = BoundExpression::GetExpression(*function.children[list_idx].GetExpression());
 	if (list_child->GetReturnType().id() != LogicalTypeId::LIST &&
 	    list_child->GetReturnType().id() != LogicalTypeId::ARRAY &&
 	    list_child->GetReturnType().id() != LogicalTypeId::SQLNULL &&
@@ -461,7 +459,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// bind the lambda parameter
-	auto &lambda_expr = function.children[lambda_expr_idx]->Cast<LambdaExpression>();
+	auto &lambda_expr = function.children[lambda_expr_idx].GetExpression()->Cast<LambdaExpression>();
 
 	unique_ptr<ParsedExpression> lambda_expr_copy;
 	const bool is_list_reduce = func.name == "list_reduce";
@@ -506,12 +504,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[lambda_expr_idx]->GetAlias();
+	auto alias = function.children[lambda_expr_idx].GetExpression()->GetAlias();
 	bind_lambda_result.expression->SetAlias(alias);
-	if (!alias.empty()) {
-		bind_lambda_result.expression->SetAlias(alias);
-	}
-	function.children[lambda_expr_idx] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+
+	function.children[lambda_expr_idx].GetExpression() =
+	    make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -521,7 +518,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		auto &child = BoundExpression::GetExpression(*function.children[i].GetExpression());
 		children.push_back(std::move(child));
 	}
 

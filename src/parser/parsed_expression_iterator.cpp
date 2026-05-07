@@ -75,7 +75,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	case ExpressionClass::FUNCTION: {
 		auto &func_expr = expr.Cast<FunctionExpression>();
 		for (auto &child : func_expr.children) {
-			callback(child);
+			callback(child.GetExpression());
 		}
 		if (func_expr.filter) {
 			callback(func_expr.filter);

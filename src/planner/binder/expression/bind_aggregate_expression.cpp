@@ -147,10 +147,10 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 
 	for (idx_t i = 0; i < aggr.children.size(); ++i) {
 		auto &child = aggr.children[i];
-		aggregate_binder.BindChild(child, 0, error);
+		aggregate_binder.BindChild(child.GetExpression(), 0, error);
 		// We have to negate the fractions for PERCENTILE_XXXX DESC
 		if (!error.HasError() && ordered_set_agg && i == aggr.children.size() - 1) {
-			NegatePercentileFractions(context, child, negate_fractions);
+			NegatePercentileFractions(context, child.GetExpression(), negate_fractions);
 		}
 	}
 
@@ -181,12 +181,12 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 				// however, we bound columns!
 				// that means this aggregation belongs to this node
 				// check if we have to resolve any errors by binding with parent binders
-				auto result = aggregate_binder.BindCorrelatedColumns(aggr.children[i], error);
+				auto result = aggregate_binder.BindCorrelatedColumns(aggr.children[i].GetExpression(), error);
 				// if there is still an error after this, we could not successfully bind the aggregate
 				if (result.HasError()) {
 					result.error.Throw();
 				}
-				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i].GetExpression());
 				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
@@ -248,7 +248,7 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
+		auto &child = BoundExpression::GetExpression(*aggr.children[i].GetExpression());
 		types.push_back(child->GetReturnType());
 		arguments.push_back(child->GetReturnType());
 		children.push_back(std::move(child));

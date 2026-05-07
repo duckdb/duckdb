@@ -142,7 +142,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			vector<unique_ptr<Expression>> bound_children;
 			// Bind the children of the aggregate function
 			for (auto &child : func_expr.children) {
-				auto bound_child = expression_binder.Bind(child);
+				auto bound_child = expression_binder.Bind(child.GetExpression());
 				aggregation_input_types.push_back(bound_child->GetReturnType());
 				bound_children.push_back(std::move(bound_child));
 			}
