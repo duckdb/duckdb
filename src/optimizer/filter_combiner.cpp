@@ -537,6 +537,12 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 
+	// Lists large enough to benefit from a hash join should not be pushed into the
+	// scan. Use same threshold as InClauseRewriter
+	if (func.children.size() - 1 >= 6) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
 	//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 	// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 	vector<Value> in_list;

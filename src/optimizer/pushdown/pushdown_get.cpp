@@ -77,10 +77,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
+		// IN with enough values can benefit from a hash join is handled by InClauseRewriter
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
+			continue;
+		}
 		// Allow pushing down filters that can throw only if there is a single expression
-		// For now, do not push down single expressions with IN either. Later we can change InClauseRewriter to handle
-		// this case
-		if (expr.CanThrow() && (expr.GetExpressionType() == ExpressionType::COMPARE_IN || filters.size() > 1)) {
+		if (expr.CanThrow() && filters.size() > 1) {
 			continue;
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);
