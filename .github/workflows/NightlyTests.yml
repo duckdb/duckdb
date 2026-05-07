@@ -268,11 +268,11 @@ jobs:
 
   storage-initialization:
      name: Storage Initialization Verification
-     runs-on: ubuntu-22.04
+     runs-on: ubuntu-24.04
      needs: linux-memory-leaks
      env:
-       CC: gcc-10
-       CXX: g++-10
+       CC: gcc
+       CXX: g++
        GEN: ninja
 
      steps:
@@ -300,11 +300,11 @@ jobs:
 
   extension-updating:
     name: Extension updating test
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: gcc
+      CXX: g++
       GEN: ninja
 
     steps:
@@ -358,11 +358,11 @@ jobs:
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
-   runs-on: ubuntu-22.04
+   runs-on: ubuntu-24.04
    needs: linux-memory-leaks
    env:
-     CC: gcc-10
-     CXX: g++-10
+     CC: gcc
+     CXX: g++
      GEN: ninja
      BUILD_BENCHMARK: 1
      BUILD_JEMALLOC: 1
