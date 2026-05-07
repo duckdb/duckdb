@@ -69,6 +69,9 @@ SQLStatement:
     - SelectStatement
     - SetStatement
     - TransactionStatement
+    - BeginTransaction
+    - CommitTransaction
+    - RollbackTransaction
     - TriggerBody
     - UpdateStatement
     - UseStatement
@@ -98,13 +101,6 @@ SetStatement:
   rules:
     - SetTimeZone
     - StandardAssignment
-
-TransactionStatement:
-  type: "unique_ptr<TransactionStatement>"
-  rules:
-    - BeginTransaction
-    - CommitTransaction
-    - RollbackTransaction
 
 QueryNode:
   type: "unique_ptr<QueryNode>"

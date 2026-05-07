@@ -7,3 +7,6 @@
 	static QualifiedName TransformUseTargetCatalogSchema(string catalog_name, string reserved_schema_name, vector<string> dot_identifier);
 	static string TransformDotIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformDotIdentifier(string identifier);
+	static unique_ptr<SQLStatement> TransformTransactionStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static TransactionModifierType TransformReadOrWriteInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static TransactionModifierType TransformReadOrWrite(TransactionModifierType read_only_or_read_write);
