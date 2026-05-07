@@ -292,6 +292,14 @@
         "type": "double",
         "unit": "milliseconds",
         "query_root": true
+      },
+      {
+        "name": "RESULT_COLLECTOR",
+        "enum_value": 100,
+        "description": "The time spent collecting and materializing the query result.",
+        "type": "double",
+        "unit": "milliseconds",
+        "query_root": true
       }
     ]
   },

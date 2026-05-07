@@ -1,0 +1,121 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_result_collector.test
+# description: Test RESULT_COLLECTOR metric.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"RESULT_COLLECTOR": "true"}';
+
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT range AS id, hash(range) AS data FROM range(10000);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# Verify that result_collector timing is present and non-negative
+query I
+SELECT
+	CASE WHEN result_collector >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Test with a SELECT query that materializes results
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"RESULT_COLLECTOR": "true"}';
+
+statement ok
+SELECT * FROM test ORDER BY id;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# Verify that result_collector is tracked
+query I
+SELECT
+	CASE WHEN result_collector >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Verify that result_collector only appears at root level, not in children
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"RESULT_COLLECTOR": "true", "OPERATOR_NAME": "true", "OPERATOR_TYPE": "true"}';
+
+statement ok
+SELECT * FROM test WHERE id < 1000 ORDER BY id;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+# Check that root has result_collector
+query I
+SELECT
+	CASE WHEN result_collector >= 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Verify that children nodes don't have result_collector
+statement ok
+CREATE OR REPLACE TABLE metrics_children AS SELECT unnest(children, recursive := true) FROM metrics_output;
+
+statement error
+SELECT result_collector FROM metrics_children;
+----
+Binder Error
+
+# Test disabling the metric removes it from output
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"RESULT_COLLECTOR": "false"}';
+
+statement ok
+SELECT * FROM test LIMIT 100;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '{TEST_DIR}/profiling_output.json';
+
+statement error
+SELECT result_collector FROM metrics_output;
+----
+Binder Error

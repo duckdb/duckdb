@@ -107,6 +107,7 @@ enum class MetricType : uint8_t {
 	PHYSICAL_PLANNER_RESOLVE_TYPES = 24,
 	PLANNER = 20,
 	PLANNER_BINDING = 21,
+	RESULT_COLLECTOR = 100,
 };
 
 struct MetricTypeHashFunction {

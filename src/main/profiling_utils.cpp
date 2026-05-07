@@ -105,6 +105,7 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
+	case MetricType::RESULT_COLLECTOR:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WRITE_TO_WAL_LATENCY:
 		metrics[type] = Value::CreateValue(0.0);
@@ -193,6 +194,7 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
+	case MetricType::RESULT_COLLECTOR:
 	case MetricType::WAITING_TO_ATTACH_LATENCY:
 	case MetricType::WRITE_TO_WAL_LATENCY:
 		yyjson_mut_obj_add_real(doc, dest, key_ptr, metrics[type].GetValue<double>());
