@@ -43,10 +43,10 @@ static idx_t SelectBloomFilter(Vector &input, const BloomFilterFunctionData &fun
 	D_ASSERT(func_data.filter);
 	Vector hashes(LogicalType::HASH, count);
 	VectorOperations::Hash(input, hashes, count);
-	hashes.Flatten(count);
+	hashes.Flatten();
 
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 
 	SelectionVector bloom_sel(count);
 	const auto bloom_count = func_data.filter->LookupHashes(hashes, bloom_sel, count);

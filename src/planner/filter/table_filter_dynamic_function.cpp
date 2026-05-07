@@ -84,7 +84,7 @@ bool DynamicFilterFunctionData::Equals(const FunctionData &other_p) const {
 static idx_t SelectDynamicFilter(Vector &input, ExpressionType comparison_type, const Value &constant,
                                  SelectionVector &result_sel, idx_t count) {
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 
 	idx_t approved_count = 0;
 	for (idx_t i = 0; i < count; i++) {
