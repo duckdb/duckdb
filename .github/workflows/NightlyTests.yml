@@ -259,7 +259,7 @@ jobs:
 
      - name: Install tools
        shell: bash
-       run: python3 scripts/ci/retry.py -- make toolsci
+       run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
