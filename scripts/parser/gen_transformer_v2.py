@@ -40,8 +40,22 @@ class RegexNode(GrammarNode):
 
 
 @dataclass
+class ParensNode(GrammarNode):
+    """Parens(D) <- '(' D ')'. Anonymous ListMatcher; child[1] is D's result.
+    Use ExtractResultFromParens() to reach inside."""
+    inner: GrammarNode
+
+
+@dataclass
+class ListMacroNode(GrammarNode):
+    """List(D) <- D (',' D)* ','?. Anonymous ListMatcher.
+    Use ExtractParseResultsFromList() to get all D results."""
+    inner: GrammarNode
+
+
+@dataclass
 class FunctionCallNode(GrammarNode):
-    """Macro call like Parens(inner) or List(inner)."""
+    """Unknown macro call (not Parens or List). Not auto-generated."""
     func_name: str
     inner: GrammarNode
 
@@ -129,8 +143,10 @@ def tokens_to_ast(tokens):
                 return OptionalNode(node)
             elif op == '*':
                 return RepeatNode(node, 0)
-            else:
+            elif op == '+':
                 return RepeatNode(node, 1)
+            else:
+                raise Exception("Unknown operator '{}'".format(op))
         return node
 
     def parse_atom():
@@ -149,6 +165,10 @@ def tokens_to_ast(tokens):
             inner = parse_choice()
             if peek() and peek().type == PEGTokenType.OPERATOR and peek().text == ')':
                 consume()
+            if func_name == 'Parens':
+                return ParensNode(inner)
+            elif func_name == 'List':
+                return ListMacroNode(inner)
             return FunctionCallNode(func_name, inner)
         elif t.type == PEGTokenType.OPERATOR and t.text == '(':
             consume()
@@ -398,6 +418,85 @@ def _classify_reference(name, idx, rule_to_type):
     return None
 
 
+def _classify_parens(inner_node, idx, rule_to_type):
+    """
+    ParensNode -> Parens(D) <- '(' D ')'.
+    Uses ExtractResultFromParens() to reach child[1].
+    Only supported when inner is a plain ReferenceNode.
+    """
+    if not isinstance(inner_node, ReferenceNode):
+        return None
+    name = inner_node.name
+    var_name = to_snake_case(name)
+    if name in IDENTIFIER_OVERRIDE_RULES:
+        lines = [
+            f"\tauto {var_name} = ExtractResultFromParens(list_pr.GetChild({idx}))"
+            f".Cast<IdentifierParseResult>().identifier;",
+        ]
+        return SeqElement(idx=idx, skip=False, var_name=var_name,
+                          cpp_type="string", extraction_lines=lines)
+    if name in rule_to_type:
+        cpp_type = rule_to_type[name]
+        lines = [
+            f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
+            f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
+        ]
+        return SeqElement(idx=idx, skip=False, var_name=var_name,
+                          cpp_type=cpp_type, extraction_lines=lines)
+    return None
+
+
+def _classify_list_macro(inner_node, idx, rule_to_type):
+    """
+    ListMacroNode -> List(D) <- D (',' D)* ','?.
+    Uses ExtractParseResultsFromList() to collect all D results.
+    Only supported when inner is a plain ReferenceNode with a known type.
+    Produces vector<T>.
+    """
+    if not isinstance(inner_node, ReferenceNode):
+        return None
+    name = inner_node.name
+    if name not in rule_to_type:
+        return None
+    child_type = rule_to_type[name]
+    var_name = to_snake_case(name)
+    lines = [
+        f"\tauto {var_name}_items = ExtractParseResultsFromList(list_pr.GetChild({idx}));",
+        f"\tvector<{child_type}> {var_name};",
+        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
+        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+        f"\t}}",
+    ]
+    return SeqElement(idx=idx, skip=False, var_name=var_name,
+                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+
+
+def _classify_parens_list(inner_list_node, idx, rule_to_type):
+    """
+    ParensNode(ListMacroNode(D)) -> Parens(List(D)).
+    Uses ExtractParseResultsFromList(ExtractResultFromParens(...)) to collect all D results.
+    Only supported when the ListMacroNode's inner is a plain ReferenceNode with a known type.
+    Produces vector<T>.
+    """
+    if not isinstance(inner_list_node.inner, ReferenceNode):
+        return None
+    name = inner_list_node.inner.name
+    if name not in rule_to_type:
+        return None
+    child_type = rule_to_type[name]
+    var_name = to_snake_case(name)
+    lines = [
+        f"\tauto {var_name}_items = ExtractParseResultsFromList("
+        f"ExtractResultFromParens(list_pr.GetChild({idx})));",
+        f"\tvector<{child_type}> {var_name};",
+        f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
+        f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+        f"\t}}",
+    ]
+    return SeqElement(idx=idx, skip=False, var_name=var_name,
+                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+
+
 def _classify_star_repeat(node, idx, rule_to_type):
     """
     OPERATOR '*' -> Optional(Repeat(child)) -> OptionalParseResult wrapping RepeatParseResult.
@@ -437,6 +536,12 @@ def classify_sequence_element(child, idx, rule_to_type):
         return _classify_reference(child.name, idx, rule_to_type)
     if isinstance(child, RepeatNode) and child.min_count == 0:
         return _classify_star_repeat(child, idx, rule_to_type)
+    if isinstance(child, ParensNode):
+        if isinstance(child.inner, ListMacroNode):
+            return _classify_parens_list(child.inner, idx, rule_to_type)
+        return _classify_parens(child.inner, idx, rule_to_type)
+    if isinstance(child, ListMacroNode):
+        return _classify_list_macro(child.inner, idx, rule_to_type)
     return None
 
 
@@ -492,11 +597,12 @@ def generate_sequence_internal(rule_name, return_type, elements):
 
 
 def collect_generated(rules, rule_to_type):
-    """Classify all rules; return lists of generated content and skipped rules."""
+    """Classify all rules; return lists of generated content, skipped rules, and manual bodies."""
     declarations = []
     implementations = []
     registrations = []
     skipped = []
+    manual_bodies = []
 
     for rule_name, rule in rules.items():
         return_type = rule.return_type
@@ -538,9 +644,9 @@ def collect_generated(rules, rule_to_type):
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type))
-                skipped.append((
-                    f"{rule_name} (choice body)",
-                    f"manual body needed; identifier alternatives: {identifier_alts}",
+                manual_bodies.append((
+                    rule_name,
+                    f"choice body; identifier alternatives: {identifier_alts}",
                 ))
             continue
 
@@ -554,13 +660,19 @@ def collect_generated(rules, rule_to_type):
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
-    return declarations, implementations, registrations, skipped
+    return declarations, implementations, registrations, skipped, manual_bodies
 
 
-def print_output(declarations, implementations, registrations, skipped, gram_stem):
+def print_output(declarations, implementations, registrations, skipped, manual_bodies, gram_stem):
     if skipped:
-        print("=== SKIPPED (manual implementation required) ===")
+        print("=== SKIPPED (nothing generated) ===")
         for rule_name, reason in skipped:
+            print(f"  {rule_name}: {reason}")
+        print()
+
+    if manual_bodies:
+        print("=== MANUAL BODY NEEDED (Internal generated, body must be hand-written) ===")
+        for rule_name, reason in manual_bodies:
             print(f"  {rule_name}: {reason}")
         print()
 
@@ -647,12 +759,12 @@ def main():
         if rule_name in rules:
             rules[rule_name].return_type = return_type
 
-    declarations, implementations, registrations, skipped = collect_generated(rules, rule_to_type)
+    declarations, implementations, registrations, skipped, manual_bodies = collect_generated(rules, rule_to_type)
 
     if args.write:
         write_files(implementations, declarations, registrations, gram_stem="use")
     else:
-        print_output(declarations, implementations, registrations, skipped, gram_stem="use")
+        print_output(declarations, implementations, registrations, skipped, manual_bodies, gram_stem="use")
 
 
 if __name__ == "__main__":
