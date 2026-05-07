@@ -1139,7 +1139,15 @@ jobs:
       - prepare
       - linux-relassert
     env:
+      CC: clang-20
+      CXX: clang++-20
       GEN: ninja
+      CRASH_ON_ASSERT: 1
+      FORCE_DEBUG: 1
+      FORCE_ASSERT: 1
+      EXPORT_DYNAMIC_SYMBOLS: 1
+      REDUCE_SYMBOLS: 1
+      EXTENSION_STATIC_BUILD: 0
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
