@@ -27,8 +27,8 @@ index 880bfa46..e34bcace 100644
 +			auto &compare_expr = expr.Cast<BoundFunctionExpression>();
  			if (transform.Type() == IcebergTransformType::IDENTITY) {
  				//! No further processing has been done on the stats (lower/upper bounds)
--				auto &left = compare_expr.Left();
--				auto &right = compare_expr.Right();
+-				auto &left = *compare_expr.left;
+-				auto &right = *compare_expr.right;
 +				auto &left = BoundComparisonExpression::Left(compare_expr);
 +				auto &right = BoundComparisonExpression::Right(compare_expr);
 
