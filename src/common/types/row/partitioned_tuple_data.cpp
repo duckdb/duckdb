@@ -131,6 +131,26 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	}
 }
 
+template <bool FIXED, bool HAS_SEL, bool COMPUTE_REVERSE_PARTITION_SEL>
+static void TemplatedBuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+                                       const idx_t append_count) {
+	auto &partition_entries = state.GetMap<FIXED>();
+	D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	auto &partition_sel = state.partition_sel;
+	auto &reverse_partition_sel = state.reverse_partition_sel;
+
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto index = HAS_SEL ? append_sel[i] : i;
+		const auto &partition_index = partition_indices[i];
+		auto &partition_offset = partition_entries[partition_index].offset;
+		if (COMPUTE_REVERSE_PARTITION_SEL) {
+			reverse_partition_sel.set_index(index, partition_offset);
+		}
+		partition_sel[partition_offset++] = UnsafeNumericCast<sel_t>(index);
+	}
+}
+
 template <bool FIXED>
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
                                              const idx_t append_count, const idx_t max_partition_idx) {
@@ -185,24 +205,17 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
-	D_ASSERT(state.partition_indices.GetVectorType() == VectorType::FLAT_VECTOR);
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
-	auto &partition_sel = state.partition_sel;
-	auto &reverse_partition_sel = state.reverse_partition_sel;
 	if (append_sel.IsSet()) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto index = append_sel[i];
-			const auto &partition_index = partition_indices[i];
-			auto &partition_offset = partition_entries[partition_index].offset;
-			reverse_partition_sel.set_index(index, partition_offset);
-			partition_sel[partition_offset++] = index;
+		if (state.compute_reverse_partition_sel) {
+			TemplatedBuildPartitionSel<FIXED, true, true>(state, append_sel, append_count);
+		} else {
+			TemplatedBuildPartitionSel<FIXED, true, false>(state, append_sel, append_count);
 		}
 	} else {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto &partition_index = partition_indices[i];
-			auto &partition_offset = partition_entries[partition_index].offset;
-			reverse_partition_sel.set_index(i, partition_offset);
-			partition_sel.set_index(partition_offset++, i);
+		if (state.compute_reverse_partition_sel) {
+			TemplatedBuildPartitionSel<FIXED, false, true>(state, append_sel, append_count);
+		} else {
+			TemplatedBuildPartitionSel<FIXED, false, false>(state, append_sel, append_count);
 		}
 	}
 }

@@ -23,6 +23,8 @@ public:
 	}
 
 public:
+	bool compute_reverse_partition_sel = false;
+
 	Vector partition_indices;
 	SelectionVector partition_sel;
 	SelectionVector reverse_partition_sel;
