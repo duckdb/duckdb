@@ -21,17 +21,23 @@ class CrossProductGlobalState : public GlobalSinkState {
 public:
 	explicit CrossProductGlobalState(ClientContext &context, const PhysicalCrossProduct &op)
 	    : rhs_materialized(context, op.children[1].get().GetTypes()) {
-		rhs_materialized.InitializeAppend(append_state);
+		ResetState(context);
 	}
 
+private:
+	void ResetState(ClientContext &context) {
+		rhs_materialized.ResetForReuse();
+		rhs_materialized.InitializeAppend(append_state);
+		GlobalSinkState::Reset(context);
+	}
+
+public:
 	bool SupportsReuse() const override {
 		return true;
 	}
 
 	void Reset(ClientContext &context) override {
-		rhs_materialized.ResetForReuse();
-		rhs_materialized.InitializeAppend(append_state);
-		GlobalSinkState::Reset(context);
+		ResetState(context);
 	}
 
 	ColumnDataCollection rhs_materialized;
@@ -64,9 +70,9 @@ SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, DataChunk &
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-CrossProductExecutor::CrossProductExecutor(ColumnDataCollection &rhs)
-    : rhs(rhs), position_in_chunk(0), initialized(false), finished(false) {
+CrossProductExecutor::CrossProductExecutor(ColumnDataCollection &rhs) : rhs(rhs) {
 	rhs.InitializeScanChunk(scan_chunk);
+	Reset();
 }
 
 void CrossProductExecutor::Reset(const DataChunk &input, DataChunk &output) {
