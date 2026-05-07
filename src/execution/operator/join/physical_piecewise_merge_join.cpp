@@ -68,10 +68,7 @@ public:
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(client, rhs_order, rhs_types, op);
-		if (op.filter_pushdown) {
-			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
-			global_filter_state = op.filter_pushdown->GetGlobalState(client, op);
-		}
+		ResetState(client);
 	}
 
 	inline idx_t Count() const {
@@ -88,11 +85,8 @@ public:
 	//! The global filter states to push down (if any)
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
 
-	bool SupportsReuse() const override {
-		return true;
-	}
-
-	void Reset(ClientContext &client) override {
+private:
+	void ResetState(ClientContext &client) {
 		table->ResetForReuse(client);
 		if (op.filter_pushdown) {
 			skip_filter_pushdown = op.filter_pushdown->probe_info.empty();
@@ -103,6 +97,15 @@ public:
 		}
 		GlobalSinkState::Reset(client);
 	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ClientContext &client) override {
+		ResetState(client);
+	}
 };
 
 class MergeJoinLocalState : public LocalSinkState {
@@ -112,10 +115,7 @@ public:
 
 	MergeJoinLocalState(ExecutionContext &context, MergeJoinGlobalState &gstate, const idx_t child)
 	    : table(context, *gstate.table, child) {
-		auto &op = gstate.table->op;
-		if (op.filter_pushdown) {
-			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
-		}
+		ResetState(gstate);
 	}
 
 	//! The local sort state
@@ -123,6 +123,17 @@ public:
 	//! Local state for accumulating filter statistics
 	unique_ptr<JoinFilterLocalState> local_filter_state;
 
+private:
+	void ResetState(MergeJoinGlobalState &gstate) {
+		auto &op = gstate.table->op;
+		if (op.filter_pushdown) {
+			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
+		} else {
+			local_filter_state.reset();
+		}
+	}
+
+public:
 	bool SupportsReuse() const override {
 		return true;
 	}
@@ -130,12 +141,7 @@ public:
 	void Reset(ExecutionContext &context, GlobalSinkState &gstate_p) override {
 		auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
 		table.ResetForReuse(context);
-		auto &op = gstate.table->op;
-		if (op.filter_pushdown) {
-			local_filter_state = op.filter_pushdown->GetLocalState(*gstate.global_filter_state);
-		} else {
-			local_filter_state.reset();
-		}
+		ResetState(gstate);
 	}
 };
 
