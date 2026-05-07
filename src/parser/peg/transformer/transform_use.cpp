@@ -4,11 +4,7 @@
 namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransformer &transformer,
-                                                                      ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto qn = transformer.Transform<QualifiedName>(list_pr, 1);
-
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(QualifiedName qn) {
 	string value_str;
 	if (IsInvalidSchema(qn.schema)) {
 		value_str = SQLIdentifier::ToString(qn.name);
