@@ -790,7 +790,7 @@ MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
 MapStructField <- Expression ':' Expression
 
-GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression)?)
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
 QuestionMarkNumberedParameter <- '?' NumberLiteral
@@ -1652,7 +1652,8 @@ DetachStatement <- 'DETACH' Database? IfExists? CatalogName
 UseStatement <- 'USE' UseTarget
 
 UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName
-UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*
+UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
+DotIdentifier <- '.' Identifier
 
 CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments
 

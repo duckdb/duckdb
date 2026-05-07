@@ -773,6 +773,7 @@ String:
     - ConstraintName
     - ExplainOptionName
     - OperatorLiteral
+    - DotIdentifier
 
 Bool:
   type: "bool"
