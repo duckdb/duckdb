@@ -4,12 +4,12 @@
 namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(QualifiedName qn) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(QualifiedName use_target) {
 	string value_str;
-	if (IsInvalidSchema(qn.schema)) {
-		value_str = SQLIdentifier::ToString(qn.name);
+	if (IsInvalidSchema(use_target.schema)) {
+		value_str = SQLIdentifier::ToString(use_target.name);
 	} else {
-		value_str = SQLIdentifier(qn.schema) + "." + SQLIdentifier(qn.name);
+		value_str = SQLIdentifier(use_target.schema) + "." + SQLIdentifier(use_target.name);
 	}
 
 	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
