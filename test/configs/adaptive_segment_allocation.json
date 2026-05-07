@@ -1,5 +1,0 @@
-{
-  "description": "Run with adaptive transient segment allocation enabled (initial_segment_rows=2).",
-  "on_init": "SET adaptive_segment_allocation=true; SET initial_segment_rows=2;",
-  "skip_compiled": "true"
-}

@@ -112,17 +112,6 @@ struct AccessModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct AdaptiveSegmentAllocationSetting {
-	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "adaptive_segment_allocation";
-	static constexpr const char *Description = "When enabled, transient column segments start small and double in size "
-	                                           "with each overflow, up to the block size";
-	static constexpr const char *InputType = "BOOLEAN";
-	static constexpr const char *DefaultValue = "false";
-	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
-	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
-};
-
 struct AllocatorBackgroundThreadsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "allocator_background_threads";
@@ -1196,12 +1185,12 @@ struct IndexScanPercentageSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct InitialSegmentRowsSetting {
+struct InitialColumnSegmentSizeSetting {
 	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "initial_segment_rows";
+	static constexpr const char *Name = "initial_column_segment_size";
 	static constexpr const char *Description =
-	    "Number of rows allocated for the first transient column segment when adaptive_segment_allocation is enabled. "
-	    "Subsequent segments double this until reaching the block size.";
+	    "The initial memory (in bytes) reserved for the first transient column segment. Subsequent segments double in "
+	    "size until reaching the block size.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "2048";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;

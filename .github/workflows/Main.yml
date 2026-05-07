@@ -1454,12 +1454,6 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/release/test/unittest
 
-    - name: test/configs/adaptive_segment_allocation.json
-      if: success() || failure()
-      shell: bash
-      run: |
-        python3 scripts/ci/run_tests.py --test-config=test/configs/adaptive_segment_allocation.json ./build/release/test/unittest
-
     - name: test/configs/latest_storage_block_size_16kB.json
       if: success() || failure()
       shell: bash

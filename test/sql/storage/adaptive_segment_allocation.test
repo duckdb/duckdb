@@ -5,23 +5,21 @@
 require vector_size 2048
 
 statement ok
-SET adaptive_segment_allocation = true
-
-statement ok
-SET initial_segment_rows = 2
+SET initial_column_segment_size = 8
 
 # disable auto-checkpoint so the transient segment structure is visible in pragma_storage_info
 statement ok
 SET wal_autocheckpoint='1TB'
 
-# with initial_segment_rows=2 and 5 rows, the doubling chain produces exactly 2 segments
+# with initial_column_segment_size=8 bytes and INT (4 bytes/row), the first segment holds 2 rows
+# the second segment doubles to 16 bytes (4-row capacity) and holds the remaining 3 rows
 statement ok
 CREATE TABLE step_test (i INT NOT NULL)
 
 statement ok
 INSERT INTO step_test VALUES (1), (2), (3), (4), (5)
 
-# segment 0 holds the first 2 rows (= initial_segment_rows), segment 1 holds the remaining 3
+# segment 0 holds the first 2 rows (8 bytes), segment 1 holds the remaining 3
 query II
 SELECT segment_id, count
 FROM pragma_storage_info('step_test')
@@ -43,8 +41,7 @@ CREATE TABLE mem_adaptive (a INT NOT NULL, b INT NOT NULL, c INT NOT NULL, d INT
 statement ok
 INSERT INTO mem_adaptive VALUES (1, 2, 3, 4, 5)
 
-# adaptive: 5 cols * (8 bytes data + 256 bytes validity) = ~1320 bytes
-# non-adaptive allocates ~51200 bytes for the same insert
+# 5 cols * (8 bytes data + 256 bytes validity) = ~1320 bytes
 query I
 SELECT CASE WHEN memory_usage_bytes < 2000
             THEN 'ok'
@@ -61,36 +58,7 @@ CHECKPOINT
 statement ok
 DROP TABLE mem_adaptive
 
-statement ok
-SET adaptive_segment_allocation = false
-
-statement ok
-CREATE TABLE mem_default (a INT NOT NULL, b INT NOT NULL, c INT NOT NULL, d INT NOT NULL, e INT NOT NULL)
-
-statement ok
-INSERT INTO mem_default VALUES (1, 2, 3, 4, 5)
-
-# non-adaptive: 5 cols * (STANDARD_VECTOR_SIZE * 4 + STANDARD_VECTOR_SIZE / 8) = 51200 bytes
-query I
-SELECT CASE WHEN memory_usage_bytes = 51200
-            THEN 'ok'
-            ELSE error(concat('expected 51200 bytes, got ', memory_usage_bytes))
-       END
-FROM duckdb_memory()
-WHERE tag = 'IN_MEMORY_TABLE'
-----
-ok
-
-statement ok
-DROP TABLE mem_default
-
-statement ok
-SET adaptive_segment_allocation = true
-
-statement ok
-SET initial_segment_rows = 2
-
-# correctness: 100 rows split across doubling segments (2, 4, 8, 16, 32, 38)
+# correctness: 100 rows split across doubling segments
 statement ok
 CREATE TABLE overflow_test (i BIGINT NOT NULL)
 
@@ -161,12 +129,6 @@ SELECT COUNT(*) FROM (
 ) WHERE (rn % 7 = 6) != (i IS NULL)
 ----
 0
-
-statement ok
-SET adaptive_segment_allocation = true
-
-statement ok
-SET initial_segment_rows = 2
 
 statement ok
 CREATE TABLE string_test (s VARCHAR)
