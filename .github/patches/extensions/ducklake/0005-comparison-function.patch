@@ -13,3 +13,17 @@ index 0eeb8d52..a3c8f2ab 100644
 
  	auto filter = make_uniq<LogicalFilter>(std::move(filter_expr));
  	filter->children.push_back(std::move(aggregate));
+diff --git a/src/storage/ducklake_delete_filter.cpp b/src/storage/ducklake_delete_filter.cpp
+index 3f80866c..15ac1150 100644
+--- a/src/storage/ducklake_delete_filter.cpp
++++ b/src/storage/ducklake_delete_filter.cpp
+@@ -139,8 +139,8 @@ static DeleteFileScanResult ScanDeletionVectorFile(ClientContext &context, const
+ unique_ptr<ExpressionFilter> MakeComparisonFilter(ExpressionType comparison_type, Value constant) {
+ 	auto col_ref = make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, storage_t(0));
+ 	auto bound_constant = make_uniq<BoundConstantExpression>(std::move(constant));
+-	auto comparison = make_uniq<BoundComparisonExpression>(comparison_type, std::move(col_ref),
+-			                                                      std::move(bound_constant));
++	auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(col_ref),
++	                                                    std::move(bound_constant));
+ 	return make_uniq<ExpressionFilter>(std::move(comparison));
+ }

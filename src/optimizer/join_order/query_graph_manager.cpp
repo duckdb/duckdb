@@ -224,8 +224,14 @@ static JoinCondition MaybeInvertConditions(unique_ptr<Expression> condition, boo
 	auto &comparison = condition->Cast<BoundFunctionExpression>();
 	auto &left_ref = BoundComparisonExpression::LeftMutable(comparison);
 	auto &right_ref = BoundComparisonExpression::RightMutable(comparison);
-	auto left = !invert ? std::move(left_ref) : std::move(right_ref);
-	auto right = !invert ? std::move(right_ref) : std::move(left_ref);
+	unique_ptr<Expression> left, right;
+	if (!invert) {
+		left = std::move(left_ref);
+		right = std::move(right_ref);
+	} else {
+		left = std::move(right_ref);
+		right = std::move(left_ref);
+	}
 	auto comp_type = condition->GetExpressionType();
 	if (invert) {
 		// reverse comparison expression if we reverse the order of the children
@@ -400,8 +406,14 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto &left_ref = BoundComparisonExpression::LeftMutable(comparison);
 				auto &right_ref = BoundComparisonExpression::RightMutable(comparison);
 				// we need to figure out which side is which by looking at the relations available to us
-				auto left = !invert ? std::move(left_ref) : std::move(right_ref);
-				auto right = !invert ? std::move(right_ref) : std::move(left_ref);
+				unique_ptr<Expression> left, right;
+				if (!invert) {
+					left = std::move(left_ref);
+					right = std::move(right_ref);
+				} else {
+					left = std::move(right_ref);
+					right = std::move(left_ref);
+				}
 				auto comp_type = comparison.GetExpressionType();
 				if (invert) {
 					// reverse comparison expression if we reverse the order of the children
