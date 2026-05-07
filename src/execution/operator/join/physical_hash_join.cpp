@@ -1989,7 +1989,6 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(ExecutionContext &context, Gl
                                                    Allocator &allocator)
     : op(op), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
       scan_structure(*sink.hash_table, join_key_state) {
-	auto &chunk_state = probe_local_scan.current_chunk_state;
 	lhs_probe_chunk.Initialize(allocator, sink.probe_types);
 	lhs_join_keys.Initialize(allocator, op.condition_types);
 
