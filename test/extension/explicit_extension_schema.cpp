@@ -25,7 +25,7 @@ static void LoadableExtensionExplicitSchemaFunInit(ExtensionLoader &loader) {
 
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(explicit_extension_schema, loader) {
-	auto &callback_manager = DBConfig::GetConfig(loader.GetDatabaseInstance()).GetCallbackManager();
+	DBConfig::GetConfig(loader.GetDatabaseInstance()).GetCallbackManager();
 	// set the schema for the extension
 	loader.SetExtensionSchema("explicit_schema");
 	LoadableExtensionExplicitSchemaFunInit(loader);
