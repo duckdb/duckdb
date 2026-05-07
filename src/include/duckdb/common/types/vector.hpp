@@ -163,6 +163,8 @@ public:
 
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
+	[[deprecated("Resize has been replaced by Reserve - use Reserve(to_reserve) instead")]] DUCKDB_API void
+	Resize(idx_t current_size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);

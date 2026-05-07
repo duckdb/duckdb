@@ -283,6 +283,10 @@ void Vector::Reserve(idx_t to_reserve_p) {
 	buffer->Reserve(reserve_size, VectorAppendMode::ALLOW_RESIZE);
 }
 
+void Vector::Resize(idx_t, idx_t to_reserve_p) {
+	Reserve(to_reserve_p);
+}
+
 void Vector::Append(const Value &value, VectorAppendMode append_mode) {
 	buffer->AppendValue(GetType(), value, append_mode);
 }
