@@ -22,7 +22,10 @@
         "test/sql/copy/csv/csv_limit_copy.test",
         "test/sql/aggregate/aggregates/test_mode.test",
         "test/issues/general/test_21431.test",
-        "test/sql/join/inner/test_prefix_range_filter_pushdown.test"
+        "test/sql/join/inner/test_prefix_range_filter_pushdown.test",
+        "test/sql/join/inner/test_prefix_range_filter_pushdown_strinline.test",
+        "test/sql/settings/operator_memory_limit.test",
+        "test/sql/table_function/duckdb_eviction_queues.test"
       ]
     },
     {
