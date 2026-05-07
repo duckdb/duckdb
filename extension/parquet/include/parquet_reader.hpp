@@ -129,14 +129,14 @@ struct ParquetPrefetchColumn {
 struct ParquetLoggerPrefetchMetrics {
 	//! Physical prefetch groups (column-name batches) issued for the current row group, in order
 	vector<vector<string>> prefetch_groups;
-	//! Names of columns whose filters were evaluated to drive selectivity in the current row group
-	vector<string> minimal_filters;
+	//! Tracks which scan_filters were evaluated in the current row group (indexed by scan_filter position)
+	vector<bool> filters_used;
 	//! Prefetch strategy chosen for the current row group
 	ParquetPrefetchStrategy strategy = ParquetPrefetchStrategy::NONE;
 
 	void Reset() {
 		prefetch_groups.clear();
-		minimal_filters.clear();
+		std::fill(filters_used.begin(), filters_used.end(), false);
 		strategy = ParquetPrefetchStrategy::NONE;
 	}
 

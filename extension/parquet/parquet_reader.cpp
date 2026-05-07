@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "parquet_types.h"
 #include "column_reader.hpp"
@@ -102,18 +103,19 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 	}
 
 	// Let's use ReadHead to bucket registrations so we are use we are getting whatever the ThriftFileTransport does
-	vector<const ReadHead *> bucket_order;
-	std::map<const ReadHead *, vector<ParquetPrefetchColumn>> buckets;
+	vector<reference<ReadHead>> bucket_order;
+	reference_map_t<ReadHead, vector<ParquetPrefetchColumn>> buckets;
 	set<idx_t> registered_offsets;
 	for (auto &requested_column : requested_columns) {
 		registered_offsets.insert(requested_column.offset);
-		auto rh = trans.GetReadHead(requested_column.offset).get();
-		if (!rh) {
+		auto rh_ptr = trans.GetReadHead(requested_column.offset);
+		if (!rh_ptr) {
 			continue;
 		}
+		auto &rh = *rh_ptr;
 		auto inserted = buckets.emplace(rh, vector<ParquetPrefetchColumn> {});
 		if (inserted.second) {
-			bucket_order.push_back(rh);
+			bucket_order.emplace_back(rh);
 		}
 		inserted.first->second.push_back(requested_column);
 	}
@@ -126,10 +128,11 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 		}
 		idx_t chunk_end = chunk_start + NumericCast<idx_t>(chunk.meta_data.total_compressed_size);
 		// Figure out what physical I/O this file offset lives in
-		auto rh = trans.GetReadHead(chunk_start).get();
-		if (!rh || chunk_end > rh->GetEnd()) {
+		auto rh_ptr = trans.GetReadHead(chunk_start);
+		if (!rh_ptr || chunk_end > rh_ptr->GetEnd()) {
 			continue;
 		}
+		auto &rh = *rh_ptr;
 		// Hitchhiker only counts if the ReadHead was created for one of our registrations.
 		auto bucket_it = buckets.find(rh);
 		if (bucket_it == buckets.end()) {
@@ -142,8 +145,8 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 	}
 
 	// Issue one log group per ReadHead, on the order they were registered
-	for (auto rh : bucket_order) {
-		auto &bucket = buckets[rh];
+	for (auto &rh_ref : bucket_order) {
+		auto &bucket = buckets[rh_ref];
 		std::sort(bucket.begin(), bucket.end());
 		vector<string> names;
 		names.reserve(bucket.size());
@@ -156,11 +159,21 @@ void ParquetLoggerPrefetchMetrics::GeneratePrefetchGroup(ThriftFileTransport &tr
 }
 
 static void LogRowGroupPrefetch(ClientContext &context, const string &file_path, idx_t row_group_id,
-                                const ParquetReaderScanState &state) {
+                                ParquetReaderScanState &state) {
 	const bool fully_filtered = !state.prefetch_metrics.had_match;
+	auto &filters_used = state.prefetch_metrics.logger.filters_used;
+	vector<string> minimal_filters;
+	minimal_filters.reserve(filters_used.size());
+	for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+		if (i < filters_used.size() && filters_used[i]) {
+			auto &scan_filter = state.scan_filters[i];
+			MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+			minimal_filters.push_back(state.GetColumnReader(local_idx).Schema().name);
+		}
+	}
 	DUCKDB_LOG(context, ParquetPrefetchLogType, file_path, row_group_id, fully_filtered,
 	           ParquetPrefetchStrategyToString(state.prefetch_metrics.logger.strategy),
-	           state.prefetch_metrics.logger.prefetch_groups, state.prefetch_metrics.logger.minimal_filters);
+	           state.prefetch_metrics.logger.prefetch_groups, minimal_filters);
 }
 
 using duckdb_parquet::ColumnChunk;
@@ -1794,7 +1807,11 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
-				state.prefetch_metrics.logger.minimal_filters.push_back(child_reader.Schema().name);
+				auto &filters_used = state.prefetch_metrics.logger.filters_used;
+				if (filters_used.size() != state.scan_filters.size()) {
+					filters_used.assign(state.scan_filters.size(), false);
+				}
+				filters_used[permutation[i]] = true;
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 				if (filter_count == 0) {
