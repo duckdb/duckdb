@@ -74,7 +74,7 @@ jobs:
           ref: ${{ env.GIT_REF }}
 
       - name: Install tools
-        run: python3 scripts/ci/retry.py -- make toolsci
+        run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
       - uses: ./.github/actions/ccache-action
 
