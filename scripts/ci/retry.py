@@ -1,10 +1,26 @@
 import argparse
+import re
 import os
 import subprocess
 import sys
 import time
 
 RETRY_DELAY_SECONDS = 15.0
+
+
+def parse_timeout(timeout: str) -> float:
+    match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)([smhSMH]?)\s*", timeout)
+    if not match:
+        raise ValueError("invalid timeout format")
+    value = float(match.group(1))
+    unit = match.group(2).lower()
+    if unit == "m":
+        value *= 60.0
+    elif unit == "h":
+        value *= 3600.0
+    if value <= 0:
+        raise ValueError("timeout must be > 0")
+    return value
 
 
 def parse_args() -> argparse.Namespace:
@@ -17,9 +33,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--timeout",
-        type=float,
+        type=str,
         default=None,
-        help="Optional per-attempt timeout in seconds.",
+        help="Optional per-attempt timeout (e.g. '30', '45s', '2m', '1.5h').",
     )
     parser.add_argument(
         "command",
@@ -29,8 +45,13 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.retries < 0:
         parser.error("--retries must be >= 0")
-    if args.timeout is not None and args.timeout <= 0:
-        parser.error("--timeout must be > 0")
+    if args.timeout is not None:
+        try:
+            args.timeout_seconds = parse_timeout(args.timeout)
+        except ValueError:
+            parser.error("--timeout must be a positive duration (e.g. '30', '45s', '2m', '1.5h')")
+    else:
+        args.timeout_seconds = None
     if not args.command:
         parser.error("missing command")
     if args.command[0] == "--":
@@ -57,12 +78,12 @@ def main() -> int:
 
     for attempt in range(1, attempts + 1):
         try:
-            completed = run_command(args.command, command_text, args.timeout)
+            completed = run_command(args.command, command_text, args.timeout_seconds)
             exit_code = completed.returncode
         except subprocess.TimeoutExpired:
             exit_code = 124
             print(
-                f"[retry] attempt {attempt}/{attempts} timed out after {args.timeout} sec",
+                f"[retry] attempt {attempt}/{attempts} timed out after {args.timeout}",
                 flush=True,
             )
         except OSError as exc:
