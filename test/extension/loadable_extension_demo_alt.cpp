@@ -13,6 +13,8 @@ static void LoadableExtensionFunInit(ExtensionLoader &loader, string &function_n
 
 extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo_double, loader) {
+	// Call non DUCKBD_API marked function to avoid linker errors in win32 bit
+	DBConfig::GetConfig(loader.GetDatabaseInstance()).GetCallbackManager();
 	auto &db = loader.GetDatabaseInstance();
 	auto suffix = db.GetExtensionManager().GetExtensions().size();
 	auto function_name = "loadable_extension_demo_double_" + to_string(suffix);

@@ -9,16 +9,14 @@ build_loadable_extension_directory(
   ${PARAMETERS}
   loadable_extension_demo.cpp)
 
-if(NOT (WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4))
-  build_loadable_extension_directory(
-    loadable_extension_demo_double
-    "CPP"
-    test/extension
-    "default-version"
-    ""
-    ${PARAMETERS}
-    loadable_extension_demo_alt.cpp)
-endif()
+build_loadable_extension_directory(
+  loadable_extension_demo_double
+  "CPP"
+  test/extension
+  "default-version"
+  ""
+  ${PARAMETERS}
+  loadable_extension_demo_alt.cpp)
 
 if(NOT WIN32 AND NOT SUN)
   add_definitions(-DDUCKDB_BUILD_DIRECTORY="${PROJECT_BINARY_DIR}")
