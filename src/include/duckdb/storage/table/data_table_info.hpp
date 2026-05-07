@@ -30,7 +30,7 @@ public:
 	//! Whether or not the table is temporary
 	bool IsTemporary() const;
 
-	AttachedDatabase &GetDB() {
+	AttachedDatabase &GetDB() const {
 		return db;
 	}
 

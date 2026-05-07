@@ -269,7 +269,7 @@ void IsHistogramOtherBinFunction(DataChunk &args, ExpressionState &state, Vector
 
 	// Set NULL if input is NULL.
 	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(args.size(), input_data);
+	args.data[0].ToUnifiedFormat(input_data);
 	if (!input_data.validity.CannotHaveNull()) {
 		auto &result_validity = FlatVector::ValidityMutable(result);
 		for (idx_t idx = 0; idx < args.size(); ++idx) {
@@ -336,7 +336,7 @@ void HistogramBinFinalizeFunction(Vector &state_vector, AggregateInputData &, Ve
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class HIST>

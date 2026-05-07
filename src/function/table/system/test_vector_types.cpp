@@ -170,7 +170,7 @@ struct TestVectorSequence {
 		case LogicalTypeId::UBIGINT:
 			result.Sequence(3, 2, 3);
 #if STANDARD_VECTOR_SIZE <= 2
-			result.Flatten(3);
+			result.Flatten();
 #endif
 			return;
 		default:
@@ -307,12 +307,12 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
 	for (auto &entry : result->entries) {
-		entry->Verify(context.db);
+		entry->Verify(context);
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
 			entry->Flatten();
-			entry->Verify(context.db);
+			entry->Verify(context);
 		}
 	}
 	return std::move(result);

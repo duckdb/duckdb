@@ -1,0 +1,9 @@
+[
+    {
+        "name": "__between",
+        "parameters": "input,lower,upper",
+        "description": "Returns whether or not input is between lower and upper.",
+        "example": "__between(3, 0, 10)",
+        "type": "scalar_function"
+    }
+]

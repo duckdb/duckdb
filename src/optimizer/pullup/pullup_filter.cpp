@@ -1,5 +1,5 @@
 #include "duckdb/optimizer/filter_pullup.hpp"
-#include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/legacy_bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"

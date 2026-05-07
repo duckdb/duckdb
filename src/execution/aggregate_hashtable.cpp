@@ -449,16 +449,16 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	// for each of the new groups, add them to the global (cached) list of addresses for the dictionary
 	auto &dictionary_addresses = *dict_state.dictionary_addresses;
-	auto dict_addresses = FlatVector::GetDataMutable<uintptr_t>(dictionary_addresses);
+	auto dict_addresses = FlatVector::ScatterWriter<uintptr_t>(dictionary_addresses);
 	for (idx_t i = 0; i < unique_count; i++) {
 		auto dict_idx = unique_entries.get_index(i);
 		dict_addresses[dict_idx] = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
 	}
 	// now set up the addresses for the aggregates
-	auto result_addresses = FlatVector::GetDataMutable<uintptr_t>(state.addresses);
+	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups.size());
 	for (idx_t i = 0; i < groups.size(); i++) {
 		auto dict_idx = offsets.get_index(i);
-		result_addresses[i] = dict_addresses[dict_idx];
+		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
 
 	// finally process the aggregates
@@ -498,15 +498,17 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		return new_group_count;
 	}
 
-	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
-	auto aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
-	state.addresses.Reference(Value::POINTER(aggregate_address), count_t(payload.size()));
-
 	// process the aggregates
+	// FIXME: This should just be a CONSTANT_VECTOR but subsequent operations assume FLAT_VECTOR
+	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
+	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, payload.size());
+	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
+	for (idx_t i = 0; i < payload.size(); i++) {
+		result_addresses.WriteValue(aggregate_address);
+	}
+	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
-
-	// FIXME: subsequent operations assume a flat vector
-	state.addresses.Flatten();
+	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
 }
@@ -686,7 +688,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);
 
-	addresses_v.Flatten(chunk_size);
+	addresses_v.Flatten();
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
 
 	if (skip_lookups) {

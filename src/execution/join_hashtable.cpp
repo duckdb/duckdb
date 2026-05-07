@@ -158,12 +158,12 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		salt_v.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		*ConstantVector::GetData<hash_t>(salt_v) = ht_entry_t::ExtractSalt(hash);
-		salt_v.Flatten(count);
+		salt_v.Flatten();
 
 		hash = hash & bitmask;
-		hashes_v.Flatten(count);
+		hashes_v.Flatten();
 	} else {
-		hashes_v.Flatten(count);
+		hashes_v.Flatten();
 		auto salts = FlatVector::GetDataMutable<hash_t>(salt_v);
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
@@ -268,11 +268,11 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
 		auto hashes_unified = hashes_v.Values<hash_t>(count);
-		auto hashes_dense = FlatVector::GetDataMutable<idx_t>(state.hashes_dense_v);
+		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
 
 		for (idx_t i = 0; i < count; i++) {
 			const auto row_index = row_sel->get_index(i);
-			hashes_dense[i] = hashes_unified[row_index].GetValue();
+			hashes_dense.WriteValue(hashes_unified[row_index].GetValue());
 		}
 	} else {
 		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
@@ -446,7 +446,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
-	hash_values.ToUnifiedFormat(source_chunk.size(), append_state.chunk_state.vector_data.back().unified);
+	hash_values.ToUnifiedFormat(append_state.chunk_state.vector_data.back().unified);
 
 	// We already called TupleDataCollection::ToUnifiedFormat, so we can AppendUnified here
 	sink_collection->AppendUnified(append_state, source_chunk, *current_sel, added_count);
@@ -1364,7 +1364,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 			continue;
 		}
 		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+		join_keys.data[col_idx].ToUnifiedFormat(jdata);
 		if (jdata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
@@ -1441,7 +1441,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			break;
 		default: {
 			UnifiedVectorFormat kdata;
-			last_key.ToUnifiedFormat(keys.size(), kdata);
+			last_key.ToUnifiedFormat(kdata);
 			for (idx_t i = 0; i < probe_data.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
 				mask.Set(i, kdata.validity.RowIsValid(kidx));

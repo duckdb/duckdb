@@ -244,7 +244,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 		} else {
 			child_vector.Slice(sel_sorted, sel_sorted_idx);
-			child_vector.Flatten(sel_sorted_idx);
+			child_vector.Flatten();
 		}
 	}
 }

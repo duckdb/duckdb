@@ -151,11 +151,15 @@ public:
 	unique_ptr<BlockingSample> GetSample();
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
-	AttachedDatabase &GetAttached();
-	BlockManager &GetBlockManager() {
+	AttachedDatabase &GetAttached() const;
+	DatabaseInstance &GetDatabase() const;
+	BlockManager &GetBlockManager() const {
 		return block_manager;
 	}
 	MetadataManager &GetMetadataManager();
+	const DataTableInfo &GetTableInfo() const {
+		return *info;
+	}
 	DataTableInfo &GetTableInfo() {
 		return *info;
 	}

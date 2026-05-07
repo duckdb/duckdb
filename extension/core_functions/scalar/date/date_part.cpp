@@ -2072,7 +2072,7 @@ struct StructDatePart {
 			}
 		}
 
-		result.Verify(count);
+		result.Verify();
 	}
 
 	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

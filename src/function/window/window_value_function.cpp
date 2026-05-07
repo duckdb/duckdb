@@ -393,7 +393,7 @@ public:
 
 		buffered = idx_t(std::abs(offset));
 		prev.Reference(dflt, count_t(buffered));
-		prev.Flatten(buffered);
+		prev.Flatten();
 		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 	}
 
@@ -813,7 +813,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		auto &prev = sstate.vec;
 		if (validity.CannotHaveNull()) {
@@ -931,7 +931,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		if (validity.CannotHaveNull()) {
 			VectorOperations::Copy(arg, result, count, 0, 0);
@@ -1109,7 +1109,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	eval.ExecuteExpression(input, arg);
 
 	UnifiedVectorFormat unified;
-	arg.ToUnifiedFormat(count, unified);
+	arg.ToUnifiedFormat(unified);
 	const auto &validity = unified.validity;
 
 	//	Split the result between NULLs and the Nth Value

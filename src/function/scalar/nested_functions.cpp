@@ -6,7 +6,7 @@
 namespace duckdb {
 
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
-	input.Flatten(count);
+	input.Flatten();
 
 	auto &input_keys = MapVector::GetKeys(input);
 	auto &input_values = MapVector::GetValues(input);

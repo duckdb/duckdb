@@ -31,13 +31,13 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	// since map's physical type is a list, the ListCast can be utilized
 	ListCast::ListToListCast(source, varchar_map, count, parameters);
 
-	varchar_map.Flatten(count);
+	varchar_map.Flatten();
 	auto &validity = FlatVector::ValidityMutable(varchar_map);
 	auto &key_str = MapVector::GetKeys(varchar_map);
 	auto &val_str = MapVector::GetValues(varchar_map);
 
-	key_str.Flatten(ListVector::GetListSize(source));
-	val_str.Flatten(ListVector::GetListSize(source));
+	key_str.Flatten();
+	val_str.Flatten();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(varchar_map);
 	auto key_data = FlatVector::GetData<string_t>(key_str);
