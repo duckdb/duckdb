@@ -20,6 +20,7 @@ namespace duckdb {
 namespace {
 struct SortKeyBindData : public FunctionData {
 	vector<OrderModifiers> modifiers;
+	bool all_constant = false;
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<SortKeyBindData>();
@@ -71,6 +72,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 			function.SetReturnType(LogicalType::BIGINT);
 		}
 	}
+	result->all_constant = all_constant;
 	return std::move(result);
 }
 
@@ -674,17 +676,30 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 	ConstructSortKeyRecursive(vector_data, SortKeyChunk(0, vector_data.size), info);
 }
 
-void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
+void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers,
+                     const bool &all_constant) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
 		auto result_data = FlatVector::Writer<string_t>(result, size);
-		for (idx_t r = 0; r < size; r++) {
-			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
-			auto &empty_string = result_data.WriteEmptyString(blob_size);
-			data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
+		if (all_constant && key_lengths.constant_length <= string_t::INLINE_LENGTH) {
+			// Fast path
+			const auto length = key_lengths.constant_length;
+			for (idx_t r = 0; r < size; r++) {
+				auto &empty_string = result_data.WriteEmptyString(length);
+				data_pointers[r] = data_ptr_cast(empty_string.GetPrefixWriteable());
 #ifdef DEBUG
-			memset(data_pointers[r], 0xFF, blob_size);
+				memset(data_pointers[r], 0xFF, length);
 #endif
+			}
+		} else {
+			for (idx_t r = 0; r < size; r++) {
+				auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
+				auto &empty_string = result_data.WriteEmptyString(blob_size);
+				data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
+#ifdef DEBUG
+				memset(data_pointers[r], 0xFF, blob_size);
+#endif
+			}
 		}
 		break;
 	}
@@ -708,7 +723,7 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 		auto result_data = FlatVector::GetDataMutable<string_t>(result);
 		// call Finalize on the result
 		for (idx_t r = 0; r < size; r++) {
-			result_data[r].SetSizeAndFinalize(NumericCast<uint32_t>(offsets[r]),
+			result_data[r].SetSizeAndFinalize(UnsafeNumericCast<uint32_t>(offsets[r]),
 			                                  key_lengths.variable_lengths[r] + key_lengths.constant_length);
 		}
 		break;
@@ -726,7 +741,8 @@ void FinalizeSortData(Vector &result, idx_t size, const SortKeyLengthInfo &key_l
 }
 
 void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
-                           const vector<OrderModifiers> &modifiers, Vector &result, idx_t row_count) {
+                           const vector<OrderModifiers> &modifiers, const bool &all_constant, Vector &result,
+                           idx_t row_count) {
 	// two phases
 	// a) get the length of the final sorted key
 	// b) allocate the sorted key and construct
@@ -737,7 +753,7 @@ void CreateSortKeyInternal(vector<unique_ptr<SortKeyVectorData>> &sort_key_data,
 	}
 	// allocate the empty sort keys
 	auto data_pointers = unique_ptr<data_ptr_t[]>(new data_ptr_t[row_count]);
-	PrepareSortData(result, row_count, key_lengths, data_pointers.get());
+	PrepareSortData(result, row_count, key_lengths, data_pointers.get(), all_constant);
 
 	unsafe_vector<idx_t> offsets;
 	offsets.resize(row_count, 0);
@@ -758,7 +774,7 @@ void CreateSortKeyHelpers::CreateSortKey(Vector &input, idx_t input_count, Order
 	vector<unique_ptr<SortKeyVectorData>> sort_key_data;
 	sort_key_data.push_back(make_uniq<SortKeyVectorData>(input, input_count, order_modifier));
 
-	CreateSortKeyInternal(sort_key_data, modifiers, result, input_count);
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input_count);
 }
 
 void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result) {
@@ -767,7 +783,7 @@ void CreateSortKeyHelpers::CreateSortKey(DataChunk &input, const vector<OrderMod
 	for (idx_t r = 0; r < modifiers.size(); r++) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(input.data[r], input.size(), modifiers[r]));
 	}
-	CreateSortKeyInternal(sort_key_data, modifiers, result, input.size());
+	CreateSortKeyInternal(sort_key_data, modifiers, false, result, input.size());
 }
 
 void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &result, const OrderModifiers &modifiers,
@@ -793,7 +809,7 @@ static void CreateSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	for (idx_t c = 0; c < args.ColumnCount(); c += 2) {
 		sort_key_data.push_back(make_uniq<SortKeyVectorData>(args.data[c], args.size(), bind_data.modifiers[c / 2]));
 	}
-	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, result, args.size());
+	CreateSortKeyInternal(sort_key_data, bind_data.modifiers, bind_data.all_constant, result, args.size());
 }
 
 //===--------------------------------------------------------------------===//
