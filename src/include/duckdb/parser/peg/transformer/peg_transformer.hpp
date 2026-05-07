@@ -1216,7 +1216,6 @@ private:
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// use.gram
-	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, ParseResult &parse_result);
 
@@ -1227,6 +1226,8 @@ private:
 	static VacuumOptions TransformVacuumParensOptions(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformVacuumOption(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<string> TransformNameList(PEGTransformer &transformer, ParseResult &parse_result);
+
+#include "duckdb/parser/peg/transformer/peg_transformer_generated.hpp"
 
 private:
 	PEGParser parser;
