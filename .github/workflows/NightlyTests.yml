@@ -620,7 +620,10 @@ jobs:
 
      - name: Test
        shell: bash
-       run: python3 scripts/ci/run_tests.py --test-config=test/configs/hash_zero.json build/relassert/test/unittest
+       # HASH_ZERO=1 triggers hash collisions; some test statements can turn
+       # into quadratic runtime and thus very slow. Report tests >30s, but only
+       # fail when a test runtime exceeds 2 minutes.
+       run: make unittest_relassert T="--track-runtime 30 --batch-timeout 120 --test-config=test/configs/hash_zero.json"
 
 
   bwc_build:
