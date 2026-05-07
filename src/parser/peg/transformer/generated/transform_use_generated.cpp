@@ -17,4 +17,27 @@ QualifiedName PEGTransformerFactory::TransformUseTargetInternal(
 	return TransformUseTarget(transformer, choice_pr.GetResult());
 }
 
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto catalog_name = list_pr.Child<IdentifierParseResult>(0).identifier;
+	auto reserved_schema_name = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto &dot_identifier_opt = list_pr.Child<OptionalParseResult>(3);
+	vector<string> dot_identifier;
+	if (dot_identifier_opt.HasResult()) {
+		auto &dot_identifier_repeat = dot_identifier_opt.GetResult().Cast<RepeatParseResult>();
+		for (auto dot_identifier_item : dot_identifier_repeat.GetChildren()) {
+			dot_identifier.push_back(transformer.Transform<string>(dot_identifier_item));
+		}
+	}
+	return TransformUseTargetCatalogSchema(catalog_name, reserved_schema_name, dot_identifier);
+}
+
+string PEGTransformerFactory::TransformDotIdentifierInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
+	return TransformDotIdentifier(identifier);
+}
+
 } // namespace duckdb

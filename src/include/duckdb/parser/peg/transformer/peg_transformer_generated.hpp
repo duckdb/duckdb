@@ -3,3 +3,7 @@
 	static unique_ptr<SQLStatement> TransformUseStatement(QualifiedName use_target);
 	static QualifiedName TransformUseTargetInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static QualifiedName TransformUseTarget(PEGTransformer &transformer, ParseResult &choice_result);
+	static QualifiedName TransformUseTargetCatalogSchemaInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static QualifiedName TransformUseTargetCatalogSchema(string catalog_name, string reserved_schema_name, vector<string> dot_identifier);
+	static string TransformDotIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static string TransformDotIdentifier(string identifier);

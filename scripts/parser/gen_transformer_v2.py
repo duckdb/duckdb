@@ -251,8 +251,11 @@ def generate_internal_wrapper(rule_name, return_type, semantic_children, rule_to
     arg_names = []
     for idx, child_name in semantic_children:
         var = to_snake_case(child_name)
-        child_type = rule_to_type[child_name]
-        arg_lines.append(f"\tauto {var} = transformer.Transform<{child_type}>(list_pr, {idx});")
+        if child_name in IDENTIFIER_OVERRIDE_RULES:
+            arg_lines.append(f"\tauto {var} = list_pr.Child<IdentifierParseResult>({idx}).identifier;")
+        else:
+            child_type = rule_to_type[child_name]
+            arg_lines.append(f"\tauto {var} = transformer.Transform<{child_type}>(list_pr, {idx});")
         arg_names.append(var)
 
     body = []
@@ -342,6 +345,152 @@ def generate_choice_body_declaration(rule_name, return_type):
     )
 
 
+# ---------------------------------------------------------------------------
+# Sequence-element classification
+#
+# Mirrors the per-token-type dispatch inside MatcherFactory::CreateMatcher()
+# in matcher.cpp.  Each helper handles exactly one matcher/parse-result kind:
+#
+#   _classify_literal       <- LITERAL   -> KeywordMatcher   -> KeywordParseResult  (skip)
+#   _classify_reference     <- REFERENCE -> named rule OR identifier override
+#   _classify_star_repeat   <- OPERATOR* -> Optional(Repeat) -> OptionalParseResult(RepeatParseResult)
+#
+# classify_sequence_element() is the top-level dispatch (= the switch in CreateMatcher).
+# classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SeqElement:
+    """One classified position in a sequence rule."""
+    idx: int
+    skip: bool                          # True for LiteralNode - no semantic value
+    var_name: str = ""
+    cpp_type: str = ""
+    extraction_lines: List[str] = field(default_factory=list)
+
+
+def _classify_literal(idx):
+    """LITERAL token -> KeywordMatcher -> KeywordParseResult.  No semantic value."""
+    return SeqElement(idx=idx, skip=True)
+
+
+def _classify_reference(name, idx, rule_to_type):
+    """
+    REFERENCE token -> CreateMatcher(rule_name).
+    Two sub-cases matching the two branches in CreateMatcher:
+      - rule in IDENTIFIER_OVERRIDE_RULES -> AddRuleOverride IdentifierMatcher
+                                          -> Child<IdentifierParseResult>().identifier
+      - rule in rule_to_type  -> regular ListMatcher -> transformer.Transform<T>()
+    Override rules take priority because they bypass the transformer dispatch:
+    their parse results have an empty name and cannot be looked up in transform_functions.
+    """
+    if name in IDENTIFIER_OVERRIDE_RULES:
+        var_name = to_snake_case(name)
+        lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
+        return SeqElement(idx=idx, skip=False, var_name=var_name,
+                          cpp_type="string", extraction_lines=lines)
+    if name in rule_to_type:
+        cpp_type = rule_to_type[name]
+        var_name = to_snake_case(name)
+        lines = [f"\tauto {var_name} = transformer.Transform<{cpp_type}>(list_pr, {idx});"]
+        return SeqElement(idx=idx, skip=False, var_name=var_name,
+                          cpp_type=cpp_type, extraction_lines=lines)
+    return None
+
+
+def _classify_star_repeat(node, idx, rule_to_type):
+    """
+    OPERATOR '*' -> Optional(Repeat(child)) -> OptionalParseResult wrapping RepeatParseResult.
+    Only supported when the repeated element is a plain reference with a known type.
+    Produces vector<T>.
+    """
+    if not isinstance(node.child, ReferenceNode):
+        return None
+    ref_name = node.child.name
+    if ref_name not in rule_to_type:
+        return None
+    child_type = rule_to_type[ref_name]
+    var_name = to_snake_case(ref_name)
+    lines = [
+        f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
+        f"\tvector<{child_type}> {var_name};",
+        f"\tif ({var_name}_opt.HasResult()) {{",
+        f"\t\tauto &{var_name}_repeat = {var_name}_opt.GetResult().Cast<RepeatParseResult>();",
+        f"\t\tfor (auto {var_name}_item : {var_name}_repeat.GetChildren()) {{",
+        f"\t\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+        f"\t\t}}",
+        f"\t}}",
+    ]
+    return SeqElement(idx=idx, skip=False, var_name=var_name,
+                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+
+
+def classify_sequence_element(child, idx, rule_to_type):
+    """
+    Classify one element of a SequenceNode.
+    Mirrors the token-type switch in MatcherFactory::CreateMatcher().
+    Returns SeqElement or None if the element cannot be auto-generated.
+    """
+    if isinstance(child, LiteralNode):
+        return _classify_literal(idx)
+    if isinstance(child, ReferenceNode):
+        return _classify_reference(child.name, idx, rule_to_type)
+    if isinstance(child, RepeatNode) and child.min_count == 0:
+        return _classify_star_repeat(child, idx, rule_to_type)
+    return None
+
+
+def classify_sequence_elements(children, rule_to_type):
+    """
+    Classify all children of a SequenceNode.
+    Mirrors the token loop in MatcherFactory::CreateMatcher().
+    Returns list of SeqElement, or None if any element cannot be classified.
+    """
+    elements = []
+    for idx, child in enumerate(children):
+        elem = classify_sequence_element(child, idx, rule_to_type)
+        if elem is None:
+            return None
+        elements.append(elem)
+    return elements
+
+
+# ---------------------------------------------------------------------------
+# Extended sequence-rule code generation
+# ---------------------------------------------------------------------------
+
+def is_auto_sequence_ast(ast, rule_to_type):
+    """True if ast is a SequenceNode whose every element can be classified."""
+    return (isinstance(ast, SequenceNode)
+            and classify_sequence_elements(ast.children, rule_to_type) is not None)
+
+
+def generate_sequence_body_decl(rule_name, return_type, elements):
+    """Declaration for the hand-written body that receives extracted typed args."""
+    params = ", ".join(f"{e.cpp_type} {e.var_name}" for e in elements if not e.skip)
+    return f"\tstatic {return_type} Transform{rule_name}({params});\n"
+
+
+def generate_sequence_internal(rule_name, return_type, elements):
+    """
+    Internal wrapper that casts to ListParseResult, extracts each element,
+    then calls the hand-written body.  Mirrors what ListMatcher::MatchParseResult
+    does at runtime but in the code-generation direction.
+    """
+    semantic = [e for e in elements if not e.skip]
+    body = ["\tauto &list_pr = parse_result.Cast<ListParseResult>();"]
+    for elem in semantic:
+        body.extend(elem.extraction_lines)
+    arg_names = ", ".join(e.var_name for e in semantic)
+    body.append(f"\treturn Transform{rule_name}({arg_names});")
+    return (
+        f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
+        + "\n".join(body)
+        + "\n}\n"
+    )
+
+
 def collect_generated(rules, rule_to_type):
     """Classify all rules; return lists of generated content and skipped rules."""
     declarations = []
@@ -385,16 +534,22 @@ def collect_generated(rules, rule_to_type):
             registrations.append(generate_registration(rule_name))
 
             if not identifier_alts:
-                # All alternatives have registered transformers - fully auto-generate.
                 implementations.append(generate_choice_internal_full(rule_name, return_type))
             else:
-                # Some alternatives are identifier overrides - need a manual body.
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type))
                 skipped.append((
                     f"{rule_name} (choice body)",
                     f"manual body needed; identifier alternatives: {identifier_alts}",
                 ))
+            continue
+
+        if is_auto_sequence_ast(ast, rule_to_type):
+            elements = classify_sequence_elements(ast.children, rule_to_type)
+            declarations.append(generate_internal_declaration(rule_name, return_type))
+            declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
+            implementations.append(generate_sequence_internal(rule_name, return_type, elements))
+            registrations.append(generate_registration(rule_name))
             continue
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
@@ -442,7 +597,7 @@ def cmake_content(cpp_filenames):
     )
 
 
-def write_files(implementations, declarations, gram_stem):
+def write_files(implementations, declarations, registrations, gram_stem):
     generated_dir.mkdir(parents=True, exist_ok=True)
 
     cpp_path = generated_dir / f"transform_{gram_stem}_generated.cpp"
@@ -458,17 +613,20 @@ def write_files(implementations, declarations, gram_stem):
     cmake_path.write_text(cmake_content(existing_cpp))
     print(f"Wrote {cmake_path}")
 
-    print()
-    print("Remaining manual steps:")
-    print(f"  1. In {include_peg_dir / 'peg_transformer.hpp'}, inside PEGTransformerFactory class:")
-    print(f"       Add: #include \"duckdb/parser/peg/transformer/peg_transformer_generated.hpp\"")
-    print(f"       Remove superseded TransformUseStatement(PEGTransformer &, ParseResult &) declaration")
-    print(f"  2. Add 'add_subdirectory(generated)' in {transformer_dir / 'CMakeLists.txt'}")
-    print(f"  3. In peg_transformer_factory.cpp RegisterUse(), replace:")
-    print(f"       REGISTER_TRANSFORM(TransformUseStatement)")
-    print(f"     with:")
-    print(f"       Register(\"UseStatement\", &PEGTransformerFactory::TransformUseStatementInternal);")
-    print(f"  4. Remove TransformUseStatementInternal from transform_use.cpp")
+    reg_lines = "".join(f"           {r.strip()}\n" for r in registrations)
+    print(f"""
+Remaining manual steps:
+  1. In {include_peg_dir / 'peg_transformer.hpp'}:
+       - Add inside class PEGTransformerFactory:
+           #include "duckdb/parser/peg/transformer/peg_transformer_generated.hpp"
+       - Remove any declarations now covered by peg_transformer_generated.hpp
+  2. In {transformer_dir / 'CMakeLists.txt'}:
+       - Add: add_subdirectory(generated)
+  3. In peg_transformer_factory.cpp Register{gram_stem.capitalize()}():
+       - Replace REGISTER_TRANSFORM macros for generated rules with:
+{reg_lines}  4. In transform_{gram_stem}.cpp:
+       - Remove Internal wrappers now generated (keep only hand-written bodies)
+       - Update body function signatures to match the generated declarations""")
 
 
 def main():
@@ -492,7 +650,7 @@ def main():
     declarations, implementations, registrations, skipped = collect_generated(rules, rule_to_type)
 
     if args.write:
-        write_files(implementations, declarations, gram_stem="use")
+        write_files(implementations, declarations, registrations, gram_stem="use")
     else:
         print_output(declarations, implementations, registrations, skipped, gram_stem="use")
 
