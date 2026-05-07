@@ -379,17 +379,27 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// all children bound successfully
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
-	for (idx_t i = 0; i < function.children.size(); i++) {
-		// Copy over the alias from the original child expression so that named arguments work correctly.
-		auto alias = function.children[i]->GetAlias();
-		auto &child = BoundExpression::GetExpression(*function.children[i]);
-		child->SetAlias(std::move(alias));
+	vector<pair<string, unique_ptr<Expression>>> keyword_children;
 
-		children.push_back(std::move(child));
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		if (function.children[i]->HasAlias()) {
+			auto alias = function.children[i]->GetAlias();
+			auto &child = BoundExpression::GetExpression(*function.children[i]);
+			keyword_children.emplace_back(alias, std::move(child));
+		} else {
+			auto &child = BoundExpression::GetExpression(*function.children[i]);
+			if (!keyword_children.empty()) {
+				throw BinderException(child->GetQueryLocation(),
+				                      "Positional argument '%s' cannot follow named arguments in a function call.",
+				                      child->ToString());
+			}
+			children.push_back(std::move(child));
+		}
 	}
 
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	auto result = function_binder.BindScalarFunction(func, std::move(children), std::move(keyword_children), error,
+	                                                 function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

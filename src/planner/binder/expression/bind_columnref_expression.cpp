@@ -142,12 +142,15 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		return;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
-		auto &ref = expr->Cast<PositionalReferenceExpression>();
-		if (ref.GetAlias().empty()) {
-			string table_name, column_name;
-			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
-			if (error.empty()) {
-				ref.SetAlias(column_name);
+		// Don't qualify within a function, or we will turn the positional reference into a named parameter argument
+		if (!within_function_expression) {
+			auto &ref = expr->Cast<PositionalReferenceExpression>();
+			if (ref.GetAlias().empty()) {
+				string table_name, column_name;
+				auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
+				if (error.empty()) {
+					ref.SetAlias(column_name);
+				}
 			}
 		}
 		break;
