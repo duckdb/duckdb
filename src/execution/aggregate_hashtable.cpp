@@ -685,7 +685,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
 
 	if (enable_hll) {
-		hll.Update(group_hashes_v, group_hashes_v, groups.size());
+		hll.Update(group_hashes_v);
 	}
 
 	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);

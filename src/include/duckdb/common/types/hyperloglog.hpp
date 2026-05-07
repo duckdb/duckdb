@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -102,7 +103,19 @@ public:
 				}
 			}
 		}
-	};
+	}
+
+	void Update(const Vector &hash_vec) {
+		const auto hashes = FlatVector::GetData<const hash_t>(hash_vec);
+		if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			InsertElement(hashes[0]);
+		} else {
+			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+			for (idx_t i = 0; i < hash_vec.size(); ++i) {
+				InsertElement(hashes[i]);
+			}
+		}
+	}
 
 	//! Algorithm 4
 	void ExtractCounts(uint32_t *c) const {
@@ -145,9 +158,9 @@ public:
 	}
 
 public:
-	void Update(Vector &hashes) {
+	void Update(const Vector &hashes) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
-		hll.Update(hashes, hashes, hashes.size());
+		hll.Update(hashes);
 		count += hashes.size();
 	}
 
