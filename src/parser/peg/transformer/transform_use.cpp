@@ -27,8 +27,7 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(string catalog_name,
-                                                                     string reserved_schema_name,
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(string catalog_name, string reserved_schema_name,
                                                                      vector<string> dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");

@@ -14,6 +14,7 @@ from generate_transformer import load_grammar_types
 # Grammar AST - mirrors the Matcher class hierarchy in matcher.cpp
 # ---------------------------------------------------------------------------
 
+
 class GrammarNode:
     pass
 
@@ -21,12 +22,14 @@ class GrammarNode:
 @dataclass
 class LiteralNode(GrammarNode):
     """Keyword literal ('keyword'). Corresponds to KeywordMatcher."""
+
     text: str
 
 
 @dataclass
 class ReferenceNode(GrammarNode):
     """Reference to a named grammar rule. Resolved to another Matcher at build time."""
+
     name: str
 
 
@@ -36,6 +39,7 @@ class RegexNode(GrammarNode):
     In practice, rules that contain raw regex patterns are overridden in the
     matcher via AddRuleOverride() and therefore never exercise this path at
     runtime.  We keep the node so the AST parser stays complete."""
+
     pattern: str
 
 
@@ -43,6 +47,7 @@ class RegexNode(GrammarNode):
 class ParensNode(GrammarNode):
     """Parens(D) <- '(' D ')'. Anonymous ListMatcher; child[1] is D's result.
     Use ExtractResultFromParens() to reach inside."""
+
     inner: GrammarNode
 
 
@@ -50,12 +55,14 @@ class ParensNode(GrammarNode):
 class ListMacroNode(GrammarNode):
     """List(D) <- D (',' D)* ','?. Anonymous ListMatcher.
     Use ExtractParseResultsFromList() to get all D results."""
+
     inner: GrammarNode
 
 
 @dataclass
 class FunctionCallNode(GrammarNode):
     """Unknown macro call (not Parens or List). Not auto-generated."""
+
     func_name: str
     inner: GrammarNode
 
@@ -63,24 +70,28 @@ class FunctionCallNode(GrammarNode):
 @dataclass
 class SequenceNode(GrammarNode):
     """Ordered sequence of matchers. Corresponds to ListMatcher."""
+
     children: List[GrammarNode]
 
 
 @dataclass
 class ChoiceNode(GrammarNode):
     """Ordered choice A / B / C. Corresponds to ChoiceMatcher."""
+
     alternatives: List[GrammarNode]
 
 
 @dataclass
 class OptionalNode(GrammarNode):
     """Optional match A?. Corresponds to OptionalMatcher."""
+
     child: GrammarNode
 
 
 @dataclass
 class RepeatNode(GrammarNode):
     """Repeat match A+ (min=1) or A* (min=0). Corresponds to RepeatMatcher."""
+
     child: GrammarNode
     min_count: int
 
@@ -88,6 +99,7 @@ class RepeatNode(GrammarNode):
 @dataclass
 class NegationNode(GrammarNode):
     """Negative lookahead !A."""
+
     child: GrammarNode
 
 
@@ -202,13 +214,24 @@ def rule_to_ast(rule):
 # ---------------------------------------------------------------------------
 
 IDENTIFIER_OVERRIDE_RULES = {
-    'Identifier', 'ReservedIdentifier',
-    'CatalogName', 'SchemaName', 'ReservedSchemaName',
-    'TableName', 'ReservedTableName',
-    'ColumnName', 'ReservedColumnName',
-    'IndexName', 'SequenceName',
-    'FunctionName', 'ReservedFunctionName', 'TableFunctionName',
-    'TypeName', 'PragmaName', 'SettingName', 'CopyOptionName',
+    'Identifier',
+    'ReservedIdentifier',
+    'CatalogName',
+    'SchemaName',
+    'ReservedSchemaName',
+    'TableName',
+    'ReservedTableName',
+    'ColumnName',
+    'ReservedColumnName',
+    'IndexName',
+    'SequenceName',
+    'FunctionName',
+    'ReservedFunctionName',
+    'TableFunctionName',
+    'TypeName',
+    'PragmaName',
+    'SettingName',
+    'CopyOptionName',
 }
 
 # Rules overridden with non-identifier special matchers (kept separate so
@@ -254,14 +277,14 @@ def get_semantic_children(rule):
 
 
 def generate_internal_declaration(rule_name, return_type):
-    return (f"\tstatic {return_type} Transform{rule_name}Internal"
-            f"(PEGTransformer &transformer, ParseResult &parse_result);\n")
+    return (
+        f"\tstatic {return_type} Transform{rule_name}Internal"
+        f"(PEGTransformer &transformer, ParseResult &parse_result);\n"
+    )
 
 
 def generate_body_declaration(rule_name, return_type, semantic_children, rule_to_type):
-    params = ", ".join(
-        f"{rule_to_type[name]} {to_snake_case(name)}" for _, name in semantic_children
-    )
+    params = ", ".join(f"{rule_to_type[name]} {to_snake_case(name)}" for _, name in semantic_children)
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
 
 
@@ -286,9 +309,7 @@ def generate_internal_wrapper(rule_name, return_type, semantic_children, rule_to
 
     return (
         f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
-        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
-        + "\n".join(body)
-        + "\n}\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
     )
 
 
@@ -299,6 +320,7 @@ def generate_registration(rule_name):
 # ---------------------------------------------------------------------------
 # Choice-rule helpers
 # ---------------------------------------------------------------------------
+
 
 def is_pure_reference_choice(ast):
     """True if ast is a ChoiceNode whose every alternative is a ReferenceNode."""
@@ -360,8 +382,7 @@ def generate_choice_internal_with_body(rule_name, return_type):
 def generate_choice_body_declaration(rule_name, return_type):
     """Declaration for the manual body that handles identifier alternatives."""
     return (
-        f"\tstatic {return_type} Transform{rule_name}"
-        f"(PEGTransformer &transformer, ParseResult &choice_result);\n"
+        f"\tstatic {return_type} Transform{rule_name}" f"(PEGTransformer &transformer, ParseResult &choice_result);\n"
     )
 
 
@@ -379,11 +400,13 @@ def generate_choice_body_declaration(rule_name, return_type):
 # classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SeqElement:
     """One classified position in a sequence rule."""
+
     idx: int
-    skip: bool                          # True for LiteralNode - no semantic value
+    skip: bool  # True for LiteralNode - no semantic value
     var_name: str = ""
     cpp_type: str = ""
     extraction_lines: List[str] = field(default_factory=list)
@@ -405,16 +428,14 @@ def _classify_reference(name, idx, rule_to_type, excluded_rules):
     if name in IDENTIFIER_OVERRIDE_RULES:
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type="string", extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in excluded_rules:
         return _classify_literal(idx)
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = transformer.Transform<{cpp_type}>(list_pr, {idx});"]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -437,16 +458,14 @@ def _classify_optional_reference(name, idx, rule_to_type, excluded_rules):
             f"\t\t{var_name} = {var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;",
             f"\t}}",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type="string", extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         lines = [
             f"\t{cpp_type} {var_name} {{}};",
             f"\ttransformer.TransformOptional(list_pr, {idx}, {var_name});",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -465,16 +484,14 @@ def _classify_parens(inner_node, idx, rule_to_type):
             f"\tauto {var_name} = ExtractResultFromParens(list_pr.GetChild({idx}))"
             f".Cast<IdentifierParseResult>().identifier;",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type="string", extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         lines = [
             f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
             f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name,
-                          cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -499,8 +516,7 @@ def _classify_list_macro(inner_node, idx, rule_to_type):
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name,
-                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def _classify_parens_list(inner_list_node, idx, rule_to_type):
@@ -518,15 +534,13 @@ def _classify_parens_list(inner_list_node, idx, rule_to_type):
     child_type = rule_to_type[name]
     var_name = to_snake_case(name)
     lines = [
-        f"\tauto {var_name}_items = ExtractParseResultsFromList("
-        f"ExtractResultFromParens(list_pr.GetChild({idx})));",
+        f"\tauto {var_name}_items = ExtractParseResultsFromList(" f"ExtractResultFromParens(list_pr.GetChild({idx})));",
         f"\tvector<{child_type}> {var_name};",
         f"\tfor (auto &{var_name}_item : {var_name}_items) {{",
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name,
-                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def _classify_star_repeat(node, idx, rule_to_type):
@@ -552,8 +566,7 @@ def _classify_star_repeat(node, idx, rule_to_type):
         f"\t\t}}",
         f"\t}}",
     ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name,
-                      cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def classify_sequence_element(child, idx, rule_to_type, excluded_rules):
@@ -603,10 +616,13 @@ def classify_sequence_elements(children, rule_to_type, excluded_rules):
 # Extended sequence-rule code generation
 # ---------------------------------------------------------------------------
 
+
 def is_auto_sequence_ast(ast, rule_to_type, excluded_rules):
     """True if ast is a SequenceNode whose every element can be classified."""
-    return (isinstance(ast, SequenceNode)
-            and classify_sequence_elements(ast.children, rule_to_type, excluded_rules) is not None)
+    return (
+        isinstance(ast, SequenceNode)
+        and classify_sequence_elements(ast.children, rule_to_type, excluded_rules) is not None
+    )
 
 
 def generate_sequence_body_decl(rule_name, return_type, elements):
@@ -637,9 +653,7 @@ def generate_sequence_internal(rule_name, return_type, elements):
     body.append(f"\treturn Transform{rule_name}({arg_names});")
     return (
         f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
-        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
-        + "\n".join(body)
-        + "\n}\n"
+        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
     )
 
 
@@ -649,8 +663,8 @@ class GramFileResult:
     declarations: list
     implementations: list
     registrations: list
-    skipped: list       # (rule_name, reason) — nothing generated
-    manual_bodies: list # (rule_name, reason) — Internal generated, body is hand-written
+    skipped: list  # (rule_name, reason) — nothing generated
+    manual_bodies: list  # (rule_name, reason) — Internal generated, body is hand-written
 
 
 def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
@@ -701,10 +715,12 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
                 implementations.append(generate_choice_internal_with_body(rule_name, return_type))
-                manual_bodies.append((
-                    rule_name,
-                    f"choice body; identifier alternatives: {identifier_alts}",
-                ))
+                manual_bodies.append(
+                    (
+                        rule_name,
+                        f"choice body; identifier alternatives: {identifier_alts}",
+                    )
+                )
             continue
 
         if is_auto_sequence_ast(ast, rule_to_type, excluded_rules):
@@ -786,7 +802,8 @@ def write_shared_files(all_declarations):
 
 def print_manual_steps(registrations, gram_stem):
     reg_lines = "".join(f"           {r.strip()}\n" for r in registrations)
-    print(f"""
+    print(
+        f"""
 Remaining manual steps:
   1. In {include_peg_dir / 'peg_transformer.hpp'}:
        - Add inside class PEGTransformerFactory:
@@ -798,7 +815,8 @@ Remaining manual steps:
        - Replace REGISTER_TRANSFORM macros for generated rules with:
 {reg_lines}  4. In transform_{gram_stem}.cpp:
        - Remove Internal wrappers now generated (keep only hand-written bodies)
-       - Update body function signatures to match the generated declarations""")
+       - Update body function signatures to match the generated declarations"""
+    )
 
 
 def process_gram_file(gram_filename, rule_to_type, excluded_rules):
@@ -838,8 +856,9 @@ def main():
             print(f"\n{'=' * 60}")
             print(f"  {r.gram_stem}.gram")
             print(f"{'=' * 60}")
-            print_output(r.declarations, r.implementations, r.registrations,
-                         r.skipped, r.manual_bodies, gram_stem=r.gram_stem)
+            print_output(
+                r.declarations, r.implementations, r.registrations, r.skipped, r.manual_bodies, gram_stem=r.gram_stem
+            )
 
 
 if __name__ == "__main__":

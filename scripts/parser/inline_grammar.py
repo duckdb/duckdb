@@ -384,10 +384,15 @@ def load_all_rules():
 
 def main():
     arg_parser = argparse.ArgumentParser(description='Inline the auto-complete PEG grammar files')
-    arg_parser.add_argument('--print', action='store_true', default=False,
-                            help='Print the grammar instead of writing to a file')
-    arg_parser.add_argument('--grammar-file', action='store_true', default=False,
-                            help='Write the grammar to a .gram file instead of a C++ header')
+    arg_parser.add_argument(
+        '--print', action='store_true', default=False, help='Print the grammar instead of writing to a file'
+    )
+    arg_parser.add_argument(
+        '--grammar-file',
+        action='store_true',
+        default=False,
+        help='Write the grammar to a .gram file instead of a C++ header',
+    )
     args = arg_parser.parse_args()
 
     rules, contents, keyword_sets = load_all_rules()

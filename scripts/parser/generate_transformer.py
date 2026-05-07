@@ -30,7 +30,6 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 DIRECT_REGISTER_REGEX = re.compile(r'Register\s*\(\s*"(\w+)"\s*,')
 
 
-
 def load_grammar_types(types_file):
     """
     Loads grammar_types.yml and returns (rule_to_type, excluded_rules) where
