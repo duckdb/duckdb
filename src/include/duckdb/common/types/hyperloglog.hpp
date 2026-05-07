@@ -141,23 +141,32 @@ public:
 //! Utility for computing HLL in parallel
 class ParallelHyperLogLogLocalState {
 public:
-	ParallelHyperLogLogLocalState() {
+	ParallelHyperLogLogLocalState() : count(0) {
 	}
 
 public:
 	void Update(Vector &hashes) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		hll.Update(hashes, hashes, hashes.size());
+		count += hashes.size();
 	}
 
-	void Merge(HyperLogLog &other) const {
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		other.Merge(hll);
+	void Merge(ParallelHyperLogLogLocalState &other) const DUCKDB_REQUIRES(lock) DUCKDB_REQUIRES(other.lock) {
+		other.hll.Merge(hll);
+		other.count += count;
 	}
+
+	pair<idx_t, idx_t> GetCounts() const {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return {hll.Count(), count};
+	}
+
+public:
+	mutable annotated_mutex lock;
 
 private:
-	mutable annotated_mutex lock;
 	HyperLogLog hll DUCKDB_GUARDED_BY(lock);
+	idx_t count DUCKDB_GUARDED_BY(lock);
 };
 
 class ParallelHyperLogLogGlobalState {
@@ -174,13 +183,16 @@ public:
 		return result;
 	}
 
-	idx_t GetCount() const {
-		HyperLogLog hll;
-		annotated_lock_guard<annotated_mutex> guard(lock);
+	unique_ptr<ParallelHyperLogLogLocalState> GetMergedState() const {
+		auto merged_state = make_uniq<ParallelHyperLogLogLocalState>();
+		annotated_lock_guard<annotated_mutex> merged_guard(merged_state->lock);
+
+		annotated_lock_guard<annotated_mutex> global_guard(lock);
 		for (const auto &state : states) {
-			state->Merge(hll);
+			annotated_lock_guard<annotated_mutex> state_guard(state->lock);
+			merged_state->Merge(*state);
 		}
-		return hll.Count();
+		return merged_state;
 	}
 
 private:

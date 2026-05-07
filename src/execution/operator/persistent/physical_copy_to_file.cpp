@@ -358,6 +358,7 @@ public:
 	PartitionedCopyState(PartitionedCopy &partitioned_copy, unique_ptr<GlobalSinkState> global_sink_state);
 
 public:
+	bool ShouldInitiateFlush(const idx_t &local_append_count);
 	void CreateTaskList() DUCKDB_REQUIRES(lock);
 	bool HasCompleted() const;
 	optional<PartitionedCopyTask> TryAssignTask();
@@ -373,6 +374,9 @@ public:
 
 	//! To estimate number of partitions
 	ParallelHyperLogLogGlobalState hll;
+	//! Check if we should flush once a thread's append count exceeds this value
+	atomic<idx_t> next_flush_check;
+
 	//! Sink management
 	unique_ptr<GlobalSinkState> global_sink_state;
 	//! Sort management
@@ -800,8 +804,32 @@ void PartitionedCopyHashGroup::Flush(const PartitionedCopyTask &task) {
 
 PartitionedCopyState::PartitionedCopyState(PartitionedCopy &partitioned_copy_p,
                                            unique_ptr<GlobalSinkState> global_sink_state_p)
-    : partitioned_copy(partitioned_copy_p), global_sink_state(std::move(global_sink_state_p)), total_blocks(0),
-      next_group(0), locals(0), combined(0) {
+    : partitioned_copy(partitioned_copy_p),
+      next_flush_check(Settings::Get<PartitionedWriteFlushThresholdSetting>(partitioned_copy.context)),
+      global_sink_state(std::move(global_sink_state_p)), total_blocks(0), next_group(0), locals(0), combined(0) {
+}
+
+bool PartitionedCopyState::ShouldInitiateFlush(const idx_t &local_append_count) {
+	auto expected = next_flush_check.load(std::memory_order_relaxed);
+	if (local_append_count < expected) {
+		return false; // Not enough rows accumulated yet
+	}
+
+	// CAS so only one thread increments "next_flush_check"
+	const auto desired = expected + Settings::Get<PartitionedWriteFlushThresholdSetting>(partitioned_copy.context);
+	const auto exchanged = next_flush_check.compare_exchange_strong(expected, desired, std::memory_order_relaxed,
+	                                                                std::memory_order_relaxed);
+	if (!exchanged) {
+		return false; // Another thread beat us to it
+	}
+
+	// Get counts from the HLL states
+	const auto merged_state = hll.GetMergedState();
+	auto [unique_count, total_count] = merged_state->GetCounts();
+	unique_count = MaxValue<idx_t>(unique_count, 1);
+
+	// If we have enough rows per partition on average, we can start flushing
+	return total_count / unique_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(partitioned_copy.context);
 }
 
 void PartitionedCopyState::CreateTaskList() {
@@ -1027,8 +1055,7 @@ void PartitionedCopy::Sink(ExecutionContext &execution_context, DataChunk &chunk
 	sort_strategy->Sink(execution_context, chunk, sort_strategy_sink_input);
 	lstate.append_count += chunk.size();
 
-	if (lstate.append_count >= Settings::Get<PartitionedWriteFlushThresholdSetting>(context) &&
-	    !flushing.load(std::memory_order_relaxed)) {
+	if (!flushing.load(std::memory_order_relaxed) && lstate.current_state->ShouldInitiateFlush(lstate.append_count)) {
 		annotated_lock_guard<annotated_mutex> guard(lock);
 		InitializeFlush();
 	}
