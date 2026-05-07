@@ -908,7 +908,7 @@ void Linenoise::RefreshMultiLine() {
 	/* First step: clear all the lines used before. To do so start by
 	 * going to the last row. */
 	AppendBuffer append_buffer;
-	if (old_rows - old_cursor_rows > 0) {
+	if (old_rows > old_cursor_rows) {
 		Linenoise::Log("go down %d\n", old_rows - old_cursor_rows);
 		snprintf(seq, 64, "\x1b[%dB", old_rows - int(old_cursor_rows));
 		append_buffer.Append(seq);
