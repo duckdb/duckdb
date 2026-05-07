@@ -57,6 +57,16 @@ public:
 		return values[key];
 	}
 
+	mapped_type &GetOrInsert(const key_type &key, bool &inserted) {
+		D_ASSERT(key < capacity);
+		inserted = !occupied.RowIsValidUnsafe(key);
+		if (inserted) {
+			count++;
+			occupied.SetValidUnsafe(key);
+		}
+		return values[key];
+	}
+
 	const mapped_type &operator[](const key_type &key) const {
 		D_ASSERT(key < capacity);
 		return values[key];
