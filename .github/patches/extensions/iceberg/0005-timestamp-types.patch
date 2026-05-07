@@ -1,0 +1,31 @@
+diff --git a/src/include/metadata/iceberg_transform.hpp b/src/include/metadata/iceberg_transform.hpp
+index 14a4e660..531abb99 100644
+--- a/src/include/metadata/iceberg_transform.hpp
++++ b/src/include/metadata/iceberg_transform.hpp
+@@ -80,7 +80,7 @@ struct YearTransform {
+ 			return Value::INTEGER(components.year - 1970);
+ 		}
+ 		case LogicalTypeId::TIMESTAMP_TZ: {
+-			auto val = constant.GetValue<timestamp_tz_t>();
++			timestamp_t val(constant.GetValue<timestamp_tz_t>().value);
+ 			auto components = Timestamp::GetComponents(val);
+ 			return Value::INTEGER(components.year - 1970);
+ 		}
+@@ -122,7 +122,7 @@ struct MonthTransform {
+ 			return Value::INTEGER(diff.months);
+ 		}
+ 		case LogicalTypeId::TIMESTAMP_TZ: {
+-			auto val = constant.GetValue<timestamp_tz_t>();
++			timestamp_t val(constant.GetValue<timestamp_tz_t>().value);
+ 			auto diff = Interval::GetAge(val, timestamp_t::epoch());
+ 			return Value::INTEGER(diff.months);
+ 		}
+@@ -162,7 +162,7 @@ struct DayTransform {
+ 			return Value::INTEGER(diff.days);
+ 		}
+ 		case LogicalTypeId::TIMESTAMP_TZ: {
+-			auto val = constant.GetValue<timestamp_tz_t>();
++			timestamp_t val(constant.GetValue<timestamp_tz_t>().value);
+ 			auto diff = Interval::GetDifference(val, timestamp_t::epoch());
+ 			return Value::INTEGER(diff.days);
+ 		}
