@@ -82,7 +82,7 @@ void TemplatedLoopHash(Vector &input, Vector &result, const SelectionVector *rse
 		FlatVector::SetSize(result, count_t(count));
 
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 
 		if (idata.sel->IsSet()) {
 			TightLoopHash<HAS_RSEL, true, T, INPUT_IS_ALREADY_HASH>(UnifiedVectorFormat::GetData<T>(idata),
@@ -126,11 +126,11 @@ void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, 
 template <bool HAS_RSEL, bool FIRST_HASH>
 void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	// FIXME: if we want to be more efficient we shouldn't flatten, but the logic here currently requires it
-	hashes.Flatten(count);
+	hashes.Flatten();
 	auto hdata = FlatVector::GetDataMutable<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
+	input.ToUnifiedFormat(idata);
 	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(idata);
 
 	// Hash the children into a temporary
@@ -140,7 +140,7 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
 		VectorOperations::Hash(child, child_hashes, child_count);
-		child_hashes.Flatten(child_count);
+		child_hashes.Flatten();
 	}
 	auto chdata = FlatVector::GetDataMutable<hash_t>(child_hashes);
 
@@ -216,11 +216,11 @@ void ListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, id
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	hashes.Flatten(count);
+	hashes.Flatten();
 	auto hdata = FlatVector::GetDataMutable<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(count, idata);
+	input.ToUnifiedFormat(idata);
 
 	// Hash the children into a temporary
 	auto &child = ArrayVector::GetChildMutable(input);
@@ -235,7 +235,7 @@ void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, i
 
 		Vector child_hashes(LogicalType::HASH, child_count);
 		VectorOperations::Hash(child, child_hashes, child_count);
-		child_hashes.Flatten(child_count);
+		child_hashes.Flatten();
 		auto chdata = FlatVector::GetDataMutable<hash_t>(child_hashes);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -403,7 +403,7 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 		*hash_data = CombineHashScalar(*hash_data, other_hash);
 	} else {
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// mix constant with non-constant, first get the constant value
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);

@@ -1487,7 +1487,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		SetSelectionVector(sel, indices, offset_type, size);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
-	vector.Verify(size);
+	vector.Verify();
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,

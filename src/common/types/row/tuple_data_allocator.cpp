@@ -502,7 +502,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto &new_heap_sel = *new_heap_data.sel;
 
@@ -554,7 +554,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 

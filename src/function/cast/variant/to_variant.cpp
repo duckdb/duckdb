@@ -254,7 +254,7 @@ static bool CastToVARIANT(Vector &source, Vector &result, idx_t count, CastParam
 	}
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	result.Verify(count);
+	result.Verify();
 	return true;
 }
 

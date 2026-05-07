@@ -116,7 +116,10 @@ void VectorStringBuffer::VerifyInternal(const LogicalType &type, const Selection
 		switch (type.id()) {
 		case LogicalTypeId::BIT: {
 			auto buf = str.GetData();
-			D_ASSERT(idx_t(*buf) < 8);
+			if (idx_t(*buf) >= 8) {
+				throw InternalException("Internal bit type inconsistency - padding bits should be < 8 but got %d",
+				                        idx_t(*buf));
+			}
 			Bit::Verify(str);
 			break;
 		}
@@ -125,7 +128,7 @@ void VectorStringBuffer::VerifyInternal(const LogicalType &type, const Selection
 			break;
 		case LogicalTypeId::VARCHAR:
 			// verify that the string is correct unicode
-			str.Verify();
+			str.ForceVerify();
 			break;
 		default:
 			break;

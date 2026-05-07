@@ -81,7 +81,7 @@ idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
 	idx_t valid = 0;
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	if (vdata.validity.CannotHaveNull()) {
 		return count;
 	}

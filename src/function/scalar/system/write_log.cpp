@@ -129,7 +129,7 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &info = func_expr.bind_info->Cast<WriteLogBindData>();
 
 	UnifiedVectorFormat idata;
-	args.data[0].ToUnifiedFormat(args.size(), idata);
+	args.data[0].ToUnifiedFormat(idata);
 
 	auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 

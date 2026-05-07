@@ -28,7 +28,7 @@ public:
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
 		append_data.AppendValidity(format, from, to);

@@ -158,8 +158,8 @@ void FilterCombiner::GenerateFilters(const std::function<void(unique_ptr<Express
 				auto upper_constant =
 				    make_uniq<BoundConstantExpression>(constant_list[upper_index.GetIndex()].constant);
 				auto between =
-				    make_uniq<BoundBetweenExpression>(entries[i].get().Copy(), std::move(lower_constant),
-				                                      std::move(upper_constant), lower_inclusive, upper_inclusive);
+				    BoundBetweenExpression::Create(entries[i].get().Copy(), std::move(lower_constant),
+				                                   std::move(upper_constant), lower_inclusive, upper_inclusive);
 				callback(std::move(between));
 			} else if (lower_index.IsValid()) {
 				// only lower index found, create simple comparison expression
@@ -1046,27 +1046,32 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 		}
 	}
 	D_ASSERT(!expr.IsFoldable());
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
-		auto &comparison = expr.Cast<BoundBetweenExpression>();
+	if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		auto &between = expr.Cast<BoundFunctionExpression>();
 		//! check if one of the sides is a scalar value
-		bool lower_is_scalar = comparison.lower->IsFoldable();
-		bool upper_is_scalar = comparison.upper->IsFoldable();
+		auto &input = BoundBetweenExpression::Input(between);
+		auto &lower_bound = BoundBetweenExpression::LowerBound(between);
+		auto &upper_bound = BoundBetweenExpression::UpperBound(between);
+		auto lower_inclusive = BoundBetweenExpression::LowerInclusive(between);
+		auto upper_inclusive = BoundBetweenExpression::UpperInclusive(between);
+		bool lower_is_scalar = lower_bound.IsFoldable();
+		bool upper_is_scalar = upper_bound.IsFoldable();
 		if (lower_is_scalar || upper_is_scalar) {
 			//! comparison with scalar - break apart
-			auto &node = GetNode(*comparison.input);
+			auto &node = GetNode(*BoundBetweenExpression::InputMutable(between));
 			idx_t equivalence_set = GetEquivalenceSet(node);
 			auto result = FilterResult::UNSATISFIABLE;
 
 			if (lower_is_scalar) {
-				auto scalar = comparison.lower.get();
+				auto &scalar = lower_bound;
 				Value constant_value;
-				if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
+				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
 				}
 
 				// create the ExpressionValueInformation
 				ExpressionValueInformation info;
-				if (comparison.lower_inclusive) {
+				if (lower_inclusive) {
 					info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
 				} else {
 					info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
@@ -1080,10 +1085,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(info_list, info);
 			} else {
 				D_ASSERT(upper_is_scalar);
-				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                             : ExpressionType::COMPARE_LESSTHAN;
-				auto left = comparison.lower->Copy();
-				auto right = comparison.input->Copy();
+				const auto type =
+				    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+				auto left = upper_bound.Copy();
+				auto right = input.Copy();
 				auto lower_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*lower_comp);
 			}
@@ -1094,15 +1099,15 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 			}
 
 			if (upper_is_scalar) {
-				auto scalar = comparison.upper.get();
+				auto &scalar = upper_bound;
 				Value constant_value;
-				if (!ExpressionExecutor::TryEvaluateScalar(context, *scalar, constant_value)) {
+				if (!ExpressionExecutor::TryEvaluateScalar(context, scalar, constant_value)) {
 					return FilterResult::UNSUPPORTED;
 				}
 
 				// create the ExpressionValueInformation
 				ExpressionValueInformation info;
-				if (comparison.upper_inclusive) {
+				if (upper_inclusive) {
 					info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 				} else {
 					info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
@@ -1115,10 +1120,10 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
 				result = AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 			} else {
 				D_ASSERT(lower_is_scalar);
-				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
-				                                             : ExpressionType::COMPARE_LESSTHAN;
-				auto left = comparison.input->Copy();
-				auto right = comparison.upper->Copy();
+				const auto type =
+				    upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
+				auto left = input.Copy();
+				auto right = upper_bound.Copy();
 				auto upper_comp = make_uniq<BoundComparisonExpression>(type, std::move(left), std::move(right));
 				result = AddBoundComparisonFilter(*upper_comp);
 			}
@@ -1154,7 +1159,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		}
 		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
 		for (auto &stored_exp : stored_expressions) {
-			reference<Expression> expr = stored_exp.first;
+			const_reference<Expression> expr = stored_exp.first;
 			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 				expr = *(right_node.get().Cast<BoundCastExpression>().child);
 			}

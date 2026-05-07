@@ -10,6 +10,7 @@
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
@@ -17,6 +18,8 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -241,7 +244,7 @@ void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t
 
 void DataChunk::Flatten() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Flatten(size());
+		data[i].Flatten();
 	}
 }
 
@@ -256,7 +259,7 @@ vector<LogicalType> DataChunk::GetTypes() const {
 string DataChunk::ToString() const {
 	string retval = "Chunk - [" + to_string(ColumnCount()) + " Columns]\n";
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		retval += "- " + data[i].ToString(size()) + "\n";
+		retval += "- " + data[i].ToString() + "\n";
 	}
 	return retval;
 }
@@ -355,7 +358,7 @@ void DataChunk::Slice(idx_t offset, idx_t slice_count) {
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
 	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].ToUnifiedFormat(size(), unified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(unified_data[col_idx]);
 	}
 	return unified_data;
 }
@@ -378,65 +381,102 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	}
 }
 
-void DataChunk::Verify(optional_ptr<DatabaseInstance> database_instance) {
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		if (data[i].size() != size()) {
-			throw InternalException(
-			    "DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d", i,
-			    data[i].GetType().ToString(), data[i].size(), size());
-		}
-	}
-#ifdef DEBUG
-	// verify that all vectors in this chunk have the chunk selection vector
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Verify();
-	}
+void DataChunk::Verify(ClientContext &context) {
+	Verify(DatabaseInstance::GetDatabase(context));
+}
 
-	if (!ColumnCount()) {
-		// don't try to round-trip dummy data chunks with no data
-		// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
-		// payload so the payload will be such an empty data chunk
+void DataChunk::Verify(shared_ptr<DatabaseInstance> &db) {
+	if (db) {
+		Verify(*db);
+	} else {
+		Verify();
+	}
+}
+
+void DataChunk::Verify(optional_ptr<ClientContext> context) {
+	if (context) {
+		Verify(*context);
+	} else {
+		Verify();
+	}
+}
+
+void DataChunk::Verify(DatabaseInstance &database_instance) {
+	VerifyInternal(DebugVerificationMode::DEFAULT, database_instance);
+}
+
+void DataChunk::Verify() {
+	VerifyInternal(DebugVerificationMode::DEFAULT, nullptr);
+}
+
+void DataChunk::VerifyInternal(DebugVerificationMode mode, optional_ptr<DatabaseInstance> db) {
+	if (mode == DebugVerificationMode::DEFAULT) {
+		mode = DBConfigOptions::global_verification_mode;
+	}
+	if (mode == DebugVerificationMode::NONE) {
 		return;
 	}
-
-	// verify that we can round-trip chunk serialization
-	Allocator allocator;
-	MemoryStream mem_stream(allocator);
-
-	// this is the way we can ensure that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent with
-	// each other within the current and previous versions of the code.
-	// This is an internal round-trip sanity check performed in memory. It does not write to a
-	// persistent database file. Therefore, when a version is not indicated (latest),
-	// it should always use the full set of capabilities currently supported by the engine to ensure that all
-	// valid in-memory states can be verified.
-
-	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
-
-	if (database_instance) {
-		DBConfig &config = DBConfig::GetConfig(*database_instance);
-		if (config.options.serialization_compatibility.manually_set) {
-			options.serialization_compatibility = config.options.serialization_compatibility;
+	if (mode == DebugVerificationMode::VERIFY_VECTORS) {
+		// verify all vectors have the same size as the chunk
+		for (idx_t i = 0; i < ColumnCount(); i++) {
+			if (data[i].size() != size()) {
+				throw InternalException(
+				    "DataChunk::Verify - size mismatch: vector %d (%s) has size %d but chunk has size %d", i,
+				    data[i].GetType().ToString(), data[i].size(), size());
+			}
+		}
+		// verify internal consistency of the chunk
+		for (idx_t i = 0; i < ColumnCount(); i++) {
+			data[i].Verify();
 		}
 	}
+	if (mode == DebugVerificationMode::VERIFY_SERIALIZATION) {
+		if (!ColumnCount()) {
+			// don't try to round-trip dummy data chunks with no data
+			// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
+			// payload so the payload will be such an empty data chunk
+			return;
+		}
 
-	BinarySerializer serializer(mem_stream, options);
+		// verify that we can round-trip chunk serialization
+		Allocator allocator;
+		MemoryStream mem_stream(allocator);
 
-	serializer.Begin();
-	Serialize(serializer);
-	serializer.End();
+		// this is the way we can ensure that the `Serialize` and `Deserialize` methods of a `DataChunk` are consistent
+		// with each other within the current and previous versions of the code. This is an internal round-trip sanity
+		// check performed in memory. It does not write to a persistent database file. Therefore, when a version is not
+		// indicated (latest), it should always use the full set of capabilities currently supported by the engine to
+		// ensure that all valid in-memory states can be verified.
 
-	mem_stream.Rewind();
+		SerializationOptions options;
+		options.serialization_compatibility = SerializationCompatibility::Latest();
 
-	BinaryDeserializer deserializer(mem_stream);
-	DataChunk new_chunk;
+		if (db) {
+			DBConfig &config = DBConfig::GetConfig(*db);
+			if (config.options.serialization_compatibility.manually_set) {
+				options.serialization_compatibility = config.options.serialization_compatibility;
+			}
+		}
 
-	deserializer.Begin();
-	new_chunk.Deserialize(deserializer);
-	deserializer.End();
+		BinarySerializer serializer(mem_stream, options);
 
-	D_ASSERT(size() == new_chunk.size());
-#endif
+		serializer.Begin();
+		Serialize(serializer);
+		serializer.End();
+
+		mem_stream.Rewind();
+
+		BinaryDeserializer deserializer(mem_stream);
+		DataChunk new_chunk;
+
+		deserializer.Begin();
+		new_chunk.Deserialize(deserializer);
+		deserializer.End();
+
+		if (size() != new_chunk.size()) {
+			throw InternalException("Data Chunk Verification: Serialization size mismatch");
+		}
+	}
 }
 
 void DataChunk::Print() const {

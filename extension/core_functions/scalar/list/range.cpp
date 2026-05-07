@@ -116,16 +116,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
 			break;
 		case 2:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
 			break;
 		case 3:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
-			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
+			args.data[2].ToUnifiedFormat(vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");
@@ -194,15 +194,7 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	RangeInfoStruct<OP, INCLUSIVE_BOUND> info(args);
-	idx_t args_size = 1;
-	auto result_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			args_size = args.size();
-			result_type = VectorType::FLAT_VECTOR;
-			break;
-		}
-	}
+	auto args_size = args.size();
 	auto list_writer = FlatVector::Writer<VectorListType<typename OP::TYPE>>(result, args_size);
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
@@ -223,10 +215,6 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 			seen_value = true;
 		}
 	}
-
-	result.SetVectorType(result_type);
-
-	result.Verify(args.size());
 }
 
 } // namespace

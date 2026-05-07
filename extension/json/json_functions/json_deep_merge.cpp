@@ -57,7 +57,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjs
 static inline void DeepMergeReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_val *objs[], const idx_t count) {
 	UnifiedVectorFormat input_data;
 	auto &input_vector = input;
-	input_vector.ToUnifiedFormat(count, input_data);
+	input_vector.ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	for (idx_t i = 0; i < count; i++) {

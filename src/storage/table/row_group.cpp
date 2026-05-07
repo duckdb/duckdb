@@ -1082,7 +1082,7 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		D_ASSERT(col_data.type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
-			sliced_vector.Flatten(count);
+			sliced_vector.Flatten();
 			col_data.Update(transaction, table_entry, column.index, sliced_vector, ids + offset, count,
 			                row_group_start);
 		} else {
@@ -1104,7 +1104,7 @@ void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_e
 	idx_t depth = 1;
 	if (offset > 0) {
 		Vector sliced_vector(updates.data[0], offset, offset + count);
-		sliced_vector.Flatten(count);
+		sliced_vector.Flatten();
 		col_data.UpdateColumn(transaction, table_entry, column_path, sliced_vector, ids + offset, count, depth,
 		                      row_group_start);
 	} else {

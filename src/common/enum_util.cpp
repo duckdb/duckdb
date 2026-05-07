@@ -31,6 +31,7 @@
 #include "duckdb/common/enums/debug_initialize.hpp"
 #include "duckdb/common/enums/debug_statement_verification.hpp"
 #include "duckdb/common/enums/debug_vector_verification.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 #include "duckdb/common/enums/deprecated_using_key_syntax.hpp"
 #include "duckdb/common/enums/destroy_buffer_upon.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
@@ -1610,6 +1611,26 @@ DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char
 	return static_cast<DebugVectorVerification>(StringUtil::StringToEnum(GetDebugVectorVerificationValues(), 7, "DebugVectorVerification", value));
 }
 
+const StringUtil::EnumStringLiteral *GetDebugVerificationModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(DebugVerificationMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(DebugVerificationMode::NONE), "NONE" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_VECTORS), "VERIFY_VECTORS" },
+		{ static_cast<uint32_t>(DebugVerificationMode::VERIFY_SERIALIZATION), "VERIFY_SERIALIZATION" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value) {
+	return StringUtil::EnumToString(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", static_cast<uint32_t>(value));
+}
+
+template<>
+DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value) {
+	return static_cast<DebugVerificationMode>(StringUtil::StringToEnum(GetDebugVerificationModeValues(), 4, "DebugVerificationMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetDecimalBitWidthValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(DecimalBitWidth::DECIMAL_32), "DECIMAL_32" },
@@ -1958,7 +1979,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_REF), "BOUND_REF" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_SUBQUERY), "BOUND_SUBQUERY" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_WINDOW), "BOUND_WINDOW" },
-		{ static_cast<uint32_t>(ExpressionClass::BOUND_BETWEEN), "BOUND_BETWEEN" },
+		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_BETWEEN), "LEGACY_BOUND_BETWEEN" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_UNNEST), "BOUND_UNNEST" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA), "BOUND_LAMBDA" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_LAMBDA_REF), "BOUND_LAMBDA_REF" },

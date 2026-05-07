@@ -332,6 +332,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verification_mode",
+        "description": "DEBUG SETTING: toggle the verification mode.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
         "type": "BOOLEAN",
