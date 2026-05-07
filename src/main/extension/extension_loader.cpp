@@ -86,6 +86,9 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = extension_name;
+	if (function.schema == DEFAULT_SCHEMA) {
+		function.schema = extension_schema;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -107,6 +110,9 @@ void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = extension_name;
+	if (function.schema == DEFAULT_SCHEMA) {
+		function.schema = extension_schema;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -128,6 +134,9 @@ void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateWindowFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = extension_name;
+	if (function.schema == DEFAULT_SCHEMA) {
+		function.schema = extension_schema;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -156,7 +165,9 @@ void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 	D_ASSERT(!info.functions.name.empty());
 	info.extension_name = extension_name;
-	info.schema = extension_schema;
+	if (info.schema == DEFAULT_SCHEMA) {
+		info.schema = extension_schema;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -191,7 +202,9 @@ void ExtensionLoader::RegisterFunction(CopyFunction function) {
 
 void ExtensionLoader::RegisterFunction(CreateMacroInfo &info) {
 	info.extension_name = extension_name;
-	info.schema = extension_schema;
+	if (info.schema == DEFAULT_SCHEMA) {
+		info.schema = extension_schema;
+	}
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
@@ -201,7 +214,9 @@ void ExtensionLoader::RegisterCollation(CreateCollationInfo &info) {
 	info.extension_name = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	info.schema = extension_schema;
+	if (info.schema == DEFAULT_SCHEMA) {
+		info.schema = extension_schema;
+	}
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateCollation(data, info);
 
