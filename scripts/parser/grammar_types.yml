@@ -19,7 +19,10 @@
 #
 # Rules handled by RegisterEnum() are NOT listed here (they are auto-detected
 # by generate_transformer.py from peg_transformer_factory.cpp).
-# Rules in EXCLUDED_RULES in generate_transformer.py are also NOT listed here.
+#
+# excluded_rules: rules skipped during stub generation. When encountered as
+# children in auto-generated sequence rules they are treated as skip elements
+# (no semantic value extracted).
 
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
@@ -915,3 +918,75 @@ overrides:
   # update.gram
   UpdateSetElement: "pair<string, unique_ptr<ParsedExpression>>"
   UpdateSetColumnTarget: "string"
+# ---------------------------------------------------------------------------
+# excluded_rules: no transformer stub generated, no semantic value extracted
+# ---------------------------------------------------------------------------
+
+excluded_rules:
+  - Program
+  - FunctionType
+  - IfExists
+  - Database
+  - AbortOrRollback
+  - CommitOrEnd
+  - StartOrBegin
+  - Transaction
+  - VariableAssign
+  - MacroOrFunction
+  - SettingScope
+  - ColLabel
+  - GroupingOrGroupingId
+  - DefaultValues
+  - RowOrRows
+  - Recursive
+  - StarSymbol
+  - IfNotExists
+  - PlainIdentifier
+  - QuotedIdentifier
+  - CreateTableColumnElement
+  - OrReplace
+  - ReservedIdentifier
+  - CatalogName
+  - SchemaName
+  - ReservedSchemaName
+  - TableName
+  - ConstraintName
+  - IntervalNumber
+  - ReservedTableName
+  - ColumnName
+  - ReservedColumnName
+  - FunctionName
+  - ReservedFunctionName
+  - TableFunctionName
+  - TypeName
+  - PragmaName
+  - SettingName
+  - CopyOptionName
+  - AtTimeZoneOperator
+  - Generated
+  - ColumnConstraint
+  - AlwaysOrByDefault
+  - Lateral
+  - ConstraintNameClause
+  - ReservedSchemaQualification
+  - UsingSample
+  - TableSample
+  - TypeList
+  - NamedParameterAssignment
+  - WithOrdinality
+  - ByName
+  - CollateOperator
+  - ExportClause
+  - ValueOrValues
+  - PivotKeyword
+  - UnpivotKeyword
+  - Unique
+  - DefArg
+  - NoneLiteral
+  - RowOrStruct
+  - ForEachRow
+  - ForEachStatement
+  - SetData
+  - CTEBodyContent
+  - SingleArrowPair
+  - OperatorLiteral

@@ -29,82 +29,13 @@ REGISTER_TRANSFORM_REGEX = re.compile(r"REGISTER_TRANSFORM\s*\(\s*Transform(\w+)
 # Matches: Register("RuleName", &SomeFunction) — direct registration bypassing the macro
 DIRECT_REGISTER_REGEX = re.compile(r'Register\s*\(\s*"(\w+)"\s*,')
 
-EXCLUDED_RULES = {
-    "Program",
-    "FunctionType",
-    "IfExists",
-    "Database",
-    "AbortOrRollback",
-    "CommitOrEnd",
-    "StartOrBegin",
-    "Transaction",
-    "VariableAssign",
-    "MacroOrFunction",
-    "SettingScope",
-    "ColLabel",
-    "MacroOrFunction",
-    "GroupingOrGroupingId",
-    "DefaultValues",
-    "RowOrRows",
-    "Recursive",
-    "StarSymbol",
-    "IfNotExists",
-    "PlainIdentifier",
-    "QuotedIdentifier",
-    "CreateTableColumnElement",
-    "OrReplace",
-    "ReservedIdentifier",
-    "CatalogName",
-    "SchemaName",
-    "ReservedSchemaName",
-    "ReservedIdentifier",
-    "TableName",
-    "ConstraintName",
-    "IntervalNumber",
-    "ReservedTableName",
-    "ColumnName",
-    "ReservedColumnName",
-    "FunctionName",
-    "ReservedFunctionName",
-    "TableFunctionName",
-    "TypeName",
-    "PragmaName",
-    "SettingName",
-    "CopyOptionName",
-    "AtTimeZoneOperator",
-    "Generated",
-    "ColumnConstraint",
-    "AlwaysOrByDefault",
-    "Lateral",
-    "ConstraintNameClause",
-    "ReservedSchemaQualification",
-    "UsingSample",
-    "TableSample",
-    "TypeList",
-    "NamedParameterAssignment",
-    "WithOrdinality",
-    "ByName",
-    "CollateOperator",
-    "ExportClause",
-    "ValueOrValues",
-    "PivotKeyword",
-    "UnpivotKeyword",
-    "Unique",
-    "DefArg",
-    "NoneLiteral",
-    "RowOrStruct",
-    "ForEachRow",
-    "ForEachStatement",
-    "SetData",
-    "CTEBodyContent",
-    "SingleArrowPair",
-    "OperatorLiteral",
-}
 
 
 def load_grammar_types(types_file):
     """
-    Loads grammar_types.yml and returns a dict mapping rule name -> C++ return type.
+    Loads grammar_types.yml and returns (rule_to_type, excluded_rules) where
+    rule_to_type maps rule name -> C++ return type, and excluded_rules is the
+    set of rules that should be skipped during stub generation.
     """
     if yaml is None:
         print("Error: PyYAML is required. Install with: pip install pyyaml", file=sys.stderr)
@@ -125,23 +56,23 @@ def load_grammar_types(types_file):
     rule_to_source = {}  # tracks where each rule was first seen for error messages
     duplicates = []
 
-    def register(rule_name, cpp_type, source):
-        rule_name = str(rule_name)
-        if rule_name in rule_to_type:
-            duplicates.append(f"  '{rule_name}' in '{source}' (already listed in '{rule_to_source[rule_name]}')")
+    def register(name, cpp_type, source):
+        name = str(name)
+        if name in rule_to_type:
+            duplicates.append(f"  '{name}' in '{source}' (already listed in '{rule_to_source[name]}')")
         else:
-            rule_to_type[rule_name] = str(cpp_type)
-            rule_to_source[rule_name] = source
+            rule_to_type[name] = str(cpp_type)
+            rule_to_source[name] = source
 
     # Top-level overrides: flat RuleName -> "type" map
     overrides = data.get("overrides", {})
     if isinstance(overrides, dict):
-        for rule_name, cpp_type in overrides.items():
-            register(rule_name, cpp_type, "overrides")
+        for name, cpp_type in overrides.items():
+            register(name, cpp_type, "overrides")
 
     # Category entries: CategoryName -> {type: "...", rules: [...]}
     for key, value in data.items():
-        if key == "overrides":
+        if key in ("overrides", "excluded_rules"):
             continue
         if not isinstance(value, dict):
             continue
@@ -149,8 +80,8 @@ def load_grammar_types(types_file):
         rules = value.get("rules", [])
         if not cpp_type or not isinstance(rules, list):
             continue
-        for rule_name in rules:
-            register(rule_name, cpp_type, key)
+        for name in rules:
+            register(name, cpp_type, key)
 
     if duplicates:
         print(f"Error: {types_file} contains duplicate rule listings:", file=sys.stderr)
@@ -158,7 +89,8 @@ def load_grammar_types(types_file):
             print(msg, file=sys.stderr)
         sys.exit(1)
 
-    return rule_to_type
+    excluded_rules = set(data.get("excluded_rules", []))
+    return rule_to_type, excluded_rules
 
 
 def find_grammar_rules(grammar_path):
@@ -342,7 +274,7 @@ def main():
 
     args = parser.parse_args()
 
-    rule_to_type = load_grammar_types(GRAMMAR_TYPES_FILE)
+    rule_to_type, excluded_rules = load_grammar_types(GRAMMAR_TYPES_FILE)
     grammar_rules_by_file = find_grammar_rules(Path(GRAMMAR_DIR))
     transformer_impls = find_transformer_rules(Path(TRANSFORMER_DIR))
     enum_rules, registered_rules, directly_registered_rules = find_factory_registrations(Path(FACTORY_REG_FILE))
@@ -379,7 +311,7 @@ def main():
 
         for rule_name in sorted(grammar_rules):
             total_rules_scanned += 1
-            if rule_name in EXCLUDED_RULES:
+            if rule_name in excluded_rules:
                 print(f"{'[ EXCLUDED ]':<14} {rule_name}")
                 continue
 
@@ -428,7 +360,7 @@ def main():
 
     print("\n--- Summary: Rule Coverage ---")
     print(f"{'TOTAL RULES SCANNED':<25} : {total_rules_scanned}")
-    print(f"  {'  - Excluded':<23} : {len(EXCLUDED_RULES)}")
+    print(f"  {'  - Excluded':<23} : {len(excluded_rules)}")
     print("---------------------------------------")
     print(f"{'TOTAL ACTIONABLE RULES':<25} : {total_grammar_rules}")
     print(f"{'TOTAL COVERED':<25} : {total_covered} ({coverage:.2f}%)")
@@ -442,25 +374,25 @@ def main():
             print(f"{file_name:<25} : {count} issues")
 
     print("\n--- Orphan / Mismatch Check ---")
-    orphan_transformers = transformer_impls - all_grammar_rules_flat - EXCLUDED_RULES
+    orphan_transformers = transformer_impls - all_grammar_rules_flat - excluded_rules
     if orphan_transformers:
         print("\n[!] Orphan Transformer Functions (No matching grammar rule):")
         for rule in sorted(list(orphan_transformers)):
             print(f"  - Transform{rule}")
 
-    orphan_enums = enum_rules - all_grammar_rules_flat - EXCLUDED_RULES
+    orphan_enums = enum_rules - all_grammar_rules_flat - excluded_rules
     if orphan_enums:
         print("\n[!] Orphan Enum Rules (No matching grammar rule):")
         for rule in sorted(list(orphan_enums)):
             print(f'  - RegisterEnum("{rule}")')
 
-    orphan_registrations = registered_rules - all_grammar_rules_flat - EXCLUDED_RULES
+    orphan_registrations = registered_rules - all_grammar_rules_flat - excluded_rules
     if orphan_registrations:
         print("\n[!] Orphan Registrations (No matching grammar rule):")
         for rule in sorted(list(orphan_registrations)):
             print(f"  - REGISTER_TRANSFORM(Transform{rule})")
 
-    orphan_direct = directly_registered_rules - all_grammar_rules_flat - EXCLUDED_RULES
+    orphan_direct = directly_registered_rules - all_grammar_rules_flat - excluded_rules
     if orphan_direct:
         print("\n[!] Orphan Direct Registrations (No matching grammar rule):")
         for rule in sorted(list(orphan_direct)):
