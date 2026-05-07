@@ -1215,9 +1215,6 @@ private:
 	                                                                            ParseResult &parse_result);
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// use.gram
-	static QualifiedName TransformUseTargetCatalogSchema(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// vacuum.gram
 	static unique_ptr<SQLStatement> TransformVacuumStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static VacuumOptions TransformVacuumOptions(PEGTransformer &transformer, ParseResult &parse_result);
