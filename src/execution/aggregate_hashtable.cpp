@@ -506,6 +506,7 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
+	FlatVector::SetSize(state.addresses, payload.size());
 	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
 	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
