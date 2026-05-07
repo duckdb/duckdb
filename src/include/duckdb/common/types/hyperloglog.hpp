@@ -164,9 +164,9 @@ public:
 		count += hashes.size();
 	}
 
-	void Merge(ParallelHyperLogLogLocalState &other) const DUCKDB_REQUIRES(lock) DUCKDB_REQUIRES(other.lock) {
-		other.hll.Merge(hll);
-		other.count += count;
+	void Merge(const ParallelHyperLogLogLocalState &other) DUCKDB_REQUIRES(lock) DUCKDB_REQUIRES(other.lock) {
+		hll.Merge(other.hll);
+		count += other.count;
 	}
 
 	pair<idx_t, idx_t> GetCounts() const {
