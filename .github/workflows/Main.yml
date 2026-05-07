@@ -524,7 +524,7 @@ jobs:
       env:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test_utils;httpfs"
         DISABLE_SANITIZER: 1
         SMOKE_UNITTEST: build/release/test/unittest
       with:
