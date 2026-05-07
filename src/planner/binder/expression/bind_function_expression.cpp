@@ -380,7 +380,11 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
 	for (idx_t i = 0; i < function.children.size(); i++) {
+		// Copy over the alias from the original child expression so that named arguments work correctly.
+		auto alias = function.children[i]->GetAlias();
 		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		child->SetAlias(std::move(alias));
+
 		children.push_back(std::move(child));
 	}
 

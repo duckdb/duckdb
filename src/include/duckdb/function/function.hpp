@@ -183,9 +183,18 @@ public:
 	}
 
 	auto AddParameter(LogicalType type) -> void {
-		auto name = parameters.empty() ? string("col") : string("col") + to_string(parameters.size() + 1);
+		auto name = parameters.empty() ? string("col") : string("col") + to_string(parameters.size());
 
 		parameters.emplace_back(name, std::move(type));
+	}
+
+	auto GetParameterIndexByName(const string &name) const -> optional_idx {
+		for (idx_t i = 0; i < parameters.size(); i++) {
+			if (parameters[i].GetName() == name) {
+				return i;
+			}
+		}
+		return optional_idx();
 	}
 
 	void Verify() const {

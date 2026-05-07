@@ -22,20 +22,31 @@ FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), cont
 FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
 }
 
-optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
+optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments,
+                                              const vector<pair<string, LogicalType>> &named_arguments) {
 	auto &sig = func.GetSignature();
 
-	if (arguments.size() < sig.GetParameterCount()) {
-		// not enough arguments to fulfill the non-vararg part of the function
-		return optional_idx();
+	// Compute total number of arguments passed
+	idx_t total_arg_count = arguments.size() + named_arguments.size();
+
+	if (sig.GetParameterCount() != total_arg_count) {
+		if (!sig.HasVarArgs()) {
+			// invalid argument count: check the next function
+			return optional_idx();
+		}
 	}
+
 	idx_t cost = 0;
+	bool has_parameter = false;
+
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		LogicalType arg_type = i < sig.GetParameterCount() ? sig.GetParameter(i).GetType() : sig.GetVarArgs();
-		if (arguments[i] == arg_type) {
-			// arguments match: do nothing
+		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
+			has_parameter = true;
 			continue;
 		}
+
+		auto arg_type = i < sig.GetParameterCount() ? sig.GetParameter(i).GetType() : sig.GetVarArgs();
+
 		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], arg_type);
 		if (cast_cost >= 0) {
 			// we can implicitly cast, add the cost to the total cost
@@ -45,36 +56,51 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleFunction &func,
 			return optional_idx();
 		}
 	}
-	return cost;
-}
 
-optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments) {
-	auto &sig = func.GetSignature();
+	// Now check the named arguments
+	for (idx_t i = 0; i < named_arguments.size(); i++) {
+		auto &named_arg = named_arguments[i];
+		auto opt_param_idx = sig.GetParameterIndexByName(named_arg.first);
 
-	if (sig.HasVarArgs()) {
-		// special case varargs function
-		return BindVarArgsFunctionCost(func, arguments);
-	}
-	if (sig.GetParameterCount() != arguments.size()) {
-		// invalid argument count: check the next function
-		return optional_idx();
-	}
-	idx_t cost = 0;
-	bool has_parameter = false;
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
-			has_parameter = true;
-			continue;
-		}
-		int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, arguments[i], sig.GetParameter(i).GetType());
-		if (cast_cost >= 0) {
-			// we can implicitly cast, add the cost to the total cost
-			cost += idx_t(cast_cost);
+		if (!opt_param_idx.IsValid()) {
+			if (!sig.HasVarArgs()) {
+				// no parameter with this name: continue
+				return optional_idx();
+			}
+
+			// This is a named vararg argument, we can skip the parameter index check as varargs are always at the end
+			// of the argument list
+			auto &vararg_type = sig.GetVarArgs();
+			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, vararg_type);
+			if (cast_cost >= 0) {
+				// we can implicitly cast, add the cost to the total cost
+				cost += idx_t(cast_cost);
+			} else {
+				// we can't implicitly cast: throw an error
+				return optional_idx();
+			}
 		} else {
-			// we can't implicitly cast: throw an error
-			return optional_idx();
+			// This parameter index might technically be invalid, in that it may point to a parameter that has already
+			// been filled by a positional argument. However, we will catch that later when we actually bind the
+			// argument expressions to construct the bound function expression. At that point we will also have more
+			// context so we can give a better error message.
+			const auto param_idx = opt_param_idx.GetIndex();
+
+			if (param_idx < arguments.size()) {
+				// If already covered by a positional argument, skip the cost check here.
+				continue;
+			}
+
+			auto &param = sig.GetParameter(param_idx);
+			int64_t cast_cost = CastFunctionSet::ImplicitCastCost(context, named_arg.second, param.GetType());
+			if (cast_cost >= 0) {
+				cost += idx_t(cast_cost);
+			} else {
+				return optional_idx();
+			}
 		}
 	}
+
 	if (has_parameter) {
 		// all arguments are implicitly castable and there is a parameter - return 0 as cost
 		return 0;
@@ -108,7 +134,8 @@ optional_idx FunctionBinder::BindVarArgsFunctionCost(const SimpleNamedParameterF
 }
 
 optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction &func,
-                                              const vector<LogicalType> &arguments) {
+                                              const vector<LogicalType> &arguments,
+                                              const vector<pair<string, LogicalType>> &) {
 	if (func.HasVarArgs()) {
 		// special case varargs function
 		return BindVarArgsFunctionCost(func, arguments);
@@ -141,15 +168,17 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleNamedParameterFunction
 }
 
 template <class T>
-vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
-                                                         const vector<LogicalType> &arguments, ErrorData &error) {
+vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, const FunctionSet<T> &functions,
+                                                         const vector<LogicalType> &arguments,
+                                                         const vector<pair<string, LogicalType>> &named_arguments,
+                                                         ErrorData &error) {
 	optional_idx best_function;
 	idx_t lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<idx_t> candidate_functions;
 	for (idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
 		auto &func = functions.functions[f_idx];
 		// check the arguments of the function
-		auto bind_cost = BindFunctionCost(func, arguments);
+		auto bind_cost = BindFunctionCost(func, arguments, named_arguments);
 		if (!bind_cost.IsValid()) {
 			// auto casting was not possible
 			continue;
@@ -189,8 +218,8 @@ vector<idx_t> FunctionBinder::BindFunctionsFromArguments(const string &name, Fun
 
 template <class T>
 optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_name, const string &schema_name,
-                                                        const string &name, FunctionSet<T> &functions,
-                                                        vector<idx_t> &candidate_functions,
+                                                        const string &name, const FunctionSet<T> &functions,
+                                                        const vector<idx_t> &candidate_functions,
                                                         const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
@@ -210,9 +239,11 @@ optional_idx FunctionBinder::MultipleCandidateException(const string &catalog_na
 }
 
 template <class T>
-optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
-                                                       const vector<LogicalType> &arguments, ErrorData &error) {
-	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
+optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, const FunctionSet<T> &functions,
+                                                       const vector<LogicalType> &arguments,
+                                                       const vector<pair<string, LogicalType>> &named_arguments,
+                                                       ErrorData &error) {
+	auto candidate_functions = BindFunctionsFromArguments(name, functions, arguments, named_arguments, error);
 	if (candidate_functions.empty()) {
 		// No candidates, return an invalid index.
 		return optional_idx();
@@ -233,33 +264,33 @@ optional_idx FunctionBinder::BindFunctionFromArguments(const string &name, Funct
 	return candidate_functions[0];
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
+optional_idx FunctionBinder::BindFunction(const string &name, const ScalarFunctionSet &functions,
                                           const vector<LogicalType> &arguments, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, arguments, error);
+	return BindFunctionFromArguments(name, functions, arguments, {}, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
+optional_idx FunctionBinder::BindFunction(const string &name, const AggregateFunctionSet &functions,
                                           const vector<LogicalType> &arguments, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, arguments, error);
+	return BindFunctionFromArguments(name, functions, arguments, {}, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
+optional_idx FunctionBinder::BindFunction(const string &name, const WindowFunctionSet &functions,
                                           const vector<LogicalType> &arguments, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, arguments, error);
+	return BindFunctionFromArguments(name, functions, arguments, {}, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, WindowFunctionSet &functions,
+optional_idx FunctionBinder::BindFunction(const string &name, const TableFunctionSet &functions,
                                           const vector<LogicalType> &arguments, ErrorData &error) {
-	return BindFunctionFromArguments(name, functions, arguments, error);
+	return BindFunctionFromArguments(name, functions, arguments, {}, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-                                          ErrorData &error) {
+optional_idx FunctionBinder::BindFunction(const string &name, const PragmaFunctionSet &functions,
+                                          vector<Value> &parameters, ErrorData &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
 	}
-	auto entry = BindFunctionFromArguments(name, functions, types, error);
+	auto entry = BindFunctionFromArguments(name, functions, types, {}, error);
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
@@ -273,31 +304,51 @@ optional_idx FunctionBinder::BindFunction(const string &name, PragmaFunctionSet 
 	return entry;
 }
 
-vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments) {
-	vector<LogicalType> types;
-	types.reserve(arguments.size());
-	for (auto &argument : arguments) {
-		types.push_back(ExpressionBinder::GetExpressionReturnType(*argument));
+pair<vector<LogicalType>, vector<pair<string, LogicalType>>>
+FunctionBinder::GetArgumentsFromExpressions(const vector<unique_ptr<Expression>> &arguments) {
+	vector<LogicalType> positional_args;
+	vector<pair<string, LogicalType>> named_args;
+
+	for (auto &arg : arguments) {
+		auto type = ExpressionBinder::GetExpressionReturnType(*arg);
+		if (arg->HasAlias()) {
+			named_args.emplace_back(arg->GetAlias(), std::move(type));
+		} else {
+			if (!named_args.empty()) {
+				throw BinderException(arg->GetQueryLocation(),
+				                      "Positional arguments cannot follow named arguments in a function call");
+			}
+			positional_args.push_back(std::move(type));
+		}
 	}
-	return types;
+	return {std::move(positional_args), std::move(named_args)};
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-                                          vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
-	auto types = GetLogicalTypesFromExpressions(arguments);
-	return BindFunction(name, functions, types, error);
+optional_idx FunctionBinder::BindFunction(const string &name, const ScalarFunctionSet &functions,
+                                          const vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+	auto [args, kwargs] = GetArgumentsFromExpressions(arguments);
+	if (error.HasError()) {
+		return optional_idx();
+	}
+	return BindFunctionFromArguments(name, functions, args, kwargs, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-                                          vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
-	auto types = GetLogicalTypesFromExpressions(arguments);
-	return BindFunction(name, functions, types, error);
+optional_idx FunctionBinder::BindFunction(const string &name, const AggregateFunctionSet &functions,
+                                          const vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+	auto [args, kwargs] = GetArgumentsFromExpressions(arguments);
+	if (error.HasError()) {
+		return optional_idx();
+	}
+	return BindFunctionFromArguments(name, functions, args, kwargs, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-                                          vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
-	auto types = GetLogicalTypesFromExpressions(arguments);
-	return BindFunction(name, functions, types, error);
+optional_idx FunctionBinder::BindFunction(const string &name, const TableFunctionSet &functions,
+                                          const vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+	auto [args, kwargs] = GetArgumentsFromExpressions(arguments);
+	if (error.HasError()) {
+		return optional_idx();
+	}
+	return BindFunctionFromArguments(name, functions, args, kwargs, error);
 }
 
 enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
@@ -374,7 +425,14 @@ void FunctionBinder::CastToFunctionArguments(BoundSimpleFunction &function, vect
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
+			auto &child = children[i];
+
+			// Propagate the alias so that it is not lost during the cast.
+			auto alias = child->GetAlias();
+
+			child->ClearAlias();
+			child = BoundCastExpression::AddCastToType(context, std::move(child), target_type);
+			child->SetAlias(std::move(alias));
 		}
 	}
 }
@@ -388,7 +446,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
 }
 
-unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
@@ -702,8 +760,62 @@ void FunctionBinder::CheckTemplateTypesResolved(const BoundSimpleFunction &bound
 	VerifyTemplateType(bound_function.GetReturnType(), bound_function.GetName());
 }
 
+static void ReorderNamedArguments(const SimpleFunction &function, vector<unique_ptr<Expression>> &arguments) {
+	// Figure out where the named arguments start. Positional arguments must come before named arguments.
+	idx_t named_args_start = 0;
+	for (idx_t arg_idx = 0; arg_idx < arguments.size(); arg_idx++) {
+		if (arguments[arg_idx]->HasAlias()) {
+			break;
+		}
+		named_args_start++;
+	}
+
+	const auto &sig = function.GetSignature();
+
+	// For named arguments, we need to reorder them to match the function signature
+	for (idx_t arg_idx = named_args_start; arg_idx < arguments.size(); arg_idx++) {
+		const auto location = arguments[arg_idx]->GetQueryLocation();
+
+		if (!arguments[arg_idx]->HasAlias()) {
+			// Positional arguments cannot come after named arguments
+			throw BinderException(location, "Positional arguments cannot follow named arguments in a function call");
+		}
+
+		auto &alias = arguments[arg_idx]->GetAlias();
+		const auto opt_param_idx = sig.GetParameterIndexByName(alias);
+		if (!opt_param_idx.IsValid()) {
+			if (arg_idx >= function.GetSignature().GetParameterCount() && function.HasVarArgs()) {
+				// This is a named vararg argument, we can skip it as varargs are always at the end of the argument list
+				continue;
+			}
+
+			throw BinderException(location, "Function '%s' does not have a parameter named '%s'", function.GetName(),
+			                      alias);
+		}
+		const auto param_idx = opt_param_idx.GetIndex();
+
+		// If this named argument is already in the correct position we don't need to swap it.
+		if (param_idx == arg_idx) {
+			continue;
+		}
+
+		if (param_idx < named_args_start) {
+			throw BinderException(location,
+			                      "Named argument '%s' cannot be used for parameter '%s' because it is already "
+			                      "filled by a positional argument",
+			                      alias, sig.GetParameter(param_idx).GetName());
+		}
+
+		// Swap the named argument with the argument at the position of the parameter it is filling
+		std::swap(arguments[arg_idx], arguments[param_idx]);
+	}
+}
+
 pair<BoundScalarFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_ptr<Expression>> &children) {
+	// Reorder named args
+	ReorderNamedArguments(function, children);
+
 	// Make a BoundScalarFunction out of the ScalarFunction, so we can store bind info and other properties in it.
 	BoundScalarFunction bound_function(function);
 
@@ -717,8 +829,6 @@ FunctionBinder::ResolveFunction(const ScalarFunction &function, vector<unique_pt
 
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(bound_function, children);
-
-	// ResolveTemplateTypes(bound_function.arguments, bound_function.return_type, children, bound_function);
 
 	unique_ptr<FunctionData> bind_info;
 
@@ -770,6 +880,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunction &
 
 pair<BoundAggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const AggregateFunction &function, vector<unique_ptr<Expression>> &children) {
+	// Reorder named args
+	// ReorderNamedArguments(function, children);
+
 	// Make a BoundFunction out of the func
 	BoundAggregateFunction bound_function(function);
 
@@ -815,6 +928,9 @@ pair<BoundWindowFunction, unique_ptr<FunctionData>>
 FunctionBinder::ResolveFunction(const WindowFunction &function, vector<unique_ptr<Expression>> &children,
                                 optional_ptr<vector<OrderByNode>> orders,
                                 optional_ptr<vector<OrderByNode>> arg_orders) {
+	// Reorder named args
+	// ReorderNamedArguments(function, children);
+
 	BoundWindowFunction bound_function(function);
 
 	// Expand varargs if necessary
