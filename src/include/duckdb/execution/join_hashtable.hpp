@@ -175,12 +175,46 @@ public:
 		SelectionVector keys_no_match_sel;
 	};
 
+	//! Per-thread cache for dictionary-aware probing. Mirrors GroupedAggregateHashTable::AggregateDictionaryState
+	//! (aggregate_hashtable.hpp): same lifecycle (per-id rebind, found_entry mask), with the resolved-address
+	//! buffer reinterpreted as a head-of-chain pointer cache. The extra dictionary_validity array records
+	//! whether a slot hit at all (the aggregate side has no notion of "miss" since groups are always created).
+	struct ProbeDictionaryState {
+		ProbeDictionaryState();
+
+		//! The current dictionary id; empty until the first dict-eligible chunk binds the cache
+		string dictionary_id;
+		//! Scratch chunk holding the D-or-fewer distinct keys to probe (single column)
+		DataChunk unique_values;
+		//! Used by RowMatcher::Match (called from GetRowPointers) for the byte-equality re-check on the D keys
+		TupleDataChunkState unique_key_state;
+		//! D hashes for the D unique keys
+		Vector hashes;
+		//! Position-indexed scratch buffer that receives GetRowPointers' output for the D unique keys;
+		//! remapped into dictionary_pointers via unique_entries
+		Vector new_dictionary_pointers;
+		//! Dict slots encountered in this chunk in first-seen order
+		SelectionVector unique_entries;
+		//! Per-slot head-of-chain pointer cache (allocated lazily to capacity = dict_size)
+		unique_ptr<Vector> dictionary_pointers;
+		//! Per-slot hit/miss flag, parallel to dictionary_pointers
+		unsafe_unique_array<bool> dictionary_validity;
+		//! Per-slot "already attempted" flag; persists across chunks until dictionary_id changes
+		unsafe_unique_array<bool> found_entry;
+		//! Capacity of dictionary_pointers / dictionary_validity / found_entry
+		idx_t capacity = 0;
+		//! Receives the hit row indices from GetRowPointers
+		SelectionVector match_sel;
+	};
+
 	struct ProbeState : SharedState {
 		ProbeState();
 
 		Vector ht_offsets_and_salts_v;
 		Vector hashes_dense_v;
 		SelectionVector non_empty_sel;
+		//! Per-id cache for dictionary-aware probing; lazily populated on the first dict-eligible chunk
+		ProbeDictionaryState dict_state;
 	};
 
 	struct InsertState : SharedState {
@@ -221,6 +255,11 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
+	//! Dictionary-aware variant of Probe. Returns true if the chunk was handled (and scan_structure is
+	//! populated equivalently to Probe()); false if the LHS keys aren't dictionary-eligible — in which case
+	//! the caller must fall back to Probe(). Mirrors GroupedAggregateHashTable::TryAddDictionaryGroups.
+	bool TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+	                        ProbeState &probe_state);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;
 

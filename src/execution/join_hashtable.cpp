@@ -1,6 +1,7 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -26,6 +27,11 @@ JoinHashTable::SharedState::SharedState()
 JoinHashTable::ProbeState::ProbeState()
     : SharedState(), ht_offsets_and_salts_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
       non_empty_sel(STANDARD_VECTOR_SIZE) {
+}
+
+JoinHashTable::ProbeDictionaryState::ProbeDictionaryState()
+    : hashes(LogicalType::HASH), new_dictionary_pointers(LogicalType::POINTER), unique_entries(STANDARD_VECTOR_SIZE),
+      match_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
@@ -864,6 +870,132 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,
 		               scan_structure.sel_vector, scan_structure.has_null_value_filter);
 	}
+}
+
+bool JoinHashTable::TryProbeDictionary(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
+                                       ProbeState &probe_state) {
+	// Direct port of GroupedAggregateHashTable::TryAddDictionaryGroups (aggregate_hashtable.cpp).
+	// Single-key scope is enforced by the caller (see CanUseDictionaryProbe in physical_hash_join.cpp).
+	static constexpr idx_t MAX_DICTIONARY_SIZE_THRESHOLD = 20000;
+	static constexpr idx_t DICTIONARY_THRESHOLD = 2;
+
+	D_ASSERT(equality_types.size() == 1);
+	D_ASSERT(Count() > 0);
+	D_ASSERT(finalized);
+
+	// eligibility: storage-shaped dictionary only
+	auto &dict_col = keys.data[0];
+	if (dict_col.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		return false;
+	}
+	const auto opt_dict_size = DictionaryVector::DictionarySize(dict_col);
+	if (!opt_dict_size.IsValid()) {
+		return false;
+	}
+	const idx_t dict_size = opt_dict_size.GetIndex();
+	const auto &dictionary_id = DictionaryVector::DictionaryId(dict_col);
+	if (dictionary_id.empty()) {
+		// no id -> we cannot cache across vectors; only worth it if the dict is much smaller than the chunk
+		if (dict_size * DICTIONARY_THRESHOLD >= keys.size()) {
+			return false;
+		}
+	} else if (dict_size >= MAX_DICTIONARY_SIZE_THRESHOLD) {
+		return false;
+	}
+
+	auto &dictionary_vector = DictionaryVector::Child(dict_col);
+	auto &offsets = DictionaryVector::SelVector(dict_col);
+	auto &dict_state = probe_state.dict_state;
+
+	// bind / re-bind per-id cache
+	if (dict_state.dictionary_id.empty() || dict_state.dictionary_id != dictionary_id) {
+		if (dict_size > dict_state.capacity) {
+			dict_state.dictionary_pointers = make_uniq<Vector>(LogicalType::POINTER, dict_size);
+			dict_state.dictionary_validity = make_unsafe_uniq_array<bool>(dict_size);
+			dict_state.found_entry = make_unsafe_uniq_array<bool>(dict_size);
+			dict_state.capacity = dict_size;
+		}
+		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
+		// Validity is keyed by dict slot and persists across chunks, so it is only zeroed when the id rotates
+		memset(dict_state.dictionary_validity.get(), 0, dict_size * sizeof(bool));
+		dict_state.dictionary_id = dictionary_id;
+	} else if (dict_size > dict_state.capacity) {
+		throw InternalException("JoinHashTable - using cached dictionary data but dictionary has changed (dictionary "
+		                        "id %s - dict size %d, current capacity %d)",
+		                        dict_state.dictionary_id, dict_size, dict_state.capacity);
+	}
+
+	// walk N rows once to find dict slots that have not been resolved yet for this id
+	auto &found_entry = dict_state.found_entry;
+	auto &unique_entries = dict_state.unique_entries;
+	idx_t unique_count = 0;
+	for (idx_t i = 0; i < keys.size(); i++) {
+		const auto dict_idx = offsets.get_index(i);
+		unique_entries.set_index(unique_count, dict_idx);
+		unique_count += !found_entry[dict_idx];
+		found_entry[dict_idx] = true;
+	}
+
+	if (unique_count > 0) {
+		// slice + hash + probe on the D unique slots
+		auto &unique_values = dict_state.unique_values;
+		if (unique_values.ColumnCount() == 0) {
+			unique_values.InitializeEmpty(vector<LogicalType> {equality_types[0]});
+			TupleDataCollection::InitializeChunkState(dict_state.unique_key_state, {equality_types[0]});
+		}
+		unique_values.data[0].Slice(dictionary_vector, unique_entries, unique_count);
+		unique_values.SetCardinality(unique_count);
+
+		// lay out the keys for the byte-equality re-check inside RowMatcher::Match (called by GetRowPointers)
+		TupleDataCollection::ToUnifiedFormat(dict_state.unique_key_state, unique_values);
+
+		auto &hashes = dict_state.hashes;
+		VectorOperations::Hash(unique_values.data[0], hashes, unique_count);
+
+		idx_t count = unique_count;
+		GetRowPointers(unique_values, dict_state.unique_key_state, probe_state, hashes, nullptr, count,
+		               dict_state.new_dictionary_pointers, dict_state.match_sel, false);
+
+		// remap position-indexed hits onto the per-slot cache via unique_entries; misses keep their
+		// previous validity bit (false at re-bind, possibly true if cached from a prior chunk under
+		// the same id — though that should never happen because unique_entries only holds new slots).
+		const auto src_ptrs = FlatVector::GetData<data_ptr_t>(dict_state.new_dictionary_pointers);
+		auto dst_ptrs = FlatVector::GetDataMutable<data_ptr_t>(*dict_state.dictionary_pointers);
+		for (idx_t i = 0; i < count; i++) {
+			const auto position = dict_state.match_sel.get_index(i);
+			const auto dict_idx = unique_entries.get_index(position);
+			dst_ptrs[dict_idx] = src_ptrs[position];
+			dict_state.dictionary_validity[dict_idx] = true;
+		}
+	}
+	// when unique_count == 0 the cache is fully warm and dictionary_validity / dictionary_pointers are still valid
+
+	// fan out: produce the same scan_structure shape that InitializeScanStructure + GetRowPointers produce in Probe()
+	scan_structure.is_null = false;
+	scan_structure.finished = false;
+	if (join_type != JoinType::INNER) {
+		memset(scan_structure.found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	}
+	TupleDataCollection::ToUnifiedFormat(key_state, keys);
+	const SelectionVector *current_sel;
+	const idx_t prepared_count =
+	    PrepareKeys(keys, key_state.vector_data, current_sel, scan_structure.sel_vector, false);
+	scan_structure.has_null_value_filter = prepared_count < keys.size();
+
+	auto dst_ptrs = FlatVector::GetDataMutable<data_ptr_t>(scan_structure.pointers);
+	const auto src_ptrs = FlatVector::GetData<data_ptr_t>(*dict_state.dictionary_pointers);
+	const auto validity = dict_state.dictionary_validity.get();
+	idx_t kept = 0;
+	for (idx_t i = 0; i < prepared_count; i++) {
+		const auto row_index = current_sel->get_index(i);
+		const auto dict_idx = offsets.get_index(row_index);
+		if (validity[dict_idx]) {
+			dst_ptrs[row_index] = src_ptrs[dict_idx];
+			scan_structure.sel_vector.set_index(kept++, row_index);
+		}
+	}
+	scan_structure.count = kept;
+	return true;
 }
 
 ScanStructure::ScanStructure(JoinHashTable &ht_p, TupleDataChunkState &key_state_p)
