@@ -1192,10 +1192,7 @@ private:
 	static string TransformIdentifierOrKeyword(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// transaction.gram
-	static unique_ptr<SQLStatement> TransformBeginTransaction(PEGTransformer &transformer, ParseResult &parse_result);
 	static TransactionModifierType TransformReadOnlyOrReadWrite(PEGTransformer &transformer, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformCommitTransaction(PEGTransformer &, ParseResult &parse_result);
-	static unique_ptr<SQLStatement> TransformRollbackTransaction(PEGTransformer &, ParseResult &parse_result);
 
 	// update.gram
 	static unique_ptr<SQLStatement> TransformUpdateStatement(PEGTransformer &transformer, ParseResult &parse_result);

@@ -8,5 +8,11 @@
 	static string TransformDotIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformDotIdentifier(string identifier);
 	static unique_ptr<SQLStatement> TransformTransactionStatementInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformBeginTransactionInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformBeginTransaction(TransactionModifierType read_or_write);
+	static unique_ptr<SQLStatement> TransformRollbackTransactionInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformRollbackTransaction();
+	static unique_ptr<SQLStatement> TransformCommitTransactionInternal(PEGTransformer &transformer, ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCommitTransaction();
 	static TransactionModifierType TransformReadOrWriteInternal(PEGTransformer &transformer, ParseResult &parse_result);
 	static TransactionModifierType TransformReadOrWrite(TransactionModifierType read_only_or_read_write);

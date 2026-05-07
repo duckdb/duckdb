@@ -908,10 +908,10 @@ void PEGTransformerFactory::RegisterTransaction() {
 	// transaction.gram
 	Register("TransactionStatement", &PEGTransformerFactory::TransformTransactionStatementInternal);
 	Register("ReadOrWrite", &PEGTransformerFactory::TransformReadOrWriteInternal);
-	REGISTER_TRANSFORM(TransformBeginTransaction);
+	Register("BeginTransaction", &PEGTransformerFactory::TransformBeginTransactionInternal);
+	Register("CommitTransaction", &PEGTransformerFactory::TransformCommitTransactionInternal);
+	Register("RollbackTransaction", &PEGTransformerFactory::TransformRollbackTransactionInternal);
 	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
-	REGISTER_TRANSFORM(TransformCommitTransaction);
-	REGISTER_TRANSFORM(TransformRollbackTransaction);
 }
 
 void PEGTransformerFactory::RegisterUpdate() {
