@@ -10,6 +10,7 @@ namespace {
 template <class T>
 
 void CopyToStorageLoop(Vector &source, idx_t count, data_ptr_t target) {
+	D_ASSERT(source.size() == count);
 	auto result_data = (T *)target;
 	for (auto entry : source.Values<T>()) {
 		if (!entry.IsValid()) {

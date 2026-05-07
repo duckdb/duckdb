@@ -509,7 +509,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			}
 		} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
 			serializer.WriteProperty(90, "vector_type", VectorType::CONSTANT_VECTOR);
-			return Vector::Serialize(serializer, 1, false); // just serialize one value
+			// Resize to 1 so that size() == count == 1 during the recursive call, then restore
+			FlatVector::SetSize(*this, 1);
+			Vector::Serialize(serializer, 1, false); // just serialize one value
+			FlatVector::SetSize(*this, count);
+			return;
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 			serializer.WriteProperty(90, "vector_type", VectorType::SEQUENCE_VECTOR);
 			auto &sequence = buffer->Cast<SequenceBuffer>();
