@@ -1656,7 +1656,7 @@ class HashJoinLocalSourceState;
 
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context);
+	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context);
 
 	//! Initialize this source state using the info in the sink
 	void Initialize(HashJoinGlobalSinkState &sink);
@@ -1688,24 +1688,6 @@ public:
 		return true;
 	}
 
-	void Reset(ClientContext &context) override {
-		global_stage = HashJoinSourceStage::INIT;
-		build_chunk_idx = DConstants::INVALID_INDEX;
-		build_chunk_count = 0;
-		build_chunk_done = 0;
-		build_chunks_per_thread = DConstants::INVALID_INDEX;
-		probe_chunk_count = 0;
-		probe_chunk_done = 0;
-		probe_count = op.children[0].get().estimated_cardinality;
-		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
-		full_outer_chunk_idx = DConstants::INVALID_INDEX;
-		full_outer_chunk_count = 0;
-		full_outer_chunk_done = 0;
-		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
-		blocked_tasks.clear();
-		GlobalSourceState::Reset(context);
-	}
-
 public:
 	const PhysicalHashJoin &op;
 
@@ -1733,11 +1715,36 @@ public:
 	idx_t full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 
 	vector<InterruptState> blocked_tasks;
+
+private:
+	void ResetState(ClientContext &context) {
+		global_stage = HashJoinSourceStage::INIT;
+		build_chunk_idx = DConstants::INVALID_INDEX;
+		build_chunk_count = 0;
+		build_chunk_done = 0;
+		build_chunks_per_thread = DConstants::INVALID_INDEX;
+		probe_chunk_count = 0;
+		probe_chunk_done = 0;
+		probe_count = op.children[0].get().estimated_cardinality;
+		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
+		full_outer_chunk_idx = DConstants::INVALID_INDEX;
+		full_outer_chunk_count = 0;
+		full_outer_chunk_done = 0;
+		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
+		blocked_tasks.clear();
+		GlobalSourceState::Reset(context);
+	}
+
+public:
+	void Reset(ClientContext &context) override {
+		ResetState(context);
+	}
 };
 
 class HashJoinLocalSourceState : public LocalSourceState {
 public:
-	HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink, Allocator &allocator);
+	HashJoinLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate, const PhysicalHashJoin &op,
+	                         const HashJoinGlobalSinkState &sink, Allocator &allocator);
 
 	//! Do the work this thread has been assigned
 	void ExecuteTask(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, DataChunk &chunk);
@@ -1778,11 +1785,8 @@ public:
 	idx_t full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 	unique_ptr<JoinHTScanState> full_outer_scan_state;
 
-	bool SupportsReuse() const override {
-		return true;
-	}
-
-	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
+private:
+	void ResetState() {
 		local_stage = HashJoinSourceStage::INIT;
 		build_chunk_idx_from = DConstants::INVALID_INDEX;
 		build_chunk_idx_to = DConstants::INVALID_INDEX;
@@ -1800,6 +1804,15 @@ public:
 		full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 		full_outer_scan_state.reset();
 	}
+
+public:
+	bool SupportsReuse() const override {
+		return true;
+	}
+
+	void Reset(ExecutionContext &context, GlobalSourceState &gstate_p) override {
+		ResetState();
+	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -1808,15 +1821,12 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_uniq<HashJoinLocalSourceState>(*this, sink_state->Cast<HashJoinGlobalSinkState>(),
+	return make_uniq<HashJoinLocalSourceState>(context, gstate, *this, sink_state->Cast<HashJoinGlobalSinkState>(),
 	                                           BufferAllocator::Get(context.client));
 }
 
-HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
-    : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
-      probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
-      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120), full_outer_chunk_count(0),
-      full_outer_chunk_done(0) {
+HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context) : op(op) {
+	ResetState(context);
 }
 
 void HashJoinGlobalSourceState::Initialize(HashJoinGlobalSinkState &sink) {
@@ -1979,13 +1989,12 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 	return false;
 }
 
-HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
+HashJoinLocalSourceState::HashJoinLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate,
+                                                   const PhysicalHashJoin &op, const HashJoinGlobalSinkState &sink,
                                                    Allocator &allocator)
-    : op(op), local_stage(HashJoinSourceStage::INIT), addresses(LogicalType::POINTER),
-      lhs_join_key_executor(sink.context), scan_structure(*sink.hash_table, join_key_state) {
+    : op(op), addresses(LogicalType::POINTER), lhs_join_key_executor(sink.context),
+      scan_structure(*sink.hash_table, join_key_state) {
 	auto &chunk_state = probe_local_scan.current_chunk_state;
-	chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-
 	lhs_probe_chunk.Initialize(allocator, sink.probe_types);
 	lhs_join_keys.Initialize(allocator, op.condition_types);
 
@@ -1997,6 +2006,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, c
 	for (auto &cond : op.conditions) {
 		lhs_join_key_executor.AddExpression(cond.GetLHS());
 	}
+	ResetState();
 }
 
 void HashJoinLocalSourceState::ExecuteTask(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
