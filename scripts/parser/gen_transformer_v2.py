@@ -596,8 +596,18 @@ def generate_sequence_internal(rule_name, return_type, elements):
     )
 
 
-def collect_generated(rules, rule_to_type):
-    """Classify all rules; return lists of generated content, skipped rules, and manual bodies."""
+@dataclass
+class GramFileResult:
+    gram_stem: str
+    declarations: list
+    implementations: list
+    registrations: list
+    skipped: list       # (rule_name, reason) — nothing generated
+    manual_bodies: list # (rule_name, reason) — Internal generated, body is hand-written
+
+
+def collect_generated(gram_stem, rules, rule_to_type):
+    """Classify all rules; return a GramFileResult."""
     declarations = []
     implementations = []
     registrations = []
@@ -660,7 +670,7 @@ def collect_generated(rules, rule_to_type):
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
-    return declarations, implementations, registrations, skipped, manual_bodies
+    return GramFileResult(gram_stem, declarations, implementations, registrations, skipped, manual_bodies)
 
 
 def print_output(declarations, implementations, registrations, skipped, manual_bodies, gram_stem):
@@ -709,15 +719,16 @@ def cmake_content(cpp_filenames):
     )
 
 
-def write_files(implementations, declarations, registrations, gram_stem):
+def write_cpp_file(implementations, gram_stem):
     generated_dir.mkdir(parents=True, exist_ok=True)
-
     cpp_path = generated_dir / f"transform_{gram_stem}_generated.cpp"
     cpp_path.write_text(cpp_file_content(implementations))
     print(f"Wrote {cpp_path}")
 
+
+def write_shared_files(all_declarations):
     hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
-    hpp_path.write_text(GENERATED_HEADER + "".join(declarations))
+    hpp_path.write_text(GENERATED_HEADER + "".join(all_declarations))
     print(f"Wrote {hpp_path}")
 
     existing_cpp = sorted(p.name for p in generated_dir.glob("*_generated.cpp"))
@@ -725,6 +736,8 @@ def write_files(implementations, declarations, registrations, gram_stem):
     cmake_path.write_text(cmake_content(existing_cpp))
     print(f"Wrote {cmake_path}")
 
+
+def print_manual_steps(registrations, gram_stem):
     reg_lines = "".join(f"           {r.strip()}\n" for r in registrations)
     print(f"""
 Remaining manual steps:
@@ -741,30 +754,45 @@ Remaining manual steps:
        - Update body function signatures to match the generated declarations""")
 
 
+def process_gram_file(gram_filename, rule_to_type):
+    gram_stem = gram_filename.removesuffix('.gram')
+    gram_path = statements_dir / gram_filename
+    with open(gram_path, 'r') as f:
+        file_content = f.read()
+    try:
+        rules = parse_peg_grammar(file_content)
+    except Exception as e:
+        raise Exception(f"{gram_filename}: {e}") from None
+
+    for rule_name, return_type in rule_to_type.items():
+        if rule_name in rules:
+            rules[rule_name].return_type = return_type
+
+    return collect_generated(gram_stem, rules, rule_to_type)
+
+
 def main():
     arg_parser = argparse.ArgumentParser(description="Generate Internal transformer wrappers from grammar rules.")
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
     args = arg_parser.parse_args()
 
-    use_file_path = statements_dir / 'use.gram'
-    with open(use_file_path, 'r') as f:
-        file_content = f.read()
-    try:
-        rules = parse_peg_grammar(file_content)
-    except Exception as e:
-        raise Exception(f"{use_file_path.name}: {e}") from None
-
+    gram_files_to_gen = ['use.gram', 'transaction.gram']
     rule_to_type = load_grammar_types(type_dir / 'grammar_types.yml')
-    for rule_name, return_type in rule_to_type.items():
-        if rule_name in rules:
-            rules[rule_name].return_type = return_type
-
-    declarations, implementations, registrations, skipped, manual_bodies = collect_generated(rules, rule_to_type)
+    results = [process_gram_file(f, rule_to_type) for f in gram_files_to_gen]
 
     if args.write:
-        write_files(implementations, declarations, registrations, gram_stem="use")
+        all_declarations = [d for r in results for d in r.declarations]
+        write_shared_files(all_declarations)
+        for r in results:
+            write_cpp_file(r.implementations, r.gram_stem)
+            print_manual_steps(r.registrations, r.gram_stem)
     else:
-        print_output(declarations, implementations, registrations, skipped, manual_bodies, gram_stem="use")
+        for r in results:
+            print(f"\n{'=' * 60}")
+            print(f"  {r.gram_stem}.gram")
+            print(f"{'=' * 60}")
+            print_output(r.declarations, r.implementations, r.registrations,
+                         r.skipped, r.manual_bodies, gram_stem=r.gram_stem)
 
 
 if __name__ == "__main__":
