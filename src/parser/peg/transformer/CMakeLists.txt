@@ -1,3 +1,5 @@
+add_subdirectory(generated)
+
 add_library_unity(
   duckdb_parser_peg_transformer
   OBJECT
