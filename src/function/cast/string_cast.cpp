@@ -462,13 +462,13 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_ns_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCast>);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_sec_t, duckdb::TryCastToTimestampSec>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_sec_t, duckdb::TryCast>);
 	case LogicalTypeId::TIMESTAMP_MS:
 		return BoundCastInfo(
-		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ms_t, duckdb::TryCastToTimestampMS>);
+		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ms_t, duckdb::TryCast>);
 	case LogicalTypeId::BLOB:
 		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>);
 	case LogicalTypeId::BIT:
