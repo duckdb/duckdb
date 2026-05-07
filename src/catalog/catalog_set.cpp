@@ -1,6 +1,9 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
@@ -330,6 +333,20 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 		}
 	}
 
+	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
+	// pointer so that commit-time Flush pushes an AppendInfo referencing the current DuckTableEntry.
+	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
+		auto &tce = value->Cast<TableCatalogEntry>();
+		if (tce.IsDuckTable()) {
+			auto &new_entry = tce.Cast<DuckTableEntry>();
+			auto &new_storage = new_entry.GetStorage();
+			auto lstorage = LocalStorage::Get(*transaction.context, new_storage.db).GetStorage(new_storage);
+			if (lstorage) {
+				lstorage->table_entry = &new_entry;
+			}
+		}
+	}
+
 	// lock the catalog for writing
 	unique_lock<mutex> write_lock(catalog.GetWriteLock());
 	// lock this catalog set to disallow reading
@@ -510,7 +527,7 @@ bool CatalogSet::UseTimestamp(CatalogTransaction transaction, transaction_t time
 		return true;
 	}
 	if (timestamp < transaction.start_time) {
-		// this version was commited before we started the transaction
+		// this version was committed before we started the transaction
 		return true;
 	}
 	return false;
@@ -750,9 +767,9 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry &)> &callback) {
 	lock_guard<mutex> lock(catalog_lock);
 	for (auto &kv : map.Entries()) {
 		auto &entry = *kv.second;
-		auto &commited_entry = GetCommittedEntry(entry);
-		if (!commited_entry.deleted) {
-			callback(commited_entry);
+		auto &committed_entry = GetCommittedEntry(entry);
+		if (!committed_entry.deleted) {
+			callback(committed_entry);
 		}
 	}
 }

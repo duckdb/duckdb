@@ -2,9 +2,6 @@
 # description: Test blob base64 functions
 # group: [blob]
 
-statement ok
-PRAGMA enable_verification
-
 # test base64 encoding
 query I
 SELECT base64(encode(''))

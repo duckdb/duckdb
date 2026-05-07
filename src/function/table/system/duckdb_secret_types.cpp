@@ -47,16 +47,20 @@ void DuckDBSecretTypesFunction(ClientContext &context, TableFunctionInput &data_
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// type, LogicalType::VARCHAR
+	auto &type = output.data[0];
+	// default_provider, LogicalType::VARCHAR
+	auto &default_provider = output.data[1];
+	// extension, LogicalType::VARCHAR
+	auto &extension = output.data[2];
+
 	while (data.offset < data.types.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.types[data.offset++];
 
-		// return values:
-		// type, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
-		// default_provider, LogicalType::VARCHAR
-		output.SetValue(1, count, Value(entry.default_provider));
-		// extension, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(entry.extension));
+		type.Append(Value(entry.name));
+		default_provider.Append(Value(entry.default_provider));
+		extension.Append(Value(entry.extension));
 
 		count++;
 	}

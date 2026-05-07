@@ -14,7 +14,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
 
 		UnifiedVectorFormat vdata;
-		values_insert_order.ToUnifiedFormat(size_p, vdata);
+		values_insert_order.ToUnifiedFormat(vdata);
 
 		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		for (idx_t i = 0; i < size_p; i++) {
@@ -32,7 +32,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 
 	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &deserializer, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
-		auto strings = FlatVector::Writer<string_t>(values_insert_order, size);
+		auto strings = FlatVector::ScatterWriter<string_t>(values_insert_order);
 
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			if (i >= size) {

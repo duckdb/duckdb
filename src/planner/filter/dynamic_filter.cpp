@@ -31,7 +31,7 @@ FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) cons
 	if (!filter_data->initialized) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto column = make_uniq<BoundReferenceExpression>(stats.GetType(), 0);
+	auto column = make_uniq<BoundReferenceExpression>(stats.GetType(), 0ULL);
 	auto expression = filter_data->ToExpression(*column);
 	return ExpressionFilter::CheckExpressionStatistics(*expression, stats);
 }

@@ -173,6 +173,8 @@ static unordered_set<VariantLogicalType> GetVariantType(const LogicalType &type)
 		return {VariantLogicalType::TIME_MICROS};
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return {VariantLogicalType::TIMESTAMP_MICROS_TZ};
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return {VariantLogicalType::TIMESTAMP_NANOS_TZ};
 	case LogicalTypeId::TIMESTAMP:
 		return {VariantLogicalType::TIMESTAMP_MICROS};
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -902,7 +904,7 @@ static void ToParquetVariant(DataChunk &input, ExpressionState &state, Vector &r
 	auto count = input.size();
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto &result_vectors = StructVector::GetEntries(result);

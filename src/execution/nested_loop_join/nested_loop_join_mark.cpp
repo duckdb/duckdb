@@ -42,7 +42,7 @@ static void MarkJoinNested(Vector &left, Vector &right, idx_t lcount, idx_t rcou
 		if (found_match[i]) {
 			continue;
 		}
-		ConstantVector::Reference(left_reference, left, i, rcount);
+		ConstantVector::Reference(left_reference, count_t(rcount), left, i, lcount);
 		idx_t count;
 		switch (comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:

@@ -95,6 +95,22 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// name
+	auto &name = output.data[0];
+	// type
+	auto &type = output.data[1];
+	// provider
+	auto &provider = output.data[2];
+	// persistent
+	auto &persistent = output.data[3];
+	// storage
+	auto &storage = output.data[4];
+	// scope
+	auto &scope = output.data[5];
+	// secret_string
+	auto &secret_string = output.data[6];
+
 	while (data.offset < secrets.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &secret_entry = secrets[data.offset];
 
@@ -105,21 +121,13 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 		const auto &secret = *secret_entry.secret;
 
-		idx_t i = 0;
-		// name
-		output.SetValue(i++, count, secret.GetName());
-		// type
-		output.SetValue(i++, count, Value(secret.GetType()));
-		// provider
-		output.SetValue(i++, count, Value(secret.GetProvider()));
-		// persistent
-		output.SetValue(i++, count, Value(secret_entry.persist_type == SecretPersistType::PERSISTENT));
-		// storage
-		output.SetValue(i++, count, Value(secret_entry.storage_mode));
-		// scope
-		output.SetValue(i++, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		// secret_string
-		output.SetValue(i++, count, secret.ToString(bind_data.redact));
+		name.Append(Value(secret.GetName()));
+		type.Append(Value(secret.GetType()));
+		provider.Append(Value(secret.GetProvider()));
+		persistent.Append(Value::BOOLEAN(secret_entry.persist_type == SecretPersistType::PERSISTENT));
+		storage.Append(Value(secret_entry.storage_mode));
+		scope.Append(Value::LIST(LogicalType::VARCHAR, scope_value));
+		secret_string.Append(Value(secret.ToString(bind_data.redact)));
 
 		data.offset++;
 		count++;

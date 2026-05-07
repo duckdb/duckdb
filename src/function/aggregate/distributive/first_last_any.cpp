@@ -146,10 +146,10 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		sel_t assign_sel[STANDARD_VECTOR_SIZE];
 		idx_t assign_count = 0;
@@ -178,7 +178,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		if (assign_count == count) {
 			CreateSortKeyHelpers::CreateSortKey(input, count, modifiers, sort_key);
 		} else {
-			SelectionVector sel(assign_sel);
+			SelectionVector sel(assign_sel, STANDARD_VECTOR_SIZE);
 			Vector sliced_input(input, sel, assign_count);
 			CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		}
@@ -213,15 +213,15 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
 
-		function.arguments[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 		return nullptr;
 	}
 };
 
-LogicalType GetFirstStateType(const AggregateFunction &function) {
+LogicalType GetFirstStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
-	LogicalType value_type = function.arguments[0];
+	LogicalType value_type = function.GetArguments()[0];
 	child_types.emplace_back("value", value_type);
 	child_types.emplace_back("is_set", LogicalType::BOOLEAN);
 	child_types.emplace_back("is_null", LogicalType::BOOLEAN);
@@ -237,7 +237,7 @@ void FirstFunctionSimpleUpdate(Vector inputs[], AggregateInputData &aggregate_in
 		// This saves iterating through all elements when we only need the last one
 		D_ASSERT(input_count == 1);
 		UnifiedVectorFormat idata;
-		inputs[0].ToUnifiedFormat(count, idata);
+		inputs[0].ToUnifiedFormat(idata);
 		auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 
 		for (idx_t i = count; i-- > 0;) {
@@ -292,7 +292,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::DECIMAL) {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
-		function.arguments[0] = type;
+		function.GetSignature().GetParameter(0).SetType(type);
 		function.SetReturnType(type);
 		return function;
 	}
@@ -354,10 +354,10 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto decimal_type = arguments[0]->return_type;
-	auto name = std::move(function.name);
-	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
-	function.name = std::move(name);
+	auto decimal_type = arguments[0]->GetReturnType();
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
+	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetReturnType(decimal_type);
 	return nullptr;
@@ -376,17 +376,12 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 
-	auto input_type = arguments[0]->return_type;
-	auto name = std::move(function.name);
-	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
-	function.name = std::move(name);
+	auto input_type = arguments[0]->GetReturnType();
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
+	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
-	if (function.HasBindCallback()) {
-		return function.Bind(input.GetClientContext(), arguments);
-		;
-	} else {
-		return nullptr;
-	}
+	return nullptr;
 }
 
 template <bool LAST, bool SKIP_NULLS>

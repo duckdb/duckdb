@@ -193,7 +193,12 @@ struct JSONTableInOutResult {
 			type.data[count] = JSONCommon::ValTypeToStringT(val);
 		}
 		if (atom.enabled) {
-			atom.data[count] = JSONCommon::JSONValue(val, lstate.alc, atom.vector, atom.validity, count);
+			auto atom_result = JSONCommon::JSONValue(val, lstate.alc, atom.vector);
+			if (atom_result.has_value()) {
+				atom.data[count] = atom_result.value();
+			} else {
+				atom.validity.SetInvalid(count);
+			}
 		}
 		if (id.enabled) {
 			id.data[count] = NumericCast<idx_t>(val - lstate.doc->root);
@@ -342,7 +347,7 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 			lstate.recursion_nodes.pop_back(); // Array/object is done, remove
 		}
 	}
-	output.SetCardinality(result.count);
+	output.SetChildCardinality(result.count);
 
 	// Set constant virtual columns ("json", "root", and "empty")
 	if (gstate.json_column_index.IsValid()) {
@@ -353,10 +358,11 @@ static OperatorResultType JSONTableInOutFunction(ExecutionContext &, TableFuncti
 		auto &root_vector = output.data[gstate.root_column_index.GetIndex()];
 		root_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::GetData<string_t>(root_vector)[0] = string_t(lstate.path.c_str(), lstate.len);
+		FlatVector::SetSize(root_vector, count_t(result.count));
 	}
 	if (gstate.empty_column_idex.IsValid()) {
 		auto &empty_vector = output.data[gstate.empty_column_idex.GetIndex()];
-		ConstantVector::SetNull(empty_vector);
+		ConstantVector::SetNull(empty_vector, count_t(result.count));
 	}
 
 	if (output.size() == 0) {

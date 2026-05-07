@@ -214,7 +214,7 @@ MetadataResult SetHighlightColors(ShellState &state, const vector<string> &args)
 	return MetadataResult::SUCCESS;
 }
 
-MetadataResult ToggleHighlighErrors(ShellState &state, const vector<string> &args) {
+MetadataResult ToggleHighlightErrors(ShellState &state, const vector<string> &args) {
 	state.highlight_errors = state.StringToBool(args[1]) ? OptionType::ON : OptionType::OFF;
 	return MetadataResult::SUCCESS;
 }
@@ -868,7 +868,7 @@ static const MetadataCommand metadata_commands[] = {
     {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
-    {"highlight_errors", 2, ToggleHighlighErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
+    {"highlight_errors", 2, ToggleHighlightErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
     {"highlight_mode", 2, ToggleHighlightMode, "mixed|dark|light", "Toggle the highlight mode to dark or light mode", 0,
      ""},
     {"highlight_results", 2, ToggleHighlightResult, "on|off", "Turn highlighting of results on or off", 0, ""},

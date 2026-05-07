@@ -9,7 +9,10 @@ struct NegateOperator {
 	template <class T>
 	static bool CanNegate(T input) {
 		using Limits = NumericLimits<T>;
-		return !(Limits::IsSigned() && Limits::Minimum() == input);
+		if (!Limits::IsSigned()) {
+			return input == T(0);
+		}
+		return Limits::Minimum() != input;
 	}
 
 	template <class TA, class TR>
@@ -17,7 +20,7 @@ struct NegateOperator {
 		if (!CanNegate<TA>(input)) {
 			throw OutOfRangeException("Overflow in negation of numeric value!");
 		}
-		return -(TR)input;
+		return static_cast<TR>(-static_cast<TR>(input));
 	}
 };
 

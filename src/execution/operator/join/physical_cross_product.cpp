@@ -109,7 +109,8 @@ OperatorResultType CrossProductExecutor::Execute(const DataChunk &input, DataChu
 	col_count = scan.ColumnCount();
 	col_offset = scan_input_chunk ? 0 : input.ColumnCount();
 	for (idx_t i = 0; i < col_count; i++) {
-		ConstantVector::Reference(output.data[col_offset + i], scan.data[i], position_in_chunk, scan.size());
+		ConstantVector::Reference(output.data[col_offset + i], count_t(output.size()), scan.data[i], position_in_chunk,
+		                          scan.size());
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }

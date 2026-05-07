@@ -113,7 +113,9 @@ struct BoundCastInfo {
 	    init_cast_local_state_t init_local_state = nullptr);
 
 	bool Cast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) const {
-		return function(source, result, count, parameters);
+		auto all_ok = function(source, result, count, parameters);
+		FlatVector::SetSize(result, count);
+		return all_ok;
 	}
 
 public:
@@ -183,6 +185,8 @@ private:
 	                                         const LogicalType &target);
 	static BoundCastInfo TimestampTzCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                           const LogicalType &target);
+	static BoundCastInfo TimestampTzNsCastSwitch(BindCastInput &input, const LogicalType &source,
+	                                             const LogicalType &target);
 	static BoundCastInfo TimestampNsCastSwitch(BindCastInput &input, const LogicalType &source,
 	                                           const LogicalType &target);
 	static BoundCastInfo TimestampMsCastSwitch(BindCastInput &input, const LogicalType &source,

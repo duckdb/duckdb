@@ -3,10 +3,6 @@
 # group: [csv]
 
 statement ok
-pragma enable_verification
-
-
-statement ok
 copy (
 select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
 ) to '{TEMP_DIR}/timestamps.csv' ( timestampformat '%A');

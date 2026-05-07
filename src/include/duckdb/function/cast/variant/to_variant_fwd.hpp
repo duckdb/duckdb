@@ -78,7 +78,9 @@ void WriteContainerData(VariantVectorData &result, idx_t result_index, uint32_t 
 struct ContainerSelectionVectors {
 public:
 	explicit ContainerSelectionVectors(idx_t max_size)
-	    : new_selection(0, max_size), non_null_selection(0, max_size), children_selection(0, max_size) {
+	    : new_selection(SelectionVector::Incremental(max_size)),
+	      non_null_selection(SelectionVector::Incremental(max_size)),
+	      children_selection(SelectionVector::Incremental(max_size)) {
 	}
 
 public:
@@ -146,15 +148,15 @@ void HandleVariantNull(ToVariantGlobalResultData &result, idx_t result_index, ui
 struct ToVariantSourceData {
 public:
 	ToVariantSourceData(Vector &source, idx_t source_size) : vec(source), source_size(source_size) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, const SelectionVector &sel)
 	    : vec(source), source_size(source_size), source_sel(sel) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 	ToVariantSourceData(Vector &source, idx_t source_size, optional_ptr<const SelectionVector> sel)
 	    : vec(source), source_size(source_size), source_sel(sel) {
-		vec.ToUnifiedFormat(source_size, source_format);
+		vec.ToUnifiedFormat(source_format);
 	}
 
 public:

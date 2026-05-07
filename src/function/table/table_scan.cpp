@@ -27,7 +27,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -134,7 +133,7 @@ public:
 		if (input.CanRemoveFilterColumns()) {
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
-		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 
 		// Initialize the local storage scan.
 		auto &bind_data = input.bind_data->Cast<TableScanBindData>();
@@ -301,13 +300,13 @@ public:
 			l_state->all_columns.Initialize(context.client, scanned_types);
 		}
 
-		l_state->scan_state.options.force_fetch_row = ClientConfig::GetConfig(context.client).force_fetch_row;
+		l_state->scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context.client);
 		return std::move(l_state);
 	}
 
 	void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) override {
 		auto &l_state = data_p.local_state->Cast<TableScanLocalState>();
-		l_state.scan_state.options.force_fetch_row = ClientConfig::GetConfig(context).force_fetch_row;
+		l_state.scan_state.options.force_fetch_row = Settings::Get<DebugForceFetchRowSetting>(context);
 
 		do {
 			if (bind_data.is_create_index) {
@@ -473,13 +472,14 @@ struct ComparisonCondition {
 
 static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, value_set_t &in_values,
                                                       vector<ComparisonCondition> &comparisons) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR && expr.type == ExpressionType::COMPARE_IN) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+	    expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
 		auto &op = expr.Cast<BoundOperatorExpression>();
 		if (op.children.empty() || op.children[0]->GetExpressionClass() != ExpressionClass::BOUND_REF) {
 			return false;
 		}
 		for (idx_t i = 1; i < op.children.size(); i++) {
-			if (op.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+			if (op.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 				return false;
 			}
 			auto &value = op.children[i]->Cast<BoundConstantExpression>().value;
@@ -494,9 +494,9 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		Value val;
 		bool left_is_ref = comp.left->GetExpressionClass() == ExpressionClass::BOUND_REF;
 		bool right_is_ref = comp.right->GetExpressionClass() == ExpressionClass::BOUND_REF;
-		if (comp.right->type == ExpressionType::VALUE_CONSTANT && left_is_ref) {
+		if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
 			val = comp.right->Cast<BoundConstantExpression>().value;
-		} else if (comp.left->type == ExpressionType::VALUE_CONSTANT && right_is_ref) {
+		} else if (comp.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
 			val = comp.left->Cast<BoundConstantExpression>().value;
 		} else {
 			return false;
@@ -504,14 +504,14 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		if (val.IsNull()) {
 			return false;
 		}
-		if (comp.type == ExpressionType::COMPARE_EQUAL) {
+		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			in_values.insert(val);
 		}
-		comparisons.push_back({comp.type, std::move(val)});
+		comparisons.push_back({comp.GetExpressionType(), std::move(val)});
 		return true;
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
-	    expr.type == ExpressionType::CONJUNCTION_AND) {
+	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conj = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : conj.children) {
 			if (!CollectValuesAndComparisonsFromExpression(*child, in_values, comparisons)) {
@@ -567,15 +567,6 @@ static bool CollectValuesAndComparisonsFromTableFilter(const TableFilter &filter
 			return true; // No child filters, always OK
 		}
 		return CollectValuesAndComparisonsFromTableFilter(*optional_filter.child_filter, in_values, comparisons);
-	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
-		for (auto &value : in_filter.values) {
-			if (!value.IsNull()) {
-				in_values.insert(value);
-			}
-		}
-		return true;
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();

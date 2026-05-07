@@ -296,8 +296,8 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		}
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
-			col.ChangeGeneratedExpressionType(bound_expression->return_type);
-			col.SetType(bound_expression->return_type);
+			col.ChangeGeneratedExpressionType(bound_expression->GetReturnType());
+			col.SetType(bound_expression->GetReturnType());
 
 			// Update the type in the binding, for future expansions
 			table_binding->SetColumnType(i.index, col.Type());
@@ -638,11 +638,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 					target_col_names.push_back(names[i]);
 				}
 			}
-			ColumnList new_colums;
+			ColumnList new_columns;
 			for (idx_t i = 0; i < target_col_names.size(); i++) {
-				new_colums.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
+				new_columns.AddColumn(ColumnDefinition(target_col_names[i], sql_types[i]));
 			}
-			base.columns = std::move(new_colums);
+			base.columns = std::move(new_columns);
 		} else {
 			for (idx_t i = 0; i < names.size(); i++) {
 				base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));

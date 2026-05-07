@@ -158,7 +158,7 @@ unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, Ph
 bool ZSTDStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<ZSTDAnalyzeState>();
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
@@ -644,7 +644,7 @@ void ZSTDStorage::Compress(CompressionState &state_p, Vector &input, idx_t count
 
 	// Get vector data
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -712,7 +712,7 @@ public:
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
 
-		auto data = segment_handle.Ptr() + segment.GetBlockOffset();
+		auto data = segment_handle.GetDataMutable() + segment.GetBlockOffset();
 		idx_t offset = 0;
 
 		segment_count = segment.count.load();
@@ -792,13 +792,13 @@ public:
 		idx_t ptr_offset = 0;
 		if (metadata.block_id == INVALID_BLOCK) {
 			// Data lives on the segment's page
-			handle_start = segment_handle.Ptr();
+			handle_start = segment_handle.GetDataMutable();
 			ptr_offset += segment_block_offset;
 		} else {
 			// Data lives on an extra page, have to load the block first
 			auto block = LoadPage(metadata.block_id);
 			auto data_handle = buffer_manager.Pin(block);
-			handle_start = data_handle.Ptr();
+			handle_start = data_handle.GetDataMutable();
 			scan_state.buffer_handles.push_back(std::move(data_handle));
 		}
 
@@ -850,7 +850,7 @@ public:
 		// Load the next page
 		auto block = LoadPage(next_id);
 		auto handle = buffer_manager.Pin(block);
-		auto ptr = handle.Ptr();
+		auto ptr = handle.GetDataMutable();
 		scan_state.buffer_handles.push_back(std::move(handle));
 		scan_state.current_buffer_ptr = ptr;
 
@@ -901,7 +901,7 @@ public:
 	}
 
 	void Skip(ZSTDVectorScanState &scan_state, idx_t count) {
-		if (!skip_buffer) {
+		if (!skip_buffer.IsSet()) {
 			skip_buffer = Allocator::DefaultAllocator().Allocate(duckdb_zstd::ZSTD_DStreamOutSize());
 		}
 

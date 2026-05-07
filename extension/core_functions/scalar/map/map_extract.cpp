@@ -23,8 +23,8 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
 
-	pos_vec.ToUnifiedFormat(count, pos_format);
-	map_vec.ToUnifiedFormat(count, lst_format);
+	pos_vec.ToUnifiedFormat(pos_format);
+	map_vec.ToUnifiedFormat(lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
 	const auto inc_list_data = UnifiedVectorFormat::GetData<list_entry_t>(lst_format);
@@ -52,7 +52,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	result.Verify(count);
+	result.Verify();
 }
 
 static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -68,48 +68,31 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 	Vector pos_vec(LogicalType::INTEGER, count);
 	ListSearchOp<int32_t>(map_vec, key_vec, arg_vec, pos_vec, args.size());
 
-	UnifiedVectorFormat val_format;
-	UnifiedVectorFormat pos_format;
-	UnifiedVectorFormat lst_format;
-
-	val_vec.ToUnifiedFormat(ListVector::GetListSize(map_vec), val_format);
-	pos_vec.ToUnifiedFormat(count, pos_format);
-	map_vec.ToUnifiedFormat(count, lst_format);
-
-	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
-	const auto inc_list_data = UnifiedVectorFormat::GetData<list_entry_t>(lst_format);
+	auto pos_entries = pos_vec.Values<int32_t>(count);
+	auto map_entries = map_vec.Values<list_entry_t>(count);
+	const auto val_size = ListVector::GetListSize(map_vec);
 	auto out_list_data = FlatVector::Writer<list_entry_t>(result, count);
 
-	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-		const auto lst_idx = lst_format.sel->get_index(row_idx);
-		if (!lst_format.validity.RowIsValid(lst_idx)) {
-			out_list_data.SetInvalid(row_idx);
+		auto map_entry = map_entries[row_idx];
+		if (!map_entry.IsValid()) {
+			out_list_data.WriteNull();
 			continue;
 		}
 
-		const auto pos_idx = pos_format.sel->get_index(row_idx);
-		if (!pos_format.validity.RowIsValid(pos_idx)) {
-			// We didnt find the key in the map, so return empty list
-			out_list_data[row_idx].offset = offset;
-			out_list_data[row_idx].length = 0;
+		auto list = out_list_data.WriteDynamicList();
+		auto pos_entry = pos_entries[row_idx];
+		if (!pos_entry.IsValid()) {
+			// key not found: return empty list
 			continue;
 		}
 
-		auto &inc_list = inc_list_data[lst_idx];
-		// Compute the actual position of the value in the map value vector
-		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_data[pos_idx] - 1);
-		out_list_data[row_idx].offset = offset;
-		out_list_data[row_idx].length = 1;
-		ListVector::Append(result, val_vec, pos + 1, pos);
-		offset++;
+		const auto &inc_list = map_entry.GetValue();
+		const auto pos = inc_list.offset + UnsafeNumericCast<idx_t>(pos_entry.GetValue() - 1);
+		SelectionVector sel(1);
+		sel.set_index(0, pos);
+		list.Append(val_vec, sel, val_size, 0, 1);
 	}
-
-	if (args.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(count);
 }
 
 ScalarFunction MapExtractValueFun::GetFunction() {

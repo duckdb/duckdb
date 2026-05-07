@@ -1,9 +1,11 @@
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/render_tree.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -139,6 +141,10 @@ OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &conte
 	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
+TableFunctionParallelism PhysicalOperator::SourceParallelism() const {
+	return TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
+}
+
 ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
 	ProgressData res;
 	res.SetInvalid();
@@ -189,7 +195,7 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 }
 
 OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext &context) {
-	if (!context.client.config.enable_caching_operators) {
+	if (!Settings::Get<EnableCachingOperatorsSetting>(context.client)) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
 		return OperatorCachingMode::NONE;
@@ -388,9 +394,9 @@ static CachingPhysicalOperatorExecuteMode SelectExecutionMode(const DataChunk &c
 		D_ASSERT(state.cached_chunk->size() > 0);
 
 		if (chunk.size() <= CachingPhysicalOperator::CACHE_THRESHOLD) {
-			// We can consider appening
+			// We can consider appending
 			if (chunk.size() + state.cached_chunk->size() <= STANDARD_VECTOR_SIZE) {
-				// Both fit toghether, append then return
+				// Both fit together, append then return
 				return CachingPhysicalOperatorExecuteMode::RETURN_CACHED_PLUS_CHUNK;
 			}
 			if (needs_continuation_chunk) {

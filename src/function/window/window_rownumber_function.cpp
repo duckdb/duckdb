@@ -86,7 +86,24 @@ void WindowRowNumberLocalState::Finalizer(ExecutionContext &context, CollectionP
 //===--------------------------------------------------------------------===//
 // WindowRowNumberExecutor
 //===--------------------------------------------------------------------===//
+class WindowRowNumberStreamingState : public WindowExecutorStreamingState {
+public:
+	WindowRowNumberStreamingState() : vec(Value((int64_t)1), count_t(1)) {
+	}
+
+	void Evaluate(idx_t count, Vector &result) {
+		// Set row numbers
+		auto &row_number = *FlatVector::GetDataMutable<int64_t>(vec);
+		auto rdata = FlatVector::Writer<int64_t>(result, count);
+		for (idx_t i = 0; i < count; i++) {
+			rdata.WriteValue(row_number++);
+		}
+	}
+	Vector vec;
+};
+
 struct WindowRowNumberExecutor {
+	//! Blocking APIs
 	static void GetBounds(WindowBoundsSet &required, const BoundWindowExpression &wexpr);
 	static void GetSharing(WindowExecutor &executor, WindowSharedExpressions &shared);
 
@@ -97,6 +114,19 @@ struct WindowRowNumberExecutor {
 
 	static void GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds, Vector &result,
 	                    idx_t row_idx, OperatorSinkInput &sink);
+
+	//! Streaming APIs
+	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		return true;
+	}
+	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                      const BoundWindowExpression &wexpr) {
+		return make_uniq<WindowRowNumberStreamingState>();
+	}
+	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
+	                       Vector &result, LocalSourceState &state) {
+		state.Cast<WindowRowNumberStreamingState>().Evaluate(input.size(), result);
+	}
 };
 
 WindowFunction RowNumberFun::GetFunction() {
@@ -104,6 +134,10 @@ WindowFunction RowNumberFun::GetFunction() {
 	    Name, {}, LogicalType::BIGINT, ExpressionType::WINDOW_ROW_NUMBER, nullptr, WindowRowNumberExecutor::GetBounds,
 	    WindowRowNumberExecutor::GetSharing, WindowRowNumberExecutor::GetGlobal, WindowRowNumberExecutor::GetLocal,
 	    WindowRowNumberLocalState::Sinker, WindowRowNumberLocalState::Finalizer, WindowRowNumberExecutor::GetData);
+	fun.SetCanStreamCallback(WindowRowNumberExecutor::CanStream);
+	fun.SetStreamingStateCallback(WindowRowNumberExecutor::GetStreamingState);
+	fun.SetStreamingDataCallback(WindowRowNumberExecutor::StreamData);
+
 	return fun;
 }
 
@@ -154,11 +188,12 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 		if (grstate.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
 				// Row numbers are unique ranks
-				rdata[i] = UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx));
+				rdata.WriteValue(
+				    UnsafeNumericCast<int64_t>(grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx)));
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				rdata[i] = UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1);
+				rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - frame_begin[i] + 1));
 			}
 		}
 		return;
@@ -166,7 +201,7 @@ void WindowRowNumberExecutor::GetData(ExecutionContext &context, DataChunk &eval
 
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		rdata[i] = UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1);
+		rdata.WriteValue(UnsafeNumericCast<int64_t>(row_idx - partition_begin[i] + 1));
 	}
 }
 
@@ -230,7 +265,7 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (ntile_col.CellIsNull(i)) {
-			rdata.SetInvalid(i);
+			rdata.WriteNull();
 		} else {
 			auto n_param = ntile_col.GetCell<int64_t>(i);
 			if (n_param < 1) {
@@ -268,7 +303,7 @@ void WindowNtileExecutor::GetData(ExecutionContext &context, DataChunk &eval_chu
 			}
 			// result has to be between [1, NTILE]
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			rdata[i] = result_ntile;
+			rdata.WriteValue(result_ntile);
 		}
 	}
 }

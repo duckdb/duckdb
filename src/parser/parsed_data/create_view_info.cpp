@@ -24,9 +24,12 @@ string CreateViewInfo::ToString() const {
 	result += QualifierToString(temporary ? "" : catalog, schema, view_name);
 	if (!aliases.empty()) {
 		result += " (";
-		result += StringUtil::Join(aliases, aliases.size(), ", ",
-		                           [](const string &name) { return KeywordHelper::WriteOptionallyQuoted(name); });
+		result +=
+		    StringUtil::Join(aliases, aliases.size(), ", ", [](const string &name) { return SQLIdentifier(name); });
 		result += ")";
+	}
+	if (binding_mode == CreateViewBindingMode::SKIP_BINDING) {
+		result += " WITH (DEFER_BINDING)";
 	}
 	result += " AS ";
 	result += query->ToString();

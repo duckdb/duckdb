@@ -30,7 +30,7 @@ struct ReadHead {
 	// Current info
 	FileBufferHandleGroup handle_group;
 	AllocatedData local_buffer;
-	data_ptr_t buffer_ptr = nullptr;
+	const_data_ptr_t buffer_ptr = nullptr;
 	bool data_isset = false;
 
 	idx_t GetEnd() const {

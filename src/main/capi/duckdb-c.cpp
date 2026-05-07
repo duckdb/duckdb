@@ -130,7 +130,7 @@ duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection) {
 	Connection *conn = reinterpret_cast<Connection *>(connection);
 	auto query_progress = conn->context->GetQueryProgress();
 	query_progress_type.total_rows_to_process = query_progress.GetTotalRowsToProcess();
-	query_progress_type.rows_processed = query_progress.GetRowsProcesseed();
+	query_progress_type.rows_processed = query_progress.GetRowsProcessed();
 	query_progress_type.percentage = query_progress.GetPercentage();
 	return query_progress_type;
 }

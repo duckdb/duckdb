@@ -90,7 +90,7 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	vector<LogicalType> types(highest_index + 1, LogicalType::SQLNULL);
 	for (auto &group : groups) {
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
-		types[bound_ref.index] = bound_ref.return_type;
+		types[bound_ref.index] = bound_ref.GetReturnType();
 	}
 	return types;
 }
@@ -202,10 +202,10 @@ public:
 		for (auto &aggr : op.grouped_aggregate_data.aggregates) {
 			auto &aggregate = aggr->Cast<BoundAggregateExpression>();
 			for (auto &child : aggregate.children) {
-				payload_types.push_back(child->return_type);
+				payload_types.push_back(child->GetReturnType());
 			}
 			if (aggregate.filter) {
-				filter_types.push_back(aggregate.filter->return_type);
+				filter_types.push_back(aggregate.filter->GetReturnType());
 			}
 		}
 		payload_types.reserve(payload_types.size() + filter_types.size());

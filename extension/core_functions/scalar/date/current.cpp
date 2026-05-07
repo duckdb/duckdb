@@ -18,7 +18,7 @@ static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, V
 	D_ASSERT(input.ColumnCount() == 0);
 	auto ts = GetTransactionTimestamp(state);
 	auto val = Value::TIMESTAMPTZ(timestamp_tz_t(ts));
-	result.Reference(val);
+	result.Reference(val, count_t(input.size()));
 }
 
 ScalarFunction GetCurrentTimestampFun::GetFunction() {

@@ -64,7 +64,7 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		(void)converted;
 		D_ASSERT(converted);
 		// we flatten the child because we use FlatVector::SetNull below and we may get non-flat from source/cast
-		result_child_vector.Flatten(count);
+		result_child_vector.Flatten();
 	}
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -104,7 +104,8 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		throw InternalException("Struct to union cast failed for unknown reason");
 	}
 
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 	return true;
 }
 

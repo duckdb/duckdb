@@ -97,6 +97,7 @@ protected:
 
 struct StrfTimeFormat : public StrTimeFormat { // NOLINT: work-around bug in clang-tidy
 	DUCKDB_API idx_t GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name);
+	DUCKDB_API idx_t GetLength(date_t date, int32_t data[8], const char *tz_name) const;
 
 	DUCKDB_API void FormatStringNS(date_t date, int32_t data[8], const char *tz_name, char *target) const;
 	DUCKDB_API void FormatString(date_t date, int32_t data[8], const char *tz_name, char *target);
@@ -118,7 +119,6 @@ protected:
 protected:
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, int32_t data[8], const char *tz_name);
-	idx_t GetLength(date_t date, int32_t data[8], const char *tz_name) const;
 
 	string_t ConvertTimestampValue(const timestamp_t &input, StringHeap &heap) const;
 	string_t ConvertTimestampValue(const timestamp_ns_t &input, StringHeap &heap) const;

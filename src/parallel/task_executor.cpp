@@ -2,6 +2,8 @@
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include <thread>
+
 namespace duckdb {
 
 TaskExecutor::TaskExecutor(TaskScheduler &scheduler)
@@ -38,14 +40,16 @@ void TaskExecutor::FinishTask() {
 void TaskExecutor::WorkOnTasks() {
 	// repeatedly execute tasks until we are finished
 	shared_ptr<Task> task_from_producer;
-	while (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
-		auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
-		(void)res;
-		D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
-		task_from_producer.reset();
-	}
 	// wait for all active tasks to finish
 	while (completed_tasks != total_tasks) {
+		if (scheduler.GetTaskFromProducer(*token, task_from_producer)) {
+			const auto res = task_from_producer->Execute(TaskExecutionMode::PROCESS_ALL);
+			std::ignore = res;
+			D_ASSERT(res != TaskExecutionResult::TASK_BLOCKED);
+			task_from_producer.reset();
+		} else {
+			std::this_thread::yield();
+		}
 	}
 
 	// check if we ran into any errors while checkpointing

@@ -217,6 +217,17 @@ static bool ParquetScanPushdownExpression(ClientContext &context, const LogicalG
 	return true;
 }
 
+static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, const LogicalIndex &col_idx) {
+	auto &bind_data = bind_data_p.Cast<MultiFileBindData>();
+
+	auto &column = bind_data.columns[col_idx.index];
+	auto &column_type = column.type;
+	if (column_type.id() != LogicalTypeId::STRUCT) {
+		return false;
+	}
+	return true;
+}
+
 static void VerifyParquetSchemaParameter(const Value &schema) {
 	LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
 	                                                          {"type", LogicalType::VARCHAR},
@@ -409,7 +420,8 @@ TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 	table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 	table_function.named_parameters["can_have_nan"] = LogicalType::BOOLEAN;
-	table_function.statistics = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStats;
+	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
+	table_function.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
 	table_function.serialize = ParquetScanSerialize;
 	table_function.deserialize = ParquetScanDeserialize;
 	table_function.get_row_id_columns = ParquetGetRowIdColumns;

@@ -107,6 +107,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ShreddingType shredding_types;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+	//! Per-column NOT NULL flags
+	vector<bool> not_null_columns;
 
 	//! Which encodings to include when writing
 	ParquetVersion parquet_version = ParquetVersion::V1;
@@ -348,7 +350,22 @@ static unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFun
 
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
+
 	return std::move(bind_data);
+}
+
+static void ParquetCopyToPropagateStatistics(CopyToPropagateStatsInput &input) {
+	auto &parquet_bind = input.bind_data.Cast<ParquetWriteBindData>();
+	auto count = parquet_bind.sql_types.size();
+	if (input.column_stats.size() != count) {
+		return;
+	}
+	parquet_bind.not_null_columns.assign(count, false);
+	for (idx_t i = 0; i < count; i++) {
+		if (input.column_stats[i] && !input.column_stats[i]->CanHaveNull()) {
+			parquet_bind.not_null_columns[i] = true;
+		}
+	}
 }
 
 static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &context, FunctionData &bind_data,
@@ -357,14 +374,26 @@ static unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(
-	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
-	    parquet_bind.field_ids.Copy(), parquet_bind.shredding_types.Copy(), parquet_bind.kv_metadata,
-	    parquet_bind.encryption_config, parquet_bind.dictionary_size_limit,
-	    parquet_bind.string_dictionary_page_size_limit, parquet_bind.enable_bloom_filters,
-	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.parquet_version,
-	    parquet_bind.geoparquet_version, parquet_bind.write_timestamp_as_int96,
-	    parquet_bind.timestamp_is_adjusted_to_utc);
+
+	ParquetWriterOptions options;
+	options.file_name = file_path;
+	options.sql_types = parquet_bind.sql_types;
+	options.column_names = parquet_bind.column_names;
+	options.codec = parquet_bind.codec, options.field_ids = parquet_bind.field_ids.Copy();
+	options.shredding_types = parquet_bind.shredding_types.Copy();
+	options.encryption_config = parquet_bind.encryption_config;
+	options.dictionary_size_limit = parquet_bind.dictionary_size_limit,
+	options.string_dictionary_page_size_limit = parquet_bind.string_dictionary_page_size_limit;
+	options.enable_bloom_filters = parquet_bind.enable_bloom_filters,
+	options.bloom_filter_false_positive_ratio = parquet_bind.bloom_filter_false_positive_ratio;
+	options.compression_level = parquet_bind.compression_level;
+	options.parquet_version = parquet_bind.parquet_version,
+	options.geoparquet_version = parquet_bind.geoparquet_version;
+	options.write_timestamp_as_int96 = parquet_bind.write_timestamp_as_int96,
+	options.timestamp_is_adjusted_to_utc = parquet_bind.timestamp_is_adjusted_to_utc;
+	options.not_null_columns = parquet_bind.not_null_columns;
+
+	global_state->writer = make_uniq<ParquetWriter>(context, fs, std::move(options), parquet_bind.kv_metadata);
 	return std::move(global_state);
 }
 
@@ -650,6 +679,8 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.timestamp_is_adjusted_to_utc);
 	serializer.WritePropertyWithDefault(119, "write_timestamp_as_int96", bind_data.write_timestamp_as_int96,
 	                                    default_value.write_timestamp_as_int96);
+	serializer.WritePropertyWithDefault<vector<bool>>(120, "not_null_columns", bind_data.not_null_columns,
+	                                                  default_value.not_null_columns);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -688,6 +719,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    118, "timestamp_is_adjusted_to_utc", default_value.timestamp_is_adjusted_to_utc);
 	data->write_timestamp_as_int96 = deserializer.ReadPropertyWithExplicitDefault(
 	    119, "write_timestamp_as_int96", default_value.write_timestamp_as_int96);
+	data->not_null_columns =
+	    deserializer.ReadPropertyWithExplicitDefault<vector<bool>>(120, "not_null_columns", vector<bool>());
 
 	return std::move(data);
 }
@@ -813,7 +846,7 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 	bool any_change = false;
 
 	for (auto &expr : input.select_list) {
-		const auto &type = expr->return_type;
+		const auto &type = expr->GetReturnType();
 		const auto &name = expr->GetAlias();
 
 		// Spatial types need to be encoded into WKB when writing GeoParquet.
@@ -907,6 +940,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	function.supports_sql_null = true;
 	function.copy_to_select = ParquetWriteSelect;
 	function.copy_to_bind = ParquetWriteBind;
+	function.copy_to_propagate_statistics = ParquetCopyToPropagateStatistics;
 	function.copy_options = ParquetListCopyOptions;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;

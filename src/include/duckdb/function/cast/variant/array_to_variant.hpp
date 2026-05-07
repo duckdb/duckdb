@@ -50,8 +50,7 @@ bool ConvertArrayToVariant(ToVariantSourceData &source, ToVariantGlobalResultDat
 	//! Now write the child vector of the list
 	auto &entry = ArrayVector::GetChildMutable(source.vec);
 	if (sel.count != list_size) {
-		Vector sliced_entry(entry.GetType(), nullptr);
-		sliced_entry.Dictionary(entry, list_size, sel.non_null_selection, sel.count);
+		Vector sliced_entry(entry, sel.non_null_selection, sel.count);
 		ToVariantSourceData child_source_data(sliced_entry, sel.count);
 		return ConvertToVariant<WRITE_DATA, false>(child_source_data, result, sel.count, &sel.new_selection,
 		                                           &sel.children_selection, false);

@@ -26,10 +26,11 @@ ScalarFunctionSet JSONFunctions::GetValueFunction() {
 	GetValueFunctionsInternal(set, LogicalType::VARCHAR);
 	GetValueFunctionsInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		if (func.arguments[0].IsJSONType() && func.arguments[1].IsNumeric()) {
+		const auto &sig = func.GetSignature();
+		if (sig.GetParameter(0).GetType().IsJSONType() && sig.GetParameter(1).GetType().IsNumeric()) {
 			continue;
 		}
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

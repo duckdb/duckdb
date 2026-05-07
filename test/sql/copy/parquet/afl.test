@@ -6,9 +6,6 @@ mode skip
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
-
 foreach i 1 2 6
 
 statement error

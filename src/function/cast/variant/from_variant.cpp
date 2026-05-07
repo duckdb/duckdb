@@ -259,19 +259,20 @@ static bool ConvertVariantToList(FromVariantConversionData &conversion_data, Vec
 
 	ListVector::Reserve(result, total_offset + total_children);
 	auto &child = ListVector::GetChildMutable(result);
-	auto result_data = FlatVector::Writer<list_entry_t>(result, offset + count);
+	auto result_data = FlatVector::Writer<list_entry_t>(result, count, offset);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
 		auto &child_data_entry = child_data[i];
 
 		if (!validity.RowIsValid(i)) {
-			result_data.SetInvalid(offset + i);
+			result_data.WriteNull();
 			continue;
 		}
 
-		auto &entry = result_data[i + offset];
+		list_entry_t entry;
 		entry.offset = total_offset;
 		entry.length = child_data_entry.child_count;
+		result_data.WriteValue(entry);
 		total_offset += entry.length;
 
 		FindValues(conversion_data.variant, row_index, new_sel, child_data_entry);
@@ -392,7 +393,7 @@ static bool ConvertVariantToStruct(FromVariantConversionData &conversion_data, V
 	SelectionVector child_values_sel;
 	child_values_sel.Initialize(count);
 
-	SelectionVector row_sel(0, count);
+	auto row_sel = SelectionVector::Incremental(0ULL, count);
 	if (row.IsValid()) {
 		auto row_index = row.GetIndex();
 		for (idx_t i = 0; i < count; i++) {
@@ -442,7 +443,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 
 	ConvertedJSONHolder json_holder;
 
-	auto result_data = FlatVector::Writer<string_t>(result, count);
+	auto result_data = FlatVector::Writer<string_t>(result, count, offset);
 	json_holder.doc = yyjson_mut_doc_new(nullptr);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_index = row.IsValid() ? row.GetIndex() : i;
@@ -461,7 +462,7 @@ static bool CastVariantToJSON(FromVariantConversionData &conversion_data, Vector
 			return false;
 		}
 		string_t res(json_holder.stringified_json, NumericCast<uint32_t>(len));
-		result_data[offset + i] = res;
+		result_data.WriteValue(res);
 		free(json_holder.stringified_json);
 		json_holder.stringified_json = nullptr;
 	}
@@ -656,6 +657,10 @@ static bool CastVariant(FromVariantConversionData &conversion_data, Vector &resu
 			return CastVariantToPrimitive<
 			    VariantDirectConversion<timestamp_tz_t, VariantLogicalType::TIMESTAMP_MICROS_TZ>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
+		case LogicalTypeId::TIMESTAMP_TZ_NS:
+			return CastVariantToPrimitive<
+			    VariantDirectConversion<timestamp_tz_ns_t, VariantLogicalType::TIMESTAMP_NANOS_TZ>>(
+			    conversion_data, result, sel, offset, count, row, empty_payload);
 		case LogicalTypeId::UUID:
 			return CastVariantToPrimitive<VariantDirectConversion<hugeint_t, VariantLogicalType::UUID>>(
 			    conversion_data, result, sel, offset, count, row, empty_payload);
@@ -715,7 +720,7 @@ static bool CastFromVARIANT(Vector &variant_vec, Vector &result, idx_t count, Ca
 	// fallback to conversion
 	D_ASSERT(variant_vec.GetType().id() == LogicalTypeId::VARIANT);
 	RecursiveUnifiedVectorFormat variant_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, variant_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, variant_format);
 	FromVariantConversionData conversion_data(variant_format);
 
 	reference<const SelectionVector> sel(*ConstantVector::ZeroSelectionVector());
@@ -771,6 +776,7 @@ BoundCastInfo DefaultCasts::VariantCastSwitch(BindCastInput &input, const Logica
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:

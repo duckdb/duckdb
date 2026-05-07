@@ -534,7 +534,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 
 	expr->SetQueryLocation(col_ref_p.GetQueryLocation());
 
-	// the above QualifyColumName returns a generated expression for a generated
+	// the above QualifyColumnName returns a generated expression for a generated
 	// column, and struct_extract for a struct, or a lambda reference expression,
 	// all of them are not column reference expressions, so we return here
 	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {

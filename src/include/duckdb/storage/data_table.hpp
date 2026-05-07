@@ -49,6 +49,7 @@ struct DataTableInfo;
 struct LocalAppendState;
 struct ParallelTableScanState;
 struct TableAppendState;
+class CommitDropState;
 
 enum class DataTableVersion {
 	MAIN_TABLE, // this is the newest version of the table - it has not been altered or dropped
@@ -110,31 +111,32 @@ public:
 	bool CanFetch(DuckTransaction &transaction, const row_t row_id);
 
 	//! Initializes appending to transaction-local storage
-	void InitializeLocalAppend(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	void InitializeLocalAppend(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
 	                           const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Initializes only the delete-indexes of the transaction-local storage
-	void InitializeLocalStorage(LocalAppendState &state, TableCatalogEntry &table, ClientContext &context,
+	void InitializeLocalStorage(LocalAppendState &state, DuckTableEntry &table, ClientContext &context,
 	                            const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a DataChunk to the transaction-local storage of the table.
-	void LocalAppend(LocalAppendState &state, ClientContext &context, DataChunk &chunk, bool unsafe);
+	void LocalAppend(LocalAppendState &state, DuckTableEntry &table_entry, ClientContext &context, DataChunk &chunk,
+	                 bool unsafe);
 	//! Finalizes a transaction-local append
 	void FinalizeLocalAppend(LocalAppendState &state);
 	//! Append a chunk to the transaction-local storage of this table and update the delete indexes.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, Vector &row_ids,
 	                 DataChunk &delete_chunk);
 	//! Appends to the transaction-local storage of this table
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, bool unsafe = false);
 	//! Append a chunk to the transaction-local storage of this table.
-	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	void LocalWALAppend(DuckTableEntry &table, ClientContext &context, DataChunk &chunk,
 	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a column data collection with default values to the transaction-local storage of this table.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
+	void LocalAppend(DuckTableEntry &table, ClientContext &context, ColumnDataCollection &collection,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
-	void LocalMerge(ClientContext &context, OptimisticWriteCollection &collection);
+	void LocalMerge(ClientContext &context, DuckTableEntry &table_entry, OptimisticWriteCollection &collection);
 	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
 	//! Returns the index into the optimistic_collections vector for newly created collection.
 	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<OptimisticWriteCollection> collection);
@@ -148,12 +150,13 @@ public:
 	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Delete the entries with the specified row identifier from the table
-	idx_t Delete(TableDeleteState &state, ClientContext &context, Vector &row_ids, idx_t count);
+	idx_t Delete(TableDeleteState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
+	             idx_t count);
 
 	unique_ptr<TableUpdateState> InitializeUpdate(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Update the entries with the specified row identifier from the table
-	void Update(TableUpdateState &state, ClientContext &context, Vector &row_ids,
+	void Update(TableUpdateState &state, ClientContext &context, DuckTableEntry &table_entry, Vector &row_ids,
 	            const vector<PhysicalIndex> &column_ids, DataChunk &data);
 	//! Update a single (sub-)column along a column path
 	//! The column_path vector is a *path* towards a column within the table
@@ -164,7 +167,7 @@ public:
 	//! -> 1 (second subcolumn of struct)
 	//! -> 0 (first subcolumn of INT)
 	//! This method should only be used from the WAL replay. It does not verify update constraints.
-	void UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
+	void UpdateColumn(DuckTableEntry &table, ClientContext &context, Vector &row_ids,
 	                  const vector<column_t> &column_path, DataChunk &updates);
 
 	//! Fetches an append lock
@@ -236,8 +239,10 @@ public:
 	unique_ptr<StorageLockKey> GetCheckpointLock();
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
-	void CommitDropTable();
-	void CommitDropColumn(const idx_t column_index);
+	//! Accumulates the table's on-disk blocks for reclamation into the drop state.
+	void CommitDropTable(CommitDropState &drop_state);
+	//! Accumulates the column's on-disk blocks for reclamation into the drop state.
+	void CommitDropColumn(const idx_t column_index, CommitDropState &drop_state);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;

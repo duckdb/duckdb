@@ -2,9 +2,6 @@
 # description: Test bignum implicit cast
 # group: [bignum]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT -(1::BIGNUM)
 ----

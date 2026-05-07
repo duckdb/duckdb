@@ -25,20 +25,19 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			throw InvalidInputException("IN needs at least two children");
 		}
 
-		Vector left(expr.children[0]->return_type);
+		Vector left(expr.children[0]->GetReturnType());
 		// eval left side
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
 
 		// init result to false
 		Vector intermediate(LogicalType::BOOLEAN);
-		Value false_val = Value::BOOLEAN(false);
-		intermediate.Reference(false_val);
+		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
 
 		// in rhs is a list of constants
 		// for every child, OR the result of the comparison with the left
 		// to get the overall result.
 		for (idx_t child = 1; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->return_type);
+			Vector vector_to_check(expr.children[child]->GetReturnType());
 			Vector comp_res(LogicalType::BOOLEAN);
 
 			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
@@ -71,7 +70,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		idx_t remaining_count = count;
 		idx_t next_count;
 		for (idx_t child = 0; child < expr.children.size(); child++) {
-			Vector vector_to_check(expr.children[child]->return_type);
+			Vector vector_to_check(expr.children[child]->GetReturnType());
 			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 

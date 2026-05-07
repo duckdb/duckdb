@@ -38,7 +38,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		return nullptr;
 	}
 	D_ASSERT(root);
-	auto in_type = expr.children[0]->return_type;
+	auto in_type = expr.children[0]->GetReturnType();
 	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
@@ -87,9 +87,8 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			// error while evaluating scalar
 			return nullptr;
 		}
-		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);
-		chunk.SetValue(0, index, value);
+		chunk.data[0].Append(value);
 		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);

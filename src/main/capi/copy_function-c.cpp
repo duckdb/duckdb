@@ -685,7 +685,7 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 			}
 		}
 
-		// Assing the option as a named parameter
+		// Assign the option as a named parameter
 		named_parameters[opt.first] = param_value;
 	}
 
@@ -729,7 +729,7 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 			return;
 		}
 	}
-	for (const auto &argument : tf.arguments) {
+	for (const auto &argument : tf.GetArguments()) {
 		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
 			return;
 		}

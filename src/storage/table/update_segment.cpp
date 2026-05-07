@@ -86,7 +86,7 @@ data_ptr_t UpdateInfo::GetValues() {
 }
 
 UpdateInfo &UpdateInfo::Get(UndoBufferReference &entry) {
-	auto update_info = reinterpret_cast<UpdateInfo *>(entry.Ptr());
+	auto update_info = reinterpret_cast<UpdateInfo *>(entry.GetDataMutable());
 	return *update_info;
 }
 
@@ -102,12 +102,12 @@ idx_t UpdateInfo::GetAllocSize(idx_t type_size) {
 	return AlignValue<idx_t>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 }
 
-void UpdateInfo::Initialize(UpdateInfo &info, DataTable &data_table, transaction_t transaction_id,
+void UpdateInfo::Initialize(UpdateInfo &info, DuckTableEntry &table_entry, transaction_t transaction_id,
                             idx_t row_group_start) {
 	info.max = STANDARD_VECTOR_SIZE;
 	info.row_group_start = row_group_start;
 	info.version_number = transaction_id;
-	info.table = &data_table;
+	info.table = &table_entry;
 	info.segment = nullptr;
 	info.prev.entry = nullptr;
 	info.next.entry = nullptr;
@@ -422,8 +422,8 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 			return;
 		}
 		idx_t left = 0;
-		idx_t right = current.N - 1;
-		while (left <= right) {
+		idx_t right = current.N;
+		while (left < right) {
 			idx_t mid = left + (right - left) / 2;
 			if (tuples[mid] == row_idx) {
 				result_mask.Set(result_idx, info_data[mid]);
@@ -431,7 +431,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
 			} else if (tuples[mid] < row_idx) {
 				left = mid + 1;
 			} else {
-				right = mid - 1;
+				right = mid;
 			}
 		}
 	});
@@ -1256,11 +1256,11 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DataTable &data_table, idx_t type_size, idx_t count,
-                                  unsafe_unique_array<char> &data, idx_t row_group_start) {
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, DuckTableEntry &table_entry, idx_t type_size,
+                                  idx_t count, unsafe_unique_array<char> &data, idx_t row_group_start) {
 	data = make_unsafe_uniq_array_uninitialized<char>(UpdateInfo::GetAllocSize(type_size));
 	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
-	UpdateInfo::Initialize(*update_info, data_table, transaction.transaction_id, row_group_start);
+	UpdateInfo::Initialize(*update_info, table_entry, transaction.transaction_id, row_group_start);
 	return update_info;
 }
 
@@ -1278,13 +1278,13 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	}
 }
 
-void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, idx_t column_index, Vector &update_p,
-                           row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
+void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
+                           Vector &update_p, row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
 	UnifiedVectorFormat update_format;
-	update_p.ToUnifiedFormat(count, update_format);
+	update_p.ToUnifiedFormat(update_format);
 
 	// update statistics
 	SelectionVector sel;
@@ -1297,7 +1297,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 	}
 	if (statistics_update_function == UpdateStringStatistics) {
 		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten(count);
+		update_p.Flatten();
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		auto &validity = FlatVector::ValidityMutable(update_p);
 		for (idx_t i = 0; i < count; i++) {
@@ -1305,7 +1305,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
-		update_p.ToUnifiedFormat(count, update_format);
+		update_p.ToUnifiedFormat(update_format);
 	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
@@ -1354,11 +1354,11 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
 				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-				node_ref = dtransaction.CreateUpdateInfo(type_size, data_table, count, row_group_start);
+				node_ref = dtransaction.CreateUpdateInfo(table_entry, type_size, count, row_group_start);
 				node = &UpdateInfo::Get(node_ref);
 			} else {
-				node =
-				    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
+				node = CreateEmptyUpdateInfo(transaction, table_entry, type_size, count, update_info_data,
+				                             row_group_start);
 			}
 			node->segment = this;
 			node->vector_index = vector_index;
@@ -1392,7 +1392,7 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 		auto handle = root->allocator.Allocate(alloc_size);
 		auto &update_info = UpdateInfo::Get(handle);
-		UpdateInfo::Initialize(update_info, data_table, TRANSACTION_ID_START - 1, row_group_start);
+		UpdateInfo::Initialize(update_info, table_entry, TRANSACTION_ID_START - 1, row_group_start);
 		update_info.column_index = column_index;
 
 		InitializeUpdateInfo(update_info, ids, sel, count, vector_index, vector_offset);
@@ -1402,11 +1402,11 @@ void UpdateSegment::Update(TransactionData transaction, DataTable &data_table, i
 		UndoBufferReference node_ref;
 		optional_ptr<UpdateInfo> transaction_node;
 		if (transaction.transaction) {
-			node_ref = transaction.transaction->CreateUpdateInfo(type_size, data_table, count, row_group_start);
+			node_ref = transaction.transaction->CreateUpdateInfo(table_entry, type_size, count, row_group_start);
 			transaction_node = &UpdateInfo::Get(node_ref);
 		} else {
 			transaction_node =
-			    CreateEmptyUpdateInfo(transaction, data_table, type_size, count, update_info_data, row_group_start);
+			    CreateEmptyUpdateInfo(transaction, table_entry, type_size, count, update_info_data, row_group_start);
 		}
 
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);

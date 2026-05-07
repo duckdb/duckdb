@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/common/operator/integer_cast_operator.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/skip_scanner.hpp"
@@ -19,7 +20,7 @@ constexpr idx_t StringValueScanner::LINE_FINDER_ID;
 
 StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
                                      const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
-                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_hander_p,
+                                     idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler_p,
                                      CSVIterator &iterator_p, bool store_line_size_p,
                                      shared_ptr<CSVFileScan> csv_file_scan_p, idx_t &lines_read_p, bool sniffing_p,
                                      const string &path_p, idx_t scan_id, bool &used_unstrictness)
@@ -29,7 +30,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
                                 : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
-      error_handler(error_hander_p), iterator(iterator_p), store_line_size(store_line_size_p),
+      error_handler(error_handler_p), iterator(iterator_p), store_line_size(store_line_size_p),
       csv_file_scan(std::move(csv_file_scan_p)), lines_read(lines_read_p), used_unstrictness(used_unstrictness),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(path_p) {
 	// Vector information
@@ -924,7 +925,7 @@ bool StringValueResult::AddRow(StringValueResult &result, const idx_t buffer_pos
 		if (result.quoted) {
 			AddQuotedValue(result, buffer_pos);
 		} else {
-			char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
+			const char *value_ptr = result.buffer_ptr + result.last_position.buffer_pos;
 			idx_t size = buffer_pos - result.last_position.buffer_pos;
 			if (result.escaped) {
 				AddPossiblyEscapedValue(result, buffer_pos, value_ptr, size, size == 0);
@@ -1188,6 +1189,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			insert_chunk.Slice(successful_rows, sel_idx);
 			result.borked_rows.clear();
 		}
+		insert_chunk.SetChildCardinality(insert_chunk.size());
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
 			if (iterator.IsBoundarySet()) {

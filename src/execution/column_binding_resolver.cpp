@@ -199,17 +199,17 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					    expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index, bindings.size(),
 					    types.size());
 				}
-				if (expr.return_type != types[i]) {
+				if (expr.GetReturnType() != types[i]) {
 					throw InternalException("Failed to bind column reference \"%s\" [%d.%d]: inequal types (%s != %s)",
 					                        expr.GetAlias(), expr.binding.table_index.index, expr.binding.column_index,
-					                        expr.return_type.ToString(), types[i].ToString());
+					                        expr.GetReturnType().ToString(), types[i].ToString());
 				}
 			}
 			if (verify_only) {
 				// in verification mode
 				return nullptr;
 			}
-			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.return_type, i);
+			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.GetReturnType(), i);
 		}
 	}
 	// LCOV_EXCL_START

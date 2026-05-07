@@ -1,6 +1,5 @@
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
@@ -13,7 +12,7 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
                                          const vector<column_t> &order_idx, const idx_t count, bool unique)
     : order_idx(order_idx), build_stage(WindowMergeSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
-	const auto force_external = ClientConfig::GetConfig(client).force_external;
+	const auto force_external = Settings::Get<DebugForceExternalSetting>(client);
 	LogicalType index_type;
 	if (count < std::numeric_limits<uint32_t>::max() && !force_external) {
 		index_type = LogicalType::INTEGER;
@@ -26,7 +25,7 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &client, const vector<Bou
 	vector<BoundOrderByNode> orders;
 	for (const auto &order_p : orders_p) {
 		auto order = order_p.Copy();
-		const auto &type = order.expression->return_type;
+		const auto &type = order.expression->GetReturnType();
 		scan_types.emplace_back(type);
 		order.expression = make_uniq<BoundReferenceExpression>(type, orders.size());
 		orders.emplace_back(std::move(order));

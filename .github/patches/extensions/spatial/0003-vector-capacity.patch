@@ -1,5 +1,5 @@
 diff --git a/src/spatial/operators/spatial_join_physical.cpp b/src/spatial/operators/spatial_join_physical.cpp
-index e601047..83d4905 100644
+index 804b7c9..bd8b172 100644
 --- a/src/spatial/operators/spatial_join_physical.cpp
 +++ b/src/spatial/operators/spatial_join_physical.cpp
 @@ -670,8 +670,8 @@ SinkFinalizeType PhysicalSpatialJoin::Finalize(Pipeline &pipeline, Event &event,

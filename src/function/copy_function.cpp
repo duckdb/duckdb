@@ -129,7 +129,7 @@ CopyFunctionFlushBatchReason CopyFunctionBatchAnalyzer::ToReason() const {
 		return CopyFunctionFlushBatchReason::BATCH_SIZE_BYTES;
 	}
 
-	return CopyFunctionFlushBatchReason::LAST_BATCH;
+	return CopyFunctionFlushBatchReason::FORCED_FLUSH;
 }
 
 } // namespace duckdb

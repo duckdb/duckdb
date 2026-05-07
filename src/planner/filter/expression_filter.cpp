@@ -9,6 +9,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/string_stats.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 
@@ -34,6 +35,24 @@ ExpressionFilter &ExpressionFilter::GetExpressionFilter(TableFilter &filter, con
 	return filter.Cast<ExpressionFilter>();
 }
 
+unique_ptr<Expression> ExpressionFilter::CreateInExpression(unique_ptr<Expression> column, vector<Value> values) {
+	auto result = make_uniq<BoundOperatorExpression>(ExpressionType::COMPARE_IN, LogicalType::BOOLEAN);
+	result->children.push_back(std::move(column));
+	for (auto &value : values) {
+		result->children.push_back(make_uniq<BoundConstantExpression>(std::move(value)));
+	}
+	return std::move(result);
+}
+
+unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Expression> column,
+                                                                   ExpressionType expression_type) {
+	D_ASSERT(expression_type == ExpressionType::OPERATOR_IS_NULL ||
+	         expression_type == ExpressionType::OPERATOR_IS_NOT_NULL);
+	auto result = make_uniq<BoundOperatorExpression>(expression_type, LogicalType::BOOLEAN);
+	result->children.push_back(std::move(column));
+	return std::move(result);
+}
+
 bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value &val) const {
 	ExpressionExecutor executor(context, *expr);
 	return EvaluateWithConstant(executor, val);
@@ -41,7 +60,7 @@ bool ExpressionFilter::EvaluateWithConstant(ClientContext &context, const Value 
 
 bool ExpressionFilter::EvaluateWithConstant(ExpressionExecutor &executor, const Value &val) const {
 	DataChunk input;
-	input.data.emplace_back(val);
+	input.data.emplace_back(val, count_t(1));
 	input.SetCardinality(1);
 
 	SelectionVector sel(1);
@@ -58,11 +77,7 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) c
 	return CheckExpressionStatistics(*expr, stats);
 }
 
-static bool IsDirectColumnRef(const Expression &expr) {
-	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF;
-}
-
-static FilterPropagateResult CheckZonemapAgainstConstants(BaseStatistics &stats, ExpressionType comparison_type,
+static FilterPropagateResult CheckZonemapAgainstConstants(const BaseStatistics &stats, ExpressionType comparison_type,
                                                           array_ptr<const Value> values) {
 	D_ASSERT(values.size() > 0);
 	switch (values[0].type().InternalType()) {
@@ -97,20 +112,57 @@ static FilterPropagateResult CheckFunctionStatistics(const BoundFunctionExpressi
 	return func_expr.function.GetFilterPruneCallback()(input);
 }
 
+static optional_ptr<const BaseStatistics> TryGetFilterStats(const Expression &expr, const BaseStatistics &stats,
+                                                            vector<unique_ptr<BaseStatistics>> &owned_stats) {
+	switch (expr.GetExpressionClass()) {
+	case ExpressionClass::BOUND_REF:
+		return &stats;
+	case ExpressionClass::BOUND_FUNCTION: {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		idx_t child_idx;
+		if (!TryGetStructExtractChildIndex(func, child_idx) || func.children.empty()) {
+			return nullptr;
+		}
+		auto child_stats = TryGetFilterStats(*func.children[0], stats, owned_stats);
+		if (!child_stats || child_stats->GetType().id() != LogicalTypeId::STRUCT) {
+			return nullptr;
+		}
+		owned_stats.push_back(StructStats::GetChildStats(*child_stats, child_idx).ToUnique());
+		return owned_stats.back().get();
+	}
+	default:
+		return nullptr;
+	}
+}
+
 static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpression &comp_expr,
                                                        BaseStatistics &stats) {
-	if (!IsDirectColumnRef(*comp_expr.left) || comp_expr.right->type != ExpressionType::VALUE_CONSTANT) {
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	optional_ptr<const BaseStatistics> filter_stats;
+	optional_ptr<const BoundConstantExpression> constant_expr;
+	auto comparison_type = comp_expr.GetExpressionType();
+	if (comp_expr.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(*comp_expr.left, stats, owned_stats);
+		constant_expr = &comp_expr.right->Cast<BoundConstantExpression>();
+	} else if (comp_expr.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		filter_stats = TryGetFilterStats(*comp_expr.right, stats, owned_stats);
+		constant_expr = &comp_expr.left->Cast<BoundConstantExpression>();
+		comparison_type = FlipComparisonExpression(comparison_type);
+	} else {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	auto &constant = comp_expr.right->Cast<BoundConstantExpression>().value;
+	if (!filter_stats || !constant_expr) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	auto &constant = constant_expr->value;
 	if (constant.IsNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!stats.CanHaveNoNull()) {
+	if (!filter_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto result = CheckZonemapAgainstConstants(stats, comp_expr.type, array_ptr<const Value>(&constant, 1));
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+	auto result = CheckZonemapAgainstConstants(*filter_stats, comparison_type, array_ptr<const Value>(&constant, 1));
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
@@ -118,21 +170,26 @@ static FilterPropagateResult CheckComparisonStatistics(const BoundComparisonExpr
 
 static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats,
                                                          ExpressionType operator_type) {
-	if (op_expr.children.empty() || !IsDirectColumnRef(*op_expr.children[0])) {
+	if (op_expr.children.empty()) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto filter_stats = TryGetFilterStats(*op_expr.children[0], stats, owned_stats);
+	if (!filter_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	if (operator_type == ExpressionType::OPERATOR_IS_NULL) {
-		if (!stats.CanHaveNull()) {
+		if (!filter_stats->CanHaveNull()) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
-		if (!stats.CanHaveNoNull()) {
+		if (!filter_stats->CanHaveNoNull()) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 	} else {
-		if (!stats.CanHaveNoNull()) {
+		if (!filter_stats->CanHaveNoNull()) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
-		if (!stats.CanHaveNull()) {
+		if (!filter_stats->CanHaveNull()) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
 	}
@@ -140,13 +197,18 @@ static FilterPropagateResult CheckNullOperatorStatistics(const BoundOperatorExpr
 }
 
 static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
-	if (op_expr.children.size() <= 1 || !IsDirectColumnRef(*op_expr.children[0])) {
+	if (op_expr.children.size() <= 1) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	vector<unique_ptr<BaseStatistics>> owned_stats;
+	auto filter_stats = TryGetFilterStats(*op_expr.children[0], stats, owned_stats);
+	if (!filter_stats) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	vector<Value> values;
 	values.reserve(op_expr.children.size() - 1);
 	for (idx_t i = 1; i < op_expr.children.size(); i++) {
-		if (op_expr.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+		if (op_expr.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
 		auto &value = op_expr.children[i]->Cast<BoundConstantExpression>().value;
@@ -157,22 +219,22 @@ static FilterPropagateResult CheckInOperatorStatistics(const BoundOperatorExpres
 	if (values.empty()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (!stats.CanHaveNoNull()) {
+	if (!filter_stats->CanHaveNoNull()) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	auto result = CheckZonemapAgainstConstants(stats, ExpressionType::COMPARE_EQUAL,
+	auto result = CheckZonemapAgainstConstants(*filter_stats, ExpressionType::COMPARE_EQUAL,
 	                                           array_ptr<const Value>(values.data(), values.size()));
-	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && stats.CanHaveNull()) {
+	if (result == FilterPropagateResult::FILTER_ALWAYS_TRUE && filter_stats->CanHaveNull()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	return result;
 }
 
 static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpression &op_expr, BaseStatistics &stats) {
-	switch (op_expr.type) {
+	switch (op_expr.GetExpressionType()) {
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
-		return CheckNullOperatorStatistics(op_expr, stats, op_expr.type);
+		return CheckNullOperatorStatistics(op_expr, stats, op_expr.GetExpressionType());
 	case ExpressionType::COMPARE_IN:
 		return CheckInOperatorStatistics(op_expr, stats);
 	default:
@@ -181,7 +243,7 @@ static FilterPropagateResult CheckOperatorStatistics(const BoundOperatorExpressi
 }
 
 static FilterPropagateResult CheckConjunctionStatistics(const BoundConjunctionExpression &conj, BaseStatistics &stats) {
-	switch (conj.type) {
+	switch (conj.GetExpressionType()) {
 	case ExpressionType::CONJUNCTION_AND: {
 		auto result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		for (auto &child : conj.children) {
@@ -255,7 +317,7 @@ string ExpressionFilter::ToString(const string &column_name) const {
 
 void ExpressionFilter::ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expression &column,
                                                   ExpressionType replace_type) {
-	if (expr->type == replace_type) {
+	if (expr->GetExpressionType() == replace_type) {
 		expr = column.Copy();
 		return;
 	}

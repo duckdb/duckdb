@@ -125,7 +125,7 @@ select log(2, -1)
 statement error
 select log(1, 64)
 ----
-<REGEX>:.*Out of Range Error.*divison by zero.*
+<REGEX>:.*Out of Range Error.*division by zero.*
 
 query I
 select log(2, 1)

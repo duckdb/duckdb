@@ -5,10 +5,10 @@
 require tpch
 
 statement ok
-pragma verify_external
+SET debug_force_external=true;
 
 statement ok
-PRAGMA verify_serializer
+SET debug_verify_serializer=true;
 
 statement ok
 CALL dbgen(sf=0.01);

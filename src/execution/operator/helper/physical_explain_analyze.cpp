@@ -37,8 +37,8 @@ SourceResultType PhysicalExplainAnalyze::GetDataInternal(ExecutionContext &conte
                                                          OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
 
-	chunk.SetValue(0, 0, Value("analyzed_plan"));
-	chunk.SetValue(1, 0, Value(gstate.analyzed_plan));
+	chunk.data[0].Append(Value("analyzed_plan"));
+	chunk.data[1].Append(Value(gstate.analyzed_plan));
 	chunk.SetCardinality(1);
 
 	return SourceResultType::FINISHED;

@@ -5,6 +5,6 @@ add_subdirectory(parallelism)
 add_subdirectory(pivot)
 add_subdirectory(storage)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES}
+set(UNITTEST_OBJECT_FILES
+    ${UNITTEST_OBJECT_FILES}
     PARENT_SCOPE)

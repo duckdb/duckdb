@@ -182,7 +182,7 @@ void ColumnSegment::Resize(idx_t new_size) {
 	auto old_handle = buffer_manager.Pin(block);
 	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
 	auto new_block = new_handle.GetBlockHandle();
-	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+	memcpy(new_handle.GetDataMutable(), old_handle.Ptr(), segment_size);
 
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
@@ -462,21 +462,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		}
 		return approved_tuple_count;
 	}
-	case TableFilterType::IS_NULL: {
-		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
-	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		// Apply the filter on the child vector
-		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
-		UnifiedVectorFormat child_data;
-		child_vec.ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
-		                       approved_tuple_count);
-	}
 	case TableFilterType::BLOOM_FILTER: {
 		auto &bloom_filter = filter.Cast<BFTableFilter>();
 		auto &state = filter_state.Cast<JoinFilterTableFilterState>();
@@ -527,7 +512,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 					continue;
 				}
 				auto current_result_data = result_sel.data() + result_offset;
-				SelectionVector current_result_sel(current_result_data);
+				SelectionVector current_result_sel(current_result_data, result_sel.Capacity() - result_offset);
 				idx_t new_matches =
 				    state.executor->SelectExpression(chunk, current_result_sel, current_sel, current_count);
 				// increment all matches by the offset

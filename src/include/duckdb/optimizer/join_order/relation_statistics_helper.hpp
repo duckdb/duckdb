@@ -28,7 +28,7 @@ public:
 		if (!FoundExpression()) {
 			return false;
 		}
-		return expression->type == ExpressionType::BOUND_COLUMN_REF;
+		return expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF;
 	}
 
 public:

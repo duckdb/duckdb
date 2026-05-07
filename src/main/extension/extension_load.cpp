@@ -120,7 +120,7 @@ struct ExtensionAccess {
 			}
 		} else if (load_state.init_result.abi_type == ExtensionABIType::C_STRUCT_UNSTABLE) {
 			// NOTE: we currently don't check anything here: the version of extensions of ABI type C_STRUCT_UNSTABLE is
-			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb verions meaning they will always
+			// ignored because C_STRUCT_UNSTABLE extensions are tied 1:1 to duckdb versions meaning they will always
 			// receive the whole function pointer struct
 		} else {
 			load_state.has_error = true;
@@ -190,7 +190,7 @@ static string ComputeFinalHash(const vector<string> &chunks) {
 	return two_level_hash;
 }
 
-static void IntializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
+static void InitializeAncillaryData(vector<string> &hash_chunks, vector<idx_t> &splits, idx_t length) {
 	const idx_t maxLenChunks = 1024ULL * 1024ULL;
 	const idx_t numChunks = (length + maxLenChunks - 1) / maxLenChunks;
 	hash_chunks.resize(numChunks);
@@ -327,7 +327,7 @@ bool ExtensionHelper::CheckExtensionSignature(FileHandle &handle, ParsedExtensio
 
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
-	IntializeAncillaryData(hash_chunks, splits, signature_offset);
+	InitializeAncillaryData(hash_chunks, splits, signature_offset);
 
 	ComputeHashesOnSegments(ComputeSHA256FileSegment, &handle, splits, hash_chunks);
 
@@ -343,7 +343,7 @@ bool ExtensionHelper::CheckExtensionBufferSignature(const char *buffer, idx_t bu
                                                     const bool allow_community_extensions) {
 	vector<string> hash_chunks;
 	vector<idx_t> splits;
-	IntializeAncillaryData(hash_chunks, splits, buffer_length);
+	InitializeAncillaryData(hash_chunks, splits, buffer_length);
 
 	ComputeHashesOnSegments(ComputeSHA256Buffer, buffer, splits, hash_chunks);
 
@@ -509,7 +509,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 #ifdef WASM_LOADABLE_EXTENSIONS
 	EM_ASM(
 	    {
-		    // Next few lines should argubly in separate JavaScript-land function call
+		    // Next few lines should arguably in separate JavaScript-land function call
 		    // TODO: move them out / have them configurable
 		    const xhr = new XMLHttpRequest();
 		    xhr.open("GET", UTF8ToString($0), false);

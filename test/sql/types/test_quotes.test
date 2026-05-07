@@ -1,0 +1,145 @@
+# name: test/sql/types/test_quotes.test
+# description: TypeExpression::ToString() must correctly handle quoting of type
+# group: [types]
+
+# ---------------------------------------------------------------------------
+# 1. Column defaults with CAST
+#    Before the fix: CAST(1 AS "UTINYINT")  After: CAST(1 AS UTINYINT)
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TABLE t_defaults (
+    a UTINYINT  DEFAULT CAST(1 AS UTINYINT),
+    b USMALLINT DEFAULT CAST(1 AS USMALLINT),
+    c UINTEGER  DEFAULT CAST(1 AS UINTEGER),
+    d UBIGINT   DEFAULT CAST(1 AS UBIGINT),
+    e UHUGEINT  DEFAULT CAST(1 AS UHUGEINT),
+    f TINYINT   DEFAULT CAST(1 AS TINYINT),
+    g HUGEINT   DEFAULT CAST(1 AS HUGEINT),
+    h DOUBLE    DEFAULT CAST(1.0 AS DOUBLE),
+    i SMALLINT  DEFAULT CAST(1 AS SMALLINT),
+    j INTEGER   DEFAULT CAST(1 AS INTEGER)
+);
+
+query TTT
+SELECT column_name, column_default, data_type
+FROM information_schema.columns
+WHERE table_name = 't_defaults'
+ORDER BY column_name;
+----
+a	CAST(1 AS UTINYINT)	UTINYINT
+b	CAST(1 AS USMALLINT)	USMALLINT
+c	CAST(1 AS UINTEGER)	UINTEGER
+d	CAST(1 AS UBIGINT)	UBIGINT
+e	CAST(1 AS UHUGEINT)	UHUGEINT
+f	CAST(1 AS TINYINT)	TINYINT
+g	CAST(1 AS HUGEINT)	HUGEINT
+h	CAST(1.0 AS DOUBLE)	DOUBLE
+i	CAST(1 AS SMALLINT)	SMALLINT
+j	CAST(1 AS INTEGER)	INTEGER
+
+# ---------------------------------------------------------------------------
+# 2. Create View
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE VIEW v_utiny  AS SELECT CAST(1 AS UTINYINT);
+
+statement ok
+CREATE VIEW v_usmall AS SELECT CAST(1 AS USMALLINT);
+
+statement ok
+CREATE VIEW v_uint   AS SELECT CAST(1 AS UINTEGER);
+
+statement ok
+CREATE VIEW v_ubig   AS SELECT CAST(1 AS UBIGINT);
+
+statement ok
+CREATE VIEW v_uhuge  AS SELECT CAST(1 AS UHUGEINT);
+
+statement ok
+CREATE VIEW v_tiny   AS SELECT CAST(1 AS TINYINT);
+
+statement ok
+CREATE VIEW v_huge   AS SELECT CAST(1 AS HUGEINT);
+
+statement ok
+CREATE VIEW v_dbl    AS SELECT CAST(1.0 AS DOUBLE);
+
+statement ok
+CREATE VIEW v_small  AS SELECT CAST(1 AS SMALLINT);
+
+statement ok
+CREATE VIEW v_int    AS SELECT CAST(1 AS INTEGER);
+
+query TT
+SELECT view_name, sql
+FROM duckdb_views()
+WHERE view_name IN ('v_utiny','v_usmall','v_uint','v_ubig','v_uhuge',
+                    'v_tiny','v_huge','v_dbl', 'v_small','v_int')
+ORDER BY view_name;
+----
+v_dbl	CREATE VIEW v_dbl AS SELECT CAST(1.0 AS DOUBLE);
+v_huge	CREATE VIEW v_huge AS SELECT CAST(1 AS HUGEINT);
+v_int	CREATE VIEW v_int AS SELECT CAST(1 AS INTEGER);
+v_small	CREATE VIEW v_small AS SELECT CAST(1 AS SMALLINT);
+v_tiny	CREATE VIEW v_tiny AS SELECT CAST(1 AS TINYINT);
+v_ubig	CREATE VIEW v_ubig AS SELECT CAST(1 AS UBIGINT);
+v_uhuge	CREATE VIEW v_uhuge AS SELECT CAST(1 AS UHUGEINT);
+v_uint	CREATE VIEW v_uint AS SELECT CAST(1 AS UINTEGER);
+v_usmall	CREATE VIEW v_usmall AS SELECT CAST(1 AS USMALLINT);
+v_utiny	CREATE VIEW v_utiny AS SELECT CAST(1 AS UTINYINT);
+
+# ---------------------------------------------------------------------------
+# 3. Compound types — STRUCT and LIST. Before the fix these came out as e.g.
+#    "STRUCT"(x "UTINYINT", y "USMALLINT").
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE VIEW v_struct AS SELECT CAST({'x': 1, 'y': 2} AS STRUCT(x UTINYINT, y USMALLINT)) AS s;
+
+statement ok
+CREATE VIEW v_list AS SELECT CAST([1, 2] AS UTINYINT[]) AS l;
+
+query T
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_struct';
+----
+CREATE VIEW v_struct AS SELECT CAST(main.struct_pack(x := 1, y := 2) AS STRUCT(x UTINYINT, y USMALLINT)) AS s;
+
+query T
+SELECT sql FROM duckdb_views() WHERE view_name = 'v_list';
+----
+CREATE VIEW v_list AS SELECT CAST(main.list_value(1, 2) AS UTINYINT[]) AS l;
+
+# ---------------------------------------------------------------------------
+# 4. user-defined types named after keywords must keep their quotes.
+#    "coalesce" is a COL_NAME keyword; "select" is a RESERVED keyword.
+# ---------------------------------------------------------------------------
+
+statement ok
+CREATE TYPE "coalesce" AS ENUM('a', 'b', 'c');
+
+statement ok
+CREATE TYPE "select" AS ENUM('x', 'y', 'z');
+
+statement ok
+CREATE TABLE t_kw_udt (
+    a VARCHAR DEFAULT CAST('a' AS "coalesce"),
+    b VARCHAR DEFAULT CAST('x' AS "select")
+);
+
+query TTT
+SELECT column_name, column_default, data_type
+FROM information_schema.columns
+WHERE table_name = 't_kw_udt'
+ORDER BY column_name;
+----
+a	CAST('a' AS "coalesce")	VARCHAR
+b	CAST('x' AS "select")	VARCHAR
+
+# The column_default must round-trip: re-executing it should not cause a parse error.
+statement ok
+CREATE TABLE t_kw_udt2 (
+    a VARCHAR DEFAULT CAST('a' AS "coalesce"),
+    b VARCHAR DEFAULT CAST('x' AS "select")
+);

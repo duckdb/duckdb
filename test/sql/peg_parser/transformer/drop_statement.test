@@ -2,13 +2,8 @@
 # description: 
 # group: [transformer]
 
-require autocomplete
-
 statement ok
 CREATE TABLE integers (i bigint);
-
-statement ok
-call enable_peg_parser();
 
 statement ok
 DROP TABLE integers;

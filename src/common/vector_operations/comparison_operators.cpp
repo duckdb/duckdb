@@ -195,9 +195,9 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	for (idx_t i = 0; i < count; i++) {
 		auto entry = cmp_data[i];
 		if (!entry.IsValid()) {
-			result_data.SetInvalid(i);
+			result_data.WriteNull();
 		} else {
-			result_data[i] = predicate(entry.GetValue());
+			result_data.WriteValue(predicate(entry.GetValue()));
 		}
 	}
 }
@@ -258,8 +258,8 @@ struct DistinctComparatorExecute {
 	static void Execute(Vector &left, Vector &right, int8_t *result_data, const SelectionVector &lhs_sel,
 	                    const SelectionVector &rhs_sel, idx_t sel_count) {
 		UnifiedVectorFormat left_format, right_format;
-		left.ToUnifiedFormat(sel_count, left_format);
-		right.ToUnifiedFormat(sel_count, right_format);
+		left.ToUnifiedFormat(left_format);
+		right.ToUnifiedFormat(right_format);
 		auto ldata = UnifiedVectorFormat::GetData<T>(left_format);
 		auto rdata = UnifiedVectorFormat::GetData<T>(right_format);
 		for (idx_t i = 0; i < sel_count; i++) {
@@ -370,7 +370,7 @@ struct ListEntryAccessor {
 	}
 	static void FlattenChild(Vector &vector) {
 		auto &child = ListVector::GetChildMutable(vector);
-		child.Flatten(ListVector::GetListSize(vector));
+		child.Flatten();
 	}
 	static idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		auto entries = UnifiedVectorFormat::GetData<list_entry_t>(format);
@@ -392,7 +392,7 @@ struct ArrayEntryAccessor {
 	}
 	void FlattenChild(Vector &vector) {
 		auto &child = ArrayVector::GetChildMutable(vector);
-		child.Flatten(ArrayVector::GetTotalSize(vector));
+		child.Flatten();
 	}
 	idx_t GetOffset(UnifiedVectorFormat &format, idx_t sel_idx) {
 		return format.sel->get_index(sel_idx) * array_size;
@@ -458,8 +458,8 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 
 	// step 2: get entries and child vector
 	UnifiedVectorFormat left_format, right_format;
-	left.ToUnifiedFormat(sel_count, left_format);
-	right.ToUnifiedFormat(sel_count, right_format);
+	left.ToUnifiedFormat(left_format);
+	right.ToUnifiedFormat(right_format);
 	auto &left_child = accessor.GetChild(left);
 	auto &right_child = accessor.GetChild(right);
 
@@ -537,8 +537,8 @@ static void VariantComparator(Vector &left, Vector &right, int8_t *result_data, 
                               const SelectionVector &rhs_sel, idx_t sel_count,
                               optional_ptr<ValidityMask> result_validity = nullptr) {
 	RecursiveUnifiedVectorFormat left_recursive_data, right_recursive_data;
-	Vector::RecursiveToUnifiedFormat(left, sel_count, left_recursive_data);
-	Vector::RecursiveToUnifiedFormat(right, sel_count, right_recursive_data);
+	Vector::RecursiveToUnifiedFormat(left, left_recursive_data);
+	Vector::RecursiveToUnifiedFormat(right, right_recursive_data);
 
 	UnifiedVariantVectorData left_variant(left_recursive_data);
 	UnifiedVariantVectorData right_variant(right_recursive_data);
@@ -760,8 +760,8 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 		DistinctExecuteConstant<T, OP>(left, right, result);
 	} else {
 		UnifiedVectorFormat ldata, rdata;
-		left.ToUnifiedFormat(count, ldata);
-		right.ToUnifiedFormat(count, rdata);
+		left.ToUnifiedFormat(ldata);
+		right.ToUnifiedFormat(rdata);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 		DistinctExecuteGenericLoop<T, OP>(UnifiedVectorFormat::GetData<T>(ldata),
@@ -845,7 +845,7 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 	// note that even for NULLS FIRST, ONLY the top-level is NULLS FIRST,
 	// i.e. within structs we still use NULLS LAST semantics
 	VectorOperations::DistinctComparator(left, right, result, count);
-	result.Flatten(count);
+	result.Flatten();
 	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
 	auto left_validity = left.Validity(count);
 	auto right_validity = right.Validity(count);

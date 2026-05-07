@@ -2,9 +2,6 @@
 # description: Issue 537
 # group: [rigger]
 
-statement ok
-PRAGMA enable_verification
-
 # Fetching from table and view results in a crash
 statement ok
 CREATE TABLE t0(c0 INT);

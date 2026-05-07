@@ -117,9 +117,9 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto offset = data[i].GetValueUnsafe();
-		result_data[i].offset = current_offset;
-		result_data[i].length = offset - current_offset - base_offset;
-		current_offset += result_data[i].length;
+		auto length = offset - current_offset - base_offset;
+		result_data.WriteValue(list_entry_t(current_offset, length));
+		current_offset += length;
 	}
 
 	D_ASSERT(last_entry >= base_offset);
@@ -138,6 +138,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	state.last_offset = last_entry;
 
 	ListVector::SetListSize(result, child_scan_count);
+	FlatVector::SetSize(result, count_t(scan_count));
 	return scan_count;
 }
 
@@ -153,7 +154,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	D_ASSERT(scan_count > 0);
 
 	UnifiedVectorFormat offsets;
-	offset_vector.ToUnifiedFormat(scan_count, offsets);
+	offset_vector.ToUnifiedFormat(offsets);
 	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
 	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
 	idx_t child_scan_count = last_entry - state.last_offset;
@@ -258,12 +259,12 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(TransactionData transaction, DataTable &data_table, idx_t column_index,
+void ListColumnData::Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index,
                             Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t row_group_start) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(TransactionData transaction, DataTable &data_table,
+void ListColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry,
                                   const vector<column_t> &column_path, Vector &update_vector, row_t *row_ids,
                                   idx_t update_count, idx_t depth, idx_t row_group_start) {
 	throw NotImplementedException("List Update Column is not supported");

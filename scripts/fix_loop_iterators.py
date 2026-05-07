@@ -7,7 +7,10 @@ from pathlib import Path
 
 
 def fix_file(path: Path) -> int:
-    text = path.read_text(encoding="utf-8")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except:
+        return
     new_text = re.sub(r'\$\{(\w+)\}', r'{\1}', text)
     if new_text == text:
         return 0

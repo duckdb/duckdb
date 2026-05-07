@@ -39,7 +39,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		//! invertible in practice.
 		auto &cast_expression = column_ref_expr->Cast<BoundCastExpression>();
 		auto target_type = cast_expression.source_type();
-		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.return_type)) {
+		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression.GetReturnType())) {
 			return nullptr;
 		}
 
@@ -54,7 +54,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 
 		// Is the constant cast invertible?
 		if (!cast_constant.IsNull() &&
-		    !BoundCastExpression::CastIsInvertible(cast_expression.return_type, target_type)) {
+		    !BoundCastExpression::CastIsInvertible(cast_expression.GetReturnType(), target_type)) {
 			// Cast is not invertible, so we do not rewrite this expression to ensure that the cast is executed
 			return nullptr;
 		}

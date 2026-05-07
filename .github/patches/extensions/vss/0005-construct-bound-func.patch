@@ -1,0 +1,22 @@
+diff --git a/src/hnsw/hnsw_optimize_topk.cpp b/src/hnsw/hnsw_optimize_topk.cpp
+index 5d16215..c48a9f9 100644
+--- a/src/hnsw/hnsw_optimize_topk.cpp
++++ b/src/hnsw/hnsw_optimize_topk.cpp
+@@ -36,15 +36,13 @@ static unique_ptr<Expression> CreateListOrderByExpr(ClientContext &context, uniq
+ 	vector<unique_ptr<Expression>> arguments;
+ 	arguments.push_back(std::move(elem_expr));
+ 
+-	auto agg_bind_data = func.Bind(context, arguments);
+-	auto new_agg_expr =
+-	    make_uniq<BoundAggregateExpression>(func, std::move(arguments), std::move(std::move(filter_expr)),
+-	                                        std::move(agg_bind_data), AggregateType::NON_DISTINCT);
++	auto new_agg_expr = func.Bind(context, std::move(arguments));
+ 
+ 	// We also need to order the list items by the distance
+ 	BoundOrderByNode order_by_node(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(order_expr));
+ 	new_agg_expr->order_bys = make_uniq<BoundOrderModifier>();
+ 	new_agg_expr->order_bys->orders.push_back(std::move(order_by_node));
++	new_agg_expr->filter = std::move(filter_expr);
+ 
+ 	return std::move(new_agg_expr);
+ }

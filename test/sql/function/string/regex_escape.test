@@ -2,9 +2,6 @@
 # description: regex escape test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test the example
 query T
 SELECT regexp_escape('https://duckdb.org');

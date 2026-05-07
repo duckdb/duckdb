@@ -42,8 +42,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
                              const vector<idx_t> &output_in_probe)
     : context(context_p), op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
+      vfound(Value::BOOLEAN(false), count_t(STANDARD_VECTOR_SIZE)), join_type(type_p), finalized(false),
+      has_null(false), residual_predicate(predicate_ptr), radix_bits(initial_radix_bits) {
 	// store residual predicate information
 	residual_info = std::move(residual_p);
 	lhs_output_in_probe = output_in_probe;
@@ -51,8 +51,8 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const PhysicalOperator &o
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.IsComparison());
-		D_ASSERT(condition.GetLHS().return_type == condition.GetRHS().return_type);
-		auto type = condition.GetLHS().return_type;
+		D_ASSERT(condition.GetLHS().GetReturnType() == condition.GetRHS().GetReturnType());
+		auto type = condition.GetLHS().GetReturnType();
 		if (condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL ||
 		    condition.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// ensure that all equality conditions are at the front,
@@ -158,12 +158,12 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 		salt_v.SetVectorType(VectorType::CONSTANT_VECTOR);
 
 		*ConstantVector::GetData<hash_t>(salt_v) = ht_entry_t::ExtractSalt(hash);
-		salt_v.Flatten(count);
+		salt_v.Flatten();
 
 		hash = hash & bitmask;
-		hashes_v.Flatten(count);
+		hashes_v.Flatten();
 	} else {
-		hashes_v.Flatten(count);
+		hashes_v.Flatten();
 		auto salts = FlatVector::GetDataMutable<hash_t>(salt_v);
 		auto hashes = FlatVector::GetDataMutable<hash_t>(hashes_v);
 		for (idx_t i = 0; i < count; i++) {
@@ -218,7 +218,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				const hash_t row_salt = ht_entry_t::ExtractSalt(row_hash);
 				const bool salt_match = entry.GetSalt() == row_salt;
 				if (salt_match) {
-					// we know that the enty is occupied and the salt matches -> compare the keys
+					// we know that the entry is occupied and the salt matches -> compare the keys
 					auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
 					                    row_index);
@@ -267,16 +267,12 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
-		UnifiedVectorFormat hashes_unified_v;
-		hashes_v.ToUnifiedFormat(count, hashes_unified_v);
-
-		auto hashes_unified = UnifiedVectorFormat::GetData<hash_t>(hashes_unified_v);
-		auto hashes_dense = FlatVector::GetDataMutable<idx_t>(state.hashes_dense_v);
+		auto hashes_unified = hashes_v.Values<hash_t>(count);
+		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
 
 		for (idx_t i = 0; i < count; i++) {
 			const auto row_index = row_sel->get_index(i);
-			const auto uvf_index = hashes_unified_v.sel->get_index(row_index);
-			hashes_dense[i] = hashes_unified[uvf_index];
+			hashes_dense.WriteValue(hashes_unified[row_index].GetValue());
 		}
 	} else {
 		VectorOperations::Copy(hashes_v, state.hashes_dense_v, count, 0, 0);
@@ -323,7 +319,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			hashes_dense[i] = ht_offset_and_salt; // populate dense again
 		}
 
-		// in the next interation, we have a selection vector with the keys that do not match
+		// in the next iteration, we have a selection vector with the keys that do not match
 		row_sel = &state.keys_no_match_sel;
 		has_row_sel = true;
 
@@ -395,17 +391,17 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		// for the correlated mark join we need to keep track of COUNT(*) and COUNT(COLUMN) for each of the correlated
 		// columns push into the aggregate hash table
 		D_ASSERT(info.correlated_counts);
-		info.group_chunk.SetCardinality(keys);
 		for (idx_t i = 0; i < info.correlated_types.size(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
+		info.group_chunk.SetCardinality(keys);
 		if (info.correlated_payload.data.empty()) {
 			vector<LogicalType> types;
 			types.push_back(keys.data[info.correlated_types.size()].GetType());
 			info.correlated_payload.InitializeEmpty(types);
 		}
-		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
+		info.correlated_payload.SetCardinality(keys);
 		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 
@@ -450,7 +446,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
-	hash_values.ToUnifiedFormat(source_chunk.size(), append_state.chunk_state.vector_data.back().unified);
+	hash_values.ToUnifiedFormat(append_state.chunk_state.vector_data.back().unified);
 
 	// We already called TupleDataCollection::ToUnifiedFormat, so we can AppendUnified here
 	sink_collection->AppendUnified(append_state, source_chunk, *current_sel, added_count);
@@ -493,7 +489,7 @@ static data_ptr_t LoadPointer(const const_data_ptr_t &source) {
 	return cast_uint64_to_pointer(Load<uint64_t>(source));
 }
 
-//! If we consider to insert into an entry we expct to be empty, if it was filled in the meantime the insert will not
+//! If we consider to insert into an entry we expect to be empty, if it was filled in the meantime the insert will not
 //! happen and we need to return the pointer to the to row with which the new entry would have collided. In any other
 //! case we return a nullptr
 template <bool PARALLEL, bool EXPECT_EMPTY>
@@ -1024,6 +1020,7 @@ idx_t ScanStructure::ApplyResidualPredicate(DataChunk &probe_data, SelectionVect
 		idx_t layout_col = entry.second;
 		auto &target_vector = residual_state->eval_chunk.data[col_with_offset];
 		GatherResult(target_vector, match_sel, match_count, layout_col);
+		FlatVector::SetSize(target_vector, count_t(match_count));
 	}
 
 	SelectionVector &selected_sel = residual_state->selected_sel;
@@ -1071,23 +1068,31 @@ idx_t ScanStructure::ScanInnerJoin(DataChunk &keys, DataChunk &probe_data, Selec
 	}
 }
 
+template <bool USE_DICT_EMISSION>
+static void AdvancePointersLoop(JoinHashTable &ht, Vector &pointers, SelectionVector &out_sel,
+                                const SelectionVector &sel, const idx_t sel_count, idx_t &out_count) {
+	idx_t new_count = 0;
+	auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(pointers);
+	for (idx_t i = 0; i < sel_count; i++) {
+		auto idx = sel.get_index(i);
+		ptrs[idx] = ht.GetNextPointer<USE_DICT_EMISSION>(ptrs[idx]);
+		if (ptrs[idx]) {
+			out_sel.set_index(new_count++, idx);
+		}
+	}
+	out_count = new_count;
+}
+
 void ScanStructure::AdvancePointers(const SelectionVector &sel, const idx_t sel_count) {
 	if (!ht.chains_longer_than_one) {
 		this->count = 0;
 		return;
 	}
-
-	// now for all the pointers, we move on to the next set of pointers
-	idx_t new_count = 0;
-	auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(this->pointers);
-	for (idx_t i = 0; i < sel_count; i++) {
-		auto idx = sel.get_index(i);
-		ptrs[idx] = LoadPointer(ptrs[idx] + ht.pointer_offset);
-		if (ptrs[idx]) {
-			this->sel_vector.set_index(new_count++, idx);
-		}
+	if (ht.use_dict_emission) {
+		AdvancePointersLoop<true>(ht, pointers, sel_vector, sel, sel_count, count);
+	} else {
+		AdvancePointersLoop<false>(ht, pointers, sel_vector, sel, sel_count, count);
 	}
-	this->count = new_count;
 }
 
 void ScanStructure::AdvancePointers() {
@@ -1107,6 +1112,23 @@ void ScanStructure::GatherResult(Vector &result, const SelectionVector &sel_vect
 void ScanStructure::GatherResult(Vector &result, const idx_t count, const idx_t col_idx) {
 	ht.data_collection->Gather(rhs_pointers, *FlatVector::IncrementalSelectionVector(), count, col_idx, result,
 	                           *FlatVector::IncrementalSelectionVector(), nullptr);
+}
+
+void JoinHashTable::GatherRHS(Vector &row_ptrs, const SelectionVector &ptr_sel, const idx_t count, DataChunk &result,
+                              idx_t rhs_col_offset) const {
+	if (use_dict_emission) {
+		const auto ptrs = FlatVector::GetData<data_ptr_t>(row_ptrs);
+		EmitDictVectors(ptrs, ptr_sel, count, result, rhs_col_offset);
+		return;
+	}
+	const auto &result_sel = *FlatVector::IncrementalSelectionVector();
+	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
+		auto &vector = result.data[rhs_col_offset + col_idx];
+		const auto output_col_idx = output_columns[col_idx];
+		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
+		data_collection->Gather(row_ptrs, ptr_sel, count, output_col_idx, vector, result_sel, nullptr);
+		FlatVector::SetSize(vector, count_t(count));
+	}
 }
 
 void ScanStructure::UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count) {
@@ -1169,12 +1191,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 					result.SetCardinality(result_count);
 
 					// on the RHS, we need to fetch the data from the hash table
-					for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-						auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-						const auto output_col_idx = ht.output_columns[i];
-						D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-						GatherResult(vector, chain_match_sel_vector, result_count, output_col_idx);
-					}
+					ht.GatherRHS(pointers, chain_match_sel_vector, result_count, result, ht.lhs_output_in_probe.size());
 
 					AdvancePointers();
 					return;
@@ -1197,12 +1214,8 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &probe_data, DataCh
 		result.SetCardinality(base_count);
 
 		// 2) gather RHS vectors
-		for (idx_t i = 0; i < ht.output_columns.size(); i++) {
-			auto &vector = result.data[ht.lhs_output_in_probe.size() + i];
-			const auto output_col_idx = ht.output_columns[i];
-			D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
-			GatherResult(vector, base_count, output_col_idx);
-		}
+		ht.GatherRHS(rhs_pointers, *FlatVector::IncrementalSelectionVector(), base_count, result,
+		             ht.lhs_output_in_probe.size());
 	}
 }
 
@@ -1274,6 +1287,32 @@ void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 	finished = true;
 }
 
+template <bool USE_DICT_EMISSION>
+static void MarkChainsAsFoundLoop(JoinHashTable &ht, data_ptr_t ptrs[], const SelectionVector &chain_match_sel_vector,
+                                  const idx_t result_count, const data_ptr_t dead_end_ptr) {
+	for (idx_t i = 0; i < result_count; i++) {
+		const auto idx = chain_match_sel_vector.get_index(i);
+		auto &ptr = ptrs[idx];
+		if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
+			ptr = dead_end_ptr;
+			continue;
+		}
+
+		// Fully mark chain as found
+		while (true) {
+			// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
+			// threads Technically it is, but it does not matter, since the only value that can be written is
+			// "true"
+			Store<bool>(true, ptr + ht.tuple_size);
+			auto next_ptr = ht.GetNextPointer<USE_DICT_EMISSION>(ptr);
+			if (!next_ptr) {
+				break;
+			}
+			ptr = next_ptr;
+		}
+	}
+}
+
 void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_data) {
 	const auto ptrs = FlatVector::GetDataMutable<data_ptr_t>(pointers);
 	while (!PointersExhausted()) {
@@ -1282,26 +1321,11 @@ void ScanStructure::NextRightSemiOrAntiJoin(DataChunk &keys, DataChunk &probe_da
 
 		if (ht.non_equality_predicates.empty() && !ht.residual_predicate) {
 			// we only have equality predicates - the match is found for the entire chain
-			for (idx_t i = 0; i < result_count; i++) {
-				const auto idx = chain_match_sel_vector.get_index(i);
-				auto &ptr = ptrs[idx];
-				if (Load<bool>(ptr + ht.tuple_size)) { // Early out: chain has been fully marked as found before
-					ptr = ht.dead_end.get();
-					continue;
-				}
-
-				// Fully mark chain as found
-				while (true) {
-					// NOTE: threadsan reports this as a data race because this can be set concurrently by separate
-					// threads Technically it is, but it does not matter, since the only value that can be written is
-					// "true"
-					Store<bool>(true, ptr + ht.tuple_size);
-					auto next_ptr = LoadPointer(ptr + ht.pointer_offset);
-					if (!next_ptr) {
-						break;
-					}
-					ptr = next_ptr;
-				}
+			const auto dead_end_ptr = ht.dead_end.get();
+			if (ht.use_dict_emission) {
+				MarkChainsAsFoundLoop<true>(ht, ptrs, chain_match_sel_vector, result_count, dead_end_ptr);
+			} else {
+				MarkChainsAsFoundLoop<false>(ht, ptrs, chain_match_sel_vector, result_count, dead_end_ptr);
 			}
 		} else {
 			// we have non-equality predicates - we need to evaluate the join condition for every row
@@ -1329,6 +1353,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 
 	auto &mark_vector = result.data.back();
 	mark_vector.SetVectorType(VectorType::FLAT_VECTOR);
+	FlatVector::SetSize(mark_vector, count_t(probe_data.size()));
 
 	// first we set the NULL values from the join keys
 	// if there is any NULL in the keys, the result is NULL
@@ -1339,7 +1364,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 			continue;
 		}
 		UnifiedVectorFormat jdata;
-		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+		join_keys.data[col_idx].ToUnifiedFormat(jdata);
 		if (jdata.validity.CanHaveNull()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
@@ -1383,10 +1408,10 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
 		D_ASSERT(keys.ColumnCount() == info.group_chunk.ColumnCount() + 1);
-		info.group_chunk.SetCardinality(keys);
 		for (idx_t i = 0; i < info.group_chunk.ColumnCount(); i++) {
 			info.group_chunk.data[i].Reference(keys.data[i]);
 		}
+		info.group_chunk.SetCardinality(keys);
 		info.correlated_counts->FetchAggregates(info.group_chunk, info.result_chunk);
 
 		// extract OUTPUT columns from probe_data
@@ -1416,7 +1441,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			break;
 		default: {
 			UnifiedVectorFormat kdata;
-			last_key.ToUnifiedFormat(keys.size(), kdata);
+			last_key.ToUnifiedFormat(kdata);
 			for (idx_t i = 0; i < probe_data.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
 				mask.Set(i, kdata.validity.RowIsValid(kidx));
@@ -1441,6 +1466,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 				mask.SetValid(i);
 			}
 		}
+		FlatVector::SetSize(result_vector, count_t(probe_data.size()));
 	}
 	finished = true;
 }
@@ -1474,7 +1500,7 @@ void ScanStructure::NextLeftJoin(DataChunk &keys, DataChunk &probe_data, DataChu
 			// now set the right side to NULL
 			for (idx_t i = ht.lhs_output_in_probe.size(); i < result.ColumnCount(); i++) {
 				Vector &vec = result.data[i];
-				ConstantVector::SetNull(vec);
+				ConstantVector::SetNull(vec, count_t(remaining_count));
 			}
 		}
 		finished = true;
@@ -1520,6 +1546,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &probe_data, DataC
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, count_t(probe_data.size()));
 	}
 	result.SetCardinality(probe_data.size());
 
@@ -1587,6 +1614,7 @@ void ScanStructure::NextUniqueLeftJoin(DataChunk &keys, DataChunk &probe_data, D
 		const auto output_col_idx = ht.output_columns[i];
 		D_ASSERT(vector.GetType() == ht.layout_ptr->GetTypes()[output_col_idx]);
 		GatherResult(vector, result_sel, result_sel, result_count, output_col_idx);
+		FlatVector::SetSize(vector, count_t(probe_size));
 	}
 
 	// single pass - done
@@ -1645,16 +1673,11 @@ void JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses, Dat
 	// set the left side as a constant NULL
 	for (idx_t i = 0; i < left_column_count; i++) {
 		Vector &vec = result.data[i];
-		ConstantVector::SetNull(vec);
+		ConstantVector::SetNull(vec, count_t(found_entries));
 	}
 
 	// gather the values from the RHS
-	for (idx_t i = 0; i < output_columns.size(); i++) {
-		auto &vector = result.data[left_column_count + i];
-		const auto output_col_idx = output_columns[i];
-		D_ASSERT(vector.GetType() == layout_ptr->GetTypes()[output_col_idx]);
-		data_collection->Gather(addresses, sel_vector, found_entries, output_col_idx, vector, sel_vector, nullptr);
-	}
+	GatherRHS(addresses, sel_vector, found_entries, result, left_column_count);
 }
 
 idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses) {
@@ -1856,7 +1879,7 @@ bool JoinHashTable::PrepareExternalFinalize(const idx_t max_ht_size) {
 	std::stable_sort(partition_indices.begin(), partition_indices.end(), [&](const idx_t &lhs, const idx_t &rhs) {
 		const auto lhs_size = partitions[lhs]->SizeInBytes() + PointerTableSize(partitions[lhs]->Count());
 		const auto rhs_size = partitions[rhs]->SizeInBytes() + PointerTableSize(partitions[rhs]->Count());
-		// We divide by min_partition_size, effectively rouding everything down to a multiple of min_partition_size
+		// We divide by min_partition_size, effectively rounding everything down to a multiple of min_partition_size
 		// Makes it so minor differences in partition sizes don't mess up the original order
 		// Retaining as much of the original order as possible reduces I/O (partition idx determines eviction queue idx)
 		return lhs_size / min_partition_size < rhs_size / min_partition_size;
@@ -1984,6 +2007,128 @@ void ProbeSpill::PrepareNextProbe() {
 	}
 	consumer = make_uniq<ColumnDataConsumer>(*global_spill_collection, column_ids);
 	consumer->InitializeScan();
+}
+
+//===--------------------------------------------------------------------===//
+// Small Build Side Dictionary Emission
+//===--------------------------------------------------------------------===//
+//! Threshold constants gating small-build-side dictionary emission
+struct DictionaryEmissionActivation {
+	//! Caps the dict_arrays allocation; 8 MiB keeps them in L3 and bounds aux_next_ptrs
+	static constexpr idx_t MAX_BUILD_PAYLOAD_BYTES = 8ULL * 1024ULL * 1024ULL;
+	//! Below this, dictionary-emission setup is not amortized by probe-side savings
+	static constexpr idx_t MIN_PROBE_ROWS = 262144;
+	//! Below this ratio, per-row savings are unlikely to amortize the setup cost
+	static constexpr idx_t PROBE_BUILD_RATIO = 100;
+};
+
+idx_t JoinHashTable::ComputeBuildPayloadBytes(const vector<LogicalType> &rhs_output_types) const {
+	// the size of variable-size strings isn't counted here because they are already stored in the TupleDataCollection
+	idx_t payload_bytes_per_row = 0;
+	for (const auto &type : rhs_output_types) {
+		payload_bytes_per_row += GetTypeIdSize(type.InternalType());
+	}
+	return Count() * payload_bytes_per_row;
+}
+
+bool JoinHashTable::CanUseDictionaryEmission(const PhysicalHashJoin &op, bool external, idx_t probe_cardinality) const {
+	// external joins rebuild partitions, invalidating row pointers
+	if (external) {
+		return false;
+	}
+	// SINGLE joins need FlatVector::SetNull for unmatched rows; dictionary vectors cannot supply it
+	if (join_type == JoinType::SINGLE) {
+		return false;
+	}
+	if (op.rhs_output_columns.col_types.empty()) {
+		return false;
+	}
+	if (Count() == 0) {
+		return false;
+	}
+	if (probe_cardinality < DictionaryEmissionActivation::MIN_PROBE_ROWS) {
+		return false;
+	}
+	if (probe_cardinality < DictionaryEmissionActivation::PROBE_BUILD_RATIO * Count()) {
+		return false;
+	}
+	// Vector::Dictionary does not support nested types
+	for (const auto &type : op.rhs_output_columns.col_types) {
+		switch (type.InternalType()) {
+		case PhysicalType::STRUCT:
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY:
+			return false;
+		default:
+			break;
+		}
+	}
+	if (ComputeBuildPayloadBytes(op.rhs_output_columns.col_types) >
+	    DictionaryEmissionActivation::MAX_BUILD_PAYLOAD_BYTES) {
+		return false;
+	}
+	// Count() fits in the uint32_t dict index stored into NEXT_PTR by BuildDictionaryArrays
+	D_ASSERT(Count() <= NumericLimits<uint32_t>::Maximum());
+	return true;
+}
+
+void JoinHashTable::EmitDictVectors(const data_ptr_t *row_ptrs, const SelectionVector &ptr_sel, idx_t count,
+                                    DataChunk &result, idx_t rhs_col_offset) const {
+	D_ASSERT(output_columns.size() == dict_arrays.size());
+	SelectionVector build_sel_vec(count);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = ptr_sel.get_index(i);
+		build_sel_vec.set_index(i, Load<uint32_t>(row_ptrs[idx] + pointer_offset));
+	}
+	for (idx_t col_idx = 0; col_idx < output_columns.size(); col_idx++) {
+		auto &vector = result.data[rhs_col_offset + col_idx];
+		vector.Dictionary(dict_arrays[col_idx], build_sel_vec, count);
+	}
+}
+
+void JoinHashTable::BuildDictionaryArrays(const PhysicalHashJoin &op) {
+	auto &collection = *data_collection;
+	const auto build_count = collection.Count();
+	// preconditions enforced by CanUseDictionaryEmission
+	D_ASSERT(build_count > 0);
+	// dict index is a uint32_t; assert defensively if MAX_BUILD_PAYLOAD_BYTES is ever relaxed
+	D_ASSERT(build_count <= NumericLimits<uint32_t>::Maximum());
+
+	// collect a row pointer per build row; the TDC holds its own BufferHandles for its lifetime,
+	// and FinishEvent has already verified everything is pinned before calling us
+	Vector row_pointer_vector(LogicalType::POINTER, build_count);
+	JoinHTScanState scan_state(collection, 0, collection.ChunkCount(), TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	const auto collected = FillWithHTOffsets(scan_state, row_pointer_vector);
+	D_ASSERT(collected == build_count);
+	(void)collected;
+	const auto row_ptrs = FlatVector::GetData<data_ptr_t>(row_pointer_vector);
+
+	// gather RHS output columns into columnar dictionary arrays
+	const auto &sel = *FlatVector::IncrementalSelectionVector();
+	for (idx_t col_idx = 0; col_idx < op.rhs_output_columns.col_types.size(); col_idx++) {
+		const auto &type = op.rhs_output_columns.col_types[col_idx];
+		auto dict_entry = DictionaryVector::CreateReusableDictionary(type, build_count);
+		const auto output_col_idx = output_columns[col_idx];
+		collection.Gather(row_pointer_vector, sel, build_count, output_col_idx, dict_entry->data, sel, nullptr);
+		dict_arrays.emplace_back(std::move(dict_entry));
+	}
+
+	// save chain pointers before overwriting NEXT_PTR; GetNextPointer reads them back
+	if (chains_longer_than_one) {
+		aux_next_ptrs = buffer_manager.GetBufferAllocator().Allocate(build_count * sizeof(data_ptr_t));
+		aux_next_ptrs_data = reinterpret_cast<data_ptr_t *>(aux_next_ptrs.get());
+	}
+
+	// save the original NEXT_PTR into aux_next_ptrs (if chains exist) and embed the dict index
+	for (idx_t i = 0; i < build_count; i++) {
+		const auto next_ptr_location = row_ptrs[i] + pointer_offset;
+		if (chains_longer_than_one) {
+			aux_next_ptrs_data[i] = LoadPointer(next_ptr_location);
+		}
+		Store<uint32_t>(static_cast<uint32_t>(i), next_ptr_location);
+	}
+
+	use_dict_emission = true;
 }
 
 } // namespace duckdb

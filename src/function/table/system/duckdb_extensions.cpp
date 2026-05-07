@@ -194,28 +194,38 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
+
+	// extension_name LogicalType::VARCHAR
+	auto &extension_name = output.data[0];
+	// loaded LogicalType::BOOLEAN
+	auto &loaded = output.data[1];
+	// installed LogicalType::BOOLEAN
+	auto &installed = output.data[2];
+	// install_path LogicalType::VARCHAR
+	auto &install_path = output.data[3];
+	// description LogicalType::VARCHAR
+	auto &description = output.data[4];
+	// aliases     LogicalType::LIST(LogicalType::VARCHAR)
+	auto &aliases = output.data[5];
+	// extension_version LogicalType::VARCHAR
+	auto &extension_version = output.data[6];
+	// install_mode LogicalType::VARCHAR
+	auto &install_mode = output.data[7];
+	// installed_from LogicalType::VARCHAR
+	auto &installed_from = output.data[8];
+
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
 
-		// return values:
-		// extension_name LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
-		// loaded LogicalType::BOOLEAN
-		output.SetValue(1, count, Value::BOOLEAN(entry.loaded));
-		// installed LogicalType::BOOLEAN
-		output.SetValue(2, count, Value::BOOLEAN(entry.installed));
-		// install_path LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.file_path));
-		// description LogicalType::VARCHAR
-		output.SetValue(4, count, Value(entry.description));
-		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
-		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(6, count, Value(entry.extension_version));
-		// installed_mode LogicalType::VARCHAR
-		output.SetValue(7, count, EnumUtil::ToString(entry.install_mode));
-		// installed_source LogicalType::VARCHAR
-		output.SetValue(8, count, Value(entry.installed_from));
+		extension_name.Append(Value(entry.name));
+		loaded.Append(Value::BOOLEAN(entry.loaded));
+		installed.Append(Value::BOOLEAN(entry.installed));
+		install_path.Append(Value(entry.file_path));
+		description.Append(Value(entry.description));
+		aliases.Append(Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		extension_version.Append(Value(entry.extension_version));
+		install_mode.Append(EnumUtil::ToString(entry.install_mode));
+		installed_from.Append(Value(entry.installed_from));
 
 		data.offset++;
 		count++;

@@ -6,9 +6,6 @@
 # however, ISO 8601 DOES have the year 0, thus "0000-01-01" is actually equal to "0001-01-01 (BC)"
 # this means all BC dates are off-by-one, so -1000-01-01 is equal to "1001-01-01 (BC)", etc
 
-statement ok
-PRAGMA enable_verification
-
 # create and insert into table
 statement ok
 CREATE TABLE dates(i DATE)

@@ -18,28 +18,26 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	auto current_date = Timestamp::FromDatetime(
 	    Timestamp::GetDate(MetaTransaction::Get(state.GetContext()).start_timestamp), dtime_t(0));
 
-	UnaryExecutor::ExecuteWithNulls<timestamp_t, interval_t>(input.data[0], result, input.size(),
-	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-		                                                         if (Timestamp::IsFinite(input)) {
-			                                                         return Interval::GetAge(current_date, input);
-		                                                         } else {
-			                                                         mask.SetInvalid(idx);
-			                                                         return interval_t();
-		                                                         }
-	                                                         });
+	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(),
+	                                                [&](timestamp_t input) -> optional<interval_t> {
+		                                                if (Timestamp::IsFinite(input)) {
+			                                                return Interval::GetAge(current_date, input);
+		                                                } else {
+			                                                return nullopt;
+		                                                }
+	                                                });
 }
 
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
-	BinaryExecutor::ExecuteWithNulls<timestamp_t, timestamp_t, interval_t>(
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [&](timestamp_t input1, timestamp_t input2, ValidityMask &mask, idx_t idx) {
+	    [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
 		    if (Timestamp::IsFinite(input1) && Timestamp::IsFinite(input2)) {
 			    return Interval::GetAge(input1, input2);
 		    } else {
-			    mask.SetInvalid(idx);
-			    return interval_t();
+			    return nullopt;
 		    }
 	    });
 }

@@ -21,7 +21,7 @@ string DropInfo::ToString() const {
 	string result = "";
 	if (type == CatalogType::PREPARED_STATEMENT) {
 		result += "DEALLOCATE PREPARE ";
-		result += KeywordHelper::WriteOptionallyQuoted(name);
+		result += SQLIdentifier(name);
 	} else {
 		result += "DROP";
 		result += " " + ParseInfo::TypeToString(type);

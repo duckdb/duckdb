@@ -179,7 +179,7 @@ constexpr T ClampValue(T v, T min, T max) {
 
 template <typename T>
 T AbsValue(T a) {
-	return a < 0 ? -a : a;
+	return a < 0 ? static_cast<T>(-a) : a;
 }
 
 //! Align value (ceiling) (not for pointer types)

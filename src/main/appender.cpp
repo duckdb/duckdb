@@ -318,12 +318,12 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 		throw InvalidInputException("Too many appends for chunk!");
 	}
 	if (value.type() == target.GetTypes()[col]) {
-		target.SetValue(col, row, value);
+		target.data[col].SetValue(row, value);
 	} else {
 		Value new_value;
 		string error_msg;
 		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.SetValue(col, row, new_value);
+			target.data[col].SetValue(row, new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -341,7 +341,7 @@ void BaseAppender::Append(std::nullptr_t value) {
 }
 
 void BaseAppender::AppendValue(const Value &value) {
-	chunk.SetValue(column, chunk.size(), value);
+	chunk.data[column].SetValue(chunk.size(), value);
 	column++;
 }
 
@@ -738,7 +738,7 @@ InternalAppender::~InternalAppender() {
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
 	auto binder = Binder::CreateBinder(context);
 	auto bound_constraints = binder->BindConstraints(table);
-	table.GetStorage().LocalAppend(table, context, collection, bound_constraints, nullptr);
+	table.GetStorage().LocalAppend(table.Cast<DuckTableEntry>(), context, collection, bound_constraints, nullptr);
 }
 
 void BaseAppender::Close() {

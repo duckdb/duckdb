@@ -1,0 +1,85 @@
+# name: test/extension/window_extension.test
+# description: Test the DuckWeed window function
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension';
+
+query III
+WITH streaming AS (
+	SELECT 
+		i,
+		IF(i % 5, i, NULL) AS m,
+	FROM range(20) tbl(i)
+)
+SELECT 
+	i, 
+	m, 
+	duckweed(m) OVER () as d
+FROM streaming
+ORDER BY i;
+----
+0	NULL	NULL
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	NULL	4
+6	6	6
+7	7	7
+8	8	8
+9	9	9
+10	NULL	9
+11	11	11
+12	12	12
+13	13	13
+14	14	14
+15	NULL	14
+16	16	16
+17	17	17
+18	18	18
+19	19	19
+
+query IIII
+WITH blocking AS (
+	SELECT 
+		i,
+		i % 3 AS p,
+		IF(i % 5, i, NULL) AS m,
+	FROM range(20) tbl(i)
+)
+SELECT 
+	i, 
+	p, 
+	m, 
+	duckweed(m) OVER (PARTITION BY p ORDER BY i) as d
+FROM blocking
+ORDER BY p, i;
+----
+0	0	NULL	NULL
+3	0	3	3
+6	0	6	6
+9	0	9	9
+12	0	12	12
+15	0	NULL	12
+18	0	18	18
+1	1	1	1
+4	1	4	4
+7	1	7	7
+10	1	NULL	7
+13	1	13	13
+16	1	16	16
+19	1	19	19
+2	2	2	2
+5	2	NULL	2
+8	2	8	8
+11	2	11	11
+14	2	14	14
+17	2	17	17
+

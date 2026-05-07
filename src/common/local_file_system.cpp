@@ -110,7 +110,7 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
+		struct _stati64 status; // typos:ignore
 		_wstati64(wpath, &status);
 		if (status.st_mode & S_IFREG) {
 			return true;
@@ -122,7 +122,7 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
+		struct _stati64 status; // typos:ignore
 		_wstati64(wpath, &status);
 		if (status.st_mode & _S_IFCHR) {
 			return true;

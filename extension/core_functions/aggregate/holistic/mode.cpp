@@ -365,8 +365,8 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-	                   idx_t rid) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 
 		state.InitializePage(partition);
@@ -381,44 +381,49 @@ struct ModeFunction : TypedModeFunction<TYPE_OP> {
 
 		ModeIncluded<STATE> included(fmask, state);
 
+		using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
+		Updater updater(state, included);
+
 		if (!state.frequency_map) {
 			state.frequency_map = TYPE_OP::CreateEmpty(Allocator::DefaultAllocator());
 		}
 		const size_t tau_inverse = 4; // tau==0.25
-		if (state.nonzero <= (state.frequency_map->size() / tau_inverse) || prevs.back().end <= frames.front().start ||
-		    frames.back().end <= prevs.front().start) {
-			state.Reset();
-			// for f ∈ F do
-			for (const auto &frame : frames) {
-				for (auto i = frame.start; i < frame.end; ++i) {
-					if (included(i)) {
-						state.ModeAdd(i);
+		for (idx_t rid = 0; rid < count; ++rid) {
+			const auto &frames = subframes_per_row[rid];
+
+			if (state.nonzero <= (state.frequency_map->size() / tau_inverse) ||
+			    prevs.back().end <= frames.front().start || frames.back().end <= prevs.front().start) {
+				state.Reset();
+				// for f ∈ F do
+				for (const auto &frame : frames) {
+					for (auto i = frame.start; i < frame.end; ++i) {
+						if (included(i)) {
+							state.ModeAdd(i);
+						}
 					}
 				}
+			} else {
+				AggregateExecutor::IntersectFrames(prevs, frames, updater);
 			}
-		} else {
-			using Updater = UpdateWindowState<STATE, INPUT_TYPE>;
-			Updater updater(state, included);
-			AggregateExecutor::IntersectFrames(prevs, frames, updater);
-		}
 
-		if (!state.valid) {
-			// Rescan
-			auto highest_frequency = state.Scan();
-			if (highest_frequency != state.frequency_map->end()) {
-				state.Update(highest_frequency->first);
-				state.count = highest_frequency->second.count;
-				state.valid = (state.count > 0);
+			if (!state.valid) {
+				// Rescan
+				auto highest_frequency = state.Scan();
+				if (highest_frequency != state.frequency_map->end()) {
+					state.Update(highest_frequency->first);
+					state.count = highest_frequency->second.count;
+					state.valid = (state.count > 0);
+				}
 			}
-		}
 
-		if (state.valid) {
-			rdata[rid] = TYPE_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
-		} else {
-			rmask.Set(rid, false);
-		}
+			if (state.valid) {
+				rdata[rid] = TYPE_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
+			} else {
+				rmask.Set(rid, false);
+			}
 
-		prevs = frames;
+			prevs = frames;
+		}
 	}
 };
 
@@ -459,7 +464,7 @@ AggregateFunction GetTypedModeFunction(const LogicalType &type) {
 	auto func =
 	    AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP, AggregateDestructorType::LEGACY>(
 	        type, type);
-	func.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
+	func.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, INPUT_TYPE>);
 	return func;
 }
 
@@ -503,8 +508,8 @@ AggregateFunction GetModeAggregate(const LogicalType &type) {
 unique_ptr<FunctionData> BindModeAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetModeAggregate(arguments[0]->return_type);
-	function.name = "mode";
+	function.ReplaceImplementation(GetModeAggregate(arguments[0]->GetReturnType()));
+	function.SetName("mode");
 	return nullptr;
 }
 
@@ -605,8 +610,8 @@ AggregateFunction GetEntropyFunction(const LogicalType &type) {
 unique_ptr<FunctionData> BindEntropyAggregate(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetEntropyFunction(arguments[0]->return_type);
-	function.name = "entropy";
+	function.ReplaceImplementation(GetEntropyFunction(arguments[0]->GetReturnType()));
+	function.SetName("entropy");
 	return nullptr;
 }
 

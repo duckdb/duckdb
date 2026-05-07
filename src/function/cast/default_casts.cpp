@@ -45,7 +45,7 @@ void HandleCastError::AssignError(const string &error_message, string *error_mes
                                   optional_ptr<const Expression> cast_source, optional_idx error_location) {
 	string column;
 	if (cast_source && cast_source->HasAlias()) {
-		column = " when casting from source column " + cast_source->alias;
+		column = " when casting from source column " + cast_source->GetAlias();
 	}
 	if (!error_message_ptr) {
 		throw ConversionException(error_location, error_message + column);
@@ -62,7 +62,7 @@ bool DefaultCasts::TryVectorNullCast(Vector &source, Vector &result, idx_t count
 		HandleCastError::AssignError(TryCast::UnimplementedCastMessage(source.GetType(), result.GetType()), parameters);
 		success = false;
 	}
-	ConstantVector::SetNull(result);
+	ConstantVector::SetNull(result, count_t(count));
 	return success;
 }
 
@@ -93,9 +93,10 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 		result_entries[i].Reference(source_entries[i]);
 	}
 
-	source.Flatten(count);
+	source.Flatten();
 	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 	return true;
 }
 
@@ -120,7 +121,7 @@ static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType 
 
 static bool NullTypeCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	// cast a NULL to another type, just copy the properties and change the type
-	ConstantVector::SetNull(result);
+	ConstantVector::SetNull(result, count_t(count));
 	return true;
 }
 
@@ -172,6 +173,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TimestampCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TimestampTzCastSwitch(input, source, target);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return TimestampTzNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return TimestampNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_MS:

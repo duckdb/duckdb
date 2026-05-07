@@ -1,7 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
 #include "core_functions/scalar/list_functions.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -118,16 +116,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
 			break;
 		case 2:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
 			break;
 		case 3:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
-			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
+			args.data[2].ToUnifiedFormat(vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");
@@ -196,50 +194,27 @@ void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	RangeInfoStruct<OP, INCLUSIVE_BOUND> info(args);
-	idx_t args_size = 1;
-	auto result_type = VectorType::CONSTANT_VECTOR;
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			args_size = args.size();
-			result_type = VectorType::FLAT_VECTOR;
-			break;
-		}
-	}
-	auto result_data = FlatVector::Writer<list_entry_t>(result, args_size);
-	uint64_t total_size = 0;
+	auto args_size = args.size();
+	auto list_writer = FlatVector::Writer<VectorListType<typename OP::TYPE>>(result, args_size);
 	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
-			result_data.SetInvalid(i);
-			result_data[i].offset = total_size;
-			result_data[i].length = 0;
-		} else {
-			result_data[i].offset = total_size;
-			result_data[i].length = info.ListLength(i);
-			total_size += result_data[i].length;
+			list_writer.WriteNull();
+			continue;
 		}
-	}
-
-	// now construct the child vector of the list
-	ListVector::Reserve(result, total_size);
-	auto range_data = FlatVector::Writer<typename OP::TYPE>(ListVector::GetChildMutable(result), total_size);
-	idx_t total_idx = 0;
-	for (idx_t i = 0; i < args_size; i++) {
 		typename OP::TYPE start_value = info.StartListValue(i);
 		typename OP::INCREMENT_TYPE increment = info.ListIncrementValue(i);
+		const auto length = info.ListLength(i);
 
 		typename OP::TYPE range_value = start_value;
-		for (idx_t range_idx = 0; range_idx < result_data[i].length; range_idx++) {
-			if (range_idx > 0) {
+		bool seen_value = false;
+		for (auto &child_writer : list_writer.WriteList(length)) {
+			if (seen_value) {
 				OP::Increment(range_value, increment);
 			}
-			range_data[total_idx++] = range_value;
+			child_writer.WriteValue(range_value);
+			seen_value = true;
 		}
 	}
-
-	ListVector::SetListSize(result, total_size);
-	result.SetVectorType(result_type);
-
-	result.Verify(args.size());
 }
 
 } // namespace

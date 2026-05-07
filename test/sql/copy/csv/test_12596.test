@@ -2,9 +2,6 @@
 # description: CSV reader: combination of null_padding = true and parallel = false introduces extra row #12596
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query III
 from read_csv('{DATA_DIR}/csv/bug_12596.csv', skip=1, delim=',', header=false, columns={'c1': 'INTEGER', 'c2': 'INTEGER', 'column2': 'VARCHAR'}, null_padding = true);
 ----

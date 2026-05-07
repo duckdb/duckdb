@@ -2,9 +2,6 @@
 # description: Test ATTACH of reserved names
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 # attach a new database called temp
 statement ok
 ATTACH DATABASE '{TEST_DIR}/temp.db';

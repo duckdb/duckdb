@@ -87,7 +87,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 	// Anyone who needs it can then convert it to the form they need.
 	if (wexpr.filter_expr) {
 		const auto filter_idx = shared.RegisterSink(wexpr.filter_expr);
-		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.filter_expr->return_type, filter_idx);
+		filter_ref = make_uniq<BoundReferenceExpression>(wexpr.filter_expr->GetReturnType(), filter_idx);
 	}
 }
 

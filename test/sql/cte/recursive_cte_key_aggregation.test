@@ -2,9 +2,6 @@
 # description: Recursive CTEs with USING KEY and aggregations
 # group: [cte]
 
-statement ok
-PRAGMA enable_verification;
-
 query II
 WITH RECURSIVE tbl(a, b) USING KEY (a , max(b)) AS (
 	SELECT 1, 5

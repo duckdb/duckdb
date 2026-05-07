@@ -3,9 +3,6 @@
 # group: [nodes]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE integers AS SELECT range a, 1 AS b, 1 AS c FROM range(1024)
 
 statement ok

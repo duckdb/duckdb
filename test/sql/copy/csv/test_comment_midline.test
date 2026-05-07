@@ -2,9 +2,6 @@
 # description: Test that the comment option of csv reading works properly
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 query II
 from read_csv('{DATA_DIR}/csv/comments/14648.csv',
    header=false,

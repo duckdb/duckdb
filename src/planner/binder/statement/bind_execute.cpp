@@ -43,10 +43,10 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		if (is_literal) {
 			auto &constant = bound_expr->Cast<BoundConstantExpression>();
 			LogicalType return_type;
-			if (constant.return_type == LogicalTypeId::VARCHAR &&
-			    StringType::GetCollation(constant.return_type).empty()) {
+			if (constant.GetReturnType() == LogicalTypeId::VARCHAR &&
+			    StringType::GetCollation(constant.GetReturnType()).empty()) {
 				return_type = LogicalTypeId::STRING_LITERAL;
-			} else if (constant.return_type.IsIntegral()) {
+			} else if (constant.GetReturnType().IsIntegral()) {
 				return_type = LogicalType::INTEGER_LITERAL(constant.value);
 			} else {
 				return_type = constant.value.type();

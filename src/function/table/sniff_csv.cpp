@@ -181,24 +181,24 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 
 	// 1. Delimiter
 	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
-	output.SetValue(0, 0, str_opt);
+	output.data[0].Append(Value(str_opt));
 	// 2. Quote
 	str_opt = sniffer_options.dialect_options.state_machine_options.quote.FormatValue();
-	output.SetValue(1, 0, str_opt);
+	output.data[1].Append(Value(str_opt));
 	// 3. Escape
 	str_opt = sniffer_options.dialect_options.state_machine_options.escape.FormatValue();
-	output.SetValue(2, 0, str_opt);
+	output.data[2].Append(Value(str_opt));
 	// 4. NewLine Delimiter
 	auto new_line_identifier = sniffer_options.NewLineIdentifierToString();
-	output.SetValue(3, 0, new_line_identifier);
+	output.data[3].Append(Value(new_line_identifier));
 	// 5. Comment
 	str_opt = sniffer_options.dialect_options.state_machine_options.comment.FormatValue();
-	output.SetValue(4, 0, str_opt);
+	output.data[4].Append(Value(str_opt));
 	// 6. Skip Rows
-	output.SetValue(5, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
+	output.data[5].Append(Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
 	// 7. Has Header
 	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue());
-	output.SetValue(6, 0, has_header);
+	output.data[6].Append(has_header);
 	// 8. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	vector<Value> values;
 	std::ostringstream columns;
@@ -213,38 +213,36 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		}
 	}
 	columns << "}";
-	output.SetValue(7, 0, Value::LIST(values));
+	output.data[7].Append(Value::LIST(values));
 	// 9. Date Format
 	auto date_format = sniffer_options.dialect_options.date_format[LogicalType::DATE].GetValue();
 	if (!date_format.Empty()) {
-		output.SetValue(8, 0, date_format.format_specifier);
+		output.data[8].Append(Value(date_format.format_specifier));
 	} else {
 		bool has_date = false;
 		for (auto &c_type : sniffer_result.return_types) {
-			// Must be ISO 8601
 			if (c_type.id() == LogicalTypeId::DATE) {
-				output.SetValue(8, 0, Value("%Y-%m-%d"));
 				has_date = true;
+				break;
 			}
 		}
-		if (!has_date) {
-			output.SetValue(8, 0, Value(nullptr));
-		}
+		// Must be ISO 8601
+		output.data[8].Append(has_date ? Value("%Y-%m-%d") : Value(nullptr));
 	}
 
 	// 10. Timestamp Format
 	auto timestamp_format = sniffer_options.dialect_options.date_format[LogicalType::TIMESTAMP].GetValue();
 	if (!timestamp_format.Empty()) {
-		output.SetValue(9, 0, timestamp_format.format_specifier);
+		output.data[9].Append(Value(timestamp_format.format_specifier));
 	} else {
-		output.SetValue(9, 0, Value(nullptr));
+		output.data[9].Append(Value(nullptr));
 	}
 
 	// 11. The Extra User Arguments
 	if (data.options.user_defined_parameters.empty()) {
-		output.SetValue(10, 0, Value());
+		output.data[10].Append(Value());
 	} else {
-		output.SetValue(10, 0, Value(data.options.GetUserDefinedParameters()));
+		output.data[10].Append(Value(data.options.GetUserDefinedParameters()));
 	}
 
 	// 12. csv_read string
@@ -327,7 +325,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 		csv_read << separator << data.options.GetUserDefinedParameters();
 	}
 	csv_read << ");";
-	output.SetValue(11, 0, csv_read.str());
+	output.data[11].Append(Value(csv_read.str()));
 	global_state.done = true;
 }
 

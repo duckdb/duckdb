@@ -2,9 +2,6 @@
 # description: Test date implicit casts
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 foreach type timestamp timestamp_ms timestamp_ns timestamp_s
 
 statement ok

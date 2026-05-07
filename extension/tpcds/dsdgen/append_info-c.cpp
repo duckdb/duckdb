@@ -21,8 +21,8 @@ append_info *append_info_get(void *info_list, int table_id) {
 	return (append_info *)append_vector[table_id].get();
 }
 
-bool tpcds_append_information::IsNull() {
-	return nullCheck(table_def.first_column + appender.CurrentColumn());
+bool tpcds_append_information::IsNull(int nColumn) {
+	return nullCheck(nColumn);
 }
 
 void append_row_start(append_info info) {
@@ -35,45 +35,45 @@ void append_row_end(append_info info) {
 	append_info->appender.EndRow();
 }
 
-void append_varchar(append_info info, const char *value) {
+void append_varchar(append_info info, const char *value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull()) {
+	if (append_info->IsNull(nColumn) || !value || *value == '\0') {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<duckdb::string_t>(duckdb::string_t(value));
 	}
 }
 
-void append_key(append_info info, int64_t value) {
+void append_key(append_info info, int64_t value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull() || value < 0) {
+	if (append_info->IsNull(nColumn) || value < 0) {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<int64_t>(value);
 	}
 }
 
-void append_integer_decimal(append_info info, int32_t val) {
+void append_integer_decimal(append_info info, int32_t val, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull()) {
+	if (append_info->IsNull(nColumn)) {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<int32_t>(val * 100);
 	}
 }
 
-void append_integer(append_info info, int32_t value) {
+void append_integer(append_info info, int32_t value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull()) {
+	if (append_info->IsNull(nColumn)) {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<int32_t>(value);
 	}
 }
 
-void append_boolean(append_info info, int32_t value) {
+void append_boolean(append_info info, int32_t value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull()) {
+	if (append_info->IsNull(nColumn)) {
 		append_info->appender.Append(nullptr);
 	} else {
 		append_info->appender.Append<bool>(value != 0);
@@ -82,9 +82,9 @@ void append_boolean(append_info info, int32_t value) {
 
 // value is a Julian date
 // FIXME: direct int conversion, offsets should be constant
-void append_date(append_info info, int64_t value) {
+void append_date(append_info info, int64_t value, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull() || value < 0) {
+	if (append_info->IsNull(nColumn) || value < 0) {
 		append_info->appender.Append(nullptr);
 	} else {
 		date_t dTemp;
@@ -94,9 +94,9 @@ void append_date(append_info info, int64_t value) {
 	}
 }
 
-void append_decimal(append_info info, decimal_t *val) {
+void append_decimal(append_info info, decimal_t *val, int nColumn) {
 	auto append_info = (tpcds_append_information *)info;
-	if (append_info->IsNull()) {
+	if (append_info->IsNull(nColumn)) {
 		append_info->appender.Append(nullptr);
 		return;
 	}

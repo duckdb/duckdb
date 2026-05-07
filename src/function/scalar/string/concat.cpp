@@ -5,6 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -62,7 +63,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	}
 
 	// first we allocate the empty strings for each of the values
-	auto result_data = FlatVector::Writer<string_t>(result, args.size());
+	auto result_data = FlatVector::ScatterWriter<string_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		// allocate an empty string of the required size
 		idx_t str_length = constant_lengths + result_lengths[i];
@@ -129,60 +130,56 @@ void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 }
 
 struct ListConcatInputData {
-	ListConcatInputData(Vector &input, Vector &child_vec) : input(input), child_vec(child_vec) {
+	ListConcatInputData(Vector &input, idx_t size)
+	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>(size)) {
 	}
 
-	UnifiedVectorFormat vdata;
-	Vector &input;
-	Vector &child_vec;
-	UnifiedVectorFormat child_vdata;
-	const list_entry_t *input_entries = nullptr;
+	const Vector &input;
+	const Vector &child_vec;
+	VectorIterator<list_entry_t> list_data;
 };
 
 void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &result, bool is_operator) {
 	auto count = args.size();
 
-	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	vector<ListConcatInputData> input_data;
 	for (auto &input : args.data) {
 		if (!is_operator && input.GetType().id() == LogicalTypeId::SQLNULL) {
 			// LIST_CONCAT ignores NULL values
 			continue;
 		}
-
-		auto &child_vec = ListVector::GetChildMutable(input);
-		ListConcatInputData data(input, child_vec);
-		input.ToUnifiedFormat(count, data.vdata);
-
-		data.input_entries = UnifiedVectorFormat::GetData<list_entry_t>(data.vdata);
-		auto list_size = ListVector::GetListSize(input);
-
-		child_vec.ToUnifiedFormat(list_size, data.child_vdata);
-
-		input_data.push_back(std::move(data));
+		input_data.emplace_back(input, count);
 	}
 
-	idx_t offset = 0;
-	for (idx_t i = 0; i < count; i++) {
-		result_data[i].offset = offset;
-		result_data[i].length = 0;
-		for (auto &data : input_data) {
-			auto list_index = data.vdata.sel->get_index(i);
-			if (!data.vdata.validity.RowIsValid(list_index)) {
-				// LIST_CONCAT ignores NULL values, but || does not
-				if (is_operator) {
-					result_data.SetInvalid(i);
+	// the || operator yields NULL whenever any input is NULL, while list_concat skips NULLs
+	vector<bool> row_invalid(count, false);
+	if (is_operator) {
+		for (auto &input : input_data) {
+			for (idx_t r = 0; r < count; r++) {
+				if (!input.list_data[r].IsValid()) {
+					row_invalid[r] = true;
 				}
+			}
+		}
+	}
+
+	auto result_writer = FlatVector::Writer<list_entry_t>(result, count);
+	for (idx_t r = 0; r < count; r++) {
+		if (row_invalid[r]) {
+			result_writer.WriteNull();
+			continue;
+		}
+		auto list = result_writer.WriteDynamicList();
+		for (auto &input : input_data) {
+			auto list_val = input.list_data[r];
+			if (!list_val.IsValid()) {
 				continue;
 			}
-			const auto &list_entry = data.input_entries[list_index];
-			result_data[i].length += list_entry.length;
-			ListVector::Append(result, data.child_vec, *data.child_vdata.sel, list_entry.offset + list_entry.length,
-			                   list_entry.offset);
+			const auto &list_entry = list_val.GetValue();
+			list.Append(input.child_vec, *FlatVector::IncrementalSelectionVector(),
+			            list_entry.offset + list_entry.length, list_entry.offset, list_entry.length);
 		}
-		offset += result_data[i].length;
 	}
-	ListVector::SetListSize(result, offset);
 }
 
 void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -201,27 +198,26 @@ void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	return StringConcatFunction(args, state, result);
 }
 
-void SetArgumentType(ScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
+void SetArgumentType(BoundScalarFunction &bound_function, const LogicalType &type, bool is_operator) {
 	if (is_operator) {
-		bound_function.arguments[0] = type;
-		bound_function.arguments[1] = type;
+		bound_function.GetArguments()[0] = type;
+		bound_function.GetArguments()[1] = type;
 		bound_function.SetReturnType(type);
 		return;
 	}
 
-	for (auto &arg : bound_function.arguments) {
+	for (auto &arg : bound_function.GetArguments()) {
 		arg = type;
 	}
-	bound_function.varargs = type;
 	bound_function.SetReturnType(type);
 }
 
-unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindListConcat(ClientContext &context, BoundScalarFunction &bound_function,
                                         vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	LogicalType child_type = LogicalType::SQLNULL;
 	bool all_null = true;
 	for (auto &arg : arguments) {
-		auto &return_type = arg->return_type;
+		auto &return_type = arg->GetReturnType();
 		if (return_type == LogicalTypeId::SQLNULL) {
 			// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 			continue;
@@ -248,7 +244,7 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 						type_list += ", ";
 					}
 				}
-				type_list += arguments[arg_idx]->return_type.ToString();
+				type_list += arguments[arg_idx]->GetReturnType().ToString();
 			}
 			throw BinderException(*arg, "Cannot concatenate types %s - an explicit cast is required", type_list);
 		}
@@ -270,23 +266,23 @@ unique_ptr<FunctionData> BindListConcat(ClientContext &context, ScalarFunction &
 	return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 }
 
-unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, BoundScalarFunction &bound_function,
                                                     vector<unique_ptr<Expression>> &arguments, bool is_operator) {
 	bool list_concat = false;
 	bool all_null = true;
 	// blob concat is only supported for the concat operator - regular concat converts to varchar
 	bool all_blob = is_operator ? true : false;
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->return_type.id() == LogicalTypeId::LIST || arg->return_type.id() == LogicalTypeId::ARRAY) {
+		if (arg->GetReturnType().id() == LogicalTypeId::LIST || arg->GetReturnType().id() == LogicalTypeId::ARRAY) {
 			list_concat = true;
 		}
-		if (arg->return_type.id() != LogicalTypeId::BLOB) {
+		if (arg->GetReturnType().id() != LogicalTypeId::BLOB) {
 			all_blob = false;
 		}
-		if (arg->return_type.id() != LogicalTypeId::SQLNULL) {
+		if (arg->GetReturnType().id() != LogicalTypeId::SQLNULL) {
 			all_null = false;
 		}
 	}
@@ -297,14 +293,17 @@ unique_ptr<FunctionData> BindConcatFunctionInternal(ClientContext &context, Scal
 		if (is_operator) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
-		} else if (bound_function.varargs.id() == LogicalTypeId::LIST ||
-		           bound_function.varargs.id() == LogicalTypeId::ARRAY) {
+		}
+
+		const auto &func_args = bound_function.GetArguments();
+		if (!func_args.empty() &&
+		    (func_args[0].id() == LogicalTypeId::LIST || func_args[0].id() == LogicalTypeId::ARRAY)) {
 			SetArgumentType(bound_function, LogicalTypeId::SQLNULL, is_operator);
 			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
-		} else {
-			SetArgumentType(bound_function, LogicalTypeId::VARCHAR, is_operator);
-			return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 		}
+
+		SetArgumentType(bound_function, LogicalTypeId::VARCHAR, is_operator);
+		return make_uniq<ConcatFunctionData>(bound_function.GetReturnType(), is_operator);
 	}
 	auto return_type = all_blob ? LogicalType::BLOB : LogicalType::VARCHAR;
 
@@ -342,7 +341,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
 	auto fun =
 	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
-	fun.varargs = LogicalType::LIST(LogicalType::ANY);
+	fun.SetVarArgs(LogicalType::LIST(LogicalType::ANY));
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
@@ -358,7 +357,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat =
 	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
-	concat.varargs = LogicalType::ANY;
+	concat.SetVarArgs(LogicalType::ANY);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }

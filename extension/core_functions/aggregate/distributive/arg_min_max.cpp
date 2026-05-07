@@ -189,11 +189,11 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
+		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		}
-		function.arguments[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -207,7 +207,7 @@ struct SpecializedGenericArgMinMaxState {
 	}
 
 	static void PrepareData(Vector &by, idx_t count, bool &, UnifiedVectorFormat &result) {
-		by.ToUnifiedFormat(count, result);
+		by.ToUnifiedFormat(result);
 	}
 };
 
@@ -220,7 +220,7 @@ struct GenericArgMinMaxState {
 	static void PrepareData(Vector &by, idx_t count, Vector &extra_state, UnifiedVectorFormat &result) {
 		OrderModifiers modifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		CreateSortKeyHelpers::CreateSortKeyWithValidity(by, extra_state, modifiers, count);
-		extra_state.ToUnifiedFormat(count, result);
+		extra_state.ToUnifiedFormat(result);
 	}
 };
 
@@ -234,7 +234,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 
 		auto &arg = inputs[0];
 		UnifiedVectorFormat adata;
-		arg.ToUnifiedFormat(count, adata);
+		arg.ToUnifiedFormat(adata);
 
 		using ARG_TYPE = typename STATE::ARG_TYPE;
 		using BY_TYPE = typename STATE::BY_TYPE;
@@ -245,7 +245,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		STATE *last_state = nullptr;
 		sel_t assign_sel[STANDARD_VECTOR_SIZE];
@@ -307,7 +307,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		Vector sort_key(LogicalType::BLOB);
 		auto modifiers = OrderModifiers(ORDER_TYPE, OrderByNullType::NULLS_LAST);
 		// slice with a selection vector and generate sort keys
-		SelectionVector sel(assign_sel);
+		SelectionVector sel(assign_sel, assign_count);
 		Vector sliced_input(arg, sel, assign_count);
 		CreateSortKeyHelpers::CreateSortKey(sliced_input, assign_count, modifiers, sort_key);
 		auto sort_key_data = FlatVector::GetData<string_t>(sort_key);
@@ -354,11 +354,11 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->return_type.InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->return_type);
+		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
+			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		}
-		function.arguments[0] = arguments[0]->return_type;
-		function.SetReturnType(arguments[0]->return_type);
+		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.SetReturnType(arguments[0]->GetReturnType());
 
 		auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
 		return unique_ptr<FunctionData>(std::move(function_data));
@@ -401,8 +401,8 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                         AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
-	function.return_type = type;
+	function.GetArguments() = {type, by_type};
+	function.SetReturnType(type);
 	return function;
 #endif
 }
@@ -462,8 +462,8 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.arguments = {type, by_type};
-	function.return_type = type;
+	function.GetArguments() = {type, by_type};
+	function.SetReturnType(type);
 #endif
 	return function;
 }
@@ -526,8 +526,8 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->return_type;
-	auto by_type = arguments[1]->return_type;
+	auto decimal_type = arguments[0]->GetReturnType();
+	auto by_type = arguments[1]->GetReturnType();
 
 	// To avoid a combinatorial explosion, cast the ordering argument to one from the list
 	auto by_types = ArgMaxByTypes();
@@ -554,9 +554,9 @@ unique_ptr<FunctionData> BindDecimalArgMinMax(BindAggregateFunctionInput &input)
 		by_type = by_types[best_target];
 	}
 
-	auto name = std::move(function.name);
-	function = GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING);
-	function.name = std::move(name);
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetDecimalArgMinMaxFunction<OP>(by_type, decimal_type, NULL_HANDLING));
+	function.SetName(std::move(name));
 	function.SetReturnType(decimal_type);
 
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING);
@@ -669,8 +669,8 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format, bind_data.nulls_last);
 	STATE::ARG_TYPE::PrepareData(arg_vector, count, arg_extra_state, arg_format, bind_data.nulls_last);
 
-	n_vector.ToUnifiedFormat(count, n_format);
-	state_vector.ToUnifiedFormat(count, state_format);
+	n_vector.ToUnifiedFormat(n_format);
+	state_vector.ToUnifiedFormat(state_format);
 
 	auto states = UnifiedVectorFormat::GetData<STATE *>(state_format);
 
@@ -719,7 +719,7 @@ void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t inp
 // Bind
 //------------------------------------------------------------------------------
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -733,7 +733,7 @@ void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 }
 
 template <class VAL_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -759,7 +759,7 @@ void SpecializeArgMinMaxNFunction(PhysicalType arg_type, AggregateFunction &func
 }
 
 template <class COMPARATOR>
-void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -785,7 +785,7 @@ void SpecializeArgMinMaxNFunction(PhysicalType val_type, PhysicalType arg_type, 
 }
 
 template <class VAL_TYPE, class ARG_TYPE, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(BoundAggregateFunction &function) {
 	using STATE = ArgMinMaxNState<VAL_TYPE, ARG_TYPE, COMPARATOR>;
 	using OP = MinMaxNOperation;
 
@@ -798,7 +798,7 @@ void SpecializeArgMinMaxNullNFunction(AggregateFunction &function) {
 }
 
 template <class VAL_TYPE, bool NULLS_LAST, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (arg_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -824,7 +824,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType arg_type, AggregateFunction &
 }
 
 template <bool NULLS_LAST, class COMPARATOR>
-void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_type, AggregateFunction &function) {
+void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_type, BoundAggregateFunction &function) {
 	switch (val_type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::VARCHAR:
@@ -858,14 +858,14 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
-		if (arg->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (arg->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 			throw ParameterNotResolvedException();
 		}
 	}
 
-	const auto val_type = arguments[0]->return_type.InternalType();
-	const auto arg_type = arguments[1]->return_type.InternalType();
-	function.SetReturnType(LogicalType::LIST(arguments[0]->return_type));
+	const auto val_type = arguments[0]->GetReturnType().InternalType();
+	const auto arg_type = arguments[1]->GetReturnType().InternalType();
+	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 
 	// Specialize the function based on the input types
 	auto function_data = make_uniq<ArgMinMaxFunctionData>(NULL_HANDLING, NULLS_LAST);

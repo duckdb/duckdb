@@ -39,5 +39,6 @@ public:
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
 	unique_ptr<CreateInfo> Copy() const override;
+	string ToString() const override;
 };
 } // namespace duckdb

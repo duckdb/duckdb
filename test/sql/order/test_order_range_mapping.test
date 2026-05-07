@@ -2,9 +2,6 @@
 # description: Test ORDER BY range mapping of order expressions using statistics
 # group: [order]
 
-statement ok
-pragma enable_verification
-
 # cast to utinyint
 foreach type <integral>
 

@@ -1,6 +1,0 @@
-%type <str> access_method
-%type <str> access_method_clause
-%type <boolean> opt_concurrently
-%type <str> opt_index_name
-%type <list> opt_reloptions
-%type <boolean> opt_unique

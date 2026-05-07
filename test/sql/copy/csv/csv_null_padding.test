@@ -2,9 +2,6 @@
 # description: Test nullpadding setting
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # null padding with a header
 query IIII
 FROM read_csv_auto('{DATA_DIR}/csv/nullpadding_header.csv', null_padding=True, comment = '')

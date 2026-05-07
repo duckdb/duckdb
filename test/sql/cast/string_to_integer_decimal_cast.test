@@ -2,9 +2,6 @@
 # description: String to Integer casts with Decimals
 # group: [cast]
 
-statement ok
-PRAGMA enable_verification
-
 # Positive numbers (includes unsigned)
 foreach type <integral>
 

@@ -70,7 +70,7 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
 			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
-			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->return_type;
+			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}
 		if (!arg->GetAlias().empty()) {
 			// Default argument
@@ -296,7 +296,7 @@ MacroFunction::GetPositionalParametersForSerialization(Serializer &serializer) c
 		}
 		return result;
 	}
-	// Serializing targeting an older version - delete all named parameters from the list of positional parmaeters
+	// Serializing targeting an older version - delete all named parameters from the list of positional parameters
 	for (auto &param : parameters) {
 		auto &colref = param->Cast<ColumnRefExpression>();
 		if (default_parameters.find(colref.GetName()) != default_parameters.end()) {

@@ -11,10 +11,10 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
-class DataTable;
+class DuckTableEntry;
 
 struct AppendInfo {
-	DataTable *table;
+	DuckTableEntry *table;
 	idx_t start_row;
 	idx_t count;
 };

@@ -6,8 +6,8 @@
 
 namespace duckdb {
 
-void ExpressionState::AddChild(Expression &child_expr) {
-	types.push_back(child_expr.return_type);
+void ExpressionState::AddChild(const Expression &child_expr) {
+	types.push_back(child_expr.GetReturnType());
 	auto child_state = ExpressionExecutor::InitializeState(child_expr, root);
 	child_states.push_back(std::move(child_state));
 
@@ -34,7 +34,8 @@ bool ExpressionState::HasContext() {
 
 ClientContext &ExpressionState::GetContext() {
 	if (!HasContext()) {
-		throw BinderException("Cannot use %s in this context", (expr.Cast<BoundFunctionExpression>()).function.name);
+		throw BinderException("Cannot use %s in this context",
+		                      (expr.Cast<BoundFunctionExpression>()).function.GetName());
 	}
 	return root.executor->GetContext();
 }

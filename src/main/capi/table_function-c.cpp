@@ -205,7 +205,7 @@ void duckdb_table_function_add_parameter(duckdb_table_function function, duckdb_
 	}
 	auto &tf = GetCTableFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	tf.arguments.push_back(*logical_type);
+	tf.GetArguments().push_back(*logical_type);
 }
 
 void duckdb_table_function_add_named_parameter(duckdb_table_function function, const char *name,
@@ -289,7 +289,7 @@ duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb
 			return DuckDBError;
 		}
 	}
-	for (const auto &argument : tf.arguments) {
+	for (const auto &argument : tf.GetArguments()) {
 		if (duckdb::TypeVisitor::Contains(argument, duckdb::LogicalTypeId::INVALID)) {
 			return DuckDBError;
 		}

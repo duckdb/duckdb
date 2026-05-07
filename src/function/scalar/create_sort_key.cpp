@@ -58,7 +58,7 @@ unique_ptr<FunctionData> CreateSortKeyBind(BindScalarFunctionInput &input) {
 	bool all_constant = true;
 	idx_t constant_size = 0;
 	for (idx_t i = 0; i < arguments.size(); i += 2) {
-		auto physical_type = arguments[i]->return_type.InternalType();
+		auto physical_type = arguments[i]->GetReturnType().InternalType();
 		if (!TypeIsConstantSize(physical_type)) {
 			all_constant = false;
 		} else {
@@ -86,7 +86,7 @@ struct SortKeyVectorData {
 
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
-			input.ToUnifiedFormat(size, format);
+			input.ToUnifiedFormat(format);
 		} else {
 			format.physical_type = input.GetType().InternalType();
 		}
@@ -165,7 +165,7 @@ struct SortKeyConstantOperator {
 			// descending order - so flip bytes
 			data_t flipped_bytes[sizeof(T)];
 			for (idx_t b = 0; b < sizeof(T); b++) {
-				flipped_bytes[b] = ~input[b];
+				flipped_bytes[b] = static_cast<data_t>(~input[b]);
 			}
 			result_value = Radix::DecodeData<T>(flipped_bytes);
 		} else {
@@ -196,7 +196,7 @@ struct SortKeyVarcharOperator {
 		// iterate until we encounter the string delimiter to figure out the string length
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
+			string_delimiter = static_cast<data_t>(~string_delimiter);
 		}
 		idx_t pos;
 		for (pos = 0; input[pos] != string_delimiter; pos++) {
@@ -207,9 +207,9 @@ struct SortKeyVarcharOperator {
 		auto str_data = data_ptr_cast(result_value.GetDataWriteable());
 		for (pos = 0; pos < str_len; pos++) {
 			if (flip_bytes) {
-				str_data[pos] = (~input[pos]) - 1;
+				str_data[pos] = static_cast<data_t>((~input[pos]) - 1);
 			} else {
-				str_data[pos] = input[pos] - 1;
+				str_data[pos] = static_cast<data_t>(input[pos] - 1);
 			}
 		}
 		result_value.Finalize();
@@ -255,8 +255,8 @@ struct SortKeyBlobOperator {
 		data_t string_delimiter = SortKeyVectorData::STRING_DELIMITER;
 		data_t escape_character = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
 		if (flip_bytes) {
-			string_delimiter = ~string_delimiter;
-			escape_character = ~escape_character;
+			string_delimiter = static_cast<data_t>(~string_delimiter);
+			escape_character = static_cast<data_t>(~escape_character);
 		}
 		idx_t blob_len = 0;
 		idx_t pos;
@@ -276,7 +276,7 @@ struct SortKeyBlobOperator {
 				input_pos++;
 			}
 			if (flip_bytes) {
-				str_data[result_pos++] = ~input[input_pos];
+				str_data[result_pos++] = static_cast<data_t>(~input[input_pos]);
 			} else {
 				str_data[result_pos++] = input[input_pos];
 			}
@@ -512,7 +512,7 @@ void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, con
 		if (info.flip_bytes) {
 			// descending order - so flip bytes
 			for (idx_t b = offset; b < offset + encode_len; b++) {
-				result_ptr[b] = ~result_ptr[b];
+				result_ptr[b] = static_cast<data_t>(~result_ptr[b]);
 			}
 		}
 		offset += encode_len;
@@ -677,11 +677,11 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
+		auto result_data = FlatVector::Writer<string_t>(result, size);
 		for (idx_t r = 0; r < size; r++) {
 			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
-			result_data[r] = StringVector::EmptyString(result, blob_size);
-			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+			auto &empty_string = result_data.WriteEmptyString(blob_size);
+			data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
 #ifdef DEBUG
 			memset(data_pointers[r], 0xFF, blob_size);
 #endif
@@ -774,7 +774,7 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
                                                      const idx_t count) {
 	CreateSortKey(input, count, modifiers, result);
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(count, format);
+	input.ToUnifiedFormat(format);
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -855,17 +855,17 @@ unique_ptr<FunctionData> DecodeSortKeyBind(BindScalarFunctionInput &input) {
 	}
 
 	const auto &sort_key_arg = *arguments[0];
-	if (sort_key_arg.return_type == LogicalType::BIGINT) {
+	if (sort_key_arg.GetReturnType() == LogicalType::BIGINT) {
 		if (!all_constant || constant_size > sizeof(int64_t)) {
 			throw BinderException("sort_key has type BIGINT but arguments require BLOB");
 		}
-	} else if (sort_key_arg.return_type == LogicalType::BLOB) {
+	} else if (sort_key_arg.GetReturnType() == LogicalType::BLOB) {
 		if (all_constant && constant_size <= sizeof(int64_t)) {
 			throw BinderException("sort_key has type BLOB but arguments require BIGINT");
 		}
 	} else {
 		throw BinderException("sort_key must be either BIGINT or BLOB, got %s instead",
-		                      sort_key_arg.return_type.ToString());
+		                      sort_key_arg.GetReturnType().ToString());
 	}
 	function.SetReturnType(LogicalType::STRUCT(std::move(children)));
 
@@ -1009,9 +1009,9 @@ void DecodeSortKeyList(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVectorD
 		// list is valid - decode child elements
 		// we don't know how many there will be
 		// decode child elements until we encounter the list delimiter
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
 
 		// get the current list size
@@ -1055,9 +1055,9 @@ void DecodeSortKeyArray(DecodeSortKeyData decode_data_arr[], DecodeSortKeyVector
 		// arrays need to encode exactly array_size child elements
 		// however the decoded data still contains a list delimiter
 		// we use this delimiter to verify we successfully decoded the entire array
-		auto list_delimiter = SortKeyVectorData::LIST_DELIMITER;
+		data_t list_delimiter = SortKeyVectorData::LIST_DELIMITER;
 		if (vector_data.flip_bytes) {
-			list_delimiter = ~list_delimiter;
+			list_delimiter = static_cast<data_t>(~list_delimiter);
 		}
 		auto &child_vector = ArrayVector::GetChildMutable(result);
 		auto array_size = ArrayType::GetSize(result.GetType());
@@ -1188,7 +1188,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto count = args.size();
 	auto &sort_key_vec = args.data[0];
 	UnifiedVectorFormat sort_key_vec_format;
-	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
+	sort_key_vec.ToUnifiedFormat(sort_key_vec_format);
 
 	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that
@@ -1245,7 +1245,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 ScalarFunction CreateSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("create_sort_key", {LogicalType::ANY}, LogicalType::BLOB, CreateSortKeyFunction,
 	                                 CreateSortKeyBind);
-	sort_key_function.varargs = LogicalType::ANY;
+	sort_key_function.SetVarArgs(LogicalType::ANY);
 	sort_key_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return sort_key_function;
 }
@@ -1254,7 +1254,7 @@ ScalarFunction DecodeSortKeyFun::GetFunction() {
 	ScalarFunction sort_key_function("decode_sort_key", {LogicalType::ANY, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                 LogicalType::STRUCT({{"any", LogicalType::ANY}}), DecodeSortKeyFunction,
 	                                 DecodeSortKeyBind);
-	sort_key_function.varargs = LogicalType::VARCHAR;
+	sort_key_function.SetVarArgs(LogicalType::VARCHAR);
 	return sort_key_function;
 }
 

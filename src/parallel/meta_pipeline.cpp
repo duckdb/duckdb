@@ -155,7 +155,7 @@ static bool PipelineExceedsThreadCount(Pipeline &pipeline, const idx_t thread_co
 }
 
 void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &new_dependencies,
-                                            const MetaPipeline &last_child) {
+                                            const MetaPipeline &last_child, bool force) {
 	if (recursive_cte) {
 		return; // let's not burn our fingers on this for now
 	}
@@ -173,16 +173,18 @@ void MetaPipeline::AddRecursiveDependencies(const vector<shared_ptr<Pipeline>> &
 	it++;
 
 	// we try to limit the performance impact of these dependencies on smaller workloads,
-	// by only adding the dependencies if the source operator can likely keep all threads busy
+	// by only adding the dependencies if the source operator can likely keep all threads busy.
+	// when 'force' is true (e.g. for DML CTEs), we always add the dependencies regardless,
+	// because the ordering is required for correctness, not just performance.
 	const auto thread_count = NumericCast<idx_t>(TaskScheduler::GetScheduler(executor.context).NumberOfThreads());
 	for (; it != child_meta_pipelines.end(); it++) {
 		for (auto &pipeline : it->get()->pipelines) {
-			if (!PipelineExceedsThreadCount(*pipeline, thread_count)) {
+			if (!force && !PipelineExceedsThreadCount(*pipeline, thread_count)) {
 				continue;
 			}
 			auto &pipeline_deps = pipeline_dependencies[*pipeline];
 			for (auto &new_dependency : new_dependencies) {
-				if (!PipelineExceedsThreadCount(*new_dependency, thread_count)) {
+				if (!force && !PipelineExceedsThreadCount(*new_dependency, thread_count)) {
 					continue;
 				}
 				pipeline_deps.push_back(*new_dependency);

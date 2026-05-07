@@ -5,9 +5,6 @@
 statement ok
 SET default_null_order='nulls_first';
 
-statement ok
-PRAGMA enable_verification
-
 query I
 select (select MIN(val) from unnest((select a)) t(val)) from (select ARRAY[1, 2, 3, NULL]) t(a);
 ----

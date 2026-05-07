@@ -26,14 +26,14 @@ public:
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 		idx_t size = to - from;
 		vector<sel_t> child_indices;
 		append_data.AppendValidity(format, from, to);
 		AppendOffsets(append_data, format, from, to, child_indices);
 
 		// append the child vector of the list
-		SelectionVector child_sel(child_indices.data());
+		SelectionVector child_sel(child_indices.data(), child_indices.size());
 		auto &child = ListVector::GetChild(input);
 		auto child_size = child_indices.size();
 		Vector child_copy(child.GetType());

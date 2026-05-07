@@ -2,9 +2,6 @@
 # description: Test lists in basic subqueries
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT (SELECT [1, 2])
 ----

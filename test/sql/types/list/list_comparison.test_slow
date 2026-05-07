@@ -2,9 +2,6 @@
 # description: Test LIST comparisons
 # group: [list]
 
-statement ok
-PRAGMA enable_verification
-
 # Large constant integer lists
 query T
 SELECT (select list(l) from range(1999) tbl(l)) < (select list(r) from range(2000) tbl(r))

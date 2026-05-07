@@ -6,7 +6,7 @@
 namespace duckdb {
 
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
-	input.Flatten(count);
+	input.Flatten();
 
 	auto &input_keys = MapVector::GetKeys(input);
 	auto &input_values = MapVector::GetValues(input);
@@ -15,10 +15,10 @@ void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
 	for (auto entry : input.Values<list_entry_t>(count)) {
 		if (!entry.IsValid()) {
-			result_data.SetInvalid(entry.GetIndex());
+			result_data.WriteNull();
 			continue;
 		}
-		result_data[entry.GetIndex()] = entry.GetValue();
+		result_data.WriteValue(entry.GetValue());
 	}
 	ListVector::SetListSize(result, ListVector::GetListSize(input));
 

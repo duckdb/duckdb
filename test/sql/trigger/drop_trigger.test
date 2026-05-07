@@ -2,11 +2,6 @@
 # description: Test DROP TRIGGER removes from catalog
 # group: [trigger]
 
-require autocomplete
-
-statement ok
-call enable_peg_parser();
-
 # Setup
 statement ok
 CREATE TABLE t1 (id INTEGER, data VARCHAR);

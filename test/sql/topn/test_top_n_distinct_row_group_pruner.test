@@ -1,0 +1,29 @@
+# name: test/sql/topn/test_top_n_distinct_row_group_pruner.test
+# description: DISTINCT should invalidate row group pruning limits for persisted top-n plans
+# group: [topn]
+
+load {TEST_DIR}/top_n_distinct_row_group_pruner_main.duckdb
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_distinct_row_group_pruner_data.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+CREATE TABLE db.t(i BIGINT)
+
+statement ok
+INSERT INTO db.t SELECT 0 FROM range(2048)
+
+statement ok
+INSERT INTO db.t SELECT 1 FROM range(2048)
+
+restart
+
+statement ok
+ATTACH '{TEST_DIR}/top_n_distinct_row_group_pruner_data.duckdb' AS db
+
+query I
+SELECT DISTINCT i FROM db.t ORDER BY 1 LIMIT 2
+----
+0
+1
+

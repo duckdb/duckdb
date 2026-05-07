@@ -88,7 +88,7 @@ public:
 	//! Get chunk ranges that belong to a specific partition index
 	vector<pair<idx_t, idx_t>> GetChunkRangesForPartition(idx_t partition_idx) const;
 	//! Gets the pointers to the start of every block
-	vector<data_ptr_t> GetRowBlockPointers() const;
+	vector<data_ptr_t> GetRowBlockPointers();
 	//! Destroy the blocks corresponding to the chunk indices
 	void DestroyChunks(idx_t chunk_idx_begin, idx_t chunk_idx_end);
 

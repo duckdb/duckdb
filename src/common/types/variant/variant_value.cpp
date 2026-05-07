@@ -183,6 +183,10 @@ static void AnalyzeValue(const VariantValue &value, idx_t row, DataChunk &offset
 			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			data_offset += sizeof(timestamp_tz_ns_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
 			data_offset += sizeof(timestamp_t);
 			break;
@@ -470,6 +474,13 @@ static void ConvertValue(const VariantValue &value, VariantVectorData &result, i
 			data_offset += sizeof(timestamp_tz_t);
 			break;
 		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
+			result.type_ids_data[values_list_offset + values_offset] =
+			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_NANOS_TZ);
+			Store(primitive.GetValueUnsafe<timestamp_tz_ns_t>(), blob_data + data_offset);
+			data_offset += sizeof(timestamp_tz_t);
+			break;
+		}
 		case LogicalTypeId::TIMESTAMP: {
 			result.type_ids_data[values_list_offset + values_offset] =
 			    static_cast<uint8_t>(VariantLogicalType::TIMESTAMP_MICROS);
@@ -638,27 +649,20 @@ static void InitializeVariants(DataChunk &offsets, Vector &result, SelectionVect
 	auto blob_sizes = variant::OffsetData::GetBlob(offsets);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &keys_entry = keys_data[i];
-		auto &children_entry = children_data[i];
-		auto &values_entry = values_data[i];
-
 		//! keys
-		keys_entry.length = keys_sizes[i];
-		keys_entry.offset = keys_offset;
-		keys_offset += keys_entry.length;
+		keys_data.WriteValue(list_entry_t(keys_offset, keys_sizes[i]));
+		keys_offset += keys_sizes[i];
 
 		//! children
-		children_entry.length = children_sizes[i];
-		children_entry.offset = children_offset;
-		children_offset += children_entry.length;
+		children_data.WriteValue(list_entry_t(children_offset, children_sizes[i]));
+		children_offset += children_sizes[i];
 
 		//! values
-		values_entry.length = values_sizes[i];
-		values_entry.offset = values_offset;
-		values_offset += values_entry.length;
+		values_data.WriteValue(list_entry_t(values_offset, values_sizes[i]));
+		values_offset += values_sizes[i];
 
 		//! value
-		blob_data[i].EmptyString(blob_sizes[i]);
+		blob_data.WriteEmptyString(blob_sizes[i]);
 	}
 
 	//! Reserve for the children of the lists
@@ -755,12 +759,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	keys_entry.Flatten(keys_selvec_size);
-
-	if (input.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
+	FlatVector::SetSize(result, count);
+	result.Verify();
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {
@@ -800,6 +800,10 @@ yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}
 		case LogicalTypeId::TIMESTAMP_TZ: {
+			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
+			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+		}
+		case LogicalTypeId::TIMESTAMP_TZ_NS: {
 			auto value_str = primitive_value.CastAs(context, LogicalType::VARCHAR).GetValue<string>();
 			return yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 		}

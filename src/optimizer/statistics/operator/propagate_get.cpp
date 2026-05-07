@@ -8,7 +8,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
@@ -17,14 +16,15 @@
 namespace duckdb {
 
 static bool IsDirectFilterColumnRef(const Expression &expr) {
-	return expr.type == ExpressionType::BOUND_REF || expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	return expr.GetExpressionType() == ExpressionType::BOUND_REF ||
+	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
 static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, string &alias) {
-	if (expr->type == ExpressionType::BOUND_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_REF) {
 		auto &bound_ref = expr->Cast<BoundReferenceExpression>();
 		index = bound_ref.index;
-		alias = bound_ref.alias;
+		alias = bound_ref.GetAlias();
 		return;
 	}
 	ExpressionIterator::EnumerateChildren(*expr,
@@ -93,14 +93,15 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 		auto &comp = expr.Cast<BoundComparisonExpression>();
 		auto is_compare_distinct = comp.GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM ||
 		                           comp.GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
-		if (IsDirectFilterColumnRef(*comp.left) && comp.right->type == ExpressionType::VALUE_CONSTANT) {
+		if (IsDirectFilterColumnRef(*comp.left) && comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			auto &constant = comp.right->Cast<BoundConstantExpression>();
 			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
 				UpdateFilterStatistics(input, comp.GetExpressionType(), constant.value);
 			} else if (!is_compare_distinct) {
 				input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 			}
-		} else if (comp.left->type == ExpressionType::VALUE_CONSTANT && IsDirectFilterColumnRef(*comp.right)) {
+		} else if (comp.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT &&
+		           IsDirectFilterColumnRef(*comp.right)) {
 			auto &constant = comp.left->Cast<BoundConstantExpression>();
 			if (constant.value.type().InternalType() == input.GetType().InternalType()) {
 				UpdateFilterStatistics(input, FlipComparisonExpression(comp.GetExpressionType()), constant.value);
@@ -121,7 +122,7 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op = expr.Cast<BoundOperatorExpression>();
-		if (expr.type == ExpressionType::OPERATOR_IS_NOT_NULL && !op.children.empty() &&
+		if (expr.GetExpressionType() == ExpressionType::OPERATOR_IS_NOT_NULL && !op.children.empty() &&
 		    IsDirectFilterColumnRef(*op.children[0])) {
 			input.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		}
@@ -137,7 +138,7 @@ static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
 		return false;
 	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "IsConstantOrNullFilter");
-	if (expr_filter.expr->type != ExpressionType::BOUND_FUNCTION) {
+	if (expr_filter.expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
 		return false;
 	}
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
@@ -146,14 +147,14 @@ static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
 
 static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
-		throw InternalException("CanReplaceConstantOrNull() called on unexepected Table Filter");
+		throw InternalException("CanReplaceConstantOrNull() called on unexpected Table Filter");
 	}
 	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
 		for (auto child = ++func.children.begin(); child != func.children.end(); child++) {
-			switch (child->get()->type) {
+			switch (child->get()->GetExpressionType()) {
 			case ExpressionType::BOUND_REF:
 			case ExpressionType::VALUE_CONSTANT:
 				continue;
@@ -222,7 +223,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 				break;
 			}
 			// filter is true or null; we can replace this with a not null filter
-			get.table_filters.SetFilterByColumnIndex(table_filter_column, make_uniq<IsNotNullFilter>());
+			auto not_null = ExpressionFilter::CreateNullCheckExpression(
+			    make_uniq<BoundReferenceExpression>(stats.GetType(), 0ULL), ExpressionType::OPERATOR_IS_NOT_NULL);
+			get.table_filters.SetFilterByColumnIndex(table_filter_column,
+			                                         make_uniq<ExpressionFilter>(std::move(not_null)));
 			break;
 		}
 		case FilterPropagateResult::FILTER_FALSE_OR_NULL:

@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
+class CommitDropState;
 class TableCatalogEntry;
 
 //! Wrapper class to allow copying a DuckIndexEntry (for altering the DuckIndexEntry metadata such as comments)
@@ -47,8 +48,8 @@ public:
 
 	DataTableInfo &GetDataTableInfo() const;
 
-	//! Drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
-	void CommitDrop();
+	//! Saves index removal into drop_state to be removed after FlushCommit().
+	void CommitDrop(CommitDropState &drop_state);
 };
 
 } // namespace duckdb

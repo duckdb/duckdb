@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &i
 		throw BinderException("json_serialize_plan takes at least one argument");
 	}
 
-	if (arguments[0]->return_type != LogicalType::VARCHAR) {
+	if (arguments[0]->GetReturnType() != LogicalType::VARCHAR) {
 		throw InvalidTypeException("json_serialize_plan first argument must be a VARCHAR");
 	}
 
@@ -66,27 +66,27 @@ static unique_ptr<FunctionData> JsonSerializePlanBind(BindScalarFunctionInput &i
 		}
 		auto &alias = arg->GetAlias();
 		if (alias == "skip_null") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_null' argument must be a boolean");
 			}
 			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "skip_empty") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "skip_default") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'skip_default' argument must be a boolean");
 			}
 			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "format") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'format' argument must be a boolean");
 			}
 			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else if (alias == "optimize") {
-			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
+			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_plan: 'optimize' argument must be a boolean");
 			}
 			optimize = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));

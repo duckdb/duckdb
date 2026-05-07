@@ -24,9 +24,9 @@ JSONTransformOptions::JSONTransformOptions() : parameters(false, &error_message)
 }
 
 JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplicate_key_p, bool error_missing_key_p,
-                                           bool error_unkown_key_p)
+                                           bool error_unknown_key_p)
     : strict_cast(strict_cast_p), error_duplicate_key(error_duplicate_key_p), error_missing_key(error_missing_key_p),
-      error_unknown_key(error_unkown_key_p), parameters(false, &error_message) {
+      error_unknown_key(error_unknown_key_p), parameters(false, &error_message) {
 }
 
 //! Forward declaration for recursion
@@ -78,7 +78,7 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	D_ASSERT(bound_function.arguments.size() == 2);
+	D_ASSERT(bound_function.GetArguments().size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
@@ -86,8 +86,8 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 		throw BinderException("JSON structure must be a constant!");
 	}
 	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalTypeId::SQLNULL;
+	if (structure_val.IsNull() || arguments[1]->GetReturnType() == LogicalTypeId::SQLNULL) {
+		bound_function.SetReturnType(LogicalTypeId::SQLNULL);
 	} else {
 		if (!structure_val.DefaultTryCastAs(LogicalType::JSON())) {
 			throw BinderException("Cannot cast JSON structure to string");
@@ -95,9 +95,9 @@ static unique_ptr<FunctionData> JSONTransformBind(BindScalarFunctionInput &input
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
-		bound_function.return_type = StructureStringToType(doc->root, context);
+		bound_function.SetReturnType(StructureStringToType(doc->root, context));
 	}
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }
 
 static inline string_t GetString(yyjson_val *val) {
@@ -521,7 +521,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
 		if (projected_indices.find(child_i) == projected_indices.end()) {
-			ConstantVector::SetNull(child_vs[child_i]);
+			ConstantVector::SetNull(child_vs[child_i], count_t(count));
 		}
 	}
 
@@ -928,6 +928,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -955,7 +956,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
-	input.ToUnifiedFormat(count, input_data);
+	input.ToUnifiedFormat(input_data);
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents
@@ -999,7 +1000,7 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformFunctionInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }
@@ -1014,7 +1015,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, LogicalType::JSON());
 	for (auto &func : set.functions) {
-		func.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+		func.SetFallible();
 	}
 	return set;
 }

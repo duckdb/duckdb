@@ -7,25 +7,25 @@
 namespace duckdb {
 
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p, buffer_ptr<DictionaryEntry> entry_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
-      sel_count(sel_count_p), entry(std::move(entry_p)) {
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(sel), entry(std::move(entry_p)) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p,
                                    buffer_ptr<DictionaryEntry> entry_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
-      sel_count(sel_count_p), entry(std::move(entry_p)) {
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(std::move(data)), entry(std::move(entry_p)) {
 }
 DictionaryBuffer::DictionaryBuffer(const SelectionVector &sel, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel),
-      sel_count(sel_count_p) {
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(sel) {
 }
 DictionaryBuffer::DictionaryBuffer(buffer_ptr<SelectionData> data, idx_t sel_count_p)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(std::move(data)),
-      sel_count(sel_count_p) {
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(sel_count_p)),
+      sel_vector(std::move(data)) {
 }
 DictionaryBuffer::DictionaryBuffer(idx_t count)
-    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER), sel_vector(count),
-      sel_count(count) {
+    : VectorBuffer(VectorType::DICTIONARY_VECTOR, VectorBufferType::DICTIONARY_BUFFER, count_t(count)),
+      sel_vector(count) {
 }
 
 idx_t DictionaryBuffer::GetDataSize(const LogicalType &type, idx_t count) const {
@@ -39,33 +39,34 @@ idx_t DictionaryBuffer::GetAllocationSize() const {
 	return size + GetEntry().data.GetAllocationSize();
 }
 
-void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::DICTIONARY_VECTOR);
-	D_ASSERT(type == GetEntry().data.GetType());
+	auto &child = GetEntry().data;
+	if (type != child.GetType()) {
+		throw InternalException("Dictionary expression type mismatch - type %s does not match child type %s", type,
+		                        child.GetType());
+	}
 	if (!sel.IsSet()) {
 		// sel is not set - directly pass in the dictionary
-		GetEntry().data.Verify(sel_vector, count);
+		child.Verify(sel_vector, count);
 	} else {
 		// sel is set - slice the dictionary with the selection vector
 		SelectionVector child_sel(count);
 		for (idx_t i = 0; i < count; i++) {
 			child_sel.set_index(i, sel_vector.get_index(sel.get_index(i)));
 		}
-		GetEntry().data.Verify(child_sel, count);
+		child.Verify(child_sel, count);
 	}
 }
 
-void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.owned_sel.Initialize(sel_vector);
 	format.sel = &format.owned_sel;
 
 	auto &child = entry->data;
 	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// flatten the child in-place
-		entry->data.Flatten(count);
+		entry->data.Flatten();
 	}
 	format.data = FlatVector::GetData(entry->data);
 	format.validity = FlatVector::ValidityMutable(entry->data);
@@ -87,11 +88,31 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceWithCache(SelCache &cache, const
 		result = Slice(type, sel, count);
 		cache.cache[target_data] = result;
 	}
-	if (dictionary_size.IsValid()) {
-		auto &dict_buffer = result->Cast<DictionaryBuffer>();
-		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-		dict_buffer.SetDictionaryId(std::move(dictionary_id));
+	return result;
+}
+
+buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type, idx_t offset, idx_t end) {
+	// dictionary vector slice: slice the dictionary instead of stacking dictionaries
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
+	auto count = end - offset;
+	auto &sel_data = GetSelVector().sel_data();
+	if (!sel_data) {
+		// non-owning sel, we need to create a new selection vector to slice
+		SelectionVector new_sel(count);
+		for (idx_t i = 0; i < count; i++) {
+			new_sel.set_index(i, sel_vector.get_index(offset + i));
+		}
+		return make_uniq<DictionaryBuffer>(new_sel, count, entry);
+	}
+	if (offset == 0) {
+		// for offset = 0 all we have to do is update the count - so just create a new buffer
+		return make_uniq<DictionaryBuffer>(sel_data, end, entry);
+	}
+	SelectionVector sliced_sel(sel_vector.data() + offset, count);
+	auto result = make_uniq<DictionaryBuffer>(sliced_sel, count, entry);
+	result->AddAuxiliaryData(make_uniq<SelectionDataHolder>(sel_data));
 	return result;
 }
 
@@ -101,29 +122,26 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::SliceInternal(const LogicalType &type
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		throw InternalException("Struct vectors cannot be dictionary vectors");
 	}
-	auto dictionary_size = GetDictionarySize();
-	auto dictionary_id = GetDictionaryId();
 	auto sliced_dictionary = GetSelVector().Slice(sel, count);
-	auto entry = GetEntryPtr();
-	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), count, std::move(entry));
-	if (dictionary_size.IsValid()) {
-		auto &dict_buffer = new_buffer->Cast<DictionaryBuffer>();
-		dict_buffer.SetDictionarySize(dictionary_size.GetIndex());
-		dict_buffer.SetDictionaryId(std::move(dictionary_id));
-	}
+	auto new_buffer = make_buffer<DictionaryBuffer>(std::move(sliced_dictionary), count, entry);
 	return new_buffer;
 }
 
 Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
-	if (index >= sel_count) {
+	if (index >= Size()) {
 		throw InternalException("DictionaryBuffer::GetValue out of range for selection vector");
 	}
 	auto resolved_index = sel_vector.get_index(index);
 	return entry->data.GetValue(resolved_index);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, const SelectionVector &input_sel,
-                                                   idx_t count) const {
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type) const {
+	// flatten the child based on the selection vector stored in the dictionary
+	return entry->data.Buffer().FlattenSlice(type, sel_vector, Size());
+}
+
+buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalType &type,
+                                                                const SelectionVector &input_sel, idx_t count) const {
 	// get the selection vector to push into the child
 	// if input_sel is set, we slice the dictionary by input_sel, otherwise we pass in the dict directly
 	const_reference<SelectionVector> sel_ref(sel_vector);
@@ -139,12 +157,12 @@ buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, cons
 	auto &sel = sel_ref.get();
 
 	// flatten the child using the selection vector
-	return entry->data.BufferMutable().Flatten(type, sel, count);
+	return entry->data.BufferMutable().FlattenSlice(type, sel, count);
 }
 
 buffer_ptr<DictionaryEntry> DictionaryVector::CreateReusableDictionary(const LogicalType &type, const idx_t &size) {
 	auto entry = make_buffer<DictionaryEntry>(Vector(type, size));
-	entry->size = size;
+	FlatVector::SetSize(entry->data, size);
 	entry->id = UUID::ToString(UUID::GenerateRandomUUID());
 	return entry;
 }
@@ -158,7 +176,6 @@ const Vector &DictionaryVector::GetCachedHashes(Vector &input) {
 	if (!entry.cached_hashes) {
 		// Uninitialized: hash the dictionary
 		const auto dictionary_size = DictionarySize(input).GetIndex();
-		D_ASSERT(!entry.size.IsValid() || entry.size.GetIndex() == dictionary_size);
 		entry.cached_hashes = make_uniq<Vector>(LogicalType::HASH, dictionary_size);
 		VectorOperations::Hash(entry.data, *entry.cached_hashes, dictionary_size);
 	}

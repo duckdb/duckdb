@@ -23,6 +23,10 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
+FORMAT_VENV ?= build/format-venv
+FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
+FORMAT_SETUP_DEPS := format_venv
+
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
 EXE_SUFFIX := .exe
@@ -65,6 +69,13 @@ endif
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
+endif
+DUCKDB_NINJA_FILTER ?= $(if $(CI),1,0)
+NINJA_BUILD_WRAPPER :=
+ifeq ($(GEN),ninja)
+ifneq ($(DUCKDB_NINJA_FILTER),0)
+	NINJA_BUILD_WRAPPER=$(PYTHON) ${PROJ_DIR}scripts/ci/filter_ninja_output.py --
+endif
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
@@ -317,6 +328,9 @@ endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
+ifeq (${DISABLE_BUILTIN_HTTPLIB}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_HTTPLIB=1
+endif
 ifeq (${DISABLE_SHELL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
 endif
@@ -416,7 +430,7 @@ define cmake_build
 	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
 	cd $(1) && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
-	cmake --build . --config $(2)
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config $(2)
 endef
 
 debug: ${EXTENSION_CONFIG_STEP}
@@ -430,12 +444,12 @@ BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
@@ -461,7 +475,7 @@ clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config RelWithDebInfo
 
 SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
@@ -476,7 +490,7 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
@@ -561,53 +575,91 @@ define ensure_apt_commands
 		command -v $$cmd >/dev/null 2>&1 || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(2); \
 	fi
 endef
 
-.PHONY: toolsci format_tools enum-integrity-check
+define ensure_apt_packages
+	missing=0; \
+	for pkg in $(1); do \
+		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
+	done; \
+	if [ $$missing -eq 1 ]; then \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(1); \
+	fi
+endef
+
+.PHONY: toolsci
 
 toolsci:
-	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz,ninja-build mold ccache pkg-config pigz)
-	pkg-config --exists libcurl || { \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq libcurl4-openssl-dev; \
-	}
-	ls -lh /usr/bin/gcc* /usr/bin/g++*
+	$(call ensure_apt_commands,ninja mold ccache pkg-config pigz clang++-20 clangd-20,ninja-build mold ccache pkg-config pigz clang++-20 clangd-20)
+	$(call ensure_apt_packages,python3-requests libcurl4-openssl-dev llvm-20-dev libclang-rt-20-dev)
+	ls -lh /usr/bin/gcc* /usr/bin/g++* /usr/bin/clang++*
 	gcc --version
 	g++ --version
+	clang++ --version
 
 test_ci:
 	python3 -m unittest discover --buffer --start-directory scripts/ci $(T)
 
-format_tools:
-	$(call ensure_apt_commands,ninja clang-format,ninja-build clang-format-11)
-	sudo pip3 install --break-system-packages cmake-format 'black==24.*' cxxheaderparser pcpp 'clang_format==11.0.1'
+.PHONY: format_tools parser_tools spell_tools
+format_tools: parser_tools spell_tools
+
+parser_tools:
+	$(call ensure_apt_commands,ninja,ninja-build)
+	sudo pip3 install --break-system-packages cxxheaderparser pcpp
 	@echo "::group::Installed Python packages"
 	pip3 freeze
 	@echo "::endgroup::"
-	@echo "::group::Formatter versions and config"
-	clang-format --version
-	clang-format --dump-config
-	black --version
-	@echo "::endgroup::"
 
+spell_tools:
+	@if [ "$$(uname -s)" != "Linux" ]; then \
+		echo "Skipping spell_tools on non-Linux"; \
+		exit 0; \
+	fi
+	@set -eu; \
+	VERSION=1.45.1; \
+	if [ "$$(uname -m)" = "arm64" ] || [ "$$(uname -m)" = "aarch64" ]; then \
+		ARCH="aarch64"; \
+	else \
+		ARCH="x86_64"; \
+	fi; \
+	TARGET_FILE="$${ARCH}-unknown-linux-musl"; \
+	FILE_NAME="typos-v$${VERSION}-$${TARGET_FILE}.tar.gz"; \
+	DOWNLOAD_URL="https://github.com/crate-ci/typos/releases/download/v$${VERSION}/$${FILE_NAME}"; \
+	$(PYTHON) scripts/ci/retry.py -- curl --fail --location --silent --show-error --output "/tmp/$${FILE_NAME}" "$${DOWNLOAD_URL}"; \
+	TMP_DIR="$$(mktemp -d)"; \
+	tar -xzf "/tmp/$${FILE_NAME}" -C "$${TMP_DIR}"; \
+	TYPOS_BIN="$$(find "$${TMP_DIR}" -type f -name typos | head -n 1)"; \
+	if [ -w /usr/local/bin ]; then \
+		install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	else \
+		sudo install -m 0755 "$${TYPOS_BIN}" /usr/local/bin/typos; \
+	fi; \
+	typos --version
+
+.PHONY: enum-integrity-check
 enum-integrity-check:
 	$(PYTHON) scripts/verify_enum_integrity.py src/include/duckdb.h
+
+.PHONY: format_venv
+format_venv:
+	@if [ ! -x "$(FORMAT_PYTHON)" ]; then \
+		mkdir -p "$(dir $(FORMAT_VENV))" && \
+		$(PYTHON) -m venv "$(FORMAT_VENV)"; \
+	fi
+	@$(FORMAT_PYTHON) -m pip show black >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install black==24.*
+	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
+	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
-amaldebug:
-	mkdir -p ./build/amaldebug && \
-	$(PYTHON) scripts/amalgamation.py && \
-	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${CMAKE_VARS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
-	cmake --build . --config Debug
 
 tidy-check:
 	mkdir -p ./build/tidy && \
@@ -641,22 +693,21 @@ tidy-fix:
 	$(PYTHON) ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
-	$(PYTHON) scripts/amalgamation.py --compile
+	$(PYTHON) scripts/test_compile.py
 
-format-check:
-	$(PYTHON) scripts/format.py --all --check
+format-check: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check $(T)
 
-format-check-silent:
-	$(PYTHON) scripts/format.py --all --check --silent
+format-check-silent: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --check --silent $(T)
 
-format-fix:
-	rm -rf src/amalgamation/*
-	$(PYTHON) scripts/format.py --all --fix --noconfirm
+format-fix: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py --all --fix --noconfirm $(T)
 
 .PHONY: check-extension-entries
-check-extension-entries: extension_configuration
+check-extension-entries: extension_configuration $(FORMAT_SETUP_DEPS)
 	$(PYTHON) scripts/generate_extensions_function.py
-	$(PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/main/extension_entries.hpp --fix --noconfirm
 	@git diff -- src/include/duckdb/main/extension_entries.hpp > extension_entries.hpp.diff
 	@if [ -s extension_entries.hpp.diff ]; then \
 		cat extension_entries.hpp.diff; \
@@ -667,17 +718,17 @@ check-extension-entries: extension_configuration
 		echo "No differences found"; \
 	fi
 
-format-head:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-head: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
-format-changes:
-	$(PYTHON) scripts/format.py HEAD --fix --noconfirm
+format-changes: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py HEAD --fix --noconfirm $(T)
 
-format-main:
-	$(PYTHON) scripts/format.py main --fix --noconfirm
+format-main: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py main --fix --noconfirm $(T)
 
-format-feature:
-	$(PYTHON) scripts/format.py feature --fix --noconfirm
+format-feature: $(FORMAT_SETUP_DEPS)
+	$(FORMAT_PYTHON) scripts/format.py feature --fix --noconfirm $(T)
 
 format-configs:
 	$(foreach file, $(wildcard $(CONFIGS_DIR)/*), jq . < "$(file)" > "$(file).tmp" && mv "$(file).tmp" "$(file)" ;)

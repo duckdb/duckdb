@@ -1,4 +1,6 @@
 #include "duckdb/function/window/window_executor.hpp"
+
+#include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -21,7 +23,7 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, WindowSharedExpress
 
 	if (wexpr.window) {
 		if (wexpr.window->HasSharingCallback()) {
-			wexpr.window->GetSharingCallback()(*this, shared);
+			wexpr.window->GetSharing(*this, shared);
 		} else {
 			//	If no one overrides, assume the arguments are only needed at evaluate time
 			for (auto &child : wexpr.children) {
@@ -38,7 +40,8 @@ void WindowExecutor::Evaluate(ExecutionContext &context, idx_t row_idx, DataChun
 
 	EvaluateInternal(context, eval_chunk, lbstate.state.bounds, result, row_idx, sink);
 
-	result.Verify(eval_chunk.size());
+	FlatVector::SetSize(result, count_t(eval_chunk.size()));
+	result.Verify();
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, const WindowExecutor &executor,
@@ -47,7 +50,7 @@ WindowExecutorGlobalState::WindowExecutorGlobalState(ClientContext &client, cons
     : client(client), executor(executor), payload_count(payload_count), partition_mask(partition_mask),
       order_mask(order_mask) {
 	for (const auto &child : executor.wexpr.children) {
-		arg_types.emplace_back(child->return_type);
+		arg_types.emplace_back(child->GetReturnType());
 	}
 }
 
@@ -66,7 +69,7 @@ unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client
                                                            const ValidityMask &partition_mask,
                                                            const ValidityMask &order_mask) const {
 	if (wexpr.window && wexpr.window->HasGlobalCallback()) {
-		return wexpr.window->GetGlobalCallback()(client, *this, payload_count, partition_mask, order_mask);
+		return wexpr.window->GetGlobalState(client, *this, payload_count, partition_mask, order_mask);
 	}
 	return make_uniq<WindowExecutorGlobalState>(client, *this, payload_count, partition_mask, order_mask);
 }
@@ -74,7 +77,7 @@ unique_ptr<GlobalSinkState> WindowExecutor::GetGlobalState(ClientContext &client
 unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &context,
                                                          const GlobalSinkState &gstate) const {
 	if (wexpr.window && wexpr.window->HasLocalCallback()) {
-		return wexpr.window->GetLocalCallback()(context, gstate);
+		return wexpr.window->GetLocalState(context, gstate);
 	}
 	return make_uniq<WindowExecutorLocalState>(context, gstate.Cast<WindowExecutorGlobalState>());
 }
@@ -82,7 +85,7 @@ unique_ptr<LocalSinkState> WindowExecutor::GetLocalState(ExecutionContext &conte
 void WindowExecutor::Sink(ExecutionContext &context, DataChunk &sink_chunk, DataChunk &coll_chunk,
                           const idx_t input_idx, OperatorSinkInput &sink) const {
 	if (wexpr.window && wexpr.window->HasSinkCallback()) {
-		wexpr.window->GetSinkCallback()(context, sink_chunk, coll_chunk, input_idx, sink);
+		wexpr.window->Sink(context, sink_chunk, coll_chunk, input_idx, sink);
 	} else {
 		auto &lbstate = sink.local_state.Cast<WindowExecutorLocalState>();
 		lbstate.Sink(context, sink_chunk, coll_chunk, input_idx, sink);
@@ -94,7 +97,7 @@ void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collectio
 	lbstate.state.Finalize(collection);
 
 	if (wexpr.window && wexpr.window->HasFinalizeCallback()) {
-		wexpr.window->GetFinalizeCallback()(context, collection, sink);
+		wexpr.window->Finalize(context, collection, sink);
 	} else {
 		lbstate.Finalize(context, collection, sink);
 	}
@@ -103,7 +106,7 @@ void WindowExecutor::Finalize(ExecutionContext &context, CollectionPtr collectio
 void WindowExecutor::EvaluateInternal(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
                                       Vector &result, idx_t row_idx, OperatorSinkInput &sink) const {
 	if (wexpr.window && wexpr.window->HasEvaluateCallback()) {
-		wexpr.window->GetEvaluateCallback()(context, eval_chunk, bounds, result, row_idx, sink);
+		wexpr.window->Evaluate(context, eval_chunk, bounds, result, row_idx, sink);
 	}
 }
 

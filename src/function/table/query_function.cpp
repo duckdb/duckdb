@@ -89,10 +89,10 @@ void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	query_table_function.bind_replace = TableBindReplace;
 	query_table.AddFunction(query_table_function);
 
-	query_table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
+	query_table_function.GetArguments() = {LogicalType::LIST(LogicalType::VARCHAR)};
 	query_table.AddFunction(query_table_function);
 	// add by_name option
-	query_table_function.arguments.emplace_back(LogicalType::BOOLEAN);
+	query_table_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
 	set.AddFunction(query_table);
 }

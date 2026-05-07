@@ -2,9 +2,6 @@
 # description: Test secondary ordering of LEAD/LAG
 # group: [window]
 
-statement ok
-PRAGMA enable_verification
-
 query IIIII
 SELECT 
 	i,

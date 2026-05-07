@@ -67,7 +67,14 @@ public:
 	}
 };
 
-enum class RequestType : uint8_t { GET_REQUEST, PUT_REQUEST, HEAD_REQUEST, DELETE_REQUEST, POST_REQUEST };
+enum class RequestType : uint8_t {
+	GET_REQUEST,
+	PUT_REQUEST,
+	HEAD_REQUEST,
+	DELETE_REQUEST,
+	POST_REQUEST,
+	OPTIONS_REQUEST
+};
 
 struct HTTPHeaders {
 	using header_map_t = case_insensitive_map_t<string>;
@@ -201,6 +208,12 @@ struct DeleteRequestInfo : public BaseRequest {
 	}
 };
 
+struct OptionsRequestInfo : public BaseRequest {
+	OptionsRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params)
+	    : BaseRequest(RequestType::OPTIONS_REQUEST, path, headers, params) {
+	}
+};
+
 struct PostRequestInfo : public BaseRequest {
 	PostRequestInfo(const string &path, const HTTPHeaders &headers, HTTPParams &params, const_data_ptr_t buffer_in,
 	                idx_t buffer_in_len)
@@ -228,6 +241,7 @@ public:
 	virtual unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) = 0;
 	virtual unique_ptr<HTTPResponse> Post(PostRequestInfo &info) = 0;
+	virtual unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) = 0;
 	virtual void Cleanup() {};
 
 	unique_ptr<HTTPResponse> Request(BaseRequest &request);

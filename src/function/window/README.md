@@ -2,7 +2,7 @@
 
 Starting with V2.0, window functions will no longer be special cased via enums
 but will be stored in the catalog as a new function type.
-They are in the same namepace as macros and as scalar and aggregate functions.
+They are in the same namespace as macros and as scalar and aggregate functions.
 
 Among other things, this means that extensions will be able to register _new_ window functions.
 New window functions should be functions that _cannot_ be implemented as windowed aggregates.
@@ -13,14 +13,15 @@ Note that the builtin window functions all use this API - there are no secret in
 The one minor exception to this precept is that for backward compatibility,
 the builtin functions are serialized using the legacy mechanisms.
 
-There are four sets of APIs for window functions:
+There are five sets of APIs for window functions:
 
 * Binding
 * Blocking implementation
 * Streaming implementation
 * Serialization
+* Registration
 
-Note that not all APIs are required.
+Note that not all APIs are required, but the streaming APIs are an "all or nothing" proposition.
 
 ## Binding APIs
 
@@ -36,7 +37,7 @@ This will tell the serialization code to read and write any state information th
 
 ### Binding Flags
 
-The binding flags are used by the bind to check whether the function can support various windowing modifiers:
+The binding flags are used by the binder to check whether the function can support various windowing modifiers:
 
 | Flag | Default | Description |
 | :--- | :--- | :--- |
@@ -49,21 +50,28 @@ The binding flags are used by the bind to check whether the function can support
 Most of the builtin functions use the default values of the flags.
 Two notable exceptions are:
 
-* `can_ignore_nulls` is not supported by `FILL` (interpolating `NULL`s is what it does)
+* `can_ignore_nulls` is not supported by `FILL` (interpolating `NULL`s is what it does);
 * `can_order_by` is not supported by `DENSE_RANK`.
 
-### Binding Functions
+### Binding Function
 
-The binder internals are currently only set up to validate function arguments,
-but window functions also have ordering arguments that need validation.
-For this reason there are two API for binding and validating specific window function calls:
+The binder internals are currently only set up to validate function _arguments_,
+but window functions also have ordering arguments that may need validation.
+For this reason, the `window_bind_function_t` function is passed two optional arguments in the
+`BindWindowFunctionInput` struct:
 
-* `window_bind_function_t` - This performs the usual binding operations of argument validation and override.
-* `window_validate_function_t` - This performs additional checks of the ordering arguments after binding.
+* `ClientContext &` - The query context;
+* `WindowFunction &` - The window function being bound;
+* `vector<unique_ptr<Expression>> &arguments` - The arguments being bound;
+* `optional_ptr<vector<OrderByNode>> orders` - The `ORDER BY` _framing_ (not always available);
+* `optional_ptr<vector<OrderByNode>> arg_orders` - The `ORDER BY` _arguments_ (not always available);
 
-Among the builtin functions, these are only defined by the "value" functions (`XXX_VALUE`, `FILL`, `LEAD`/`LAG`).
+If they are present, then the binding function should validate them as well as the arguments.
+
+Among the builtin functions, binding is only defined by the "value" functions (`XXX_VALUE`, `FILL`, `LEAD`/`LAG`).
+Ordering validation is only implemented by `FILL`.
 Note that the binding APIs can return an optional `FunctionData` subclass,
-but none of the builtin window functions need such an object.
+but none of the builtin window functions use such an object.
 
 ## Blocking APIs
 
@@ -165,8 +173,78 @@ but takes additional arguments for the frame bounds and the row index inside the
 
 ## Streaming APIs
 
+In addition to the blocking window operator, there is a streaming window operator
+that can be used under certain conditions.
+In order to be streamable, a window function must satisfy the following criteria:
+
+* The `OVER()` clause must be empty (e.g., single partition, "natural ordering");
+* No `ORDER BY` arguments are allowed;
+* No `EXCLUDE` clause.
+
+### Can Stream
+
+A function that could potentially stream under these constraints can provide a `window_canstream_function_t` callback:
+
+* `ClientContext &client` - The query's execution context;
+* `const BoundWindowExpression &wexpr` - The function being checked;
+* `idx_t max_delta` - The number of rows the hosting operator is willing to buffer on behalf of the function (forward or backward).
+
+If the function says it can stream, then it _must_ provide the other two APIs: state construction and evaluation.
+
+### Streaming State
+
+The `window_streaming_state_function_t` API returns a subclass of `WindowExecutorStreamingState`.
+It's base class is a `LocalSourceState` with an additional member that says
+how many extra leading rows should be buffered.
+It defaults to zero, but the subclass can override it.
+The arguments are:
+
+* `ClientContext &client` - The query context for the state;
+* `DataChunk &input` - The _first_ input chunk that is being streamed;
+* `const BoundWindowExpression &wexpr` - The function whose state is being constructed.
+
+### Streaming Evaluation
+
+The `window_stream_function_t` API evaluates the window function on a given input chunk.
+The function also has access to any delayed data, but this may be larger than it has requested.
+The arguments are:
+
+* `ExecutionContext &context` - The thread-local context for the evaluation;
+* `DataChunk &input` - The input chunk from the previous operator, plus the output columns being generated
+* `DataChunk &delayed` - The leading rows _after_ the current chunk;
+* `idx_t &delayed_capacity` - The maximum row capacity of the delayed chunk;
+* `Vector &result` - The output values to generate;
+* `LocalSourceState &lstate` - The thread-local state for the function.
+
+Because this API can  be called with buffered look-ahead,
+the function should treat the two chunks as consecutive blocks of rows.
+In other words, the available data is `input || delayed`.
+Nevertheless, the function should only compute `|input|` values for the `result`.
+
 ## Serialization APIs
 
 The serialization APIs are used to serialize and deserialize the `FunctionData` objects created during binding.
 At present, these are not needed by any of the builtin window functions,
 but they are available for new functions that may require them.
+
+## Registration
+
+To add a new window function, you can now register it with the new window `ExtensionLoader::RegisterFunction` APIs.
+You can register a single `WindowFunction`, a `WindowFunctionSet` or by using a `CreateWindowFunctionInfo` object.
+The existing functions are now generated from `functions.json` files using `scripts/generate_functions.py`.
+Because the script requires "subclassifications" the window functions have been split into three groups:
+
+* `rows` - Functions that compute row numbers;
+* `ranking` - Functions that compute numeric rankings;
+* `value` - Functions that return argument values.
+
+Extensions can now use these mechanisms to add new window functions to the catalog.
+
+## Extension Example
+
+There is an example of a simple "fill down" window function extension called "duckweed"
+in `loadable_extension_demo.cpp`.
+The function fills in `NULL`s using the most recent non-`NULL` value.
+This operation is streamable, so it demonstrates the full API set.
+
+(The name is the answer to "What fills up a duck?")

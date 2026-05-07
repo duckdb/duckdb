@@ -85,7 +85,12 @@ void LogicalOperatorDeepCopy::ReplaceTableIndexMulti(LogicalOperator &op) {
 }
 
 void LogicalOperatorDeepCopy::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		ReplaceTableIndex<LogicalProjection>(op);
@@ -233,7 +238,11 @@ void TableBindingReplacer::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 
-	VisitOperatorChildren(op);
+	// Because we are changing table bindings, VisitOperatorChildren will clear projection maps
+	// Therefore, the recursion is implemented here to avoid that
+	for (auto &child : op.children) {
+		VisitOperator(*child);
+	}
 	VisitOperatorExpressions(op);
 }
 

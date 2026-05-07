@@ -25,6 +25,13 @@
 
 namespace duckdb {
 
+//! Controls how a table function manages parallelism.
+enum class TableFunctionParallelism : uint8_t {
+	SELF_MANAGED_PARALLELISM = 0, //! Source handles its own parallelism (default)
+	SEQUENTIAL = 1,               //! Sequential source, benefits from external parallelization
+	FORCE_SINGLE_THREADED = 2     //! Sequential source, prefers single-threaded execution
+};
+
 class BaseStatistics;
 class LogicalDependencyList;
 class LogicalGet;
@@ -440,7 +447,7 @@ public:
 	//! (Optional) cardinality function
 	//! Returns the expected cardinality of this scan
 	table_function_cardinality_t cardinality;
-	//! (Optional) returns the number of rows that have benn scanned
+	//! (Optional) returns the number of rows that have been scanned
 	table_function_rows_scanned_t rows_scanned;
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
@@ -503,6 +510,9 @@ public:
 	//! By default init_global is called when the pipeline is ready for execution
 	//! If this is set to `INITIALIZE_ON_SCHEDULE` the table function is initialized when the query is scheduled
 	TableFunctionInitialization global_initialization = TableFunctionInitialization::INITIALIZE_ON_EXECUTE;
+
+	//! How this table function manages parallelism
+	TableFunctionParallelism parallelism = TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
 
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;

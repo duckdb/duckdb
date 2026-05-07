@@ -108,8 +108,8 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	for (idx_t i = 1; i < ordered_bindings.size(); ++i) {
 		// Right child.
 		children.push_back(ordered_bindings[i].get().Copy());
-		new_root =
-		    binder.BindScalarFunction(DEFAULT_SCHEMA, root.function.name, std::move(children), error, root.is_operator);
+		new_root = binder.BindScalarFunction(DEFAULT_SCHEMA, root.function.GetName(), std::move(children), error,
+		                                     root.is_operator);
 		if (!new_root) {
 			error.Throw();
 		}
@@ -119,7 +119,7 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	}
 
 	D_ASSERT(children.size() == 1);
-	D_ASSERT(children[0]->return_type == root.return_type);
+	D_ASSERT(children[0]->GetReturnType() == root.GetReturnType());
 
 	return std::move(children[0]);
 }

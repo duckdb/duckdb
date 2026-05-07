@@ -76,6 +76,11 @@ struct JSONConverter {
 		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
 	}
 
+	static yyjson_mut_val *VisitTimestampTZNanos(timestamp_tz_ns_t val, yyjson_mut_doc *doc) {
+		auto val_str = Value::TIMESTAMPTZNS(val).ToString();
+		return yyjson_mut_strncpy(doc, val_str.c_str(), val_str.size());
+	}
+
 	static yyjson_mut_val *VisitFloat(float val, yyjson_mut_doc *doc) {
 		return yyjson_mut_real(doc, val);
 	}

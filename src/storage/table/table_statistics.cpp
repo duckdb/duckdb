@@ -144,7 +144,7 @@ void TableStatistics::MergeStats(TableStatistics &other) {
 			D_ASSERT(other.table_sample->type == SampleType::RESERVOIR_SAMPLE);
 			this_reservoir.Merge(std::move(other.table_sample));
 		}
-		// if no other.table sample, do nothig
+		// if no other.table sample, do nothing
 	} else {
 		if (other.table_sample) {
 			auto &other_reservoir = other.table_sample->Cast<ReservoirSample>();

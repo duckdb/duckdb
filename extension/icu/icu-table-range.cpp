@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -207,12 +208,13 @@ struct ICUTableRange {
 				return OperatorResultType::HAVE_MORE_OUTPUT;
 			}
 			idx_t size = 0;
-			auto data = FlatVector::Writer<timestamp_t>(output.data[0], STANDARD_VECTOR_SIZE);
+			auto data = FlatVector::ScatterWriter<timestamp_t>(output.data[0]);
 			while (true) {
 				if (state.Finished(state.current_state)) {
 					break;
 				}
-				data[size++] = state.current_state;
+				data[size] = state.current_state;
+				size++;
 				state.current_state = ICUDateFunc::Add(calendar, state.current_state, state.increment);
 				if (size >= STANDARD_VECTOR_SIZE) {
 					break;
@@ -224,7 +226,7 @@ struct ICUTableRange {
 				state.initialized_row = false;
 				continue;
 			}
-			output.SetCardinality(size);
+			output.SetChildCardinality(size);
 			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 	}

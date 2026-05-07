@@ -9,6 +9,8 @@
 #include "tpcds_constants.hpp"
 #include "dsdgen_schema.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "dsdgen-c/porting.h"
+#include "dsdgen-c/parallel.h"
 
 #include <cassert>
 
@@ -135,6 +137,7 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_
 			if (builder_func((void *)&append_info, i)) {
 				throw InternalException("Table generation failed");
 			}
+			row_stop(table_id);
 		}
 	}
 

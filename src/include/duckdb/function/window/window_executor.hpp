@@ -49,6 +49,12 @@ public:
 	WindowBoundariesState state;
 };
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 class WindowExecutor {
 public:
 	using CollectionPtr = optional_ptr<WindowCollection>;

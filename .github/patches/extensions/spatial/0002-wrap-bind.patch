@@ -1,5 +1,5 @@
 diff --git a/src/spatial/modules/geos/geos_module.cpp b/src/spatial/modules/geos/geos_module.cpp
-index 4b0a544..91470a6 100644
+index ff2c6cd..4135c83 100644
 --- a/src/spatial/modules/geos/geos_module.cpp
 +++ b/src/spatial/modules/geos/geos_module.cpp
 @@ -229,8 +229,11 @@ struct ST_AsMVTGeom {
@@ -125,7 +125,7 @@ index 8796650..cad93a6 100644
  	auto &point_children = StructVector::GetEntries(point_vector);
  	auto x_data = FlatVector::GetDataMutable<double>(point_children[0]);
 diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
-index 5310f80..1c5031e 100644
+index 2b63e23..b9c0aee 100644
 --- a/src/spatial/modules/main/spatial_functions_scalar.cpp
 +++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
 @@ -439,7 +439,7 @@ struct ST_Area {

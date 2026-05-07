@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-QueryErrorContext::QueryErrorContext(const ParsedExpression &expr) : query_location(expr.query_location) {
+QueryErrorContext::QueryErrorContext(const ParsedExpression &expr) : query_location(expr.GetQueryLocation()) {
 }
 
 string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,

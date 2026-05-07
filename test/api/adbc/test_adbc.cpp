@@ -455,6 +455,34 @@ TEST_CASE("ADBC - Test ingestion - Incorrect column count", "[adbc]") {
 	input_data.release = nullptr;
 }
 
+TEST_CASE("ADBC - Test ingestion - Append to missing table", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input_data = db.QueryArrow("SELECT 42 as value");
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(
+	    AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, "missing_table", &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND,
+	                                       &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&adbc_statement, &input_data, &db.adbc_error)));
+	auto status = AdbcStatementExecuteQuery(&adbc_statement, nullptr, nullptr, &db.adbc_error);
+	REQUIRE(!SUCCESS(status));
+	REQUIRE(db.adbc_error.message);
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "does not exist"));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "missing_table"));
+	db.adbc_error.release(&db.adbc_error);
+	InitializeADBCError(&db.adbc_error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &db.adbc_error)));
+	if (input_data.release) {
+		input_data.release(&input_data);
+	}
+	input_data.release = nullptr;
+}
+
 TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -765,7 +793,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	input_data.get_next(&input_data, &prepared_array);
 
 	// Create the schema
-	db.Query("CREATE SCHEMA " + KeywordHelper::WriteOptionallyQuoted(schema_name));
+	db.Query("CREATE SCHEMA " + SQLIdentifier(schema_name));
 
 	// Create ADBC statement that will create a table called "test"
 	AdbcStatement adbc_stmt;
@@ -799,8 +827,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	}
 
 	// Check we can query
-	auto schema_table =
-	    KeywordHelper::WriteOptionallyQuoted(schema_name) + "." + KeywordHelper::WriteOptionallyQuoted(table_name);
+	auto schema_table = SQLIdentifier(schema_name) + "." + SQLIdentifier(table_name);
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));

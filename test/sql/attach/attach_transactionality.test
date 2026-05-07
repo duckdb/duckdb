@@ -2,9 +2,6 @@
 # description: Test transactionality of attach
 # group: [attach]
 
-statement ok
-PRAGMA enable_verification
-
 # straightforward attach and rollback
 statement ok
 BEGIN TRANSACTION

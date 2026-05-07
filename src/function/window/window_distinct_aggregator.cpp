@@ -125,7 +125,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	sort_types = aggregator.arg_types;
 	sort_types.emplace_back(LogicalType::UBIGINT);
 
-	//	All expressions will be precomputed for sharing, so we jsut need to reference the arguments
+	//	All expressions will be precomputed for sharing, so we just need to reference the arguments
 	vector<BoundOrderByNode> orders;
 	for (const auto &type : sort_types) {
 		auto expr = make_uniq<BoundReferenceExpression>(type, orders.size());
@@ -261,6 +261,7 @@ void WindowDistinctAggregatorLocalState::Sink(ExecutionContext &context, DataChu
 	auto &sorted_vec = sort_chunk.data.back();
 	auto sorted = FlatVector::GetDataMutable<idx_t>(sorted_vec);
 	std::iota(sorted, sorted + count, input_idx);
+	FlatVector::SetSize(sorted_vec, count_t(count));
 
 	// Our arguments are being fully materialised,
 	// but we also need them as sort keys.
@@ -540,12 +541,12 @@ void WindowDistinctSortTree::BuildRun(idx_t level_nr, idx_t run_idx, WindowDisti
 
 	//! The states to update
 	auto &update_v = ldastate.update_v;
-	auto updates = FlatVector::Writer<data_ptr_t>(update_v);
+	auto updates = FlatVector::ScatterWriter<data_ptr_t>(update_v);
 
 	auto &source_v = ldastate.source_v;
-	auto sources = FlatVector::Writer<data_ptr_t>(source_v);
+	auto sources = FlatVector::ScatterWriter<data_ptr_t>(source_v);
 	auto &target_v = ldastate.target_v;
-	auto targets = FlatVector::Writer<data_ptr_t>(target_v);
+	auto targets = FlatVector::ScatterWriter<data_ptr_t>(target_v);
 
 	auto &zipped_tree = gdastate.zipped_tree;
 	auto &zipped_level = zipped_tree.tree[level_nr].first;
@@ -637,7 +638,7 @@ void WindowDistinctAggregatorLocalState::FlushStates() {
 
 	const auto &aggr = gdstate.aggr;
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	statel.Verify(flush_count);
+	statel.Verify();
 	aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 
 	flush_count = 0;

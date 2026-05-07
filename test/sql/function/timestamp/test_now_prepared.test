@@ -3,9 +3,6 @@
 # group: [timestamp]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE timestamps(ts TIMESTAMP);
 
 # the NOW function should not be cached in prepared statements
