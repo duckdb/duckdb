@@ -1691,7 +1691,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			if (!pointer_copy.has_metadata_blocks && !pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException("Checkpointing should always remember metadata blocks");
 			}
-			if (SupportsPerColumnWrites() == pointer_copy.has_per_column_metadata_blocks) {
+			if (SupportsPerColumnWrites() != pointer_copy.has_per_column_metadata_blocks) {
 				throw InternalException(
 				    "Checkpointing should always remember per-column metadata blocks when supporting it");
 			}
