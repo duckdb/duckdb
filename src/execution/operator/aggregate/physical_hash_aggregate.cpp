@@ -864,17 +864,27 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalSourceState : public GlobalSourceState {
 public:
-	HashAggregateGlobalSourceState(ClientContext &context, const PhysicalHashAggregate &op) : op(op), state_index(0) {
+	HashAggregateGlobalSourceState(ClientContext &context, const PhysicalHashAggregate &op) : op(op) {
 		for (auto &grouping : op.groupings) {
 			auto &rt = grouping.table_data;
 			radix_states.push_back(rt.GetGlobalSourceState(context));
 		}
+		ResetState(context);
 	}
 
 	const PhysicalHashAggregate &op;
 	atomic<idx_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
+
+private:
+	void ResetState(ClientContext &context) {
+		state_index = 0;
+		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
+			op.groupings[grouping_idx].table_data.ResetGlobalSourceState(context, *radix_states[grouping_idx]);
+		}
+		GlobalSourceState::Reset(context);
+	}
 
 public:
 	idx_t MaxThreads() override {
@@ -898,11 +908,7 @@ public:
 	}
 
 	void Reset(ClientContext &context) override {
-		state_index = 0;
-		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
-			op.groupings[grouping_idx].table_data.ResetGlobalSourceState(context, *radix_states[grouping_idx]);
-		}
-		GlobalSourceState::Reset(context);
+		ResetState(context);
 	}
 };
 
@@ -912,23 +918,32 @@ unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(Client
 
 class HashAggregateLocalSourceState : public LocalSourceState {
 public:
-	explicit HashAggregateLocalSourceState(ExecutionContext &context, const PhysicalHashAggregate &op) : op(op) {
+	explicit HashAggregateLocalSourceState(ExecutionContext &context, const PhysicalHashAggregate &op,
+	                                       GlobalSourceState &gstate)
+	    : op(op) {
 		for (auto &grouping : op.groupings) {
 			auto &rt = grouping.table_data;
 			radix_states.push_back(rt.GetLocalSourceState(context));
 		}
+		ResetState();
 	}
 
 	const PhysicalHashAggregate &op;
 	optional_idx radix_idx;
 	vector<unique_ptr<LocalSourceState>> radix_states;
 
+private:
+	void ResetState() {
+		radix_idx.SetInvalid();
+	}
+
+public:
 	bool SupportsReuse() const override {
 		return true;
 	}
 
 	void Reset(ExecutionContext &context, GlobalSourceState &gstate) override {
-		radix_idx.SetInvalid();
+		ResetState();
 		for (idx_t grouping_idx = 0; grouping_idx < op.groupings.size(); grouping_idx++) {
 			op.groupings[grouping_idx].table_data.ResetLocalSourceState(context, *radix_states[grouping_idx]);
 		}
@@ -937,7 +952,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(ExecutionContext &context,
                                                                         GlobalSourceState &gstate) const {
-	return make_uniq<HashAggregateLocalSourceState>(context, *this);
+	return make_uniq<HashAggregateLocalSourceState>(context, *this, gstate);
 }
 
 SourceResultType PhysicalHashAggregate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
