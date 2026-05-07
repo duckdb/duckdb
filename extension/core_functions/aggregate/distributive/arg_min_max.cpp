@@ -401,7 +401,8 @@ AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type,
 	                         AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.GetArguments() = {type, by_type};
+	function.GetSignature().GetParameter(0).SetType(type);
+	function.GetSignature().GetParameter(1).SetType(by_type);
 	function.SetReturnType(type);
 	return function;
 #endif
@@ -462,7 +463,8 @@ AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const
 	function.SetBindCallback(GetBindFunction<OP>(null_handling));
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>(null_handling);
-	function.GetArguments() = {type, by_type};
+	function.GetSignature().GetParameter(0).SetType(type);
+	function.GetSignature().GetParameter(1).SetType(by_type);
 	function.SetReturnType(type);
 #endif
 	return function;
