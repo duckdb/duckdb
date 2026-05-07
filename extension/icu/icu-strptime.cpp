@@ -136,7 +136,7 @@ struct ICUStrptime : public ICUDateFunc {
 		for (auto &format : formats) {
 			if (format.Parse(input, parsed)) {
 				if (parsed.is_special) {
-					result = timestamp_tz_t(parsed.ToTimestamp().value);
+					result = timestamp_tz_t(parsed.ToTimestamp());
 					return;
 				} else {
 					// Set TZ first, if any.
@@ -411,7 +411,7 @@ struct ICUStrptime : public ICUDateFunc {
 			return FromNaive(calendar, us);
 		}
 
-		return timestamp_tz_t(us.value);
+		return timestamp_tz_t(us);
 	}
 
 	static bool VarcharToTimestampTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -444,7 +444,7 @@ struct ICUStrptime : public ICUDateFunc {
 				    return nullopt;
 			    }
 
-			    return timestamp_tz_ns_t(result.value);
+			    return timestamp_tz_ns_t(result);
 		    });
 		return true;
 	}

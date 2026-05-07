@@ -17,7 +17,7 @@ namespace duckdb {
 
 date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_tz_t instant) {
 	if (!instant.IsFinite()) {
-		return Timestamp::GetDate(timestamp_t(instant.value));
+		return Timestamp::GetDate(timestamp_t(instant));
 	}
 
 	// Extract the time zone parts

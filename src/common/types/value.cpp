@@ -268,7 +268,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		const auto date = Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY);
 		const auto ts = Timestamp::FromDatetime(date, dtime_t(0));
-		return Value::TIMESTAMPTZ(timestamp_tz_t(ts.value));
+		return Value::TIMESTAMPTZ(timestamp_tz_t(ts));
 	}
 	case LogicalTypeId::TIMESTAMP_TZ_NS: {
 		// Clear the fractional day.

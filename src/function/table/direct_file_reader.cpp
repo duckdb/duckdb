@@ -152,7 +152,7 @@ AsyncResult DirectFileReader::Scan(ClientContext &context, GlobalTableFunctionSt
 				try {
 					const auto timestamp_seconds = fs.GetLastModifiedTime(*file_handle);
 					FlatVector::GetDataMutable<timestamp_tz_t>(last_modified_vector)[out_idx] =
-					    timestamp_tz_t(timestamp_seconds.value);
+					    timestamp_tz_t(timestamp_seconds);
 				} catch (std::exception &ex) {
 					ErrorData error(ex);
 					if (error.Type() == ExceptionType::CONVERSION) {

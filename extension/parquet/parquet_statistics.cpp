@@ -312,7 +312,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			}
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-			return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_value.value));
+			return Value::TIMESTAMPTZ(timestamp_tz_t(timestamp_value));
 		}
 		return Value::TIMESTAMP(timestamp_value);
 	}
@@ -343,7 +343,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			}
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
-			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value.value));
+			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value));
 		}
 		return Value::TIMESTAMPNS(timestamp_value);
 	}

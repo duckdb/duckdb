@@ -24,8 +24,14 @@ struct timebase_t { // NOLINT
 	timebase_t() = default;
 	explicit inline constexpr timebase_t(int64_t value) : value(value) {
 	}
-	inline timebase_t &operator=(int64_t micros) {
-		value = micros;
+
+	//	Allow explicit conversion of same precision types
+	using not_zone = timebase_t<P, !Z>;
+	explicit inline constexpr timebase_t(const not_zone &nz) : value(nz.value) {
+	}
+
+	inline timebase_t &operator=(int64_t input) {
+		value = input;
 		return *this;
 	}
 
@@ -79,6 +85,7 @@ using timestamp_ms_t = timebase_t<1000, false>;
 
 //! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
 using timestamp_t = timebase_t<1000000, false>;
+using timestamp_us_t = timebase_t<1000000, false>;
 
 //! Type used to represent TIMESTAMP_NS. timestamp_ns_t holds the nanoseconds since 1970-01-01.
 using timestamp_ns_t = timebase_t<1000000000, false>;
@@ -86,6 +93,7 @@ using timestamp_ns_t = timebase_t<1000000000, false>;
 //! Type used to represent TIMESTAMPTZ. timestamp_tz_t holds the microseconds since 1970-01-01 (UTC).
 //! It is physically the same as timestamp_t, both hold microseconds since epoch.
 using timestamp_tz_t = timebase_t<1000000, true>;
+using timestamp_tz_us_t = timebase_t<1000000, true>;
 
 //! Type used to represent TIMESTAMPTZ_NS. timestamp_tz_ns_t holds the nanooseconds since 1970-01-01 (UTC).
 //! It is physically the same as timestamp_ns_t, both hold nanoseconds since epoch.

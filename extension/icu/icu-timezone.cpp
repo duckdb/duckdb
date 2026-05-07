@@ -116,7 +116,7 @@ struct ICUCast {
 //	From naive types to TIMESTAMP_TZ
 template <>
 timestamp_tz_t ICUCast::Operation(timestamp_t src) {
-	return timestamp_tz_t(src.value);
+	return timestamp_tz_t(src);
 }
 
 template <>
@@ -131,17 +131,17 @@ timestamp_tz_t ICUCast::Operation(timestamp_ns_t src) {
 
 template <>
 timestamp_tz_t ICUCast::Operation(timestamp_sec_t src) {
-	return timestamp_tz_t(CastTimestampSecToUs::Operation<timestamp_sec_t, timestamp_tz_t>(src).value);
+	return timestamp_tz_t(CastTimestampSecToUs::Operation<timestamp_sec_t, timestamp_tz_t>(src));
 }
 
 template <>
 timestamp_tz_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_t(Cast::Operation<date_t, timestamp_t>(src).value);
+	return timestamp_tz_t(Cast::Operation<date_t, timestamp_t>(src));
 }
 
 template <>
 timestamp_tz_ns_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_ns_t(Cast::Operation<date_t, timestamp_tz_ns_t>(src).value);
+	return timestamp_tz_ns_t(Cast::Operation<date_t, timestamp_tz_ns_t>(src));
 }
 
 //	From TIMESTAMP_TZ to naive types
@@ -157,7 +157,7 @@ timestamp_ms_t ICUCast::Operation(timestamp_tz_t src) {
 
 template <>
 timestamp_t ICUCast::Operation(timestamp_tz_t src) {
-	return timestamp_t(src.value);
+	return timestamp_t(src);
 }
 
 template <>
@@ -168,7 +168,7 @@ timestamp_ns_t ICUCast::Operation(timestamp_tz_t src) {
 //	From TIMESTAMP_TZ_NS
 template <>
 timestamp_ns_t ICUCast::Operation(timestamp_tz_ns_t src) {
-	return timestamp_ns_t(src.value);
+	return timestamp_ns_t(src);
 }
 
 //	From TIME_TZ
@@ -180,7 +180,7 @@ dtime_tz_t ICUCast::Operation(dtime_tz_t src) {
 struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_tz_t Operation(icu::Calendar *calendar, timestamp_t naive) {
 		if (!naive.IsFinite()) {
-			return timestamp_tz_t(naive.value);
+			return timestamp_tz_t(naive);
 		}
 
 		// Extract the parts from the "instant"
@@ -215,18 +215,18 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 
 	static inline timestamp_tz_ns_t Operation(icu::Calendar *calendar, timestamp_ns_t naive) {
 		if (!naive.IsFinite()) {
-			return timestamp_tz_ns_t(naive.value);
+			return timestamp_tz_ns_t(naive);
 		}
 
 		auto nanos = naive.value % Interval::NANOS_PER_MICRO;
 		timestamp_t micros(naive.value / Interval::NANOS_PER_MICRO);
-		timestamp_t cast(Operation(calendar, micros).value);
+		timestamp_t cast(Operation(calendar, micros));
 
 		timestamp_ns_t result;
 		if (!Timestamp::TryFromTimestampNanos(cast, nanos, result)) {
 			throw ConversionException("ICU date overflows timestamp_ns range");
 		}
-		return timestamp_tz_ns_t(result.value);
+		return timestamp_tz_ns_t(result);
 	}
 
 	template <class SRC, class DST>
@@ -299,7 +299,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 struct ICUToNaiveTimestamp : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, timestamp_tz_t instant) {
 		if (!instant.IsFinite()) {
-			return timestamp_t(instant.value);
+			return timestamp_t(instant);
 		}
 
 		// Extract the time zone parts
@@ -333,7 +333,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 
 	static inline timestamp_ns_t Operation(icu::Calendar *calendar, timestamp_tz_ns_t instant) {
 		if (!instant.IsFinite()) {
-			return timestamp_ns_t(instant.value);
+			return timestamp_ns_t(instant);
 		}
 
 		auto nanos = instant.value % Interval::NANOS_PER_MICRO;
@@ -447,7 +447,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		const auto now = timestamp_tz_t(info.now.value);
+		const auto now = timestamp_tz_t(info.now);
 		return ICUToNaiveTimestamp::Operation(calendar, now);
 	}
 

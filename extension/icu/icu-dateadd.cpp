@@ -181,8 +181,8 @@ template <>
 interval_t ICUCalendarAge::Operation(timestamp_tz_t end_date, timestamp_tz_t start_date, TZCalendar &calendar_p) {
 	auto calendar = calendar_p.GetICUCalendar();
 	if (calendar_p.IsGregorian()) {
-		auto start_data = ICUHelpers::GetComponents(timestamp_tz_t(start_date.value), calendar);
-		auto end_data = ICUHelpers::GetComponents(timestamp_tz_t(end_date.value), calendar);
+		auto start_data = ICUHelpers::GetComponents(start_date, calendar);
+		auto end_data = ICUHelpers::GetComponents(end_date, calendar);
 		return Interval::GetAge(end_data, start_data, start_date > end_date);
 	}
 	// fallback for non-gregorian calendars, since Interval::GetAge does not handle

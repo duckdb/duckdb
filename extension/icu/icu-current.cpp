@@ -19,7 +19,7 @@ static void CurrentTimeFunction(DataChunk &input, ExpressionState &state, Vector
 	ICUDateFunc::BindData data(state.GetContext());
 
 	dtime_tz_t result_time(dtime_t(0), 0);
-	ICUToTimeTZ::ToTimeTZ(data.calendar.get(), timestamp_tz_t(instant.value), result_time);
+	ICUToTimeTZ::ToTimeTZ(data.calendar.get(), timestamp_tz_t(instant), result_time);
 	auto val = Value::TIMETZ(result_time);
 	result.Reference(val, count_t(input.size()));
 }
@@ -28,7 +28,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 0);
 	auto instant = GetTransactionTimestamp(state);
 
-	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), timestamp_tz_t(instant.value)));
+	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), timestamp_tz_t(instant)));
 	result.Reference(val, count_t(input.size()));
 }
 

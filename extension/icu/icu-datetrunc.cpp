@@ -221,7 +221,7 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 }
 
 timestamp_tz_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionState &state) {
-	const timestamp_tz_t current_timestamp(MetaTransaction::Get(state.GetContext()).start_timestamp.value);
+	const timestamp_tz_t current_timestamp(MetaTransaction::Get(state.GetContext()).start_timestamp);
 	auto current_micros = SetTime(calendar, current_timestamp);
 	ICUDateTrunc::TruncDay(calendar, current_micros);
 	return GetTime(calendar);

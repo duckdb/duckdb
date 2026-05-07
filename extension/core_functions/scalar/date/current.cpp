@@ -12,7 +12,7 @@ static timestamp_t GetTransactionTimestamp(ExpressionState &state) {
 static void CurrentTimestampFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 0);
 	auto ts = GetTransactionTimestamp(state);
-	auto val = Value::TIMESTAMPTZ(timestamp_tz_t(ts.value));
+	auto val = Value::TIMESTAMPTZ(timestamp_tz_t(ts));
 	result.Reference(val, count_t(input.size()));
 }
 

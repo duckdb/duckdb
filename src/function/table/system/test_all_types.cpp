@@ -167,7 +167,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes(const bool use_large_enum, const 
 	    Value::LIST(LogicalType::TIMESTAMP_TZ,
 	                {Value::TIMESTAMPTZ(timestamp_tz_t()), Value::TIMESTAMPTZ(timestamp_tz_t::infinity()),
 	                 Value::TIMESTAMPTZ(timestamp_tz_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
-	                 Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07", true).value))});
+	                 Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromString("2022-05-12 16:23:45-07", true)))});
 	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
 
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);

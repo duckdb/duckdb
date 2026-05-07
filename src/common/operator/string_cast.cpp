@@ -221,6 +221,7 @@ duckdb::string_t StringCast::Operation(timestamp_t input, StringHeap &heap) {
 
 template <>
 duckdb::string_t StringCast::Operation(timestamp_ns_t input, StringHeap &heap) {
+	//	FIXME: This is just horrible...
 	timestamp_t us(input.value);
 	return StringFromTimestamp<true>(us, heap);
 }
