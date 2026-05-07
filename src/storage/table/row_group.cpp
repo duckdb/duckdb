@@ -1570,9 +1570,16 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		auto &data_writer = writer.GetPayloadWriter();
 		auto pointer = writer.GetMetaBlockPointer();
 
+		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
 
+		// Write pointers to the column segments.
+		//
+		// Just as above, the state can refer to many other states, so this
+		// can cascade recursively into more pointer writes.
 		auto persistent_data = state->ToPersistentData();
+		// increment the "start" in all data pointers by the row group start
+		// FIXME: this is only necessary when targeting old serialization
 		IncrementSegmentStart(persistent_data, row_group_start);
 
 		BinarySerializer serializer(data_writer, serialization_options);
@@ -1604,7 +1611,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	if (metadata_manager) {
 		row_group_pointer.deletes_pointers = CheckpointDeletes(writer);
 		metadata_manager->ClearModifiedBlocks(reused_column_blocks);
-		metadata_manager->ClearModifiedBlocks(deletes_pointers);
 	}
 
 	// cache metadata pointers for future checkpoint reuse
