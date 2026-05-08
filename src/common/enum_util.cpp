@@ -3375,19 +3375,21 @@ const StringUtil::EnumStringLiteral *GetMetricTypeValues() {
 		{ static_cast<uint32_t>(MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES), "PHYSICAL_PLANNER_RESOLVE_TYPES" },
 		{ static_cast<uint32_t>(MetricType::PLANNER), "PLANNER" },
 		{ static_cast<uint32_t>(MetricType::PLANNER_BINDING), "PLANNER_BINDING" },
-		{ static_cast<uint32_t>(MetricType::RESULT_COLLECTOR), "RESULT_COLLECTOR" }
+		{ static_cast<uint32_t>(MetricType::RESULT_COLLECTOR), "RESULT_COLLECTOR" },
+		{ static_cast<uint32_t>(MetricType::EXECUTOR_INITIALIZE), "EXECUTOR_INITIALIZE" },
+		{ static_cast<uint32_t>(MetricType::CLEANUP), "CLEANUP" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<MetricType>(MetricType value) {
-	return StringUtil::EnumToString(GetMetricTypeValues(), 73, "MetricType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricTypeValues(), 75, "MetricType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricType EnumUtil::FromString<MetricType>(const char *value) {
-	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 73, "MetricType", value));
+	return static_cast<MetricType>(StringUtil::StringToEnum(GetMetricTypeValues(), 75, "MetricType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMonotonicityValues() {

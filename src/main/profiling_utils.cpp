@@ -57,9 +57,11 @@ void ProfilingUtils::SetMetricToDefault(profiler_metrics_t &metrics, const Metri
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
+	case MetricType::CLEANUP:
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::EXECUTOR_INITIALIZE:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
@@ -147,9 +149,11 @@ void ProfilingUtils::MetricToJson(duckdb_yyjson::yyjson_mut_doc *doc, duckdb_yyj
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
+	case MetricType::CLEANUP:
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CPU_TIME:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::EXECUTOR_INITIALIZE:
 	case MetricType::LATENCY:
 	case MetricType::OPERATOR_TIMING:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:

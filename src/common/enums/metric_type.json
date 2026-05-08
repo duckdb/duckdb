@@ -300,6 +300,22 @@
         "type": "double",
         "unit": "milliseconds",
         "query_root": true
+      },
+      {
+        "name": "EXECUTOR_INITIALIZE",
+        "enum_value": 101,
+        "description": "The time spent initializing the executor, building pipelines and scheduling tasks.",
+        "type": "double",
+        "unit": "milliseconds",
+        "query_root": true
+      },
+      {
+        "name": "CLEANUP",
+        "enum_value": 102,
+        "description": "The time spent in post-execution cleanup including transaction commit and thread relaunch.",
+        "type": "double",
+        "unit": "milliseconds",
+        "query_root": true
       }
     ]
   },

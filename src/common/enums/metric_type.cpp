@@ -13,11 +13,13 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::CHECKPOINT_LATENCY,
+		MetricType::CLEANUP,
 		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::CPU_TIME,
 		MetricType::CUMULATIVE_CARDINALITY,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
 		MetricType::CUMULATIVE_ROWS_SCANNED,
+		MetricType::EXECUTOR_INITIALIZE,
 		MetricType::EXTRA_INFO,
 		MetricType::LATENCY,
 		MetricType::OPERATOR_CARDINALITY,
@@ -318,7 +320,9 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricType type) {
 profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 	return {
 		MetricType::ALL_OPTIMIZERS,
+		MetricType::CLEANUP,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::EXECUTOR_INITIALIZE,
 		MetricType::PARSER,
 		MetricType::PHYSICAL_PLANNER,
 		MetricType::PHYSICAL_PLANNER_COLUMN_BINDING,
@@ -333,7 +337,9 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	switch(type) {
 	case MetricType::ALL_OPTIMIZERS:
+	case MetricType::CLEANUP:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::EXECUTOR_INITIALIZE:
 	case MetricType::PARSER:
 	case MetricType::PHYSICAL_PLANNER:
 	case MetricType::PHYSICAL_PLANNER_COLUMN_BINDING:
@@ -355,8 +361,10 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricType::ATTACH_REPLAY_WAL_LATENCY,
 		MetricType::BLOCKED_THREAD_TIME,
 		MetricType::CHECKPOINT_LATENCY,
+		MetricType::CLEANUP,
 		MetricType::COMMIT_LOCAL_STORAGE_LATENCY,
 		MetricType::CUMULATIVE_OPTIMIZER_TIMING,
+		MetricType::EXECUTOR_INITIALIZE,
 		MetricType::LATENCY,
 		MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER,
 		MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE,
@@ -420,8 +428,10 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::ATTACH_REPLAY_WAL_LATENCY:
 	case MetricType::BLOCKED_THREAD_TIME:
 	case MetricType::CHECKPOINT_LATENCY:
+	case MetricType::CLEANUP:
 	case MetricType::COMMIT_LOCAL_STORAGE_LATENCY:
 	case MetricType::CUMULATIVE_OPTIMIZER_TIMING:
+	case MetricType::EXECUTOR_INITIALIZE:
 	case MetricType::LATENCY:
 	case MetricType::OPTIMIZER_AGGREGATE_FUNCTION_REWRITER:
 	case MetricType::OPTIMIZER_BUILD_SIDE_PROBE_SIDE:
