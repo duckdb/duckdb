@@ -1,11 +1,9 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/verify_arg_properties.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/value_operations/value_operations.hpp"
-
-#include <numeric>
 
 namespace duckdb {
 
@@ -144,112 +142,6 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunct
 	return std::move(result);
 }
 
-#ifdef DEBUG
-namespace {
-
-// Build a row-index permutation sorted by (other-args, target-arg). Rows that match on every
-// non-target arg end up adjacent, sorted by the target arg within each such group.
-vector<idx_t> SortRowsByTargetArg(DataChunk &args, idx_t target_arg) {
-	vector<idx_t> perm(args.size());
-	std::iota(perm.begin(), perm.end(), idx_t(0));
-	std::sort(perm.begin(), perm.end(), [&](idx_t a, idx_t b) {
-		for (idx_t k = 0; k < args.ColumnCount(); k++) {
-			if (k == target_arg) {
-				continue;
-			}
-			const auto va = args.data[k].GetValue(a);
-			const auto vb = args.data[k].GetValue(b);
-			if (!ValueOperations::DistinctFrom(va, vb)) {
-				continue;
-			}
-			return ValueOperations::DistinctLessThan(va, vb);
-		}
-		return ValueOperations::DistinctLessThan(args.data[target_arg].GetValue(a), args.data[target_arg].GetValue(b));
-	});
-	return perm;
-}
-
-// True if every arg except target_arg has NotDistinctFrom values at rows a and b.
-bool RowsShareNonTargetArgs(DataChunk &args, idx_t target_arg, idx_t a, idx_t b) {
-	for (idx_t k = 0; k < args.ColumnCount(); k++) {
-		if (k == target_arg) {
-			continue;
-		}
-		if (ValueOperations::DistinctFrom(args.data[k].GetValue(a), args.data[k].GetValue(b))) {
-			return false;
-		}
-	}
-	return true;
-}
-
-// Asserts the monotonicity claim on a single ordered pair (in_a <= in_b by sort).
-void AssertMonotonicityPair(Monotonicity m, const Value &in_a, const Value &in_b, const Value &out_a,
-                            const Value &out_b) {
-	// CONSTANT, or equal inputs to a deterministic function: outputs must match.
-	if (m == Monotonicity::CONSTANT || !ValueOperations::DistinctFrom(in_a, in_b)) {
-		D_ASSERT(!ValueOperations::DistinctFrom(out_a, out_b));
-		return;
-	}
-	const bool strict = IsStrict(m);
-	if (IsMonotonicIncreasing(m)) {
-		D_ASSERT(strict ? ValueOperations::DistinctLessThan(out_a, out_b)
-		                : ValueOperations::DistinctLessThanEquals(out_a, out_b));
-	} else {
-		D_ASSERT(strict ? ValueOperations::DistinctGreaterThan(out_a, out_b)
-		                : ValueOperations::DistinctGreaterThanEquals(out_a, out_b));
-	}
-}
-
-void VerifyArgPropertiesForArg(DataChunk &args, idx_t target_arg, Vector &result, const ArgProperties &props,
-                               bool check_monotonicity, bool check_injectivity) {
-	const auto perm = SortRowsByTargetArg(args, target_arg);
-	auto &target_vec = args.data[target_arg];
-	for (idx_t i = 1; i < args.size(); i++) {
-		const idx_t a = perm[i - 1];
-		const idx_t b = perm[i];
-		if (!RowsShareNonTargetArgs(args, target_arg, a, b)) {
-			continue; // group boundary — claims don't apply across other-arg changes
-		}
-		const auto in_a = target_vec.GetValue(a);
-		const auto in_b = target_vec.GetValue(b);
-		const auto out_a = result.GetValue(a);
-		const auto out_b = result.GetValue(b);
-		// NULL endpoints have no monotonic relation
-		if (in_a.IsNull() || in_b.IsNull() || out_a.IsNull() || out_b.IsNull()) {
-			continue;
-		}
-		if (check_monotonicity) {
-			AssertMonotonicityPair(props.monotonicity, in_a, in_b, out_a, out_b);
-		}
-		if (check_injectivity && ValueOperations::DistinctFrom(in_a, in_b)) {
-			D_ASSERT(ValueOperations::DistinctFrom(out_a, out_b));
-		}
-	}
-}
-
-} // namespace
-#endif
-
-// Verifies declared ArgProperties hold over the chunk's actual inputs and outputs. Tolerates
-// SPECIAL_HANDLING null behavior — the pair walk skips any pair touching a NULL endpoint.
-static void VerifyArgProperties(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
-#ifdef DEBUG
-	if (!expr.function.HasArgProperties() || args.size() < 2) {
-		return;
-	}
-	const auto &all_props = expr.function.GetAllArgProperties();
-	for (idx_t arg_idx = 0; arg_idx < all_props.size(); arg_idx++) {
-		const auto &props = all_props[arg_idx];
-		const bool check_monotonicity = IsKnownMonotonic(props.monotonicity);
-		const bool check_injectivity = props.injective;
-		if (!check_monotonicity && !check_injectivity) {
-			continue;
-		}
-		VerifyArgPropertiesForArg(args, arg_idx, result, props, check_monotonicity, check_injectivity);
-	}
-#endif
-}
-
 static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &args, Vector &result) {
 #ifdef DEBUG
 	if (args.data.empty() || expr.function.GetNullHandling() != FunctionNullHandling::DEFAULT_NULL_HANDLING) {
@@ -383,7 +275,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	FlatVector::SetSize(result, count_t(count));
 
 	VerifyNullHandling(expr, arguments, result);
-	VerifyArgProperties(expr, arguments, result);
+	VerifyFunctionArgProperties(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.GetReturnType());
 }
 
