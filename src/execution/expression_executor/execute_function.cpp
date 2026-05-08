@@ -300,8 +300,8 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	// Pass the incremental sel to the callback so it indexes these flat vectors correctly (not with the
 	// original `sel` indices which could be out of bounds for the pre-selected buffers).
 	// Then remap the callback's 0-based output indices back to the original sel indices.
-	idx_t result_count = expr.function.GetSelectCallback()(
-	    arguments, *state, FlatVector::IncrementalSelectionVector(), true_sel, false_sel);
+	idx_t result_count = expr.function.GetSelectCallback()(arguments, *state, FlatVector::IncrementalSelectionVector(),
+	                                                       true_sel, false_sel);
 	if (true_sel) {
 		for (idx_t i = 0; i < result_count; i++) {
 			true_sel->set_index(i, sel->get_index(true_sel->get_index(i)));
