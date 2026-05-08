@@ -631,9 +631,7 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
             continue
 
         if is_pure_reference_choice(ast):
-            _, identifier_alts, unknown_alts = classify_choice_alternatives(
-                ast.alternatives, rule_to_type
-            )
+            _, identifier_alts, unknown_alts = classify_choice_alternatives(ast.alternatives, rule_to_type)
             if unknown_alts:
                 skipped.append((rule_name, f"choice has unknown alternatives: {unknown_alts}"))
                 continue
