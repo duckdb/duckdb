@@ -83,9 +83,6 @@ class RepeatNode(GrammarNode):
     """Repeat match A+ (min=1) or A* (min=0). Corresponds to RepeatMatcher."""
 
     child: GrammarNode
-    min_count: int
-
-
 
 
 def tokens_to_ast(tokens):
@@ -139,9 +136,9 @@ def tokens_to_ast(tokens):
             if op == '?':
                 return OptionalNode(node)
             elif op == '*':
-                return RepeatNode(node, 0)
+                return OptionalNode(RepeatNode(node))
             elif op == '+':
-                return RepeatNode(node, 1)
+                return RepeatNode(node)
             else:
                 raise Exception("Unknown operator '{}'".format(op))
         return node
@@ -523,9 +520,11 @@ def _classify_parens_list(inner_list_node, idx, rule_to_type):
     return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
-def _classify_star_repeat(node, idx, rule_to_type):
+def _classify_repeat(node, idx, rule_to_type, optional):
     """
-    OPERATOR '*' -> Optional(Repeat(child)) -> OptionalParseResult wrapping RepeatParseResult.
+    Shared helper for A* and A+.
+    A* -> OptionalNode(RepeatNode(A)) -> OptionalParseResult wrapping RepeatParseResult.
+    A+ -> RepeatNode(A)              -> RepeatParseResult directly (guaranteed >= 1 element).
     Only supported when the repeated element is a plain reference with a known type.
     Produces vector<T>.
     """
@@ -536,17 +535,34 @@ def _classify_star_repeat(node, idx, rule_to_type):
         return None
     child_type = rule_to_type[ref_name]
     var_name = to_snake_case(ref_name)
-    lines = [
-        f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
-        f"\tvector<{child_type}> {var_name};",
-        f"\tif ({var_name}_opt.HasResult()) {{",
-        f"\t\tauto &{var_name}_repeat = {var_name}_opt.GetResult().Cast<RepeatParseResult>();",
-        f"\t\tfor (auto {var_name}_item : {var_name}_repeat.GetChildren()) {{",
-        f"\t\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
-        f"\t\t}}",
-        f"\t}}",
-    ]
+    if optional:
+        lines = [
+            f"\tauto &{var_name}_opt = list_pr.Child<OptionalParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tif ({var_name}_opt.HasResult()) {{",
+            f"\t\tauto &{var_name}_repeat = {var_name}_opt.GetResult().Cast<RepeatParseResult>();",
+            f"\t\tfor (auto &{var_name}_item : {var_name}_repeat.GetChildren()) {{",
+            f"\t\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+            f"\t\t}}",
+            f"\t}}",
+        ]
+    else:
+        lines = [
+            f"\tauto &{var_name}_repeat = list_pr.Child<RepeatParseResult>({idx});",
+            f"\tvector<{child_type}> {var_name};",
+            f"\tfor (auto &{var_name}_item : {var_name}_repeat.GetChildren()) {{",
+            f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
+            f"\t}}",
+        ]
     return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+
+
+def _classify_star_repeat(node, idx, rule_to_type):
+    return _classify_repeat(node, idx, rule_to_type, optional=True)
+
+
+def _classify_plus_repeat(node, idx, rule_to_type):
+    return _classify_repeat(node, idx, rule_to_type, optional=False)
 
 
 def classify_sequence_element(child, idx, rule_to_type, excluded_rules):
@@ -565,9 +581,13 @@ def classify_sequence_element(child, idx, rule_to_type, excluded_rules):
             return _classify_literal(idx)
         if isinstance(inner, ReferenceNode):
             return _classify_optional_reference(inner.name, idx, rule_to_type, excluded_rules)
+        if isinstance(inner, RepeatNode):
+            # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
+            # OptionalMatcher(RepeatMatcher(A)) structure. Delegate to star-repeat classifier.
+            return _classify_star_repeat(inner, idx, rule_to_type)
         return None  # OptionalNode(ParensNode) etc. - deferred
-    if isinstance(child, RepeatNode) and child.min_count == 0:
-        return _classify_star_repeat(child, idx, rule_to_type)
+    if isinstance(child, RepeatNode):
+        return _classify_plus_repeat(child, idx, rule_to_type)
     if isinstance(child, ParensNode):
         if isinstance(child.inner, ListMacroNode):
             return _classify_parens_list(child.inner, idx, rule_to_type)

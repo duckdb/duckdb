@@ -26,7 +26,7 @@ QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(PEG
 	vector<string> dot_identifier;
 	if (dot_identifier_opt.HasResult()) {
 		auto &dot_identifier_repeat = dot_identifier_opt.GetResult().Cast<RepeatParseResult>();
-		for (auto dot_identifier_item : dot_identifier_repeat.GetChildren()) {
+		for (auto &dot_identifier_item : dot_identifier_repeat.GetChildren()) {
 			dot_identifier.push_back(transformer.Transform<string>(dot_identifier_item));
 		}
 	}
