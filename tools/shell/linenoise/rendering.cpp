@@ -909,8 +909,9 @@ void Linenoise::RefreshMultiLine() {
 	 * going to the last row. */
 	AppendBuffer append_buffer;
 	if (old_rows > old_cursor_rows) {
-		Linenoise::Log("go down %d\n", old_rows - old_cursor_rows);
-		snprintf(seq, 64, "\x1b[%luB", old_rows - old_cursor_rows);
+		int extra_rows = old_rows - old_cursor_rows;
+		Linenoise::Log("go down %d\n", extra_rows);
+		snprintf(seq, 64, "\x1b[%dB", extra_rows);
 		append_buffer.Append(seq);
 	}
 
