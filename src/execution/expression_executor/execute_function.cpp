@@ -151,7 +151,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		auto entries = arg.Validity(count);
+		auto entries = arg.Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}
@@ -163,7 +163,7 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	auto result_validity = result.Validity(count);
+	auto result_validity = result.Validity();
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
 			D_ASSERT(!result_validity.IsValid(i));
@@ -195,7 +195,7 @@ static void ExecuteSelectFunction(const BoundFunctionExpression &expr, DataChunk
 	result_validity.SetAllValid(count);
 	D_ASSERT(expr.function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	for (auto &arg : args.data) {
-		auto entries = arg.Validity(count);
+		auto entries = arg.Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}

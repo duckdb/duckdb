@@ -2014,7 +2014,7 @@ struct StructDatePart {
 			}
 		}
 
-		auto entries = input.Values<INPUT_TYPE>(count);
+		auto entries = input.Values<INPUT_TYPE>();
 
 		// Start with a valid flat vector
 		result.SetVectorType(VectorType::FLAT_VECTOR);

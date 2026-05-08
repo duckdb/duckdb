@@ -575,8 +575,8 @@ define ensure_apt_commands
 		command -v $$cmd >/dev/null 2>&1 || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(2); \
 	fi
 endef
 
@@ -586,8 +586,8 @@ define ensure_apt_packages
 		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(1); \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(1); \
 	fi
 endef
 

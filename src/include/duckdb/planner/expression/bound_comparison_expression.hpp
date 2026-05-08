@@ -25,6 +25,9 @@ struct BoundComparisonExpression {
 
 	static unique_ptr<Expression> &LeftMutable(BoundFunctionExpression &between_expr);
 	static unique_ptr<Expression> &RightMutable(BoundFunctionExpression &between_expr);
+	static unique_ptr<Expression> Create(ExpressionType type, unique_ptr<Expression> left,
+	                                     unique_ptr<Expression> right);
+
 
 	//! Flip the comparison type, updating both the expression type and the bind data.
 	//! Use instead of SetExpressionTypeUnsafe to keep the two in sync.

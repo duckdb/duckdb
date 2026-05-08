@@ -270,7 +270,7 @@ jobs:
 
       - name: Install tools
         timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
       - name: Check format
         run: |
@@ -311,7 +311,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Fix ASan runtime
       shell: bash
@@ -360,7 +360,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
@@ -482,7 +482,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -509,7 +509,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -574,7 +574,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -609,7 +609,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Install pytest
       timeout-minutes: 10
@@ -711,7 +711,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
