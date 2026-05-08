@@ -14,9 +14,6 @@ namespace duckdb {
 //! The BoundComparisonExpression has been moved to a function expression
 //! This class exists only as a set of helper methods
 struct BoundComparisonExpression {
-	static unique_ptr<Expression> Create(ExpressionType type, unique_ptr<Expression> left,
-	                                     unique_ptr<Expression> right);
-
 	static bool IsComparison(ExpressionType type);
 	static bool IsComparison(const Expression &expr);
 
