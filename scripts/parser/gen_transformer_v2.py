@@ -34,16 +34,6 @@ class ReferenceNode(GrammarNode):
 
 
 @dataclass
-class RegexNode(GrammarNode):
-    """Regex or character-class match ([...] or <...>).
-    In practice, rules that contain raw regex patterns are overridden in the
-    matcher via AddRuleOverride() and therefore never exercise this path at
-    runtime.  We keep the node so the AST parser stays complete."""
-
-    pattern: str
-
-
-@dataclass
 class ParensNode(GrammarNode):
     """Parens(D) <- '(' D ')'. Anonymous ListMatcher; child[1] is D's result.
     Use ExtractResultFromParens() to reach inside."""
@@ -169,8 +159,6 @@ def tokens_to_ast(tokens):
             return LiteralNode(consume().text)
         elif t.type == PEGTokenType.REFERENCE:
             return ReferenceNode(consume().text)
-        elif t.type == PEGTokenType.REGEX:
-            return RegexNode(consume().text)
         elif t.type == PEGTokenType.FUNCTION_CALL:
             # inline_grammar already consumed the '(' and bumped bracket_count
             func_name = consume().text
