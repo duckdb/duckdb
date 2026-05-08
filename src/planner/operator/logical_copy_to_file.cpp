@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -73,6 +74,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(221, "batch_size", batch_size, optional_idx());
 	serializer.WritePropertyWithDefault(222, "batch_size_bytes", batch_size_bytes, optional_idx());
 	serializer.WritePropertyWithDefault(223, "batches_per_file", batches_per_file, optional_idx());
+	serializer.WritePropertyWithDefault(224, "sort_columns", sort_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -125,6 +127,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto batch_size = deserializer.ReadPropertyWithExplicitDefault(221, "batch_size", optional_idx());
 	auto batch_size_bytes = deserializer.ReadPropertyWithExplicitDefault(222, "batch_size_bytes", optional_idx());
 	auto batches_per_file = deserializer.ReadPropertyWithExplicitDefault(223, "batches_per_file", optional_idx());
+	auto sort_columns = deserializer.ReadPropertyWithExplicitDefault(224, "sort_columns", vector<BoundOrderByNode>());
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -159,6 +162,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->batch_size = batch_size;
 	result->batch_size_bytes = batch_size_bytes;
 	result->batches_per_file = batches_per_file;
+	result->sort_columns = std::move(sort_columns);
 
 	return std::move(result);
 }

@@ -11,6 +11,7 @@
 #include "duckdb/function/window/window_collection.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/main/settings.hpp"
 #include "fmt/format.h"

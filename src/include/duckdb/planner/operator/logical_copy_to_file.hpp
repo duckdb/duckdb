@@ -18,6 +18,8 @@
 
 namespace duckdb {
 
+struct BoundOrderByNode;
+
 class LogicalCopyToFile : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_COPY_TO_FILE;
@@ -50,6 +52,8 @@ public:
 	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
+	vector<BoundOrderByNode> sort_columns;
+
 	vector<string> names;
 	vector<LogicalType> expected_types;
 
