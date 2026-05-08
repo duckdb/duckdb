@@ -189,7 +189,7 @@ static void ComparatorToBoolean(Vector &left, Vector &right, Vector &result, idx
 	D_ASSERT(result.GetType() == LogicalType::BOOLEAN);
 	Vector comparator_result(LogicalType::TINYINT, count);
 	VectorOperations::Comparator(left, right, comparator_result, count);
-	auto cmp_data = comparator_result.Values<int8_t>(count);
+	auto cmp_data = comparator_result.Values<int8_t>();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::Writer<bool>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -299,8 +299,8 @@ static void StructComparator(Vector &left, Vector &right, int8_t *result_data, c
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	// step 1: handle struct-level validity and initialize results
-	auto left_validity = left.Validity(sel_count);
-	auto right_validity = right.Validity(sel_count);
+	auto left_validity = left.Validity();
+	auto right_validity = right.Validity();
 	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
 
 	// remaining tracks which rows still need child comparison
@@ -414,8 +414,8 @@ static void ListOrArrayComparator(Vector &left, Vector &right, int8_t *result_da
 	accessor.FlattenChild(left);
 	accessor.FlattenChild(right);
 	// step 1: handle top-level validity
-	auto left_validity = left.Validity(sel_count);
-	auto right_validity = right.Validity(sel_count);
+	auto left_validity = left.Validity();
+	auto right_validity = right.Validity();
 	bool has_nulls = left_validity.CanHaveNull() || right_validity.CanHaveNull();
 
 	SelectionVector remaining_lhs_sel(sel_count);
@@ -847,8 +847,8 @@ void VectorOperations::DistinctComparatorNullsFirst(Vector &left, Vector &right,
 	VectorOperations::DistinctComparator(left, right, result, count);
 	result.Flatten();
 	auto result_data = FlatVector::GetDataMutable<int8_t>(result);
-	auto left_validity = left.Validity(count);
-	auto right_validity = right.Validity(count);
+	auto left_validity = left.Validity();
+	auto right_validity = right.Validity();
 	if (!left_validity.CanHaveNull() && !right_validity.CanHaveNull()) {
 		return;
 	}

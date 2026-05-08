@@ -332,7 +332,7 @@ static void RegexExtractStructFunction(DataChunk &args, ExpressionState &state, 
 			child_entry.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 
-		for (auto entry : input.Values<string_t>(count)) {
+		for (auto entry : input.Values<string_t>()) {
 			if (!entry.IsValid()) {
 				FlatVector::SetNull(result, entry.GetIndex(), true);
 				continue;

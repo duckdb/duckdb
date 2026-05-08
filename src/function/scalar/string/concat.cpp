@@ -53,7 +53,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 			constant_lengths += input_data->GetSize();
 		} else {
 			// now get the lengths of each of the input elements
-			for (auto entry : input.Values<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>()) {
 				if (!entry.IsValid()) {
 					continue;
 				}
@@ -92,7 +92,7 @@ void StringConcatFunction(DataChunk &args, ExpressionState &state, Vector &resul
 				result_lengths[i] += input_len;
 			}
 		} else {
-			for (auto entry : input.Values<string_t>(args.size())) {
+			for (auto entry : input.Values<string_t>()) {
 				if (!entry.IsValid()) {
 					continue;
 				}
@@ -131,7 +131,7 @@ void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &result) {
 
 struct ListConcatInputData {
 	ListConcatInputData(Vector &input, idx_t size)
-	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>(size)) {
+	    : input(input), child_vec(ListVector::GetChild(input)), list_data(input.Values<list_entry_t>()) {
 	}
 
 	const Vector &input;

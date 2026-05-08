@@ -163,14 +163,16 @@ public:
 
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
-	DUCKDB_API void Resize(idx_t size, idx_t to_reserve);
+	[[deprecated("Resize has been replaced by Reserve - use Reserve(to_reserve) instead")]] DUCKDB_API void
+	Resize(idx_t current_size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	//! Returns the uncompressed size of the data stored within this vector
-	idx_t GetDataSize(idx_t cardinality) const;
-	[[deprecated("This method is an alias for GetDataSize(cardinality) for legacy reasons - use either that or "
+	idx_t GetDataSize() const;
+	idx_t GetDataSize(idx_t count) const;
+	[[deprecated("This method is an alias for GetDataSize() for legacy reasons - use either that or "
 	             "GetAllocationSize() instead")]] idx_t
 	GetAllocationSize(idx_t cardinality) const;
 	//! Returns the data allocated by the vector buffers
@@ -209,12 +211,12 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values() const;
 
 	template <class T>
-	VectorValidValueIterator<T> ValidValues(idx_t count) const;
+	VectorValidValueIterator<T> ValidValues() const;
 
-	VectorValidityIterator Validity(idx_t count) const;
+	VectorValidityIterator Validity() const;
 
 	//! This allows a vector to reference another vector while const
 	//! This is only used internally in `Flatten` - since referencing
