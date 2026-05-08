@@ -4,7 +4,7 @@
 load {TEST_DIR}/test_default_temp_dir.db
 
 statement ok
-SET memory_limit='2MB';
+SET memory_limit='3MB';
 
 statement ok
 RESET temp_directory

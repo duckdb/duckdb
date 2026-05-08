@@ -4,7 +4,7 @@
 require skip_reload
 
 statement ok
-PRAGMA memory_limit='2MB'
+PRAGMA memory_limit='3MB'
 
 # --- Not changed when set explicitly by the user
 
