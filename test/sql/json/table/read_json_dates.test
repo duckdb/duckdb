@@ -177,6 +177,48 @@ select typeof(ts), ts from read_json_auto('{TEMP_DIR}/iso8601_neg_offset.json')
 ----
 TIMESTAMP	2023-02-08 02:12:28.789
 
+# Multiple timestamp formats in single JSON (issue 22103)
+statement ok
+copy (select * from (values ('{"ts1":"2026-04-01T06:01:00.010000+00:00", "ts2":"2026-04-02T06:03:00+00:01", "ts3":"2026-04-03T06:03:00Z", "ts4":"2026-04-04T06:04:00"}'))) to '{TEMP_DIR}/issue_22103.json' (format csv, quote '', header 0)
+
+query IIIIIIII
+SELECT typeof(ts1), ts1, typeof(ts2), ts2, typeof(ts3), ts3, typeof(ts4), ts4
+FROM read_json_auto('{TEMP_DIR}/issue_22103.json')
+----
+TIMESTAMP	2026-04-01 06:01:00.01	TIMESTAMP	2026-04-02 06:02:00	TIMESTAMP	2026-04-03 06:03:00	TIMESTAMP	2026-04-04 06:04:00
+
+# -----------------------------------------------------------------------------
+# Named timestamp_format produces a single-format list: only matching values
+# are typed as TIMESTAMP; others remain VARCHAR, confirming that default list
+# is ignored.
+#
+
+statement ok
+copy (select * from (values ('{"ts": "2026-04-04T06:04:00", "ts_tz": "2026-04-04T06:04:00Z"}'))) to '{TEMP_DIR}/ts_explicit_fmt.json' (format csv, quote '', header 0)
+
+query IIII
+SELECT typeof(ts), ts, typeof(ts_tz), ts_tz
+FROM read_json_auto('{TEMP_DIR}/ts_explicit_fmt.json', timestamp_format='%Y-%m-%dT%H:%M:%S')
+----
+TIMESTAMP	2026-04-04 06:04:00	VARCHAR	2026-04-04T06:04:00Z
+
+# -----------------------------------------------------------------------------
+# Safety: %Y-%m-%dT%H:%M:%S must reject trailing TZ content
+# The format fallback chain in TransformFromStringWithFormat relies on this —
+# if strptime ever accepts trailing characters, TZ offsets would be silently
+# dropped instead of being parsed by a TZ-aware format.
+#
+
+statement error
+SELECT strptime('2026-04-01T06:03:00+00:01', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
+statement error
+SELECT strptime('2026-04-01T06:03:00Z', '%Y-%m-%dT%H:%M:%S');
+----
+trailing
+
 # test that TIMESTAMPFORMAT also applies to TIMESTAMPTZ columns
 statement ok
 create table timestamptz_test as select '1996-03-27 07:42:33+00'::TIMESTAMPTZ t
