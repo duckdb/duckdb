@@ -1,6 +1,7 @@
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/verify_arg_properties.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -274,6 +275,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	FlatVector::SetSize(result, count_t(count));
 
 	VerifyNullHandling(expr, arguments, result);
+	VerifyFunctionArgProperties(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.GetReturnType());
 }
 

@@ -176,3 +176,98 @@ query II
 SELECT s.min, s.max FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
 ----
 1.0	2.718281828459045
+
+# floor is NonDecreasing (not injective): bounds propagate but distinct_count must not
+query III
+SELECT s.min, s.max, s.approx_unique FROM (SELECT STATS(floor(x)) s FROM mixed LIMIT 1)
+----
+0.0	1.0	NULL
+
+# cast forward-bounds
+
+statement ok
+CREATE TABLE tinies AS SELECT (i - 50)::TINYINT AS bi FROM range(100) _(i)
+
+# strict widening: min/max + distinct_count carry forward
+query IIII
+SELECT s.min, s.max, s.approx_unique, s.has_null
+FROM (SELECT STATS(bi::BIGINT) s FROM tinies LIMIT 1)
+----
+-50	49	100	false
+
+# try_cast marks has_null even on no-null input
+query III
+SELECT s.min, s.max, s.has_null
+FROM (SELECT STATS(TRY_CAST(bi AS BIGINT)) s FROM tinies LIMIT 1)
+----
+-50	49	true
+
+statement ok
+CREATE TABLE tstamps AS SELECT (TIMESTAMP '2024-01-01' + INTERVAL (i) HOUR) AS t FROM range(100) _(i)
+
+# TIMESTAMP -> TIMESTAMP_NS: strict precision widening (CanPropagateCast bailed on this)
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIMESTAMP_NS) s FROM tstamps LIMIT 1)
+----
+2024-01-01 00:00:00	2024-01-05 03:00:00
+
+# TIMESTAMP -> TIMESTAMP_MS: NonDecreasing precision truncation (CanPropagateCast bailed)
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIMESTAMP_MS) s FROM tstamps LIMIT 1)
+----
+2024-01-01 00:00:00	2024-01-05 03:00:00
+
+# distinct_count: non-injective casts must not carry it forward — 100 distinct microseconds
+# collapse to 1 millisecond. (#22439 review; exact-value coverage in statistics_distinct_count.test)
+statement ok
+CREATE TABLE micros AS SELECT (TIMESTAMP '2024-01-01' + INTERVAL (i) MICROSECOND) AS t FROM range(100) _(i)
+
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(t::TIMESTAMP_MS) s FROM micros LIMIT 1)
+----
+2024-01-01 00:00:00	2024-01-01 00:00:00	NULL
+
+# DECIMAL -> INTEGER drops the fractional part; NonDecreasing, not injective
+statement ok
+CREATE TABLE decs AS SELECT v::DECIMAL(10, 2) AS d FROM (VALUES (1.10), (1.20), (1.50), (1.99)) _(v)
+
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(d::INTEGER) s FROM decs LIMIT 1)
+----
+1	2	NULL
+
+# TIMESTAMP -> TIME: UNKNOWN, no bounds
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIME) s FROM tstamps LIMIT 1)
+----
+NULL	NULL
+
+# identity cast preserves distinct_count
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(bi::TINYINT) s FROM tinies LIMIT 1)
+----
+-50	49	100
+
+# unsigned -> strictly-wider signed: every UTINYINT value lands in INTEGER's non-negative half,
+# so the cast is StrictlyIncreasing. Main bailed at the source physical-type filter.
+statement ok
+CREATE TABLE utinies AS SELECT (i + 1)::UTINYINT AS ub FROM range(100) _(i)
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(ub::INTEGER) s FROM utinies LIMIT 1)
+----
+1	100
+
+# TIME -> TIME_TZ default cast packs offset 0 (no ICU); strict in time portion. Under ICU,
+# the override returns BoundCastInfo without annotation and propagation bails — locked in by
+# statistics_cast_icu.test (#22235 / #22259).
+statement ok
+CREATE TABLE times AS SELECT (TIME '00:00:00' + INTERVAL (i) MINUTE) AS t FROM range(60) _(i)
+
+query II
+SELECT s.min, s.max FROM (SELECT STATS(t::TIMETZ) s FROM times LIMIT 1)
+----
+00:00:00+00	00:59:00+00

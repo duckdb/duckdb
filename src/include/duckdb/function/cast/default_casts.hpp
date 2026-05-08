@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/function/arg_properties.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
@@ -137,10 +138,24 @@ public:
 		function = new_function;
 	}
 
+	//! Per-arg metadata for the cast's input; mirrors `ScalarFunction::arg_properties[0]`.
+	const ArgProperties &GetArgProperties() const {
+		return arg_properties;
+	}
+	BoundCastInfo &SetArgProperties(ArgProperties props) & {
+		arg_properties = props;
+		return *this;
+	}
+	BoundCastInfo SetArgProperties(ArgProperties props) && {
+		arg_properties = props;
+		return std::move(*this);
+	}
+
 private:
 	cast_function_t function;
 	init_cast_local_state_t init_local_state;
 	unique_ptr<BoundCastData> cast_data;
+	ArgProperties arg_properties;
 };
 
 struct BindCastInput {

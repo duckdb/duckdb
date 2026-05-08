@@ -1,0 +1,36 @@
+# name: test/optimizer/statistics/statistics_distinct_count.test
+# description: distinct_count propagation for injective casts/functions; gated to default vector size since HLL counts are vector-size-sensitive on small tables
+# group: [statistics]
+
+require vector_size 2048
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+# single-arg StrictlyIncreasing implies injective; distinct_count carries through exp
+statement ok
+CREATE TABLE mixed AS SELECT unnest([0.0::DOUBLE, 1.0::DOUBLE, NULL]) AS x
+
+query III
+SELECT s.min, s.max, s.approx_unique FROM (SELECT STATS(exp(x)) s FROM mixed LIMIT 1)
+----
+1.0	2.718281828459045	2
+
+# multi-arg with foldable constants reduces to single varying arg; year is StrictlyIncreasing → injective
+statement ok
+CREATE TABLE years AS SELECT i::BIGINT AS y FROM range(2000, 2050) _(i)
+
+query III
+SELECT s.min, s.max, s.approx_unique
+FROM (SELECT STATS(make_timestamp(y, 1, 1, 0, 0, 0.0)) s FROM years LIMIT 1)
+----
+2000-01-01 00:00:00	2049-01-01 00:00:00	50
+
+# strict precision widening on cast preserves distinct_count
+statement ok
+CREATE TABLE micros AS SELECT (TIMESTAMP '2024-01-01' + INTERVAL (i) MICROSECOND) AS t FROM range(100) _(i)
+
+query III
+SELECT s.min, s.max, s.approx_unique FROM (SELECT STATS(t::TIMESTAMP_NS) s FROM micros LIMIT 1)
+----
+2024-01-01 00:00:00	2024-01-01 00:00:00.000099	100

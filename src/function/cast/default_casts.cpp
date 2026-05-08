@@ -29,7 +29,9 @@ BoundCastInfo::BoundCastInfo(cast_function_t function_p, unique_ptr<BoundCastDat
 }
 
 BoundCastInfo BoundCastInfo::Copy() const {
-	return BoundCastInfo(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	BoundCastInfo result(function, cast_data ? cast_data->Copy() : nullptr, init_local_state);
+	result.arg_properties = arg_properties;
+	return result;
 }
 
 bool DefaultCasts::NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {

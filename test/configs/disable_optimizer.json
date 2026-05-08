@@ -76,6 +76,7 @@
       "reason": "Statistics are not set without optimizers.",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/optimizer/statistics/statistics_distinct_count.test",
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
         "test/parquet/parquet_stats_function.test",

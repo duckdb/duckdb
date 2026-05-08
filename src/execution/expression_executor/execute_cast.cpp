@@ -1,6 +1,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/verify_arg_properties.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 
@@ -67,6 +68,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	FlatVector::SetSize(result, count_t(count));
+	VerifyCastArgProperties(expr, child, result, count);
 }
 
 } // namespace duckdb
