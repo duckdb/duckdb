@@ -102,31 +102,7 @@ interval_parse_number:
 			// colon: we are parsing a time
 			goto interval_parse_time;
 		} else {
-			if (pos == start_pos) {
-				return false;
-			}
-			// finished the number, parse it from the string
-			string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
-			number = Cast::Operation<string_t, int64_t>(nr_string);
-			fraction = 0;
-			if (c == '.') {
-				idx_t frac_start = 0;
-				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
-					if (frac_start == 0) {
-						frac_start = pos;
-					}
-				}
-
-				if (frac_start != 0) {
-					string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
-					fraction = Cast::Operation<string_t, double>(frac_string);
-				}
-			}
-			if (negative) {
-				number = -number;
-				fraction = -fraction;
-			}
-			goto interval_parse_identifier;
+			break;
 		}
 	}
 	{
@@ -136,6 +112,19 @@ interval_parse_number:
 		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
 		number = Cast::Operation<string_t, int64_t>(nr_string);
 		fraction = 0;
+		if (pos < len && str[pos] == '.') {
+			idx_t frac_start = 0;
+			for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos) {
+				if (frac_start == 0) {
+					frac_start = pos;
+				}
+			}
+
+			if (frac_start != 0) {
+				string_t frac_string(str + frac_start - 1, UnsafeNumericCast<uint32_t>(pos - frac_start + 1));
+				fraction = Cast::Operation<string_t, double>(frac_string);
+			}
+		}
 		if (negative) {
 			number = -number;
 			fraction = -fraction;
