@@ -270,11 +270,7 @@ void Vector::AddHeapReference(const Vector &other) {
 	AddAuxiliaryData(make_uniq<AuxiliaryDataSetHolder>(auxiliary_data));
 }
 
-void Vector::Reserve(idx_t to_reserve) {
-	Resize(buffer ? buffer->Capacity() : 0, to_reserve);
-}
-
-void Vector::Resize(idx_t size, idx_t to_reserve_p) {
+void Vector::Reserve(idx_t to_reserve_p) {
 	auto reserve_size = VectorBuffer::GetReserveSize(to_reserve_p);
 	if (!buffer) {
 		Initialize(VectorDataInitialization::UNINITIALIZED, reserve_size);
@@ -284,7 +280,11 @@ void Vector::Resize(idx_t size, idx_t to_reserve_p) {
 	if (reserve_size <= capacity) {
 		return;
 	}
-	buffer->Resize(size, reserve_size);
+	buffer->Reserve(reserve_size, VectorAppendMode::ALLOW_RESIZE);
+}
+
+void Vector::Resize(idx_t, idx_t to_reserve_p) {
+	Reserve(to_reserve_p);
 }
 
 void Vector::Append(const Value &value, VectorAppendMode append_mode) {
@@ -358,12 +358,16 @@ void Vector::Print(idx_t) const {
 	Print();
 }
 
-idx_t Vector::GetDataSize(idx_t cardinality) const {
-	return Buffer().GetDataSize(type, cardinality);
+idx_t Vector::GetDataSize() const {
+	return GetDataSize(size());
+}
+
+idx_t Vector::GetDataSize(idx_t count) const {
+	return Buffer().GetDataSize(type, count);
 }
 
 idx_t Vector::GetAllocationSize(idx_t cardinality) const {
-	return GetDataSize(cardinality);
+	return GetDataSize();
 }
 
 idx_t Vector::GetAllocationSize() const {
@@ -509,7 +513,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 			}
 		} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
 			serializer.WriteProperty(90, "vector_type", VectorType::CONSTANT_VECTOR);
-			return Vector::Serialize(serializer, 1, false); // just serialize one value
+			// Resize to 1 so that size() == count == 1 during the recursive call, then restore
+			FlatVector::SetSize(*this, 1);
+			Vector::Serialize(serializer, 1, false); // just serialize one value
+			FlatVector::SetSize(*this, count);
+			return;
 		} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 			serializer.WriteProperty(90, "vector_type", VectorType::SEQUENCE_VECTOR);
 			auto &sequence = buffer->Cast<SequenceBuffer>();

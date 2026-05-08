@@ -6,10 +6,10 @@ namespace duckdb {
 
 static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto count = args.size();
-	auto sep_data = args.data[0].Values<string_t>(count);
+	auto sep_data = args.data[0].Values<string_t>();
 	vector<VectorIterator<string_t>> iterators;
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		iterators.emplace_back(args.data[col_idx].Values<string_t>(args.size()));
+		iterators.emplace_back(args.data[col_idx].Values<string_t>());
 	}
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
