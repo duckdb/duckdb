@@ -40,10 +40,6 @@ using namespace duckdb; // NOLINT
 //===--------------------------------------------------------------------===//
 // Scalar function
 //===--------------------------------------------------------------------===//
-static inline int32_t hello_fun(string_t what) {
-	return UnsafeNumericCast<int32_t>(what.GetSize() + 5);
-}
-
 static inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"), count_t(args.size()));
 }
@@ -59,8 +55,8 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -86,7 +82,7 @@ static inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -99,8 +95,8 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	args.Flatten();
 	UnifiedVectorFormat lhs_data;
 	UnifiedVectorFormat rhs_data;
-	left_vector.ToUnifiedFormat(count, lhs_data);
-	right_vector.ToUnifiedFormat(count, rhs_data);
+	left_vector.ToUnifiedFormat(lhs_data);
+	right_vector.ToUnifiedFormat(rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -126,7 +122,7 @@ static inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vec
 	if (left_vector_type == VectorType::CONSTANT_VECTOR && right_vector_type == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 //===--------------------------------------------------------------------===//
@@ -324,7 +320,7 @@ public:
 		//	Evaluate the argument
 		sstate.executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		for (idx_t i = 0; i < count; ++i) {
 			const auto idx = unified.sel->get_index(i);
@@ -822,7 +818,7 @@ static void RowIdFilterFunction(DataChunk &args, ExpressionState &state, Vector 
 	idx_t count = args.size();
 
 	UnifiedVectorFormat vdata;
-	input_vec.ToUnifiedFormat(count, vdata);
+	input_vec.ToUnifiedFormat(vdata);
 	auto row_ids = UnifiedVectorFormat::GetData<int64_t>(vdata);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -918,8 +914,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	auto &client_context = *con.context;
 	auto &catalog = Catalog::GetSystemCatalog(client_context);
 	con.BeginTransaction();
-	con.CreateScalarFunction<int32_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
-	                                            LogicalType(LogicalTypeId::INTEGER), &hello_fun);
 	catalog.CreateFunction(client_context, hello_alias_info);
 
 	// Add alias POINT type

@@ -67,7 +67,7 @@ static void RepeatListFunction(DataChunk &args, ExpressionState &, Vector &resul
 			            list_input.offset, list_input.length);
 		}
 	}
-	result.Verify(count);
+	result.Verify();
 }
 
 ScalarFunctionSet RepeatFun::GetFunctions() {

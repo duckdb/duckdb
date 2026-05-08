@@ -759,12 +759,8 @@ void VariantValue::ToVARIANT(vector<VariantValue> &input, Vector &result) {
 	VariantUtils::FinalizeVariantKeys(result, dictionary, keys_selvec, keys_selvec_size);
 
 	keys_entry.Slice(keys_selvec, keys_selvec_size);
-	keys_entry.Flatten(keys_selvec_size);
-
-	if (input.size() == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-	result.Verify(count);
+	FlatVector::SetSize(result, count);
+	result.Verify();
 }
 
 yyjson_mut_val *VariantValue::ToJSON(ClientContext &context, yyjson_mut_doc *doc) const {

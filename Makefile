@@ -70,6 +70,13 @@ ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
 endif
+DUCKDB_NINJA_FILTER ?= $(if $(CI),1,0)
+NINJA_BUILD_WRAPPER :=
+ifeq ($(GEN),ninja)
+ifneq ($(DUCKDB_NINJA_FILTER),0)
+	NINJA_BUILD_WRAPPER=$(PYTHON) ${PROJ_DIR}scripts/ci/filter_ninja_output.py --
+endif
+endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
 endif
@@ -423,7 +430,7 @@ define cmake_build
 	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
 	cd $(1) && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
-	cmake --build . --config $(2)
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config $(2)
 endef
 
 debug: ${EXTENSION_CONFIG_STEP}
@@ -437,12 +444,12 @@ BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
 	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
@@ -468,7 +475,7 @@ clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
-	cmake --build . --config RelWithDebInfo
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config RelWithDebInfo
 
 SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
@@ -483,7 +490,7 @@ build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
@@ -568,8 +575,8 @@ define ensure_apt_commands
 		command -v $$cmd >/dev/null 2>&1 || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(2); \
 	fi
 endef
 
@@ -579,8 +586,8 @@ define ensure_apt_packages
 		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(1); \
+		sudo apt-get update -y -q; \
+		sudo apt-get install -y -q $(1); \
 	fi
 endef
 
@@ -651,7 +658,7 @@ benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
-	cmake --build . --config Release
+	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 
 tidy-check:

@@ -1,4 +1,4 @@
-#include "duckdb/common/ubigint.hpp"
+#include "duckdb/common/checked_integer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/list_functions.hpp"
@@ -25,8 +25,7 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 	auto new_size_entries = new_sizes.Values<ubigint_t>(row_count);
 	auto &child_vector = ListVector::GetChild(lists);
 
-	// Sum up the total child capacity using checked arithmetic so we trip an
-	// Overflow exception up-front for absurd target sizes (e.g. UINT64_MAX).
+	// Sum up the total child capacity
 	ubigint_t total_child_size(0);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto list_entry = list_entries[row_idx];
@@ -36,17 +35,10 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		}
 	}
 
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
+	bool has_default_vector = args.ColumnCount() == 3 && args.data[2].GetType().id() != LogicalTypeId::SQLNULL;
 
-	// the default vector's element type is dynamic so we can't use Values<T>
-	// here -- ToUnifiedFormat lets us check validity for any payload type.
-	UnifiedVectorFormat default_data;
-	optional_ptr<Vector> default_vector;
-	if (args.ColumnCount() == 3) {
-		default_vector = &args.data[2];
-		default_vector->ToUnifiedFormat(row_count, default_data);
-	}
+	ListVector::Reserve(result, total_child_size.GetValue());
+	auto result_entries = FlatVector::Writer<list_entry_t>(result, row_count);
 
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 		auto list_entry = list_entries[row_idx];
@@ -67,28 +59,27 @@ static void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &resul
 		auto list = result_entries.WriteDynamicList();
 		ubigint_t source_offset = source_list.offset;
 		ubigint_t source_count = source_offset + copy_count;
-		list.Append(child_vector, *FlatVector::IncrementalSelectionVector(), source_count.value, source_offset.value,
-		            copy_count.value);
+		list.Append(child_vector, *FlatVector::IncrementalSelectionVector(), source_count.GetValue(),
+		            source_offset.GetValue(), copy_count.GetValue());
 
 		if (copy_count >= new_size) {
 			continue;
 		}
 		ubigint_t remaining_count = new_size - copy_count;
 
-		if (default_vector) {
-			auto default_idx = default_data.sel->get_index(row_idx);
-			if (default_data.validity.RowIsValid(default_idx)) {
-				SelectionVector sel(remaining_count.value);
-				for (idx_t j = 0; j < remaining_count.value; j++) {
-					sel.set_index(j, row_idx);
-				}
-				list.Append(*default_vector, sel, remaining_count.value, 0, remaining_count.value);
-				continue;
+		// if a default value is provided fill the list with the default value
+		if (has_default_vector) {
+			SelectionVector sel(remaining_count.GetValue());
+			for (idx_t j = 0; j < remaining_count.GetValue(); j++) {
+				sel.set_index(j, row_idx);
 			}
+			auto &default_vector = args.data[2];
+			list.Append(default_vector, sel, args.size(), 0, remaining_count.GetValue());
+			continue;
 		}
 
 		// Fill the remaining space with NULL.
-		list.AppendNulls(remaining_count.value);
+		list.AppendNulls(remaining_count.GetValue());
 	}
 }
 

@@ -1287,7 +1287,7 @@ bool PEGTransformerFactory::ConstructConstantFromExpression(const ParsedExpressi
 	}
 	case ExpressionType::VALUE_CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
-		value = constant.value;
+		value = constant.GetValue();
 		return true;
 	}
 	case ExpressionType::OPERATOR_CAST: {

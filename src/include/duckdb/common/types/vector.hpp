@@ -101,26 +101,36 @@ public:
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
-	DUCKDB_API string ToString(idx_t count) const;
-	DUCKDB_API void Print(idx_t count) const;
+	[[deprecated("ToString no longer requires a count - use ToString() instead")]] DUCKDB_API string
+	ToString(idx_t count) const;
+	[[deprecated("Print no longer requires a count - use Print() instead")]] DUCKDB_API void Print(idx_t count) const;
 
 	DUCKDB_API string ToString() const;
 	DUCKDB_API void Print() const;
 
+	[[deprecated("Flatten no longer requires a count - use Flatten() instead")]] DUCKDB_API void
+	Flatten(idx_t count) const;
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
-	DUCKDB_API void Flatten(idx_t count) const;
+	DUCKDB_API void Flatten() const;
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
+
+	[[deprecated("ToUnifiedFormat no longer requires a count - use ToUnifiedFormat(data) instead")]] DUCKDB_API void
+	ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
 	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
-	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) const;
+	DUCKDB_API void ToUnifiedFormat(UnifiedVectorFormat &data) const;
+
+	[[deprecated("RecursiveToUnifiedFormat no longer requires a count - use RecursiveToUnifiedFormat(input, data) "
+	             "instead")]] static void
+	RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
-	static void RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
+	static void RecursiveToUnifiedFormat(const Vector &input, RecursiveUnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
@@ -128,7 +138,8 @@ public:
 	//! Turn the vector into a shredded variant vector
 	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
-	DUCKDB_API void Verify(idx_t count) const;
+	[[deprecated("Verify no longer requires a count - use Verify() without count instead")]] DUCKDB_API void
+	Verify(idx_t count) const;
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify() const;

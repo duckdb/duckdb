@@ -86,7 +86,7 @@ struct SortKeyVectorData {
 
 	SortKeyVectorData(Vector &input, idx_t size, OrderModifiers modifiers) : vec(input) {
 		if (size != 0) {
-			input.ToUnifiedFormat(size, format);
+			input.ToUnifiedFormat(format);
 		} else {
 			format.physical_type = input.GetType().InternalType();
 		}
@@ -677,11 +677,11 @@ void ConstructSortKey(SortKeyVectorData &vector_data, SortKeyConstructInfo &info
 void PrepareSortData(Vector &result, idx_t size, SortKeyLengthInfo &key_lengths, data_ptr_t *data_pointers) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BLOB: {
-		auto result_data = FlatVector::GetDataMutable<string_t>(result);
+		auto result_data = FlatVector::Writer<string_t>(result, size);
 		for (idx_t r = 0; r < size; r++) {
 			auto blob_size = key_lengths.variable_lengths[r] + key_lengths.constant_length;
-			result_data[r] = StringVector::EmptyString(result, blob_size);
-			data_pointers[r] = data_ptr_cast(result_data[r].GetDataWriteable());
+			auto &empty_string = result_data.WriteEmptyString(blob_size);
+			data_pointers[r] = data_ptr_cast(empty_string.GetDataWriteable());
 #ifdef DEBUG
 			memset(data_pointers[r], 0xFF, blob_size);
 #endif
@@ -774,7 +774,7 @@ void CreateSortKeyHelpers::CreateSortKeyWithValidity(Vector &input, Vector &resu
                                                      const idx_t count) {
 	CreateSortKey(input, count, modifiers, result);
 	UnifiedVectorFormat format;
-	input.ToUnifiedFormat(count, format);
+	input.ToUnifiedFormat(format);
 	auto &validity = FlatVector::ValidityMutable(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -1188,7 +1188,7 @@ static void DecodeSortKeyFunction(DataChunk &args, ExpressionState &state, Vecto
 	const auto count = args.size();
 	auto &sort_key_vec = args.data[0];
 	UnifiedVectorFormat sort_key_vec_format;
-	sort_key_vec.ToUnifiedFormat(count, sort_key_vec_format);
+	sort_key_vec.ToUnifiedFormat(sort_key_vec_format);
 
 	// When doing aggressive vector verification, the "sort_key_vec_format.validity.CannotHaveNull()" is not always true
 	// However, all the actual values should be valid, so we assert that

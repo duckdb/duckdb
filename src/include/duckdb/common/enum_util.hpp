@@ -166,6 +166,8 @@ enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
 
+enum class DebugVerificationMode : uint8_t;
+
 enum class DecimalBitWidth : uint8_t;
 
 enum class DefaultOrderByNullType : uint8_t;
@@ -735,6 +737,9 @@ const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerifica
 
 template<>
 const char* EnumUtil::ToChars<DebugVectorVerification>(DebugVectorVerification value);
+
+template<>
+const char* EnumUtil::ToChars<DebugVerificationMode>(DebugVerificationMode value);
 
 template<>
 const char* EnumUtil::ToChars<DecimalBitWidth>(DecimalBitWidth value);
@@ -1489,6 +1494,9 @@ DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(cons
 
 template<>
 DebugVectorVerification EnumUtil::FromString<DebugVectorVerification>(const char *value);
+
+template<>
+DebugVerificationMode EnumUtil::FromString<DebugVerificationMode>(const char *value);
 
 template<>
 DecimalBitWidth EnumUtil::FromString<DecimalBitWidth>(const char *value);

@@ -75,7 +75,8 @@ void RemapChildVectors(const Vector &result, const vector<reference<Vector>> &in
 				throw InternalException("Default value in remap struct must be a constant");
 			}
 			bool default_is_null = ConstantVector::IsNull(result_vectors[i]);
-			result_vectors[i].get().Flatten(count);
+			FlatVector::SetSize(result_vectors[i], count);
+			result_vectors[i].get().Flatten();
 			if (has_top_level_null && !default_is_null) {
 				// if we have any top-level NULL values and the default value is not NULL, we need to propagate the NULL
 				// values to the default value

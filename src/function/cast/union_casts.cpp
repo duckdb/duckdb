@@ -154,7 +154,7 @@ static unique_ptr<BoundCastData> BindUnionToUnionCast(BindCastInput &input, cons
 			// found a matching member
 			if (StringUtil::CIEquals(source_member_name, target_member_name)) {
 				auto &target_member_type = UnionType::GetMemberType(target, target_idx);
-				tag_map[source_idx] = target_idx;
+				tag_map[source_idx] = static_cast<union_tag_t>(target_idx);
 				member_casts.push_back(input.GetCastFunction(source_member_type, target_member_type));
 				found = true;
 				break;
@@ -282,7 +282,7 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		// This is not always the case, e.g. when a member is cast using the default TryNullCast function
 		// the resulting member vector will be a constant null vector.
 		for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
-			UnionVector::GetMember(result, target_member_idx).Flatten(count);
+			UnionVector::GetMember(result, target_member_idx).Flatten();
 		}
 
 		// We assume that a union tag vector validity matches the union vector validity.
@@ -332,7 +332,6 @@ BoundCastInfo DefaultCasts::ImplicitToUnionCast(BindCastInput &input, const Logi
 }
 
 static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all union members to varchar
 	auto &cast_data = parameters.cast_data->Cast<UnionMemberBoundCastData>();
 	Vector varchar_union(cast_data.type, count);
@@ -362,12 +361,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 			result_data.WriteValue("NULL");
 		}
 	}
-
-	if (constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
-	result.Verify(count);
+	result.Verify();
 	return true;
 }
 

@@ -23,8 +23,8 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 	UnifiedVectorFormat pos_format;
 	UnifiedVectorFormat lst_format;
 
-	pos_vec.ToUnifiedFormat(count, pos_format);
-	map_vec.ToUnifiedFormat(count, lst_format);
+	pos_vec.ToUnifiedFormat(pos_format);
+	map_vec.ToUnifiedFormat(lst_format);
 
 	const auto pos_data = UnifiedVectorFormat::GetData<int32_t>(pos_format);
 	const auto inc_list_data = UnifiedVectorFormat::GetData<list_entry_t>(lst_format);
@@ -52,7 +52,7 @@ static void MapExtractValueFunc(DataChunk &args, ExpressionState &state, Vector 
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	result.Verify(count);
+	result.Verify();
 }
 
 static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &result) {

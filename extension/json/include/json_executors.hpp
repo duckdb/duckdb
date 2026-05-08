@@ -131,7 +131,7 @@ public:
 
 		UnifiedVectorFormat input_data;
 		auto &input_vector = args.data[0];
-		input_vector.ToUnifiedFormat(count, input_data);
+		input_vector.ToUnifiedFormat(input_data);
 		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 		ListVector::Reserve(result, list_size);
