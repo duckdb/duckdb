@@ -51,14 +51,16 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 	}
 	}
 
+	auto repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		local_extension_repo = env_var;
 		autoload_known_extensions = true;
 		autoinstall_known_extensions = true;
 	} else if (autoload_known_extensions) {
-		local_extension_repo = string(DUCKDB_BUILD_DIRECTORY) + "/repository";
+		local_extension_repo = repo;
 	}
+	test_config.SetLocalExtensionRepository(repo);
 	config->SetOptionByName("autoinstall_known_extensions", autoinstall_known_extensions);
 	config->SetOptionByName("autoload_known_extensions", autoload_known_extensions);
 	for (auto &entry : test_config.GetConfigSettings()) {
@@ -124,7 +126,8 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 	Connection con(db);
 	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
 		// try INSTALL extension
-		con.Query("INSTALL " + extension);
+		auto repo = test_config.GetLocalExtensionRepository();
+		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
 	}
 
 	// try LOAD extension
