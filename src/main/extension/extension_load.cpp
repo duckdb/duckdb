@@ -630,14 +630,11 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// If the extension is already statically linked into DuckDB, avoid dlopen-ing a second copy.
 	// Loading two C++ copies of the same extension can trigger ASan ODR violations.
 	auto extension_name = ExtensionHelper::GetExtensionName(extension);
-	for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
-		auto default_extension = ExtensionHelper::GetDefaultExtension(i);
-		if (default_extension.statically_loaded && extension_name == default_extension.name) {
-			ExtensionInstallInfo install_info;
-			install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
-			info.FinishLoad(install_info);
-			return;
-		}
+	if (ExtensionHelper::IsLinkedExtension(extension_name)) {
+		ExtensionInstallInfo install_info;
+		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
+		info.FinishLoad(install_info);
+		return;
 	}
 
 	auto extension_init_result = InitialLoad(db, fs, extension);

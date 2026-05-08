@@ -261,6 +261,7 @@ private:
 	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
 	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
 	                           ExtensionInitResult &result, string &error);
+	static bool IsLinkedExtension(const string &extension_name);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,

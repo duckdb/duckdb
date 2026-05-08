@@ -177,6 +177,23 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 	return false;
 }
 
+bool ExtensionHelper::IsLinkedExtension(const string &extension_name) {
+	for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
+		auto default_extension = ExtensionHelper::GetDefaultExtension(i);
+		if (default_extension.statically_loaded && extension_name == default_extension.name) {
+			return true;
+		}
+	}
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
+	for (auto &linked_name : LinkedExtensions()) {
+		if (extension_name == linked_name) {
+			return true;
+		}
+	}
+#endif
+	return false;
+}
+
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
 	return AddExtensionInstallHintToErrorMsg(DatabaseInstance::GetDatabase(context), base_error, extension_name);
