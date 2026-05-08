@@ -610,17 +610,17 @@ struct SortKeyConstructInfo {
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
-template <class OP, bool ALL_VALID_NO_SELS, bool FLIP_BYTES>
+template <class OP, bool ALL_VALID, bool NO_SELS, bool FLIP_BYTES>
 void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, const SortKeyChunk chunk,
                                        const SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
-		const auto result_index = ALL_VALID_NO_SELS ? r : chunk.GetResultIndex(r);
-		const auto idx = ALL_VALID_NO_SELS ? r : vector_data.format.sel->get_index(r);
+		const auto result_index = NO_SELS ? r : chunk.GetResultIndex(r);
+		const auto idx = NO_SELS ? r : vector_data.format.sel->get_index(r);
 		auto offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		if (!ALL_VALID_NO_SELS && !vector_data.format.validity.RowIsValidUnsafe(idx)) {
+		if (!ALL_VALID && !vector_data.format.validity.RowIsValidUnsafe(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
 			offsets[result_index] = offset;
@@ -634,22 +634,31 @@ void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, con
 	}
 }
 
+template <class OP, bool ALL_VALID, bool NO_SELS>
+void TemplatedConstructSortKeyDispatchFlip(SortKeyVectorData &vector_data, SortKeyChunk chunk,
+                                           SortKeyConstructInfo &info) {
+	if (info.flip_bytes) {
+		TemplatedConstructSortKeyInternal<OP, ALL_VALID, NO_SELS, true>(vector_data, chunk, info);
+	} else {
+		TemplatedConstructSortKeyInternal<OP, ALL_VALID, NO_SELS, false>(vector_data, chunk, info);
+	}
+}
+
 template <class OP>
 void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info) {
 	if (chunk.start == chunk.end) {
 		return;
 	}
 	const auto all_valid = vector_data.format.validity.CannotHaveNull();
-	const auto has_sel = vector_data.format.sel->IsSet();
-	const auto all_valid_no_sels = all_valid && !chunk.has_result_index && !has_sel;
-	if (all_valid_no_sels && !info.flip_bytes) {
-		TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
-	} else if (all_valid_no_sels) {
-		TemplatedConstructSortKeyInternal<OP, true, true>(vector_data, chunk, info);
-	} else if (!info.flip_bytes) {
-		TemplatedConstructSortKeyInternal<OP, false, false>(vector_data, chunk, info);
+	const auto no_sels = !chunk.has_result_index && !vector_data.format.sel->IsSet();
+	if (all_valid && no_sels) {
+		TemplatedConstructSortKeyDispatchFlip<OP, true, true>(vector_data, chunk, info);
+	} else if (all_valid) {
+		TemplatedConstructSortKeyDispatchFlip<OP, true, false>(vector_data, chunk, info);
+	} else if (no_sels) {
+		TemplatedConstructSortKeyDispatchFlip<OP, false, true>(vector_data, chunk, info);
 	} else {
-		TemplatedConstructSortKeyInternal<OP, false, true>(vector_data, chunk, info);
+		TemplatedConstructSortKeyDispatchFlip<OP, false, false>(vector_data, chunk, info);
 	}
 }
 
