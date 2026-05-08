@@ -434,7 +434,7 @@ void PEGTransformerFactory::RegisterDescribe() {
 
 void PEGTransformerFactory::RegisterDetach() {
 	// detach.gram
-	REGISTER_TRANSFORM(TransformDetachStatement);
+	Register("DetachStatement", &TransformDetachStatementInternal);
 }
 
 void PEGTransformerFactory::RegisterDrop() {
@@ -454,6 +454,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropCollation);
 	REGISTER_TRANSFORM(TransformDropType);
 	REGISTER_TRANSFORM(TransformDropBehavior);
+	REGISTER_TRANSFORM(TransformIfExists);
 	REGISTER_TRANSFORM(TransformDropSecret);
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 	REGISTER_TRANSFORM(TransformDropTrigger);

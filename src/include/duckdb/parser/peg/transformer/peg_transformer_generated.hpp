@@ -21,3 +21,6 @@ static unique_ptr<SQLStatement> TransformCommitTransactionInternal(PEGTransforme
 static unique_ptr<SQLStatement> TransformCommitTransaction();
 static TransactionModifierType TransformReadOrWriteInternal(PEGTransformer &transformer, ParseResult &parse_result);
 static TransactionModifierType TransformReadOrWrite(TransactionModifierType read_only_or_read_write);
+static unique_ptr<SQLStatement> TransformDetachStatementInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result);
+static unique_ptr<SQLStatement> TransformDetachStatement(bool if_exists, string catalog_name);

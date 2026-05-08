@@ -792,6 +792,7 @@ Bool:
     - AnyOrAll
     - IgnoreOrRespectNulls
     - PrecedingOrFollowing
+    - IfExists
     - IncludeOrExcludeNulls
 
 Int64:
@@ -925,7 +926,6 @@ overrides:
 excluded_rules:
   - Program
   - FunctionType
-  - IfExists
   - Database
   - AbortOrRollback
   - CommitOrEnd

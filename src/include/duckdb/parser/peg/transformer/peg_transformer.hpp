@@ -633,6 +633,7 @@ private:
 	static unique_ptr<DropStatement> TransformDropCollation(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropType(PEGTransformer &transformer, ParseResult &parse_result);
 	static bool TransformDropBehavior(PEGTransformer &transformer, ParseResult &parse_result);
+	static bool TransformIfExists(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropSecret(PEGTransformer &transformer, ParseResult &parse_result);
 	static string TransformDropSecretStorage(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropTrigger(PEGTransformer &transformer, ParseResult &parse_result);
