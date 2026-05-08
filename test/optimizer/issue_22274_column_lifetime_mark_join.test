@@ -1,0 +1,41 @@
+# name: test/optimizer/issue_22274_column_lifetime_mark_join.test
+# description: Regression for GitHub issue 22274 — INTERNAL Error "Vector::Reference ... (source BOOLEAN referenced TINYINT)" when a FILTER sits above a MARK join from IN (...), alongside another predicate on a payload column (e.g. flag < 1). ColumnLifetimeAnalyzer must separate FILTER output bindings (references from above) from predicate-only bindings, then visit predicates and children and rebuild projection_map against post-visit child bindings.
+# group: [optimizer]
+
+#
+# SQL-only repro (native table scan): this file. Arrow string_view + duckdb_arrow_scan repro: test/arrow/arrow_filter_pushdown.cpp ("Arrow filter projection over IN mark join"). Python script: scripts/reproduce_github_issue_22274_arrow.py
+
+# issue: https://github.com/duckdb/duckdb/issues/22274
+
+statement ok
+CREATE TEMP TABLE bug_22274_src AS SELECT
+	(i % 3)::VARCHAR AS name,
+	CASE WHEN (i % 10) <> 0 THEN 0::TINYINT ELSE 1::TINYINT END AS flag
+FROM range(5000) tbl(i)
+
+# Sanity: filtered row count matches expected (flag < 1 yields 4500 of 5000 rows; all names in IN list).
+query I
+SELECT COUNT(*) FROM bug_22274_src
+WHERE flag < 1 AND name IN ('0','1','2','3','4','5')
+----
+4500
+
+# At least six scalar RHS values so IN becomes a MARK join (see InClauseRewriter).
+query TI
+SELECT name::VARCHAR, COUNT(*) FROM bug_22274_src
+WHERE flag < 1 AND name IN ('0','1','2','3','4','5')
+GROUP BY 1
+ORDER BY 1
+----
+0	1500
+1	1500
+2	1500
+
+# Plan-shape guard: query must keep the FILTER-over-MARK-join pattern.
+query TT
+EXPLAIN SELECT name::VARCHAR, COUNT(*) FROM bug_22274_src
+WHERE flag < 1 AND name IN ('0','1','2','3','4','5')
+GROUP BY 1
+ORDER BY 1
+----
+physical_plan	<REGEX>:.*FILTER.*Join Type: MARK.*

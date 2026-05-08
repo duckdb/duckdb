@@ -1,6 +1,8 @@
 #include "catch.hpp"
 
 #include "arrow/arrow_test_helper.hpp"
+#include "duckdb.h"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 
@@ -104,4 +106,60 @@ TEST_CASE("Arrow filter pushdown - nested view types disable pushdown", "[arrow]
 		REQUIRE(StandaloneFilter(explain_str));
 		REQUIRE(!FilterInScan(explain_str));
 	}
+}
+
+// Regression for GitHub #22274 / PR #22382: mirrors Python/pyarrow register() + MARK join failure mode.
+// Verify under RelWithDebInfo or Release: on upstream/main without the PR fixes, the query errors
+// (INTERNAL / Vector::Reference); with the fix it returns six groups × 2500 rows.
+// SQL table-scan variant: test/optimizer/issue_22274_column_lifetime_mark_join.test
+TEST_CASE("Arrow filter projection over IN mark join (issue 22274)", "[arrow]") {
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE(!con.Query("PRAGMA threads=1")->HasError());
+	REQUIRE(!con.Query("CREATE TABLE src AS SELECT "
+	                   "['TOYOTA','HONDA','FORD','CHEVROLET','BMW','MERCEDES','NISSAN','HYUNDAI','KIA','SUBARU',"
+	                   "'MAZDA','VPG','ISUZU','SMART','LUCID','LOTUS','PLYMOUTH','DODGE_MITS','VINFAST',"
+	                   "'POLESTAR'][((i % 20) + 1)::INTEGER] AS name, "
+	                   "CASE WHEN i % 10 != 0 THEN 0::TINYINT ELSE 1::TINYINT END AS flag "
+	                   "FROM range(50000) tbl(i)")
+	             ->HasError());
+
+	auto explain_factory = MakeArrowFactory(con, "SELECT name, flag FROM src", true);
+	auto explain_str = GetExplainForFilter(con, *explain_factory,
+	                                       "flag < 1 AND name IN "
+	                                       "('VPG','ISUZU','SMART','LUCID','LOTUS','POLESTAR')");
+
+	REQUIRE(StandaloneFilter(explain_str));
+	REQUIRE(!FilterInScan(explain_str));
+	REQUIRE(explain_str.find("MARK") != string::npos);
+	REQUIRE(explain_str.find("SEMI") == string::npos);
+
+	// Separate factory/stream for execution (explain path consumes the first Arrow result).
+	auto query_factory = MakeArrowFactory(con, "SELECT name, flag FROM src", true);
+	ArrowStreamParameters parameters;
+	auto stream_wrapper = ArrowTestFactory::CreateStream(reinterpret_cast<uintptr_t>(query_factory.get()), parameters);
+	REQUIRE(stream_wrapper);
+
+	duckdb_connection c_con = reinterpret_cast<duckdb_connection>(&con);
+	auto stream_handle = reinterpret_cast<duckdb_arrow_stream>(&stream_wrapper->arrow_array_stream);
+	REQUIRE(duckdb_arrow_scan(c_con, "data", stream_handle) == DuckDBSuccess);
+
+	auto result = con.Query("SELECT name, COUNT(*) AS cnt FROM data "
+	                        "WHERE flag < 1 AND name IN ('VPG','ISUZU','SMART','LUCID','LOTUS','POLESTAR') "
+	                        "GROUP BY 1 ORDER BY 1");
+	INFO("GitHub issue #22274: duckdb_arrow_scan + produce_arrow_string_view + IN (MARK join) + grouped aggregate; "
+	     "query error is printed below by NO_FAIL.");
+	REQUIRE_NO_FAIL(*result);
+	auto &mat = result->Cast<MaterializedQueryResult>();
+	REQUIRE(mat.RowCount() == 6);
+
+	const vector<string> expected_names {"ISUZU", "LOTUS", "LUCID", "POLESTAR", "SMART", "VPG"};
+	for (idx_t row_idx = 0; row_idx < expected_names.size(); row_idx++) {
+		REQUIRE(mat.GetValue(0, row_idx).ToString() == expected_names[row_idx]);
+		REQUIRE(mat.GetValue(1, row_idx).ToString() == "2500");
+	}
+
+	// Do not call duckdb_destroy_arrow_stream: it assumes a heap-allocated ArrowArrayStream from
+	// duckdb_arrow_array_scan; our stream lives inside stream_wrapper (ArrowArrayStreamWrapper).
 }
