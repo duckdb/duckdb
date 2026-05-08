@@ -93,10 +93,9 @@ def tokens_to_ast(tokens):
       choice   = sequence ('/' sequence)*
       sequence = term+
       term     = atom ('?' | '*' | '+')?
-      atom     = LITERAL | REFERENCE | REGEX
+      atom     = LITERAL | REFERENCE
                  | FUNCTION_CALL choice ')'
                  | '(' choice ')'
-                 | '!' atom
     """
     pos = [0]
 
@@ -211,20 +210,6 @@ IDENTIFIER_OVERRIDE_RULES = {
     'CopyOptionName',
 }
 
-# Rules overridden with non-identifier special matchers (kept separate so
-# callers can distinguish the parse-result type if needed in the future).
-NUMBER_LITERAL_OVERRIDE_RULES = {'NumberLiteral'}
-STRING_LITERAL_OVERRIDE_RULES = {'StringLiteral'}
-OPERATOR_LITERAL_OVERRIDE_RULES = {'OperatorLiteral'}
-
-# Union of all override rules for quick membership tests.
-ALL_OVERRIDE_RULES = (
-    IDENTIFIER_OVERRIDE_RULES
-    | NUMBER_LITERAL_OVERRIDE_RULES
-    | STRING_LITERAL_OVERRIDE_RULES
-    | OPERATOR_LITERAL_OVERRIDE_RULES
-)
-
 
 scripts_dir = Path(__file__).parent.parent
 src_dir = scripts_dir.parent / 'src'
@@ -243,50 +228,10 @@ def to_snake_case(name):
     return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
-def is_simple_rule(rule):
-    """True if all tokens are LITERAL or REFERENCE (no operators, choices, groups)."""
-    return all(t.type in (PEGTokenType.LITERAL, PEGTokenType.REFERENCE) for t in rule.tokens)
-
-
-def get_semantic_children(rule):
-    """Returns [(index, rule_name)] for every REFERENCE token in the rule."""
-    return [(i, tok.text) for i, tok in enumerate(rule.tokens) if tok.type == PEGTokenType.REFERENCE]
-
-
 def generate_internal_declaration(rule_name, return_type):
     return (
         f"\tstatic {return_type} Transform{rule_name}Internal"
         f"(PEGTransformer &transformer, ParseResult &parse_result);\n"
-    )
-
-
-def generate_body_declaration(rule_name, return_type, semantic_children, rule_to_type):
-    params = ", ".join(f"{rule_to_type[name]} {to_snake_case(name)}" for _, name in semantic_children)
-    return f"\tstatic {return_type} Transform{rule_name}({params});\n"
-
-
-def generate_internal_wrapper(rule_name, return_type, semantic_children, rule_to_type):
-    """Generates the Internal .cpp function that extracts children and calls the body."""
-    arg_lines = []
-    arg_names = []
-    for idx, child_name in semantic_children:
-        var = to_snake_case(child_name)
-        if child_name in IDENTIFIER_OVERRIDE_RULES:
-            arg_lines.append(f"\tauto {var} = list_pr.Child<IdentifierParseResult>({idx}).identifier;")
-        else:
-            child_type = rule_to_type[child_name]
-            arg_lines.append(f"\tauto {var} = transformer.Transform<{child_type}>(list_pr, {idx});")
-        arg_names.append(var)
-
-    body = []
-    if arg_lines:
-        body.append("\tauto &list_pr = parse_result.Cast<ListParseResult>();")
-        body.extend(arg_lines)
-    body.append(f"\treturn Transform{rule_name}({', '.join(arg_names)});")
-
-    return (
-        f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
-        f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
     )
 
 
@@ -617,14 +562,6 @@ def classify_sequence_elements(children, rule_to_type, excluded_rules):
 # ---------------------------------------------------------------------------
 
 
-def is_auto_sequence_ast(ast, rule_to_type, excluded_rules):
-    """True if ast is a SequenceNode whose every element can be classified."""
-    return (
-        isinstance(ast, SequenceNode)
-        and classify_sequence_elements(ast.children, rule_to_type, excluded_rules) is not None
-    )
-
-
 def generate_sequence_body_decl(rule_name, return_type, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
     params = ", ".join(f"{e.cpp_type} {e.var_name}" for e in elements if not e.skip)
@@ -681,18 +618,6 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
             skipped.append((rule_name, "no return type in grammar_types.yml"))
             continue
 
-        if is_simple_rule(rule):
-            children = get_semantic_children(rule)
-            unknown = [name for _, name in children if name not in rule_to_type]
-            if unknown:
-                skipped.append((rule_name, f"unknown child types: {unknown}"))
-                continue
-            declarations.append(generate_internal_declaration(rule_name, return_type))
-            declarations.append(generate_body_declaration(rule_name, return_type, children, rule_to_type))
-            implementations.append(generate_internal_wrapper(rule_name, return_type, children, rule_to_type))
-            registrations.append(generate_registration(rule_name))
-            continue
-
         try:
             ast = rule_to_ast(rule)
         except Exception as e:
@@ -723,13 +648,14 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
                 )
             continue
 
-        if is_auto_sequence_ast(ast, rule_to_type, excluded_rules):
+        if isinstance(ast, SequenceNode):
             elements = classify_sequence_elements(ast.children, rule_to_type, excluded_rules)
-            declarations.append(generate_internal_declaration(rule_name, return_type))
-            declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
-            implementations.append(generate_sequence_internal(rule_name, return_type, elements))
-            registrations.append(generate_registration(rule_name))
-            continue
+            if elements is not None:
+                declarations.append(generate_internal_declaration(rule_name, return_type))
+                declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
+                implementations.append(generate_sequence_internal(rule_name, return_type, elements))
+                registrations.append(generate_registration(rule_name))
+                continue
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
