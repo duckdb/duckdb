@@ -8,6 +8,10 @@
 #include "core_functions/aggregate/algebraic/corr.hpp"
 #include "core_functions/aggregate/algebraic_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
+#include "core_functions/aggregate/algebraic/stddev.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/aggregate_state.hpp"
 
 namespace duckdb {
 

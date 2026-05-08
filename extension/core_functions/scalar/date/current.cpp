@@ -1,14 +1,16 @@
 #include "core_functions/scalar/date_functions.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
+class DataChunk;
 
 static timestamp_t GetTransactionTimestamp(ExpressionState &state) {
 	return MetaTransaction::Get(state.GetContext()).start_timestamp;

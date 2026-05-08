@@ -11,6 +11,7 @@
 #include "duckdb/function/function_list.hpp"
 
 namespace duckdb {
+struct StaticFunctionDefinition;
 
 struct CoreFunctionList {
 	static const StaticFunctionDefinition *GetFunctionList();
