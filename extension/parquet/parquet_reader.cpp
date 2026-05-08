@@ -1681,6 +1681,9 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		return SourceResultType::FINISHED;
 	}
 
+	const bool log_prefetch =
+	    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
+
 	// see if we have to switch to the next row group in the parquet file
 	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
 		state.current_group++;
@@ -1689,9 +1692,6 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
-
-		const bool log_prefetch =
-		    Logger::Get(context).ShouldLog(ParquetPrefetchLogType::NAME, ParquetPrefetchLogType::LEVEL);
 
 		if (log_prefetch && state.prefetch_metrics.filter_ran && state.current_group > 0) {
 			LogRowGroupPrefetch(context, file.path, state.group_idx_list[state.current_group - 1], state);
@@ -1807,11 +1807,13 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				ColumnReaderInput reader_input(scan_count, define_ptr, repeat_ptr);
 				child_reader.Filter(reader_input, result_vector, scan_filter.filter, *scan_filter.filter_state,
 				                    state.sel, filter_count, is_first_filter);
-				auto &filters_used = state.prefetch_metrics.logger.filters_used;
-				if (filters_used.size() != state.scan_filters.size()) {
-					filters_used.assign(state.scan_filters.size(), false);
+				if (log_prefetch) {
+					auto &filters_used = state.prefetch_metrics.logger.filters_used;
+					if (filters_used.size() != state.scan_filters.size()) {
+						filters_used.assign(state.scan_filters.size(), false);
+					}
+					filters_used[permutation[i]] = true;
 				}
-				filters_used[permutation[i]] = true;
 				need_to_read[local_idx.GetIndex()] = false;
 				is_first_filter = false;
 				if (filter_count == 0) {

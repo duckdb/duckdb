@@ -65,7 +65,8 @@
         "test/sql/index/art/scan/test_art_prepared_scan.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
-        "test/sql/copy/parquet/parquet_prefetch_projection.test"
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test"
       ]
     },
     {

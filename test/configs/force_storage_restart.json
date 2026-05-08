@@ -37,7 +37,8 @@
         "test/logging/warnings_as_errors.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
-        "test/sql/copy/parquet/parquet_prefetch_projection.test"
+        "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_metrics_multifile.test"
       ]
     },
     {
