@@ -26,14 +26,14 @@ struct AggregateSortKeyHelpers {
 
 		UnifiedVectorFormat idata;
 		if (IGNORE_NULLS) {
-			input.ToUnifiedFormat(count, idata);
+			input.ToUnifiedFormat(idata);
 		}
 
 		UnifiedVectorFormat kdata;
-		sort_key.ToUnifiedFormat(count, kdata);
+		sort_key.ToUnifiedFormat(kdata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		auto key_data = UnifiedVectorFormat::GetData<string_t>(kdata);
 		auto states = UnifiedVectorFormat::GetData<STATE *>(sdata);

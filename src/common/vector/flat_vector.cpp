@@ -50,18 +50,31 @@ idx_t StandardVectorBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void StandardVectorBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
+void StandardVectorBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::FLAT_VECTOR || vector_type == VectorType::CONSTANT_VECTOR);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		return;
+	if (type_size != GetTypeIdSize(type.InternalType())) {
+		throw InternalException("Type size mismatch in flat vector buffer");
 	}
 	// verify all entries in the sel fit within the validity
 	if (sel.IsSet()) {
 		for (idx_t i = 0; i < count; i++) {
-			D_ASSERT(sel.get_index(i) < validity.Capacity());
+			auto sel_idx = sel.get_index(i);
+			if (sel_idx > validity.Capacity()) {
+				throw InternalException("Selection vector index %d out of range for validity capacity %d", sel_idx,
+				                        validity.Capacity());
+			}
+			if (sel_idx > Capacity()) {
+				throw InternalException("Selection vector index %d out of range for vector capacity %d", sel_idx,
+				                        Capacity());
+			}
 		}
-	} else {
-		D_ASSERT(count <= validity.Capacity());
+	} else if (vector_type == VectorType::FLAT_VECTOR) {
+		if (count > validity.Capacity()) {
+			throw InternalException("Count %d out of range for validity capacity %d", count, validity.Capacity());
+		}
+		if (count > Capacity()) {
+			throw InternalException("Count %d out of range for capacity %d", count, Capacity());
+		}
 	}
 }
 
@@ -155,12 +168,12 @@ void FlattenVectorBuffer(data_ptr_t target, const_data_ptr_t source, const Selec
 	}
 }
 
-buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> StandardVectorBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already a flat vector - bail
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -182,9 +195,9 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::FlattenSliceInternal(const Logica
 	return result;
 }
 
-void StandardVectorBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void StandardVectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}
@@ -351,6 +364,8 @@ Value StandardVectorBuffer::GetValue(const LogicalType &type, idx_t index) const
 		return Value::TIMESTAMPSEC(reinterpret_cast<const timestamp_sec_t *>(data_ptr)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(reinterpret_cast<const timestamp_tz_t *>(data_ptr)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return Value::TIMESTAMPTZNS(reinterpret_cast<const timestamp_tz_ns_t *>(data_ptr)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(reinterpret_cast<const hugeint_t *>(data_ptr)[index]);
 	case LogicalTypeId::UHUGEINT:
@@ -483,6 +498,32 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 		auto child_offset = idx * array_size;
 		for (idx_t i = 0; i < array_size; i++) {
 			FlatVector::SetNull(child, child_offset + i, is_null);
+		}
+	}
+}
+
+void FlatVector::CopyValidity(Vector &target, const Vector &source, idx_t count) {
+	if (source.GetVectorType() == VectorType::FLAT_VECTOR) {
+		SetValidity(target, Validity(source));
+		return;
+	}
+	auto &result_validity = ValidityMutable(target);
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(source)) {
+			result_validity.SetAllInvalid(count);
+		} else {
+			result_validity.Reset(count);
+		}
+		return;
+	}
+	auto validity = source.Validity(count);
+	if (!validity.CanHaveNull()) {
+		result_validity.Reset(count);
+		return;
+	}
+	for (idx_t r = 0; r < count; r++) {
+		if (!validity.IsValid(r)) {
+			result_validity.SetInvalid(r);
 		}
 	}
 }

@@ -249,7 +249,7 @@ void VariantUtils::UnshredVariantData(Vector &input, Vector &output, idx_t count
 	auto &shredded = child_vectors[1];
 
 	RecursiveUnifiedVectorFormat recursive_format;
-	Vector::RecursiveToUnifiedFormat(unshredded, count, recursive_format);
+	Vector::RecursiveToUnifiedFormat(unshredded, recursive_format);
 	UnifiedVariantVectorData variant(recursive_format);
 
 	auto variant_values = Unshred(variant, shredded, count, nullptr);

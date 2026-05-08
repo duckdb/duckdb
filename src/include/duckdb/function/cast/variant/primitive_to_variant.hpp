@@ -320,6 +320,10 @@ bool ConvertPrimitiveToVariant(ToVariantSourceData &source, ToVariantGlobalResul
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_MICROS_TZ,
 		                                 timestamp_tz_t>(source, result, count, selvec, values_index_selvec,
 		                                                 empty_payload, is_root);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::TIMESTAMP_NANOS_TZ,
+		                                 timestamp_tz_ns_t>(source, result, count, selvec, values_index_selvec,
+		                                                    empty_payload, is_root);
 	case LogicalTypeId::UUID:
 		return ConvertPrimitiveTemplated<WRITE_DATA, IGNORE_NULLS, VariantLogicalType::UUID, hugeint_t>(
 		    source, result, count, selvec, values_index_selvec, empty_payload, is_root);

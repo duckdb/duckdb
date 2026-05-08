@@ -164,11 +164,11 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 	UnifiedVectorFormat list_data, begin_data, end_data, step_data;
 	idx_t sel_length = 0;
 
-	list_vector.ToUnifiedFormat(count, list_data);
-	begin_vector.ToUnifiedFormat(count, begin_data);
-	end_vector.ToUnifiedFormat(count, end_data);
+	list_vector.ToUnifiedFormat(list_data);
+	begin_vector.ToUnifiedFormat(begin_data);
+	end_vector.ToUnifiedFormat(end_data);
 	if (step_vector) {
-		step_vector->ToUnifiedFormat(count, step_data);
+		step_vector->ToUnifiedFormat(step_data);
 		sel.Initialize(ListVector::GetListSize(list_vector));
 	}
 
@@ -226,7 +226,7 @@ void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector,
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
-		result_child_vector->Flatten(sel_length);
+		result_child_vector->Flatten();
 		ListVector::SetListSize(result, sel_length);
 	}
 }
@@ -245,7 +245,7 @@ void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vect
 	ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE, OP>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
 	                                             count, sel, sel_idx, result_child_vector, begin_is_empty,
 	                                             end_is_empty);
-	result.Verify(count);
+	result.Verify();
 }
 
 void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -279,7 +279,7 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		// Share the value dictionary as we are just going to slice it
 		if (list_or_str_vector.GetVectorType() != VectorType::FLAT_VECTOR &&
 		    list_or_str_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			list_or_str_vector.Flatten(count);
+			list_or_str_vector.Flatten();
 		}
 		ExecuteSlice<list_entry_t, int64_t, ListSliceOperations>(result, list_or_str_vector, begin_vector, end_vector,
 		                                                         step_vector, count, begin_is_empty, end_is_empty);
@@ -381,7 +381,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	fun.SetFallible();
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.GetArguments().push_back(LogicalType::BIGINT);
+	fun.GetSignature().AddParameter(LogicalType::BIGINT);
 	set.AddFunction(fun);
 	return set;
 }

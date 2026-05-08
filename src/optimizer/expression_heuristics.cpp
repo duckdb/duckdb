@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/expression/bound_between_expression.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
@@ -67,11 +68,14 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundBetweenExpression &expr) {
-	return Cost(*expr.input) + Cost(*expr.lower) + Cost(*expr.upper) + 10;
+idx_t ExpressionHeuristics::BetweenExpressionCost(const BoundFunctionExpression &expr) {
+	auto &input = BoundBetweenExpression::Input(expr);
+	auto &lower_bound = BoundBetweenExpression::LowerBound(expr);
+	auto &upper_bound = BoundBetweenExpression::UpperBound(expr);
+	return Cost(input) + Cost(lower_bound) + Cost(upper_bound) + 10;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundCaseExpression &expr) {
 	// CASE WHEN check THEN result_if_true ELSE result_if_false END
 	idx_t case_cost = 0;
 	for (auto &case_check : expr.case_checks) {
@@ -82,7 +86,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCaseExpression &expr) {
 	return case_cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
 	// OPERATOR_CAST
 	// determine cast cost by comparing cast_expr.source_type and cast_expr_target_type
 	idx_t cast_cost = 0;
@@ -99,13 +103,13 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundCastExpression &expr) {
 	return Cost(*expr.child) + cast_cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundComparisonExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundComparisonExpression &expr) {
 	// COMPARE_EQUAL, COMPARE_NOTEQUAL, COMPARE_GREATERTHAN, COMPARE_GREATERTHANOREQUALTO, COMPARE_LESSTHAN,
 	// COMPARE_LESSTHANOREQUALTO
 	return Cost(*expr.left) + 5 + Cost(*expr.right);
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &expr) {
 	// CONJUNCTION_AND, CONJUNCTION_OR
 	idx_t cost = 5;
 	for (auto &child : expr.children) {
@@ -114,7 +118,10 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
 	return cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		return BetweenExpressionCost(expr);
+	}
 	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
 	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
@@ -127,7 +134,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 		cost_children += Cost(*child);
 	}
 
-	auto cost_function = function_costs.find(expr.function.name);
+	auto cost_function = function_costs.find(expr.function.GetName());
 	if (cost_function != function_costs.end()) {
 		return cost_children + cost_function->second;
 	} else {
@@ -135,7 +142,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type) {
+idx_t ExpressionHeuristics::ExpressionCost(const BoundOperatorExpression &expr, ExpressionType expr_type) {
 	idx_t sum = 0;
 	for (auto &child : expr.children) {
 		sum += Cost(*child);
@@ -168,15 +175,11 @@ idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multi
 	}
 }
 
-idx_t ExpressionHeuristics::Cost(Expression &expr) {
+idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		return ExpressionCost(case_expr);
-	}
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between_expr = expr.Cast<BoundBetweenExpression>();
-		return ExpressionCost(between_expr);
 	}
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();

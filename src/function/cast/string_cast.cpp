@@ -430,7 +430,7 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 	default: {
 		UnifiedVectorFormat unified_source;
 
-		source.ToUnifiedFormat(count, unified_source);
+		source.ToUnifiedFormat(unified_source);
 		auto source_sel = unified_source.sel;
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(unified_source);
 		auto &source_mask = unified_source.validity;
@@ -458,6 +458,9 @@ BoundCastInfo DefaultCasts::StringCastSwitch(BindCastInput &input, const Logical
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_t, duckdb::TryCastErrorMessage>);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return BoundCastInfo(
+		    &VectorCastHelpers::TryCastErrorLoop<string_t, timestamp_tz_ns_t, duckdb::TryCastErrorMessage>);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return BoundCastInfo(
 		    &VectorCastHelpers::TryCastStrictLoop<string_t, timestamp_ns_t, duckdb::TryCastToTimestampNS>);

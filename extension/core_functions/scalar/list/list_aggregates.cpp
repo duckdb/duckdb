@@ -30,7 +30,7 @@ unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &sta
 }
 // FIXME: benchmark the use of cluster_update against using update (if applicable)
 
-unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
+unique_ptr<FunctionData> ListAggregatesBindFailure(BoundScalarFunction &bound_function) {
 	bound_function.GetArguments()[0] = LogicalType::SQLNULL;
 	bound_function.SetReturnType(LogicalType::SQLNULL);
 	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
@@ -138,7 +138,7 @@ struct DistinctFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 
 		auto old_len = ListVector::GetListSize(result);
@@ -173,7 +173,7 @@ struct DistinctFunctor {
 		}
 		D_ASSERT(current_offset == old_len + new_entries);
 		ListVector::SetListSize(result, current_offset);
-		result.Verify(count);
+		result.Verify();
 	}
 };
 
@@ -181,7 +181,7 @@ struct UniqueFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 		auto states = UnifiedVectorFormat::GetData<HistogramAggState<T, MAP_TYPE> *>(sdata);
 
 		auto result_data = FlatVector::Writer<uint64_t>(result, count);
@@ -194,7 +194,7 @@ struct UniqueFunctor {
 			}
 			result_data.WriteValue(state->hist->size());
 		}
-		result.Verify(count);
+		result.Verify();
 	}
 };
 
@@ -222,15 +222,14 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 	D_ASSERT(aggr.function.HasStateUpdateCallback());
 
-	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetChildMutable(lists);
-	child_vector.Flatten(lists_size);
+	child_vector.Flatten();
 
 	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(lists_size, child_data);
+	child_vector.ToUnifiedFormat(child_data);
 
 	UnifiedVectorFormat lists_data;
-	lists.ToUnifiedFormat(count, lists_data);
+	lists.ToUnifiedFormat(lists_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
@@ -379,9 +378,10 @@ void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 }
 
 template <bool IS_AGGR = false>
-unique_ptr<FunctionData>
-ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function, const LogicalType &list_child_type,
-                           AggregateFunction &aggr_function, vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, BoundScalarFunction &bound_function,
+                                                    const LogicalType &list_child_type,
+                                                    const AggregateFunction &aggr_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
 	auto expr = make_uniq<BoundConstantExpression>(Value(list_child_type));
@@ -471,14 +471,14 @@ unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
 		bound_function.SetErrorMode(best_function.GetErrorMode());
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 
 	// create the unordered map histogram function
-	D_ASSERT(best_function.GetArguments().size() == 1);
+	D_ASSERT(best_function.GetSignature().GetParameterCount() == 1);
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
 	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }

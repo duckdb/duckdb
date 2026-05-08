@@ -208,7 +208,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 		ArrowToDuckDB(state, data.arrow_table.GetColumns(), output);
 	}
 
-	output.Verify(context.db);
+	output.Verify(context);
 	state.chunk_offset += output.size();
 }
 
@@ -241,6 +241,7 @@ static bool CanPushdown(const ArrowType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:

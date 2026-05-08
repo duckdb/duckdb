@@ -326,7 +326,7 @@ public:
 #endif
 		} else {
 			UnifiedVectorFormat sdata;
-			states.ToUnifiedFormat(count, sdata);
+			states.ToUnifiedFormat(sdata);
 			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, aggr_input_data, *sdata.sel, count);
 		}
 	}
@@ -624,8 +624,8 @@ public:
 #endif
 		} else {
 			UnifiedVectorFormat idata, sdata;
-			input.ToUnifiedFormat(count, idata);
-			states.ToUnifiedFormat(count, sdata);
+			input.ToUnifiedFormat(idata);
+			states.ToUnifiedFormat(sdata);
 #ifdef DUCKDB_SMALLER_BINARY
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
@@ -680,7 +680,7 @@ public:
 #endif
 		default: {
 			UnifiedVectorFormat idata;
-			input.ToUnifiedFormat(count, idata);
+			input.ToUnifiedFormat(idata);
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                            aggr_input_data, (STATE_TYPE *)state, count, idata.validity,
 			                                            *idata.sel);
@@ -701,9 +701,9 @@ public:
 	static void BinaryScatter(AggregateInputData &aggr_input_data, Vector &a, Vector &b, Vector &states, idx_t count) {
 		UnifiedVectorFormat adata, bdata, sdata;
 
-		a.ToUnifiedFormat(count, adata);
-		b.ToUnifiedFormat(count, bdata);
-		states.ToUnifiedFormat(count, sdata);
+		a.ToUnifiedFormat(adata);
+		b.ToUnifiedFormat(bdata);
+		states.ToUnifiedFormat(sdata);
 
 		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
@@ -714,8 +714,8 @@ public:
 	static void BinaryUpdate(AggregateInputData &aggr_input_data, Vector &a, Vector &b, data_ptr_t state, idx_t count) {
 		UnifiedVectorFormat adata, bdata;
 
-		a.ToUnifiedFormat(count, adata);
-		b.ToUnifiedFormat(count, bdata);
+		a.ToUnifiedFormat(adata);
+		b.ToUnifiedFormat(bdata);
 
 		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),

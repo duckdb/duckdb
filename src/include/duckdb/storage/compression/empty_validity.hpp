@@ -48,7 +48,7 @@ public:
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 		auto &state = state_p.Cast<EmptyValidityCompressionState>();
 		UnifiedVectorFormat format;
-		scan_vector.ToUnifiedFormat(count, format);
+		scan_vector.ToUnifiedFormat(format);
 		state.non_nulls += format.validity.CountValid(count);
 		state.count += count;
 	}

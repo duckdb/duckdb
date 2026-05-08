@@ -132,7 +132,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class MAP_TYPE>
@@ -213,7 +213,7 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

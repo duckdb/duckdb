@@ -130,7 +130,7 @@ void ConstantVector::Reference(Vector &vector, count_t count, const Vector &sour
 	}
 	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(source_count, vdata);
+		source.ToUnifiedFormat(vdata);
 		auto source_idx = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(source_idx)) {
 			// list is null: create null value
@@ -150,7 +150,7 @@ void ConstantVector::Reference(Vector &vector, count_t count, const Vector &sour
 			sel.set_index(i, array_size * source_idx + i);
 		}
 		target_child.Slice(sel, array_size);
-		target_child.Flatten(array_size); // since its constant we only have to flatten this much
+		target_child.Flatten(); // since its constant we only have to flatten this much
 
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto &validity = vector.BufferMutable().GetValidityMask();
@@ -160,7 +160,7 @@ void ConstantVector::Reference(Vector &vector, count_t count, const Vector &sour
 	}
 	case PhysicalType::STRUCT: {
 		UnifiedVectorFormat vdata;
-		source.ToUnifiedFormat(source_count, vdata);
+		source.ToUnifiedFormat(vdata);
 
 		auto struct_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(struct_index)) {

@@ -509,5 +509,39 @@ void PEGKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typefunc_keyword_map.insert("try_cast");
 	typefunc_keyword_map.insert("unpack");
 	typefunc_keyword_map.insert("verbose");
+
+	// Populating typename_keyword_map
+	typename_keyword_map.insert("anti");
+	typename_keyword_map.insert("asof");
+	typename_keyword_map.insert("at");
+	typename_keyword_map.insert("authorization");
+	typename_keyword_map.insert("binary");
+	typename_keyword_map.insert("by");
+	typename_keyword_map.insert("collation");
+	typename_keyword_map.insert("columns");
+	typename_keyword_map.insert("concurrently");
+	typename_keyword_map.insert("cross");
+	typename_keyword_map.insert("freeze");
+	typename_keyword_map.insert("full");
+	typename_keyword_map.insert("glob");
+	typename_keyword_map.insert("ilike");
+	typename_keyword_map.insert("inner");
+	typename_keyword_map.insert("is");
+	typename_keyword_map.insert("isnull");
+	typename_keyword_map.insert("join");
+	typename_keyword_map.insert("left");
+	typename_keyword_map.insert("like");
+	typename_keyword_map.insert("natural");
+	typename_keyword_map.insert("notnull");
+	typename_keyword_map.insert("outer");
+	typename_keyword_map.insert("overlaps");
+	typename_keyword_map.insert("positional");
+	typename_keyword_map.insert("right");
+	typename_keyword_map.insert("semi");
+	typename_keyword_map.insert("similar");
+	typename_keyword_map.insert("tablesample");
+	typename_keyword_map.insert("try_cast");
+	typename_keyword_map.insert("unpack");
+	typename_keyword_map.insert("verbose");
 }
 } // namespace duckdb

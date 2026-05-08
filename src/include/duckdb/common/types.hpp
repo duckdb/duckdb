@@ -35,6 +35,9 @@ using buffer_ptr = shared_ptr<T>;
 template <class... Args>
 struct VectorStructType;
 
+template <class T>
+struct VectorListType;
+
 template <class T, typename... ARGS>
 buffer_ptr<T> make_buffer(ARGS &&...args) { // NOLINT: mimic std casing
 	return make_shared_ptr<T>(std::forward<ARGS>(args)...);
@@ -223,6 +226,7 @@ enum class LogicalTypeId : uint8_t {
 	UINTEGER = 30,
 	UBIGINT = 31,
 	TIMESTAMP_TZ = 32,
+	TIMESTAMP_TZ_NS = 33,
 	TIME_TZ = 34,
 	TIME_NS = 35,
 	BIT = 36,
@@ -413,6 +417,7 @@ public:
 	static constexpr const LogicalTypeId TIME = LogicalTypeId::TIME;
 	static constexpr const LogicalTypeId TIME_NS = LogicalTypeId::TIME_NS;
 	static constexpr const LogicalTypeId TIMESTAMP_TZ = LogicalTypeId::TIMESTAMP_TZ;
+	static constexpr const LogicalTypeId TIMESTAMP_TZ_NS = LogicalTypeId::TIMESTAMP_TZ_NS;
 	static constexpr const LogicalTypeId TIME_TZ = LogicalTypeId::TIME_TZ;
 	static constexpr const LogicalTypeId VARCHAR = LogicalTypeId::VARCHAR;
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;

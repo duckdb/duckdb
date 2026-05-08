@@ -193,7 +193,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	case PhysicalType::STRUCT: {
 		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			// below code needs constant or flat structs
-			vector.Flatten(count);
+			vector.Flatten();
 		}
 		auto &vector_entries = StructVector::GetEntries(vector);
 		auto &result_entries = StructVector::GetEntries(result);
@@ -221,7 +221,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 			result_data[result_idx].offset += offset;
 		}
 
-		result.Verify(sel, count);
+		result.Verify();
 		break;
 	}
 	default:

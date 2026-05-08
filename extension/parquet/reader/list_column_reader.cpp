@@ -127,7 +127,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 			// no more elements available: we are done
 			break;
 		}
-		read_vector.Verify(child_actual_num_values);
+		read_vector.Verify();
 		idx_t current_chunk_offset = OP::GetOffset(result_out);
 
 		// hard-won piece of code this, modify at your own risk
@@ -175,7 +175,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
 			read_vector.Slice(read_vector, child_idx, child_actual_num_values);
 			overflow_child_count = child_actual_num_values - child_idx;
-			read_vector.Verify(overflow_child_count);
+			read_vector.Verify();
 
 			// move values in the child repeats and defines *backward* by child_idx
 			for (idx_t repdef_idx = 0; repdef_idx < overflow_child_count; repdef_idx++) {

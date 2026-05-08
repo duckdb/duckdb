@@ -393,7 +393,7 @@ public:
 
 		buffered = idx_t(std::abs(offset));
 		prev.Reference(dflt, count_t(buffered));
-		prev.Flatten(buffered);
+		prev.Flatten();
 		temp.Initialize(VectorDataInitialization::UNINITIALIZED, buffered);
 	}
 
@@ -588,13 +588,13 @@ WindowFunction LeadFun::GetTypedFunction(const LogicalType &type, idx_t nargs) {
 	auto funcs = GetLeadLagFunctionSet(Name, ExpressionType::WINDOW_LEAD);
 
 	for (auto &func : funcs.functions) {
-		if (func.GetArguments().size() != nargs) {
+		if (func.GetSignature().GetParameterCount() != nargs) {
 			continue;
 		}
 
-		func.GetArguments()[0] = type;
+		func.GetSignature().GetParameter(0).SetType(type);
 		if (nargs > 2) {
-			func.GetArguments()[2] = type;
+			func.GetSignature().GetParameter(2).SetType(type);
 		}
 		return func;
 	}
@@ -813,7 +813,7 @@ void WindowFirstValueExecutor::StreamData(ExecutionContext &context, DataChunk &
 		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		auto &prev = sstate.vec;
 		if (validity.CannotHaveNull()) {
@@ -931,7 +931,7 @@ void WindowLastValueExecutor::StreamData(ExecutionContext &context, DataChunk &i
 		auto &arg = sstate.arg;
 		executor.ExecuteExpression(input, arg);
 		UnifiedVectorFormat unified;
-		arg.ToUnifiedFormat(count, unified);
+		arg.ToUnifiedFormat(unified);
 		const auto &validity = unified.validity;
 		if (validity.CannotHaveNull()) {
 			VectorOperations::Copy(arg, result, count, 0, 0);
@@ -1109,7 +1109,7 @@ void WindowNthValueStreamingState::StreamData(ExecutionContext &context, DataChu
 	eval.ExecuteExpression(input, arg);
 
 	UnifiedVectorFormat unified;
-	arg.ToUnifiedFormat(count, unified);
+	arg.ToUnifiedFormat(unified);
 	const auto &validity = unified.validity;
 
 	//	Split the result between NULLs and the Nth Value
@@ -1407,6 +1407,7 @@ static fill_value_t GetFillValueFunction(const LogicalType &type) {
 		return FillValueFunction<date_t>;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:

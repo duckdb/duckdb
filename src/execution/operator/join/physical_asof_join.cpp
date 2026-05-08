@@ -1020,23 +1020,20 @@ void AsOfProbeBuffer::ScanLeft() {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(lhs_payload, lhs_keys);
-	lhs_keys.Flatten();
 
-	//	Combine the NULLs
+	// Combine the NULLs
 	const auto count = lhs_payload.size();
 	lhs_valid_mask.Reset();
 	for (auto col_idx : op.null_sensitive) {
 		auto &col = lhs_keys.data[col_idx];
-		UnifiedVectorFormat unified;
-		col.ToUnifiedFormat(count, unified);
-		lhs_valid_mask.Combine(unified.validity, count);
+		lhs_valid_mask.Combine(col, count);
 	}
 
 	// Filter out NULL matches
 	if (lhs_valid_mask.CanHaveNull()) {
-		const auto count = lhs_match_count;
+		const auto match_count = lhs_match_count;
 		lhs_match_count = 0;
-		for (idx_t i = 0; i < count; ++i) {
+		for (idx_t i = 0; i < match_count; ++i) {
 			const auto idx = lhs_match_sel.get_index(i);
 			if (lhs_valid_mask.RowIsValidUnsafe(idx)) {
 				lhs_match_sel.set_index(lhs_match_count++, idx);

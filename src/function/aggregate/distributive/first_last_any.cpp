@@ -226,10 +226,10 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	static void Update(Vector inputs[], AggregateInputData &input_data, idx_t, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 
 		UnifiedVectorFormat sdata;
-		state_vector.ToUnifiedFormat(count, sdata);
+		state_vector.ToUnifiedFormat(sdata);
 
 		sel_t assign_sel[STANDARD_VECTOR_SIZE];
 		idx_t assign_count = 0;
@@ -299,7 +299,7 @@ struct FirstVectorFunction : FirstFunctionStringBase<LAST, SKIP_NULLS> {
 	}
 };
 
-LogicalType GetFirstStateType(const AggregateFunction &function) {
+LogicalType GetFirstStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	LogicalType value_type = function.GetArguments()[0];
 	child_types.emplace_back("value", value_type);
@@ -360,7 +360,7 @@ AggregateFunction GetFirstFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::DECIMAL) {
 		type.Verify();
 		AggregateFunction function = GetDecimalFirstFunction<LAST, SKIP_NULLS>(type);
-		function.GetArguments()[0] = type;
+		function.GetSignature().GetParameter(0).SetType(type);
 		function.SetReturnType(type);
 		return function;
 	}
@@ -424,9 +424,9 @@ unique_ptr<FunctionData> BindDecimalFirst(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
 	auto decimal_type = arguments[0]->GetReturnType();
-	auto name = std::move(function.name);
-	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
-	function.name = std::move(name);
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetFirstFunction<LAST, SKIP_NULLS>(decimal_type));
+	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	function.SetReturnType(decimal_type);
 	return nullptr;
@@ -446,9 +446,9 @@ unique_ptr<FunctionData> BindFirst(BindAggregateFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 
 	auto input_type = arguments[0]->GetReturnType();
-	auto name = std::move(function.name);
-	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
-	function.name = std::move(name);
+	auto name = function.GetName();
+	function.ReplaceImplementation(GetFirstOperator<LAST, SKIP_NULLS>(input_type));
+	function.SetName(std::move(name));
 	function.SetDistinctDependent(AggregateDistinctDependent::NOT_DISTINCT_DEPENDENT);
 	return nullptr;
 }

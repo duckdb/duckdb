@@ -18,6 +18,7 @@ on:
       - 'main'
       - 'feature'
       - 'v*.*-*'
+      - 'gh-readonly-queue/**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -53,6 +54,13 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Run only specific jobs in CI (separated by whitespace) and skip the rest.
+  #
+  # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
+  # and the dependent job is also skipped.
+  #
+  # For example, to run only "extensions", use:
+  # OVERRIDE_JOBS: linux-relassert linux-release extensions
 
 jobs:
  prepare:
@@ -121,6 +129,11 @@ jobs:
             tests_slow:
               - test/**/*.cpp
               - test/**/*.test_slow
+            capi:
+              - src/include/duckdb.h
+              - src/common/types.cpp
+              - src/include/duckdb/common/types.hpp
+              - src/function/table/system/test_all_types.cpp
             julia:
               - tools/juliapkg/**
 
@@ -255,13 +268,9 @@ jobs:
             echo "static_libs_linux_matrix=$static_libs_linux_matrix"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: ./.github/actions/ccache-action
-        with:
-          save: ${{ fromJson(steps.config.outputs.save_cache) }}
-
       - name: Install tools
         timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
       - name: Check format
         run: |
@@ -287,7 +296,7 @@ jobs:
       FORCE_ASSERT: 1
       EXPORT_DYNAMIC_SYMBOLS: 1
       REDUCE_SYMBOLS: 1
-      EXTENSIONS_STATIC_BUILD: 0
+      EXTENSION_STATIC_BUILD: 0
 
     steps:
     - name: "Checkout"
@@ -302,7 +311,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Fix ASan runtime
       shell: bash
@@ -351,7 +360,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
@@ -394,11 +403,12 @@ jobs:
     name: Tidy Check
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'tidy-check') }}
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
     env:
       CC: gcc
       CXX: g++
       GEN: ninja
+      CLANGD_BINARY: clangd-20
 
     steps:
     - uses: actions/checkout@v6
@@ -414,57 +424,24 @@ jobs:
         python3 scripts/ci/retry.py -- sudo apt-get install -y -qq clang-tidy
         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
 
-    - uses: ./.github/actions/ccache-action
-      with:
-        save: ${{ fromJson(needs.prepare.outputs.save_cache) }}
-
-    - name: Download clang-tidy-cache
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: |
-        set -e
-        curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
-        md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
-        chmod +x /tmp/clang-tidy-cache
-
-    - name: Tidy Check
-      if: ${{ github.ref_name == 'main' || github.ref_name == 'feature' }}
-      run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
-
     - name: Tidy Check Diff
-      if: ${{ github.ref_name != 'main' && github.ref_name != 'feature' }}
+      if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run: DUCKDB_GIT_BASE_BRANCH=${{ github.base_ref }} make tidy-check-diff
 
- check-clangd-tidy:
-   name: Tidy Check (clangd)
-   if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'check-clangd-tidy') }}
-   needs: prepare
-   runs-on: ${{ needs.prepare.outputs.runner_linux_x64 }}
-   env:
-     CLANGD_BINARY: clangd-20
+    - name: Clean
+      run: make clean
 
-   steps:
-     - name: "Checkout"
-       uses: duckdb/duckdb-ci/.github/actions/checkout@main
-       with:
-         runner_provider: ${{ github.repository == 'duckdb/duckdb' && 'namespace' || 'github' }}
-         fetch_depth: 0
-         ref: ${{ needs.prepare.outputs.git_sha }}
+    - name: Install clangd-tidy
+      run: python3 scripts/ci/retry.py -- make install-clangd-tidy
 
-     - name: Install
-       timeout-minutes: 10
-       run: |
-         python3 scripts/ci/retry.py -- make toolsci
-         python3 scripts/ci/retry.py -- sudo pip3 install 'pybind11[global]' --break-system-packages
-         python3 scripts/ci/retry.py -- make install-clangd-tidy
-
-     - name: Tidy Check
-       run: |
-         mkdir -p ~/.config/clangd
-         cat > ~/.config/clangd/config.yaml <<'EOF'
-         Diagnostics:
-           UnusedIncludes: None
-         EOF
-         make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
+    - name: Tidy Check (clangd)
+      run: |
+        mkdir -p ~/.config/clangd
+        cat > ~/.config/clangd/config.yaml <<'EOF'
+        Diagnostics:
+          UnusedIncludes: None
+        EOF
+        make tidy-check-clangd CLANGD_TIDY_QUERY_DRIVER=/usr/bin/**/g++*,/usr/bin/**/gcc*
 
  extensions:
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions') }}
@@ -505,7 +482,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -532,7 +509,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -597,7 +574,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -632,7 +609,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Install pytest
       timeout-minutes: 10
@@ -667,6 +644,7 @@ jobs:
           dnf install -y \
             ccache       \
             ninja-build  \
+            python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -733,7 +711,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -766,6 +744,7 @@ jobs:
             g++     \
             git     \
             make    \
+            python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -951,7 +930,7 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache python3.12 ninja-build zip python3-pip
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1415,6 +1394,18 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
 
+    - name: test/configs/internal_vector_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_serialization.json ./build/release/test/unittest
+
+    - name: test/configs/internal_vector_verification.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_verification.json ./build/release/test/unittest
+
     - name: test/configs/force_external.json
       if: success() || failure()
       shell: bash
@@ -1551,7 +1542,6 @@ jobs:
       - linux-relassert-tests
       - regression
       - tidy-check
-      - check-clangd-tidy
       - extensions
       - wasm-eh
       - linux-release

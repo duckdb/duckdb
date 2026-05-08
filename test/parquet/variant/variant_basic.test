@@ -118,7 +118,7 @@ from '{DATA_DIR}/parquet-testing/variant_decimal16_negative.parquet';
 query II
 from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos1.parquet';
 ----
-1	1957-11-07 12:33:54.123457+00
+1	1957-11-07 12:33:54.123456789+00
 
 query II
 from '{DATA_DIR}/parquet-testing/variant_decimal8_negative.parquet';
@@ -138,7 +138,7 @@ from '{DATA_DIR}/parquet-testing/variant_int8_positive.parquet';
 query II
 from '{DATA_DIR}/parquet-testing/variant_timestamp_nanos2.parquet';
 ----
-1	2024-11-07 12:33:54.123456+00
+1	2024-11-07 12:33:54.123456789+00
 
 query II
 from '{DATA_DIR}/parquet-testing/variant_int8_negative.parquet';

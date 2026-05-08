@@ -60,6 +60,7 @@ struct VariantNormalizer {
 	static void VisitTimestamp(timestamp_t val, VariantNormalizerState &state);
 	static void VisitTimestampNanos(timestamp_ns_t val, VariantNormalizerState &state);
 	static void VisitTimestampTZ(timestamp_tz_t val, VariantNormalizerState &state);
+	static void VisitTimestampTZNanos(timestamp_tz_ns_t val, VariantNormalizerState &state);
 
 	static void VisitString(const string_t &str, VariantNormalizerState &state);
 	static void VisitBlob(const string_t &blob, VariantNormalizerState &state);

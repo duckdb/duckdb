@@ -416,6 +416,23 @@
             }
         },
         {
+            "name": "duckdb_create_timestamp_tz_ns",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_timestamp_ns",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a TIMESTAMP_TZ_NS value from a duckdb_timestamp_ns\n\n",
+                "param_comments": {
+                    "input": "The duckdb_timestamp_ns value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
             "name": "duckdb_create_timestamp_s",
             "return_type": "duckdb_value",
             "params": [
@@ -894,6 +911,23 @@
                     "val": "A duckdb_value containing a TIMESTAMP_TZ"
                 },
                 "return_value": "A duckdb_timestamp, or MinValue<timestamp_tz> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_timestamp_tz_ns",
+            "return_type": "duckdb_timestamp_ns",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the TIMESTAMP_TZ_NS value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a TIMESTAMP_TZ_NS"
+                },
+                "return_value": "A duckdb_timestamp_ns, or MinValue<timestamp_tz_ns> if the value cannot be converted"
             }
         },
         {
