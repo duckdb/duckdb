@@ -200,6 +200,9 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
+		if (!state.compute_reverse_partition_sel) {
+			return;
+		}
 		// This needs to be initialized, even if we go the short path here
 		if (append_sel.IsSet()) {
 			for (sel_t i = 0; i < append_count; i++) {
@@ -251,10 +254,10 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 	}
 }
 
-template <bool fixed>
+template <bool FIXED>
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
-	using GETTER = TemplatedMapGetter<list_entry_t, fixed>;
-	const auto &partition_entries = state.GetMap<fixed>();
+	using GETTER = TemplatedMapGetter<list_entry_t, FIXED>;
+	const auto &partition_entries = state.GetMap<FIXED>();
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);
 
