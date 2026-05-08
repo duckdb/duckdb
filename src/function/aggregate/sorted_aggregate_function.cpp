@@ -555,7 +555,7 @@ struct SortedAggregateFunction {
 		auto update = aggr.GetCallbacks().GetStateUpdateCallback();
 		auto finalize = aggr.GetCallbacks().GetStateFinalizeCallback();
 
-		auto sdata = states.Values<SortedAggregateState *>(count);
+		auto sdata = states.Values<SortedAggregateState *>();
 
 		vector<idx_t> state_unprocessed(count, 0);
 		for (idx_t i = 0; i < count; ++i) {

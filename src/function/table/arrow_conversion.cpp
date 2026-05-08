@@ -568,8 +568,8 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto &runs = *run_end_encoding.run_ends;
 	auto &values = *run_end_encoding.values;
 
-	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
-	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
+	auto run_ends_data = runs.Values<RUN_END_TYPE>();
+	auto values_data = values.Values<VALUE_TYPE>();
 	auto result_data = FlatVector::ScatterWriter<VALUE_TYPE>(result);
 	auto &validity = FlatVector::ValidityMutable(result);
 

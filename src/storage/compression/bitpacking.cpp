@@ -325,7 +325,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	}
 
 	auto &analyze_state = state.Cast<BitpackingAnalyzeState<T>>();
-	for (auto entry : input.Values<T>(count)) {
+	for (auto entry : input.Values<T>()) {
 		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(entry)) {
 			return false;
 		}
@@ -489,7 +489,7 @@ public:
 	}
 
 	void Append(Vector &input, idx_t count) {
-		for (auto entry : input.Values<T>(count)) {
+		for (auto entry : input.Values<T>()) {
 			state.template Update<BitpackingWriter>(entry);
 		}
 	}

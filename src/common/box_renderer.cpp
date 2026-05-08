@@ -616,7 +616,7 @@ string BoxRendererImplementation::TryFormatLargeNumber(const string &numeric) {
 void BoxRendererImplementation::ConvertRenderVector(Vector &vector, Vector &render_lengths, idx_t count,
                                                     const LogicalType &original_type, idx_t null_render_length) {
 	vector.Flatten();
-	auto input_values = vector.Values<string_t>(count);
+	auto input_values = vector.Values<string_t>();
 	auto &validity = FlatVector::ValidityMutable(vector);
 	auto result_data = FlatVector::ScatterWriter<string_t>(vector);
 	auto render_length_data = FlatVector::Writer<uint64_t>(render_lengths, count);

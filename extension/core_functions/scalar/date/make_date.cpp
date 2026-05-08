@@ -54,7 +54,7 @@ void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &res
 	auto &vec = input.data[0];
 	const auto count = input.size();
 
-	auto iter = vec.Values<VectorStructType<T, T, T>>(count);
+	auto iter = vec.Values<VectorStructType<T, T, T>>();
 	auto writer = FlatVector::Writer<date_t>(result, count);
 	for (const auto entry : iter) {
 		const auto y = entry.template GetChildValue<0>();

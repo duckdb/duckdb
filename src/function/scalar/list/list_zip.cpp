@@ -19,9 +19,9 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	optional<VectorIterator<bool>> truncate_flag;
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		if (i + 1 == args.ColumnCount() && args.data[i].GetType().id() == LogicalTypeId::BOOLEAN) {
-			truncate_flag = args.data[i].Values<bool>(count);
+			truncate_flag = args.data[i].Values<bool>();
 		} else if (args.data[i].GetType().id() == LogicalTypeId::LIST) {
-			input_lists.emplace_back(args.data[i].Values<list_entry_t>(count));
+			input_lists.emplace_back(args.data[i].Values<list_entry_t>());
 		} else {
 			// SQLNULL — no list iterator possible; treated as always-null input
 			input_lists.emplace_back(nullopt);

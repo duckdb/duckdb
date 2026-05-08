@@ -190,8 +190,6 @@ public:
 	                                                const SelectionVector &sel, idx_t count);
 	//! Create a UnifiedVectorFormat from the buffer's data
 	virtual void ToUnifiedFormat(UnifiedVectorFormat &format) const;
-	//! Resize the buffer's data allocation
-	virtual void Resize(idx_t current_size, idx_t new_size);
 
 protected:
 	//! Slice a constant vector with a specific count
@@ -209,6 +207,9 @@ protected:
 	                                                      idx_t count) const;
 
 	virtual void VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const;
+
+	//! Resize the buffer's data allocation
+	virtual void ReserveInternal(idx_t new_size);
 
 protected:
 	VectorType vector_type;
