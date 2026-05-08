@@ -132,8 +132,9 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 			st.arena[cur.val.bitfields.cursor] = pos; // append pos to run
 			cur.val.i64++; // this is really val.bitfields.cursor++ but without bit-extraction overhead
 		}
-		if (lo < hi)
+		if (lo < hi) {
 			flush(st, cur);
+		}
 	};
 
 	auto only_merge = [&](SlotTab &st, Slot cur, sel_t lo, sel_t hi) {
@@ -146,8 +147,9 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 			st.arena[cur.val.bitfields.cursor] = pos; // append pos to run
 			cur.val.i64++; // this is really val.bitfields.cursor++ but without bit-extraction overhead
 		}
-		if (lo < hi)
+		if (lo < hi) {
 			flush(st, cur);
+		}
 	};
 
 	auto free_table = [&](SlotTab &st) {

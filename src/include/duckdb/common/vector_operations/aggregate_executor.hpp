@@ -448,7 +448,7 @@ public:
 	static void ExecuteUnaryClusteredDictOpt(Vector &input, const ClusteredAggr &clustered, idx_t count,
 	                                         const sel_t *cluster_iter = nullptr) {
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		if constexpr (SIMPLE_DICT) {
 			ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(
@@ -514,7 +514,7 @@ public:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClusteredUnifiedOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		ExecuteUnaryClustPrepared<STATE_TYPE, INPUT_TYPE, OP>(vals, idata.validity, clustered, [&](idx_t r, idx_t) {
 			return SelectionIndexer<false, true> {clustered.group_runs[r].sel, idata.sel};
@@ -552,7 +552,7 @@ public:
 			return;
 		}
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		auto vals = UnifiedVectorFormat::GetData<INPUT_TYPE>(idata);
 		AggregateUnaryInput unary_input(aggr_input_data, idata.validity);
 		for (idx_t r = 0; r < clustered.n_group_runs; r++) {

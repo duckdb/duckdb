@@ -164,7 +164,7 @@ struct CountFunction : public BaseCountFunction {
 			return;
 		}
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		CountClusteredRuns(cs, idata.validity, [&](const sel_t *run_sel, idx_t, idx_t k) {
 			return idata.sel->get_index(run_sel ? run_sel[k] : k);
 		});
@@ -174,7 +174,7 @@ struct CountFunction : public BaseCountFunction {
 	static void CountClusteredDict(Vector &input, const ClusteredAggr &clustered, idx_t count,
 	                               const sel_t *cluster_iter = nullptr) {
 		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
+		input.ToUnifiedFormat(idata);
 		if constexpr (SIMPLE_DICT) {
 			CountClusteredRuns(clustered, idata.validity,
 			                   [&](const sel_t *, idx_t pos, idx_t k) { return cluster_iter[pos + k]; });

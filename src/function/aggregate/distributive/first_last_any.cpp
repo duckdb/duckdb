@@ -313,7 +313,7 @@ void FirstFunctionClusterUpdate(Vector inputs[], AggregateInputData &aggregate_i
                                 const ClusteredAggr &clustered, idx_t count) {
 	D_ASSERT(input_count == 1);
 	UnifiedVectorFormat idata;
-	inputs[0].ToUnifiedFormat(count, idata);
+	inputs[0].ToUnifiedFormat(idata);
 	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	AggregateUnaryInput unary_input(aggregate_input_data, idata.validity);
 	for (idx_t r = 0; r < clustered.n_group_runs; r++) {
