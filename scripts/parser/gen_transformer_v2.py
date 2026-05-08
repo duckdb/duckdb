@@ -86,11 +86,6 @@ class RepeatNode(GrammarNode):
     min_count: int
 
 
-@dataclass
-class NegationNode(GrammarNode):
-    """Negative lookahead !A."""
-
-    child: GrammarNode
 
 
 def tokens_to_ast(tokens):
@@ -176,9 +171,6 @@ def tokens_to_ast(tokens):
             if peek() and peek().type == PEGTokenType.OPERATOR and peek().text == ')':
                 consume()
             return inner  # anonymous group - transparent node
-        elif t.type == PEGTokenType.OPERATOR and t.text == '!':
-            consume()
-            return NegationNode(parse_atom())
         else:
             raise Exception(f"Unexpected token in grammar AST parse: {t}")
 
