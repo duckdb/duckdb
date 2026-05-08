@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
@@ -131,33 +132,7 @@ public:
 		if (++idx_in_entry == occupied_mask::BITS_PER_VALUE) {
 			NextEntry();
 		}
-		// Loop until we find an occupied index, or until the end
-		auto end = map.end();
-		while (*this < end) {
-			const auto &entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
-			if (entry == static_cast<uint8_t>(~occupied_mask::ValidityBuffer::MAX_ENTRY)) {
-				// Entire entry is unoccupied, skip
-				if (entry_idx == end.entry_idx) {
-					// This is the last entry
-					idx_in_entry = end.idx_in_entry;
-					break;
-				}
-				NextEntry();
-			} else {
-				// One or more occupied in entry, loop over it
-				const auto idx_to = entry_idx == end.entry_idx ? end.idx_in_entry : occupied_mask::BITS_PER_VALUE;
-				for (; idx_in_entry < idx_to; idx_in_entry++) {
-					if (map.occupied.RowIsValid(entry, idx_in_entry)) {
-						// We found an occupied index
-						return *this;
-					}
-				}
-				// We did not find an occupied index
-				if (*this != end) {
-					NextEntry();
-				}
-			}
-		}
+		MoveToNextOccupied();
 		return *this;
 	}
 
@@ -201,6 +176,27 @@ private:
 	void NextEntry() {
 		entry_idx++;
 		idx_in_entry = 0;
+	}
+
+	void MoveToNextOccupied() {
+		idx_t end_entry_idx;
+		idx_t end_idx_in_entry;
+		occupied_mask::GetEntryIndex(map.capacity, end_entry_idx, end_idx_in_entry);
+		while (entry_idx < end_entry_idx || (entry_idx == end_entry_idx && idx_in_entry < end_idx_in_entry)) {
+			const auto entry_end =
+			    entry_idx == end_entry_idx ? end_idx_in_entry : occupied_mask::BITS_PER_VALUE;
+			const auto entry = map.occupied.GetValidityEntryUnsafe(entry_idx);
+			const auto valid_until_end = static_cast<uint8_t>(entry & occupied_mask::EntryWithValidBits(entry_end));
+			const auto remaining =
+			    static_cast<uint8_t>(valid_until_end & ~occupied_mask::EntryWithValidBits(idx_in_entry));
+			if (remaining) {
+				idx_in_entry = CountZeros<uint64_t>::Trailing(remaining);
+				return;
+			}
+			NextEntry();
+		}
+		entry_idx = end_entry_idx;
+		idx_in_entry = end_idx_in_entry;
 	}
 
 private:
