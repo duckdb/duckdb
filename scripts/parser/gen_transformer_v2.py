@@ -80,7 +80,9 @@ class OptionalNode(GrammarNode):
 
 @dataclass
 class RepeatNode(GrammarNode):
-    """Repeat match A+ (min=1) or A* (min=0). Corresponds to RepeatMatcher."""
+    """Repeat match A+ (one or more). Corresponds to RepeatMatcher.
+    A* (zero or more) is represented as OptionalNode(RepeatNode), matching
+    the runtime OptionalMatcher(RepeatMatcher) structure."""
 
     child: GrammarNode
 
@@ -251,11 +253,11 @@ def is_pure_reference_choice(ast):
 
 def classify_choice_alternatives(alternatives, rule_to_type):
     """
-    Split choice alternatives into two groups:
+    Split choice alternatives into three groups:
       - transformer_alts: names with a registered transformer (in rule_to_type)
       - identifier_alts:  names that are identifier overrides (produce IdentifierParseResult)
+      - unknown_alts:     neither registered nor known overrides -- need manual handling
     Returns (transformer_alts, identifier_alts, unknown_alts).
-    unknown_alts are neither registered nor known overrides - these need manual handling.
     """
     transformer_alts = []
     identifier_alts = []
@@ -312,11 +314,16 @@ def generate_choice_body_declaration(rule_name, return_type):
 # Sequence-element classification
 #
 # Mirrors the per-token-type dispatch inside MatcherFactory::CreateMatcher()
-# in matcher.cpp.  Each helper handles exactly one matcher/parse-result kind:
+# in matcher.cpp.  Each helper handles one matcher/parse-result kind:
 #
-#   _classify_literal       <- LITERAL   -> KeywordMatcher   -> KeywordParseResult  (skip)
-#   _classify_reference     <- REFERENCE -> named rule OR identifier override
-#   _classify_star_repeat   <- OPERATOR* -> Optional(Repeat) -> OptionalParseResult(RepeatParseResult)
+#   _classify_literal           LiteralNode       -> KeywordParseResult           (skip)
+#   _classify_reference         ReferenceNode     -> IdentifierParseResult OR Transform<T>
+#   _classify_optional_reference OptionalNode(Ref) -> optional identifier OR TransformOptional<T>
+#   _classify_star_repeat       OptionalNode(Rep) -> OptionalParseResult(RepeatParseResult) vector<T>
+#   _classify_plus_repeat       RepeatNode        -> RepeatParseResult             vector<T>
+#   _classify_parens            ParensNode(Ref)   -> ExtractResultFromParens       T
+#   _classify_list_macro        ListMacroNode(Ref)-> ExtractParseResultsFromList   vector<T>
+#   _classify_parens_list       ParensNode(List)  -> ExtractParseResultsFromList(ExtractResultFromParens) vector<T>
 #
 # classify_sequence_element() is the top-level dispatch (= the switch in CreateMatcher).
 # classify_sequence_elements() iterates all children of a SequenceNode (= the token loop).
@@ -570,9 +577,9 @@ def generate_sequence_body_decl(rule_name, return_type, elements):
 
 def generate_sequence_internal(rule_name, return_type, elements):
     """
-    Internal wrapper that casts to ListParseResult, extracts each element,
-    then calls the hand-written body.  Mirrors what ListMatcher::MatchParseResult
-    does at runtime but in the code-generation direction.
+    Generate the Internal wrapper for a sequence rule.
+    Casts parse_result to ListParseResult, extracts each semantic element
+    into a typed local variable, then calls the hand-written body with those args.
     """
     semantic = [e for e in elements if not e.skip]
     has_semantic_elements = len(semantic) > 0
@@ -746,6 +753,7 @@ Remaining manual steps:
 
 
 def process_gram_file(gram_filename, rule_to_type, excluded_rules):
+    """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
     gram_path = statements_dir / gram_filename
     with open(gram_path, 'r') as f:
