@@ -397,10 +397,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
-	auto &profiler = QueryProfiler::Get(*this);
-	profiler.StartPhase(MetricType::RESULT_COLLECTOR);
 	result = executor.GetResult();
-	profiler.EndPhase();
+	auto &profiler = QueryProfiler::Get(*this);
 	if (!create_stream_result) {
 		profiler.StartPhase(MetricType::CLEANUP);
 		CleanupInternal(lock, result.get(), false);

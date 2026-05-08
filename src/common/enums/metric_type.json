@@ -294,14 +294,6 @@
         "query_root": true
       },
       {
-        "name": "RESULT_COLLECTOR",
-        "enum_value": 100,
-        "description": "The time spent collecting and materializing the query result.",
-        "type": "double",
-        "unit": "milliseconds",
-        "query_root": true
-      },
-      {
         "name": "EXECUTOR_INITIALIZE",
         "enum_value": 101,
         "description": "The time spent initializing the executor, building pipelines and scheduling tasks.",

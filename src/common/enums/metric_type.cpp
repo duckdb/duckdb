@@ -72,7 +72,6 @@ profiler_settings_t MetricsUtils::GetAllMetrics() {
 		MetricType::PLANNER,
 		MetricType::PLANNER_BINDING,
 		MetricType::QUERY_NAME,
-		MetricType::RESULT_COLLECTOR,
 		MetricType::RESULT_SET_SIZE,
 		MetricType::ROWS_RETURNED,
 		MetricType::SYSTEM_PEAK_BUFFER_MEMORY,
@@ -330,7 +329,6 @@ profiler_settings_t MetricsUtils::GetPhaseTimingMetrics() {
 		MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES,
 		MetricType::PLANNER,
 		MetricType::PLANNER_BINDING,
-		MetricType::RESULT_COLLECTOR,
 	};
 }
 
@@ -347,7 +345,6 @@ bool MetricsUtils::IsPhaseTimingMetric(MetricType type) {
 	case MetricType::PHYSICAL_PLANNER_RESOLVE_TYPES:
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
-	case MetricType::RESULT_COLLECTOR:
 		return true;
 	default:
 		return false;
@@ -410,7 +407,6 @@ profiler_settings_t MetricsUtils::GetRootScopeMetrics() {
 		MetricType::PLANNER,
 		MetricType::PLANNER_BINDING,
 		MetricType::QUERY_NAME,
-		MetricType::RESULT_COLLECTOR,
 		MetricType::ROWS_RETURNED,
 		MetricType::TOTAL_BYTES_READ,
 		MetricType::TOTAL_BYTES_WRITTEN,
@@ -477,7 +473,6 @@ bool MetricsUtils::IsRootScopeMetric(MetricType type) {
 	case MetricType::PLANNER:
 	case MetricType::PLANNER_BINDING:
 	case MetricType::QUERY_NAME:
-	case MetricType::RESULT_COLLECTOR:
 	case MetricType::ROWS_RETURNED:
 	case MetricType::TOTAL_BYTES_READ:
 	case MetricType::TOTAL_BYTES_WRITTEN:

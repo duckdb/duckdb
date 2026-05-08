@@ -93,7 +93,6 @@ SELECT unnest(res) FROM (
 "PLANNER": "true"
 "PLANNER_BINDING": "true"
 "QUERY_NAME": "true"
-"RESULT_COLLECTOR": "true"
 "RESULT_SET_SIZE": "true"
 "ROWS_RETURNED": "true"
 "SYSTEM_PEAK_BUFFER_MEMORY": "true"
