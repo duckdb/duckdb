@@ -334,16 +334,15 @@ def generate_choice_body_declaration(rule_name, return_type):
 class SeqElement:
     """One classified position in a sequence rule."""
 
-    idx: int
     skip: bool  # True for LiteralNode - no semantic value
     var_name: str = ""
     cpp_type: str = ""
     extraction_lines: List[str] = field(default_factory=list)
 
 
-def _classify_literal(idx):
+def _classify_literal():
     """LITERAL token -> KeywordMatcher -> KeywordParseResult.  No semantic value."""
-    return SeqElement(idx=idx, skip=True)
+    return SeqElement(skip=True)
 
 
 def _classify_reference(name, idx, rule_to_type, excluded_rules):
@@ -357,14 +356,14 @@ def _classify_reference(name, idx, rule_to_type, excluded_rules):
     if name in IDENTIFIER_OVERRIDE_RULES:
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = list_pr.Child<IdentifierParseResult>({idx}).identifier;"]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in excluded_rules:
-        return _classify_literal(idx)
+        return _classify_literal()
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = transformer.Transform<{cpp_type}>(list_pr, {idx});"]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -372,12 +371,12 @@ def _classify_optional_reference(name, idx, rule_to_type, excluded_rules):
     """
     OptionalNode(ReferenceNode) -> OptionalMatcher wrapping a named rule.
     Priority order matches _classify_reference:
-      1. excluded_rules        -> keyword-only optional (Transaction?) -> skip
-      2. IDENTIFIER_OVERRIDE_RULES -> optional identifier, extracted via HasResult()
-      3. rule_to_type          -> optional typed rule, extracted via TransformOptional
+      1. excluded_rules             -> keyword-only optional (Transaction?) -> skip
+      2. IDENTIFIER_OVERRIDE_RULES  -> optional identifier, extracted via HasResult()
+      3. rule_to_type               -> optional typed rule, extracted via TransformOptional
     """
     if name in excluded_rules:
-        return _classify_literal(idx)
+        return _classify_literal()
     var_name = to_snake_case(name)
     if name in IDENTIFIER_OVERRIDE_RULES:
         lines = [
@@ -387,14 +386,14 @@ def _classify_optional_reference(name, idx, rule_to_type, excluded_rules):
             f"\t\t{var_name} = {var_name}_opt.GetResult().Cast<IdentifierParseResult>().identifier;",
             f"\t}}",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         lines = [
             f"\t{cpp_type} {var_name} {{}};",
             f"\ttransformer.TransformOptional(list_pr, {idx}, {var_name});",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -413,14 +412,14 @@ def _classify_parens(inner_node, idx, rule_to_type):
             f"\tauto {var_name} = ExtractResultFromParens(list_pr.GetChild({idx}))"
             f".Cast<IdentifierParseResult>().identifier;",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
     if name in rule_to_type:
         cpp_type = rule_to_type[name]
         lines = [
             f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
             f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
         ]
-        return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
+        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type, extraction_lines=lines)
     return None
 
 
@@ -445,7 +444,7 @@ def _classify_list_macro(inner_node, idx, rule_to_type):
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def _classify_parens_list(inner_list_node, idx, rule_to_type):
@@ -469,7 +468,7 @@ def _classify_parens_list(inner_list_node, idx, rule_to_type):
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def _classify_repeat(node, idx, rule_to_type, optional):
@@ -506,7 +505,7 @@ def _classify_repeat(node, idx, rule_to_type, optional):
             f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
             f"\t}}",
         ]
-    return SeqElement(idx=idx, skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
+    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>", extraction_lines=lines)
 
 
 def _classify_star_repeat(node, idx, rule_to_type):
@@ -524,13 +523,13 @@ def classify_sequence_element(child, idx, rule_to_type, excluded_rules):
     Returns SeqElement or None if the element cannot be auto-generated.
     """
     if isinstance(child, LiteralNode):
-        return _classify_literal(idx)
+        return _classify_literal()
     if isinstance(child, ReferenceNode):
         return _classify_reference(child.name, idx, rule_to_type, excluded_rules)
     if isinstance(child, OptionalNode):
         inner = child.child
         if isinstance(inner, LiteralNode):
-            return _classify_literal(idx)
+            return _classify_literal()
         if isinstance(inner, ReferenceNode):
             return _classify_optional_reference(inner.name, idx, rule_to_type, excluded_rules)
         if isinstance(inner, RepeatNode):
@@ -632,7 +631,7 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
             continue
 
         if is_pure_reference_choice(ast):
-            transformer_alts, identifier_alts, unknown_alts = classify_choice_alternatives(
+            _, identifier_alts, unknown_alts = classify_choice_alternatives(
                 ast.alternatives, rule_to_type
             )
             if unknown_alts:
@@ -669,27 +668,27 @@ def collect_generated(gram_stem, rules, rule_to_type, excluded_rules):
     return GramFileResult(gram_stem, declarations, implementations, registrations, skipped, manual_bodies)
 
 
-def print_output(declarations, implementations, registrations, skipped, manual_bodies, gram_stem):
-    if skipped:
+def print_output(result: GramFileResult):
+    if result.skipped:
         print("=== SKIPPED (nothing generated) ===")
-        for rule_name, reason in skipped:
+        for rule_name, reason in result.skipped:
             print(f"  {rule_name}: {reason}")
         print()
 
-    if manual_bodies:
+    if result.manual_bodies:
         print("=== MANUAL BODY NEEDED (Internal generated, body must be hand-written) ===")
-        for rule_name, reason in manual_bodies:
+        for rule_name, reason in result.manual_bodies:
             print(f"  {rule_name}: {reason}")
         print()
 
     print("=== DECLARATIONS (peg_transformer_generated.hpp) ===")
-    print("".join(declarations))
+    print("".join(result.declarations))
 
-    print(f"=== IMPLEMENTATION (generated/transform_{gram_stem}_generated.cpp) ===")
-    print("".join(implementations))
+    print(f"=== IMPLEMENTATION (generated/transform_{result.gram_stem}_generated.cpp) ===")
+    print("".join(result.implementations))
 
-    print(f"=== REGISTRATION (in Register{gram_stem.capitalize()}() in peg_transformer_factory.cpp) ===")
-    print("".join(registrations))
+    print(f"=== REGISTRATION (in Register{result.gram_stem.capitalize()}() in peg_transformer_factory.cpp) ===")
+    print("".join(result.registrations))
 
 
 def cpp_file_content(implementations):
@@ -722,11 +721,13 @@ def write_cpp_file(implementations, gram_stem):
     print(f"Wrote {cpp_path}")
 
 
-def write_shared_files(all_declarations):
+def write_hpp(all_declarations):
     hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
     hpp_path.write_text(GENERATED_HEADER + "".join(all_declarations))
     print(f"Wrote {hpp_path}")
 
+
+def write_cmake():
     existing_cpp = sorted(p.name for p in generated_dir.glob("*_generated.cpp"))
     cmake_path = generated_dir / "CMakeLists.txt"
     cmake_path.write_text(cmake_content(existing_cpp))
@@ -756,10 +757,8 @@ def process_gram_file(gram_filename, rule_to_type, excluded_rules):
     """Parse a .gram file and classify all its rules into a GramFileResult."""
     gram_stem = gram_filename.removesuffix('.gram')
     gram_path = statements_dir / gram_filename
-    with open(gram_path, 'r') as f:
-        file_content = f.read()
     try:
-        rules = parse_peg_grammar(file_content)
+        rules = parse_peg_grammar(gram_path.read_text())
     except Exception as e:
         raise Exception(f"{gram_filename}: {e}") from None
 
@@ -781,18 +780,18 @@ def main():
 
     if args.write:
         all_declarations = [d for r in results for d in r.declarations]
-        write_shared_files(all_declarations)
+        write_hpp(all_declarations)
         for r in results:
             write_cpp_file(r.implementations, r.gram_stem)
+        write_cmake()
+        for r in results:
             print_manual_steps(r.registrations, r.gram_stem)
     else:
         for r in results:
             print(f"\n{'=' * 60}")
             print(f"  {r.gram_stem}.gram")
             print(f"{'=' * 60}")
-            print_output(
-                r.declarations, r.implementations, r.registrations, r.skipped, r.manual_bodies, gram_stem=r.gram_stem
-            )
+            print_output(r)
 
 
 if __name__ == "__main__":
