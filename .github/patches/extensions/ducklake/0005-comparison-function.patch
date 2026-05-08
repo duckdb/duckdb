@@ -27,3 +27,40 @@ index 3f80866c..15ac1150 100644
 +	                                                    std::move(bound_constant));
  	return make_uniq<ExpressionFilter>(std::move(comparison));
  }
+
+diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
+index c752b712..583b97af 100644
+--- a/src/storage/ducklake_metadata_manager.cpp
++++ b/src/storage/ducklake_metadata_manager.cpp
+@@ -1259,12 +1259,12 @@ string DuckLakeMetadataManager::GenerateFilterPushdown(const TableFilter &filter
+ 		if (!expression_filter.expr) {
+ 			return string();
+ 		}
+ 		auto expr_class = expression_filter.expr->GetExpressionClass();
+-		if (expr_class == ExpressionClass::BOUND_COMPARISON) {
+-			auto &comparison = expression_filter.expr->Cast<BoundComparisonExpression>();
+-			auto &left = *comparison.left;
+-			auto &right = *comparison.right;
+-			ExpressionType comparison_type = comparison.GetExpressionType();
++		if (BoundComparisonExpression::IsComparison(*expression_filter.expr)) {
++			auto &comparison = expression_filter.expr->Cast<BoundFunctionExpression>();
++			auto &left = BoundComparisonExpression::Left(comparison);
++			auto &right = BoundComparisonExpression::Right(comparison);
++			ExpressionType comparison_type = comparison.GetExpressionType();
+ 			const BoundConstantExpression *constant_expr = nullptr;
+ 			if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+ 			    right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
+index 713175d1..ab1c2e5f 100644
+--- a/src/storage/ducklake_multi_file_reader.cpp
++++ b/src/storage/ducklake_multi_file_reader.cpp
+@@ -63,8 +63,7 @@ static void AddSnapshotFilter(BaseFileReader &reader, const ColumnIndex &col_idx
+ 	auto constant = Value::UBIGINT(snapshot_value).DefaultCastAs(col_type);
+ 	auto col_ref = make_uniq<BoundReferenceExpression>(col_type, static_cast<storage_t>(0));
+ 	auto bound_constant = make_uniq<BoundConstantExpression>(std::move(constant));
+-	auto comparison =
+-	    make_uniq<BoundComparisonExpression>(comparison_type, std::move(col_ref), std::move(bound_constant));
++	auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(col_ref), std::move(bound_constant));
+ 	auto filter = make_uniq<ExpressionFilter>(std::move(comparison));
+ 	reader.filters->PushFilter(ProjectionIndex(col_idx.GetPrimaryIndex()), std::move(filter));
+ }
