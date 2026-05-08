@@ -315,11 +315,8 @@ timestamp_t Timestamp::FromString(const string &str, bool use_offset) {
 }
 
 string Timestamp::ToString(timestamp_t timestamp) {
-	if (timestamp == timestamp_t::infinity()) {
-		return Date::PINF.str;
-	}
-	if (timestamp == timestamp_t::ninfinity()) {
-		return Date::NINF.str;
+	if (!timestamp.IsFinite()) {
+		return Date::ToInfinity(timestamp);
 	}
 
 	date_t date;

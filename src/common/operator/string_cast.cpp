@@ -85,10 +85,8 @@ duckdb::string_t StringCast::Operation(uhugeint_t input, StringHeap &heap) {
 
 template <>
 duckdb::string_t StringCast::Operation(date_t input, StringHeap &heap) {
-	if (input == date_t::infinity()) {
-		return heap.AddString(Date::PINF.str);
-	} else if (input == date_t::ninfinity()) {
-		return heap.AddString(Date::NINF.str);
+	if (!input.IsFinite()) {
+		return heap.AddString(Date::ToInfinity(input));
 	}
 	int32_t date[3];
 	Date::Convert(input, date[0], date[1], date[2]);
@@ -156,11 +154,8 @@ duckdb::string_t StringCast::Operation(dtime_ns_t input, StringHeap &heap) {
 
 template <bool HAS_NANOS>
 duckdb::string_t StringFromTimestamp(timestamp_t input, StringHeap &heap) {
-	if (input == timestamp_t::infinity()) {
-		return heap.AddString(Date::PINF.str);
-	}
-	if (input == timestamp_t::ninfinity()) {
-		return heap.AddString(Date::NINF.str);
+	if (!input.IsFinite()) {
+		return heap.AddString(Date::ToInfinity(input));
 	}
 
 	date_t date_entry;
@@ -294,11 +289,8 @@ string_t StringCastTZ::Operation(dtime_tz_t input, StringHeap &heap) {
 
 template <>
 string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap) {
-	if (input == timestamp_t::infinity()) {
-		return heap.AddString(Date::PINF.str);
-	}
-	if (input == timestamp_t::ninfinity()) {
-		return heap.AddString(Date::NINF.str);
+	if (!input.IsFinite()) {
+		return heap.AddString(Date::ToInfinity(input));
 	}
 
 	date_t date_entry;
@@ -336,11 +328,8 @@ string_t StringCastTZ::Operation(timestamp_t input, StringHeap &heap) {
 
 template <>
 string_t StringCastTZ::Operation(timestamp_ns_t input, StringHeap &heap) {
-	if (input == input.infinity()) {
-		return heap.AddString(Date::PINF.str);
-	}
-	if (input == input.ninfinity()) {
-		return heap.AddString(Date::NINF.str);
+	if (!input.IsFinite()) {
+		return heap.AddString(Date::ToInfinity(input));
 	}
 
 	date_t date_entry;
