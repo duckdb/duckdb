@@ -524,6 +524,7 @@ jobs:
       env:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
+        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/extensions/fts.cmake;.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake'
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test_utils;httpfs"
         DISABLE_SANITIZER: 1
         SMOKE_UNITTEST: build/release/test/unittest
