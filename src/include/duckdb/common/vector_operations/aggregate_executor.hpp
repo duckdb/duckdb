@@ -385,8 +385,8 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = source.Values<const STATE_TYPE *>(count);
-		auto tdata = target.Values<STATE_TYPE *>(count);
+		auto sdata = source.Values<const STATE_TYPE *>();
+		auto tdata = target.Values<STATE_TYPE *>();
 
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
@@ -504,7 +504,7 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
-		auto sdata = states.Values<STATE_TYPE *>(count);
+		auto sdata = states.Values<STATE_TYPE *>();
 		;
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValueUnsafe(), aggr_input_data);

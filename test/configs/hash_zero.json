@@ -9,6 +9,7 @@
         "test/optimizer/joins/tpcds_nofail.test",
         "test/fuzzer/duckfuzz/bind_limit_num.test_slow",
         "test/sql/types/enum/test_5983.test",
+        "test/sql/insert/insert_by_name.test",
         "test/sql/insert/insert_from_many_grouping_sets.test",
         "test/sql/subquery/lateral/pg_lateral.test",
         "test/sql/aggregate/aggregates/test_perfect_ht.test",
@@ -19,7 +20,12 @@
         "test/sql/copy/csv/test_8890.test",
         "test/sql/copy/csv/test_15211.test",
         "test/sql/copy/csv/csv_limit_copy.test",
-        "test/sql/aggregate/aggregates/test_mode.test"
+        "test/sql/aggregate/aggregates/test_mode.test",
+        "test/issues/general/test_21431.test",
+        "test/sql/join/inner/test_prefix_range_filter_pushdown.test",
+        "test/sql/join/inner/test_prefix_range_filter_pushdown_strinline.test",
+        "test/sql/settings/operator_memory_limit.test",
+        "test/sql/table_function/duckdb_eviction_queues.test"
       ]
     },
     {

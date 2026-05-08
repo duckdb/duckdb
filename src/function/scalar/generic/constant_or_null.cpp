@@ -54,7 +54,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			auto entries = args.data[idx].Validity(args.size());
+			auto entries = args.data[idx].Validity();
 			if (entries.CanHaveNull()) {
 				result.Flatten();
 				auto &result_mask = FlatVector::ValidityMutable(result);

@@ -19,6 +19,9 @@ public:
 public:
 	BoundComparisonExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 
+	static unique_ptr<Expression> Create(ExpressionType type, unique_ptr<Expression> left,
+	                                     unique_ptr<Expression> right);
+
 	unique_ptr<Expression> left;
 	unique_ptr<Expression> right;
 

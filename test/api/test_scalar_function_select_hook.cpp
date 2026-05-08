@@ -14,7 +14,7 @@ struct IsEvenOperator {
 };
 
 static void IsEvenFunction(DataChunk &args, ExpressionState &, Vector &result) {
-	auto input_data = args.data[0].Values<int32_t>(args.size());
+	auto input_data = args.data[0].Values<int32_t>();
 	auto result_data = FlatVector::Writer<bool>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_val = input_data[i];
@@ -28,7 +28,7 @@ static void IsEvenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 static idx_t IsEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionVector *true_sel,
                                   SelectionVector *false_sel) {
-	auto input_data = args.data[0].Values<int32_t>(args.size());
+	auto input_data = args.data[0].Values<int32_t>();
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;
@@ -51,7 +51,7 @@ static idx_t IsEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionV
 
 static idx_t NullOrEvenSelectFunction(DataChunk &args, ExpressionState &, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
-	auto input_data = args.data[0].Values<int32_t>(args.size());
+	auto input_data = args.data[0].Values<int32_t>();
 
 	idx_t true_count = 0;
 	idx_t false_count = 0;

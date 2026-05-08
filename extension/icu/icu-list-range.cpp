@@ -15,9 +15,9 @@ struct ICUListRange : public ICUDateFunc {
 	class RangeInfoStruct {
 	public:
 		explicit RangeInfoStruct(DataChunk &args_p)
-		    : args(args_p), start_value_data(args.data[0].template Values<timestamp_tz_t>(args.size())),
-		      end_value_data(args.data[1].template Values<timestamp_tz_t>(args.size())),
-		      increment_value_data(args.data[2].template Values<interval_t>(args.size())) {
+		    : args(args_p), start_value_data(args.data[0].template Values<timestamp_tz_t>()),
+		      end_value_data(args.data[1].template Values<timestamp_tz_t>()),
+		      increment_value_data(args.data[2].template Values<interval_t>()) {
 		}
 
 		bool RowIsValid(idx_t row_idx) {

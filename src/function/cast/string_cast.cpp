@@ -41,7 +41,7 @@ static bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastPara
 	auto result_vector_type =
 	    source.GetVectorType() == VectorType::CONSTANT_VECTOR ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR;
 
-	auto source_data = source.Values<string_t>(count);
+	auto source_data = source.Values<string_t>();
 	auto result_data = FlatVector::ScatterWriter<T>(result);
 
 	VectorTryCastData vector_cast_data(result, parameters);
@@ -157,8 +157,8 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 	// set the list size after the child cast, since the cast may have replaced the child buffer
 	ListVector::SetListSize(result, total_list_size);
 	if (!all_converted && parameters.nullify_parent) {
-		auto result_child_validity = result_child.Validity(total_list_size);
-		auto varchar_vector_validity = varchar_vector.Validity(total_list_size);
+		auto result_child_validity = result_child.Validity();
+		auto varchar_vector_validity = varchar_vector.Validity();
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
