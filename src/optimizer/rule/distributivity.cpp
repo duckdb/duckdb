@@ -26,7 +26,7 @@ void DistributivityRule::AddExpressionSet(Expression &expr, expression_set_t &se
 }
 
 unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExpression &conj, idx_t idx,
-                                                             Expression &expr) {
+                                                             const Expression &expr) {
 	auto &child = conj.children[idx];
 	unique_ptr<Expression> result;
 	if (child->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {

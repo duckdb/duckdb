@@ -123,8 +123,6 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE:
 		return PropagateExpression(expr.Cast<BoundAggregateExpression>(), expr_ptr);
-	case ExpressionClass::BOUND_BETWEEN:
-		return PropagateExpression(expr.Cast<BoundBetweenExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CASE:
 		return PropagateExpression(expr.Cast<BoundCaseExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_CONJUNCTION:

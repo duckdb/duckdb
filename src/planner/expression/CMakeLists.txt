@@ -3,7 +3,7 @@ add_library_unity(
   OBJECT
   bound_expression.cpp
   bound_aggregate_expression.cpp
-  bound_between_expression.cpp
+  legacy_bound_between_expression.cpp
   bound_case_expression.cpp
   bound_cast_expression.cpp
   bound_columnref_expression.cpp

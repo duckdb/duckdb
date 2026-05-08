@@ -1284,7 +1284,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	auto write_lock = lock.GetExclusiveLock();
 
 	UnifiedVectorFormat update_format;
-	update_p.ToUnifiedFormat(count, update_format);
+	update_p.ToUnifiedFormat(update_format);
 
 	// update statistics
 	SelectionVector sel;
@@ -1297,7 +1297,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	}
 	if (statistics_update_function == UpdateStringStatistics) {
 		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten(count);
+		update_p.Flatten();
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		auto &validity = FlatVector::ValidityMutable(update_p);
 		for (idx_t i = 0; i < count; i++) {
@@ -1305,7 +1305,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 				update_data[i] = GetStringHeap().AddBlob(update_data[i]);
 			}
 		}
-		update_p.ToUnifiedFormat(count, update_format);
+		update_p.ToUnifiedFormat(update_format);
 	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique

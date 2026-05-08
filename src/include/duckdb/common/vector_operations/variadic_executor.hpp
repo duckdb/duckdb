@@ -114,7 +114,7 @@ private:
 
 			std::array<UnifiedVectorFormat, N> vdata;
 			for (size_t i = 0; i < N; i++) {
-				inputs[i].get().ToUnifiedFormat(count, vdata[i]);
+				inputs[i].get().ToUnifiedFormat(vdata[i]);
 			}
 
 			auto data_ptrs = std::make_tuple(UnifiedVectorFormat::GetData<ARGS>(vdata[Is])...);
@@ -198,7 +198,7 @@ private:
 
 		std::array<UnifiedVectorFormat, N> vdata;
 		for (size_t i = 0; i < N; i++) {
-			inputs[i].get().ToUnifiedFormat(count, vdata[i]);
+			inputs[i].get().ToUnifiedFormat(vdata[i]);
 		}
 
 		auto data_ptrs = std::make_tuple(UnifiedVectorFormat::GetData<ARGS>(vdata[Is])...);

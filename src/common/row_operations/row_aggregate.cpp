@@ -48,6 +48,19 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
                                  DataChunk &payload, idx_t arg_idx, idx_t count) {
+	if (addresses.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (aggr.function.HasStateSimpleUpdateCallback()) {
+			AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
+			aggr.function.GetStateSimpleUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx],
+			                                             aggr_input_data, aggr.child_count,
+			                                             FlatVector::GetData<data_ptr_t>(addresses)[0], payload.size());
+			return;
+		}
+		// FIXME: these are expected to be flat in at least a few places:
+		//  "Test Aggregate Functions C API"
+		//  "Test String Aggregate Function"
+		addresses.Flatten();
+	}
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
 	aggr.function.GetStateUpdateCallback()(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data,
 	                                       aggr.child_count, addresses, count);
@@ -61,7 +74,7 @@ void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFil
 	}
 
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
-	filtered_addresses.Flatten(count);
+	filtered_addresses.Flatten();
 
 	UpdateStates(state, aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
 }

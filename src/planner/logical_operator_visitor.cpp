@@ -235,9 +235,6 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = VisitReplace(expr.Cast<BoundAggregateExpression>(), expression);
 		break;
-	case ExpressionClass::BOUND_BETWEEN:
-		result = VisitReplace(expr.Cast<BoundBetweenExpression>(), expression);
-		break;
 	case ExpressionClass::BOUND_CASE:
 		result = VisitReplace(expr.Cast<BoundCaseExpression>(), expression);
 		break;
@@ -299,11 +296,6 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 // we don't care about coverage here
 // LCOV_EXCL_START
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
-                                                            unique_ptr<Expression> *expr_ptr) {
-	return nullptr;
-}
-
-unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundBetweenExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }

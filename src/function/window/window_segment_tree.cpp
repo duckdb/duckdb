@@ -169,7 +169,7 @@ WindowSegmentTreePart::WindowSegmentTreePart(ArenaAllocator &allocator, const Ag
 	data_ptr_t state_ptr = state.data();
 	D_ASSERT(statef.GetVectorType() == VectorType::FLAT_VECTOR);
 	statef.SetVectorType(VectorType::CONSTANT_VECTOR);
-	statef.Flatten(STANDARD_VECTOR_SIZE);
+	statef.Flatten();
 	auto fdata = FlatVector::GetDataMutable<data_ptr_t>(statef);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		fdata[i] = state_ptr;
@@ -197,7 +197,7 @@ void WindowSegmentTreePart::FlushStates(bool combining) {
 
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	if (combining) {
-		statel.Verify(flush_count);
+		statel.Verify();
 		aggr.function.GetStateCombineCallback()(statel, statep, aggr_input_data, flush_count);
 	} else {
 		auto &scanned = cursor->chunk;

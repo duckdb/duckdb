@@ -111,7 +111,7 @@ unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCh
 void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, idx_t count) {
 	auto &state = state_p.Cast<UncompressedCompressState>();
 	UnifiedVectorFormat vdata;
-	data.ToUnifiedFormat(count, vdata);
+	data.ToUnifiedFormat(vdata);
 
 	idx_t offset = 0;
 	while (count > 0) {

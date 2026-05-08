@@ -54,6 +54,13 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Run only specific jobs in CI (separated by whitespace) and skip the rest.
+  #
+  # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
+  # and the dependent job is also skipped.
+  #
+  # For example, to run only "extensions", use:
+  # OVERRIDE_JOBS: linux-relassert linux-release extensions
 
 jobs:
  prepare:
@@ -263,7 +270,7 @@ jobs:
 
       - name: Install tools
         timeout-minutes: 10
-        run: python3 scripts/ci/retry.py -- make -j4 format_tools
+        run: python3 scripts/ci/retry.py --timeout 2m -- make -j4 format_tools
 
       - name: Check format
         run: |
@@ -304,7 +311,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Fix ASan runtime
       shell: bash
@@ -353,7 +360,7 @@ jobs:
         ref: ${{ needs.prepare.outputs.git_sha }}
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download relassert build artifact
       uses: actions/download-artifact@v8
@@ -475,7 +482,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -502,7 +509,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/ccache-action
       with:
@@ -567,7 +574,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
@@ -602,7 +609,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - name: Install pytest
       timeout-minutes: 10
@@ -637,6 +644,7 @@ jobs:
           dnf install -y \
             ccache       \
             ninja-build  \
+            python3.12   \
             perl-IPC-Cmd
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -703,7 +711,7 @@ jobs:
 
     - name: Install tools
       timeout-minutes: 10
-      run: python3 scripts/ci/retry.py -- make toolsci
+      run: python3 scripts/ci/retry.py --timeout 2m -- make toolsci
 
     - uses: ./.github/actions/cleanup_runner
 
@@ -736,6 +744,7 @@ jobs:
             g++     \
             git     \
             make    \
+            python3 \
             samurai
           git config --global --add safe.directory \"$PWD\"
           make -C \"$PWD\"
@@ -921,7 +930,7 @@ jobs:
         timeout-minutes: 10
         shell: bash
         run: |
-          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache ninja-build zip python3-pip
+          yum install -y perl-IPC-Cmd gcc-toolset-12 gcc-toolset-12-gcc-c++ ccache python3.12 ninja-build zip python3-pip
 
       - uses: ./.github/actions/ccache-action
         with:
@@ -1384,6 +1393,18 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/disable_optimizer.json ./build/release/test/unittest
+
+    - name: test/configs/internal_vector_serialization.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_serialization.json ./build/release/test/unittest
+
+    - name: test/configs/internal_vector_verification.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/internal_vector_verification.json ./build/release/test/unittest
 
     - name: test/configs/force_external.json
       if: success() || failure()

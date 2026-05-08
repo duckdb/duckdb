@@ -189,7 +189,7 @@ public:
 	virtual buffer_ptr<VectorBuffer> SliceWithCache(SelCache &cache, const LogicalType &type,
 	                                                const SelectionVector &sel, idx_t count);
 	//! Create a UnifiedVectorFormat from the buffer's data
-	virtual void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const;
+	virtual void ToUnifiedFormat(UnifiedVectorFormat &format) const;
 	//! Resize the buffer's data allocation
 	virtual void Resize(idx_t current_size, idx_t new_size);
 
