@@ -69,6 +69,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	    layout_ptr->CannotHaveNull() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	predicates.resize(layout_ptr->ColumnCount() - 1, expr_type);
 	row_matcher.Initialize(true, *layout_ptr, predicates);
+
+	state.partitioned_append_state.compute_reverse_partition_sel = true;
+	state.unpartitioned_append_state.compute_reverse_partition_sel = true;
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
@@ -684,7 +687,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
 
 	if (enable_hll) {
-		hll.Update(group_hashes_v, group_hashes_v, groups.size());
+		hll.Update(group_hashes_v);
 	}
 
 	const auto hashes = group_hashes_v.Values<hash_t>();
