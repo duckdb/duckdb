@@ -918,6 +918,15 @@ endfunction()
 # this depends on disable_target_warnings so the order matters
 include(${PROJECT_SOURCE_DIR}/extension/extension_build_tools.cmake)
 
+# These compile definitions/paths are consumed by sources in src/ (e.g. extension_helper.cpp, allocator.cpp),
+# so they must be configured before add_subdirectory(src).
+include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
+add_extension_definitions()
+add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
+add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
+
 if(ENABLE_JEMALLOC AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND NOT FORCE_32_BIT AND OS_NAME STREQUAL "linux" AND NOT EMSCRIPTEN AND NOT CLANG_TIDY AND NOT ANDROID AND NOT ZOS AND NOT BSD AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
   set(JEMALLOC_ENABLED TRUE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ENABLE_JEMALLOC")
