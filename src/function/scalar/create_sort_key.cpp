@@ -162,6 +162,17 @@ struct SortKeyConstantOperator {
 		return sizeof(T);
 	}
 
+	template <bool FLIP_BYTES>
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		Radix::EncodeData<T>(result, input);
+		if (FLIP_BYTES) {
+			for (idx_t b = 0; b < sizeof(T); b++) {
+				result[b] = static_cast<data_t>(~result[b]);
+			}
+		}
+		return sizeof(T);
+	}
+
 	static idx_t Decode(const_data_ptr_t input, Vector &result, TYPE &result_value, bool flip_bytes) {
 		if (flip_bytes) {
 			// descending order - so flip bytes
@@ -191,6 +202,19 @@ struct SortKeyVarcharOperator {
 			result[r] = input_data[r] + 1;
 		}
 		result[input_size] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
+		return input_size + 1;
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		auto input_data = const_data_ptr_cast(input.GetDataUnsafe());
+		auto input_size = input.GetSize();
+		for (idx_t r = 0; r < input_size; r++) {
+			auto encoded_byte = static_cast<data_t>(input_data[r] + 1);
+			result[r] = FLIP_BYTES ? static_cast<data_t>(~encoded_byte) : encoded_byte;
+		}
+		auto delimiter = SortKeyVectorData::STRING_DELIMITER;
+		result[input_size] = FLIP_BYTES ? static_cast<data_t>(~delimiter) : delimiter;
 		return input_size + 1;
 	}
 
@@ -249,6 +273,23 @@ struct SortKeyBlobOperator {
 			}
 		}
 		result[result_offset++] = SortKeyVectorData::STRING_DELIMITER; // null-byte delimiter
+		return result_offset;
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		auto input_data = data_ptr_t(input.GetDataUnsafe());
+		auto input_size = input.GetSize();
+		idx_t result_offset = 0;
+		for (idx_t r = 0; r < input_size; r++) {
+			if (input_data[r] <= 1) {
+				auto escape = SortKeyVectorData::BLOB_ESCAPE_CHARACTER;
+				result[result_offset++] = FLIP_BYTES ? static_cast<data_t>(~escape) : escape;
+			}
+			result[result_offset++] = FLIP_BYTES ? static_cast<data_t>(~input_data[r]) : input_data[r];
+		}
+		auto delimiter = SortKeyVectorData::STRING_DELIMITER;
+		result[result_offset++] = FLIP_BYTES ? static_cast<data_t>(~delimiter) : delimiter;
 		return result_offset;
 	}
 
@@ -493,31 +534,27 @@ struct SortKeyConstructInfo {
 
 static void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chunk, SortKeyConstructInfo &info);
 
-template <class OP, bool ALL_VALID, bool HAS_RESULT_INDEX_OR_SEL>
+template <class OP, bool ALL_VALID_NO_SELS, bool FLIP_BYTES>
 void TemplatedConstructSortKeyInternal(const SortKeyVectorData &vector_data, const SortKeyChunk chunk,
                                        const SortKeyConstructInfo &info) {
 	auto data = UnifiedVectorFormat::GetData<typename OP::TYPE>(vector_data.format);
 	auto &offsets = info.offsets;
 	for (idx_t r = chunk.start; r < chunk.end; r++) {
-		const auto result_index = HAS_RESULT_INDEX_OR_SEL ? chunk.GetResultIndex(r) : r;
-		const auto idx = HAS_RESULT_INDEX_OR_SEL ? vector_data.format.sel->get_index(r) : r;
-		auto &offset = offsets[result_index];
+		const auto result_index = ALL_VALID_NO_SELS ? r : chunk.GetResultIndex(r);
+		const auto idx = ALL_VALID_NO_SELS ? r : vector_data.format.sel->get_index(r);
+		auto offset = offsets[result_index];
 		auto result_ptr = info.result_data[result_index];
-		if (!ALL_VALID && !vector_data.format.validity.RowIsValid(idx)) {
+		if (!ALL_VALID_NO_SELS && !vector_data.format.validity.RowIsValidUnsafe(idx)) {
 			// NULL value - write the null byte and skip
 			result_ptr[offset++] = vector_data.null_byte;
+			offsets[result_index] = offset;
 			continue;
 		}
 		// valid value - write the validity byte
 		result_ptr[offset++] = vector_data.valid_byte;
-		idx_t encode_len = OP::Encode(result_ptr + offset, data[idx]);
-		if (info.flip_bytes) {
-			// descending order - so flip bytes
-			for (idx_t b = offset; b < offset + encode_len; b++) {
-				result_ptr[b] = static_cast<data_t>(~result_ptr[b]);
-			}
-		}
+		idx_t encode_len = OP::template Encode<FLIP_BYTES>(result_ptr + offset, data[idx]);
 		offset += encode_len;
+		offsets[result_index] = offset;
 	}
 }
 
@@ -526,18 +563,17 @@ void TemplatedConstructSortKey(SortKeyVectorData &vector_data, SortKeyChunk chun
 	if (chunk.start == chunk.end) {
 		return;
 	}
-	if (vector_data.format.validity.CannotHaveNull()) {
-		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
-			TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
-		} else {
-			TemplatedConstructSortKeyInternal<OP, true, true>(vector_data, chunk, info);
-		}
+	const auto all_valid = vector_data.format.validity.CannotHaveNull();
+	const auto has_sel = vector_data.format.sel->IsSet();
+	const auto all_valid_no_sels = all_valid && !chunk.has_result_index && !has_sel;
+	if (all_valid_no_sels && !info.flip_bytes) {
+		TemplatedConstructSortKeyInternal<OP, true, false>(vector_data, chunk, info);
+	} else if (all_valid_no_sels) {
+		TemplatedConstructSortKeyInternal<OP, true, true>(vector_data, chunk, info);
+	} else if (!info.flip_bytes) {
+		TemplatedConstructSortKeyInternal<OP, false, false>(vector_data, chunk, info);
 	} else {
-		if (!chunk.has_result_index && !vector_data.format.sel->IsSet()) {
-			TemplatedConstructSortKeyInternal<OP, false, false>(vector_data, chunk, info);
-		} else {
-			TemplatedConstructSortKeyInternal<OP, false, true>(vector_data, chunk, info);
-		}
+		TemplatedConstructSortKeyInternal<OP, false, true>(vector_data, chunk, info);
 	}
 }
 
