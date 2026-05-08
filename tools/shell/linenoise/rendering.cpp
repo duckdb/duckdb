@@ -910,12 +910,12 @@ void Linenoise::RefreshMultiLine() {
 	AppendBuffer append_buffer;
 	if (old_rows > old_cursor_rows) {
 		Linenoise::Log("go down %d\n", old_rows - old_cursor_rows);
-		snprintf(seq, 64, "\x1b[%lluB", old_rows - old_cursor_rows);
+		snprintf(seq, 64, "\x1b[%luB", old_rows - old_cursor_rows);
 		append_buffer.Append(seq);
 	}
 
 	/* Now for every row clear it, go up. */
-	for (int j = 0; j + 1 < old_rows; j++) {
+	for (idx_t j = 0; j + 1 < old_rows; j++) {
 		Linenoise::Log("clear+up\n");
 		append_buffer.Append("\r\x1b[0K\x1b[1A");
 	}
