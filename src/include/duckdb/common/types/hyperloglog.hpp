@@ -111,7 +111,8 @@ public:
 			InsertElement(hashes[0]);
 		} else {
 			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			for (idx_t i = 0; i < hash_vec.size(); ++i) {
+			const auto count = hash_vec.size();
+			for (idx_t i = 0; i < count; ++i) {
 				InsertElement(hashes[i]);
 			}
 		}
