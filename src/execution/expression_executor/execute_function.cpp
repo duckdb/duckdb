@@ -293,27 +293,7 @@ idx_t ExpressionExecutor::Select(const BoundFunctionExpression &expr, Expression
 	}
 	arguments.SetCardinality(count);
 	arguments.Verify(context);
-	if (!sel) {
-		return expr.function.GetSelectCallback()(arguments, *state, nullptr, true_sel, false_sel);
-	}
-	// Children were executed with `sel`, producing pre-selected flat vectors valid at indices 0..count-1.
-	// Pass the incremental sel to the callback so it indexes these flat vectors correctly (not with the
-	// original `sel` indices which could be out of bounds for the pre-selected buffers).
-	// Then remap the callback's 0-based output indices back to the original sel indices.
-	idx_t result_count = expr.function.GetSelectCallback()(arguments, *state, FlatVector::IncrementalSelectionVector(),
-	                                                       true_sel, false_sel);
-	if (true_sel) {
-		for (idx_t i = 0; i < result_count; i++) {
-			true_sel->set_index(i, sel->get_index(true_sel->get_index(i)));
-		}
-	}
-	if (false_sel) {
-		idx_t false_count = count - result_count;
-		for (idx_t i = 0; i < false_count; i++) {
-			false_sel->set_index(i, sel->get_index(false_sel->get_index(i)));
-		}
-	}
-	return result_count;
+	return expr.function.GetSelectCallback()(arguments, *state, sel, true_sel, false_sel);
 }
 
 } // namespace duckdb
