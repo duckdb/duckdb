@@ -549,6 +549,9 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 	if (skip_lookups) {
 		return false;
 	}
+	if (sizeof(uintptr_t) < sizeof(uint64_t)) {
+		return false;
+	}
 	ClusteredAggr clustered;
 	if (ht_offsets_valid) {
 		if (capacity >= ClusteredAggr::MAX_GID_COUNT) {
