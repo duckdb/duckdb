@@ -76,8 +76,8 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 			TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, state.partition_sel, actual_append_count);
 		}
 
-		BuildBufferSpace(state);
 		// Build the buffer space
+		BuildBufferSpace(state);
 
 		// Now scatter everything in one go
 		partitions[0]->Scatter(state.chunk_state, input, state.partition_sel, actual_append_count);

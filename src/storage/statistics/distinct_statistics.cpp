@@ -43,7 +43,7 @@ void DistinctStatistics::UpdateInternal(Vector &new_data, idx_t count, Vector &h
 	sample_count += count;
 	VectorOperations::Hash(new_data, hashes, count);
 
-	log->Update(hashes);
+	log->Update(new_data, hashes, count);
 }
 
 string DistinctStatistics::ToString() const {

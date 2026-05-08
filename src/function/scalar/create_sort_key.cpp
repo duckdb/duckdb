@@ -24,11 +24,12 @@ struct SortKeyBindData : public FunctionData {
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<SortKeyBindData>();
-		return modifiers == other.modifiers;
+		return modifiers == other.modifiers && all_constant == other.all_constant;
 	}
 	unique_ptr<FunctionData> Copy() const override {
 		auto result = make_uniq<SortKeyBindData>();
 		result->modifiers = modifiers;
+		result->all_constant = all_constant;
 		return std::move(result);
 	}
 };
