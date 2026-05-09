@@ -964,21 +964,26 @@ static RewrittenMappedExpression RewriteMappedValueExpression(const Expression &
 static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, const MultiFileIndexMapping &mapping,
                                                       const LogicalType &target_type) {
 	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comparison = expr.Cast<BoundComparisonExpression>();
-		if (comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		if (!BoundComparisonExpression::IsComparison(expr)) {
 			return nullptr;
 		}
-		auto lhs = RewriteMappedValueExpression(*comparison.left, mapping, target_type);
+		auto &comparison = expr.Cast<BoundFunctionExpression>();
+		auto &left = BoundComparisonExpression::Left(comparison);
+		auto &right = BoundComparisonExpression::Right(comparison);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return nullptr;
+		}
+		auto lhs = RewriteMappedValueExpression(left, mapping, target_type);
 		if (!lhs.expr || !lhs.type) {
 			return nullptr;
 		}
-		auto constant = comparison.right->Cast<BoundConstantExpression>().value;
+		auto constant = right.Cast<BoundConstantExpression>().value;
 		if (!TryCastConstant(constant, *lhs.type)) {
 			return nullptr;
 		}
-		return make_uniq<BoundComparisonExpression>(comparison.GetExpressionType(), std::move(lhs.expr),
-		                                            make_uniq<BoundConstantExpression>(std::move(constant)));
+		return BoundComparisonExpression::Create(comparison.GetExpressionType(), std::move(lhs.expr),
+		                                         make_uniq<BoundConstantExpression>(std::move(constant)));
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
@@ -1108,7 +1113,7 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		}
 		auto lhs = make_uniq<BoundReferenceExpression>(target_type, 0ULL);
 		auto rhs = make_uniq<BoundConstantExpression>(std::move(new_constant));
-		return make_uniq<ExpressionFilter>(make_uniq<BoundComparisonExpression>(
+		return make_uniq<ExpressionFilter>(BoundComparisonExpression::Create(
 		    dynamic_filter.filter_data->comparison_type, std::move(lhs), std::move(rhs)));
 	}
 	default:

@@ -98,6 +98,11 @@ buffer_ptr<VectorBuffer> StandardVectorBuffer::ConstantSliceInternal(const Logic
 
 buffer_ptr<VectorBuffer> StandardVectorBuffer::SliceInternal(const LogicalType &type, const SelectionVector &sel,
                                                              idx_t count) {
+	if (!sel.IsSet()) {
+		// Incremental selection (rows 0..count-1): produce a flat offset-based sub-view
+		// to avoid creating a DictionaryBuffer with a null selection vector.
+		return SliceInternal(type, idx_t(0), count);
+	}
 	Vector child_vector(type, shared_from_this());
 	auto entry = make_shared_ptr<DictionaryEntry>(std::move(child_vector));
 	return make_buffer<DictionaryBuffer>(sel, count, std::move(entry));

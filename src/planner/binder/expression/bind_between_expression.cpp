@@ -55,10 +55,10 @@ BindResult ExpressionBinder::BindExpression(BetweenExpression &expr, idx_t depth
 		// the expression does not have side effects and can be copied: create two comparisons
 		// the reason we do this is that individual comparisons are easier to handle in optimizers
 		// if both comparisons remain they will be folded together again into a single BETWEEN in the optimizer
-		auto left_compare = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
-		                                                         input->Copy(), std::move(lower));
-		auto right_compare = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                                          std::move(input), std::move(upper));
+		auto left_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+		                                                      input->Copy(), std::move(lower));
+		auto right_compare = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                       std::move(input), std::move(upper));
 		return BindResult(make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
 		                                                        std::move(left_compare), std::move(right_compare)));
 	} else {

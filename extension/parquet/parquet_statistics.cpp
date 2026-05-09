@@ -646,14 +646,17 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 }
 
 static bool HasFilterConstants(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL &&
-		    comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = comp.right->Cast<BoundConstantExpression>();
-			return !constant.value.IsNull();
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			return false;
 		}
-		return false;
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
+		return !constant.value.IsNull();
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -736,13 +739,16 @@ static uint64_t ValueXXH64(const Value &constant) {
 }
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL ||
-		    comp.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return false;
 		}
-		auto &constant = comp.right->Cast<BoundConstantExpression>();
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
 		D_ASSERT(!constant.value.IsNull());
 		auto hash = ValueXXH64(constant.value);
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
