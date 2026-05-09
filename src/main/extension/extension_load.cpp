@@ -694,7 +694,7 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 		return;
 	}
 
-	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
+	throw IOException("Unknown ABI type of value '%d' for extension '%s'",
 	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
 #endif
 }
