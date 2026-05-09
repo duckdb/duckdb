@@ -59,3 +59,46 @@ SELECT list(c2) over(partition BY c1) AS "c3"
 QUALIFY "c3".len() = 1;
 ----
 [Masters]
+
+# Issue #20305: alias should take priority over column when names match in QUALIFY.
+# lead(n)=[2, NULL]; alias `n` should resolve to lead, so QUALIFY n IS NOT NULL keeps only the first row.
+query I
+FROM VALUES (1), (2) AS t(n)
+SELECT lead(n) OVER() AS n
+QUALIFY n IS NOT NULL;
+----
+2
+
+# Same as above with the prefix-alias syntax.
+query I
+FROM VALUES (1), (2) AS t(n)
+SELECT n: lead(n) OVER()
+QUALIFY n IS NOT NULL;
+----
+2
+
+# Explicit table prefix bypasses alias and references the FROM column.
+query I
+FROM VALUES (1), (2) AS t(n)
+SELECT lead(n) OVER() AS n
+QUALIFY t.n IS NOT NULL
+ORDER BY t.n;
+----
+2
+NULL
+
+# Explicit alias prefix continues to resolve to the SELECT alias.
+query I
+FROM VALUES (1), (2) AS t(n)
+SELECT lead(n) OVER() AS n
+QUALIFY alias.n IS NOT NULL;
+----
+2
+
+# Comparison: when alias name does not collide, behavior is unchanged.
+query I
+FROM VALUES (1), (2) AS t(n)
+SELECT lead(n) OVER() AS m
+QUALIFY m IS NOT NULL;
+----
+2

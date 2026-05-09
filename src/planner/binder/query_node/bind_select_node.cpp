@@ -551,7 +551,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
 		QualifyBinder qualify_binder(*this, context, result, info);
-		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+		ExpressionBinder::QualifyColumnNames(qualify_binder, statement.qualify);
 		result.qualify = qualify_binder.Bind(statement.qualify);
 		if (qualify_binder.HasBoundColumns()) {
 			if (qualify_binder.BoundAggregates()) {
