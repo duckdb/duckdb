@@ -19,11 +19,9 @@ class Vector;
 //! Clustered-aware kernels can use per-run accumulation; everyone else keeps the
 //! regular scatter path over input-order addresses.
 struct ClusteredAggr {
-	static constexpr idx_t HASH_RUNLENGTH_THRESHOLD = 16;
-	static constexpr idx_t MIXED_RUNLENGTH_THRESHOLD = 8;
-	static constexpr idx_t MERGE_RUNLENGTH_THRESHOLD = 4;
+	static constexpr idx_t RUNLENGTH_THRESHOLD = 4;
 	static constexpr idx_t MAX_RUNS = STANDARD_VECTOR_SIZE;
-	static constexpr idx_t MAX_HOT_KEYS = 15;
+	static constexpr idx_t MAX_HOT_KEYS = 32;
 	static constexpr idx_t HASHTAB_LOG2 = 11;
 	static constexpr idx_t HASHTAB_SZ = idx_t(1) << HASHTAB_LOG2;
 	static constexpr idx_t MAX_GID_COUNT = idx_t(1) << 32;

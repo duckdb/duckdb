@@ -30,7 +30,6 @@ namespace duckdb {
 // Slot bitfield widths (implementation detail)
 constexpr int SLOT_GRP_BITS = 13;
 constexpr int SLOT_CURSOR_BITS = 64 - 32 - SLOT_GRP_BITS; // 19 bits
-static_assert(SLOT_GRP_BITS + SLOT_CURSOR_BITS + 32 == 64, "Slot bitfields must sum to 64");
 static_assert((1 << SLOT_GRP_BITS) >= STANDARD_VECTOR_SIZE, "Group IDs must be able to address vectorsize");
 
 struct Slot { // really just a 64-bits integer
@@ -69,16 +68,16 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	st1.tab = reinterpret_cast<Slot *>(slots);
 	st2.tab = reinterpret_cast<Slot *>(slots + HASHTAB_SZ);
 	st1.arena = st2.arena = arena;
-	st1.seq = arena + (MAX_HOT_KEYS + 1) * HALF_VEC;
-	st2.seq = arena + (MAX_HOT_KEYS + 2) * HALF_VEC;
+	st1.seq = arena + (MAX_HOT_KEYS + 0) * HALF_VEC;
+	st2.seq = arena + (MAX_HOT_KEYS + 1) * HALF_VEC;
 
-	auto finish_run = [&](SlotTab &st, const Slot s, idx_t threshold) -> uint64_t {
+	auto finish_run = [&](SlotTab &st, const Slot s) -> uint64_t {
 		const idx_t cnt = static_cast<idx_t>((st.arena + s.val.bitfields.cursor) - group_runs[s.val.bitfields.idx].sel);
 		group_runs[s.val.bitfields.idx].count = cnt;
 		if (s.val.bitfields.idx >= hot_groups) {
 			st.seq += cnt; // sequential runs sequentially allocate from one buffer
 		}
-		if (cnt >= threshold) {
+		if (cnt >= RUNLENGTH_THRESHOLD) {
 			tuples_in_large += cnt;
 		}
 		return s.val.bitfields.cursor;
@@ -86,7 +85,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 
 	auto free_slot = [&](SlotTab &st, uint64_t hash) {
 		if (st.tab[hash].val.i64 != FREE_SLOT) {
-			finish_run(st, st.tab[hash], HASH_RUNLENGTH_THRESHOLD);
+			finish_run(st, st.tab[hash]);
 			st.tab[hash].val.i64 = FREE_SLOT;
 		}
 	};
@@ -104,7 +103,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 		if (DUCKDB_UNLIKELY(s.val.i64 == FREE_SLOT)) { // hash slot free?
 			s = new_run(st, gid, n_group_runs * HALF_VEC);
 		} else if (DUCKDB_UNLIKELY(s.val.bitfields.gid != gid)) { // hash collision? overwrite!
-			s = new_run(st, gid, finish_run(st, s, HASH_RUNLENGTH_THRESHOLD));
+			s = new_run(st, gid, finish_run(st, s));
 		}
 		st.arena[s.val.bitfields.cursor] = pos; // append pos to run
 		s.val.i64++; // this is really val.bitfields.cursor++ but without bit-extraction overhead
@@ -115,7 +114,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 		if (s.val.bitfields.idx < hot_groups) {
 			st.tab[slot_hash(s.val.bitfields.gid)] = s; // store back hot slot in HT
 		} else {
-			finish_run(st, s, MERGE_RUNLENGTH_THRESHOLD); // finish non-hot (i.e. sequential) run
+			finish_run(st, s); // finish non-hot (i.e. sequential) run
 		}
 	};
 
@@ -137,69 +136,57 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 		}
 	};
 
-	auto only_merge = [&](SlotTab &st, Slot cur, sel_t lo, sel_t hi) {
-		for (sel_t pos = lo; pos < hi; pos++) {
-			uint64_t gid = group_ids[pos];
-			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gid)) {
-				flush(st, cur);
-				cur = new_run(st, gid, static_cast<uint64_t>(st.seq - st.arena));
-			}
-			st.arena[cur.val.bitfields.cursor] = pos; // append pos to run
-			cur.val.i64++; // this is really val.bitfields.cursor++ but without bit-extraction overhead
-		}
-		if (lo < hi) {
-			flush(st, cur);
-		}
-	};
-
 	auto free_table = [&](SlotTab &st) {
 		for (sel_t i = 0; i < hot_groups; i++) {
 			free_slot(st, slot_hash(group_runs[i].gid));
 		}
 	};
 
-	// start with hash-based algorithm, using two cursors and two hashtables (for higher IPC)
-	// ..but, first run an instrumented version that counts sequential hits on the first 3%
+	// first we do a short instrumented hash-loop (first 6%) that detects sequential runs
 	Slot cur1(~0ULL, ~0ULL, ~0ULL);
-	Slot cur2(~0ULL, ~0ULL, ~0ULL);
-	idx_t miss1 = 0, miss2 = 0;
-	sel_t pos;
-	const sel_t half = count / 2, sample = count / 16;
+	const sel_t sample = count / 16;
+	sel_t miss = 0, pos;
 	D_ASSERT(sample >= 32);
 	for (pos = 0; pos < sample && n_group_runs < MAX_HOT_KEYS; pos++) {
 		uint64_t gid1 = group_ids[pos];
-		uint64_t gid2 = group_ids[pos + half];
-		miss1 += (cur1.val.bitfields.gid != gid1);
-		miss2 += (cur2.val.bitfields.gid != gid2);
+		miss += (cur1.val.bitfields.gid != gid1);
 		cur1 = hash_store(st1, gid1, pos);
-		cur2 = hash_store(st2, gid2, pos + half);
 	}
-	if (miss1 + miss2 > n_group_runs + 2) {
-		// continue with the hash-based strategy that works best when there are <16 groups
-		for (; pos < half && n_group_runs < MAX_HOT_KEYS; pos++) {
+	hot_groups = n_group_runs;
+	if (miss > n_group_runs + 1) {
+		// hash-strategy, using two cursors and two hashtables (for higher IPC)
+		Slot cur2(~0ULL, ~0ULL, ~0ULL);
+		const sel_t start = pos;
+		const sel_t half = (count - start) / 2;
+		const sel_t mid = start + half;
+		for (; pos < mid && n_group_runs < (MAX_HOT_KEYS - 1); pos++) {
 			uint64_t gid1 = group_ids[pos];
 			uint64_t gid2 = group_ids[pos + half];
 			cur1 = hash_store(st1, gid1, pos);
 			cur2 = hash_store(st2, gid2, pos + half);
 		}
-		hot_groups = n_group_runs; // hash table will be getting too full, switch strategy
+		hot_groups = n_group_runs; // too many random hot-keys to profit, switch to a mixed strategy
 
-		// still do hash-lookups (for hot-keys), but do not insert anymore; just detect runs
-		hash_merge(st1, cur1, pos, half);
-		hash_merge(st2, cur2, half + pos, count);
-	} else {
-		// almost fully clustered sequence!
-		hot_groups = n_group_runs; // for free_table to work properly
-
-		// forget the hash table, just look for sequential gids
-		only_merge(st1, cur1, pos, half);
-		only_merge(st2, cur2, half + pos, count);
+		// mixed strategy : still do hash-lookups (for hot-keys), but do not insert new keys; just detect runs
+		hash_merge(st1, cur1, pos, mid);
+		hash_merge(st2, cur2, pos + half, count);
+	} else if (pos < count) {
+		// merge strategy: forget the hash table(s) -- treat this as a fully clustered sequence
+		for (; pos < count; pos++) {
+			uint64_t gid = group_ids[pos];
+			if (DUCKDB_UNLIKELY(cur1.val.bitfields.gid != gid)) {
+				flush(st1, cur1);
+				cur1 = new_run(st1, gid, static_cast<uint64_t>(st1.seq - st1.arena));
+			}
+			st1.arena[cur1.val.bitfields.cursor] = pos; // append pos to run
+			cur1.val.i64++; // this is really val.bitfields.cursor++ but without bit-extraction overhead
+		}
+		flush(st1, cur1);
 	}
 	free_table(st1);
 	free_table(st2);
 	cached_dict_sel = nullptr;
-	bool ok = (2 * tuples_in_large >= count);
-	return ok;
+	return (2 * tuples_in_large >= count); // success is "half of the tuples is in a long run"
 }
 
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {
@@ -248,7 +235,7 @@ const sel_t *ClusteredAggr::ClusterIter(const Vector &input, idx_t count) const 
 }
 
 void ClusteredAggrState::Initialize() {
-	arena = make_unsafe_uniq_array_uninitialized<sel_t>((ClusteredAggr::MAX_HOT_KEYS + 3) * STANDARD_VECTOR_SIZE / 2);
+	arena = make_unsafe_uniq_array_uninitialized<sel_t>((ClusteredAggr::MAX_HOT_KEYS / 2 + 1) * STANDARD_VECTOR_SIZE);
 	slots = make_unsafe_uniq_array_uninitialized<uint64_t>(2 * ClusteredAggr::HASHTAB_SZ);
 	std::fill_n(slots.get(), 2 * ClusteredAggr::HASHTAB_SZ, ClusteredAggr::FREE_SLOT);
 	skipped_opportunities = 0;
