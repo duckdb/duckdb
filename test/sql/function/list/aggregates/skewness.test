@@ -15,11 +15,11 @@ NULL
 statement ok
 CREATE TABLE skew AS SELECT LIST(10) AS i FROM range(5) t1(i)
 
-# constant value
+# constant value (zero variance → NULL, since skewness is mathematically undefined)
 query I
 select list_skewness (i) from skew
 ----
-NAN
+NULL
 
 query I
 select list_skewness ([1,2])
