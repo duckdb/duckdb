@@ -106,3 +106,60 @@ query I
 EXECUTE v1('Hello World')
 ----
 hello
+
+# Issue #17788: parser-level rewrites must apply through dot-chaining as well.
+# These functions (coalesce, ifnull, if, try, construct_array, date, unpack) have no
+# scalar-function counterpart, so x.<name>(...) must be rewritten the same way as <name>(x, ...).
+
+query I
+SELECT col.ifnull('b') FROM (SELECT 'a' AS col)
+----
+a
+
+query I
+SELECT col.ifnull('b') FROM (SELECT NULL::VARCHAR AS col)
+----
+b
+
+query I
+SELECT col.coalesce('b') FROM (SELECT 'a' AS col)
+----
+a
+
+query I
+SELECT col.coalesce('b', 'c') FROM (SELECT NULL::VARCHAR AS col)
+----
+b
+
+# col.len() = 1, then 1.coalesce('b') = 1 (cast to first non-null result type)
+query I
+SELECT col.len().coalesce(99) FROM (SELECT 'a' AS col)
+----
+1
+
+# Wrong number of arguments to IFNULL must error consistently in both paths.
+statement error
+SELECT col.ifnull('a', 'b') FROM (SELECT 'a' AS col)
+----
+Wrong number of arguments to IFNULL
+
+statement error
+SELECT col.len().ifnull('b','c') FROM (SELECT 'a' AS col)
+----
+Wrong number of arguments to IFNULL
+
+# Other parser-level rewrites should also work through dot-chaining.
+query I
+SELECT (TRUE).if(1, 2)
+----
+1
+
+query I
+SELECT (FALSE).if(1, 2)
+----
+2
+
+query I
+SELECT ('2024-01-15').date()
+----
+2024-01-15
