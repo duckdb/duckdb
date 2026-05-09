@@ -12,6 +12,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 
@@ -86,6 +87,9 @@ private:
 	unsafe_unique_ptr<BlockQueue> untouched;
 	//! Touched by block IDs
 	unsafe_unique_ptr<BlockQueue> touched;
+
+	//! Token used to indicate whether current BlockAllocator is alive.
+	shared_ptr<atomic<bool>> alive_token;
 };
 
 } // namespace duckdb
