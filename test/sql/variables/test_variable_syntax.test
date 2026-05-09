@@ -1,0 +1,152 @@
+# name: test/sql/variables/test_variable_syntax.test
+# description: Test $variable syntax as shorthand for getvariable()
+# group: [variables]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET VARIABLE animal = 'duck'
+
+query I
+SELECT $animal
+----
+duck
+
+# $variable and getvariable() return the same value
+query I
+SELECT $animal = getvariable('animal')
+----
+true
+
+statement ok
+SET VARIABLE x = 42
+
+query I
+SELECT $x + 1
+----
+43
+
+statement ok
+SET VARIABLE greeting = 'hello'
+
+query II
+SELECT $x, $greeting
+----
+42	hello
+
+statement ok
+SET VARIABLE animal = 'goose'
+
+query I
+SELECT $animal
+----
+goose
+
+# RESET clears the variable — $variable should fail without a value
+statement ok
+RESET VARIABLE animal
+
+statement error
+SELECT $animal
+----
+Values were not provided
+
+# $variable with non-existent variable gives a clear error
+statement error
+SELECT $does_not_exist
+----
+Values were not provided
+
+# PREPARE with $param — variable serves as default value
+statement ok
+SET VARIABLE multiplier = 10
+
+statement ok
+PREPARE stmt_default AS SELECT $multiplier * $x AS result
+
+query I
+EXECUTE stmt_default
+----
+420
+
+# EXECUTE with explicit params — named params take precedence over variables
+query I
+EXECUTE stmt_default(multiplier := 2, x := 5)
+----
+10
+
+# EXECUTE with one explicit param, one from variable
+query I
+EXECUTE stmt_default(multiplier := 3)
+----
+126
+
+# EXECUTE with other param explicitly set, the remaining comes from variable
+query I
+EXECUTE stmt_default(x := 1)
+----
+10
+
+# Change variable, re-execute without params — picks up new value
+statement ok
+SET VARIABLE multiplier = 100
+
+query I
+EXECUTE stmt_default
+----
+4200
+
+# named params override even after variable was changed
+query I
+EXECUTE stmt_default(multiplier := 1, x := 1)
+----
+1
+
+# $variable syntax in WHERE clause
+statement ok
+CREATE TABLE t (i INTEGER)
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3), (4), (5)
+
+statement ok
+SET VARIABLE threshold = 3
+
+query I
+SELECT i FROM t WHERE i > $threshold ORDER BY i
+----
+4
+5
+
+query I
+SELECT count(*) FROM t WHERE i <= $threshold
+----
+3
+
+# PREPARE using $variable in WHERE
+statement ok
+PREPARE filter_stmt AS SELECT i FROM t WHERE i > $threshold ORDER BY i
+
+query I
+EXECUTE filter_stmt
+----
+4
+5
+
+query I
+EXECUTE filter_stmt(threshold := 1)
+----
+2
+3
+4
+5
+
+statement ok
+SET VARIABLE limit_val = 2
+
+query I
+SELECT i FROM t ORDER BY i LIMIT $limit_val
+----
+1
+2

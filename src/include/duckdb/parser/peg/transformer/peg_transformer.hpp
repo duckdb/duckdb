@@ -191,6 +191,7 @@ public:
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
 
 	bool in_window_definition = false;
+	bool has_anonymous_parameters = false;
 
 	friend class StackChecker<PEGTransformer>;
 	idx_t stack_depth = 0;

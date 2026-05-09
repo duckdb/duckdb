@@ -126,7 +126,7 @@ public:
 		for (auto &val : missing_set) {
 			missing_values.push_back(val);
 		}
-		return StringUtil::Format("Values were not provided for the following prepared statement parameters: %s",
+		return StringUtil::Format("Values were not provided for the following parameters: %s",
 		                          StringUtil::Join(missing_values, ", "));
 	}
 

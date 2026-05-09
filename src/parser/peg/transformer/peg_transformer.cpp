@@ -43,7 +43,9 @@ void PEGTransformer::SetParam(const string &identifier, idx_t index, PreparedPar
 
 void PEGTransformer::ClearParameters() {
 	prepared_statement_parameter_index = 0;
+	last_param_type = PreparedParamType::INVALID;
 	named_parameter_map.clear();
+	has_anonymous_parameters = false;
 }
 
 void PEGTransformer::Clear() {
