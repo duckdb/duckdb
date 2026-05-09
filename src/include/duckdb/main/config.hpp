@@ -153,6 +153,8 @@ struct DBConfigOptions {
 	bool variant_legacy_encoding = false;
 	//! Metadata from DuckDB callers
 	string custom_user_agent;
+	//! HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)
+	string http_proxy;
 	//! The default block header size for new duckdb database files.
 	idx_t default_block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
