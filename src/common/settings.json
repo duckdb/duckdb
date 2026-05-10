@@ -353,6 +353,13 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_serializer",
         "description": "DEBUG SETTING: verify logical plan serializer",
         "type": "BOOLEAN",

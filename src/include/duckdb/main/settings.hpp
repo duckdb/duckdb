@@ -579,6 +579,16 @@ struct DebugVerifyBlocksSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct DebugVerifyColumnBindingsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verify_column_bindings";
+	static constexpr const char *Description = "DEBUG SETTING: run extra internal verification of column bindings";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifySerializerSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_serializer";
