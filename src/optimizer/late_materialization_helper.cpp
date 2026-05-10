@@ -9,6 +9,7 @@ unique_ptr<LogicalGet> LateMaterializationHelper::CreateLHSGet(const LogicalGet 
 	                                     rhs.names, rhs.virtual_columns);
 	new_get->GetMutableColumnIds() = rhs.GetColumnIds();
 	new_get->projection_ids = rhs.projection_ids;
+	new_get->projection_pushdown_done = rhs.projection_pushdown_done;
 	new_get->parameters = rhs.parameters;
 	new_get->named_parameters = rhs.named_parameters;
 	new_get->input_table_types = rhs.input_table_types;

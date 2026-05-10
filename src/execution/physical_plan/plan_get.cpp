@@ -203,6 +203,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	    std::move(op.parameters), std::move(op.virtual_columns));
 	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
 	cast_table_scan.dynamic_filters = op.dynamic_filters;
+	cast_table_scan.projection_pushdown_done = op.projection_pushdown_done;
 	if (filter) {
 		filter->children.push_back(table_scan);
 		return *filter;

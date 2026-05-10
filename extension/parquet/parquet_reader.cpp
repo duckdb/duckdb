@@ -1309,6 +1309,14 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				state.offset_in_group = group.num_rows;
 				return;
 			}
+			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+				for (idx_t sf_idx = 0; sf_idx < state.scan_filters.size(); sf_idx++) {
+					if (idx_t(state.scan_filters[sf_idx].filter_idx) == idx_t(col_idx)) {
+						state.filter_always_true[sf_idx] = true;
+						break;
+					}
+				}
+			}
 		}
 	}
 
@@ -1338,8 +1346,9 @@ idx_t ParquetReader::GetDataSize() const {
 	return data_size;
 }
 
-ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter)
-    : filter_idx(filter_idx), filter(filter) {
+ParquetScanFilter::ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter,
+                                     bool column_is_filter_only)
+    : filter_idx(filter_idx), filter(filter), column_is_filter_only(column_is_filter_only) {
 	filter_state = TableFilterState::Initialize(context, filter);
 }
 
@@ -1367,12 +1376,23 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		state.file_handle = fs.OpenFile(context, file, flags);
 	}
 	state.scan_filters.clear();
+	state.filter_always_true.clear();
 	if (filters) {
 		state.adaptive_filter_cache.InitializeAdaptiveFilter(*filters, filter_global_indices, context.logger,
 		                                                     file.path);
-		for (auto &entry : *filters) {
-			state.scan_filters.emplace_back(context, entry.GetIndex(), entry.Filter());
+		// projection_ids is authoritative once the optimizer has finalized it (projection_pushdown_done);
+		// otherwise an empty list means "no info" and every column is treated as projected.
+		const bool unlisted_is_projected = projection_ids.empty() && !projection_pushdown_done;
+		vector<bool> is_projected(column_ids.size(), unlisted_is_projected);
+		for (auto id : projection_ids) {
+			D_ASSERT(id < is_projected.size());
+			is_projected[id] = true;
 		}
+		for (auto &entry : *filters) {
+			const auto filter_local_idx = entry.GetIndex();
+			state.scan_filters.emplace_back(context, filter_local_idx, entry.Filter(), !is_projected[filter_local_idx]);
+		}
+		state.filter_always_true.assign(state.scan_filters.size(), false);
 	}
 
 	state.thrift_file_proto = CreateThriftFileProtocol(context, *state.file_handle, state.prefetch_mode);
@@ -1498,6 +1518,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 		// TODO: only need this if we have a deletion vector?
 		state.group_offset = GetRowGroupOffset(*this, state.group_idx_list[state.current_group]);
 
+		std::fill(state.filter_always_true.begin(), state.filter_always_true.end(), false);
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto col_idx = MultiFileLocalIndex(i);
@@ -1619,8 +1640,19 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					// if no rows are left we can stop checking filters
 					break;
 				}
-				auto &scan_filter = state.scan_filters[permutation[i]];
+				const idx_t sf_idx = permutation[i];
+				auto &scan_filter = state.scan_filters[sf_idx];
 				MultiFileLocalIndex local_idx(scan_filter.filter_idx);
+
+				if (state.filter_always_true[sf_idx] && scan_filter.column_is_filter_only) {
+					// row-group stats prove the filter always-true and the column is unprojected: skip
+					// both the filter eval and the decode. Reset the vector so chunk verification
+					// doesn't see stale buffer pointers from a prior batch.
+					need_to_read[local_idx.GetIndex()] = false;
+					auto &result_vector = result.data[local_idx.GetIndex()];
+					result_vector.Reference(Value(result_vector.GetType()), count_t(result.size()));
+					continue;
+				}
 
 				auto &result_vector = result.data[local_idx.GetIndex()];
 				auto &child_reader = state.GetColumnReader(local_idx);

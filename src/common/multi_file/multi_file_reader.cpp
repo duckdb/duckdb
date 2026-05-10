@@ -597,6 +597,9 @@ ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &read
                                                        ClientContext &context, MultiFileGlobalState &gstate) {
 	FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids, context,
 	             gstate.multi_file_reader_state.get());
+	// seed in global space — CreateMapping translates to local space in place
+	reader_data.reader->projection_ids = gstate.projection_ids;
+	reader_data.reader->projection_pushdown_done = gstate.projection_pushdown_done;
 	return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, gstate.file_list,
 	                     bind_data.reader_bind, bind_data.virtual_columns);
 }

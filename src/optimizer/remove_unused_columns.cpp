@@ -870,6 +870,8 @@ void RemoveUnusedColumns::RemoveColumnsFromLogicalGet(LogicalGet &get, unique_pt
 	// with the "selection vector" that includes filter columns
 	idx_t col_idx = 0;
 	get.projection_ids.clear();
+	// downstream consumers can now treat empty projection_ids as authoritative ("nothing projected")
+	get.projection_pushdown_done = true;
 	vector<ProjectionIndex> filtered_original_ids;
 	//! Find matching indices between the proj_sel and the col_sel
 	for (auto to_keep : proj_sel) {
