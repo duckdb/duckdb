@@ -187,7 +187,7 @@ void JoinHashTable::RegisterMarkJoinNullRows(DataChunk &keys) {
 	validities.reserve(keys.ColumnCount());
 	bool can_have_null = false;
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		validities.emplace_back(keys.data[col_idx], keys.size());
+		validities.emplace_back(keys.data[col_idx]);
 		can_have_null = can_have_null || validities.back().CanHaveNull();
 	}
 	if (!can_have_null) {
@@ -368,7 +368,7 @@ static idx_t MatchNullRemainderChunk(DataChunk &join_keys, const SelectionVector
 	vector<VectorValidityIterator> rhs_validities;
 	rhs_validities.reserve(scan_chunk.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < scan_chunk.ColumnCount(); col_idx++) {
-		rhs_validities.emplace_back(scan_chunk.data[col_idx], scan_chunk.size());
+		rhs_validities.emplace_back(scan_chunk.data[col_idx]);
 	}
 
 	for (idx_t scan_row = 0; scan_row < scan_chunk.size(); scan_row++) {
@@ -1191,7 +1191,7 @@ void JoinHashTable::ConstructEmptyMarkJoinResult(DataChunk &join_keys, DataChunk
 				continue;
 			}
 			UnifiedVectorFormat jdata;
-			join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+			join_keys.data[col_idx].ToUnifiedFormat(jdata);
 			if (jdata.validity.CanHaveNull()) {
 				for (idx_t i = 0; i < join_keys.size(); i++) {
 					auto jidx = jdata.sel->get_index(i);
@@ -1709,7 +1709,7 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &pro
 				continue;
 			}
 			UnifiedVectorFormat jdata;
-			join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
+			join_keys.data[col_idx].ToUnifiedFormat(jdata);
 			if (jdata.validity.CanHaveNull()) {
 				for (idx_t i = 0; i < join_keys.size(); i++) {
 					auto jidx = jdata.sel->get_index(i);
