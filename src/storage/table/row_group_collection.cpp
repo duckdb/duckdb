@@ -1028,13 +1028,11 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 
 	// If we are in WAL replay, delete data will be buffered, and so we sort the column_ids
 	// since the sorted form will be the mapping used to get back physical IDs from the buffered index chunk.
-	vector<StorageIndex> column_ids;
-	for (auto &col : indexed_column_id_set) {
-		column_ids.emplace_back(col);
-	}
+	vector<StorageIndex> column_ids{indexed_column_id_set.begin(), indexed_column_id_set.end()};
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
+	column_types.reserve(column_ids.size());
 	for (auto &col : column_ids) {
 		column_types.push_back(types[col.GetPrimaryIndex()]);
 	}
