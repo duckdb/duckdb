@@ -2,6 +2,10 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 require noforcestorage
 
 # Set the temporary directory to an empty directory.

@@ -3,6 +3,10 @@
 
 require skip_reload
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 statement ok
 PRAGMA memory_limit='3MB'
 

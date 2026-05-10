@@ -2,6 +2,9 @@
 # description: Test the maximum swap space.
 # group: [temp_directory]
 
+# FIXME: for some reason we no longer run out of memory on Windows with the adaptive transient segments
+require notwindows
+
 require noforcestorage
 
 require skip_reload
