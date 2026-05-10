@@ -1404,7 +1404,7 @@ static void RefineMarkResultWithNullKeys(DataChunk &join_keys, ColumnDataCollect
 	const idx_t key_count = join_keys.ColumnCount();
 	vector<UnifiedVectorFormat> probe_formats(key_count);
 	for (idx_t c = 0; c < key_count; c++) {
-		join_keys.data[c].ToUnifiedFormat(count, probe_formats[c]);
+		join_keys.data[c].ToUnifiedFormat(probe_formats[c]);
 	}
 
 	ColumnDataScanState scan_state;
@@ -1416,7 +1416,7 @@ static void RefineMarkResultWithNullKeys(DataChunk &join_keys, ColumnDataCollect
 		const idx_t null_count = null_keys_chunk.size();
 		vector<UnifiedVectorFormat> null_formats(key_count);
 		for (idx_t c = 0; c < key_count; c++) {
-			null_keys_chunk.data[c].ToUnifiedFormat(null_count, null_formats[c]);
+			null_keys_chunk.data[c].ToUnifiedFormat(null_formats[c]);
 		}
 		for (idx_t i = 0; i < count; i++) {
 			if (bool_result[i] || !mask.RowIsValid(i)) {
