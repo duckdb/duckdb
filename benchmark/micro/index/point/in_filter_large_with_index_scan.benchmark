@@ -1,31 +1,51 @@
 # name: benchmark/micro/index/point/in_filter_large_with_index_scan.benchmark
-# description: Stress test row group fetching.
+# description: Stress test bulk RowGroupCollection::Fetch via UPDATE on an indexed column.
 # group: [point]
 
-name IN filter with index scan (5M co-located keys, SF10)
+# Why this benchmark looks the way it does:
+#
+# RowGroupCollection::Fetch's bulk-fetch optimization is only exercised by code
+# paths that actually call DataTable::Fetch with row_ids. In current DuckDB
+# that is two paths:
+#   * physical_insert.cpp  (INSERT ... ON CONFLICT) -- only when types_to_fetch
+#                          is non-empty, i.e. an SET expression references the
+#                          existing row's columns. INSERT ON CONFLICT DO NOTHING
+#                          does NOT call Fetch.
+#   * physical_update.cpp  (UPDATE ...) -- only when index_update is true, i.e.
+#                          the SET clause touches a column that is part of some
+#                          index on the table.
+#
+# We use the UPDATE path because it is the simplest and gives us a single
+# Fetch call per pipeline batch with all columns of the row.
+#
+# To trigger index_update without having to SET the PRIMARY KEY column (which
+# would risk uniqueness violations on the same-value re-insert), we add a
+# secondary ART index over o_custkey and SET o_custkey = o_custkey. The new
+# value is identical to the old, so the index is semantically untouched, but
+# the engine still walks the full DELETE old / FETCH old / re-INSERT pipeline,
+# which is exactly the path RowGroupCollection::Fetch's run-detection optimizes.
+#
+# The WHERE clause selects 1,000,000 contiguous keys from a table sorted by
+# o_orderkey. Because row-id order matches o_orderkey order, the row_ids passed
+# to Fetch fall in a contiguous range -- the optimal input for run-detection.
+
+name UPDATE indexed col, 1M co-located keys (SF10)
 group art
 
 require tpch
 
-cache tpch_sf10_orders_indexed_colocated.duckdb
+cache tpch_sf10_orders_indexed_secondary.duckdb
 
-# Recreate orders sorted by o_orderkey so its row-ids are contiguous and
-# monotonic in o_orderkey. A subsequent OFFSET/LIMIT on this table picks a
-# perfectly contiguous slice of row-ids, which is exactly the co-located
-# workload Phase 1 of the optimization targets.
-# 5,000,000 contiguous keys. With default row_group_size=122880 and rows in
-# o_orderkey order, this slice spans ~41 row groups and forms one long
-# run for RowGroupCollection::Fetch's run-detection.
 load
 CALL dbgen(sf=10);
-SET index_scan_percentage = 1.0;
-SET index_scan_max_count = 0;
 CREATE TABLE orders_indexed AS FROM orders ORDER BY o_orderkey;
 ALTER TABLE orders_indexed ADD PRIMARY KEY (o_orderkey);
+CREATE INDEX idx_orders_custkey ON orders_indexed(o_custkey);
 CREATE TABLE colocated_keys AS
-    SELECT o_orderkey FROM orders_indexed OFFSET 1000000 LIMIT 5000000;
+    SELECT o_orderkey FROM orders_indexed OFFSET 1000000 LIMIT 1000000;
 
 run
-SELECT o_orderkey, o_custkey, o_orderdate, o_totalprice
-FROM orders_indexed
+BEGIN;
+UPDATE orders_indexed SET o_custkey = o_custkey
 WHERE o_orderkey IN (SELECT o_orderkey FROM colocated_keys);
+ROLLBACK;
