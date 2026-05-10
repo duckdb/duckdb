@@ -31,6 +31,9 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	if (source == target) {
 		return true;
 	}
+	if (source.id() == LogicalTypeId::ENUM || target.id() == LogicalTypeId::ENUM) {
+		return false;
+	}
 	// we can only propagate numeric -> numeric
 	switch (source.InternalType()) {
 	case PhysicalType::INT8:
