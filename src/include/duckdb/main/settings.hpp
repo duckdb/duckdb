@@ -558,6 +558,17 @@ struct DebugVerificationModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugVerificationProjectionSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_verification_projection";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: add internal verification projections to stress optimizers";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugVerifyBlocksSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_verify_blocks";

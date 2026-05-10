@@ -1442,6 +1442,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_parquet_files.json ./build/release/test/unittest
 
+    - name: test/configs/verification_projection.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verification_projection.json ./build/release/test/unittest
+
     - name: test/configs/no_local_filesystem.json
       if: success() || failure()
       shell: bash
