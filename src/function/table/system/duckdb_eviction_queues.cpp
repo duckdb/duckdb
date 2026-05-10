@@ -61,7 +61,7 @@ void DuckDBEvictionQueuesFunction(ClientContext &context, TableFunctionInput &da
 		queue_index.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.queue_index)));
 		queue_type.Append(Value(entry.queue_type));
 		approximate_size.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.approximate_size)));
-		dead_nodes.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.dead_nodes)));
+		dead_nodes.Append(Value::BIGINT(entry.dead_nodes));
 		total_insertions.Append(Value::BIGINT(UnsafeNumericCast<int64_t>(entry.total_insertions)));
 		count++;
 	}

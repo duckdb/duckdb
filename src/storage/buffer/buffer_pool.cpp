@@ -100,7 +100,7 @@ public:
 	idx_t GetApproximateSize() const {
 		return q.size_approx();
 	}
-	idx_t GetDeadNodes() const {
+	int64_t GetDeadNodes() const {
 		return total_dead_nodes.load(std::memory_order_relaxed);
 	}
 	idx_t GetTotalInsertions() const {
@@ -136,7 +136,8 @@ private:
 	atomic<idx_t> evict_queue_insertions;
 	//! Total dead nodes in the eviction queue. There are two scenarios in which a node dies: (1) we destroy its block
 	//! handle, or (2) we insert a newer version into the eviction queue.
-	atomic<idx_t> total_dead_nodes;
+	//! Signed because decrements can exceed increments (nodes dying without being superseded).
+	atomic<int64_t> total_dead_nodes;
 
 	//! Locked, if a queue purge is currently active or we're trying to forcefully evict a node.
 	//! Only lets a single thread enter the purge phase.
@@ -202,8 +203,8 @@ void EvictionQueue::Purge() {
 			break;
 		}
 
-		idx_t approx_dead_nodes = total_dead_nodes;
-		approx_dead_nodes = approx_dead_nodes > approx_q_size ? approx_q_size : approx_dead_nodes;
+		auto raw_dead_nodes = total_dead_nodes.load(std::memory_order_relaxed);
+		idx_t approx_dead_nodes = raw_dead_nodes > 0 ? MinValue<idx_t>(static_cast<idx_t>(raw_dead_nodes), approx_q_size) : 0;
 		idx_t approx_alive_nodes = approx_q_size - approx_dead_nodes;
 
 		// early-out according to (2.2)
@@ -245,7 +246,7 @@ void EvictionQueue::PurgeIteration(const idx_t purge_size) {
 	// bulk re-add (TODO order them by timestamp to better retain the LRU behavior)
 	q.enqueue_bulk(purge_nodes.begin(), alive_nodes);
 
-	total_dead_nodes -= actually_dequeued - alive_nodes;
+	total_dead_nodes -= static_cast<int64_t>(actually_dequeued - alive_nodes);
 }
 
 BufferPool::BufferPool(BlockAllocator &block_allocator, idx_t maximum_memory, bool track_eviction_timestamps,
