@@ -204,7 +204,8 @@ void EvictionQueue::Purge() {
 		}
 
 		auto raw_dead_nodes = total_dead_nodes.load(std::memory_order_relaxed);
-		idx_t approx_dead_nodes = raw_dead_nodes > 0 ? MinValue<idx_t>(static_cast<idx_t>(raw_dead_nodes), approx_q_size) : 0;
+		idx_t approx_dead_nodes =
+		    raw_dead_nodes > 0 ? MinValue<idx_t>(static_cast<idx_t>(raw_dead_nodes), approx_q_size) : 0;
 		idx_t approx_alive_nodes = approx_q_size - approx_dead_nodes;
 
 		// early-out according to (2.2)
