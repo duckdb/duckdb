@@ -1066,9 +1066,6 @@ void RowGroupCollection::RemoveFromIndexes(const QueryContext &context, TableInd
 	}
 	result_chunk.SetCardinality(fetch_chunk);
 
-	DataChunk remaining_result_chunk;
-	unique_ptr<Vector> remaining_row_ids;
-
 	for (auto &entry : indexes.IndexEntries()) {
 		auto &index = *entry.index;
 		if (index.IsBound()) {
