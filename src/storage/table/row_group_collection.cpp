@@ -433,12 +433,26 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		result.SetChildCardinality(0);
 		return;
 	}
+	// All current callers pass at most STANDARD_VECTOR_SIZE row-ids per call. The stack buffers
+	// below assume this; if a future caller passes more, the run-detection loop would overflow
+	// `offsets[]` / `visible_sel_buffer[]`. Catch that during debug builds.
+	D_ASSERT(fetch_count <= STANDARD_VECTOR_SIZE);
 
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto row_groups = GetRowGroups();
 	idx_t count = 0;
+	// Stack-allocated scratch buffers reused across runs/iterations within this call. We previously
+	// constructed `SelectionVector(STANDARD_VECTOR_SIZE)` here, which heap-allocates ~8 KB per call;
+	// borrowing a stack buffer avoids that allocator churn entirely (Fetch is on the COMMIT and
+	// index-scan hot paths and gets called once per vector batch).
 	idx_t offsets[STANDARD_VECTOR_SIZE];
-	SelectionVector visible_sel(STANDARD_VECTOR_SIZE);
+	sel_t visible_sel_buffer[STANDARD_VECTOR_SIZE];
+	SelectionVector filter_sel(visible_sel_buffer, STANDARD_VECTOR_SIZE);
+	// Empty SelectionVector (sel_vector == nullptr) acts as identity via SelectionVector::get_index.
+	// Used as `sel_for_fetch` whenever the run has no invisible rows (FORCE_FETCH path or transactional
+	// fetch that returns all rows visible) so the downstream FetchRows skips both the identity-sel
+	// build and the per-row indirection through the sel.
+	const SelectionVector identity_sel;
 
 	idx_t pos = 0;
 	while (pos < fetch_count) {
@@ -472,15 +486,18 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 		}
 		const idx_t run_count = pos - run_start;
 
-		// 3. bulk visibility check for the whole run
-		idx_t visible_count = 0;
+		// 3. bulk visibility check for the whole run; only fall into the filtering branch when at
+		// least one row is invisible. For FORCE_FETCH (commit path) and the common transactional case
+		// where all rows are visible, we keep `sel_for_fetch` pointing at the empty identity sel and
+		// avoid both the sel build cost and the sel.get_index indirection in FetchRows.
+		idx_t visible_count;
+		const SelectionVector *sel_for_fetch;
 		if (state.fetch_type == FetchType::TRANSACTIONAL_FETCH) {
-			visible_count = current_row_group.Fetch(transaction, offsets, run_count, visible_sel);
+			visible_count = current_row_group.Fetch(transaction, offsets, run_count, filter_sel);
+			sel_for_fetch = (visible_count == run_count) ? &identity_sel : &filter_sel;
 		} else {
-			for (idx_t i = 0; i < run_count; i++) {
-				visible_sel.set_index(i, i);
-			}
 			visible_count = run_count;
+			sel_for_fetch = &identity_sel;
 		}
 
 		if (visible_count == 0) {
@@ -489,7 +506,8 @@ void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, c
 
 		// 4. bulk per-column fetch
 		state.row_group = row_group;
-		current_row_group.FetchRows(transaction, state, column_ids, offsets, visible_sel, visible_count, result, count);
+		current_row_group.FetchRows(transaction, state, column_ids, offsets, *sel_for_fetch, visible_count, result,
+		                            count);
 		count += visible_count;
 	}
 	result.SetChildCardinality(count);

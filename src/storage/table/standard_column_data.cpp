@@ -202,6 +202,20 @@ void StandardColumnData::FetchRow(TransactionData transaction, ColumnFetchState 
 	validity->FetchRow(transaction, *state.child_states[0], storage_index, row_id, result, result_idx);
 }
 
+void StandardColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state,
+                                   const StorageIndex &storage_index, const idx_t *offsets, const SelectionVector &sel,
+                                   idx_t fetch_count, Vector &result, idx_t result_offset) {
+	if (state.child_states.empty()) {
+		state.child_states.push_back(make_uniq<ColumnFetchState>());
+	}
+	// Bulk fetch the data and the validity in two passes; both are leaf columns so the optimized
+	// segment-level run-detection applies. This collapses 2 * fetch_count tree-locks + per-row update
+	// overlay accesses to ~one per run + one batched update overlay pass.
+	FetchRowsAtSegmentLevel(transaction, state, offsets, sel, fetch_count, result, result_offset);
+	validity->FetchRowsAtSegmentLevel(transaction, *state.child_states[0], offsets, sel, fetch_count, result,
+	                                  result_offset);
+}
+
 void StandardColumnData::VisitBlockIds(BlockIdVisitor &visitor) const {
 	ColumnData::VisitBlockIds(visitor);
 	validity->VisitBlockIds(visitor);

@@ -607,6 +607,58 @@ void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, 
 	FetchUpdateRow(transaction, row_id, result, result_idx);
 }
 
+void ColumnData::FetchRows(TransactionData transaction, ColumnFetchState &state, const StorageIndex &storage_index,
+                           const idx_t *offsets, const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                           idx_t result_offset) {
+	// Default safe fallback: per-row FetchRow. Subclasses with no per-row side effects (Standard / Validity)
+	// override to call the optimized FetchRowsAtSegmentLevel instead. Complex subclasses (Struct/List/Array/
+	// Variant/Geo/RowNumber/RowId) inherit this fallback so they keep working unchanged.
+	for (idx_t i = 0; i < fetch_count; i++) {
+		const idx_t offset = offsets[sel.get_index(i)];
+		FetchRow(transaction, state, storage_index, NumericCast<row_t>(offset), result, result_offset + i);
+	}
+}
+
+void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetchState &state, const idx_t *offsets,
+                                         const SelectionVector &sel, idx_t fetch_count, Vector &result,
+                                         idx_t result_offset) {
+	if (fetch_count == 0) {
+		return;
+	}
+	// Run-detect at the column-data segment level: cache the current segment pointer and only re-resolve
+	// (which acquires the segment-tree's internal lock) when the next offset falls outside the cached
+	// segment's [row_start, row_start + count) range. This collapses N segment-tree lookups + N tree-locks
+	// to ~one per run for clustered offsets, which is the common case for indexed point-fetches on tables
+	// whose row-id order matches the index's sort order.
+	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
+	idx_t segment_start = 0;
+	idx_t segment_end = 0;
+	for (idx_t i = 0; i < fetch_count; i++) {
+		const idx_t offset = offsets[sel.get_index(i)];
+		if (offset > count) {
+			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id out of range");
+		}
+		if (!current_segment || offset < segment_start || offset >= segment_end) {
+			current_segment = data.GetSegment(offset);
+			segment_start = current_segment->GetRowStart();
+			segment_end = segment_start + current_segment->GetNode().count;
+		}
+		const idx_t index_in_segment = offset - segment_start;
+		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + i);
+	}
+	// Apply update overlay with one update_lock acquisition for the whole batch instead of one per row.
+	// The fast path (no updates ever applied) becomes a single uncontended lock + null check.
+	{
+		lock_guard<mutex> update_guard(update_lock);
+		if (updates) {
+			for (idx_t i = 0; i < fetch_count; i++) {
+				const idx_t offset = offsets[sel.get_index(i)];
+				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + i);
+			}
+		}
+	}
+}
+
 idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector &base_vector, idx_t row_group_start) {
 	if (row_ids[0] < UnsafeNumericCast<row_t>(row_group_start)) {
 		throw InternalException("ColumnData::FetchUpdateData out of range");

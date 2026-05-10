@@ -944,10 +944,8 @@ idx_t RowGroup::Fetch(TransactionData transaction, const idx_t *offsets, idx_t f
 	}
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		// no version info at all, which means every row is visible
-		for (idx_t i = 0; i < fetch_count; i++) {
-			visible_sel.set_index(i, i);
-		}
+		// No version info at all -> every row is visible. Skip building an identity sel; the caller
+		// is responsible for treating "returned == fetch_count" as the all-visible / identity case.
 		return fetch_count;
 	}
 	return vinfo->Fetch(transaction, offsets, fetch_count, visible_sel);
@@ -981,13 +979,12 @@ void RowGroup::FetchRows(TransactionData transaction, ColumnFetchState &state, c
 		auto &result_vector = result.data[col_idx];
 		D_ASSERT(result_vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto &col_data = GetColumn(column);
-		for (idx_t i = 0; i < visible_count; i++) {
-			const idx_t local = visible_sel.get_index(i);
-			const idx_t offset = offsets[local];
-			D_ASSERT(offset <= count);
-			D_ASSERT(!FlatVector::IsNull(result_vector, result_offset + i));
-			col_data.FetchRow(transaction, state, column, NumericCast<row_t>(offset), result_vector, result_offset + i);
-		}
+		// Delegate to the column's bulk fetch. For leaf columns (Standard/Validity) this collapses
+		// per-row segment-tree lookups + per-row update_lock acquisitions to ~one per run; for complex
+		// columns (Struct/List/Array/Variant/Geo/RowNumber/RowId) the default ColumnData::FetchRows is
+		// a safe per-row loop that preserves the original behavior.
+		col_data.FetchRows(transaction, state, column, offsets, visible_sel, visible_count, result_vector,
+		                   result_offset);
 	}
 }
 
