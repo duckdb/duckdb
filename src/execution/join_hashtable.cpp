@@ -311,19 +311,21 @@ static idx_t FilterCandidatesForColumnComparison(Vector &lhs_column, Vector &rhs
                                                  idx_t candidate_count, MarkJoinNullMatchState &state,
                                                  SelectionVector &remaining_sel) {
 	ConstantVector::Reference(rhs_value, count_t(candidate_count), rhs_column, rhs_row, rhs_count);
+	Vector lhs_slice(lhs_column, candidate_sel, candidate_count);
 
-	state.null_mask.SetAllValid(state.probe_count);
-	const idx_t equal_count = VectorOperations::Equals(lhs_column, rhs_value, &candidate_sel, candidate_count,
-	                                                   &state.equal_sel, &state.unequal_sel, &state.null_mask);
+	state.null_mask.SetAllValid(candidate_count);
+	const idx_t equal_count = VectorOperations::Equals(lhs_slice, rhs_value, nullptr, candidate_count, &state.equal_sel,
+	                                                   &state.unequal_sel, &state.null_mask);
 
 	idx_t remaining_count = 0;
 	for (idx_t i = 0; i < equal_count; i++) {
-		remaining_sel.set_index(remaining_count++, state.equal_sel.get_index(i));
+		auto local_idx = state.equal_sel.get_index(i);
+		remaining_sel.set_index(remaining_count++, candidate_sel.get_index(local_idx));
 	}
 	for (idx_t i = 0; i < candidate_count - equal_count; i++) {
-		const auto candidate_idx = state.unequal_sel.get_index(i);
-		if (!state.null_mask.RowIsValid(candidate_idx)) {
-			remaining_sel.set_index(remaining_count++, candidate_idx);
+		const auto local_idx = state.unequal_sel.get_index(i);
+		if (!state.null_mask.RowIsValid(local_idx)) {
+			remaining_sel.set_index(remaining_count++, candidate_sel.get_index(local_idx));
 		}
 	}
 	return remaining_count;

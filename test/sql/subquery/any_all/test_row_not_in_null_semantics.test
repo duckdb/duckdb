@@ -65,6 +65,138 @@ SELECT (1, 2) =ANY ((VALUES (NULL, NULL)))
 ----
 NULL
 
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 9),
+		(8, 9, 8),
+		(16, 3, NULL),
+		(32, NULL, 8)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) IN (SELECT * FROM (VALUES (2, 6), (3, 7), (4, 8)) s(a, b))
+----
+2
+
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 9),
+		(8, 9, 8),
+		(16, 3, NULL),
+		(32, NULL, 8)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) NOT IN (SELECT * FROM (VALUES (2, 6), (3, 7), (4, 8)) s(a, b))
+----
+13
+
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 9),
+		(8, 9, 8),
+		(16, 3, NULL),
+		(32, NULL, 8),
+		(64, NULL, NULL)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL), (4, 8)) s(a, b))
+----
+2
+
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 9),
+		(8, 9, 8),
+		(16, 3, NULL),
+		(32, NULL, 8),
+		(64, NULL, NULL)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) NOT IN (SELECT * FROM (VALUES (2, 6), (3, 7), (3, NULL), (4, 8)) s(a, b))
+----
+9
+
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 7),
+		(8, 4, 8)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) IN (SELECT * FROM (VALUES (2, 6), (NULL, 7), (4, NULL), (NULL, NULL)) s(a, b))
+----
+2
+
+query I
+WITH r(k, x, y) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 5),
+		(2, 2, 6),
+		(4, 3, 7),
+		(8, 4, 8)
+	) v(k, x, y)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x, y) NOT IN (SELECT * FROM (VALUES (2, 6), (NULL, 7), (4, NULL), (NULL, NULL)) s(a, b))
+----
+0
+
+query I
+WITH r(k, x0, x1, x2, x3, x4, x5) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 1, 1, 1, 1, 1),
+		(2, 0, 0, 0, 0, 0, 0),
+		(4, 1, 0, 0, 0, 0, 0),
+		(8, 0, 1, 1, 0, 1, 0)
+	) v(k, x0, x1, x2, x3, x4, x5)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x0, x1, x2, x3, x4, x5) IN (
+	SELECT * FROM (VALUES
+		(1, 1, 1, 1, 1, 1),
+		(0, NULL, NULL, 0, NULL, 0)
+	) s(a0, a1, a2, a3, a4, a5)
+)
+----
+1
+
+query I
+WITH r(k, x0, x1, x2, x3, x4, x5) AS (
+	SELECT * FROM (VALUES
+		(1, 1, 1, 1, 1, 1, 1),
+		(2, 0, 0, 0, 0, 0, 0),
+		(4, 1, 0, 0, 0, 0, 0),
+		(8, 0, 1, 1, 0, 1, 0)
+	) v(k, x0, x1, x2, x3, x4, x5)
+)
+SELECT coalesce(sum(k), 0) FROM r
+WHERE (x0, x1, x2, x3, x4, x5) NOT IN (
+	SELECT * FROM (VALUES
+		(1, 1, 1, 1, 1, 1),
+		(0, NULL, NULL, 0, NULL, 0)
+	) s(a0, a1, a2, a3, a4, a5)
+)
+----
+4
+
 statement ok
 CREATE TABLE mixed_rhs(a INTEGER, b INTEGER);
 
