@@ -646,12 +646,13 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	if (!prev_segment) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
-		segment_size = MinValue<idx_t>(block_size, MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes));
+		const auto max_initial_bytes = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
+		segment_size = MinValue<idx_t>(block_size, NextPowerOfTwo(max_initial_bytes));
 	} else {
 		const auto prev_segment_size = prev_segment->SegmentSize();
 		segment_size = MinValue<idx_t>(block_size, prev_segment_size * 2);
-		D_ASSERT(IsPowerOfTwo(segment_size));
 	}
+	D_ASSERT(segment_size == block_size || IsPowerOfTwo(segment_size));
 
 	// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
 	// any segment below STANDARD_MASK_SIZE triggers a dead-segment overflow chain
