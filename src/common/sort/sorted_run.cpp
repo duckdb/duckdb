@@ -67,8 +67,7 @@ static void TemplatedGetKeyAndPayload(SORT_KEY *const *const sort_keys, SORT_KEY
 			payload_ptrs[i] = sort_key.GetPayload();
 		}
 	}
-	key.SetCardinality(count);
-	FlatVector::SetSize(key.data[0], count_t(count));
+	key.SetChildCardinality(count);
 }
 
 template <class SORT_KEY>

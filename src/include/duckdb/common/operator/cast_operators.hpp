@@ -637,6 +637,20 @@ template <>
 DUCKDB_API bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_tz_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_tz_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ms_t input, timestamp_sec_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_ms_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ms_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_sec_t input, timestamp_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Interval Casts
@@ -688,15 +702,21 @@ DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_t &resu
 template <>
 DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_t &result, CastParameters &parameters);
 template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, timestamp_tz_ns_t &result, CastParameters &parameters);
+template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_tz_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, timestamp_tz_ns_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, timestamp_ns_t &result, bool strict);
 template <>
 timestamp_t Cast::Operation(string_t input);
 template <>
 timestamp_tz_t Cast::Operation(string_t input);
+template <>
+timestamp_tz_ns_t Cast::Operation(string_t input);
 template <>
 timestamp_ns_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
@@ -732,16 +752,16 @@ struct TryCastToTimestampSec {
 template <>
 DUCKDB_API bool TryCastToTimestampNS::Operation(string_t input, timestamp_ns_t &result, bool strict);
 template <>
-DUCKDB_API bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampMS::Operation(string_t input, timestamp_ms_t &result, bool strict);
 template <>
-DUCKDB_API bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampSec::Operation(string_t input, timestamp_sec_t &result, bool strict);
 
 template <>
 DUCKDB_API bool TryCastToTimestampNS::Operation(date_t input, timestamp_ns_t &result, bool strict);
 template <>
-DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_ms_t &result, bool strict);
 template <>
-DUCKDB_API bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict);
+DUCKDB_API bool TryCastToTimestampSec::Operation(date_t input, timestamp_sec_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // string -> Non-Standard Time types
@@ -903,44 +923,44 @@ struct CastTimestampSecToNs {
 };
 
 template <>
-duckdb::timestamp_t CastTimestampUsToSec::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_sec_t CastTimestampUsToSec::Operation(duckdb::timestamp_t input);
 template <>
-duckdb::timestamp_t CastTimestampUsToMs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_ms_t CastTimestampUsToMs::Operation(duckdb::timestamp_t input);
 template <>
-duckdb::timestamp_t CastTimestampUsToNs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_ns_t CastTimestampUsToNs::Operation(duckdb::timestamp_t input);
 template <>
-duckdb::date_t CastTimestampMsToDate::Operation(duckdb::timestamp_t input);
+duckdb::date_t CastTimestampMsToDate::Operation(duckdb::timestamp_ms_t input);
 template <>
-duckdb::dtime_t CastTimestampMsToTime::Operation(duckdb::timestamp_t input);
+duckdb::dtime_t CastTimestampMsToTime::Operation(duckdb::timestamp_ms_t input);
 template <>
-duckdb::timestamp_t CastTimestampMsToUs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_t CastTimestampMsToUs::Operation(duckdb::timestamp_ms_t input);
 template <>
-duckdb::timestamp_t CastTimestampMsToNs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_ns_t CastTimestampMsToNs::Operation(duckdb::timestamp_ms_t input);
 template <>
-duckdb::date_t CastTimestampNsToDate::Operation(duckdb::timestamp_t input);
+duckdb::date_t CastTimestampNsToDate::Operation(duckdb::timestamp_ns_t input);
 template <>
-duckdb::dtime_t CastTimestampNsToTime::Operation(duckdb::timestamp_t input);
+duckdb::dtime_t CastTimestampNsToTime::Operation(duckdb::timestamp_ns_t input);
 template <>
 duckdb::dtime_ns_t CastTimestampNsToTimeNs::Operation(duckdb::timestamp_ns_t input);
 template <>
-duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_t CastTimestampNsToUs::Operation(duckdb::timestamp_ns_t input);
 template <>
-duckdb::date_t CastTimestampSecToDate::Operation(duckdb::timestamp_t input);
+duckdb::date_t CastTimestampSecToDate::Operation(duckdb::timestamp_sec_t input);
 template <>
-duckdb::dtime_t CastTimestampSecToTime::Operation(duckdb::timestamp_t input);
+duckdb::dtime_t CastTimestampSecToTime::Operation(duckdb::timestamp_sec_t input);
 template <>
-duckdb::timestamp_t CastTimestampSecToMs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_ms_t CastTimestampSecToMs::Operation(duckdb::timestamp_sec_t input);
 template <>
-duckdb::timestamp_t CastTimestampSecToUs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_t CastTimestampSecToUs::Operation(duckdb::timestamp_sec_t input);
 template <>
-duckdb::timestamp_t CastTimestampSecToNs::Operation(duckdb::timestamp_t input);
+duckdb::timestamp_ns_t CastTimestampSecToNs::Operation(duckdb::timestamp_sec_t input);
 
 template <>
 duckdb::string_t CastFromTimestampNS::Operation(duckdb::timestamp_ns_t input, StringHeap &heap);
 template <>
-duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_t input, StringHeap &heap);
+duckdb::string_t CastFromTimestampMS::Operation(duckdb::timestamp_ms_t input, StringHeap &heap);
 template <>
-duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_t input, StringHeap &heap);
+duckdb::string_t CastFromTimestampSec::Operation(duckdb::timestamp_sec_t input, StringHeap &heap);
 
 //===--------------------------------------------------------------------===//
 // Blobs

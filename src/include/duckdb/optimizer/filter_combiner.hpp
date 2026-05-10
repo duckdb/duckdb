@@ -61,8 +61,8 @@ public:
 private:
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
-	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root = true);
-	unique_ptr<Expression> FindTransitiveFilter(Expression &expr);
+	FilterResult AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root = true);
+	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);

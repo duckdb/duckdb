@@ -71,7 +71,7 @@ public:
 
 		// Replace AVG(x) with SUM(x)
 		auto &sum_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(optimizer.context, DEFAULT_SCHEMA, "sum");
-		const auto sum_fun =
+		const auto &sum_fun =
 		    sum_entry.functions.GetFunctionByArguments(optimizer.context, {avg_child->GetReturnType()});
 		vector<unique_ptr<Expression>> args;
 		args.push_back(std::move(avg_child));
@@ -173,7 +173,7 @@ public:
 			return false;
 		}
 		auto &expr = expr_p.Cast<BoundAggregateExpression>();
-		if (!FunctionMatcher::Match(function, expr.function.name)) {
+		if (!FunctionMatcher::Match(function, expr.function.GetName())) {
 			return false;
 		}
 		if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {

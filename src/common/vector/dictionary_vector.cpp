@@ -39,33 +39,34 @@ idx_t DictionaryBuffer::GetAllocationSize() const {
 	return size + GetEntry().data.GetAllocationSize();
 }
 
-void DictionaryBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void DictionaryBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(vector_type == VectorType::DICTIONARY_VECTOR);
-	D_ASSERT(type == GetEntry().data.GetType());
+	auto &child = GetEntry().data;
+	if (type != child.GetType()) {
+		throw InternalException("Dictionary expression type mismatch - type %s does not match child type %s", type,
+		                        child.GetType());
+	}
 	if (!sel.IsSet()) {
 		// sel is not set - directly pass in the dictionary
-		GetEntry().data.Verify(sel_vector, count);
+		child.Verify(sel_vector, count);
 	} else {
 		// sel is set - slice the dictionary with the selection vector
 		SelectionVector child_sel(count);
 		for (idx_t i = 0; i < count; i++) {
 			child_sel.set_index(i, sel_vector.get_index(sel.get_index(i)));
 		}
-		GetEntry().data.Verify(child_sel, count);
+		child.Verify(child_sel, count);
 	}
 }
 
-void DictionaryBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void DictionaryBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	format.owned_sel.Initialize(sel_vector);
 	format.sel = &format.owned_sel;
 
 	auto &child = entry->data;
 	if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
 		// flatten the child in-place
-		entry->data.Flatten(count);
+		entry->data.Flatten();
 	}
 	format.data = FlatVector::GetData(entry->data);
 	format.validity = FlatVector::ValidityMutable(entry->data);
@@ -134,9 +135,9 @@ Value DictionaryBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	return entry->data.GetValue(resolved_index);
 }
 
-buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> DictionaryBuffer::Flatten(const LogicalType &type) const {
 	// flatten the child based on the selection vector stored in the dictionary
-	return entry->data.Buffer().FlattenSlice(type, sel_vector, count);
+	return entry->data.Buffer().FlattenSlice(type, sel_vector, Size());
 }
 
 buffer_ptr<VectorBuffer> DictionaryBuffer::FlattenSliceInternal(const LogicalType &type,

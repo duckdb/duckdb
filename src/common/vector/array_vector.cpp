@@ -36,6 +36,7 @@ idx_t VectorArrayBuffer::GetChildSize() const {
 void VectorArrayBuffer::SetVectorSize(idx_t new_size) {
 	VectorBuffer::SetVectorSize(new_size);
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
+		FlatVector::SetSize(*child, array_size);
 		return;
 	}
 	FlatVector::SetSize(*child, new_size * array_size);
@@ -64,20 +65,10 @@ idx_t VectorArrayBuffer::GetAllocationSize() const {
 	return size;
 }
 
-void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
-	if (count == 0) {
-		return;
-	}
+void VectorArrayBuffer::VerifyInternal(const LogicalType &type, const SelectionVector &sel, idx_t count) const {
 	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
-	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		if (!validity.RowIsValid(0)) {
-			// NULL constant array - verify child is also NULL constant
-			if (child->GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				D_ASSERT(ConstantVector::IsNull(*child));
-			}
-			return;
-		}
-		child->Verify(array_size);
+	if (!sel.IsSet() && count == Size()) {
+		child->Verify();
 		return;
 	}
 	// flat vector case - only verify children for valid (non-NULL) entries
@@ -99,15 +90,16 @@ void VectorArrayBuffer::Verify(const LogicalType &type, const SelectionVector &s
 		}
 	}
 	child->Verify(child_sel, child_count);
+	// FIXME: verify NULL-ness in child
 }
 
-buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type, idx_t count) const {
+buffer_ptr<VectorBuffer> VectorArrayBuffer::Flatten(const LogicalType &type) const {
 	if (vector_type == VectorType::FLAT_VECTOR) {
 		// already flat - recursively flatten the child vector
-		child->Flatten(GetChildSize());
+		child->Flatten();
 		return nullptr;
 	}
-	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), count);
+	return FlattenSlice(type, *FlatVector::IncrementalSelectionVector(), Size());
 }
 
 buffer_ptr<VectorBuffer> VectorArrayBuffer::FlattenSliceInternal(const LogicalType &type, const SelectionVector &sel,
@@ -158,17 +150,17 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::ConstantSliceInternal(const LogicalT
 	return result;
 }
 
-void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorArrayBuffer::ReserveInternal(idx_t new_size) {
 	// resize the validity
 	validity.Resize(new_size);
 	// resize the child
-	child->Resize(current_size * array_size, new_size * array_size);
+	child->Reserve(new_size * array_size);
 	capacity = new_size;
 }
 
-void VectorArrayBuffer::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) const {
+void VectorArrayBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
-		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.sel = ConstantVector::ZeroSelectionVector(Size(), format.owned_sel);
 	} else {
 		format.sel = FlatVector::IncrementalSelectionVector();
 	}

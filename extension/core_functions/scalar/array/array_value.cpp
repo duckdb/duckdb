@@ -42,7 +42,7 @@ void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
-	result.Verify(args.size());
+	result.Verify();
 }
 
 unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
@@ -63,8 +63,6 @@ unique_ptr<FunctionData> ArrayValueBind(BindScalarFunctionInput &input) {
 		throw OutOfRangeException("Array size exceeds maximum allowed size");
 	}
 
-	// this is more for completeness reasons
-	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(LogicalType::ARRAY(child_type, arguments.size()));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

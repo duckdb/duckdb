@@ -37,6 +37,7 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/common/serialization_compatibility.hpp"
+#include "duckdb/common/enums/debug_verification_mode.hpp"
 
 namespace duckdb {
 
@@ -121,8 +122,6 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> user_options;
 	//! The set of unrecognized (other) options
 	case_insensitive_map_t<Value> unrecognized_options;
-	//! Whether to print bindings when printing the plan (debug mode only)
-	static bool debug_print_bindings; // NOLINT: debug setting
 	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
 	idx_t allocator_flush_threshold = 134217728ULL;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations (1 << 30, ~1GB)
@@ -145,6 +144,10 @@ struct DBConfigOptions {
 	LogConfig log_config = LogConfig();
 	//! Physical memory that the block allocator is allowed to use (this memory is never freed and cannot be reduced)
 	idx_t block_allocator_size = 0;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings; // NOLINT: debug setting
+	//! The global verification mode
+	static DebugVerificationMode global_verification_mode; // NOLINT: debug setting
 
 	bool operator==(const DBConfigOptions &other) const;
 };

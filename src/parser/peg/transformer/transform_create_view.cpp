@@ -117,7 +117,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateViewStmt(PEGTr
 			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
 				throw InvalidInputException("Defer binding option must be a constant value");
 			}
-			auto &val = option_entry.second->Cast<ConstantExpression>().value;
+			auto &val = option_entry.second->Cast<ConstantExpression>().GetValue();
 			if (val.IsNull()) {
 				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
 			} else if (val.type().id() != LogicalTypeId::BOOLEAN) {

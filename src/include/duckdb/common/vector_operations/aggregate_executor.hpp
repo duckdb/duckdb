@@ -259,7 +259,7 @@ public:
 #endif
 		} else {
 			UnifiedVectorFormat sdata;
-			states.ToUnifiedFormat(count, sdata);
+			states.ToUnifiedFormat(sdata);
 			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, aggr_input_data, *sdata.sel, count);
 		}
 	}
@@ -292,8 +292,8 @@ public:
 #endif
 		} else {
 			UnifiedVectorFormat idata, sdata;
-			input.ToUnifiedFormat(count, idata);
-			states.ToUnifiedFormat(count, sdata);
+			input.ToUnifiedFormat(idata);
+			states.ToUnifiedFormat(sdata);
 #ifdef DUCKDB_SMALLER_BINARY
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
@@ -348,7 +348,7 @@ public:
 #endif
 		default: {
 			UnifiedVectorFormat idata;
-			input.ToUnifiedFormat(count, idata);
+			input.ToUnifiedFormat(idata);
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
 			                                            aggr_input_data, (STATE_TYPE *)state, count, idata.validity,
 			                                            *idata.sel);
@@ -361,9 +361,9 @@ public:
 	static void BinaryScatter(AggregateInputData &aggr_input_data, Vector &a, Vector &b, Vector &states, idx_t count) {
 		UnifiedVectorFormat adata, bdata, sdata;
 
-		a.ToUnifiedFormat(count, adata);
-		b.ToUnifiedFormat(count, bdata);
-		states.ToUnifiedFormat(count, sdata);
+		a.ToUnifiedFormat(adata);
+		b.ToUnifiedFormat(bdata);
+		states.ToUnifiedFormat(sdata);
 
 		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
@@ -374,8 +374,8 @@ public:
 	static void BinaryUpdate(AggregateInputData &aggr_input_data, Vector &a, Vector &b, data_ptr_t state, idx_t count) {
 		UnifiedVectorFormat adata, bdata;
 
-		a.ToUnifiedFormat(count, adata);
-		b.ToUnifiedFormat(count, bdata);
+		a.ToUnifiedFormat(adata);
+		b.ToUnifiedFormat(bdata);
 
 		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
 		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
@@ -385,8 +385,8 @@ public:
 	template <class STATE_TYPE, class OP>
 	static void Combine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
-		auto sdata = source.Values<const STATE_TYPE *>(count);
-		auto tdata = target.Values<STATE_TYPE *>(count);
+		auto sdata = source.Values<const STATE_TYPE *>();
+		auto tdata = target.Values<STATE_TYPE *>();
 
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Combine<STATE_TYPE, OP>(*sdata[i].GetValueUnsafe(), *tdata[i].GetValueUnsafe(),
@@ -504,7 +504,7 @@ public:
 
 	template <class STATE_TYPE, class OP>
 	static void Destroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
-		auto sdata = states.Values<STATE_TYPE *>(count);
+		auto sdata = states.Values<STATE_TYPE *>();
 		;
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Destroy<STATE_TYPE>(*sdata[i].GetValueUnsafe(), aggr_input_data);

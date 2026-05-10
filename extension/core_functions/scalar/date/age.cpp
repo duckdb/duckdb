@@ -2,7 +2,6 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -20,7 +19,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 
 	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(),
 	                                                [&](timestamp_t input) -> optional<interval_t> {
-		                                                if (Timestamp::IsFinite(input)) {
+		                                                if (input.IsFinite()) {
 			                                                return Interval::GetAge(current_date, input);
 		                                                } else {
 			                                                return nullopt;
@@ -34,7 +33,7 @@ static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result
 	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
 	    input.data[0], input.data[1], result, input.size(),
 	    [&](timestamp_t input1, timestamp_t input2) -> optional<interval_t> {
-		    if (Timestamp::IsFinite(input1) && Timestamp::IsFinite(input2)) {
+		    if (input1.IsFinite() && input2.IsFinite()) {
 			    return Interval::GetAge(input1, input2);
 		    } else {
 			    return nullopt;

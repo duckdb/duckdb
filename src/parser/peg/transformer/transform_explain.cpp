@@ -89,7 +89,7 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
 	}
 	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().value));
+		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
 	} else {

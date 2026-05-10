@@ -2,13 +2,13 @@
 # description: Test arithmetic with unsigned huge integers
 # group: [uhugeint]
 
-# negation
-query II
-SELECT ~(-50::UHUGEINT), -(-(50::UHUGEINT));
+# negation: negating a non-zero unsigned value is out of range
+statement error
+SELECT -(50::UHUGEINT)
 ----
-49	50
+Out of Range Error
 
-# negate 0
+# negate 0 is well-defined
 query I
 SELECT -(0::UHUGEINT)
 ----

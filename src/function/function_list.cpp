@@ -16,6 +16,7 @@
 #include "duckdb/function/window/ranking_functions.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window/value_functions.hpp"
+#include "duckdb/function/scalar/comparison_functions.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
@@ -67,6 +68,8 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorSubtractFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorFloatDivideFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorIntegerDivideFun),
+	DUCKDB_SCALAR_FUNCTION(BetweenFun),
+	DUCKDB_SCALAR_FUNCTION(ComparisonFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUbigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUintegerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUsmallintFun),

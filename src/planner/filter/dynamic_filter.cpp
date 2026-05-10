@@ -19,8 +19,8 @@ DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value con
 }
 
 unique_ptr<Expression> DynamicFilterData::ToExpression(const Expression &column) const {
-	return make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(),
-	                                            make_uniq<BoundConstantExpression>(constant));
+	return BoundComparisonExpression::Create(comparison_type, column.Copy(),
+	                                         make_uniq<BoundConstantExpression>(constant));
 }
 
 FilterPropagateResult DynamicFilter::CheckStatistics(BaseStatistics &stats) const {

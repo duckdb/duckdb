@@ -1105,8 +1105,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					continue;
 				}
 				// An error happened, to propagate it we need to figure out the exact line where the casting failed.
-				auto inserted_validity = result_vector.Validity(parse_chunk.size());
-				auto parse_validity = parse_vector.Validity(parse_chunk.size());
+				auto inserted_validity = result_vector.Validity();
+				auto parse_validity = parse_vector.Validity();
 
 				for (; line_error < parse_chunk.size(); line_error++) {
 					if (!inserted_validity.IsValid(line_error) && parse_validity.IsValid(line_error)) {

@@ -96,7 +96,7 @@ idx_t BFTableFilter::Filter(Vector &keys_v, SelectionVector &sel, idx_t &approve
 		const bool found = this->filter.LookupOne(constant_hash);
 		found_count = found ? approved_tuple_count : 0;
 	} else {
-		state.hashes_v.Flatten(approved_tuple_count);
+		state.hashes_v.Flatten();
 		found_count = this->filter.LookupHashes(state.hashes_v, state.probe_sel, approved_tuple_count);
 	}
 

@@ -11,7 +11,6 @@
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/function/udf_function.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -192,74 +191,6 @@ public:
 	//! Returns the fully qualified, escaped table names, if qualified is set to true,
 	//! else returns the not qualified, not escaped table names.
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query, const bool qualified = false);
-
-	// NOLINTBEGIN
-	template <typename TR, typename... ARGS>
-	void CreateScalarFunction(const string &name, TR (*udf_func)(ARGS...)) {
-		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, ARGS...>(name, udf_func);
-		UDFWrapper::RegisterFunction<TR, ARGS...>(name, function, *context);
-	}
-
-	template <typename TR, typename... ARGS>
-	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                          TR (*udf_func)(ARGS...)) {
-		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, ARGS...>(name, args, ret_type, udf_func);
-		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
-	}
-
-	template <typename TR, typename... ARGS>
-	void CreateVectorizedFunction(const string &name, scalar_function_t udf_func,
-	                              LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction<TR, ARGS...>(name, udf_func, *context, std::move(varargs));
-	}
-
-	void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                              scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
-		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), std::move(udf_func), *context,
-		                             std::move(varargs));
-	}
-
-	//------------------------------------- Aggregate Functions ----------------------------------------//
-	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateAggregateFunction(const string &name) {
-		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-
-	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateAggregateFunction(const string &name) {
-		AggregateFunction function = UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-
-	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type_a) {
-		AggregateFunction function =
-		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type_a);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-
-	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
-	void CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type_a,
-	                             LogicalType input_type_b) {
-		AggregateFunction function =
-		    UDFWrapper::CreateAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_type_a, input_type_b);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-
-	void CreateAggregateFunction(const string &name, const vector<LogicalType> &arguments,
-	                             const LogicalType &return_type, aggregate_size_t state_size,
-	                             aggregate_initialize_t initialize, aggregate_update_t update,
-	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             aggregate_simple_update_t simple_update = nullptr,
-	                             bind_aggregate_function_t bind = nullptr,
-	                             aggregate_destructor_t destructor = nullptr) {
-		AggregateFunction function =
-		    UDFWrapper::CreateAggregateFunction(name, arguments, return_type, state_size, initialize, update, combine,
-		                                        finalize, simple_update, bind, destructor);
-		UDFWrapper::RegisterAggrFunction(function, *context);
-	}
-	// NOLINTEND
 
 protected:
 	//! Identified used to uniquely identify connections to the database.

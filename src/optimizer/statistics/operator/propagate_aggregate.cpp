@@ -122,7 +122,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 			// aggregate has a filter - bail
 			return;
 		}
-		const string &fun_name = aggr_expr.function.name;
+		const string &fun_name = aggr_expr.function.GetName();
 		if (fun_name == "min" || fun_name == "max") {
 			if (aggr_expr.children.size() != 1 ||
 			    aggr_expr.children[0]->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {

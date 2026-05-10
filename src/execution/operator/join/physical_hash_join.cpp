@@ -1092,8 +1092,8 @@ static unique_ptr<TableFilter> CreateComparisonExpressionFilter(ExpressionType c
 		constant_value.DefaultTryCastAs(column_type);
 	}
 	auto column = make_uniq<BoundReferenceExpression>(column_type, 0ULL);
-	auto filter_expr = make_uniq<BoundComparisonExpression>(
-	    comparison_type, std::move(column), make_uniq<BoundConstantExpression>(std::move(constant_value)));
+	auto filter_expr = BoundComparisonExpression::Create(comparison_type, std::move(column),
+	                                                     make_uniq<BoundConstantExpression>(std::move(constant_value)));
 	return make_uniq<ExpressionFilter>(std::move(filter_expr));
 }
 

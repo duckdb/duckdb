@@ -71,12 +71,12 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 
 BindResult GroupBinder::BindConstant(ConstantExpression &constant) {
 	// constant as root expression
-	if (!constant.value.type().IsIntegral()) {
+	if (!constant.GetValue().type().IsIntegral()) {
 		// non-integral expression, we just leave the constant here.
 		return ExpressionBinder::BindExpression(constant, 0);
 	}
 	// INTEGER constant: we use the integer as an index into the select list (e.g. GROUP BY 1)
-	auto index = (idx_t)constant.value.GetValue<int64_t>();
+	auto index = (idx_t)constant.GetValue().GetValue<int64_t>();
 	return BindSelectRef(index - 1);
 }
 

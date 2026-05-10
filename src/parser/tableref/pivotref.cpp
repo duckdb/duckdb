@@ -201,7 +201,7 @@ static bool TryFoldConstantForBackwardsCompatibility(const ParsedExpression &exp
 	}
 	case ExpressionType::VALUE_CONSTANT: {
 		auto &constant = expr.Cast<ConstantExpression>();
-		value = constant.value;
+		value = constant.GetValue();
 		return true;
 	}
 	case ExpressionType::OPERATOR_CAST: {

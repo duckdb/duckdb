@@ -313,7 +313,7 @@ template <class T>
 void AlpRDCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (AlpRDCompressionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
+	scan_vector.ToUnifiedFormat(vdata);
 	state.Append(vdata, count);
 }
 

@@ -34,6 +34,7 @@ class PipelineBuildState;
 class MetaPipeline;
 class PhysicalPlan;
 
+enum class TableFunctionParallelism : uint8_t;
 enum class OperatorCachingMode : uint8_t { NONE, PARTITIONED, ORDERED, UNORDERED };
 
 //! PhysicalOperator is the base class of the physical operators present in the execution plan.
@@ -144,6 +145,9 @@ public:
 	virtual bool ParallelSource() const {
 		return false;
 	}
+
+	//! How this source manages parallelism
+	virtual TableFunctionParallelism SourceParallelism() const;
 
 	virtual bool SupportsPartitioning(const OperatorPartitionInfo &partition_info) const {
 		if (partition_info.AnyRequired()) {

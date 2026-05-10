@@ -195,6 +195,7 @@ const duckdb_cast_mode = DUCKDB_CAST_MODE_
     DUCKDB_TYPE_INTEGER_LITERAL = 38
     DUCKDB_TYPE_TIME_NS = 39
     DUCKDB_TYPE_GEOMETRY = 40
+    DUCKDB_TYPE_TIMESTAMP_TZ_NS = 42
 end
 const DUCKDB_TYPE = DUCKDB_TYPE_
 
@@ -361,6 +362,7 @@ INTERNAL_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIMESTAMP_MS => duckdb_timestamp_ms,
     DUCKDB_TYPE_TIMESTAMP_NS => duckdb_timestamp_ns,
     DUCKDB_TYPE_TIMESTAMP_TZ => duckdb_timestamp,
+    DUCKDB_TYPE_TIMESTAMP_TZ_NS => duckdb_timestamp_ns,
     DUCKDB_TYPE_DATE => duckdb_date,
     DUCKDB_TYPE_TIME => duckdb_time,
     DUCKDB_TYPE_TIME_TZ => duckdb_time_tz,
@@ -400,6 +402,7 @@ JULIA_TYPE_MAP = Dict(
     DUCKDB_TYPE_TIME_TZ => Time,
     DUCKDB_TYPE_TIMESTAMP => DateTime,
     DUCKDB_TYPE_TIMESTAMP_TZ => DateTime,
+    DUCKDB_TYPE_TIMESTAMP_TZ_NS => DateTime,
     DUCKDB_TYPE_TIMESTAMP_S => DateTime,
     DUCKDB_TYPE_TIMESTAMP_MS => DateTime,
     DUCKDB_TYPE_TIMESTAMP_NS => DateTime,

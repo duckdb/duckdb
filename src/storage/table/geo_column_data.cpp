@@ -385,7 +385,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 			scan_chunk.SetCardinality(to_scan);
 
 			// Verify the scan chunk
-			scan_chunk.Verify();
+			scan_chunk.Verify(GetDatabase());
 
 			append_chunk.Reset();
 			append_chunk.SetCardinality(to_scan);
@@ -480,7 +480,7 @@ unique_ptr<ColumnCheckpointState> GeoColumnData::Checkpoint(const RowGroup &row_
 		scan_chunk.SetCardinality(to_scan);
 
 		// Verify the scan chunk
-		scan_chunk.Verify();
+		scan_chunk.Verify(GetDatabase());
 
 		append_chunk.Reset();
 		append_chunk.SetCardinality(to_scan);

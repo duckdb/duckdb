@@ -199,6 +199,9 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option.second.empty()) {
 				throw BinderException("FILE_SIZE_BYTES cannot be empty");
 			}
+			if (!function.file_size_bytes) {
+				throw BinderException("FILE_SIZE_BYTES not implemented for %s", function.name);
+			}
 			file_size_bytes = ParseBytesArg(loption, option.second[0]);
 		} else if (loption == "batches_per_file" || loption == "row_groups_per_file") {
 			if (option.second.empty()) {

@@ -176,7 +176,7 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}
 			// Found a matching function, bind it as an aggregate
-			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+			const auto &best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 			auto aggregate = function_binder.BindAggregateFunction(best_function, std::move(bound_children), nullptr,
 			                                                       AggregateType::NON_DISTINCT);
 

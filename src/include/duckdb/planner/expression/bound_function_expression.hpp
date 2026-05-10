@@ -20,9 +20,8 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_FUNCTION;
 
 public:
-	BoundFunctionExpression(LogicalType return_type, BoundScalarFunction bound_function,
-	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,
-	                        bool is_operator = false);
+	BoundFunctionExpression(BoundScalarFunction bound_function, vector<unique_ptr<Expression>> arguments,
+	                        unique_ptr<FunctionData> bind_info, bool is_operator = false);
 
 	//! The bound function expression
 	BoundScalarFunction function;
@@ -48,6 +47,11 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
+
+private:
+	static ExpressionType GetFunctionExpressionType(const BoundScalarFunction &bound_function,
+	                                                const vector<unique_ptr<Expression>> &arguments,
+	                                                optional_ptr<FunctionData> bind_info);
 };
 
 } // namespace duckdb

@@ -90,9 +90,9 @@ unique_ptr<Expression> TimeStampComparison::Apply(LogicalOperator &op, vector<re
 
 		auto left_copy = cast_columnref->Copy();
 		auto right_copy = cast_columnref->Copy();
-		auto lt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(
-		    ExpressionType::COMPARE_LESSTHAN, std::move(right_copy), std::move(val_for_comparison));
-		auto gt_eq_expr = make_uniq_base<Expression, BoundComparisonExpression>(
+		auto lt_eq_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHAN, std::move(right_copy),
+		                                                    std::move(val_for_comparison));
+		auto gt_eq_expr = BoundComparisonExpression::Create(
 		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(left_copy), std::move(original_val_for_comparison));
 		new_expr->children.push_back(std::move(gt_eq_expr));
 		new_expr->children.push_back(std::move(lt_eq_expr));

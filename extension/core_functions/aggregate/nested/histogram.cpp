@@ -72,7 +72,7 @@ void HistogramUpdateFunction(Vector inputs[], AggregateInputData &aggr_input, id
 	UnifiedVectorFormat input_data;
 	OP::PrepareData(input, count, extra_state, input_data);
 
-	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>(count);
+	auto states = state_vector.Values<HistogramAggState<T, typename MAP_TYPE::MAP_TYPE> *>();
 	auto input_values = UnifiedVectorFormat::GetData<T>(input_data);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -92,7 +92,7 @@ template <class OP, class T, class MAP_TYPE>
 void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	using HIST_STATE = HistogramAggState<T, typename MAP_TYPE::MAP_TYPE>;
 
-	auto states = state_vector.Values<HIST_STATE *>(count);
+	auto states = state_vector.Values<HIST_STATE *>();
 
 	auto &mask = FlatVector::ValidityMutable(result);
 	auto old_len = ListVector::GetListSize(result);
@@ -132,7 +132,7 @@ void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vecto
 	}
 	D_ASSERT(current_offset == old_len + new_entries);
 	ListVector::SetListSize(result, current_offset);
-	result.Verify(count);
+	result.Verify();
 }
 
 template <class OP, class T, class MAP_TYPE>
@@ -213,7 +213,7 @@ unique_ptr<FunctionData> HistogramBindFunction(BindAggregateFunctionInput &input
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	function = GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(GetHistogramFunction<IS_ORDERED>(arguments[0]->GetReturnType()));
 	return make_uniq<VariableReturnBindData>(function.GetReturnType());
 }
 

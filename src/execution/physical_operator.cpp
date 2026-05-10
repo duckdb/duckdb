@@ -1,4 +1,5 @@
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/render_tree.hpp"
@@ -138,6 +139,10 @@ OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &conte
                                                          GlobalSourceState &gstate, LocalSourceState &lstate,
                                                          const OperatorPartitionInfo &partition_info) const {
 	throw InternalException("Calling GetPartitionData on a node that does not support it");
+}
+
+TableFunctionParallelism PhysicalOperator::SourceParallelism() const {
+	return TableFunctionParallelism::SELF_MANAGED_PARALLELISM;
 }
 
 ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {

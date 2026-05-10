@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -489,15 +490,17 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 		}
 		return true;
 	}
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
 		Value val;
-		bool left_is_ref = comp.left->GetExpressionClass() == ExpressionClass::BOUND_REF;
-		bool right_is_ref = comp.right->GetExpressionClass() == ExpressionClass::BOUND_REF;
-		if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
-			val = comp.right->Cast<BoundConstantExpression>().value;
-		} else if (comp.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
-			val = comp.left->Cast<BoundConstantExpression>().value;
+		auto &left = BoundComparisonExpression::Left(comp);
+		auto &right = BoundComparisonExpression::Right(comp);
+		bool left_is_ref = left.GetExpressionClass() == ExpressionClass::BOUND_REF;
+		bool right_is_ref = right.GetExpressionClass() == ExpressionClass::BOUND_REF;
+		if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT && left_is_ref) {
+			val = right.Cast<BoundConstantExpression>().value;
+		} else if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT && right_is_ref) {
+			val = left.Cast<BoundConstantExpression>().value;
 		} else {
 			return false;
 		}
@@ -604,8 +607,8 @@ void ExtractExpressionsFromValues(const value_set_t &unique_values, BoundColumnR
                                   vector<unique_ptr<Expression>> &expressions) {
 	for (const auto &value : unique_values) {
 		auto bound_constant = make_uniq<BoundConstantExpression>(value);
-		auto filter_expr = make_uniq<BoundComparisonExpression>(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
-		                                                        std::move(bound_constant));
+		auto filter_expr = BoundComparisonExpression::Create(ExpressionType::COMPARE_EQUAL, bound_ref.Copy(),
+		                                                     std::move(bound_constant));
 		expressions.push_back(std::move(filter_expr));
 	}
 }

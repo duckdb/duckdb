@@ -672,7 +672,7 @@ void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t coun
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<date_t, string_t>(input, result, count, [&](date_t input) {
-		if (Date::IsFinite(input)) {
+		if (input.IsFinite()) {
 			dtime_t time(0);
 			idx_t len = GetLength(input, time, 0, nullptr);
 			string_t target = heap.EmptyString(len);
@@ -686,7 +686,7 @@ void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t coun
 }
 
 string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, StringHeap &heap) const {
-	if (Timestamp::IsFinite(input)) {
+	if (input.IsFinite()) {
 		date_t date;
 		dtime_t time;
 		Timestamp::Convert(input, date, time);
@@ -709,7 +709,7 @@ string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_t &input, StringH
 }
 
 string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, StringHeap &heap) const {
-	if (Timestamp::IsFinite(input)) {
+	if (input.IsFinite()) {
 		date_t date;
 		dtime_t time;
 		int32_t nanos;
@@ -729,7 +729,7 @@ string_t StrfTimeFormat::ConvertTimestampValue(const timestamp_ns_t &input, Stri
 		target.Finalize();
 		return target;
 	} else {
-		return heap.AddString(Timestamp::ToString(input));
+		return heap.AddString(Timestamp::ToString(timestamp_t(input.value)));
 	}
 }
 
@@ -742,7 +742,8 @@ void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t
 }
 
 void StrfTimeFormat::ConvertTimestampNSVector(Vector &input, Vector &result, idx_t count) {
-	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP_NS ||
+	         input.GetType().id() == LogicalTypeId::TIMESTAMP_TZ_NS);
 	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
 	auto &heap = StringVector::GetStringHeap(result);
 	UnaryExecutor::Execute<timestamp_ns_t, string_t>(
@@ -1559,7 +1560,7 @@ bool StrpTimeFormat::ParseResult::TryToTimestampNS(timestamp_ns_t &result) {
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time, result.value)) {
 		return false;
 	}
-	return Timestamp::IsFinite(result);
+	return result.IsFinite();
 }
 
 string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &format_specifier) {

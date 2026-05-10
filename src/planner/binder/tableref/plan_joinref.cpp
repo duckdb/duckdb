@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
@@ -152,14 +153,16 @@ static bool IsComparisonExpression(const Expression &expr) {
 static bool CreateJoinCondition(Expression &expr, const unordered_set<TableIndex> &left_bindings,
                                 const unordered_set<TableIndex> &right_bindings, vector<JoinCondition> &conditions) {
 	// comparison
-	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	auto left_side = JoinSide::GetJoinSide(*comparison.left, left_bindings, right_bindings);
-	auto right_side = JoinSide::GetJoinSide(*comparison.right, left_bindings, right_bindings);
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
+	auto &left_expr = BoundComparisonExpression::Left(comparison);
+	auto &right_expr = BoundComparisonExpression::Right(comparison);
+	auto left_side = JoinSide::GetJoinSide(left_expr, left_bindings, right_bindings);
+	auto right_side = JoinSide::GetJoinSide(right_expr, left_bindings, right_bindings);
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		auto comp_type = expr.GetExpressionType();
-		auto left = std::move(comparison.left);
-		auto right = std::move(comparison.right);
+		auto left = std::move(BoundComparisonExpression::LeftMutable(comparison));
+		auto right = std::move(BoundComparisonExpression::RightMutable(comparison));
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);

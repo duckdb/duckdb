@@ -202,8 +202,7 @@ void WALWriteState::WriteDelete(DeleteInfo &info) {
 			rows[i] = UnsafeNumericCast<int64_t>(info.base_row) + delete_rows[i];
 		}
 	}
-	delete_chunk->SetCardinality(info.count);
-	FlatVector::SetSize(delete_chunk->data[0], count_t(info.count));
+	delete_chunk->SetChildCardinality(info.count);
 	log.WriteDelete(*delete_chunk);
 }
 

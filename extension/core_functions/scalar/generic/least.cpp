@@ -140,7 +140,7 @@ void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			continue;
 		}
 
-		auto entries = input.data[col_idx].template Values<T>(input.size());
+		auto entries = input.data[col_idx].template Values<T>();
 
 		if (entries.CanHaveNull()) {
 			// potential new null entries: have to check the null mask
@@ -228,8 +228,9 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 		bound_function.SetInitStateCallback(LeastGreatestSortKeyInit<LEAST_GREATER_OP>);
 		break;
 	}
-	bound_function.GetArguments()[0] = child_type;
-	bound_function.SetVarArgs(child_type);
+	for (auto &arg : bound_function.GetArguments()) {
+		arg = child_type;
+	}
 	bound_function.SetReturnType(child_type);
 	return nullptr;
 }

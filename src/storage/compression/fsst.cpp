@@ -115,7 +115,7 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = state_p.Cast<FSSTAnalyzeState>();
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 
 	state.count += count;
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
@@ -439,7 +439,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 
 	// Get vector data
 	UnifiedVectorFormat vdata;
-	scan_vector.ToUnifiedFormat(count, vdata);
+	scan_vector.ToUnifiedFormat(vdata);
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	// Collect pointers to strings to compress

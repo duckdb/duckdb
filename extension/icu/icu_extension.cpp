@@ -157,11 +157,11 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(BindScalarFunctionInput &
 	auto &bound_function = input.GetBoundFunction();
 
 	//! Return a tagged collator
-	if (!bound_function.extra_info.empty()) {
-		return make_uniq<IcuBindData>(bound_function.extra_info);
+	if (!bound_function.GetExtraInfo().empty()) {
+		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 
-	const auto collation = IcuBindData::DecodeFunctionName(bound_function.name);
+	const auto collation = IcuBindData::DecodeFunctionName(bound_function.GetName());
 	auto splits = StringUtil::Split(collation, "_");
 	if (splits.size() == 1) {
 		return make_uniq<IcuBindData>(splits[0], "");
@@ -185,8 +185,8 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(BindScalarFunctionInput &
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) expected a non-null collation");
 	}
 	//! Verify tagged collation
-	if (!bound_function.extra_info.empty()) {
-		return make_uniq<IcuBindData>(bound_function.extra_info);
+	if (!bound_function.GetExtraInfo().empty()) {
+		return make_uniq<IcuBindData>(bound_function.GetExtraInfo());
 	}
 	auto splits = StringUtil::Split(StringValue::Get(val), "_");
 	if (splits.size() == 1) {

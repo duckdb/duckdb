@@ -1020,8 +1020,8 @@ bool BaseColumnPruner::HandleExtractRecursive(unique_ptr<Expression> &expr_p,
 		return false;
 	}
 	auto &function = expr.Cast<BoundFunctionExpression>();
-	if (function.function.name != "struct_extract_at" && function.function.name != "struct_extract" &&
-	    function.function.name != "array_extract" && function.function.name != "variant_extract") {
+	if (function.function.GetName() != "struct_extract_at" && function.function.GetName() != "struct_extract" &&
+	    function.function.GetName() != "array_extract" && function.function.GetName() != "variant_extract") {
 		return false;
 	}
 	if (!function.bind_info) {

@@ -1,0 +1,20 @@
+diff --git a/src/spatial/modules/main/spatial_functions_scalar.cpp b/src/spatial/modules/main/spatial_functions_scalar.cpp
+index 9beacda..2f519f7 100644
+--- a/src/spatial/modules/main/spatial_functions_scalar.cpp
++++ b/src/spatial/modules/main/spatial_functions_scalar.cpp
+@@ -5458,6 +5458,7 @@ struct ST_LocateAlong {
+ 		if (arguments.size() == 2) {
+ 			// Push back offset constant
+ 			arguments.push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0.0)));
++			input.GetBoundFunction().GetArguments().push_back(LogicalType::DOUBLE);
+ 		}
+ 		return nullptr; // No additional data needed
+ 	}
+@@ -5560,6 +5561,7 @@ struct ST_LocateBetween {
+ 		if (arguments.size() == 3) {
+ 			// Push back offset constant
+ 			arguments.push_back(make_uniq<BoundConstantExpression>(Value::DOUBLE(0.0)));
++			input.GetBoundFunction().GetArguments().push_back(LogicalType::DOUBLE);
+ 		}
+ 		return nullptr; // No additional data needed
+ 	}

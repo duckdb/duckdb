@@ -108,7 +108,7 @@ struct ListFilterFunctor {
 		SelectionVector sel(elem_cnt);
 
 		// compute the new lengths and offsets, and create a selection vector
-		for (auto entry : lambda_vector.Values<bool>(elem_cnt)) {
+		for (auto entry : lambda_vector.Values<bool>()) {
 			// set length and offset of empty lists
 			while (info.row_idx < info.entry_lengths.size() && !info.entry_lengths[info.row_idx]) {
 				result_entries[info.row_idx].offset = info.offset;
@@ -158,7 +158,7 @@ vector<LambdaFunctions::ColumnInfo> LambdaFunctions::GetColumnInfo(DataChunk &ar
 	// skip the input list and then insert all remaining input vectors
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		data.emplace_back(args.data[i]);
-		args.data[i].ToUnifiedFormat(row_count, data.back().format);
+		args.data[i].ToUnifiedFormat(data.back().format);
 	}
 	return data;
 }
@@ -200,9 +200,7 @@ static void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::Colum
 	}
 
 	// ensure all input vectors are sized to the chunk cardinality (some references inherit a different size)
-	for (idx_t i = 0; i < info.input_chunk.ColumnCount(); i++) {
-		FlatVector::SetSize(info.input_chunk.data[i], count_t(elem_cnt));
-	}
+	info.input_chunk.SetChildCardinality(elem_cnt);
 
 	// execute the lambda expression
 	info.expr_executor->Execute(info.input_chunk, info.lambda_chunk);
@@ -272,9 +270,8 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 	auto mutable_column_infos = LambdaFunctions::GetMutableColumnInfo(info.column_infos);
 
 	// special-handling for the child_vector
-	auto child_vector_size = ListVector::GetListSize(args.data[0]);
 	LambdaFunctions::ColumnInfo child_info(*info.child_vector);
-	info.child_vector->ToUnifiedFormat(child_vector_size, child_info.format);
+	info.child_vector->ToUnifiedFormat(child_info.format);
 
 	// get the expression executor
 	LambdaExecuteInfo execute_info(state.GetContext(), *info.lambda_expr, args, info.has_index, *info.child_vector);
@@ -354,7 +351,7 @@ static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &resul
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_ptr<Expression>> &arguments,
                                                                 ClientContext &context,
-                                                                ScalarFunction &bound_function) {
+                                                                BoundScalarFunction &bound_function) {
 	// NULL list parameter
 	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
 		bound_function.GetArguments()[0] = LogicalType::SQLNULL;
@@ -371,7 +368,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaPrepareBind(vector<unique_pt
 	return nullptr;
 }
 
-unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
+unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context, BoundScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments,
                                                          const bool has_index) {
 	unique_ptr<FunctionData> bind_data = ListLambdaPrepareBind(arguments, context, bound_function);

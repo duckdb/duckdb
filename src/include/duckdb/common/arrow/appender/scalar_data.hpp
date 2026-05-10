@@ -94,7 +94,7 @@ struct ArrowScalarBaseData {
 		idx_t size = to - from;
 		D_ASSERT(size <= input_size);
 		UnifiedVectorFormat format;
-		input.ToUnifiedFormat(input_size, format);
+		input.ToUnifiedFormat(format);
 
 		// append the validity mask
 		append_data.AppendValidity(format, from, to);

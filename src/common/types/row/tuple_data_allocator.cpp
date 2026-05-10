@@ -146,10 +146,10 @@ bool TupleDataAllocator::BuildFastPath(TupleDataSegment &segment, TupleDataPinSt
 	}
 
 	// We can do the fast path append!
-	auto row_locations = FlatVector::GetDataMutable<data_ptr_t>(chunk_state.row_locations);
+	auto row_locations = FlatVector::Writer<data_ptr_t>(chunk_state.row_locations, append_count, append_offset);
 	const auto base_row_ptr = GetRowPointer(pin_state, part) + part.count * row_width;
 	for (idx_t i = 0; i < append_count; i++) {
-		row_locations[append_offset + i] = base_row_ptr + i * row_width;
+		row_locations.WriteValue(base_row_ptr + i * row_width);
 	}
 
 	// Increment counts and sizes
@@ -502,7 +502,7 @@ void SortKeyRecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto &new_heap_sel = *new_heap_data.sel;
 
@@ -554,7 +554,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
-	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	new_heap_ptrs.ToUnifiedFormat(new_heap_data);
 	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 

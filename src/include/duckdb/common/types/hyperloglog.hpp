@@ -10,6 +10,7 @@
 
 #include "duckdb/common/bit_utils.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -79,34 +80,43 @@ public:
 public:
 	//! Add data to this HLL
 	void Update(Vector &input, Vector &hash_vec, const idx_t count) {
-		UnifiedVectorFormat idata;
-		input.ToUnifiedFormat(count, idata);
-
-		UnifiedVectorFormat hdata;
-		hash_vec.ToUnifiedFormat(count, hdata);
-		const auto hashes = UnifiedVectorFormat::GetData<hash_t>(hdata);
+		auto idata = input.Validity();
+		const auto hashes = hash_vec.Values<hash_t>();
 
 		if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (idata.validity.RowIsValid(0)) {
-				InsertElement(hashes[0]);
+			if (idata.IsValid(0)) {
+				InsertElement(hashes[0].GetValue());
 			}
 		} else {
 			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
-			if (idata.validity.CannotHaveNull()) {
+			if (idata.CannotHaveNull()) {
 				for (idx_t i = 0; i < count; ++i) {
-					const auto hash = hashes[i];
+					const auto hash = hashes[i].GetValue();
 					InsertElement(hash);
 				}
 			} else {
 				for (idx_t i = 0; i < count; ++i) {
-					if (idata.validity.RowIsValid(idata.sel->get_index(i))) {
-						const auto hash = hashes[i];
+					if (idata.IsValid(i)) {
+						const auto hash = hashes[i].GetValue();
 						InsertElement(hash);
 					}
 				}
 			}
 		}
-	};
+	}
+
+	void Update(const Vector &hash_vec) {
+		const auto hashes = FlatVector::GetData<const hash_t>(hash_vec);
+		if (hash_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			InsertElement(hashes[0]);
+		} else {
+			D_ASSERT(hash_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+			const auto count = hash_vec.size();
+			for (idx_t i = 0; i < count; ++i) {
+				InsertElement(hashes[i]);
+			}
+		}
+	}
 
 	//! Algorithm 4
 	void ExtractCounts(uint32_t *c) const {
@@ -140,6 +150,68 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
+};
+
+//! Utility for computing HLL in parallel
+class ParallelHyperLogLogLocalState {
+public:
+	ParallelHyperLogLogLocalState() : count(0) {
+	}
+
+public:
+	void Update(const Vector &hashes) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		hll.Update(hashes);
+		count += hashes.size();
+	}
+
+	void Merge(const ParallelHyperLogLogLocalState &other) DUCKDB_REQUIRES(lock) DUCKDB_REQUIRES(other.lock) {
+		hll.Merge(other.hll);
+		count += other.count;
+	}
+
+	pair<idx_t, idx_t> GetCounts() const {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		return {hll.Count(), count};
+	}
+
+public:
+	mutable annotated_mutex lock;
+
+private:
+	HyperLogLog hll DUCKDB_GUARDED_BY(lock);
+	idx_t count DUCKDB_GUARDED_BY(lock);
+};
+
+class ParallelHyperLogLogGlobalState {
+public:
+	ParallelHyperLogLogGlobalState() {
+	}
+
+public:
+	ParallelHyperLogLogLocalState &GetLocalState() {
+		auto state = make_uniq<ParallelHyperLogLogLocalState>();
+		auto &result = *state;
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		states.emplace_back(std::move(state));
+		return result;
+	}
+
+	unique_ptr<ParallelHyperLogLogLocalState> GetMergedState() const {
+		auto merged_state = make_uniq<ParallelHyperLogLogLocalState>();
+		annotated_lock_guard<annotated_mutex> merged_guard(merged_state->lock);
+
+		annotated_lock_guard<annotated_mutex> global_guard(lock);
+		for (const auto &state : states) {
+			annotated_lock_guard<annotated_mutex> state_guard(state->lock);
+			merged_state->Merge(*state);
+		}
+		return merged_state;
+	}
+
+private:
+	mutable annotated_mutex lock;
+	vector<unique_ptr<ParallelHyperLogLogLocalState>> states DUCKDB_GUARDED_BY(lock);
 };
 
 } // namespace duckdb

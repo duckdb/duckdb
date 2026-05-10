@@ -63,6 +63,8 @@ public:
 
 	const ChunkRows &GetHashGroups(GlobalSourceState &global_state) const override;
 
+	void RegisterHyperLogLog(LocalSinkState &local_state, ParallelHyperLogLogLocalState &hll_state) const override;
+
 public:
 	//! The host's estimated row count
 	const idx_t estimated_cardinality;

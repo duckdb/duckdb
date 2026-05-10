@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count,
+AggregateObject::AggregateObject(BoundAggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
                                  Expression *filter)
     : function(std::move(function)),

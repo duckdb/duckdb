@@ -22,7 +22,7 @@ static void IsNullLoop(Vector &input, Vector &result, idx_t count) {
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::Writer<bool>(result, count);
-		auto entries = input.Validity(count);
+		auto entries = input.Validity();
 		for (idx_t i = 0; i < count; i++) {
 			result_data.WriteValue(INVERSE ? entries.IsValid(i) : !entries.IsValid(i));
 		}
@@ -44,7 +44,7 @@ bool VectorOperations::HasNotNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return !ConstantVector::IsNull(input);
 	} else {
-		auto entries = input.Validity(count);
+		auto entries = input.Validity();
 		if (!entries.CanHaveNull()) {
 			return true;
 		}
@@ -64,7 +64,7 @@ bool VectorOperations::HasNull(Vector &input, idx_t count) {
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return ConstantVector::IsNull(input);
 	} else {
-		auto entries = input.Validity(count);
+		auto entries = input.Validity();
 		if (!entries.CanHaveNull()) {
 			return false;
 		}
@@ -81,7 +81,7 @@ idx_t VectorOperations::CountNotNull(Vector &input, const idx_t count) {
 	idx_t valid = 0;
 
 	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
+	input.ToUnifiedFormat(vdata);
 	if (vdata.validity.CannotHaveNull()) {
 		return count;
 	}

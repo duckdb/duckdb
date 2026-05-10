@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 
 namespace duckdb {
@@ -134,7 +135,7 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
-		const auto delta = dt - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(dt, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -149,7 +150,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(input, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -191,8 +192,12 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
-	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames &frames, Vector &result,
-	                   idx_t ridx) {
+	                   const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row, idx_t count,
+	                   Vector &result, idx_t row_idx) {
+		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
+		using ID = QuantileIndirect<INPUT_TYPE>;
+		using MadIndirect = QuantileComposed<MAD, ID>;
+
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
@@ -200,58 +205,60 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetDataMutable<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::ValidityMutable(result);
 
 		QuantileIncluded<INPUT_TYPE> included(fmask, data);
-		const auto n = FrameSize(included, frames);
 
-		if (!n) {
-			auto &rmask = FlatVector::ValidityMutable(result);
-			rmask.Set(ridx, false);
-			return;
-		}
-
-		//	Compute the median
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		D_ASSERT(bind_data.quantiles.size() == 1);
 		const auto &quantile = bind_data.quantiles[0];
 		auto &window_state = state.GetOrCreateWindowState();
-		MEDIAN_TYPE med;
-		if (gstate && gstate->HasTree()) {
-			med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
-		} else {
-			window_state.UpdateSkip(data, frames, included);
-			med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
-		}
-
-		//  Lazily initialise frame state
-		window_state.SetCount(frames.back().end - frames.front().start);
-		auto index2 = window_state.m.data();
-		D_ASSERT(index2);
-
-		// The replacement trick does not work on the second index because if
-		// the median has changed, the previous order is not correct.
-		// It is probably close, however, and so reuse is helpful.
 		auto &prevs = window_state.prevs;
-		ReuseIndexes(index2, frames, prevs);
-		std::partition(index2, index2 + window_state.count, included);
+		MEDIAN_TYPE med;
 
-		QuantileInterpolator<false> interp(quantile, n, false);
+		for (idx_t ridx = 0; ridx < count; ++ridx) {
+			const auto &frames = subframes_per_row[ridx];
+			const auto n = FrameSize(included, frames);
+			if (!n) {
+				rmask.Set(ridx, false);
+				continue;
+			}
 
-		// Compute mad from the second index
-		using ID = QuantileIndirect<INPUT_TYPE>;
-		ID indirect(data);
+			//	Compute the median
+			if (gstate && gstate->HasTree()) {
+				med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result,
+				                                                                         quantile);
+			} else {
+				window_state.UpdateSkip(data, frames, included);
+				med = window_state.template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
+			}
 
-		using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
-		MAD mad(med);
+			//  Lazily initialise frame state
+			window_state.SetCount(frames.back().end - frames.front().start);
+			auto index2 = window_state.m.data();
+			D_ASSERT(index2);
 
-		using MadIndirect = QuantileComposed<MAD, ID>;
-		MadIndirect mad_indirect(mad, indirect);
-		rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
+			// The replacement trick does not work on the second index because if
+			// the median has changed, the previous order is not correct.
+			// It is probably close, however, and so reuse is helpful.
+			ReuseIndexes(index2, frames, prevs);
+			std::partition(index2, index2 + window_state.count, included);
 
-		//	Prev is used by both skip lists and increments
-		prevs = frames;
+			QuantileInterpolator<false> interp(quantile, n, false);
+
+			// Compute mad from the second index
+			ID indirect(data);
+
+			MAD mad(med);
+
+			MadIndirect mad_indirect(mad, indirect);
+			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
+
+			//	Prev is used by both skip lists and increments
+			prevs = frames;
+		}
 	}
 };
 
@@ -269,7 +276,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.SetBindCallback(BindMAD);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 #ifndef DUCKDB_SMALLER_BINARY
-	fun.SetWindowCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
+	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
 #endif
 	return fun;
@@ -322,8 +329,9 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	function = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
-	function.name = "mad";
+	auto impl = GetMedianAbsoluteDeviationAggregateFunction(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(impl);
+	function.SetName("mad");
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
 	return BindMAD(input);
 }

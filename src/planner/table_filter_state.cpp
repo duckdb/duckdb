@@ -39,7 +39,7 @@ void JoinFilterTableFilterState::PrepareSlicedKeys(Vector &keys_v, SelectionVect
 		// Apply sel first (into keys_v space), then cast to key_type
 		Vector sliced_src(keys_v.GetType());
 		sliced_src.Slice(keys_v, sel, approved_tuple_count);
-		sliced_src.Flatten(approved_tuple_count);
+		sliced_src.Flatten();
 		VectorOperations::DefaultCast(sliced_src, keys_sliced_v, approved_tuple_count);
 	}
 }

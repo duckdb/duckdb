@@ -479,7 +479,7 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformResetOptions(PEGTrans
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		auto &const_expr = opt.second->Cast<ConstantExpression>();
-		if (!const_expr.value.IsNull()) {
+		if (!const_expr.GetValue().IsNull()) {
 			throw ParserException("Reset option \"%s\" cannot set any value. Did you mean to use SET?", opt.first);
 		}
 		option_names.insert(opt.first);
