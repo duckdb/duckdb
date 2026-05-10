@@ -1,0 +1,103 @@
+# name: test/sql/subquery/any_all/test_multi_column_not_in_null_22418.test
+# description: Multi-column NOT IN over a subquery must follow SQL three-valued logic when the
+# group: [any_all]
+
+#              subquery contains rows with NULL key columns. Specifically, a probe row that has
+#              a non-NULL value definitively differing from a non-NULL key column of every NULL-
+#              bearing build row should evaluate to TRUE for NOT IN (not NULL).
+
+# Issue #22418
+
+statement ok
+CREATE TABLE t_a(i INT, j INT);
+
+statement ok
+CREATE TABLE t_b(i INT, j INT);
+
+statement ok
+INSERT INTO t_a VALUES (1,1), (2,2), (3,NULL), (NULL,4);
+
+statement ok
+INSERT INTO t_b VALUES (1,1), (NULL,4);
+
+# Per SQL ternary logic over rows of t_a:
+#   (1,1) — exact match with t_b's (1,1)            → IN = TRUE       → NOT IN = FALSE
+#   (2,2) — vs (1,1) FALSE; vs (NULL,4) FALSE       → IN = FALSE      → NOT IN = TRUE
+#                  (NULL,4): j component 2 != 4 is FALSE; AND with NULL stays FALSE.
+#   (3,NULL) — probe has NULL key                   → result is NULL
+#   (NULL,4) — probe has NULL key                   → result is NULL
+#
+# Therefore the count partition (T, F, N) must be (1, 1, 2) and sum to 4.
+
+query I
+SELECT COUNT(*) FROM t_a WHERE ((i, j) NOT IN (SELECT i, j FROM t_b));
+----
+1
+
+query I
+SELECT COUNT(*) FROM t_a WHERE NOT (((i, j) NOT IN (SELECT i, j FROM t_b)));
+----
+1
+
+query I
+SELECT COUNT(*) FROM t_a WHERE (((i, j) NOT IN (SELECT i, j FROM t_b))) IS NULL;
+----
+2
+
+# row-level visibility of the predicate
+query IIT
+SELECT i, j, ((i, j) NOT IN (SELECT i, j FROM t_b)) AS not_in
+FROM t_a
+ORDER BY i NULLS LAST, j NULLS LAST;
+----
+1	1	false
+2	2	true
+3	NULL	NULL
+NULL	4	NULL
+
+# Symmetric: build-side NULL row whose non-NULL columns match the probe's row -> result NULL.
+statement ok
+CREATE TABLE t_c(i INT, j INT);
+
+statement ok
+INSERT INTO t_c VALUES (NULL, 2);
+
+query T
+SELECT (2, 2) IN (SELECT i, j FROM t_c);
+----
+NULL
+
+# Build-side NULL row whose non-NULL column definitively differs from probe -> result FALSE.
+query T
+SELECT (2, 2) IN (SELECT i, j FROM t_b WHERE j = 4);
+----
+false
+
+# Build side has only fully-non-matching rows -> NOT IN is TRUE.
+statement ok
+CREATE TABLE t_d(i INT, j INT);
+
+statement ok
+INSERT INTO t_d VALUES (10, 10), (20, 20);
+
+query T
+SELECT (2, 2) NOT IN (SELECT i, j FROM t_d);
+----
+true
+
+# Single-column NOT IN with NULLs on the right - existing semantics preserved.
+statement ok
+CREATE TABLE t_single(x INT);
+
+statement ok
+INSERT INTO t_single VALUES (1), (NULL);
+
+query T
+SELECT 5 NOT IN (SELECT x FROM t_single);
+----
+NULL
+
+query T
+SELECT 1 NOT IN (SELECT x FROM t_single);
+----
+false
