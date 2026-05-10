@@ -1,0 +1,5 @@
+{
+  "description": "Run with an initial column segment size of 8 bytes.",
+  "on_init": "SET initial_column_segment_size = 8;",
+  "skip_compiled": "true"
+}

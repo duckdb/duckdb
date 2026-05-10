@@ -498,7 +498,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, 0);
+		AppendTransientSegment(l, 0, nullptr);
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
@@ -506,7 +506,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
-		AppendTransientSegment(l, total_rows);
+		AppendTransientSegment(l, total_rows, last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
@@ -534,7 +534,7 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count);
+			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count, append_segment);
 			state.current = data.GetLastSegment(l);
 			state.current->GetNode().InitializeAppend(state);
 		}
@@ -636,26 +636,29 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
-void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
+void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment) {
 	const auto block_size = block_manager.GetBlockSize();
 
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 
 	idx_t segment_size;
-	if (last_transient_segment_size == 0) {
-		// Starting with the `initial_bytes` but making sure we have enough space for at least one row
+	if (!prev_segment) {
+		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
 		segment_size = MinValue<idx_t>(block_size, MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes));
 	} else {
-		segment_size = MinValue<idx_t>(block_size, last_transient_segment_size * 2);
+		const auto prev_segment_size = prev_segment->SegmentSize();
+		segment_size = MinValue<idx_t>(block_size, prev_segment_size * 2);
+		D_ASSERT(IsPowerOfTwo(segment_size));
 	}
+
 	// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
 	// any segment below STANDARD_MASK_SIZE triggers a dead-segment overflow chain
 	if (type.InternalType() == PhysicalType::BIT) {
 		segment_size = MaxValue(segment_size, ValidityMask::STANDARD_MASK_SIZE);
+		segment_size = NextPowerOfTwo(segment_size); // idempotent, if already a power of two
 	}
-	last_transient_segment_size = segment_size;
 	allocation_size += segment_size;
 
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());

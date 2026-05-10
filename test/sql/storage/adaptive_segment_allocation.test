@@ -4,6 +4,16 @@
 
 require vector_size 2048
 
+statement error
+SET initial_column_segment_size = 0
+----
+greater than zero
+
+statement error
+SET initial_column_segment_size = 9
+----
+power of two
+
 statement ok
 SET initial_column_segment_size = 8
 

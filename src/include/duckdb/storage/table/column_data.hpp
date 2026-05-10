@@ -213,7 +213,7 @@ public:
 
 protected:
 	//! Append a transient segment
-	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);
@@ -254,8 +254,6 @@ protected:
 	mutable mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
-	//! Size of the last transient segment - drives the adaptive doubling in AppendTransientSegment
-	idx_t last_transient_segment_size = 0;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 

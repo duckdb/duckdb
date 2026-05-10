@@ -483,6 +483,10 @@ jobs:
         shell: bash
         run: python3 scripts/ci/run_tests.py --test-config=test/configs/block_size_16kB.json ./build/relassert/test/unittest "*"
 
+      - name: All tests with a smaller initial column segment size
+        shell: bash
+        run: python3 scripts/ci/run_tests.py --test-config=test/configs/initial_column_segment_size.json ./build/relassert/test/unittest "*"
+
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04

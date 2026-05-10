@@ -1189,12 +1189,13 @@ struct InitialColumnSegmentSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "initial_column_segment_size";
 	static constexpr const char *Description =
-	    "The initial memory (in bytes) reserved for the first transient column segment. Subsequent segments double in "
-	    "size until reaching the block size.";
+	    "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. "
+	    "Subsequent segments double in size until reaching the block size.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "2048";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
 struct IntegerDivisionSetting {

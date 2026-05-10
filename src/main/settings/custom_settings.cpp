@@ -1315,6 +1315,19 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 }
 
 //===----------------------------------------------------------------------===//
+// Initial Column Segment Size
+//===----------------------------------------------------------------------===//
+void InitialColumnSegmentSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
+	auto initial_column_segment_size = input.GetValue<uint64_t>();
+	if (initial_column_segment_size == 0) {
+		throw InvalidInputException("The initial column segment size must be greater than zero");
+	}
+	if (!IsPowerOfTwo(initial_column_segment_size)) {
+		throw InvalidInputException("The initial column segment size must be a power of two");
+	}
+}
+
+//===----------------------------------------------------------------------===//
 // Log Query Path
 //===----------------------------------------------------------------------===//
 void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
