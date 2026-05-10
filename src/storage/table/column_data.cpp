@@ -625,16 +625,25 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	if (fetch_count == 0) {
 		return;
 	}
+	// Hoist the sel pointer once so the per-row branch becomes a single load+select rather than a
+	// SelectionVector::get_index call (which does the null-check inline). When the caller passes the
+	// identity SelectionVector (sel_data == nullptr) the per-row offset reduces to `offsets[i]`.
+	const sel_t *sel_data = sel.data();
 	// Run-detect at the column-data segment level: cache the current segment pointer and only re-resolve
 	// (which acquires the segment-tree's internal lock) when the next offset falls outside the cached
 	// segment's [row_start, row_start + count) range. This collapses N segment-tree lookups + N tree-locks
 	// to ~one per run for clustered offsets, which is the common case for indexed point-fetches on tables
 	// whose row-id order matches the index's sort order.
+	//
+	// Caching the raw segment pointer across loop iterations is safe because the column-data segment
+	// tree is only mutated during checkpoint/vacuum/alter operations, which do not run concurrently
+	// with a snapshot-isolated fetch. If that invariant ever changes, this cache must be revisited
+	// (or the entire bulk fetch must hold `data.Lock()` for its duration).
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
 	for (idx_t i = 0; i < fetch_count; i++) {
-		const idx_t offset = offsets[sel.get_index(i)];
+		const idx_t offset = offsets[sel_data ? sel_data[i] : i];
 		if (offset > count) {
 			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id out of range");
 		}
@@ -648,11 +657,14 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	}
 	// Apply update overlay with one update_lock acquisition for the whole batch instead of one per row.
 	// The fast path (no updates ever applied) becomes a single uncontended lock + null check.
+	// NOTE: per-row `updates->FetchRow` still acquires its own internal shared lock + buffer pin per row
+	// (see UpdateSegment::FetchRow). For workloads with frequent UPDATEs on the same column this is the
+	// next bottleneck and would be addressed by adding a bulk `UpdateSegment::FetchRows` API.
 	{
 		lock_guard<mutex> update_guard(update_lock);
 		if (updates) {
 			for (idx_t i = 0; i < fetch_count; i++) {
-				const idx_t offset = offsets[sel.get_index(i)];
+				const idx_t offset = offsets[sel_data ? sel_data[i] : i];
 				updates->FetchRow(transaction, NumericCast<idx_t>(offset), result, result_offset + i);
 			}
 		}
