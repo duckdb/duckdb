@@ -2,28 +2,28 @@
 # description: Stress test row group fetching.
 # group: [point]
 
-name IN filter with index scan (50k co-located keys)
+name IN filter with index scan (5M co-located keys, SF10)
 group art
 
 require tpch
 
-cache tpch_sf1_orders_indexed_colocated.duckdb
+cache tpch_sf10_orders_indexed_colocated.duckdb
 
-load
-CALL dbgen(sf=1);
-SET index_scan_percentage = 1.0;
-SET index_scan_max_count = 0;
 # Recreate orders sorted by o_orderkey so its row-ids are contiguous and
 # monotonic in o_orderkey. A subsequent OFFSET/LIMIT on this table picks a
 # perfectly contiguous slice of row-ids, which is exactly the co-located
 # workload Phase 1 of the optimization targets.
+# 5,000,000 contiguous keys. With default row_group_size=122880 and rows in
+# o_orderkey order, this slice spans ~41 row groups and forms one long
+# run for RowGroupCollection::Fetch's run-detection.
+load
+CALL dbgen(sf=10);
+SET index_scan_percentage = 1.0;
+SET index_scan_max_count = 0;
 CREATE TABLE orders_indexed AS FROM orders ORDER BY o_orderkey;
 ALTER TABLE orders_indexed ADD PRIMARY KEY (o_orderkey);
-# 50,000 contiguous keys. With default row_group_size=122880 and rows in
-# o_orderkey order, this slice lands inside ~1 row group and forms one long
-# run for RowGroupCollection::Fetch's run-detection.
 CREATE TABLE colocated_keys AS
-    SELECT o_orderkey FROM orders_indexed OFFSET 100000 LIMIT 50000;
+    SELECT o_orderkey FROM orders_indexed OFFSET 1000000 LIMIT 5000000;
 
 run
 SELECT o_orderkey, o_custkey, o_orderdate, o_totalprice
