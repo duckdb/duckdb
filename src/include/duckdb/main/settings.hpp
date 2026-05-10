@@ -1190,6 +1190,7 @@ struct InitialColumnSegmentSizeSetting {
 	static constexpr const char *Name = "initial_column_segment_size";
 	static constexpr const char *Description =
 	    "The initial memory (in bytes) reserved for the first transient column segment. Must be a power of two. "
+	    "Internally, we subtract the block header size (typically 8 bytes) for segments with or exceeding 1024 bytes. "
 	    "Subsequent segments double in size until reaching the block size.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr const char *DefaultValue = "2048";

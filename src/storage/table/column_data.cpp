@@ -637,8 +637,6 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment) {
-	const auto block_size = block_manager.GetBlockSize();
-
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
 
@@ -646,20 +644,29 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optiona
 	if (!prev_segment) {
 		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
 		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
-		const auto max_initial_bytes = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
-		segment_size = MinValue<idx_t>(block_size, NextPowerOfTwo(max_initial_bytes));
+		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
 	} else {
-		const auto prev_segment_size = prev_segment->SegmentSize();
-		segment_size = MinValue<idx_t>(block_size, prev_segment_size * 2);
+		segment_size = prev_segment->SegmentSize() * 2;
 	}
-	D_ASSERT(segment_size == block_size || IsPowerOfTwo(segment_size));
 
 	// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
 	// any segment below STANDARD_MASK_SIZE triggers a dead-segment overflow chain
 	if (type.InternalType() == PhysicalType::BIT) {
 		segment_size = MaxValue(segment_size, ValidityMask::STANDARD_MASK_SIZE);
-		segment_size = NextPowerOfTwo(segment_size); // idempotent, if already a power of two
 	}
+
+	// We set the segment size to the next power of two minus the block header size to
+	// ensure that we have fixed-size segments which we can group when offloading to temporary storage.
+	// FIXME: turn this into the min. temporary buffer size instead of a magical number,
+	// FIXME: once we allow offloading tinier buffers.
+	if (segment_size >= 1024) {
+		const auto block_header_size = block_manager.GetBlockHeaderSize();
+		segment_size = NextPowerOfTwo(segment_size) - block_header_size;
+	}
+
+	// The maximum segment size is always the block size of the corresponding block manager.
+	const auto block_size = block_manager.GetBlockSize();
+	segment_size = MinValue<idx_t>(block_size, segment_size);
 	allocation_size += segment_size;
 
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());

@@ -1319,8 +1319,9 @@ void IndexScanPercentageSetting::OnSet(SettingCallbackInfo &, Value &input) {
 //===----------------------------------------------------------------------===//
 void InitialColumnSegmentSizeSetting::OnSet(SettingCallbackInfo &, Value &input) {
 	auto initial_column_segment_size = input.GetValue<uint64_t>();
-	if (initial_column_segment_size == 0) {
-		throw InvalidInputException("The initial column segment size must be greater than zero");
+	if (initial_column_segment_size < DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		throw InvalidInputException(
+		    "The initial column segment size must be at least 8 bytes (default block header storage size)");
 	}
 	if (!IsPowerOfTwo(initial_column_segment_size)) {
 		throw InvalidInputException("The initial column segment size must be a power of two");

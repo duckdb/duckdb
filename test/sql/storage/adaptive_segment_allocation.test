@@ -5,9 +5,9 @@
 require vector_size 2048
 
 statement error
-SET initial_column_segment_size = 0
+SET initial_column_segment_size = 7
 ----
-greater than zero
+be at least 8 bytes
 
 statement error
 SET initial_column_segment_size = 9
