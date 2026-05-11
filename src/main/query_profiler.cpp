@@ -432,47 +432,48 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate) {
+void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate,
+                                    const PhysicalOperator &phys_op, const bool source_exhausted) {
 	if (!enabled) {
 		return;
 	}
-	if (!active_operator) {
-		throw InternalException("OperatorProfiler: Attempting to call FinishSource while no operator is active");
+	if (settings.empty()) {
+		return;
 	}
-	if (!settings.empty()) {
-		if (ProfilingInfo::Enabled(settings, MetricType::EXTRA_INFO)) {
-			// we're emitting extra info - get the extra source info
-			auto &info = GetOperatorInfo(*active_operator);
-			auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
-			for (auto &new_info : extra_info) {
-				auto entry = info.extra_info.find(new_info.first);
-				if (entry != info.extra_info.end()) {
-					// entry exists - override
-					entry->second = std::move(new_info.second);
-				} else {
-					// entry does not exist yet - insert
-					info.extra_info.insert(std::move(new_info));
-				}
+
+	if (ProfilingInfo::Enabled(settings, MetricType::EXTRA_INFO)) {
+		auto &info = GetOperatorInfo(phys_op);
+		auto extra_info = phys_op.ExtraSourceParams(gstate, lstate);
+		for (auto &new_info : extra_info) {
+			auto entry = info.extra_info.find(new_info.first);
+			if (entry != info.extra_info.end()) {
+				// entry exists - override
+				entry->second = std::move(new_info.second);
+			} else {
+				// entry does not exist yet - insert
+				info.extra_info.insert(std::move(new_info));
 			}
 		}
-		if (active_operator.get()->type == PhysicalOperatorType::TABLE_SCAN && TableScanMetricsEnabled(settings)) {
-			const auto &table_scan = active_operator->Cast<PhysicalTableScan>();
-			profiler_metrics_t metrics;
-			table_scan.GetMetrics(context, gstate, lstate, settings, metrics);
-			auto &info = GetOperatorInfo(*active_operator);
-			for (const auto metric_type : TABLE_SCAN_METRICS) {
-				if (!ProfilingInfo::Enabled(settings, metric_type)) {
-					continue;
-				}
-				if (metric_type == MetricType::OPERATOR_ROWS_SCANNED) {
-					if (!TryAddTableScanMetric(info, metrics, metric_type)) {
-						// Use the cardinality estimate if no exact rows-scanned metric is available.
-						AddEstimatedTableScanRowsScanned(context, info, table_scan);
-					}
-					continue;
-				}
-				TryAddTableScanMetric(info, metrics, metric_type);
+	}
+
+	if (phys_op.type == PhysicalOperatorType::TABLE_SCAN && TableScanMetricsEnabled(settings)) {
+		const auto &table_scan = phys_op.Cast<PhysicalTableScan>();
+		profiler_metrics_t metrics;
+		table_scan.GetMetrics(context, gstate, lstate, settings, metrics);
+		auto &info = GetOperatorInfo(phys_op);
+		for (const auto metric_type : TABLE_SCAN_METRICS) {
+			if (!ProfilingInfo::Enabled(settings, metric_type)) {
+				continue;
 			}
+			if (metric_type == MetricType::OPERATOR_ROWS_SCANNED) {
+				// If the source is not exhausted we cannot make a reliable guess based on the cardinality estimate.
+				if (!TryAddTableScanMetric(info, metrics, metric_type) && source_exhausted) {
+					// Use the cardinality estimate if no exact rows-scanned metric is available.
+					AddEstimatedTableScanRowsScanned(context, info, table_scan);
+				}
+				continue;
+			}
+			TryAddTableScanMetric(info, metrics, metric_type);
 		}
 	}
 }

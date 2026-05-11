@@ -112,6 +112,8 @@ private:
 	//! Partition info that is used by this executor
 	OperatorPartitionInfo required_partition_info;
 
+	//! Source operator indicated that there is no more output possible
+	bool source_exhausted = false;
 	//! Source or intermediate operator indicated that there is no more output possible
 	bool exhausted_pipeline = false;
 	//! Flushing of intermediate operators has started

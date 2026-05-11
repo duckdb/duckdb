@@ -69,3 +69,121 @@ SELECT
 FROM metrics_output;
 ----
 true
+
+# Show nonzero count when using LIMIT below late-materialization threshold.
+
+statement ok
+CREATE TABLE t AS SELECT range i FROM range(400000);
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM t LIMIT 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json'
+
+query I
+SELECT
+	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Show nonzero count when using LIMIT above late-materialization threshold.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM t LIMIT 1024;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json'
+
+query I
+SELECT
+	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Show nonzero count when no metrics available (use estimate).
+
+statement ok
+PRAGMA disabled_optimizers='late_materialization';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM range(10);
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json'
+
+query I
+SELECT
+	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Show zero count when using LIMIT, no metrics available and source is not exhausted.
+
+statement ok
+PRAGMA disabled_optimizers='late_materialization';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM range(1000) LIMIT 10;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json'
+
+query I
+SELECT cumulative_rows_scanned FROM metrics_output;
+----
+0
