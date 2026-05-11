@@ -18,42 +18,8 @@
 
 namespace duckdb {
 
-string GetSQLValueFunctionName(const string &column_name) {
-	auto lcase = StringUtil::Lower(column_name);
-	if (lcase == "current_catalog") {
-		return "current_catalog";
-	} else if (lcase == "current_date") {
-		return "current_date";
-	} else if (lcase == "current_schema") {
-		return "current_schema";
-	} else if (lcase == "current_role") {
-		return "current_role";
-	} else if (lcase == "current_time") {
-		return "get_current_time";
-	} else if (lcase == "current_timestamp") {
-		return "get_current_timestamp";
-	} else if (lcase == "current_user") {
-		return "current_user";
-	} else if (lcase == "localtime") {
-		return "current_localtime";
-	} else if (lcase == "localtimestamp") {
-		return "current_localtimestamp";
-	} else if (lcase == "session_user") {
-		return "session_user";
-	} else if (lcase == "user") {
-		return "user";
-	}
-	return string();
-}
-
 unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
-	auto value_function = GetSQLValueFunctionName(column_name);
-	if (value_function.empty()) {
-		return nullptr;
-	}
-
-	vector<unique_ptr<ParsedExpression>> children;
-	return make_uniq<FunctionExpression>(value_function, std::move(children));
+	return ColumnQualifier::GetSQLValueFunction(column_name);
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,

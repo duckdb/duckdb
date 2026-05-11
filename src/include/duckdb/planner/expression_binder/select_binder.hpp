@@ -24,8 +24,6 @@ protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;
 	BindResult BindUnnest(FunctionExpression &function, idx_t depth, bool root_expression) override;
 
-	unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name) override;
-
 protected:
 	idx_t unnest_level = 0;
 };

@@ -39,6 +39,7 @@ public:
 	                        const bool within_function_expression = false);
 
 	void QualifyFunction(FunctionExpression &function);
+	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 private:
 	Binder &binder;

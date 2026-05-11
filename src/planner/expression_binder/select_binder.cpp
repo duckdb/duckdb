@@ -41,13 +41,4 @@ bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t d
 	return true;
 }
 
-unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
-	auto alias_entry = node.bind_state.alias_map.find(column_name);
-	if (alias_entry != node.bind_state.alias_map.end()) {
-		// don't replace SQL value functions if they are in the alias map
-		return nullptr;
-	}
-	return ExpressionBinder::GetSQLValueFunction(column_name);
-}
-
 } // namespace duckdb
