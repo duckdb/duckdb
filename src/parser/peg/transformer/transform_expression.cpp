@@ -19,8 +19,8 @@
 
 namespace duckdb {
 
-static unique_ptr<ParsedExpression>
-TryRewriteSpecialFunctionCall(const string &lowercase_name, vector<unique_ptr<ParsedExpression>> &children);
+static unique_ptr<ParsedExpression> TryRewriteSpecialFunctionCall(const string &lowercase_name,
+                                                                  vector<unique_ptr<ParsedExpression>> &children);
 static bool IsParserLevelRewriteName(const string &lowercase_name);
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformExpressionStatement(PEGTransformer &transformer,
@@ -199,9 +199,8 @@ string PEGTransformerFactory::TransformReservedTableQualification(PEGTransformer
 // (CASE, COALESCE, UNPACK, TRY, ARRAY_CONSTRUCTOR, CAST). Returns the rewritten expression on
 // success, or nullptr if `lowercase_name` is not a special-cased name. On success, elements of
 // `children` are moved out.
-static unique_ptr<ParsedExpression>
-TryRewriteSpecialFunctionCall(const string &lowercase_name,
-                              vector<unique_ptr<ParsedExpression>> &children) {
+static unique_ptr<ParsedExpression> TryRewriteSpecialFunctionCall(const string &lowercase_name,
+                                                                  vector<unique_ptr<ParsedExpression>> &children) {
 	if (lowercase_name == "if") {
 		if (children.size() != 3) {
 			throw ParserException("Wrong number of arguments to IF.");
@@ -263,8 +262,8 @@ TryRewriteSpecialFunctionCall(const string &lowercase_name,
 
 static bool IsParserLevelRewriteName(const string &lowercase_name) {
 	return lowercase_name == "if" || lowercase_name == "unpack" || lowercase_name == "try" ||
-	       lowercase_name == "construct_array" || lowercase_name == "ifnull" ||
-	       lowercase_name == "coalesce" || lowercase_name == "date";
+	       lowercase_name == "construct_array" || lowercase_name == "ifnull" || lowercase_name == "coalesce" ||
+	       lowercase_name == "date";
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(PEGTransformer &transformer,
@@ -340,8 +339,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformFunctionExpression(
 	// behave like `ifnull(x, y)`.
 	if (!qualified_function.schema.empty() && qualified_function.catalog.empty() &&
 	    IsParserLevelRewriteName(lowercase_name)) {
-		function_children.insert(function_children.begin(),
-		                         make_uniq<ColumnRefExpression>(qualified_function.schema));
+		function_children.insert(function_children.begin(), make_uniq<ColumnRefExpression>(qualified_function.schema));
 		qualified_function.schema = "";
 	}
 
