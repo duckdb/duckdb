@@ -72,10 +72,10 @@ void OverlayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &count_vec = args.data[3];
 		// Flatten all inputs so we can iterate safely
 		UnifiedVectorFormat input_data, repl_data, start_data, count_data;
-		input_vec.ToUnifiedFormat(args.size(), input_data);
-		repl_vec.ToUnifiedFormat(args.size(), repl_data);
-		start_vec.ToUnifiedFormat(args.size(), start_data);
-		count_vec.ToUnifiedFormat(args.size(), count_data);
+		input_vec.ToUnifiedFormat(input_data);
+		repl_vec.ToUnifiedFormat(repl_data);
+		start_vec.ToUnifiedFormat(start_data);
+		count_vec.ToUnifiedFormat(count_data);
 
 		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 		auto repls = UnifiedVectorFormat::GetData<string_t>(repl_data);
