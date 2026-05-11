@@ -7,3 +7,8 @@ n''''+ST�&6>ttacrotablesampimportleT�&6>tta�rordeT�Niqeger[], e�tfilte
                   t_not_currorderent;
 ----
 Parser Error: Empty subscript '[]' is not allowed
+
+statement error
+[1,2,3][];
+----
+Parser Error: Empty subscript '[]' is not allowed
