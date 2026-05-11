@@ -30,7 +30,7 @@ index 471bc4c..f6407f3 100644
  };
  
 diff --git a/src/postgres_filter_pushdown.cpp b/src/postgres_filter_pushdown.cpp
-index cabe77f..ef47fde 100644
+index cabe77f..7b1f375 100644
 --- a/src/postgres_filter_pushdown.cpp
 +++ b/src/postgres_filter_pushdown.cpp
 @@ -1,17 +1,22 @@
@@ -62,7 +62,7 @@ index cabe77f..ef47fde 100644
  		if (!filter_str.empty()) {
  			filter_entries.push_back(std::move(filter_str));
  		}
-@@ -67,64 +72,135 @@ string PostgresFilterPushdown::TransformCTIDLiteral(const Value &constant) {
+@@ -67,64 +72,138 @@ string PostgresFilterPushdown::TransformCTIDLiteral(const Value &constant) {
  	throw InternalException("FIXME: transform ctid literal");
  }
  
@@ -132,18 +132,19 @@ index cabe77f..ef47fde 100644
 +
 +string PostgresFilterPushdown::TransformExpression(const string &column_name, const Expression &expr,
 +                                                   column_t column_id) {
-+	switch (expr.GetExpressionClass()) {
-+	case ExpressionClass::BOUND_COMPARISON: {
-+		auto &comparison = expr.Cast<BoundComparisonExpression>();
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &comparison = expr.Cast<BoundFunctionExpression>();
 +		auto comparison_type = comparison.GetExpressionType();
-+		auto subject = TransformExpressionSubject(column_name, *comparison.left);
++		auto &left = BoundComparisonExpression::Left(comparison);
++		auto &right = BoundComparisonExpression::Right(comparison);
++		auto subject = TransformExpressionSubject(column_name, left);
 +		const Value *constant = nullptr;
-+		if (!subject.empty() && comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-+			constant = &comparison.right->Cast<BoundConstantExpression>().value;
++		if (!subject.empty() && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++			constant = &right.Cast<BoundConstantExpression>().value;
 +		} else {
-+			subject = TransformExpressionSubject(column_name, *comparison.right);
-+			if (!subject.empty() && comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-+				constant = &comparison.left->Cast<BoundConstantExpression>().value;
++			subject = TransformExpressionSubject(column_name, right);
++			if (!subject.empty() && left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++				constant = &left.Cast<BoundConstantExpression>().value;
 +				comparison_type = FlipComparisonExpression(comparison_type);
 +			}
 +		}
@@ -155,6 +156,8 @@ index cabe77f..ef47fde 100644
 -	case TableFilterType::OPTIONAL_FILTER: {
 -		auto &optional_filter = filter.Cast<OptionalFilter>();
 -		return TransformFilter(column_name, *optional_filter.child_filter, column_id);
++
++	switch (expr.GetExpressionClass()) {
 +	case ExpressionClass::BOUND_CONJUNCTION: {
 +		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 +		switch (conjunction.GetExpressionType()) {
@@ -183,7 +186,8 @@ index cabe77f..ef47fde 100644
 +		case ExpressionType::COMPARE_IN: {
 +			if (subject.empty()) {
 +				return string();
-+			}
+ 			}
+-			in_list += TransformLiteral(val);
 +			string in_list;
 +			for (idx_t i = 1; i < op.children.size(); i++) {
 +				if (op.children[i]->GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
@@ -194,8 +198,7 @@ index cabe77f..ef47fde 100644
 +				}
 +				auto &constant = op.children[i]->Cast<BoundConstantExpression>().value;
 +				in_list += IsVirtualColumn(column_id) ? "FALSE" : TransformLiteral(constant);
- 			}
--			in_list += TransformLiteral(val);
++			}
 +			return IsVirtualColumn(column_id) ? "FALSE" : subject + " IN (" + in_list + ")";
 +		}
 +		default:
