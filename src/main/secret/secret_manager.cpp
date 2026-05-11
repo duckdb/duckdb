@@ -504,6 +504,20 @@ vector<SecretType> SecretManager::AllSecretTypes() {
 	return result;
 }
 
+vector<CreateSecretFunction> SecretManager::AllSecretFunctions() {
+	unique_lock<mutex> lck(manager_lock);
+	vector<CreateSecretFunction> result;
+
+	for (auto &secret_set : secret_functions) {
+		auto &inner_functions = secret_set.second.GetFunctions();
+		for (auto &func_pair : inner_functions) {
+			result.push_back(func_pair.second);
+		}
+	}
+
+	return result;
+}
+
 void SecretManager::ThrowOnSettingChangeIfInitialized() {
 	if (initialized) {
 		throw InvalidInputException(

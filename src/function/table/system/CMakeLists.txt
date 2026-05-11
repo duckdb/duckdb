@@ -21,7 +21,8 @@ add_library_unity(
   duckdb_schemas.cpp
   duckdb_secrets.cpp
   duckdb_prepared_statements.cpp
-  duckdb_which_secret.cpp
+  duckdb_which_secret.cpp 
+  duckdb_secret_type_parameters.cpp
   duckdb_secret_types.cpp
   duckdb_sequences.cpp
   duckdb_triggers.cpp
