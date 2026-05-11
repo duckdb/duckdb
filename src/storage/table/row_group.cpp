@@ -1397,9 +1397,11 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	result.existing_column_pointers = column_pointers;
 	result.has_per_column_metadata_blocks = has_per_column_metadata_blocks;
 	result.existing_per_column_metadata_blocks = per_column_metadata_blocks;
-	result_row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[GetColumnCount()]);
-	for (idx_t c = 0; c < GetColumnCount(); c++) {
-		result_row_group->is_loaded[c] = true;
+	if (is_loaded) {
+		result_row_group->is_loaded = unique_ptr<atomic<bool>[]>(new atomic<bool>[GetColumnCount()]);
+		for (idx_t c = 0; c < GetColumnCount(); c++) {
+			result_row_group->is_loaded[c] = true;
+		}
 	}
 
 	RowGroupWriteInfo info(writer.GetPartialBlockManager(), compression_types, writer.GetCheckpointOptions());
