@@ -506,6 +506,8 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 	info.name = phys_op.GetName();
 }
 
+// MetricType::EXTRA_INFO is metadata rather than a delta metric, so we do not overwrite the entire object.
+// Instead, we merge with the global object instance so subsequent flushes do not erase existing metadata.
 static void MergeOperatorExtraInfo(const InsertionOrderPreservingMap<string> &local_extra_info,
                                    Value &global_extra_info) {
 	InsertionOrderPreservingMap<string> merged;
