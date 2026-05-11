@@ -30,6 +30,7 @@
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_sample.hpp"
 
 namespace duckdb {
 
@@ -436,7 +437,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	result.from_table = std::move(from_table);
 	// bind the sample clause
 	if (statement.sample) {
-		result.sample_options = std::move(statement.sample);
+		result.from_table.plan = make_uniq<LogicalSample>(std::move(statement.sample), std::move(result.from_table.plan));
 	}
 
 	// visit the select list and expand any "*" statements

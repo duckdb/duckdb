@@ -19,11 +19,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	D_ASSERT(statement.from_table.plan);
 	auto root = std::move(statement.from_table.plan);
 
-	// plan the sample clause
-	if (statement.sample_options) {
-		root = make_uniq<LogicalSample>(std::move(statement.sample_options), std::move(root));
-	}
-
 	if (statement.where_clause) {
 		root = PlanFilter(std::move(statement.where_clause), std::move(root));
 	}
