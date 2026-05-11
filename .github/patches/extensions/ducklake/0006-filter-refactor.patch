@@ -145,7 +145,7 @@ index e87f908c..88f4f48a 100644
  				}
  				auto column_id = entry.GetIndex().GetIndex();
 diff --git a/src/storage/ducklake_metadata_manager.cpp b/src/storage/ducklake_metadata_manager.cpp
-index c752b712..ad1b3166 100644
+index 1f54514c..fd86dd06 100644
 --- a/src/storage/ducklake_metadata_manager.cpp
 +++ b/src/storage/ducklake_metadata_manager.cpp
 @@ -16,19 +16,16 @@
@@ -331,18 +331,17 @@ index c752b712..ad1b3166 100644
 -		auto &type = constant_filter.constant.type();
 -		switch (type.id()) {
 +string DuckLakeMetadataManager::GenerateFilterFromExpression(const Expression &expr, const LogicalType *type,
-+                                                            unordered_set<string> &referenced_stats) {
-+	switch (expr.GetExpressionClass()) {
-+	case ExpressionClass::BOUND_COMPARISON: {
-+		auto &comparison = expr.Cast<BoundComparisonExpression>();
++                                                             unordered_set<string> &referenced_stats) {
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &comparison = expr.Cast<BoundFunctionExpression>();
++		auto &left = BoundComparisonExpression::Left(comparison);
++		auto &right = BoundComparisonExpression::Right(comparison);
 +		const BoundConstantExpression *constant_expr = nullptr;
 +		auto comparison_type = comparison.GetExpressionType();
-+		if (IsSimpleFilterSubject(*comparison.left) &&
-+		    comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-+			constant_expr = &comparison.right->Cast<BoundConstantExpression>();
-+		} else if (IsSimpleFilterSubject(*comparison.right) &&
-+		           comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-+			constant_expr = &comparison.left->Cast<BoundConstantExpression>();
++		if (IsSimpleFilterSubject(left) && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++			constant_expr = &right.Cast<BoundConstantExpression>();
++		} else if (IsSimpleFilterSubject(right) && left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++			constant_expr = &left.Cast<BoundConstantExpression>();
 +			comparison_type = FlipComparisonExpression(comparison_type);
 +		} else {
 +			return string();
@@ -393,6 +392,7 @@ index c752b712..ad1b3166 100644
 -			}
 -			if (!result.empty()) {
 -				result += " AND ";
++	switch (expr.GetExpressionClass()) {
 +	case ExpressionClass::BOUND_OPERATOR: {
 +		auto &op_expr = expr.Cast<BoundOperatorExpression>();
 +		switch (expr.GetExpressionType()) {
@@ -410,10 +410,10 @@ index c752b712..ad1b3166 100644
 -			return string();
 -		}
 -		auto expr_class = expression_filter.expr->GetExpressionClass();
--		if (expr_class == ExpressionClass::BOUND_COMPARISON) {
--			auto &comparison = expression_filter.expr->Cast<BoundComparisonExpression>();
--			auto &left = *comparison.left;
--			auto &right = *comparison.right;
+-		if (BoundComparisonExpression::IsComparison(*expression_filter.expr)) {
+-			auto &comparison = expression_filter.expr->Cast<BoundFunctionExpression>();
+-			auto &left = BoundComparisonExpression::Left(comparison);
+-			auto &right = BoundComparisonExpression::Right(comparison);
 -			ExpressionType comparison_type = comparison.GetExpressionType();
 -			const BoundConstantExpression *constant_expr = nullptr;
 -			if (left.GetExpressionClass() == ExpressionClass::BOUND_REF &&
@@ -464,14 +464,12 @@ index c752b712..ad1b3166 100644
 +					return string();
 +				case LogicalTypeId::FLOAT:
 +				case LogicalTypeId::DOUBLE:
-+					next_filter =
-+					    GenerateConstantFilterDouble(ExpressionType::COMPARE_EQUAL, constant_value, target_type,
-+					                                 referenced_stats);
++					next_filter = GenerateConstantFilterDouble(ExpressionType::COMPARE_EQUAL, constant_value,
++					                                           target_type, referenced_stats);
 +					break;
 +				default:
-+					next_filter =
-+					    GenerateConstantFilter(ExpressionType::COMPARE_EQUAL, constant_value, target_type,
-+					                           referenced_stats);
++					next_filter = GenerateConstantFilter(ExpressionType::COMPARE_EQUAL, constant_value, target_type,
++					                                     referenced_stats);
 +					break;
 +				}
 +				if (next_filter.empty()) {
@@ -528,13 +526,15 @@ index c752b712..ad1b3166 100644
 +		auto &func = expr.Cast<BoundFunctionExpression>();
 +		if (func.function.GetName() == OptionalFilterScalarFun::NAME && func.bind_info) {
 +			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-+			return data.child_filter_expr ? GenerateFilterFromExpression(*data.child_filter_expr, type, referenced_stats)
-+			                              : string();
++			return data.child_filter_expr
++			           ? GenerateFilterFromExpression(*data.child_filter_expr, type, referenced_stats)
++			           : string();
 +		}
 +		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME && func.bind_info) {
 +			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-+			return data.child_filter_expr ? GenerateFilterFromExpression(*data.child_filter_expr, type, referenced_stats)
-+			                              : string();
++			return data.child_filter_expr
++			           ? GenerateFilterFromExpression(*data.child_filter_expr, type, referenced_stats)
++			           : string();
 +		}
 +		return string();
 +	}
@@ -581,7 +581,7 @@ index c752b712..ad1b3166 100644
  				dynamic_filter_columns.push_back(
  				    {col_filter.column_field_index, comparison_type, col_filter.column_type});
 diff --git a/src/storage/ducklake_multi_file_list.cpp b/src/storage/ducklake_multi_file_list.cpp
-index 8c106497..4676a81a 100644
+index 8c106497..456cfb3f 100644
 --- a/src/storage/ducklake_multi_file_list.cpp
 +++ b/src/storage/ducklake_multi_file_list.cpp
 @@ -50,7 +50,8 @@ void DuckLakeMultiFileList::AddFilterToPushdownInfo(FilterPushdownInfo &pushdown
@@ -599,15 +599,15 @@ index 8c106497..4676a81a 100644
  	for (auto &entry : filters) {
  		auto column_id = column_ids[entry.GetIndex().GetIndex()];
 -		AddFilterToPushdownInfo(*pushdown_info, column_id, entry.Filter().Copy());
-+		AddFilterToPushdownInfo(*pushdown_info, column_id,
-+		                        ExpressionFilter::GetExpressionFilter(entry.Filter(),
-+		                                                              "DuckLakeMultiFileList::DynamicFilterPushdown")
-+		                            .Copy());
++		AddFilterToPushdownInfo(
++		    *pushdown_info, column_id,
++		    ExpressionFilter::GetExpressionFilter(entry.Filter(), "DuckLakeMultiFileList::DynamicFilterPushdown")
++		        .Copy());
  	}
  
  	if (pushdown_info->column_filters.empty()) {
 diff --git a/src/storage/ducklake_multi_file_reader.cpp b/src/storage/ducklake_multi_file_reader.cpp
-index 713175d1..92fdb3d5 100644
+index a19f8acc..4fc11c8c 100644
 --- a/src/storage/ducklake_multi_file_reader.cpp
 +++ b/src/storage/ducklake_multi_file_reader.cpp
 @@ -28,6 +28,7 @@
@@ -618,7 +618,7 @@ index 713175d1..92fdb3d5 100644
  #include "duckdb/planner/filter/optional_filter.hpp"
  
  namespace duckdb {
-@@ -90,19 +91,19 @@ static bool CanSkipFileByTopNDynamicFilter(const DuckLakeFileListEntry &file_ent
+@@ -89,19 +90,19 @@ static bool CanSkipFileByTopNDynamicFilter(const DuckLakeFileListEntry &file_ent
  	}
  	for (auto &it : filter_info.column_filters) {
  		auto &col_filter = it.second;
