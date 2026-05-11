@@ -10,3 +10,12 @@ CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM foo) TO ('foo') WITH 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$COPY (SELECT * FROM range(5) t(i)) TO (getvariable('copy_target')) WITH (HEADER)$TEST_PEG_PARSER$);
 
+# order by specifications in copy options
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, PARTITION_BY (p1, p2), ORDER_BY (a ASC NULLS FIRST, b DESC NULLS LAST, c ASCENDING NULLS LAST, d DESCENDING NULLS FIRST, e NULLS FIRST))$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, ORDER_BY (a DESC, b ASC))$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$COPY t TO 'x.parquet' (FORMAT parquet, ORDER_BY (a, b))$TEST_PEG_PARSER$);

@@ -81,24 +81,7 @@ vector<GenericCopyOption> PEGTransformerFactory::TransformGenericCopyOptionList(
 	return result;
 }
 
-GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return transformer.Transform<GenericCopyOption>(list_pr.Child<ChoiceParseResult>(0).GetResult());
-}
-
-GenericCopyOption PEGTransformerFactory::TransformRegularGenericCopyOption(PEGTransformer &transformer,
-                                                                           ParseResult &parse_result) {
-	GenericCopyOption copy_option;
-
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	copy_option.name = StringUtil::Lower(list_pr.Child<IdentifierParseResult>(0).identifier);
-	auto &optional_expression = list_pr.Child<OptionalParseResult>(1);
-	if (!optional_expression.HasResult()) {
-		return copy_option;
-	}
-	// TODO(Dtenwolde) Rework to switch statement
-	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
+static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
@@ -137,21 +120,52 @@ GenericCopyOption PEGTransformerFactory::TransformRegularGenericCopyOption(PEGTr
 		throw NotImplementedException("Unrecognized expression type %s",
 		                              ExpressionTypeToString(expression->GetExpressionType()));
 	}
+}
+
+GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
+                                                                    ParseResult &parse_result) {
+	GenericCopyOption copy_option;
+
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	copy_option.name = StringUtil::Lower(list_pr.Child<IdentifierParseResult>(0).identifier);
+	auto &option_value = list_pr.Child<OptionalParseResult>(1);
+	if (!option_value.HasResult()) {
+		return copy_option;
+	}
+
+	auto &value_choice = option_value.GetResult().Cast<ListParseResult>().Child<ChoiceParseResult>(0).GetResult();
+	if (value_choice.name == "GenericCopyOptionParenthesizedExpressionList") {
+		auto orders = transformer.Transform<vector<OrderByNode>>(value_choice);
+		bool has_order_modifier = false;
+		for (auto &order : orders) {
+			if (order.type != OrderType::ORDER_DEFAULT || order.null_order != OrderByNullType::ORDER_DEFAULT) {
+				has_order_modifier = true;
+				break;
+			}
+		}
+
+		if (has_order_modifier) {
+			for (auto &order : orders) {
+				copy_option.children.emplace_back(order.ToString());
+			}
+		} else {
+			for (auto &order : orders) {
+				SetGenericCopyOptionExpression(copy_option, std::move(order.expression));
+			}
+		}
+	} else {
+		auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(value_choice);
+		SetGenericCopyOptionExpression(copy_option, std::move(expression));
+	}
 	return copy_option;
 }
 
-GenericCopyOption PEGTransformerFactory::TransformOrderByOption(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
-	GenericCopyOption copy_option;
-	copy_option.name = "order_by";
-
+vector<OrderByNode>
+PEGTransformerFactory::TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
+                                                                             ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
-	auto orders = transformer.Transform<vector<OrderByNode>>(extract_parens);
-	for (auto &order : orders) {
-		copy_option.children.emplace_back(order.ToString());
-	}
-	return copy_option;
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
+	return transformer.Transform<vector<OrderByNode>>(extract_parens);
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
