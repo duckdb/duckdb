@@ -33,8 +33,8 @@ EXE_SUFFIX := .exe
 endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
-UNITTEST_SLOW_FLAGS ?= --batch-timeout=300 --track-runtime=100
-UNITTEST_HUGE_FLAGS ?= --batch-size=5 --workers=50% $(UNITTEST_SLOW_FLAGS)
+UNITTEST_SLOW_FLAGS ?= --batch-size=5 --batch-timeout=300 --track-runtime=100
+UNITTEST_HUGE_FLAGS ?= --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -496,7 +496,7 @@ unittest: debug
 	$(PYTHON) scripts/ci/run_tests.py build/debug/$(UNITTEST_BINARY) $(T)
 
 unittest_reldebug:
-	$(PYTHON) scripts/ci/run_tests.py build/reldebug/$(UNITTEST_BINARY) $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_SLOW_FLAGS) build/reldebug/$(UNITTEST_BINARY) $(T)
 
 ifneq ($(SKIP_BUILD),1)
 unittest_release: release
