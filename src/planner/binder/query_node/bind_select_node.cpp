@@ -476,18 +476,19 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 	}
 
+	// prepare binding of all the result modifiers; including DISTINCT and ORDER BY targets
+	OrderBinder order_binder({*this}, statement, bind_state);
+	PrepareModifiers(order_binder, statement, result);
+
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
 		ColumnAliasBinder alias_binder(bind_state);
-		WhereBinder where_binder(*this, context, &alias_binder);
+		WhereBinder where_binder(*this, context, alias_binder);
 		unique_ptr<ParsedExpression> condition = std::move(statement.where_clause);
-		result.where_clause = where_binder.Bind(condition);
+		auto where_clause = where_binder.Bind(condition);
+		result.from_table.plan = PlanFilter(std::move(where_clause), std::move(result.from_table.plan));
 	}
-
-	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
-	OrderBinder order_binder({*this}, statement, bind_state);
-	PrepareModifiers(order_binder, statement, result);
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;

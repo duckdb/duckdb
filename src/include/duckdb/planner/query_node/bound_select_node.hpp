@@ -42,8 +42,6 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 	//! The FROM clause
 	BoundStatement from_table;
-	//! The WHERE clause
-	unique_ptr<Expression> where_clause;
 	//! list of groups
 	BoundGroupByNode groups;
 	//! HAVING clause
