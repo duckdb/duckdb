@@ -108,8 +108,8 @@ public:
 public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
-	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate, const PhysicalOperator &phys_op,
-	                             bool source_exhausted);
+	DUCKDB_API void FinalizeSourceProfiling(GlobalSourceState &gstate, LocalSourceState &lstate,
+	                                        const PhysicalOperator &phys_op, bool source_exhausted);
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);

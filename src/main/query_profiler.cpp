@@ -432,8 +432,8 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 	active_operator = nullptr;
 }
 
-void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate,
-                                    const PhysicalOperator &phys_op, const bool source_exhausted) {
+void OperatorProfiler::FinalizeSourceProfiling(GlobalSourceState &gstate, LocalSourceState &lstate,
+                                               const PhysicalOperator &phys_op, const bool source_exhausted) {
 	if (!enabled) {
 		return;
 	}
