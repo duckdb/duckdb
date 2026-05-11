@@ -272,7 +272,18 @@ def classify_choice_alternatives(alternatives, rule_types):
     return transformer_alts, identifier_alts, unknown_alts
 
 
-def generate_choice_internal_full(rule_name, return_type):
+def _box_result(return_type, return_by_value):
+    """
+    Generate the boxing return statement for an Internal function.
+    Use std::move only for move-only types (unique_ptr<T>, vector<unique_ptr<T>>).
+    Trivially-copyable types (enums, primitives) and copyable structs use a plain copy to
+    avoid the performance-move-const-arg clang-tidy warning.
+    """
+    arg = "std::move(result)" if return_by_value else "result"
+    return f"\treturn make_uniq<TypedTransformResult<{return_type}>>({arg});\n"
+
+
+def generate_choice_internal_full(rule_name, return_type, return_by_value):
     """
     Fully auto-generated Internal for a pure-transformer choice rule.
     Static class member matching transform_function_t for the static TransformRule table.
@@ -283,12 +294,12 @@ def generate_choice_internal_full(rule_name, return_type):
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
         f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
-        f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));\n"
-        f"}}\n"
+        + _box_result(return_type, return_by_value)
+        + f"}}\n"
     )
 
 
-def generate_choice_internal_with_body(rule_name, return_type):
+def generate_choice_internal_with_body(rule_name, return_type, return_by_value):
     """
     Internal for a choice rule that has identifier-override alternatives.
     Static class member matching transform_function_t for the static TransformRule table.
@@ -299,8 +310,8 @@ def generate_choice_internal_with_body(rule_name, return_type):
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
         f"\tauto result = Transform{rule_name}(transformer, choice_pr.GetResult());\n"
-        f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));\n"
-        f"}}\n"
+        + _box_result(return_type, return_by_value)
+        + f"}}\n"
     )
 
 
@@ -633,7 +644,7 @@ def generate_sequence_body_decl(rule_name, return_type, elements):
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
 
 
-def generate_sequence_internal(rule_name, return_type, elements):
+def generate_sequence_internal(rule_name, return_type, return_by_value, elements):
     """
     Generate the Internal static class member for a sequence rule.
     Returns unique_ptr<TransformResultValue> matching transform_function_t for the static table.
@@ -659,7 +670,8 @@ def generate_sequence_internal(rule_name, return_type, elements):
 
     arg_names = ", ".join(_param_arg(e) for e in semantic)
     body.append(f"\tauto result = Transform{rule_name}({arg_names});")
-    body.append(f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));")
+    box = _box_result(return_type, return_by_value).rstrip('\n')
+    body.append(box)
     return (
         f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
@@ -696,6 +708,8 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             skipped.append((rule_name, f"AST parse error: {e}"))
             continue
 
+        return_by_value = _is_by_value(rule_name, rule_types)
+
         if is_pure_reference_choice(ast):
             _, identifier_alts, unknown_alts = classify_choice_alternatives(ast.alternatives, rule_types)
             if unknown_alts:
@@ -706,10 +720,10 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             registrations.append(generate_registration(rule_name))
 
             if not identifier_alts:
-                implementations.append(generate_choice_internal_full(rule_name, return_type))
+                implementations.append(generate_choice_internal_full(rule_name, return_type, return_by_value))
             else:
                 declarations.append(generate_choice_body_declaration(rule_name, return_type))
-                implementations.append(generate_choice_internal_with_body(rule_name, return_type))
+                implementations.append(generate_choice_internal_with_body(rule_name, return_type, return_by_value))
                 manual_bodies.append(
                     (
                         rule_name,
@@ -723,7 +737,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
             if elements is not None:
                 declarations.append(generate_internal_declaration(rule_name))
                 declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
-                implementations.append(generate_sequence_internal(rule_name, return_type, elements))
+                implementations.append(generate_sequence_internal(rule_name, return_type, return_by_value, elements))
                 registrations.append(generate_registration(rule_name))
                 continue
 

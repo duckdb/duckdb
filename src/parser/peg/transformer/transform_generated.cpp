@@ -16,7 +16,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformUseTargetIntern
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = TransformUseTarget(transformer, choice_pr.GetResult());
-	return make_uniq<TypedTransformResult<QualifiedName>>(std::move(result));
+	return make_uniq<TypedTransformResult<QualifiedName>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -33,7 +33,7 @@ PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(PEGTransformer &t
 		}
 	}
 	auto result = TransformUseTargetCatalogSchema(catalog_name, reserved_schema_name, dot_identifier);
-	return make_uniq<TypedTransformResult<QualifiedName>>(std::move(result));
+	return make_uniq<TypedTransformResult<QualifiedName>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDotIdentifierInternal(PEGTransformer &transformer,
@@ -41,7 +41,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDotIdentifierIn
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
 	auto result = TransformDotIdentifier(identifier);
-	return make_uniq<TypedTransformResult<string>>(std::move(result));
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 unique_ptr<TransformResultValue>
@@ -78,7 +78,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformReadOrWriteInte
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto read_only_or_read_write = transformer.Transform<TransactionModifierType>(list_pr, 1);
 	auto result = TransformReadOrWrite(read_only_or_read_write);
-	return make_uniq<TypedTransformResult<TransactionModifierType>>(std::move(result));
+	return make_uniq<TypedTransformResult<TransactionModifierType>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
@@ -108,7 +108,7 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformExportSourceInt
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto result = TransformExportSource(catalog_name);
-	return make_uniq<TypedTransformResult<string>>(std::move(result));
+	return make_uniq<TypedTransformResult<string>>(result);
 }
 
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformImportStatementInternal(PEGTransformer &transformer,
