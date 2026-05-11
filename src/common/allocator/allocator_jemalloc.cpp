@@ -14,8 +14,6 @@
 #error "jemalloc support is only available on 64-bit Linux with DUCKDB_ENABLE_JEMALLOC enabled"
 #endif
 
-#endif
-
 extern "C" {
 
 unsigned duckdb_malloc_ncpus() {
@@ -118,3 +116,5 @@ void Allocator::SetBackgroundThreads(bool enable) {
 }
 
 } // namespace duckdb
+
+#endif

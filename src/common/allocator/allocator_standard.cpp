@@ -1,5 +1,7 @@
 #include "duckdb/common/allocator.hpp"
 
+#ifndef DUCKDB_ENABLE_JEMALLOC
+
 #ifdef __GLIBC__
 #include <malloc.h>
 #endif
@@ -74,3 +76,5 @@ void Allocator::SetBackgroundThreads(bool enable) {
 }
 
 } // namespace duckdb
+
+#endif
