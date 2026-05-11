@@ -1659,8 +1659,15 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
 		idx_t row_start = new_total_rows;
 		bool full_metadata_reuse = row_group_write_data.fully_reuse_existing_metadata_blocks;
-		auto reuse_column = row_group_write_data.reuse_column;
-		bool partial_reuse = !reuse_column.empty();
+		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
+		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
+		std::vector<bool> reuse_column;
+		if (debug_verify_blocks) {
+			reuse_column.reserve(row_group_write_data.states.size());
+			for (idx_t column_idx = 0; column_idx < row_group_write_data.states.size(); column_idx++) {
+				reuse_column[column_idx] = !row_group_write_data.states[column_idx];
+			}
+		}
 		auto new_row_group = std::move(row_group_write_data.result_row_group);
 		if (!new_row_group) {
 			// row group was unchanged - emit previous row group
@@ -1668,9 +1675,6 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		auto &row_group = *new_row_group;
 		RowGroupPointer pointer_copy;
-		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
-		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
-
 		// check if we should write this row group to the persistent storage
 		// don't write it if it only has uncommitted transaction-local changes made AFTER this checkpoint was started
 		auto pointer =
@@ -1727,21 +1731,19 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 
 			// Verify blocks are cleared for partial column reuse
-			if (partial_reuse) {
-				for (idx_t col_idx = 0; col_idx < pointer_copy.data_pointers.size(); col_idx++) {
-					if (!reuse_column[col_idx]) {
-						continue;
-					}
-					// reused column: its start block and extra blocks should be cleared
-					if (!block_manager.GetMetadataManager().BlockHasBeenCleared(pointer_copy.data_pointers[col_idx])) {
-						throw InternalException("Partial reuse: column %llu start block was not cleared", col_idx);
-					}
-					for (auto &block_id : pointer_copy.per_column_metadata_blocks.GetBlocksForColumn(col_idx)) {
-						auto block_ptr = MetaBlockPointer(block_id, 0);
-						if (!block_manager.GetMetadataManager().BlockHasBeenCleared(block_ptr)) {
-							throw InternalException("Partial reuse: column %llu extra block %llu was not cleared",
-							                        col_idx, block_id);
-						}
+			for (idx_t col_idx = 0; col_idx < pointer_copy.data_pointers.size(); col_idx++) {
+				if (!reuse_column[col_idx]) {
+					continue;
+				}
+				// reused column: its start block and extra blocks should be cleared
+				if (!block_manager.GetMetadataManager().BlockHasBeenCleared(pointer_copy.data_pointers[col_idx])) {
+					throw InternalException("Partial reuse: column %llu start block was not cleared", col_idx);
+				}
+				for (auto &block_id : pointer_copy.per_column_metadata_blocks.GetBlocksForColumn(col_idx)) {
+					auto block_ptr = MetaBlockPointer(block_id, 0);
+					if (!block_manager.GetMetadataManager().BlockHasBeenCleared(block_ptr)) {
+						throw InternalException("Partial reuse: column %llu extra block %llu was not cleared", col_idx,
+						                        block_id);
 					}
 				}
 			}

@@ -1393,9 +1393,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	    can_reuse_metadata && has_per_column_metadata_blocks && GetCollection().SupportsPerColumnWrites();
 	auto &compression_types = writer.GetCompressionTypes();
 	RowGroupWriteData result;
-	if (partial_reuse) {
-		result.reuse_column.resize(GetColumnCount(), false);
-	}
 
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
@@ -1426,7 +1423,6 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 		if (!column_has_changes) {
 			// reuse this column's metadata
-			result.reuse_column[column_idx] = true;
 			result.states.push_back(nullptr);
 			result.keep_column_loaded.push_back(true);
 			// carry forward existing column data and statistics
@@ -1517,14 +1513,13 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 		return row_group_pointer;
 	}
 	// write path: write column metadata to disk (with optional per-column reuse)
-	bool has_reuse = !write_data.reuse_column.empty();
-	D_ASSERT(!has_reuse || write_data.reuse_column.size() == GetColumnCount());
+	D_ASSERT(write_data.states.size() == GetColumnCount());
 
 	// merge stats
 	{
 		auto lock = global_stats.GetLock();
 		for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-			bool is_reused = has_reuse && write_data.reuse_column[column_idx];
+			bool is_reused = !write_data.states[column_idx];
 			if (is_reused) {
 				if (!ColumnIsLoaded(column_idx) &&
 				    collection.get().GetTypes()[column_idx].id() != LogicalTypeId::VARIANT) {
@@ -1544,7 +1539,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	vector<MetaBlockPointer> reused_column_blocks;
 
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
-		bool is_reused = has_reuse && write_data.reuse_column[column_idx];
+		bool is_reused = !write_data.states[column_idx];
 		if (is_reused) {
 			// reuse existing column pointer and per-column blocks
 			auto col_ptr = write_data.existing_column_pointers[column_idx];
