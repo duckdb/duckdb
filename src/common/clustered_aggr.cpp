@@ -63,7 +63,8 @@ struct Slot { // really just a 64-bits integer
 };
 
 // Each cursor uses an independent slice of the shared arena and its own slice of group_runs[].
-// Cursor offsets inside Slot are LOCAL to st.arena.
+// Each slice has its hot region first (MAX_HOT_PER_CURSOR lists of HALF_VEC slots) followed by a
+// HALF_VEC-sized seq bump region; cursor offsets inside Slot are LOCAL to st.arena.
 struct SlotTab {
 	Slot *const tab;        // [HASHTAB_SZ] hash table
 	sel_t *const arena;     // this cursor's arena slice base
@@ -82,11 +83,14 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	constexpr idx_t MAX_HOT_PER_CURSOR = MAX_HOTKEYS / 2;
 	idx_t tuples_in_large = 0;
 
-	// two per-cursor arena slices: each has MAX_HOT_PER_CURSOR lists that can max be HALF_VEC (whole input) in length.
-	sel_t *const slice1 = arena + STANDARD_VECTOR_SIZE; // but the first two HALF_VEC are for seq bump usage
-	sel_t *const slice2 = slice1 + MAX_HOT_PER_CURSOR * HALF_VEC;
-	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, arena, 0, 0, 0};
-	SlotTab st2 {reinterpret_cast<Slot *>(slots + HASHTAB_SZ), slice2, arena + HALF_VEC, HALF_VEC, 0, 0};
+	// Per-cursor arena slices: each has MAX_HOT_PER_CURSOR hot regions followed by 1 seq bump
+	// region, all HALF_VEC slots wide. Total per slice = (MAX_HOT_PER_CURSOR + 1) * HALF_VEC.
+	constexpr idx_t SLICE_HALF_VECS = MAX_HOT_PER_CURSOR + 1;
+	sel_t *const slice1 = arena;
+	sel_t *const slice2 = arena + SLICE_HALF_VECS * HALF_VEC;
+	SlotTab st1 {reinterpret_cast<Slot *>(slots), slice1, slice1 + MAX_HOT_PER_CURSOR * HALF_VEC, 0, 0, 0};
+	SlotTab st2 {
+	    reinterpret_cast<Slot *>(slots + HASHTAB_SZ), slice2, slice2 + MAX_HOT_PER_CURSOR * HALF_VEC, HALF_VEC, 0, 0};
 
 	auto finish_run = [&](SlotTab &st, const Slot s) -> uint64_t {
 		const idx_t cnt = static_cast<idx_t>((st.arena + s.val.bitfields.cursor) - group_runs[s.val.bitfields.idx].sel);
@@ -140,8 +144,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 			uint64_t gid = group_ids[pos];
 			uint64_t gid_low = gid & GID_MASK;
 			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gid_low)) { // no sequential match?
-				flush(st, cur);                                  // flush previous list
-				Slot s = st.tab[slot_hash(gid)];                 // hot key lookup
+				flush(st, cur);                                      // flush previous list
+				Slot s = st.tab[slot_hash(gid)];                     // hot key lookup
 				cur = (s.val.i64 != FREE_SLOT && s.val.bitfields.gid == gid_low)
 				          ? s // hot key found
 				          : new_run(st, gid, static_cast<uint64_t>(st.seq - st.arena));
@@ -162,7 +166,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 			uint64_t gid = group_ids[pos];
 			uint64_t gid_low = gid & GID_MASK;
 			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gid_low)) { // just check sequentially
-				flush(st, cur);                                  // flush previous list
+				flush(st, cur);                                      // flush previous list
 				cur = new_run(st, gid, static_cast<uint64_t>(st.seq - st.arena));
 			}
 			st.arena[cur.val.bitfields.cursor] = pos;
