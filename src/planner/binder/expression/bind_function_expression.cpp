@@ -254,7 +254,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                  json_bind_result.error.RawMessage());
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpression &function, bool allow_throw) {
+void ExpressionBinder::QualifyFunction(FunctionExpression &function) {
 	D_ASSERT(!IsUnnestFunction(function.function_name));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
@@ -262,68 +262,67 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
 	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+	if (func) {
+		// found the function - we are done
+		return;
+	}
+	// not a table function - check if the schema is set
+	if (function.schema.empty()) {
+		// schema is not set - leave it as-is
+		return;
+	}
+	// the schema is set - check if we can turn this the schema into a column ref
+	// does this function exist in the system catalog?
+	func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!func) {
-		// function was not found - check if we this is a table function
+		// we could not find the function - bail
+		return;
+	}
+	// the function exists in the system catalog - turn this into a dot call
+	ErrorData error;
+	unique_ptr<ColumnRefExpression> colref;
+	if (function.catalog.empty()) {
+		colref = make_uniq<ColumnRefExpression>(function.schema);
+	} else {
+		colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
+	}
+	auto new_colref = QualifyColumnName(*colref, error);
+	if (!new_colref) {
+		new_colref = std::move(colref);
+	}
+	// we can! transform this into a function call on the column
+	// i.e. "x.lower()" becomes "lower(x)"
+	function.children.insert(function.children.begin(), std::move(new_colref));
+	function.catalog = INVALID_CATALOG;
+	function.schema = INVALID_SCHEMA;
+}
+
+CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
+	QueryErrorContext error_context(function.GetQueryLocation());
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
+	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!func) {
+		// function was not found - check if we this is a table function (to throw a more helpful error message)
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
 		auto table_func =
-		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
+			GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
-			if (!allow_throw) {
-				return func;
-			}
 			throw BinderException(function,
-			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
-			                      "function has to be called in a FROM clause (similar to a table).",
-			                      function.function_name);
+								  "Function \"%s\" is a table function but it was used as a scalar function. This "
+								  "function has to be called in a FROM clause (similar to a table).",
+								  function.function_name);
 		}
-		// not a table function - check if the schema is set
-		if (!function.schema.empty()) {
-			// the schema is set - check if we can turn this the schema into a column ref
-			// does this function exist in the system catalog?
-			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
-			if (func) {
-				// the function exists in the system catalog - turn this into a dot call
-				ErrorData error;
-				unique_ptr<ColumnRefExpression> colref;
-				if (function.catalog.empty()) {
-					colref = make_uniq<ColumnRefExpression>(function.schema);
-				} else {
-					colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
-				}
-				auto new_colref = QualifyColumnName(*colref, error);
-				if (error.HasError()) {
-					// could not find the column - try to qualify the alias
-					if (!DoesColumnAliasExist(*colref)) {
-						if (!allow_throw) {
-							return func;
-						}
-						// no alias found either - throw
-						error.Throw();
-					}
-				}
-				// we can! transform this into a function call on the column
-				// i.e. "x.lower()" becomes "lower(x)"
-				function.children.insert(function.children.begin(), std::move(colref));
-				function.catalog = INVALID_CATALOG;
-				function.schema = INVALID_SCHEMA;
-			}
-		}
-		// rebind the function
-		if (!func) {
-			const auto on_entry_not_found =
-			    allow_throw ? OnEntryNotFound::THROW_EXCEPTION : OnEntryNotFound::RETURN_NULL;
-			func = GetCatalogEntry(function.catalog, function.schema, function_lookup, on_entry_not_found);
-		}
+		// not a table function - rebind to throw an error
+		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
-
-	return func;
+	return *func;
 }
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
-	auto func = BindAndQualifyFunction(function, true);
+	auto &func = BindFunction(function);
 
-	switch (func->type) {
+	switch (func.type) {
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		break;
@@ -331,29 +330,29 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		if (function.distinct || function.filter || !function.order_bys->orders.empty()) {
 			throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 			                            "applicable to window and aggregate functions.",
-			                            function.function_name, CatalogTypeToString(func->type));
+			                            function.function_name, CatalogTypeToString(func.type));
 		}
 		break;
 	}
 
-	switch (func->type) {
+	switch (func.type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto child = function.IsLambdaFunction();
 		if (child) {
 			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
-			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
+			return TryBindLambdaOrJson(function, depth, func, syntax_type);
 		}
-		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+		return BindFunction(function, func.Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
 	case CatalogType::MACRO_ENTRY:
 		// macro function
-		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
+		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		// aggregate function
-		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
+		return BindAggregate(function, func.Cast<AggregateFunctionCatalogEntry>(), depth);
 	case CatalogType::WINDOW_FUNCTION_ENTRY:
 		// window function
-		return BindWindow(function, func->Cast<WindowFunctionCatalogEntry>(), depth);
+		return BindWindow(function, func.Cast<WindowFunctionCatalogEntry>(), depth);
 	default:
 		throw InvalidInputException("Unsupported catalog type when binding function");
 	}

@@ -212,7 +212,8 @@ protected:
 
 	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
-	optional_ptr<CatalogEntry> BindAndQualifyFunction(FunctionExpression &function, bool allow_throw);
+	void QualifyFunction(FunctionExpression &function);
+	CatalogEntry &BindFunction(FunctionExpression &function);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);

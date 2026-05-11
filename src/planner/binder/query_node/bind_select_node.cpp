@@ -467,6 +467,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	if (statement.where_clause) {
 		// bind any star expressions in the WHERE clause
 		BindWhereStarExpression(statement.where_clause);
+		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
 
 		ColumnAliasBinder alias_binder(bind_state);
 		WhereBinder where_binder(*this, context, &alias_binder);

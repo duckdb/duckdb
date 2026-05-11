@@ -170,7 +170,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
 		if (!IsUnnestFunction(function.function_name)) {
-			BindAndQualifyFunction(function, false);
+			QualifyFunction(function);
 		}
 		if (function.IsLambdaFunction()) {
 			return QualifyColumnNamesInLambda(function, lambda_params);
