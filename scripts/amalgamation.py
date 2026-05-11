@@ -127,7 +127,7 @@ def get_includes(fpath, text):
             or included_file == 'generated_extension_headers.hpp'
         ):
             continue
-        if 'allocator.cpp' in fpath and (
+        if 'allocator_jemalloc.cpp' in fpath and (
             included_file.endswith('jemalloc.h') or included_file.endswith('malloc_ncpus.h')
         ):
             continue
