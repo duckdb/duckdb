@@ -9,10 +9,12 @@
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_qualifier.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/column_qualifier.hpp"
 
 namespace duckdb {
 
@@ -53,6 +55,18 @@ unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string 
 	vector<unique_ptr<ParsedExpression>> children;
 	return make_uniq<FunctionExpression>(value_function, std::move(children));
 }
+
+
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base, const string &field_name) {
+	ColumnQualifier qualifier(binder);
+	return qualifier.CreateStructExtract(std::move(base), field_name);
+}
+
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
+	ColumnQualifier qualifier(binder);
+	return qualifier.CreateStructPack(col_ref);
+}
+
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const ParsedExpression &expr,
                                                                  const string &column_name, ErrorData &error) {
@@ -223,65 +237,6 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 void ExpressionBinder::QualifyColumnNames(ExpressionBinder &expression_binder, unique_ptr<ParsedExpression> &expr) {
 	vector<unordered_set<string>> lambda_params;
 	expression_binder.QualifyColumnNames(expr, lambda_params);
-}
-
-unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base,
-                                                                   const string &field_name) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(std::move(base));
-	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(field_name)));
-	auto extract_fun = make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
-	return std::move(extract_fun);
-}
-
-unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &col_ref) {
-	if (col_ref.column_names.size() > 3) {
-		return nullptr;
-	}
-	D_ASSERT(!col_ref.column_names.empty());
-
-	// get a matching binding
-	ErrorData error;
-	optional_ptr<Binding> binding;
-	switch (col_ref.column_names.size()) {
-	case 1: {
-		// single entry - this must be the table name
-		BindingAlias alias(col_ref.column_names[0]);
-		binding = binder.bind_context.GetBinding(alias, error);
-		break;
-	}
-	case 2: {
-		// two entries - this can either be "catalog.table" or "schema.table" - try both
-		BindingAlias alias(col_ref.column_names[0], col_ref.column_names[1]);
-		binding = binder.bind_context.GetBinding(alias, error);
-		if (!binding) {
-			alias = BindingAlias(col_ref.column_names[0], INVALID_SCHEMA, col_ref.column_names[1]);
-			binding = binder.bind_context.GetBinding(alias, error);
-		}
-		break;
-	}
-	case 3: {
-		// three entries - this must be "catalog.schema.table"
-		BindingAlias alias(col_ref.column_names[0], col_ref.column_names[1], col_ref.column_names[2]);
-		binding = binder.bind_context.GetBinding(alias, error);
-		break;
-	}
-	default:
-		throw InternalException("Expected 1, 2 or 3 column names for CreateStructPack");
-	}
-	if (!binding) {
-		return nullptr;
-	}
-
-	// We found the table, now create the struct_pack expression
-	auto &column_names = binding->GetColumnNames();
-	vector<unique_ptr<ParsedExpression>> child_expressions;
-	child_expressions.reserve(column_names.size());
-	for (const auto &column_name : column_names) {
-		child_expressions.push_back(binder.bind_context.CreateColumnReference(
-		    binding->GetBindingAlias(), column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS));
-	}
-	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref,
