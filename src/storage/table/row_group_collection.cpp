@@ -1201,7 +1201,8 @@ public:
 
 	void ExecuteTask() override {
 		ActiveTimer vacuum_task_timer;
-		if (auto context = checkpoint_state.writer.TryGetClientContext()) {
+		auto context = checkpoint_state.writer.TryGetClientContext();
+		if (context) {
 			vacuum_task_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
 		}
 		auto &collection = checkpoint_state.collection;

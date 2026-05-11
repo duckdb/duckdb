@@ -1822,7 +1822,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
 		ActiveTimer rebuild_indexes_timer;
-		if (auto context = writer.TryGetClientContext()) {
+		auto context = writer.TryGetClientContext();
+		if (context) {
 			rebuild_indexes_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
 		}
 		RebuildIndexes();
