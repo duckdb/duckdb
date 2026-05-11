@@ -21,7 +21,7 @@
 #if defined(DUCKDB_ENABLE_JEMALLOC) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
 #define USE_JEMALLOC
 #include "jemalloc/jemalloc.h"
-#include "malloc_ncpus.h"
+#include "duckdb/malloc_ncpus.h"
 #include <thread>
 
 #endif
