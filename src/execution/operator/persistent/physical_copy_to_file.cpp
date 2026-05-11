@@ -986,11 +986,10 @@ unique_ptr<const SortStrategy> PartitionedCopy::ConstructSortStrategy() const {
 	for (auto &col : op.partition_columns) {
 		partition_bys.push_back(make_uniq<BoundReferenceExpression>(op.expected_types[col], col));
 	}
-	vector<BoundOrderByNode> order_bys;
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 
-	return SortStrategy::Factory(context, partition_bys, order_bys, op.children[0].get().GetTypes(), partition_stats,
-	                             op.children[0].get().estimated_cardinality);
+	return SortStrategy::Factory(context, partition_bys, op.order_columns, op.children[0].get().GetTypes(),
+	                             partition_stats, op.children[0].get().estimated_cardinality);
 }
 
 void PartitionedCopy::CreateNextState() {

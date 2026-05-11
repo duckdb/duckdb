@@ -216,7 +216,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else if (loption == "order_by") {
 			order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
-			throw NotImplementedException("COPY ORDER_BY");
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
@@ -347,6 +346,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
 	}
 
+	if (!order_columns.empty() && partition_cols.empty()) {
+		throw NotImplementedException("ORDER_BY is not supported without PARTITION_BY");
+	}
+
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(function, std::move(function_data), std::move(stmt.info));
 	copy->file_path = file_path;
@@ -367,6 +370,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	copy->return_type = return_type;
 	copy->preserve_order = preserve_order;
 	copy->hive_file_pattern = hive_file_pattern;
+	copy->order_columns = std::move(order_columns);
 
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
