@@ -963,9 +963,6 @@ if (NOT EXTENSION_CONFIG_BUILD)
   add_third_party(utf8proc)
   add_third_party(yyjson)
   add_third_party(zstd)
-endif()
-
-if (NOT EXTENSION_CONFIG_BUILD)
   if(NOT DUCKDB_EXPLICIT_PLATFORM)
     set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
