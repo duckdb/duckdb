@@ -85,6 +85,10 @@ set(DUCKDB_LINK_LIBS
     duckdb_yyjson
     duckdb_zstd)
 
+if(JEMALLOC_ENABLED)
+  list(APPEND DUCKDB_LINK_LIBS duckdb_jemalloc)
+endif()
+
 foreach(LINK_LIB ${DUCKDB_LINK_LIBS})
   list(APPEND LINK_OBJECTS $<TARGET_OBJECTS:${LINK_LIB}>)
 endforeach(LINK_LIB)
