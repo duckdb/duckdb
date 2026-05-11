@@ -671,6 +671,11 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	config.AddExtensionOption("add_column_enabled", "enable adding extra column to queries", LogicalType::BOOLEAN,
 	                          Value::BOOLEAN(false));
 
+	// Global-default extension option used to exercise RESET on GLOBAL-scoped
+	// extension options across multiple connections.
+	config.AddExtensionOption("demo_global_setting", "demo GLOBAL-default extension option", LogicalType::VARCHAR,
+	                          Value("default"), nullptr, SetScope::GLOBAL);
+
 	// Bounded type
 	auto bounded_type = BoundedType::GetDefault();
 	loader.RegisterType("BOUNDED", bounded_type, BoundedType::Bind);

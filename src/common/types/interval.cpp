@@ -104,30 +104,31 @@ interval_parse_number:
 			// colon: we are parsing a time
 			goto interval_parse_time;
 		} else {
-			if (pos == start_pos) {
-				return false;
-			}
-			// finished the number, parse it from the string
-			string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
-			number = Cast::Operation<string_t, int64_t>(nr_string);
-			fraction = 0;
-			if (c == '.') {
-				// we expect some microseconds
-				int32_t mult = 100000;
-				for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
-					if (mult > 0) {
-						fraction += int64_t(str[pos] - '0') * mult;
-					}
-				}
-			}
-			if (negative) {
-				number = -number;
-				fraction = -fraction;
-			}
-			goto interval_parse_identifier;
+			break;
 		}
 	}
-	goto end_of_string;
+	{
+		if (pos == start_pos) {
+			return false;
+		}
+		string_t nr_string(str + start_pos, UnsafeNumericCast<uint32_t>(pos - start_pos));
+		number = Cast::Operation<string_t, int64_t>(nr_string);
+		fraction = 0;
+		if (pos < len && str[pos] == '.') {
+			// we expect some microseconds
+			int32_t mult = 100000;
+			for (++pos; pos < len && StringUtil::CharacterIsDigit(str[pos]); ++pos, mult /= 10) {
+				if (mult > 0) {
+					fraction += int64_t(str[pos] - '0') * mult;
+				}
+			}
+		}
+		if (negative) {
+			number = -number;
+			fraction = -fraction;
+		}
+		goto interval_parse_identifier;
+	}
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
 	dtime_t time;

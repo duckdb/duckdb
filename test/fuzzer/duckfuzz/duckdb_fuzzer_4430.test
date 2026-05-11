@@ -1,0 +1,40 @@
+# name: test/fuzzer/duckfuzz/duckdb_fuzzer_4430.test
+# description: Regression test for DETACH while the current transaction has outstanding work on the database
+# group: [duckfuzz]
+
+statement ok
+ATTACH '__TEST_DIR__/duckdb_fuzzer_4430.db' AS db1
+
+# Write case: forbid DETACH after a write to db1 in the same transaction
+statement ok
+BEGIN
+
+statement ok
+CREATE TABLE db1.tbl(i INTEGER)
+
+statement error
+DETACH db1
+----
+Cannot detach database "db1"
+
+statement ok
+ROLLBACK
+
+# Read case: forbid DETACH after a read from db1 in the same transaction
+statement ok
+CREATE TABLE db1.tbl(i INTEGER)
+
+statement ok
+BEGIN
+
+query I
+SELECT * FROM db1.tbl
+----
+
+statement error
+DETACH db1
+----
+Cannot detach database "db1"
+
+statement ok
+ROLLBACK

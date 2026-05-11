@@ -904,9 +904,26 @@ class ThreadPool final : public TaskQueue {
 public:
   explicit ThreadPool(size_t n, size_t mqr = 0)
       : shutdown_(false), max_queued_requests_(mqr) {
-    while (n) {
-      threads_.emplace_back(worker(*this));
-      n--;
+    // Exception-safe construction: if std::thread creation fails partway
+    // (e.g. EAGAIN on pthread_create under thread-resource pressure), the
+    // partially-built threads_ vector would otherwise destruct with joinable
+    // std::thread objects, calling std::terminate(). Instead, signal shutdown
+    // to the workers we already spawned, join them, and rethrow.
+    try {
+      while (n) {
+        threads_.emplace_back(worker(*this));
+        n--;
+      }
+    } catch (...) {
+      {
+        duckdb::unique_lock<std::mutex> lock(mutex_);
+        shutdown_ = true;
+      }
+      cond_.notify_all();
+      for (auto &t : threads_) {
+        if (t.joinable()) { t.join(); }
+      }
+      throw;
     }
   }
 

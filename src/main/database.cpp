@@ -466,6 +466,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.SetDefaultTempDirectory();
 	}
 
+	if (new_config.options.http_proxy.empty()) {
+		HTTPProxySetting::ResetGlobal(this, config);
+	}
+
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}

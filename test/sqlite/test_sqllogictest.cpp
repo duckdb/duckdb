@@ -99,7 +99,7 @@ static void testRunner() {
 	}
 
 	auto on_cleanup = test_config.OnCleanupCommand();
-	if (!on_cleanup.empty()) {
+	if (!on_cleanup.empty() && runner.db) {
 		// perform clean-up if any is defined
 		try {
 			if (!runner.con) {

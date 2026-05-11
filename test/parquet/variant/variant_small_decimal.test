@@ -1,0 +1,23 @@
+# name: test/parquet/variant/variant_small_decimal.test
+# description: Test write small decimal write to parquet.
+# group: [variant]
+
+require parquet
+
+statement ok
+CREATE TABLE t (data VARIANT);
+
+statement ok
+INSERT INTO t VALUES (1.23::DECIMAL(3, 2)::VARIANT);
+
+statement ok
+INSERT INTO t VALUES (12.345::DECIMAL(5, 3)::VARIANT);
+
+statement ok
+COPY t TO '{TEST_DIR}/small_variant.parquet';
+
+query I
+SELECT * FROM '{TEST_DIR}/small_variant.parquet' ORDER BY data
+----
+1.23
+12.345
