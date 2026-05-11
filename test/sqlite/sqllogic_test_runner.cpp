@@ -126,6 +126,13 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
 
+	// Prefer loading statically linked extensions first to avoid loading a second
+	// copy through SQL LOAD, which can trigger ASan ODR violations.
+	auto linked_result = ExtensionHelper::LoadExtension(db, extension);
+	if (linked_result == ExtensionLoadResult::LOADED_EXTENSION) {
+		return linked_result;
+	}
+
 	auto &test_config = TestConfiguration::Get();
 	Connection con(db);
 	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
@@ -140,7 +147,7 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
 
-	return ExtensionHelper::LoadExtension(db, extension);
+	return linked_result;
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
