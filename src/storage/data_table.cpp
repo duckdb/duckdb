@@ -4,7 +4,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/profiler.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -12,6 +11,8 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/profiling_utils.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -1820,11 +1821,11 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	row_groups->Checkpoint(writer, global_stats);
 	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
 	if (writer.GetRebuildIndexes()) {
-		Profiler rebuild_indexes_timer;
-		rebuild_indexes_timer.Start();
+		ActiveTimer rebuild_indexes_timer;
+		if (auto context = writer.TryGetClientContext()) {
+			rebuild_indexes_timer = QueryProfiler::Get(*context).StartTimer(MetricType::CUMULATIVE_VACUUM_TIME);
+		}
 		RebuildIndexes();
-		rebuild_indexes_timer.End();
-		writer.AddCumulativeVacuumTime(rebuild_indexes_timer.ElapsedNanos());
 	}
 	// The row group payload data has been written. Now write:
 	//   sample
