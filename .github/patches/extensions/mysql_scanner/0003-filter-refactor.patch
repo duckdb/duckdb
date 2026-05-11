@@ -27,7 +27,7 @@ index 8366651..488f534 100644
  
  } // namespace duckdb
 diff --git a/src/mysql_filter_pushdown.cpp b/src/mysql_filter_pushdown.cpp
-index 9f1d512..03cb0af 100644
+index 9f1d512..f6ad7ea 100644
 --- a/src/mysql_filter_pushdown.cpp
 +++ b/src/mysql_filter_pushdown.cpp
 @@ -1,14 +1,29 @@
@@ -64,7 +64,7 @@ index 9f1d512..03cb0af 100644
  		if (new_filter.empty()) {
  			continue;
  		}
-@@ -39,49 +54,95 @@ string MySQLFilterPushdown::TransformComparison(ExpressionType type) {
+@@ -39,49 +54,96 @@ string MySQLFilterPushdown::TransformComparison(ExpressionType type) {
  	}
  }
  
@@ -87,17 +87,16 @@ index 9f1d512..03cb0af 100644
 -		auto constant_string = MySQLUtils::TransformConstant(constant_filter.constant);
 -		auto operator_string = TransformComparison(constant_filter.comparison_type);
 +string MySQLFilterPushdown::TransformExpression(const string &column_name, const Expression &expr) {
-+	switch (expr.GetExpressionClass()) {
-+	case ExpressionClass::BOUND_COMPARISON: {
-+		auto &comparison = expr.Cast<BoundComparisonExpression>();
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &comparison = expr.Cast<BoundFunctionExpression>();
 +		auto comparison_type = comparison.GetExpressionType();
++		auto &left = BoundComparisonExpression::Left(comparison);
++		auto &right = BoundComparisonExpression::Right(comparison);
 +		const Value *constant = nullptr;
-+		if (IsDirectReference(*comparison.left) &&
-+		    comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-+			constant = &comparison.right->Cast<BoundConstantExpression>().value;
-+		} else if (comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-+		           IsDirectReference(*comparison.right)) {
-+			constant = &comparison.left->Cast<BoundConstantExpression>().value;
++		if (IsDirectReference(left) && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
++			constant = &right.Cast<BoundConstantExpression>().value;
++		} else if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsDirectReference(right)) {
++			constant = &left.Cast<BoundConstantExpression>().value;
 +			comparison_type = FlipComparisonExpression(comparison_type);
 +		} else {
 +			return string();
@@ -112,6 +111,8 @@ index 9f1d512..03cb0af 100644
 -	}
 -	case TableFilterType::DYNAMIC_FILTER: {
 -		return string();
++
++	switch (expr.GetExpressionClass()) {
 +	case ExpressionClass::BOUND_CONJUNCTION: {
 +		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 +		switch (conjunction.GetExpressionType()) {
