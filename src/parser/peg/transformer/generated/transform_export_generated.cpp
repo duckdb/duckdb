@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatementInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatementInternal(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	string export_source {};
 	transformer.TransformOptional(list_pr, 2, export_source);
@@ -14,15 +14,14 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatementInternal
 	return TransformExportStatement(export_source, string_literal, std::move(generic_copy_option_list));
 }
 
-string PEGTransformerFactory::TransformExportSourceInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+string PEGTransformerFactory::TransformExportSourceInternal(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	return TransformExportSource(catalog_name);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatementInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatementInternal(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto string_literal = transformer.Transform<string>(list_pr, 2);
 	return TransformImportStatement(string_literal);

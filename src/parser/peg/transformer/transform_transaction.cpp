@@ -3,13 +3,15 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformBeginTransaction(const TransactionModifierType &read_or_write) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformBeginTransaction(const TransactionModifierType &read_or_write) {
 	auto info = make_uniq<TransactionInfo>(TransactionType::BEGIN_TRANSACTION);
 	info->modifier = read_or_write;
 	return make_uniq<TransactionStatement>(std::move(info));
 }
 
-TransactionModifierType PEGTransformerFactory::TransformReadOrWrite(const TransactionModifierType &read_only_or_read_write) {
+TransactionModifierType
+PEGTransformerFactory::TransformReadOrWrite(const TransactionModifierType &read_only_or_read_write) {
 	return read_only_or_read_write;
 }
 

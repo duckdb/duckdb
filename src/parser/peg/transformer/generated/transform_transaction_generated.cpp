@@ -3,33 +3,33 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformTransactionStatementInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformTransactionStatementInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	return transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformBeginTransactionInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformBeginTransactionInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	TransactionModifierType read_or_write {};
 	transformer.TransformOptional(list_pr, 2, read_or_write);
 	return TransformBeginTransaction(read_or_write);
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformRollbackTransactionInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformRollbackTransactionInternal(PEGTransformer &transformer,
+                                                                                     ParseResult &parse_result) {
 	return TransformRollbackTransaction();
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommitTransactionInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformCommitTransactionInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
 	return TransformCommitTransaction();
 }
 
-TransactionModifierType PEGTransformerFactory::TransformReadOrWriteInternal(
-    PEGTransformer &transformer, ParseResult &parse_result) {
+TransactionModifierType PEGTransformerFactory::TransformReadOrWriteInternal(PEGTransformer &transformer,
+                                                                            ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto read_only_or_read_write = transformer.Transform<TransactionModifierType>(list_pr, 1);
 	return TransformReadOrWrite(read_only_or_read_write);

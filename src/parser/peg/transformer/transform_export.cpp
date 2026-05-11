@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(const string &export_source,
-                                                                         const string &string_literal,
-                                                                         vector<GenericCopyOption> generic_copy_option_list) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformExportStatement(const string &export_source, const string &string_literal,
+                                                vector<GenericCopyOption> generic_copy_option_list) {
 	auto info = make_uniq<CopyInfo>();
 	info->file_path = string_literal;
 	info->format = "csv";

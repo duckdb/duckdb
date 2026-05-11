@@ -377,8 +377,13 @@ def _classify_reference(name, idx, rule_types, excluded_rules):
         cpp_type = rule_types[name].cpp_type
         var_name = to_snake_case(name)
         lines = [f"\tauto {var_name} = transformer.Transform<{cpp_type}>(list_pr, {idx});"]
-        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type,
-                          by_value=_is_by_value(name, rule_types), extraction_lines=lines)
+        return SeqElement(
+            skip=False,
+            var_name=var_name,
+            cpp_type=cpp_type,
+            by_value=_is_by_value(name, rule_types),
+            extraction_lines=lines,
+        )
     return None
 
 
@@ -408,8 +413,13 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             f"\t{cpp_type} {var_name} {{}};",
             f"\ttransformer.TransformOptional(list_pr, {idx}, {var_name});",
         ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type,
-                          by_value=_is_by_value(name, rule_types), extraction_lines=lines)
+        return SeqElement(
+            skip=False,
+            var_name=var_name,
+            cpp_type=cpp_type,
+            by_value=_is_by_value(name, rule_types),
+            extraction_lines=lines,
+        )
     return None
 
 
@@ -435,8 +445,13 @@ def _classify_parens(inner_node, idx, rule_types):
             f"\tauto {var_name} = transformer.Transform<{cpp_type}>"
             f"(ExtractResultFromParens(list_pr.GetChild({idx})));",
         ]
-        return SeqElement(skip=False, var_name=var_name, cpp_type=cpp_type,
-                          by_value=_is_by_value(name, rule_types), extraction_lines=lines)
+        return SeqElement(
+            skip=False,
+            var_name=var_name,
+            cpp_type=cpp_type,
+            by_value=_is_by_value(name, rule_types),
+            extraction_lines=lines,
+        )
     return None
 
 
@@ -461,8 +476,13 @@ def _classify_list_macro(inner_node, idx, rule_types):
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>",
-                      by_value=_is_by_value(name, rule_types), extraction_lines=lines)
+    return SeqElement(
+        skip=False,
+        var_name=var_name,
+        cpp_type=f"vector<{child_type}>",
+        by_value=_is_by_value(name, rule_types),
+        extraction_lines=lines,
+    )
 
 
 def _classify_parens_list(inner_list_node, idx, rule_types):
@@ -486,8 +506,13 @@ def _classify_parens_list(inner_list_node, idx, rule_types):
         f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
         f"\t}}",
     ]
-    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>",
-                      by_value=_is_by_value(name, rule_types), extraction_lines=lines)
+    return SeqElement(
+        skip=False,
+        var_name=var_name,
+        cpp_type=f"vector<{child_type}>",
+        by_value=_is_by_value(name, rule_types),
+        extraction_lines=lines,
+    )
 
 
 def _classify_repeat(node, idx, rule_types, optional):
@@ -524,8 +549,13 @@ def _classify_repeat(node, idx, rule_types, optional):
             f"\t\t{var_name}.push_back(transformer.Transform<{child_type}>({var_name}_item));",
             f"\t}}",
         ]
-    return SeqElement(skip=False, var_name=var_name, cpp_type=f"vector<{child_type}>",
-                      by_value=_is_by_value(ref_name, rule_types), extraction_lines=lines)
+    return SeqElement(
+        skip=False,
+        var_name=var_name,
+        cpp_type=f"vector<{child_type}>",
+        by_value=_is_by_value(ref_name, rule_types),
+        extraction_lines=lines,
+    )
 
 
 def _classify_star_repeat(node, idx, rule_types):
@@ -590,6 +620,7 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
 
 def generate_sequence_body_decl(rule_name, return_type, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
+
     def _param_decl(e):
         # Move-only types (unique_ptr<T>, vector<unique_ptr<T>>) are passed by value.
         # Everything else (structs, strings, primitives) uses const T & to avoid tidy warnings.
@@ -756,12 +787,7 @@ def write_hpp(all_declarations):
     hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
     # This file is #include-d inside the PEGTransformerFactory class body, so it is not a
     # valid standalone header. Suppress clang-tidy to avoid false positives from unknown types.
-    content = (
-        GENERATED_HEADER
-        + "// NOLINTBEGIN\n"
-        + "".join(all_declarations)
-        + "// NOLINTEND\n"
-    )
+    content = GENERATED_HEADER + "// NOLINTBEGIN\n" + "".join(all_declarations) + "// NOLINTEND\n"
     hpp_path.write_text(content)
     print(f"Wrote {hpp_path}")
 
