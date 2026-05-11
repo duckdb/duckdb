@@ -1381,7 +1381,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	auto &compression_types = writer.GetCompressionTypes();
 	RowGroupWriteData result;
 	if (partial_reuse) {
-		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
+		result.write_action = RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA;
 	} else {
 		result.write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	}
