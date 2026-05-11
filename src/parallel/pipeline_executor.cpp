@@ -232,7 +232,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 					return PipelineExecuteResult::INTERRUPTED;
 				}
 				if (source_result == SourceResultType::FINISHED) {
-					source_exhausted = true;
+					exhausted_source = true;
 					exhausted_pipeline = true;
 				}
 			}
@@ -384,7 +384,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 	if (pipeline.GetSource()) {
 		context.thread.profiler.FinishSource(*pipeline.source_state, *local_source_state, *pipeline.source,
-		                                     source_exhausted);
+		                                     exhausted_source);
 	}
 
 	// flush all query profiler info
