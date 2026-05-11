@@ -81,7 +81,7 @@ case_insensitive_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunc
 		copy_options["row_groups_per_file"] = CopyOption(LogicalType::UBIGINT, CopyOptionMode::WRITE_ONLY);
 		copy_options["file_size_bytes"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["partition_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
-		copy_options["sort_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
+		copy_options["order_by"] = CopyOption(LogicalType::ANY, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_files"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["preserve_order"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
 		copy_options["return_stats"] = CopyOption(LogicalType::BOOLEAN, CopyOptionMode::WRITE_ONLY);
@@ -135,6 +135,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	optional_idx file_size_bytes;
 	optional_idx batches_per_file;
 	vector<idx_t> partition_cols;
+	vector<BoundOrderByNode> order_columns;
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
@@ -213,8 +214,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 		} else if (loption == "partition_by") {
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
-		} else if (loption == "sort_by") {
-			throw NotImplementedException("COPY SORT_BY");
+		} else if (loption == "order_by") {
+			throw NotImplementedException("COPY ORDER_BY");
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;

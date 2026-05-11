@@ -83,6 +83,12 @@ vector<GenericCopyOption> PEGTransformerFactory::TransformGenericCopyOptionList(
 
 GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
                                                                     ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	return transformer.Transform<GenericCopyOption>(list_pr.Child<ChoiceParseResult>(0).GetResult());
+}
+
+GenericCopyOption PEGTransformerFactory::TransformRegularGenericCopyOption(PEGTransformer &transformer,
+                                                                           ParseResult &parse_result) {
 	GenericCopyOption copy_option;
 
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -130,6 +136,20 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 	} else {
 		throw NotImplementedException("Unrecognized expression type %s",
 		                              ExpressionTypeToString(expression->GetExpressionType()));
+	}
+	return copy_option;
+}
+
+GenericCopyOption PEGTransformerFactory::TransformOrderByOption(PEGTransformer &transformer,
+                                                                ParseResult &parse_result) {
+	GenericCopyOption copy_option;
+	copy_option.name = "order_by";
+
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(1));
+	auto orders = transformer.Transform<vector<OrderByNode>>(extract_parens);
+	for (auto &order : orders) {
+		copy_option.children.emplace_back(order.ToString());
 	}
 	return copy_option;
 }

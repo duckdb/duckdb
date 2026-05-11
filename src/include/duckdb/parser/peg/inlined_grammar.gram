@@ -1481,7 +1481,9 @@ ForceNullOption <- 'FORCE' 'NOT'? 'NULL' ColumnList
 StarSymbol <- '*'
 
 GenericCopyOptionList <- Parens(List(GenericCopyOption))
-GenericCopyOption <- CopyOptionName Expression?
+GenericCopyOption <- SortByOption / RegularGenericCopyOption
+RegularGenericCopyOption <- CopyOptionName Expression?
+SortByOption <- 'SORT_BY' Parens(OrderByExpressions)
 
 CopyFromDatabase <- 'FROM' 'DATABASE' ColId 'TO' ColId CopyDatabaseFlag?
 

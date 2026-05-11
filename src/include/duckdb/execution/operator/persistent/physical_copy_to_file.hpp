@@ -141,7 +141,7 @@ public:
 	bool hive_file_pattern;
 
 	//! If the data should be sorted
-	vector<BoundOrderByNode> sort_columns;
+	vector<BoundOrderByNode> order_columns;
 };
 
 } // namespace duckdb

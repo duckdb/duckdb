@@ -25,7 +25,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
-	    !op.partition_columns.empty() || !op.sort_columns.empty()) {
+	    !op.partition_columns.empty() || !op.order_columns.empty()) {
 		if (op.preserve_order == PreserveOrderType::PRESERVE_ORDER) {
 			throw InvalidInputException("PRESERVE_ORDER is not supported with these parameters");
 		}
@@ -83,7 +83,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
-	cast_copy.sort_columns = std::move(op.sort_columns);
+	cast_copy.order_columns = std::move(op.order_columns);
 
 	cast_copy.children.push_back(plan);
 	return copy;

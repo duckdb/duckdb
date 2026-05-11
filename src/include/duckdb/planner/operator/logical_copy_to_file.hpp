@@ -52,7 +52,7 @@ public:
 	bool hive_file_pattern = true;
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
-	vector<BoundOrderByNode> sort_columns;
+	vector<BoundOrderByNode> order_columns;
 
 	vector<string> names;
 	vector<LogicalType> expected_types;
