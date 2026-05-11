@@ -20,8 +20,9 @@ struct PerColumnMetadataBlock {
 	bool is_column_index : 1;
 	idx_t index : 63;
 
-	void Serialize(Serializer &serializer) const;
-	static PerColumnMetadataBlock Deserialize(Deserializer &source);
+	idx_t GetPacked();
+
+	static PerColumnMetadataBlock Unpack(idx_t packed);
 };
 
 class PerColumnMetadataBlocks {

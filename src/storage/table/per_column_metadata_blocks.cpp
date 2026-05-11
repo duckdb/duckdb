@@ -6,16 +6,15 @@ namespace duckdb {
 
 static constexpr idx_t COLUMN_INDEX_BIT = idx_t(1) << 63;
 
-void PerColumnMetadataBlock::Serialize(Serializer &serializer) const {
+idx_t PerColumnMetadataBlock::GetPacked() {
 	idx_t packed = index;
 	if (is_column_index) {
 		packed |= COLUMN_INDEX_BIT;
 	}
-	serializer.WriteProperty<idx_t>(100, "packed", packed);
+	return packed;
 }
 
-PerColumnMetadataBlock PerColumnMetadataBlock::Deserialize(Deserializer &deserializer) {
-	auto packed = deserializer.ReadProperty<idx_t>(100, "packed");
+PerColumnMetadataBlock PerColumnMetadataBlock::Unpack(idx_t packed) {
 	PerColumnMetadataBlock result;
 	result.is_column_index = (packed & COLUMN_INDEX_BIT) != 0;
 	result.index = packed & ~COLUMN_INDEX_BIT;
