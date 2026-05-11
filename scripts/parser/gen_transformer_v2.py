@@ -785,9 +785,17 @@ def write_cpp_file(implementations, gram_stem):
 
 def write_hpp(all_declarations):
     hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
-    # This file is #include-d inside the PEGTransformerFactory class body, so it is not a
-    # valid standalone header. Suppress clang-tidy to avoid false positives from unknown types.
-    content = GENERATED_HEADER + "// NOLINTBEGIN\n" + "".join(all_declarations) + "// NOLINTEND\n"
+    # This file is #include-d inside the PEGTransformerFactory class body, so it cannot be a
+    # valid standalone header (types like SQLStatement are only in scope inside the class).
+    # The #ifdef guard makes the file a no-op when clang-tidy processes it standalone,
+    # preventing false compilation errors. The guard is defined by peg_transformer.hpp
+    # immediately before the #include.
+    content = (
+        GENERATED_HEADER
+        + "#ifdef DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
+        + "".join(all_declarations)
+        + "#endif // DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
+    )
     hpp_path.write_text(content)
     print(f"Wrote {hpp_path}")
 

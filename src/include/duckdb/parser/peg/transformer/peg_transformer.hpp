@@ -1210,7 +1210,9 @@ private:
 	static string TransformVacuumOption(PEGTransformer &transformer, ParseResult &parse_result);
 	static vector<string> TransformNameList(PEGTransformer &transformer, ParseResult &parse_result);
 
+#define DUCKDB_INSIDE_PEG_TRANSFORMER_HPP
 #include "duckdb/parser/peg/transformer/peg_transformer_generated.hpp"
+#undef DUCKDB_INSIDE_PEG_TRANSFORMER_HPP
 
 private:
 	PEGParser parser;
