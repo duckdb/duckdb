@@ -382,10 +382,8 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 	finalized = true;
 
-	if (pipeline.GetSource()) {
-		context.thread.profiler.FinalizeSourceProfiling(*pipeline.source_state, *local_source_state, *pipeline.source,
+	context.thread.profiler.FinalizeSourceProfiling(*pipeline.source_state, *local_source_state, *pipeline.source,
 		                                                exhausted_source);
-	}
 
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
