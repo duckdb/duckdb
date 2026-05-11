@@ -1,0 +1,48 @@
+# name: test/sql/peg_parser/type_cast_string_literal.test
+# description: Test type-name string literal cast syntax (e.g. DECIMAL '1.5')
+# group: [peg_parser]
+
+statement error
+SELECT DECIMAL 'B';
+----
+Conversion Error: Could not convert string "B" to DECIMAL
+
+query I
+SELECT NUMERIC '1.5';
+----
+1.500
+
+query I
+SELECT DECIMAL '1.5';
+----
+1.500
+
+query I
+SELECT DEC '1.5';
+----
+1.500
+
+query I
+SELECT VARCHAR(5) '12345';
+----
+12345
+
+query I
+SELECT NUMERIC(5, 2) '1.50';
+----
+1.50
+
+query I
+SELECT CHARACTER(5) 'abc';
+----
+abc
+
+query I
+SELECT CHARACTER VARYING(10) 'foo';
+----
+foo
+
+query I
+SELECT TIMESTAMP(3) '2024-01-01 00:00:00';
+----
+2024-01-01 00:00:00

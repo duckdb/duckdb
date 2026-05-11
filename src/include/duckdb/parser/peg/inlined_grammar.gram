@@ -752,7 +752,7 @@ SubqueryExpression <- 'NOT'? 'EXISTS'? SubqueryReference
 CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'
 CaseWhenThen <- 'WHEN' Expression 'THEN' Expression
 CaseElse <- 'ELSE' Expression
-TypeLiteral <- ColId StringLiteral
+TypeLiteral <- Type StringLiteral
 IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?
 IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression
 FrameClause <- Framing FrameExtent WindowExcludeClause?
@@ -790,7 +790,7 @@ MapExpression <- 'MAP' MapStructExpression
 MapStructExpression <- '{' List(MapStructField)? '}'
 MapStructField <- Expression ':' Expression
 
-GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
+GroupingExpression <- GroupingOrGroupingId Parens(List(Expression)?)
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
 Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
 QuestionMarkNumberedParameter <- '?' NumberLiteral

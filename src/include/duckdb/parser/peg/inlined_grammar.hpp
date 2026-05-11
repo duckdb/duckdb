@@ -729,7 +729,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"CaseExpression <- 'CASE' Expression? CaseWhenThen+ CaseElse? 'END'\n"
 	"CaseWhenThen <- 'WHEN' Expression 'THEN' Expression\n"
 	"CaseElse <- 'ELSE' Expression\n"
-	"TypeLiteral <- ColId StringLiteral\n"
+	"TypeLiteral <- Type StringLiteral\n"
 	"IntervalLiteral <- 'INTERVAL' IntervalParameter Interval?\n"
 	"IntervalParameter <- StringLiteral / NumberLiteral / ParensExpression\n"
 	"FrameClause <- Framing FrameExtent WindowExcludeClause?\n"
