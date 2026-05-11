@@ -627,16 +627,6 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	// If the extension is already statically linked into DuckDB, avoid dlopen-ing a second copy.
-	// Loading two C++ copies of the same extension can trigger ASan ODR violations.
-	auto extension_name = ExtensionHelper::GetExtensionName(extension);
-	if (ExtensionHelper::IsLinkedExtension(extension_name)) {
-		ExtensionInstallInfo install_info;
-		install_info.mode = ExtensionInstallMode::STATICALLY_LINKED;
-		info.FinishLoad(install_info);
-		return;
-	}
-
 	auto extension_init_result = InitialLoad(db, fs, extension);
 
 	// C++ ABI
