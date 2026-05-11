@@ -672,11 +672,14 @@
     },
     {
         "name": "http_proxy",
-        "description": "HTTP proxy host",
+        "description": "HTTP proxy host (defaults to the HTTP_PROXY environment variable when unset)",
         "type": "VARCHAR",
         "scope": "global",
-        "default_value": "",
-        "struct": "HTTPProxySetting"
+        "struct": "HTTPProxySetting",
+        "custom_implementation": [
+            "set",
+            "reset"
+        ]
     },
     {
         "name": "http_proxy_password",

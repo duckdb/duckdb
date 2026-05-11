@@ -15,6 +15,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -1259,6 +1260,17 @@ void HTTPLoggingOutputSetting::ResetLocal(ClientContext &context) {
 Value HTTPLoggingOutputSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.http_logging_output);
+}
+
+//===----------------------------------------------------------------------===//
+// HTTP Proxy
+//===----------------------------------------------------------------------===//
+void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Value &input) {
+	config.options.http_proxy = input.GetValue<string>();
+}
+
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
+	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
 }
 
 //===----------------------------------------------------------------------===//
