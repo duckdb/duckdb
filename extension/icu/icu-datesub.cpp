@@ -3,7 +3,6 @@
 
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -12,78 +11,78 @@ struct ICUCalendarSub : public ICUDateFunc {
 	//	ICU only has 32 bit precision for date parts, so it can overflow a high resolution.
 	//	Since there is no difference between ICU and the obvious calculations,
 	//	we make these using the DuckDB internal type.
-	static int64_t SubtractMicrosecond(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractMicrosecond(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		return end_date.value - start_date.value;
 	}
 
-	static int64_t SubtractMillisecond(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractMillisecond(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_MSEC;
 	}
 
-	static int64_t SubtractSecond(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractSecond(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_SEC;
 	}
 
-	static int64_t SubtractMinute(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractMinute(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		return SubtractMicrosecond(calendar, start_date, end_date) / Interval::MICROS_PER_MINUTE;
 	}
 
-	static int64_t SubtractHour(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractHour(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
 	}
 
-	static int64_t SubtractDay(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractDay(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_DATE, end_date);
 	}
 
-	static int64_t SubtractWeek(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractWeek(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_WEEK_OF_YEAR, end_date);
 	}
 
-	static int64_t SubtractMonth(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractMonth(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_MONTH, end_date);
 	}
 
-	static int64_t SubtractQuarter(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractQuarter(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		// No ICU part for this, so do it manually.
 		// This will not work for lunar calendars!
 		return SubtractMonth(calendar, start_date, end_date) / 3;
 	}
 
-	static int64_t SubtractYear(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractYear(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_YEAR, end_date);
 	}
 
-	static int64_t SubtractISOYear(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractISOYear(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_YEAR_WOY, end_date);
 	}
 
-	static int64_t SubtractDecade(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractDecade(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		// No ICU part for this, so do it manually.
 		return SubtractYear(calendar, start_date, end_date) / 10;
 	}
 
-	static int64_t SubtractCentury(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractCentury(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		// No ICU part for this, so do it manually.
 		return SubtractYear(calendar, start_date, end_date) / 100;
 	}
 
-	static int64_t SubtractMillenium(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractMillenium(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		// No ICU part for this, so do it manually.
 		return SubtractYear(calendar, start_date, end_date) / 1000;
 	}
 
-	static int64_t SubtractEra(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date) {
+	static int64_t SubtractEra(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date) {
 		SetTime(calendar, start_date);
 		return SubtractField(calendar, UCAL_ERA, end_date);
 	}
@@ -106,19 +105,19 @@ struct ICUCalendarSub : public ICUDateFunc {
 			}
 			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 			auto part_func = SubtractFactory(GetDatePartSpecifier(specifier));
-			BinaryExecutor::Execute<T, T, int64_t>(
-			    startdate_arg, enddate_arg, result, args.size(), [&](T start_date, T end_date) -> optional<int64_t> {
-				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
-					    return part_func(calendar.get(), start_date, end_date);
-				    } else {
-					    return nullopt;
-				    }
-			    });
+			BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result, args.size(),
+			                                       [&](T start_date, T end_date) -> optional<int64_t> {
+				                                       if (start_date.IsFinite() && end_date.IsFinite()) {
+					                                       return part_func(calendar.get(), start_date, end_date);
+				                                       } else {
+					                                       return nullopt;
+				                                       }
+			                                       });
 		} else {
 			TernaryExecutor::Execute<string_t, T, T, int64_t>(
 			    part_arg, startdate_arg, enddate_arg, result, args.size(),
 			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
-				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
+				    if (start_date.IsFinite() && end_date.IsFinite()) {
 					    auto part_func = SubtractFactory(GetDatePartSpecifier(specifier.GetString()));
 					    return part_func(calendar.get(), start_date, end_date);
 				    } else {
@@ -135,7 +134,7 @@ struct ICUCalendarSub : public ICUDateFunc {
 
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
@@ -189,7 +188,7 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 // to the desired part precision and then applying ICU subtraction/difference
 struct ICUCalendarDiff : public ICUDateFunc {
 	template <typename T>
-	static int64_t DifferenceFunc(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date,
+	static int64_t DifferenceFunc(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date,
 	                              part_trunc_t trunc_func, part_sub_t sub_func) {
 		// Truncate the two arguments. This is safe because we will stay in range
 		auto micros = SetTime(calendar, start_date);
@@ -236,21 +235,21 @@ struct ICUCalendarDiff : public ICUDateFunc {
 				const auto part = GetDatePartSpecifier(specifier);
 				auto trunc_func = DiffTruncationFactory(part);
 				auto sub_func = SubtractFactory(part);
-				BinaryExecutor::Execute<T, T, int64_t>(
-				    startdate_arg, enddate_arg, result, args.size(),
-				    [&](T start_date, T end_date) -> optional<int64_t> {
-					    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
-						    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
-					    } else {
-						    return nullopt;
-					    }
-				    });
+				BinaryExecutor::Execute<T, T, int64_t>(startdate_arg, enddate_arg, result, args.size(),
+				                                       [&](T start_date, T end_date) -> optional<int64_t> {
+					                                       if (start_date.IsFinite() && end_date.IsFinite()) {
+						                                       return DifferenceFunc<T>(calendar, start_date, end_date,
+						                                                                trunc_func, sub_func);
+					                                       } else {
+						                                       return nullopt;
+					                                       }
+				                                       });
 			}
 		} else {
 			TernaryExecutor::Execute<string_t, T, T, int64_t>(
 			    part_arg, startdate_arg, enddate_arg, result, args.size(),
 			    [&](string_t specifier, T start_date, T end_date) -> optional<int64_t> {
-				    if (Timestamp::IsFinite(start_date) && Timestamp::IsFinite(end_date)) {
+				    if (start_date.IsFinite() && end_date.IsFinite()) {
 					    const auto part = GetDatePartSpecifier(specifier.GetString());
 					    auto trunc_func = DiffTruncationFactory(part);
 					    auto sub_func = SubtractFactory(part);
@@ -269,7 +268,7 @@ struct ICUCalendarDiff : public ICUDateFunc {
 
 	static void AddFunctions(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetArgProperties(1, ArgProperties().NonIncreasing());
 		set.SetArgProperties(2, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);

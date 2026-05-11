@@ -675,7 +675,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	// flatten the result vector if required
 	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		result.Flatten();
-		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
+		result.Reserve(STANDARD_VECTOR_SIZE);
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows

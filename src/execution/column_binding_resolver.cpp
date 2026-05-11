@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
@@ -244,13 +245,14 @@ unordered_set<TableIndex> ColumnBindingResolver::VerifyInternal(LogicalOperator 
 	return result;
 }
 
-void ColumnBindingResolver::Verify(LogicalOperator &op) {
-#ifdef DEBUG
+void ColumnBindingResolver::Verify(ClientContext &context, LogicalOperator &op) {
+	if (!Settings::Get<DebugVerifyColumnBindingsSetting>(context)) {
+		return;
+	}
 	op.ResolveOperatorTypes();
 	ColumnBindingResolver resolver(true);
 	resolver.VisitOperator(op);
 	VerifyInternal(op);
-#endif
 }
 
 } // namespace duckdb

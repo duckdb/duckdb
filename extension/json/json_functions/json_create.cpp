@@ -280,7 +280,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 
 static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector &key_v, yyjson_mut_val *vals[],
                              idx_t count) {
-	auto keys = key_v.Values<string_t>(count);
+	auto keys = key_v.Values<string_t>();
 	for (idx_t i = 0; i < count; i++) {
 		auto key_entry = keys[i];
 		if (!key_entry.IsValid()) {

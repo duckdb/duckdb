@@ -7,8 +7,6 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -20,7 +18,7 @@ struct DateDiff {
 	template <class TA, class TB, class TR, class OP>
 	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
 		BinaryExecutor::Execute<TA, TB, TR>(left, right, result, count, [&](TA startdate, TB enddate) -> optional<TR> {
-			if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+			if (startdate.IsFinite() && enddate.IsFinite()) {
 				return OP::template Operation<TA, TB, TR>(startdate, enddate);
 			} else {
 				return nullopt;
@@ -212,29 +210,29 @@ int64_t DateDiff::MicrosecondsOperator::Operation(timestamp_t startdate, timesta
 
 template <>
 int64_t DateDiff::MillisecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	D_ASSERT(Timestamp::IsFinite(startdate));
-	D_ASSERT(Timestamp::IsFinite(enddate));
+	D_ASSERT(startdate.IsFinite());
+	D_ASSERT(enddate.IsFinite());
 	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_MSEC);
 }
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	D_ASSERT(Timestamp::IsFinite(startdate));
-	D_ASSERT(Timestamp::IsFinite(enddate));
+	D_ASSERT(startdate.IsFinite());
+	D_ASSERT(enddate.IsFinite());
 	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_SEC);
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	D_ASSERT(Timestamp::IsFinite(startdate));
-	D_ASSERT(Timestamp::IsFinite(enddate));
+	D_ASSERT(startdate.IsFinite());
+	D_ASSERT(enddate.IsFinite());
 	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_MINUTE);
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	D_ASSERT(Timestamp::IsFinite(startdate));
-	D_ASSERT(Timestamp::IsFinite(enddate));
+	D_ASSERT(startdate.IsFinite());
+	D_ASSERT(enddate.IsFinite());
 	return Diff(startdate.value, enddate.value, Interval::MICROS_PER_HOUR);
 }
 
@@ -354,7 +352,7 @@ int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate) {
 struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
 	static inline optional<TR> Operation(TS part, TA startdate, TB enddate) {
-		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+		if (startdate.IsFinite() && enddate.IsFinite()) {
 			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 		} else {
 			return nullopt;

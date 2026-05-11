@@ -69,6 +69,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 	    layout_ptr->CannotHaveNull() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 	predicates.resize(layout_ptr->ColumnCount() - 1, expr_type);
 	row_matcher.Initialize(true, *layout_ptr, predicates);
+
+	state.partitioned_append_state.compute_reverse_partition_sel = true;
+	state.unpartitioned_append_state.compute_reverse_partition_sel = true;
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
@@ -498,16 +501,18 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 		return new_group_count;
 	}
 
+	// process the aggregates
+	// FIXME: This should just be a CONSTANT_VECTOR but subsequent operations assume FLAT_VECTOR
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, payload.size());
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
-
-	// process the aggregates
-	// FIXME: we can use simple_update here if the aggregates support it
+	FlatVector::SetSize(state.addresses, payload.size());
+	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
 	UpdateAggregates(payload, filter);
+	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
 
 	return new_group_count;
 }
@@ -682,10 +687,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
 
 	if (enable_hll) {
-		hll.Update(group_hashes_v, group_hashes_v, groups.size());
+		hll.Update(group_hashes_v);
 	}
 
-	const auto hashes = group_hashes_v.Values<hash_t>(chunk_size);
+	const auto hashes = group_hashes_v.Values<hash_t>();
 
 	addresses_v.Flatten();
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);

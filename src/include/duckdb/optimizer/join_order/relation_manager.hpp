@@ -54,7 +54,7 @@ public:
 	                                            JoinRelationSetManager &set_manager);
 
 	//! Extract the set of relations referred to inside an expression
-	bool ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings);
+	bool ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 	//! Add an unnest relation which can come from a logical unnest or a logical get which has an unnest function
 	void AddRelationWithChildren(JoinOrderOptimizer &optimizer, LogicalOperator &op, LogicalOperator &input_op,

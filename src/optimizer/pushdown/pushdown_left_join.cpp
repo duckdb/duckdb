@@ -119,7 +119,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
 			if (cond.IsComparison()) {
-				filter_combiner.AddFilter(make_uniq<BoundComparisonExpression>(
+				filter_combiner.AddFilter(BoundComparisonExpression::Create(
 				    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy()));
 			} else {
 				filter_combiner.AddFilter(cond.GetJoinExpression().Copy());

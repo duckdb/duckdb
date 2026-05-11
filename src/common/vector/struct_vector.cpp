@@ -115,7 +115,7 @@ void VectorStructBuffer::VerifyInternal(const LogicalType &type, const Selection
 		} else {
 			if (child.GetVectorType() == VectorType::FLAT_VECTOR ||
 			    child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				auto child_validity = child.Validity(child.size());
+				auto child_validity = child.Validity();
 				for (idx_t r = 0; r < Size(); r++) {
 					if (!validity.RowIsValid(r)) {
 						if (child_validity.IsValid(r)) {
@@ -231,12 +231,12 @@ Value VectorStructBuffer::GetValue(const LogicalType &type, idx_t index) const {
 	}
 }
 
-void VectorStructBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorStructBuffer::ReserveInternal(idx_t new_size) {
 	// resize over the validity
 	validity.Resize(new_size);
 	// resize the struct children
 	for (auto &child : children) {
-		child.Resize(current_size, new_size);
+		child.Reserve(new_size);
 	}
 	capacity = new_size;
 }

@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -528,7 +529,7 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 	}
 }
 
-bool RelationManager::ExtractBindings(Expression &expression, unordered_set<RelationIndex> &bindings) {
+bool RelationManager::ExtractBindings(const Expression &expression, unordered_set<RelationIndex> &bindings) {
 	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
@@ -553,7 +554,7 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<Rela
 	}
 	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
-	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+	ExpressionIterator::EnumerateChildren(expression, [&](const Expression &expr) {
 		if (!ExtractBindings(expr, bindings)) {
 			can_reorder = false;
 			return;
@@ -588,8 +589,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// reordering.
 				for (auto &cond : join.conditions) {
 					if (cond.IsComparison()) {
-						auto comparison = make_uniq<BoundComparisonExpression>(
-						    cond.GetComparisonType(), cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						auto comparison = BoundComparisonExpression::Create(cond.GetComparisonType(),
+						                                                    cond.GetLHS().Copy(), cond.GetRHS().Copy());
 						conjunction_expression->children.push_back(std::move(comparison));
 					}
 				}
@@ -603,11 +604,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 				// every expression and a right_set that unions all relations from the right side of a
 				// every expression (although this should always be 1).
 				for (auto &bound_expr : conjunction_expression->children) {
-					D_ASSERT(bound_expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
-					auto &comp = bound_expr->Cast<BoundComparisonExpression>();
+					auto &comp = bound_expr->Cast<BoundFunctionExpression>();
 					unordered_set<RelationIndex> right_bindings, left_bindings;
-					ExtractBindings(*comp.right, right_bindings);
-					ExtractBindings(*comp.left, left_bindings);
+					auto &left = BoundComparisonExpression::Left(comp);
+					auto &right = BoundComparisonExpression::Right(comp);
+					ExtractBindings(right, right_bindings);
+					ExtractBindings(left, left_bindings);
 
 					if (!left_set) {
 						left_set = set_manager.GetJoinRelation(left_bindings);
@@ -642,8 +644,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 
 					if (cond.IsComparison()) {
 						auto comp_type = cond.GetComparisonType();
-						expr =
-						    make_uniq<BoundComparisonExpression>(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
+						expr = BoundComparisonExpression::Create(comp_type, cond.GetLHS().Copy(), cond.GetRHS().Copy());
 					} else {
 						expr = cond.GetJoinExpression().Copy();
 						is_residual = true;

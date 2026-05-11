@@ -614,7 +614,7 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 		throw ConstraintException("CHECK constraint failed on table %s with expression %s (Unknown Error)", table.name,
 		                          check.ToString());
 	} // LCOV_EXCL_STOP
-	for (auto entry : result.Values<int32_t>(chunk.size())) {
+	for (auto entry : result.Values<int32_t>()) {
 		if (entry.IsValid() && entry.GetValue() == 0) {
 			throw ConstraintException("CHECK constraint failed on table %s with expression %s", table.name,
 			                          check.ToString());
