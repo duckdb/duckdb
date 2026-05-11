@@ -2,6 +2,7 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
+add_subdirectory(allocator)
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
@@ -29,7 +30,6 @@ endif()
 add_library_unity(
   duckdb_common
   OBJECT
-  allocator.cpp
   assert.cpp
   bind_helpers.cpp
   box_renderer.cpp

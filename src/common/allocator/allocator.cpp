@@ -9,6 +9,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <cstdint>
+
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -17,132 +18,7 @@
 #include <execinfo.h>
 #endif
 
-#ifndef USE_JEMALLOC
-#if defined(DUCKDB_ENABLE_JEMALLOC) && !defined(WIN32) && INTPTR_MAX == INT64_MAX
-#define USE_JEMALLOC
-#include "jemalloc/jemalloc.h"
-#include "duckdb/malloc_ncpus.h"
-#include <thread>
-
-#endif
-#endif
-
-#ifdef __GLIBC__
-#include <malloc.h>
-#endif
-
-#ifdef USE_JEMALLOC
-extern "C" {
-
-unsigned duckdb_malloc_ncpus() {
-#ifdef DUCKDB_NO_THREADS
-	return 1
-#else
-	unsigned concurrency = duckdb::NumericCast<unsigned>(std::thread::hardware_concurrency());
-	return std::max(concurrency, 1u);
-#endif
-}
-}
-
-#endif
-
 namespace duckdb {
-
-#ifdef USE_JEMALLOC
-namespace {
-
-struct JemallocImpl {
-	data_ptr_t Allocate(PrivateAllocatorData *private_data, idx_t size) {
-		return data_ptr_cast(duckdb_je_malloc(size));
-	}
-
-	void Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		duckdb_je_free(pointer);
-	}
-
-	data_ptr_t Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size, idx_t size) {
-		return data_ptr_cast(duckdb_je_realloc(pointer, size));
-	}
-
-	static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {
-		if (duckdb_je_mallctl(name, old_ptr, old_len, new_ptr, new_len) != 0) {
-#ifdef DEBUG
-			// We only want to throw an exception here when debugging
-			throw InternalException("je_mallctl failed for setting \"%s\"", name);
-#endif
-		}
-	}
-
-	static inline string PurgeArenaString(idx_t arena_idx) {
-		return StringUtil::Format("arena.%llu.purge", arena_idx);
-	}
-
-	template <class T>
-	static void SetJemallocCTL(const char *name, T &val) {
-		JemallocCTL(name, nullptr, nullptr, &val, sizeof(T));
-	}
-
-	static void SetJemallocCTL(const char *name) {
-		JemallocCTL(name, nullptr, nullptr, nullptr, 0);
-	}
-
-	template <class T>
-	static T GetJemallocCTL(const char *name) {
-		T result;
-		size_t len = sizeof(T);
-		JemallocCTL(name, &result, &len, nullptr, 0);
-		return result;
-	}
-
-	static int64_t DecayDelay() {
-		return DUCKDB_JEMALLOC_DECAY;
-	}
-
-	static void ThreadFlush(idx_t threshold) {
-		// We flush after exceeding the threshold
-		if (GetJemallocCTL<uint64_t>("thread.peak.read") > threshold) {
-			return;
-		}
-
-		// Flush thread-local cache
-		SetJemallocCTL("thread.tcache.flush");
-
-		// Flush this thread's arena
-		const auto purge_arena = PurgeArenaString(idx_t(GetJemallocCTL<unsigned>("thread.arena")));
-		SetJemallocCTL(purge_arena.c_str());
-
-		// Reset the peak after resetting
-		SetJemallocCTL("thread.peak.reset");
-	}
-
-	static void ThreadIdle() {
-		// Indicate that this thread is idle
-		SetJemallocCTL("thread.idle");
-
-		// Reset the peak after resetting
-		SetJemallocCTL("thread.peak.reset");
-	}
-
-	static void FlushAll() {
-		// Flush thread-local cache
-		SetJemallocCTL("thread.tcache.flush");
-
-		// Flush all arenas
-		const auto purge_arena = PurgeArenaString(MALLCTL_ARENAS_ALL);
-		SetJemallocCTL(purge_arena.c_str());
-
-		// Reset the peak after resetting
-		SetJemallocCTL("thread.peak.reset");
-	}
-	static void SetBackgroundThreads(bool enable) {
-#ifndef __APPLE__
-		SetJemallocCTL("background_thread", enable);
-#endif
-	}
-};
-
-} // namespace
-#endif
 
 constexpr const idx_t Allocator::MAXIMUM_ALLOC_SIZE;
 
@@ -290,36 +166,6 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	}
 	return new_pointer;
 }
-
-data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-#ifdef USE_JEMALLOC
-	return JemallocImpl::Allocate(private_data, size);
-#else
-	auto default_allocate_result = malloc(size);
-	if (!default_allocate_result) {
-		throw std::bad_alloc();
-	}
-	return data_ptr_cast(default_allocate_result);
-#endif
-}
-
-void Allocator::DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-#ifdef USE_JEMALLOC
-	JemallocImpl::Free(private_data, pointer, size);
-#else
-	free(pointer);
-#endif
-}
-
-data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-                                        idx_t size) {
-#ifdef USE_JEMALLOC
-	return JemallocImpl::Reallocate(private_data, pointer, old_size, size);
-#else
-	return data_ptr_cast(realloc(pointer, size));
-#endif
-}
-
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
 	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared_ptr<Allocator>();
 	return DEFAULT_ALLOCATOR;
@@ -327,72 +173,6 @@ shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
 
 Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
-}
-
-optional_idx Allocator::DecayDelay() {
-#ifdef USE_JEMALLOC
-	return NumericCast<idx_t>(JemallocImpl::DecayDelay());
-#else
-	return optional_idx();
-#endif
-}
-
-bool Allocator::SupportsFlush() {
-#if defined(USE_JEMALLOC) || defined(__GLIBC__)
-	return true;
-#else
-	return false;
-#endif
-}
-
-static void MallocTrim(idx_t pad) {
-#ifdef __GLIBC__
-	static constexpr int64_t TRIM_INTERVAL_MS = 100;
-	static atomic<int64_t> LAST_TRIM_TIMESTAMP_MS {0};
-
-	int64_t last_trim_timestamp_ms = LAST_TRIM_TIMESTAMP_MS.load();
-	auto current_ts = Timestamp::GetCurrentTimestamp();
-	auto current_timestamp_ms = Cast::Operation<timestamp_t, timestamp_ms_t>(current_ts).value;
-
-	if (current_timestamp_ms - last_trim_timestamp_ms < TRIM_INTERVAL_MS) {
-		return; // We trimmed less than TRIM_INTERVAL_MS ago
-	}
-	if (!LAST_TRIM_TIMESTAMP_MS.compare_exchange_strong(last_trim_timestamp_ms, current_timestamp_ms,
-	                                                    std::memory_order_acquire, std::memory_order_relaxed)) {
-		return; // Another thread has updated LAST_TRIM_TIMESTAMP_MS since we loaded it
-	}
-
-	// We successfully updated LAST_TRIM_TIMESTAMP_MS, we can trim
-	malloc_trim(pad);
-#endif
-}
-
-void Allocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) {
-#ifdef USE_JEMALLOC
-	if (!allocator_background_threads) {
-		JemallocImpl::ThreadFlush(threshold);
-	}
-#endif
-	MallocTrim(thread_count * threshold);
-}
-
-void Allocator::ThreadIdle() {
-#ifdef USE_JEMALLOC
-	JemallocImpl::ThreadIdle();
-#endif
-}
-
-void Allocator::FlushAll() {
-#ifdef USE_JEMALLOC
-	JemallocImpl::FlushAll();
-#endif
-	MallocTrim(0);
-}
-
-void Allocator::SetBackgroundThreads(bool enable) {
-#ifdef USE_JEMALLOC
-	JemallocImpl::SetBackgroundThreads(enable);
-#endif
 }
 
 //===--------------------------------------------------------------------===//
