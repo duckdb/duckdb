@@ -144,6 +144,14 @@ private:
 		unique_ptr<Vector> dictionary_addresses;
 		unsafe_unique_array<bool> found_entry;
 		idx_t capacity = 0;
+		//! For the clustered-aggregate fast path: track whether every state pointer added to this
+		//! dictionary shares the same high (64 - SLOT_GID_BITS) bits. The clustered path stores only
+		//! the low SLOT_GID_BITS of each pointer, so if any two pointers differ in their high bits
+		//! we cannot reuse the truncated form to disambiguate them and must fall back to scatter.
+		//! address_high_bits starts at the sentinel ~0 ("no address seen yet"); a real high-bits
+		//! value always has its low SLOT_GID_BITS cleared so ~0 cannot collide with a valid value.
+		uint64_t address_high_bits = ~uint64_t(0);
+		bool address_high_bits_uniform = true;
 	};
 
 	//! If we have this many or more radix bits, we use the unpartitioned data collection too

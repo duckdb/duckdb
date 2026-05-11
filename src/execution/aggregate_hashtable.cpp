@@ -409,6 +409,9 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		}
 		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
 		dict_state.dictionary_id = dictionary_id;
+		dict_state.address_high_bits = ~uint64_t(0);
+		dict_state.address_high_bits_uniform =
+		    (sizeof(uintptr_t) == sizeof(uint64_t)); // only relevant on 64-bits systems
 	} else if (dict_size > dict_state.capacity) {
 		throw InternalException("AggregateHT - using cached dictionary data but dictionary has changed (dictionary id "
 		                        "%s - dict size %d, current capacity %d)",
@@ -456,7 +459,17 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	auto dict_addresses = FlatVector::ScatterWriter<uintptr_t>(dictionary_addresses);
 	for (idx_t i = 0; i < unique_count; i++) {
 		auto dict_idx = unique_entries.get_index(i);
-		dict_addresses[dict_idx] = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
+		const uintptr_t addr = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
+		static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+		if (dict_state.address_high_bits_uniform) { // for clustered aggregation: check high bit uniformity
+			const uint64_t high_bits = static_cast<uint64_t>(addr) & GID_HIGH_MASK;
+			if (dict_state.address_high_bits == ~uint64_t(0)) { // uninitialized
+				dict_state.address_high_bits = high_bits;
+			} else if (high_bits != dict_state.address_high_bits) {
+				dict_state.address_high_bits_uniform = false;
+			}
+		}
+		dict_addresses[dict_idx] = addr;
 	}
 	// now set up the addresses for the aggregates
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups.size());
@@ -566,7 +579,13 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 			return entries[slot].GetPointer() + aggr_offset;
 		});
 	} else {
-		// dictionary path: addresses are already resolved pointers — use them directly as gids
+		// dictionary path: addresses are already resolved pointers — and gids are not even set then
+		// But, we can use the "addresses as gids". ClusteredAggr only triggers on low gid counts (see above) and
+		// for speed the TryClustered method exploits that by ignoring high gid bits. When using "addresses as gids"
+		// we thus need to know that all high bits are the same (this is very typically the case).
+		if (!state.dict_state.address_high_bits_uniform) {
+			return false;
+		}
 		auto addrs = FlatVector::GetData<uint64_t>(state.addresses);
 		if (!clustered_state.TryBuild(clustered, addrs, payload.size())) {
 			return false;
