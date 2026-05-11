@@ -48,8 +48,8 @@ PrefixRangeInitLocalState(ExpressionState &state, const BoundFunctionExpression 
 	return InitSelectivityTrackingLocalState(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
-static idx_t PrefixRangeSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                               SelectionVector *false_sel) {
+static idx_t PrefixRangeSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                               optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<PrefixRangeFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);

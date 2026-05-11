@@ -19,8 +19,8 @@ DynamicFilterData::DynamicFilterData(ExpressionType comparison_type_p, Value con
 }
 
 unique_ptr<Expression> DynamicFilterData::ToExpression(const Expression &column) const {
-	return make_uniq<BoundComparisonExpression>(comparison_type, column.Copy(),
-	                                            make_uniq<BoundConstantExpression>(constant));
+	return BoundComparisonExpression::Create(comparison_type, column.Copy(),
+	                                         make_uniq<BoundConstantExpression>(constant));
 }
 
 bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value &constant, const Value &value) {
@@ -101,8 +101,8 @@ static idx_t SelectDynamicFilter(Vector &input, ExpressionType comparison_type, 
 	return approved_count;
 }
 
-static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                 SelectionVector *false_sel) {
+static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
 	auto count = args.size();

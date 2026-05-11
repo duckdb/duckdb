@@ -91,8 +91,10 @@ static unique_ptr<FunctionLocalState> SelectivityOptionalFilterInitLocalState(Ex
 	                                                      data.n_vectors_to_check, data.selectivity_threshold);
 }
 
-static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                             SelectionVector *false_sel) {
+static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &state,
+                                             optional_ptr<const SelectionVector> sel,
+                                             optional_ptr<SelectionVector> true_sel,
+                                             optional_ptr<SelectionVector> false_sel) {
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	if (!local_state_ptr) {
 		return SetAllTrueSelection(args.size(), true_sel, false_sel);

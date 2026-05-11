@@ -914,14 +914,49 @@ static unique_ptr<Expression> RewriteDynamicFilterExpression(const shared_ptr<Dy
 	if (!TryCastConstant(new_constant, target_type)) {
 		return nullptr;
 	}
-	return make_uniq<BoundComparisonExpression>(filter_data->comparison_type, CreateReferenceExpression(target_type),
-	                                            make_uniq<BoundConstantExpression>(std::move(new_constant)));
+	return BoundComparisonExpression::Create(filter_data->comparison_type, CreateReferenceExpression(target_type),
+	                                         make_uniq<BoundConstantExpression>(std::move(new_constant)));
 }
 
 static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, const MultiFileIndexMapping &mapping,
                                                       const LogicalType &target_type) {
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
+		auto &func = expr.Cast<BoundFunctionExpression>();
+		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return CreateOptionalFilterExpression(nullptr, target_type);
+			}
+			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
+			if (data.child_filter_expr && !child_expr) {
+				return nullptr;
+			}
+			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
+		}
+		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
+			}
+			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
+			auto child_expr = data.child_filter_expr
+			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
+			                      : nullptr;
+			if (data.child_filter_expr && !child_expr) {
+				return nullptr;
+			}
+			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
+			                                                 data.selectivity_threshold, data.n_vectors_to_check);
+		}
+		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
+			if (!func.bind_info) {
+				return nullptr;
+			}
+			auto &data = func.bind_info->Cast<DynamicFilterFunctionData>();
+			return RewriteDynamicFilterExpression(data.filter_data, target_type);
+		}
 		if (!BoundComparisonExpression::IsComparison(expr)) {
 			return nullptr;
 		}
@@ -995,44 +1030,6 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 		default:
 			return nullptr;
 		}
-	}
-	case ExpressionClass::BOUND_FUNCTION: {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.function.GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
-				return CreateOptionalFilterExpression(nullptr, target_type);
-			}
-			auto &data = func.bind_info->Cast<OptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr
-			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                      : nullptr;
-			if (data.child_filter_expr && !child_expr) {
-				return nullptr;
-			}
-			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
-		}
-		if (func.function.GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.bind_info) {
-				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
-			}
-			auto &data = func.bind_info->Cast<SelectivityOptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr
-			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                      : nullptr;
-			if (data.child_filter_expr && !child_expr) {
-				return nullptr;
-			}
-			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
-			                                                 data.selectivity_threshold, data.n_vectors_to_check);
-		}
-		if (func.function.GetName() == DynamicFilterScalarFun::NAME) {
-			if (!func.bind_info) {
-				return nullptr;
-			}
-			auto &data = func.bind_info->Cast<DynamicFilterFunctionData>();
-			return RewriteDynamicFilterExpression(data.filter_data, target_type);
-		}
-		return nullptr;
 	}
 	case ExpressionClass::BOUND_CONSTANT:
 		return expr.Copy();

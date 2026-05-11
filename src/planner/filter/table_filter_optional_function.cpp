@@ -50,8 +50,8 @@ static void OptionalFilterFunction(DataChunk &args, ExpressionState &state, Vect
 	SetAllTrue(args, result);
 }
 
-static idx_t OptionalFilterSelect(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                  SelectionVector *false_sel) {
+static idx_t OptionalFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
+                                  optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 	return SetAllTrueSelection(args.size(), true_sel, false_sel);
 }
 

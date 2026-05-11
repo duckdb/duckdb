@@ -42,7 +42,8 @@ inline unique_ptr<FunctionLocalState> InitSelectivityTrackingLocalState(idx_t n_
 	return make_uniq<SelectivityTrackingLocalState>(n_vectors_to_check, selectivity_threshold);
 }
 
-inline idx_t SetAllTrueSelection(idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<SelectionVector> true_sel,
+                                 optional_ptr<SelectionVector> false_sel) {
 	if (true_sel) {
 		for (idx_t i = 0; i < count; i++) {
 			true_sel->set_index(i, i);
@@ -51,7 +52,8 @@ inline idx_t SetAllTrueSelection(idx_t count, SelectionVector *true_sel, Selecti
 	return count;
 }
 
-inline idx_t SetAllFalseSelection(idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+inline idx_t SetAllFalseSelection(idx_t count, optional_ptr<SelectionVector> true_sel,
+                                  optional_ptr<SelectionVector> false_sel) {
 	if (false_sel) {
 		for (idx_t i = 0; i < count; i++) {
 			false_sel->set_index(i, i);
@@ -61,7 +63,7 @@ inline idx_t SetAllFalseSelection(idx_t count, SelectionVector *true_sel, Select
 }
 
 inline idx_t FillSelectionInversion(idx_t count, const SelectionVector &true_sel, idx_t true_count,
-                                    SelectionVector *false_sel) {
+                                    optional_ptr<SelectionVector> false_sel) {
 	if (!false_sel) {
 		return count - true_count;
 	}
