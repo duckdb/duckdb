@@ -19,7 +19,6 @@ public:
 
 	bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression, BindResult &result,
 	                              unique_ptr<ParsedExpression> &expr_ptr) override;
-	bool DoesColumnAliasExist(const ColumnRefExpression &colref) override;
 
 protected:
 	void ThrowIfUnnestInLambda(const ColumnBinding &column_binding) override;

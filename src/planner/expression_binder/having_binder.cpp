@@ -5,6 +5,7 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/column_qualifier.hpp"
 
 namespace duckdb {
 
@@ -15,30 +16,10 @@ HavingBinder::HavingBinder(Binder &binder, ClientContext &context, BoundSelectNo
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 
-bool HavingBinder::DoesColumnAliasExist(const ColumnRefExpression &colref) {
-	return column_alias_binder.DoesColumnAliasExist(colref);
-}
-
 BindResult HavingBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
 	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
 	auto &lambda_ref = expr.Cast<LambdaRefExpression>();
 	return (*lambda_bindings)[expr.lambda_idx].Bind(lambda_ref, depth);
-}
-
-unique_ptr<ParsedExpression> HavingBinder::QualifyColumnName(ColumnRefExpression &colref, ErrorData &error) {
-	auto qualified_colref = ExpressionBinder::QualifyColumnName(colref, error);
-	if (!qualified_colref) {
-		return nullptr;
-	}
-
-	auto group_index = TryBindGroup(*qualified_colref);
-	if (group_index.IsValid()) {
-		return qualified_colref;
-	}
-	if (column_alias_binder.DoesColumnAliasExist(colref)) {
-		return nullptr;
-	}
-	return qualified_colref;
 }
 
 BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -94,6 +75,12 @@ BindResult HavingBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, i
 
 BindResult HavingBinder::BindWindowExpression(WindowExpression &expr, idx_t depth) {
 	throw BinderException::Unsupported(expr, "HAVING clause cannot contain window functions!");
+}
+
+void ExpressionBinder::QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr) {
+	ColumnQualifier qualifier(having_binder.binder, having_binder.lambda_bindings, having_binder);
+	vector<unordered_set<string>> lambda_params;
+	qualifier.QualifyColumnNames(expr, lambda_params);
 }
 
 } // namespace duckdb

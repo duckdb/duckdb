@@ -27,6 +27,8 @@ struct BoundGroupInformation {
 //! The BaseSelectBinder is the base binder of the SELECT, HAVING and QUALIFY binders. It can bind aggregates and window
 //! functions.
 class BaseSelectBinder : public ExpressionBinder {
+	friend class ColumnQualifier;
+
 public:
 	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
 
