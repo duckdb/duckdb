@@ -37,6 +37,7 @@ class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 class HavingBinder;
+class ColumnAliasBinder;
 
 struct DummyBinding;
 struct SelectBindState;
@@ -114,7 +115,8 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	//! Entry point for qualifying the column references of the expression
-	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
+	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr,
+	                               optional_ptr<ColumnAliasBinder> alias_binder = nullptr);
 	static void QualifyColumnNames(ExpressionBinder &binder, unique_ptr<ParsedExpression> &expr);
 	static void QualifyColumnNames(HavingBinder &having_binder, unique_ptr<ParsedExpression> &expr);
 

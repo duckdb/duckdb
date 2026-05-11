@@ -11,8 +11,10 @@
 namespace duckdb {
 
 ColumnQualifier::ColumnQualifier(Binder &binder_p, optional_ptr<vector<DummyBinding>> lambda_bindings_p,
+                                 optional_ptr<ColumnAliasBinder> alias_binder_p,
                                  optional_ptr<HavingBinder> having_binder_p)
-    : binder(binder_p), lambda_bindings(lambda_bindings_p), having_binder(having_binder_p) {
+    : binder(binder_p), lambda_bindings(lambda_bindings_p), alias_binder(alias_binder_p),
+      having_binder(having_binder_p) {
 }
 
 string GetSQLValueFunctionName(const string &column_name) {
@@ -481,6 +483,9 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDots(Colu
 unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(ColumnRefExpression &colref, ErrorData &error) {
 	auto qualified_colref = QualifyColumnNameInternal(colref, error);
 	if (!qualified_colref) {
+		if (alias_binder) {
+			return alias_binder->ResolveAlias(colref);
+		}
 		return nullptr;
 	}
 	if (!having_binder) {

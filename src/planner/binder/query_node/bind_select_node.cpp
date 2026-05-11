@@ -467,7 +467,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		BindWhereStarExpression(statement.where_clause);
 		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
 	}
-	for(auto &grp : statement.groups.group_expressions) {
+	for (auto &grp : statement.groups.group_expressions) {
 		ExpressionBinder::QualifyColumnNames(*this, grp);
 	}
 

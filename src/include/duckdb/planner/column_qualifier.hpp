@@ -11,11 +11,13 @@
 #include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
+class ColumnAliasBinder;
 class HavingBinder;
 
 class ColumnQualifier {
 public:
 	explicit ColumnQualifier(Binder &binder, optional_ptr<vector<DummyBinding>> lambda_bindings = nullptr,
+	                         optional_ptr<ColumnAliasBinder> alias_binder = nullptr,
 	                         optional_ptr<HavingBinder> having_binder = nullptr);
 	virtual ~ColumnQualifier() = default;
 
@@ -44,6 +46,7 @@ public:
 private:
 	Binder &binder;
 	optional_ptr<vector<DummyBinding>> lambda_bindings;
+	optional_ptr<ColumnAliasBinder> alias_binder;
 	optional_ptr<HavingBinder> having_binder;
 
 private:
