@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "duckdb.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
@@ -103,6 +104,19 @@ enum class ParquetPrefetchStrategy : uint8_t {
 };
 
 const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);
+
+enum class ParquetPrefetchStrategyOption : uint8_t {
+	AUTO,        //! Uses the runtime strategy to pick between ParquetPrefetchStrategy
+	WHOLE_GROUP, //! Always do the whole row group
+};
+
+ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const string &value);
+
+template <>
+const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStrategyOption value);
+
+template <>
+ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
 
 struct ParquetScanFilter {
 	ParquetScanFilter(ClientContext &context, ProjectionIndex filter_idx, TableFilter &filter);
@@ -235,6 +249,7 @@ struct ParquetOptions {
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
 	bool can_have_nan = false; // if floats or doubles can contain NaN values
+	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 };
 
 struct ParquetOptionsSerialization {

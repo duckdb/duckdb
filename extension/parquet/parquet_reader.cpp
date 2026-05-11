@@ -84,6 +84,17 @@ const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
 	}
 }
 
+ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const string &value) {
+	auto lower = StringUtil::Lower(value);
+	if (lower == "auto") {
+		return ParquetPrefetchStrategyOption::AUTO;
+	}
+	if (lower == "whole_group") {
+		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group')", value);
+}
+
 static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
 	idx_t offset = NumericCast<idx_t>(chunk.meta_data.data_page_offset);
 	if (chunk.meta_data.__isset.dictionary_page_offset) {
@@ -1733,22 +1744,26 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 				    GetFileName());
 			}
 
-			bool filters_look_unselective = false;
-			if (filters) {
-				if (state.prefetch_metrics.row_groups_executed == 0) {
-					filters_look_unselective = true;
-				} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
-				               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
-				           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
-					filters_look_unselective = true;
-				}
-			}
-
-			if ((!filters || filters_look_unselective) &&
-			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			if (parquet_options.prefetch_strategy == ParquetPrefetchStrategyOption::WHOLE_GROUP) {
 				WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
 			} else {
-				ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+				bool filters_look_unselective = false;
+				if (filters) {
+					if (state.prefetch_metrics.row_groups_executed == 0) {
+						filters_look_unselective = true;
+					} else if (static_cast<double>(state.prefetch_metrics.row_groups_with_matches) /
+					               static_cast<double>(state.prefetch_metrics.row_groups_executed) >
+					           ParquetReaderPrefetchConfig::PREFETCH_FILTER_MINIMUM_MATCH_RATIO) {
+						filters_look_unselective = true;
+					}
+				}
+
+				if ((!filters || filters_look_unselective) &&
+				    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+					WholeGroupPrefetch(state, trans, group, total_row_group_span, log_prefetch);
+				} else {
+					ColumnWisePrefetch(state, trans, group, filters_look_unselective, log_prefetch);
+				}
 			}
 		}
 		result.Reset();
