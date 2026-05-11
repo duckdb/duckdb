@@ -52,14 +52,17 @@ inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<SelectionVector> true
 	return count;
 }
 
-inline idx_t SetAllFalseSelection(idx_t count, optional_ptr<SelectionVector> true_sel,
-                                  optional_ptr<SelectionVector> false_sel) {
-	if (false_sel) {
+inline idx_t SetAllTrueSelection(idx_t count, optional_ptr<const SelectionVector> sel,
+                                 optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
+	if (!sel) {
+		return SetAllTrueSelection(count, true_sel, false_sel);
+	}
+	if (true_sel) {
 		for (idx_t i = 0; i < count; i++) {
-			false_sel->set_index(i, i);
+			true_sel->set_index(i, sel->get_index(i));
 		}
 	}
-	return 0;
+	return count;
 }
 
 inline idx_t FillSelectionInversion(idx_t count, const SelectionVector &true_sel, idx_t true_count,
@@ -68,6 +71,39 @@ inline idx_t FillSelectionInversion(idx_t count, const SelectionVector &true_sel
 		return count - true_count;
 	}
 	return SelectionVector::Inverted(true_sel, *false_sel, true_count, count);
+}
+
+inline idx_t TranslateSelection(idx_t count, optional_ptr<const SelectionVector> input_sel,
+                                const SelectionVector &local_true_sel, idx_t local_true_count,
+                                optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
+	if (!input_sel) {
+		if (true_sel && true_sel.get() != &local_true_sel) {
+			for (idx_t i = 0; i < local_true_count; i++) {
+				true_sel->set_index(i, local_true_sel.get_index(i));
+			}
+		}
+		if (false_sel) {
+			FillSelectionInversion(count, local_true_sel, local_true_count, false_sel);
+		}
+		return local_true_count;
+	}
+	if (true_sel) {
+		for (idx_t i = 0; i < local_true_count; i++) {
+			true_sel->set_index(i, input_sel->get_index(local_true_sel.get_index(i)));
+		}
+	}
+	if (false_sel) {
+		idx_t false_count = 0;
+		idx_t true_offset = 0;
+		for (idx_t i = 0; i < count; i++) {
+			if (true_offset < local_true_count && local_true_sel.get_index(true_offset) == i) {
+				true_offset++;
+				continue;
+			}
+			false_sel->set_index(false_count++, input_sel->get_index(i));
+		}
+	}
+	return local_true_count;
 }
 
 inline void SetConstantBooleanResult(Vector &result, bool value) {

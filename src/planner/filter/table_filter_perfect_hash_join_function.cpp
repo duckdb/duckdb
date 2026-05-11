@@ -80,19 +80,17 @@ static idx_t PerfectHashJoinSelect(DataChunk &args, ExpressionState &state, opti
 
 	auto count = args.size();
 	if (!func_data.executor) {
-		return SetAllTrueSelection(count, true_sel, false_sel);
+		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 	if (tracking_state && !tracking_state->IsActive()) {
 		tracking_state->Update(0, 0);
-		return SetAllTrueSelection(count, true_sel, false_sel);
+		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
 	SelectionVector temp_true(count);
-	auto result_true_sel = true_sel ? true_sel : &temp_true;
+	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
 	auto approved_count = SelectPerfectHashJoin(args.data[0], func_data, *result_true_sel, count);
-	if (false_sel) {
-		FillSelectionInversion(count, *result_true_sel, approved_count, false_sel);
-	}
+	approved_count = TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
 	if (tracking_state) {
 		tracking_state->Update(approved_count, count);
 	}

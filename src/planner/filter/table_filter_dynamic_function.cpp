@@ -107,7 +107,7 @@ static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, option
 	auto &func_data = func_expr.bind_info->Cast<DynamicFilterFunctionData>();
 	auto count = args.size();
 	if (!func_data.filter_data || !func_data.filter_data->initialized.load()) {
-		return SetAllTrueSelection(count, true_sel, false_sel);
+		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
 	ExpressionType comparison_type;
@@ -119,12 +119,9 @@ static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, option
 	}
 
 	SelectionVector temp_true(count);
-	auto result_true_sel = true_sel ? true_sel : &temp_true;
+	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
 	auto approved_count = SelectDynamicFilter(args.data[0], comparison_type, constant, *result_true_sel, count);
-	if (false_sel) {
-		FillSelectionInversion(count, *result_true_sel, approved_count, false_sel);
-	}
-	return approved_count;
+	return TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
 }
 
 ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type) {

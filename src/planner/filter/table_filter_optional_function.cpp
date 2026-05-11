@@ -52,7 +52,7 @@ static void OptionalFilterFunction(DataChunk &args, ExpressionState &state, Vect
 
 static idx_t OptionalFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
                                   optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
-	return SetAllTrueSelection(args.size(), true_sel, false_sel);
+	return SetAllTrueSelection(args.size(), sel, true_sel, false_sel);
 }
 
 ScalarFunction OptionalFilterScalarFun::GetFunction(const LogicalType &input_type) {

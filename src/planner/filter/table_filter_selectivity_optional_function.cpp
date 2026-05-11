@@ -97,21 +97,19 @@ static idx_t SelectivityOptionalFilterSelect(DataChunk &args, ExpressionState &s
                                              optional_ptr<SelectionVector> false_sel) {
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
 	if (!local_state_ptr) {
-		return SetAllTrueSelection(args.size(), true_sel, false_sel);
+		return SetAllTrueSelection(args.size(), sel, true_sel, false_sel);
 	}
 	auto &local_state = local_state_ptr->Cast<SelectivityOptionalFilterLocalState>();
 	auto count = args.size();
 	if (!local_state.IsActive()) {
 		local_state.Update(0, 0);
-		return SetAllTrueSelection(count, true_sel, false_sel);
+		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
 	SelectionVector temp_true(count);
-	auto result_true_sel = true_sel ? true_sel : &temp_true;
+	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
 	auto approved_count = local_state.executor.SelectExpression(args, *result_true_sel);
-	if (false_sel) {
-		FillSelectionInversion(count, *result_true_sel, approved_count, false_sel);
-	}
+	approved_count = TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
 	local_state.Update(approved_count, count);
 	return approved_count;
 }
