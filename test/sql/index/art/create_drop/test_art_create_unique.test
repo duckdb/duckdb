@@ -37,3 +37,28 @@ statement error
 CREATE UNIQUE INDEX idx ON merge_violation(id);
 ----
 <REGEX>:.*Constraint Error.*contains duplicates on indexed column.*
+
+# CREATE UNIQUE INDEX should build over the rows visible to the current transaction.
+# A row deleted earlier in the transaction must not participate in duplicate validation.
+statement ok
+CREATE TABLE tx_delete_unique_index (id INT, x INT);
+
+statement ok
+INSERT INTO tx_delete_unique_index VALUES (1, 10), (2, 10);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DELETE FROM tx_delete_unique_index WHERE id = 1;
+
+query I
+SELECT COUNT(*) FROM tx_delete_unique_index;
+----
+1
+
+statement ok
+CREATE UNIQUE INDEX tx_delete_unique_index_u ON tx_delete_unique_index(x);
+
+statement ok
+COMMIT;
