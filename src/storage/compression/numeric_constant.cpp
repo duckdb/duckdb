@@ -30,16 +30,16 @@ static bool IsSimpleFilterColumnRef(const Expression &expression) {
 	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
-static bool TryComparisonFiltersNullValues(const BoundComparisonExpression &comparison, bool &filters_nulls,
+static bool TryComparisonFiltersNullValues(const BoundFunctionExpression &comparison, bool &filters_nulls,
                                            bool &filters_valid_values) {
 	optional_ptr<const BoundConstantExpression> constant_expr;
+	auto &left = BoundComparisonExpression::Left(comparison);
+	auto &right = BoundComparisonExpression::Right(comparison);
 	auto comparison_type = comparison.GetExpressionType();
-	if (IsSimpleFilterColumnRef(*comparison.left) &&
-	    comparison.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		constant_expr = comparison.right->Cast<BoundConstantExpression>();
-	} else if (IsSimpleFilterColumnRef(*comparison.right) &&
-	           comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		constant_expr = comparison.left->Cast<BoundConstantExpression>();
+	if (IsSimpleFilterColumnRef(left) && right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = right.Cast<BoundConstantExpression>();
+	} else if (IsSimpleFilterColumnRef(right) && left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		constant_expr = left.Cast<BoundConstantExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else {
 		return false;
@@ -106,8 +106,8 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return false;
 	}
 
-	if (expression.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comparison = expression.Cast<BoundComparisonExpression>();
+	if (BoundComparisonExpression::IsComparison(expression.GetExpressionType())) {
+		auto &comparison = expression.Cast<BoundFunctionExpression>();
 		return TryComparisonFiltersNullValues(comparison, filters_nulls, filters_valid_values);
 	}
 
