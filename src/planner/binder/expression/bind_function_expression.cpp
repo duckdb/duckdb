@@ -384,15 +384,26 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	for (auto &arg : function.children) {
 		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpression());
 
+		if (function.IsLegacyFunctionCall()) {
+			// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
+			children.push_back(std::move(bound_arg));
+			continue;
+		}
+
 		if (arg.HasName()) {
 			keyword_children.emplace_back(arg.GetName(), std::move(bound_arg));
-		} else if (keyword_children.empty()) {
-			children.push_back(std::move(bound_arg));
-		} else {
-			throw BinderException(bound_arg->GetQueryLocation(),
-			                      "Positional argument '%s' cannot follow named arguments in a function call.",
-			                      bound_arg->ToString());
+			continue;
 		}
+
+		if (keyword_children.empty()) {
+			children.push_back(std::move(bound_arg));
+			continue;
+		}
+
+		throw BinderException(bound_arg->GetQueryLocation(),
+		                      "Positional argument '%s' cannot follow named arguments in a function call.",
+		                      bound_arg->ToString());
+
 	}
 
 	FunctionBinder function_binder(binder);

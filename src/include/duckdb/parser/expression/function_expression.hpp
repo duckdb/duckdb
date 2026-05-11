@@ -116,6 +116,10 @@ public:
 	//! whether this function should export its state or not
 	bool export_state;
 
+	//! Whether this function is a legacy function call, which means it was parsed from a function call that does not
+	//! use the new function argument syntax. This is used to determine how to handle named arguments during binding.
+	bool is_legacy_function_call = false;
+
 public:
 	string ToString() const override;
 
@@ -131,6 +135,8 @@ public:
 
 	//! Returns a pointer to the lambda expression, if the function has a lambda expression as a child, else nullptr.
 	optional_ptr<ParsedExpression> IsLambdaFunction() const;
+
+	bool IsLegacyFunctionCall() const { return is_legacy_function_call; }
 
 private:
 	FunctionExpression();
