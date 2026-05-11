@@ -53,21 +53,6 @@ MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
 	return manager.GetDiskPointer(block.pointer, UnsafeNumericCast<uint32_t>(offset));
 }
 
-vector<MetaBlockPointer> MetadataReader::GetRemainingBlocks(MetaBlockPointer last_block) {
-	vector<MetaBlockPointer> result;
-	while (has_next_block) {
-		if (last_block.IsValid() && next_pointer.block_pointer == last_block.block_pointer) {
-			if (next_pointer.offset != last_block.offset) {
-				result.push_back(next_pointer);
-			}
-			break;
-		}
-		result.push_back(next_pointer);
-		ReadNextBlock();
-	}
-	return result;
-}
-
 void MetadataReader::ReadNextBlock() {
 	ReadNextBlock(QueryContext());
 }

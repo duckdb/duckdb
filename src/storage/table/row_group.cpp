@@ -1291,27 +1291,15 @@ PerColumnMetadataBlocks RowGroup::ComputePerColumnMetadataBlocks() const {
 
 	auto &metadata_manager = GetCollection().GetMetadataManager();
 	auto &types = GetCollection().GetTypes();
-	idx_t last_idx = column_pointers.size() - 1;
 
 	for (idx_t i = 0; i < column_pointers.size(); i++) {
-		unordered_set<idx_t> result_as_set;
 		auto &start = column_pointers[i];
-		if (i < last_idx) {
-			// follow the linked list to the next column's start
-			auto &next_start = column_pointers[i + 1];
-			MetadataReader reader(metadata_manager, start);
-			auto blocks = reader.GetRemainingBlocks(next_start);
-			for (auto &ptr : blocks) {
-				result_as_set.emplace(ptr.block_pointer);
-			}
-		} else {
-			// last column: deserialize to find all blocks
-			vector<MetaBlockPointer> col_read_pointers;
-			MetadataReader col_reader(metadata_manager, start, &col_read_pointers);
-			ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, col_reader, types[i]);
-			for (auto &ptr : col_read_pointers) {
-				result_as_set.emplace(ptr.block_pointer);
-			}
+		vector<MetaBlockPointer> col_read_pointers;
+		MetadataReader col_reader(metadata_manager, start, &col_read_pointers);
+		ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), i, col_reader, types[i]);
+		unordered_set<idx_t> result_as_set;
+		for (auto &ptr : col_read_pointers) {
+			result_as_set.emplace(ptr.block_pointer);
 		}
 		result_as_set.erase(start.block_pointer);
 		if (!result_as_set.empty()) {
