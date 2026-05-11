@@ -1,5 +1,5 @@
-# name: test/overlay.test
-# group: [test]
+# name: test/sql/function/string/overlay.test
+# group: [string]
 
 query I
 SELECT OVERLAY('abcdef' PLACING 'XX' FROM 3)
