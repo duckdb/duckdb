@@ -69,7 +69,8 @@ struct StringStats {
 	                                                     array_ptr<const Value> constants);
 	DUCKDB_API static FilterPropagateResult CheckZonemap(const_data_ptr_t min_data, idx_t min_len,
 	                                                     const_data_ptr_t max_data, idx_t max_len,
-	                                                     ExpressionType comparison_type, const string &value);
+	                                                     ExpressionType comparison_type, const string &value,
+	                                                     bool min_is_exact = false, bool max_is_exact = false);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value);

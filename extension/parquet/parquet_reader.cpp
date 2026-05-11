@@ -1202,9 +1202,12 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
 					auto &min_value = pq_col_stats.min_value;
 					auto &max_value = pq_col_stats.max_value;
+					bool min_exact = pq_col_stats.__isset.is_min_value_exact && pq_col_stats.is_min_value_exact;
+					bool max_exact = pq_col_stats.__isset.is_max_value_exact && pq_col_stats.is_max_value_exact;
 					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-					                                 comp.GetExpressionType(), StringValue::Get(constant.value));
+					                                 comp.GetExpressionType(), StringValue::Get(constant.value),
+					                                 min_exact, max_exact);
 				}
 			}
 		}
