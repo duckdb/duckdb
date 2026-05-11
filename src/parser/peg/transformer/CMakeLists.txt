@@ -1,10 +1,9 @@
-add_subdirectory(generated)
-
 add_library_unity(
   duckdb_parser_peg_transformer
   OBJECT
   peg_transformer.cpp
   peg_transformer_factory.cpp
+  transform_generated.cpp
   transform_alter.cpp
   transform_analyze.cpp
   transform_attach.cpp
