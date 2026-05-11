@@ -33,8 +33,8 @@ EXE_SUFFIX := .exe
 endif
 UNITTEST_BINARY ?= test/unittest$(EXE_SUFFIX)
 SMOKE_UNITTEST ?= build/relassert/$(UNITTEST_BINARY)
-UNITTEST_SLOW_FLAGS ?= --batch-timeout=1800 --track-runtime=300
-UNITTEST_HUGE_FLAGS ?= --batch-size=1 --workers=50% $(UNITTEST_SLOW_FLAGS)
+UNITTEST_SLOW_FLAGS ?= --batch-timeout=300 --track-runtime=100
+UNITTEST_HUGE_FLAGS ?= --batch-size=5 --workers=50% $(UNITTEST_SLOW_FLAGS)
 
 # Allow setting extra unit test parameters using `make smoke T=...`.
 T ?=
@@ -534,7 +534,7 @@ unittest_threadsan: unittest_reldebug
 .PHONY: unittest_threadsan_extra
 unittest_threadsan_extra: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan_extra: unittest_reldebug
-	$(PYTHON) scripts/ci/run_tests.py --batch-size=1 --workers=50% --batch-timeout=1800 --track-runtime=300 --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
+	$(PYTHON) scripts/ci/run_tests.py $(UNITTEST_HUGE_FLAGS) --test-flags="--force-storage" build/reldebug/$(UNITTEST_BINARY) "[interquery]" $(T)
 
 docs:
 	mkdir -p ./build/docs && \
