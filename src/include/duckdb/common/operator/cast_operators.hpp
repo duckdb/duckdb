@@ -13,6 +13,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
@@ -481,6 +482,17 @@ DUCKDB_API bool TryCast::Operation(double input, double &result, bool strict);
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
 static inline bool TryCastStringBool(const char *input_data, idx_t input_size, bool &result, bool strict) {
+	// Skip leading and trailing ASCII whitespace before dispatching on
+	// length. Without this, padded inputs like '  true  ' (size 8) fall
+	// through to the default case and fail, while CAST('  1  ' AS INTEGER)
+	// succeeds via TryIntegerCast's whitespace skip. Fixes #22565.
+	while (input_size > 0 && StringUtil::CharacterIsSpace(*input_data)) {
+		input_data++;
+		input_size--;
+	}
+	while (input_size > 0 && StringUtil::CharacterIsSpace(input_data[input_size - 1])) {
+		input_size--;
+	}
 	switch (input_size) {
 	case 1: {
 		unsigned char c = static_cast<uint8_t>(std::tolower(*input_data));
