@@ -467,6 +467,9 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		BindWhereStarExpression(statement.where_clause);
 		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
 	}
+	for(auto &grp : statement.groups.group_expressions) {
+		ExpressionBinder::QualifyColumnNames(*this, grp);
+	}
 
 	if (statement.qualify) {
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
@@ -537,7 +540,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = std::move(group_binder.unbound_expression);
-			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[*unbound_groups[i]] = ProjectionIndex(i);
 		}
 		this->can_contain_nulls = prev_can_contain_nulls;
