@@ -215,6 +215,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			auto converted = ConvertVectorToValue(std::move(option.second));
 			partition_cols = ParseColumnsOrdered(converted, select_node.names, loption);
 		} else if (loption == "order_by") {
+			order_columns = ParseOrderByColumns(*this, option.second, select_node, loption);
 			throw NotImplementedException("COPY ORDER_BY");
 		} else if (loption == "return_files") {
 			if (GetBooleanArg(context, option.second)) {

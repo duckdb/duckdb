@@ -5,6 +5,12 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+
 #include <numeric>
 
 namespace duckdb {
@@ -69,7 +75,7 @@ vector<bool> ParseColumnList(const Value &value, vector<string> &names, const st
 	return ParseColumnList(children, names, loption);
 }
 
-vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string> &names, const string &loption) {
 	vector<idx_t> result;
 
 	if (set.empty()) {
@@ -99,7 +105,7 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, vector<string> &name
 	return result;
 }
 
-vector<idx_t> ParseColumnsOrdered(const Value &value, vector<string> &names, const string &loption) {
+vector<idx_t> ParseColumnsOrdered(const Value &value, const vector<string> &names, const string &loption) {
 	vector<idx_t> result;
 
 	// Only accept a list of arguments
@@ -121,6 +127,48 @@ vector<idx_t> ParseColumnsOrdered(const Value &value, vector<string> &names, con
 		return result;
 	}
 	return ParseColumnsOrdered(children, names, loption);
+}
+
+vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value> &set,
+                                             const BoundStatement &bound_statement, const string &loption) {
+	// Parse
+	vector<string> order_by_strings;
+	for (auto &value : set) {
+		order_by_strings.push_back(value.ToString());
+	}
+	const auto order_by_clause = StringUtil::Join(order_by_strings, ", ");
+	auto parsed_orders = Parser::ParseOrderList(order_by_clause);
+
+	// Bind
+	auto child_binder = Binder::CreateBinder(binder.context, &binder);
+	auto table_index = binder.GenerateTableIndex();
+	child_binder->bind_context.AddGenericBinding(table_index, "__copy_input", bound_statement.names,
+	                                             bound_statement.types);
+	ExpressionBinder expr_binder(*child_binder, binder.context);
+	vector<BoundOrderByNode> result;
+	for (auto &parsed_order : parsed_orders) {
+		result.emplace_back(parsed_order.type, parsed_order.null_order, expr_binder.Bind(parsed_order.expression));
+	}
+
+	// Convert BoundColumnRefExpression to BoundReferenceExpression
+	vector<Value> name_values;
+	case_insensitive_map_t<vector<reference<unique_ptr<Expression>>>> name_to_colref;
+	ExpressionIterator::VisitExpressionClassMutable(result.back().expression, ExpressionClass::BOUND_COLUMN_REF,
+	                                                [&](unique_ptr<Expression> &child) {
+		                                                name_values.push_back(child->ToString());
+		                                                name_to_colref[child->ToString()].push_back(child);
+	                                                });
+	const auto indices = ParseColumnsOrdered(name_values, bound_statement.names, loption);
+	D_ASSERT(name_values.size() == indices.size());
+	for (idx_t i = 0; i < indices.size(); i++) {
+		auto name = name_values[i].ToString();
+		auto &expressions = name_to_colref[name];
+		for (auto &expr : expressions) {
+			expr.get() = make_uniq<BoundReferenceExpression>(name, expr.get()->GetReturnType(), indices[i]);
+		}
+	}
+
+	return result;
 }
 
 } // namespace duckdb
