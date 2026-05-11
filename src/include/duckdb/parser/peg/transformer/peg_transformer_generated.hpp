@@ -24,3 +24,12 @@ static TransactionModifierType TransformReadOrWrite(TransactionModifierType read
 static unique_ptr<SQLStatement> TransformDetachStatementInternal(PEGTransformer &transformer,
                                                                  ParseResult &parse_result);
 static unique_ptr<SQLStatement> TransformDetachStatement(bool if_exists, string catalog_name);
+static unique_ptr<SQLStatement> TransformExportStatementInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result);
+static unique_ptr<SQLStatement> TransformExportStatement(string export_source, string string_literal,
+                                                         vector<GenericCopyOption> generic_copy_option_list);
+static string TransformExportSourceInternal(PEGTransformer &transformer, ParseResult &parse_result);
+static string TransformExportSource(string catalog_name);
+static unique_ptr<SQLStatement> TransformImportStatementInternal(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result);
+static unique_ptr<SQLStatement> TransformImportStatement(string string_literal);

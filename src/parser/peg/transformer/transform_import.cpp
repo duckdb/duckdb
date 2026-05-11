@@ -3,13 +3,10 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTransformer &transformer,
-                                                                         ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto name = list_pr.Child<StringLiteralParseResult>(2).result;
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(string import) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "import_database";
-	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(name)));
+	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(std::move(import))));
 	return std::move(result);
 }
 

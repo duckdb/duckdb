@@ -475,8 +475,8 @@ void PEGTransformerFactory::RegisterExplain() {
 }
 
 void PEGTransformerFactory::RegisterExport() {
-	REGISTER_TRANSFORM(TransformExportSource);
-	REGISTER_TRANSFORM(TransformExportStatement);
+	Register("ExportSource", &TransformExportSourceInternal);
+	Register("ExportStatement", &TransformExportStatementInternal);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -655,7 +655,7 @@ void PEGTransformerFactory::RegisterExpression() {
 }
 
 void PEGTransformerFactory::RegisterImport() {
-	REGISTER_TRANSFORM(TransformImportStatement);
+	Register("ImportStatement", &TransformImportStatementInternal);
 }
 
 void PEGTransformerFactory::RegisterInsert() {

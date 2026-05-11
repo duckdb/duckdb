@@ -772,7 +772,7 @@ def main():
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
     args = arg_parser.parse_args()
 
-    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram']
+    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram', 'export.gram']
     rule_to_type, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_to_type, excluded_rules) for f in gram_files_to_gen]
 

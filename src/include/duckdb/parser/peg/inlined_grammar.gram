@@ -1444,9 +1444,7 @@ VariableList <- List(Expression)
 ResetStatement <- 'RESET' (SetVariable / SetSetting)
 
 ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOptionList?
-
 ExportSource <- CatalogName 'TO'
-
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
 CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?

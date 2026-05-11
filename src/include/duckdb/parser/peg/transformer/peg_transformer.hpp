@@ -648,10 +648,6 @@ private:
 	static vector<GenericCopyOption> TransformExplainOptionList(PEGTransformer &transformer, ParseResult &parse_result);
 	static GenericCopyOption TransformExplainOption(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// export.gram
-	static unique_ptr<SQLStatement> TransformExportStatement(PEGTransformer &transformer, ParseResult &parse_result);
-	static string TransformExportSource(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// expression.gram
 	static unique_ptr<SQLStatement> TransformExpressionStatement(PEGTransformer &transformer,
 	                                                             ParseResult &parse_result);
@@ -887,7 +883,7 @@ private:
 	static unique_ptr<ParsedExpression> TransformListComprehensionFilter(PEGTransformer &transformer,
 	                                                                     ParseResult &parse_result);
 	static ExpressionType TransformIsDistinctFromOp(PEGTransformer &transformer, ParseResult &parse_result);
-	//
+
 	static unique_ptr<ParsedExpression> TransformGroupingExpression(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static qualified_column_map_t<string> TransformRenameList(PEGTransformer &transformer, ParseResult &parse_result);
@@ -898,9 +894,6 @@ private:
 	static pair<QualifiedColumnName, string> TransformRenameEntry(PEGTransformer &transformer,
 	                                                              ParseResult &parse_result);
 	static bool TransformIgnoreOrRespectNulls(PEGTransformer &transformer, ParseResult &parse_result);
-
-	// import.gram
-	static unique_ptr<SQLStatement> TransformImportStatement(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// insert.gram
 	static unique_ptr<SQLStatement> TransformInsertStatement(PEGTransformer &transformer, ParseResult &parse_result);
