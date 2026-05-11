@@ -1588,7 +1588,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				break;
 			}
 			auto &write_state = checkpoint_state.write_data[segment_idx];
-			if (!write_state.fully_reuse_existing_metadata_blocks) {
+			if (write_state.write_action != RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
 				table_has_changes = true;
 				break;
 			}
@@ -1603,7 +1603,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				auto &row_group = entry->GetNode();
 				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
-				D_ASSERT(write_state.fully_reuse_existing_metadata_blocks);
+				D_ASSERT(write_state.write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA);
 				vector<MetaBlockPointer> extra_metadata_block_pointers;
 				if (write_state.has_per_column_metadata_blocks) {
 					write_state.existing_per_column_metadata_blocks.ForEachBlock(
@@ -1658,7 +1658,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		}
 		auto &row_group_write_data = checkpoint_state.write_data[segment_idx];
 		idx_t row_start = new_total_rows;
-		bool full_metadata_reuse = row_group_write_data.fully_reuse_existing_metadata_blocks;
+		auto write_action = row_group_write_data.write_action;
 		auto debug_verify_blocks = Settings::Get<DebugVerifyBlocksSetting>(GetAttached().GetDatabase()) &&
 		                           dynamic_cast<SingleFileTableDataWriter *>(&checkpoint_state.writer) != nullptr;
 		std::vector<bool> reuse_column;
@@ -1700,7 +1700,11 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 				throw InternalException(
 				    "Checkpointing should always remember per-column metadata blocks when supporting it");
 			}
-			if (full_metadata_reuse && pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
+			if (write_action == RowGroupWriteAction::PARTIALLY_REUSE_COLUMN_METADATA && !SupportsPerColumnWrites()) {
+				throw InternalException("Partially reusing column metadata should only be done when supporting it");
+			}
+			if (write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA &&
+			    pointer_copy.data_pointers != row_group.GetColumnStartPointers()) {
 				throw InternalException("Column start pointers changed during full metadata reuse");
 			}
 

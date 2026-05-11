@@ -77,12 +77,18 @@ private:
 	optional_ptr<vector<unique_ptr<PartialBlockManager>>> column_partial_block_managers;
 };
 
+enum class RowGroupWriteAction {
+	REUSE_EXISTING_ROW_GROUP_METADATA,
+	PARTIALLY_REUSE_COLUMN_METADATA,
+	FULLY_CHECKPOINT_ROW_GROUP
+};
+
 struct RowGroupWriteData {
 	shared_ptr<RowGroup> result_row_group;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	vector<BaseStatistics> statistics;
 	vector<bool> keep_column_loaded;
-	bool fully_reuse_existing_metadata_blocks = false;
+	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
 	vector<idx_t> existing_extra_metadata_blocks;
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks existing_per_column_metadata_blocks;

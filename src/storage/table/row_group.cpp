@@ -1358,7 +1358,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
 	if (can_reuse_metadata && !HasChanges()) {
 		RowGroupWriteData result;
-		result.fully_reuse_existing_metadata_blocks = true;
+		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
 			result.has_per_column_metadata_blocks = true;
 			if (has_per_column_metadata_blocks) {
@@ -1393,6 +1393,11 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	    can_reuse_metadata && has_per_column_metadata_blocks && GetCollection().SupportsPerColumnWrites();
 	auto &compression_types = writer.GetCompressionTypes();
 	RowGroupWriteData result;
+	if (partial_reuse) {
+		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
+	} else {
+		result.write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
+	}
 
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
@@ -1471,7 +1476,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	// construct the row group pointer and write the column meta data to disk
 	row_group_pointer.row_start = row_group_start;
 	row_group_pointer.tuple_count = count;
-	if (write_data.fully_reuse_existing_metadata_blocks) {
+	if (write_data.write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA) {
 		// we are re-using the previous metadata
 		row_group_pointer.data_pointers = column_pointers;
 		row_group_pointer.has_metadata_blocks = !write_data.has_per_column_metadata_blocks;
