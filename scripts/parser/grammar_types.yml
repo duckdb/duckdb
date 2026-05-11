@@ -487,6 +487,11 @@ ExpressionList:
     - SubstringParameters
     - SubstringArguments
     - SubstringExpressionList
+    - OverlayArguments
+    - OverlayParameters
+    - FromExpression
+    - ForExpression
+    - OverlayExpressionList
     - PartitionOptions
     - SortedOptions
     - PivotUsing
