@@ -281,6 +281,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
 		column_lifetime.VisitOperator(*plan);
+		column_lifetime.FinalizeDeadColumnPrunes();
 	});
 
 	// Once we know the column lifetime, we have more information regarding
@@ -359,6 +360,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
 		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
 		column_lifetime.VisitOperator(*plan);
+		column_lifetime.FinalizeDeadColumnPrunes();
 	});
 
 	// apply simple expression heuristics to get an initial reordering
