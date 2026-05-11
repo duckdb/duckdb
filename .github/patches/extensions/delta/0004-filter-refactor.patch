@@ -1,5 +1,5 @@
 diff --git a/src/delta_utils.cpp b/src/delta_utils.cpp
-index eeaab95..1da6621 100644
+index eeaab95..82c7c3c 100644
 --- a/src/delta_utils.cpp
 +++ b/src/delta_utils.cpp
 @@ -7,6 +7,12 @@
@@ -15,16 +15,84 @@ index eeaab95..1da6621 100644
  #include "duckdb/common/extension_type_info.hpp"
  #include "duckdb/common/types/decimal.hpp"
  #include "duckdb/main/database.hpp"
-@@ -894,7 +900,7 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor *predicate, ffi::Ker
+@@ -40,7 +46,7 @@ ffi::EngineExpressionVisitor ExpressionVisitor::CreateVisitor(ExpressionVisitor
+ 	ffi::EngineExpressionVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
+ 
+ 	// Templated primitive functions
+ 	visitor.visit_literal_bool = VisitPrimitiveLiteralBool;
+@@ -532,19 +538,15 @@ ffi::EngineSchemaVisitor SchemaVisitor::CreateSchemaVisitor(SchemaVisitor &state
+ 	ffi::EngineSchemaVisitor visitor;
+ 
+ 	visitor.data = &state;
+-	visitor.make_field_list = (uintptr_t(*)(void *, uintptr_t)) & MakeFieldList;
+-	visitor.visit_struct =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitStruct;
+-	visitor.visit_array =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitArray;
+-	visitor.visit_map =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uintptr_t)) &
+-	    VisitMap;
+-	visitor.visit_decimal =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata, uint8_t, uint8_t)) &
+-	    VisitDecimal;
++	visitor.make_field_list = (uintptr_t (*)(void *, uintptr_t))&MakeFieldList;
++	visitor.visit_struct = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                 uintptr_t))&VisitStruct;
++	visitor.visit_array = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                uintptr_t))&VisitArray;
++	visitor.visit_map = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                              uintptr_t))&VisitMap;
++	visitor.visit_decimal = (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata,
++	                                  uint8_t, uint8_t))&VisitDecimal;
+ 	visitor.visit_string = VisitSimpleType<LogicalType::VARCHAR>();
+ 	visitor.visit_long = VisitSimpleType<LogicalType::BIGINT>();
+ 	visitor.visit_integer = VisitSimpleType<LogicalType::INTEGER>();
+@@ -559,7 +561,7 @@ ffi::EngineSchemaVisitor SchemaVisitor::CreateSchemaVisitor(SchemaVisitor &state
+ 	visitor.visit_timestamp_ntz = VisitSimpleType<LogicalType::TIMESTAMP>();
+ 
+ 	visitor.visit_variant =
+-	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata)) & VisitVariant;
++	    (void (*)(void *, uintptr_t, ffi::KernelStringSlice, bool, const ffi::CStringMap *metadata))&VisitVariant;
+ 
+ 	return visitor;
+ }
+@@ -840,7 +842,8 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ 
+ 	const auto &root_expression = parsed_expression.get(0);
+ 	if (root_expression->GetExpressionType() != ExpressionType::FUNCTION) {
+-		throw IOException("Unexpected type of root expression returned by delta kernel: %d", root_expression->GetExpressionType());
++		throw IOException("Unexpected type of root expression returned by delta kernel: %d",
++		                  root_expression->GetExpressionType());
+ 	}
+ 
+ 	if (root_expression->Cast<FunctionExpression>().function_name != "delta_kernel_transform_expression") {
+@@ -854,7 +857,7 @@ KernelUtils::UnpackTransformExpression(const vector<unique_ptr<ParsedExpression>
+ PredicateVisitor::PredicateVisitor(const vector<DeltaMultiFileColumnDefinition> &columns,
+                                    optional_ptr<const DeltaTableFilters> filters) {
+ 	predicate = this;
+-	visitor = (uintptr_t(*)(void *, ffi::KernelExpressionVisitorState *)) & VisitPredicate;
++	visitor = (uintptr_t (*)(void *, ffi::KernelExpressionVisitorState *))&VisitPredicate;
+ 
+ 	if (filters) {
+ 		for (auto &entry : *filters) {
+@@ -894,8 +897,8 @@ uintptr_t PredicateVisitor::VisitPredicate(PredicateVisitor *predicate, ffi::Ker
  	return ffi::visit_predicate_and(state, &eit);
  }
  
 -uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const ConstantFilter &filter,
-+uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, ExpressionType comparison_type, const Value &value,
-                                                 ffi::KernelExpressionVisitorState *state) {
+-                                                ffi::KernelExpressionVisitorState *state) {
++uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, ExpressionType comparison_type,
++                                                const Value &value, ffi::KernelExpressionVisitorState *state) {
  	auto maybe_left =
  	    ffi::visit_expression_column(state, KernelUtils::ToDeltaString(col_name), DuckDBEngineError::AllocateError);
-@@ -907,7 +913,6 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+ 
+@@ -907,7 +910,6 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
  	}
  
  	uintptr_t right = ~0;
@@ -32,7 +100,7 @@ index eeaab95..1da6621 100644
  	switch (value.type().id()) {
  	case LogicalType::BIGINT:
  		right = visit_expression_literal_long(state, BigIntValue::Get(value));
-@@ -958,7 +963,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+@@ -958,7 +960,7 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
  	}
  
  	// TODO support other comparison types?
@@ -41,7 +109,7 @@ index eeaab95..1da6621 100644
  	case ExpressionType::COMPARE_LESSTHAN:
  		return visit_predicate_lt(state, left, right);
  	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-@@ -984,20 +989,14 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
+@@ -984,20 +986,14 @@ uintptr_t PredicateVisitor::VisitConstantFilter(const string &col_name, const Co
  	}
  }
  
@@ -70,7 +138,7 @@ index eeaab95..1da6621 100644
  }
  
  uintptr_t PredicateVisitor::VisitIsNull(const string &col_name, ffi::KernelExpressionVisitorState *state) {
-@@ -1017,33 +1016,79 @@ uintptr_t PredicateVisitor::VisitIsNotNull(const string &col_name, ffi::KernelEx
+@@ -1017,33 +1013,79 @@ uintptr_t PredicateVisitor::VisitIsNotNull(const string &col_name, ffi::KernelEx
  	return ffi::visit_predicate_not(state, VisitIsNull(col_name, state));
  }
  
@@ -98,22 +166,22 @@ index eeaab95..1da6621 100644
 -	case TableFilterType::OPTIONAL_FILTER:
 +uintptr_t PredicateVisitor::VisitFilterExpression(const string &col_name, const Expression &expr,
 +                                                  ffi::KernelExpressionVisitorState *state) {
-+	switch (expr.GetExpressionClass()) {
-+	case ExpressionClass::BOUND_COMPARISON: {
-+		auto &comparison = expr.Cast<BoundComparisonExpression>();
++	if (BoundComparisonExpression::IsComparison(expr)) {
++		auto &comparison = expr.Cast<BoundFunctionExpression>();
 +		auto comparison_type = comparison.GetExpressionType();
-+		if (comparison.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-+		    IsSupportedFilterSubject(*comparison.right)) {
++		auto &left = BoundComparisonExpression::Left(comparison);
++		auto &right = BoundComparisonExpression::Right(comparison);
++		if (left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(right)) {
 +			return VisitConstantFilter(col_name, FlipComparisonExpression(comparison_type),
-+			                           comparison.left->Cast<BoundConstantExpression>().value, state);
++			                           left.Cast<BoundConstantExpression>().value, state);
 +		}
-+		if (comparison.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-+		    IsSupportedFilterSubject(*comparison.left)) {
-+			return VisitConstantFilter(col_name, comparison_type,
-+			                           comparison.right->Cast<BoundConstantExpression>().value, state);
++		if (right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT && IsSupportedFilterSubject(left)) {
++			return VisitConstantFilter(col_name, comparison_type, right.Cast<BoundConstantExpression>().value, state);
 +		}
 +		return ~0;
 +	}
++
++	switch (expr.GetExpressionClass()) {
 +	case ExpressionClass::BOUND_CONJUNCTION: {
 +		auto &conjunction = expr.Cast<BoundConjunctionExpression>();
 +		if (conjunction.GetExpressionType() != ExpressionType::CONJUNCTION_AND) {
