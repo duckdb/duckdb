@@ -462,13 +462,19 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	}
 	result.column_count = statement.select_list.size();
 
-	// first visit the WHERE clause
-	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
 		// bind any star expressions in the WHERE clause
 		BindWhereStarExpression(statement.where_clause);
 		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
+	}
 
+	if (statement.qualify) {
+		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
+	}
+
+	// first visit the WHERE clause
+	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
+	if (statement.where_clause) {
 		ColumnAliasBinder alias_binder(bind_state);
 		WhereBinder where_binder(*this, context, &alias_binder);
 		unique_ptr<ParsedExpression> condition = std::move(statement.where_clause);
@@ -552,7 +558,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
 		QualifyBinder qualify_binder(*this, context, result, info);
-		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
 		result.qualify = qualify_binder.Bind(statement.qualify);
 		if (qualify_binder.HasBoundColumns()) {
 			if (qualify_binder.BoundAggregates()) {
