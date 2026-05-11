@@ -608,13 +608,26 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
+	// If this is a logical extension name (not an explicit path), prefer the
+	// statically linked implementation when available. This avoids loading a
+	// second copy from disk in configurations where the extension is also built
+	// as loadable, which can trigger ASan ODR violations.
+	const auto name = options.extension_name;
+	if (!ExtensionHelper::IsFullPath(name)) {
+		DuckDB db_wrapper(db);
+		auto load_result = ExtensionHelper::LoadExtension(db_wrapper, name);
+		if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
+			return;
+		}
+	}
+
 	auto &manager = ExtensionManager::Get(db);
 	auto info = manager.BeginLoad(options);
 	if (!info) {
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
+		LoadExternalExtensionInternal(db, fs, name, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
