@@ -208,6 +208,14 @@ public:
 	ParserOptions options;
 };
 
+typedef unique_ptr<TransformResultValue> (*transform_function_t)(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result);
+
+struct TransformRule {
+	const char *name;
+	transform_function_t transform;
+};
+
 class PEGTransformerFactory {
 public:
 	explicit PEGTransformerFactory();
@@ -269,14 +277,11 @@ public:
 	void RegisterCreateTrigger();
 	void RegisterDeallocate();
 	void RegisterDelete();
-	void RegisterDetach();
 	void RegisterDescribe();
 	void RegisterDrop();
 	void RegisterExecute();
 	void RegisterExplain();
-	void RegisterExport();
 	void RegisterExpression();
-	void RegisterImport();
 	void RegisterInsert();
 	void RegisterLoad();
 	void RegisterMergeInto();
@@ -284,13 +289,13 @@ public:
 	void RegisterPragma();
 	void RegisterPrepare();
 	void RegisterSelect();
-	void RegisterUse();
 	void RegisterSet();
 	void RegisterTransaction();
 	void RegisterUpdate();
 	void RegisterVacuum();
 	void RegisterKeywordsAndIdentifiers();
 	void RegisterEnums();
+	void RegisterGenerated();
 
 private:
 	template <typename T>

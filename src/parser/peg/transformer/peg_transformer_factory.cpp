@@ -432,11 +432,6 @@ void PEGTransformerFactory::RegisterDescribe() {
 	REGISTER_TRANSFORM(TransformSummarize);
 }
 
-void PEGTransformerFactory::RegisterDetach() {
-	// detach.gram
-	Register("DetachStatement", &TransformDetachStatementInternal);
-}
-
 void PEGTransformerFactory::RegisterDrop() {
 	// drop.gram
 	REGISTER_TRANSFORM(TransformDropStatement);
@@ -472,11 +467,6 @@ void PEGTransformerFactory::RegisterExplain() {
 	REGISTER_TRANSFORM(TransformExplainOptionList);
 	REGISTER_TRANSFORM(TransformExplainOption);
 	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
-}
-
-void PEGTransformerFactory::RegisterExport() {
-	Register("ExportSource", &TransformExportSourceInternal);
-	Register("ExportStatement", &TransformExportStatementInternal);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -652,10 +642,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformRenameEntry);
 
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
-}
-
-void PEGTransformerFactory::RegisterImport() {
-	Register("ImportStatement", &TransformImportStatementInternal);
 }
 
 void PEGTransformerFactory::RegisterInsert() {
@@ -882,14 +868,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformRepeatableSample);
 }
 
-void PEGTransformerFactory::RegisterUse() {
-	// use.gram
-	Register("UseStatement", &PEGTransformerFactory::TransformUseStatementInternal);
-	Register("UseTarget", &PEGTransformerFactory::TransformUseTargetInternal);
-	Register("UseTargetCatalogSchema", &PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal);
-	Register("DotIdentifier", &PEGTransformerFactory::TransformDotIdentifierInternal);
-}
-
 void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
@@ -906,12 +884,6 @@ void PEGTransformerFactory::RegisterSet() {
 }
 
 void PEGTransformerFactory::RegisterTransaction() {
-	// transaction.gram
-	Register("TransactionStatement", &PEGTransformerFactory::TransformTransactionStatementInternal);
-	Register("ReadOrWrite", &PEGTransformerFactory::TransformReadOrWriteInternal);
-	Register("BeginTransaction", &PEGTransformerFactory::TransformBeginTransactionInternal);
-	Register("CommitTransaction", &PEGTransformerFactory::TransformCommitTransactionInternal);
-	Register("RollbackTransaction", &PEGTransformerFactory::TransformRollbackTransactionInternal);
 	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
 }
 
@@ -1101,6 +1073,7 @@ void PEGTransformerFactory::RegisterEnums() {
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
+	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
@@ -1121,14 +1094,11 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTrigger();
 	RegisterDeallocate();
 	RegisterDelete();
-	RegisterDetach();
 	RegisterDescribe();
 	RegisterDrop();
 	RegisterExecute();
 	RegisterExplain();
-	RegisterExport();
 	RegisterExpression();
-	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
 	RegisterMergeInto();
@@ -1136,7 +1106,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPragma();
 	RegisterPrepare();
 	RegisterSelect();
-	RegisterUse();
 	RegisterSet();
 	RegisterTransaction();
 	RegisterUpdate();

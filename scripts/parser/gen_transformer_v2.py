@@ -229,15 +229,15 @@ def to_snake_case(name):
     return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
 
-def generate_internal_declaration(rule_name, return_type):
+def generate_internal_declaration(rule_name):
     return (
-        f"\tstatic {return_type} Transform{rule_name}Internal"
+        f"\tstatic unique_ptr<TransformResultValue> Transform{rule_name}Internal"
         f"(PEGTransformer &transformer, ParseResult &parse_result);\n"
     )
 
 
 def generate_registration(rule_name):
-    return f'Register("{rule_name}", &PEGTransformerFactory::Transform{rule_name}Internal);\n'
+    return f'\t{{"{rule_name}", &PEGTransformerFactory::Transform{rule_name}Internal}},\n'
 
 
 # ---------------------------------------------------------------------------
@@ -275,14 +275,15 @@ def classify_choice_alternatives(alternatives, rule_types):
 def generate_choice_internal_full(rule_name, return_type):
     """
     Fully auto-generated Internal for a pure-transformer choice rule.
-    All alternatives have registered transformers so we can delegate directly.
+    Static class member matching transform_function_t for the static TransformRule table.
     """
     return (
-        f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\treturn transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        f"\tauto result = transformer.Transform<{return_type}>(choice_pr.GetResult());\n"
+        f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));\n"
         f"}}\n"
     )
 
@@ -290,14 +291,15 @@ def generate_choice_internal_full(rule_name, return_type):
 def generate_choice_internal_with_body(rule_name, return_type):
     """
     Internal for a choice rule that has identifier-override alternatives.
-    Extracts the ChoiceParseResult then delegates to a hand-written body.
+    Static class member matching transform_function_t for the static TransformRule table.
     """
     return (
-        f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n"
         f"\tauto &list_pr = parse_result.Cast<ListParseResult>();\n"
         f"\tauto &choice_pr = list_pr.Child<ChoiceParseResult>(0);\n"
-        f"\treturn Transform{rule_name}(transformer, choice_pr.GetResult());\n"
+        f"\tauto result = Transform{rule_name}(transformer, choice_pr.GetResult());\n"
+        f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));\n"
         f"}}\n"
     )
 
@@ -633,9 +635,9 @@ def generate_sequence_body_decl(rule_name, return_type, elements):
 
 def generate_sequence_internal(rule_name, return_type, elements):
     """
-    Generate the Internal wrapper for a sequence rule.
-    Casts parse_result to ListParseResult, extracts each semantic element
-    into a typed local variable, then calls the hand-written body with those args.
+    Generate the Internal static class member for a sequence rule.
+    Returns unique_ptr<TransformResultValue> matching transform_function_t for the static table.
+    Extracts typed args from parse_result, calls the hand-written body, then boxes via TypedTransformResult.
     """
     semantic = [e for e in elements if not e.skip]
     has_semantic_elements = len(semantic) > 0
@@ -656,9 +658,10 @@ def generate_sequence_internal(rule_name, return_type, elements):
         return e.var_name
 
     arg_names = ", ".join(_param_arg(e) for e in semantic)
-    body.append(f"\treturn Transform{rule_name}({arg_names});")
+    body.append(f"\tauto result = Transform{rule_name}({arg_names});")
+    body.append(f"\treturn make_uniq<TypedTransformResult<{return_type}>>(std::move(result));")
     return (
-        f"{return_type} PEGTransformerFactory::Transform{rule_name}Internal(\n"
+        f"unique_ptr<TransformResultValue> PEGTransformerFactory::Transform{rule_name}Internal(\n"
         f"    PEGTransformer &transformer, ParseResult &parse_result) {{\n" + "\n".join(body) + "\n}\n"
     )
 
@@ -699,7 +702,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
                 skipped.append((rule_name, f"choice has unknown alternatives: {unknown_alts}"))
                 continue
 
-            declarations.append(generate_internal_declaration(rule_name, return_type))
+            declarations.append(generate_internal_declaration(rule_name))
             registrations.append(generate_registration(rule_name))
 
             if not identifier_alts:
@@ -718,7 +721,7 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
         if isinstance(ast, SequenceNode):
             elements = classify_sequence_elements(ast.children, rule_types, excluded_rules)
             if elements is not None:
-                declarations.append(generate_internal_declaration(rule_name, return_type))
+                declarations.append(generate_internal_declaration(rule_name))
                 declarations.append(generate_sequence_body_decl(rule_name, return_type, elements))
                 implementations.append(generate_sequence_internal(rule_name, return_type, elements))
                 registrations.append(generate_registration(rule_name))
@@ -752,13 +755,29 @@ def print_output(result: GramFileResult):
     print("".join(result.registrations))
 
 
-def write_cpp(all_implementations):
+def generate_table_and_register(all_registrations):
+    entries = "".join("\t\t" + e.lstrip() for e in all_registrations)
+    return (
+        "void PEGTransformerFactory::RegisterGenerated() {\n"
+        + "\tstatic const TransformRule builtin_transform_rules[] = {\n"
+        + entries
+        + "\t};\n"
+        + "\tfor (const auto &rule : builtin_transform_rules) {\n"
+        + "\t\tsql_transform_functions[rule.name] = rule.transform;\n"
+        + "\t}\n"
+        + "}\n"
+    )
+
+
+def write_cpp(all_implementations, all_registrations):
     cpp_path = transformer_dir / "transform_generated.cpp"
     content = (
         GENERATED_HEADER
         + '#include "duckdb/parser/peg/transformer/peg_transformer.hpp"\n'
         + "\nnamespace duckdb {\n\n"
         + "\n".join(all_implementations)
+        + "\n"
+        + generate_table_and_register(all_registrations)
         + "\n} // namespace duckdb\n"
     )
     cpp_path.write_text(content)
@@ -829,7 +848,8 @@ def main():
         all_declarations = [d for r in results for d in r.declarations]
         write_hpp(all_declarations)
         all_implementations = [impl for r in results for impl in r.implementations]
-        write_cpp(all_implementations)
+        all_registrations = [reg for r in results for reg in r.registrations]
+        write_cpp(all_implementations, all_registrations)
         print_manual_steps(results)
     else:
         for r in results:
