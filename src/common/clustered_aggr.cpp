@@ -140,8 +140,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 			uint64_t gid = group_ids[pos];
 			uint64_t gid_low = gid & GID_MASK;
 			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gid_low)) { // no sequential match?
-				flush(st, cur);                                      // flush previous list
-				Slot s = st.tab[slot_hash(gid)];                     // hot key lookup
+				flush(st, cur);                                  // flush previous list
+				Slot s = st.tab[slot_hash(gid)];                 // hot key lookup
 				cur = (s.val.i64 != FREE_SLOT && s.val.bitfields.gid == gid_low)
 				          ? s // hot key found
 				          : new_run(st, gid, static_cast<uint64_t>(st.seq - st.arena));
@@ -161,8 +161,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 		for (sel_t pos = lo; pos < hi; pos++) {
 			uint64_t gid = group_ids[pos];
 			uint64_t gid_low = gid & GID_MASK;
-			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gidlow) { // just check sequentially
-				flush(st, cur);                                    // flush previous list
+			if (DUCKDB_UNLIKELY(cur.val.bitfields.gid != gid_low)) { // just check sequentially
+				flush(st, cur);                                  // flush previous list
 				cur = new_run(st, gid, static_cast<uint64_t>(st.seq - st.arena));
 			}
 			st.arena[cur.val.bitfields.cursor] = pos;
