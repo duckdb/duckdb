@@ -1,0 +1,22 @@
+# name: test/optimizer/statistics/statistics_unsigned_cast.test
+# description: Statistics propagation across casts involving unsigned integer types
+# group: [statistics]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE t_signed AS SELECT i::INT AS id FROM range(0, 100) t(i);
+
+query II
+EXPLAIN SELECT * FROM t_signed WHERE id::BIGINT > 100;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+CREATE TABLE t_unsigned AS SELECT i::UINTEGER AS id FROM range(0, 100) t(i);
+
+query II
+EXPLAIN SELECT * FROM t_unsigned WHERE id::BIGINT > 100;
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*

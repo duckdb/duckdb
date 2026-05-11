@@ -460,10 +460,10 @@ idx_t RelationStatisticsHelper::InspectTableFilter(idx_t cardinality, const Tabl
 		}
 		return cardinality_after_filters;
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
 		return cardinality_after_filters;
 	}
-	auto &comparison = expr.Cast<BoundComparisonExpression>();
+	auto &comparison = expr.Cast<BoundFunctionExpression>();
 	if (comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 		return cardinality_after_filters;
 	}

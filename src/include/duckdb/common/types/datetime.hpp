@@ -92,6 +92,10 @@ struct dtime_t { // NOLINT
 	static inline dtime_t allballs() { // NOLINT
 		return dtime_t(0);
 	} // NOLINT
+
+	inline bool IsFinite() const {
+		return true;
+	}
 };
 
 //! Type used to represent TIME_NS. dtime_ns_t holds the nanoseconds since midnight.
@@ -175,6 +179,10 @@ struct dtime_tz_t { // NOLINT
 	inline bool operator>=(const dtime_tz_t &rhs) const {
 		return sort_key() >= rhs.sort_key();
 	};
+
+	inline bool IsFinite() const {
+		return true;
+	}
 };
 
 } // namespace duckdb

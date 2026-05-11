@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
@@ -103,10 +104,12 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
 	return Cost(*expr.child) + cast_cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(const BoundComparisonExpression &expr) {
+idx_t ExpressionHeuristics::ComparisonExpressionCost(const BoundFunctionExpression &expr) {
 	// COMPARE_EQUAL, COMPARE_NOTEQUAL, COMPARE_GREATERTHAN, COMPARE_GREATERTHANOREQUALTO, COMPARE_LESSTHAN,
 	// COMPARE_LESSTHANOREQUALTO
-	return Cost(*expr.left) + 5 + Cost(*expr.right);
+	auto &left = BoundComparisonExpression::Left(expr);
+	auto &right = BoundComparisonExpression::Right(expr);
+	return Cost(left) + 5 + Cost(right);
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &expr) {
@@ -121,6 +124,9 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &exp
 idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		return BetweenExpressionCost(expr);
+	}
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		return ComparisonExpressionCost(expr);
 	}
 	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
@@ -184,10 +190,6 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
 		return ExpressionCost(cast_expr);
-	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		return ExpressionCost(comp_expr);
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();

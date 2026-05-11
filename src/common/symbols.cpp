@@ -104,7 +104,6 @@ template class unique_ptr<BoundAggregateExpression>;
 template class unique_ptr<BoundCaseExpression>;
 template class unique_ptr<BoundCastExpression>;
 template class unique_ptr<BoundColumnRefExpression>;
-template class unique_ptr<BoundComparisonExpression>;
 template class unique_ptr<BoundConjunctionExpression>;
 template class unique_ptr<BoundConstantExpression>;
 template class unique_ptr<BoundDefaultExpression>;

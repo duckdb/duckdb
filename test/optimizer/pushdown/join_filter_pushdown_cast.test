@@ -167,11 +167,10 @@ CREATE TABLE probe_ubigint AS SELECT v::UBIGINT AS a FROM (VALUES (1), (5), (10)
 statement ok
 CREATE TABLE build_neg AS SELECT b::BIGINT AS b FROM (VALUES (5), (-1), (10)) t(b);
 
-# TODO HERE
 query II
 EXPLAIN ANALYZE SELECT COUNT(*) FROM (SELECT a::BIGINT AS a FROM probe_ubigint) t JOIN build_neg ON t.a = build_neg.b;
 ----
-analyzed_plan	<!REGEX>:.*Dynamic Filters:.*
+analyzed_plan	<REGEX>:.*Dynamic Filters:.*
 
 # -1 cannot be cast to UBIGINT — only 5 and 10 match
 query I

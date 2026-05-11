@@ -1,8 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
-#include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -17,8 +15,8 @@ struct ICUListRange : public ICUDateFunc {
 	class RangeInfoStruct {
 	public:
 		explicit RangeInfoStruct(DataChunk &args_p)
-		    : args(args_p), start_value_data(args.data[0].template Values<timestamp_t>()),
-		      end_value_data(args.data[1].template Values<timestamp_t>()),
+		    : args(args_p), start_value_data(args.data[0].template Values<timestamp_tz_t>()),
+		      end_value_data(args.data[1].template Values<timestamp_tz_t>()),
 		      increment_value_data(args.data[2].template Values<interval_t>()) {
 		}
 
@@ -35,12 +33,12 @@ struct ICUListRange : public ICUDateFunc {
 			return true;
 		}
 
-		timestamp_t StartListValue(idx_t row_idx) {
+		timestamp_tz_t StartListValue(idx_t row_idx) {
 			auto start_val = start_value_data[row_idx];
 			return start_val.GetValue();
 		}
 
-		timestamp_t EndListValue(idx_t row_idx) {
+		timestamp_tz_t EndListValue(idx_t row_idx) {
 			auto end_val = end_value_data[row_idx];
 			return end_val.GetValue();
 		}
@@ -50,7 +48,7 @@ struct ICUListRange : public ICUDateFunc {
 			return increment_val.GetValue();
 		}
 
-		void GetListValues(idx_t row_idx, timestamp_t &start_value, timestamp_t &end_value,
+		void GetListValues(idx_t row_idx, timestamp_tz_t &start_value, timestamp_tz_t &end_value,
 		                   interval_t &increment_value) {
 			start_value = StartListValue(row_idx);
 			end_value = EndListValue(row_idx);
@@ -58,24 +56,24 @@ struct ICUListRange : public ICUDateFunc {
 		}
 
 		uint64_t ListLength(idx_t row_idx, TZCalendar &calendar) {
-			timestamp_t start_value;
-			timestamp_t end_value;
+			timestamp_tz_t start_value;
+			timestamp_tz_t end_value;
 			interval_t increment_value;
 			GetListValues(row_idx, start_value, end_value, increment_value);
 			return ListLength(start_value, end_value, increment_value, INCLUSIVE_BOUND, calendar);
 		}
 
-		void Increment(timestamp_t &input, interval_t increment, TZCalendar &calendar) {
+		void Increment(timestamp_tz_t &input, interval_t increment, TZCalendar &calendar) {
 			input = Add(calendar, input, increment);
 		}
 
 	private:
 		DataChunk &args;
-		VectorIterator<timestamp_t> start_value_data;
-		VectorIterator<timestamp_t> end_value_data;
+		VectorIterator<timestamp_tz_t> start_value_data;
+		VectorIterator<timestamp_tz_t> end_value_data;
 		VectorIterator<interval_t> increment_value_data;
 
-		uint64_t ListLength(timestamp_t start_value, timestamp_t end_value, interval_t increment_value,
+		uint64_t ListLength(timestamp_tz_t start_value, timestamp_tz_t end_value, interval_t increment_value,
 		                    bool inclusive_bound, TZCalendar &calendar) {
 			bool is_positive = increment_value.months > 0 || increment_value.days > 0 || increment_value.micros > 0;
 			bool is_negative = increment_value.months < 0 || increment_value.days < 0 || increment_value.micros < 0;
@@ -84,7 +82,7 @@ struct ICUListRange : public ICUDateFunc {
 				return 0;
 			}
 			// We don't allow infinite bounds because they generate errors or infinite loops
-			if (!Timestamp::IsFinite(start_value) || !Timestamp::IsFinite(end_value)) {
+			if (!start_value.IsFinite() || !end_value.IsFinite()) {
 				throw InvalidInputException("Interval infinite bounds not supported");
 			}
 
@@ -133,7 +131,7 @@ struct ICUListRange : public ICUDateFunc {
 
 		RangeInfoStruct<INCLUSIVE_BOUND> info(args);
 		idx_t args_size = args.size();
-		auto list_writer = FlatVector::Writer<VectorListType<timestamp_t>>(result, args_size);
+		auto list_writer = FlatVector::Writer<VectorListType<timestamp_tz_t>>(result, args_size);
 		for (idx_t i = 0; i < args_size; i++) {
 			if (!info.RowIsValid(i)) {
 				list_writer.WriteNull();
@@ -142,7 +140,7 @@ struct ICUListRange : public ICUDateFunc {
 			const auto length = info.ListLength(i, calendar);
 			auto list = list_writer.WriteDynamicList();
 
-			timestamp_t range_value = info.StartListValue(i);
+			timestamp_tz_t range_value = info.StartListValue(i);
 			interval_t increment = info.ListIncrementValue(i);
 			for (idx_t range_idx = 0; range_idx < NumericCast<idx_t>(length); range_idx++) {
 				if (range_idx > 0) {
