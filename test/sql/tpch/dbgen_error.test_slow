@@ -1,4 +1,4 @@
-# name: test/sql/tpch/dbgen_error.test
+# name: test/sql/tpch/dbgen_error.test_slow
 # description: Test error thrown during dbgen
 # group: [tpch]
 
