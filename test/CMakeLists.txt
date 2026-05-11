@@ -65,4 +65,8 @@ else()
   link_extension_libraries(unittest "")
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_link_libraries(unittest atomic)
+endif()
+
 duckdb_codesign_for_debugging(unittest)
