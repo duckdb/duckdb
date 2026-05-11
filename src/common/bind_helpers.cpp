@@ -10,6 +10,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <numeric>
 
@@ -140,6 +141,7 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 	auto parsed_orders = Parser::ParseOrderList(order_by_clause);
 
 	// Bind
+	auto &config = DBConfig::GetConfig(binder.context);
 	auto child_binder = Binder::CreateBinder(binder.context, &binder);
 	auto table_index = binder.GenerateTableIndex();
 	child_binder->bind_context.AddGenericBinding(table_index, "__copy_input", bound_statement.names,
@@ -147,7 +149,9 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 	ExpressionBinder expr_binder(*child_binder, binder.context);
 	vector<BoundOrderByNode> result;
 	for (auto &parsed_order : parsed_orders) {
-		result.emplace_back(parsed_order.type, parsed_order.null_order, expr_binder.Bind(parsed_order.expression));
+		const auto order_type = config.ResolveOrder(binder.context, parsed_order.type);
+		const auto null_order = config.ResolveNullOrder(binder.context, order_type, parsed_order.null_order);
+		result.emplace_back(order_type, null_order, expr_binder.Bind(parsed_order.expression));
 	}
 
 	// Convert BoundColumnRefExpression to BoundReferenceExpression
