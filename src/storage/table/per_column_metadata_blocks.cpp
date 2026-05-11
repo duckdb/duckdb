@@ -21,19 +21,28 @@ PerColumnMetadataBlock PerColumnMetadataBlock::Unpack(idx_t packed) {
 	return result;
 }
 
-vector<idx_t> PerColumnMetadataBlocks::GetBlocksForColumn(idx_t col_idx) const {
-	vector<idx_t> result;
-	bool found = false;
+vector<vector<idx_t>> PerColumnMetadataBlocks::GetBlocksForColumns(const vector<idx_t> &columns) const {
+	vector<vector<idx_t>> result(columns.size());
+	if (columns.empty()) {
+		return result;
+	}
+	idx_t col_pos = 0;
+	bool collecting = false;
 	for (auto &entry : data) {
 		if (entry.is_column_index) {
-			if (found) {
+			collecting = false;
+			// skip past requested columns that are before the current entry
+			while (col_pos < columns.size() && columns[col_pos] < entry.index) {
+				col_pos++;
+			}
+			if (col_pos >= columns.size()) {
 				break;
 			}
-			if (entry.index == col_idx) {
-				found = true;
+			if (columns[col_pos] == entry.index) {
+				collecting = true;
 			}
-		} else if (found) {
-			result.push_back(entry.index);
+		} else if (collecting) {
+			result[col_pos].push_back(entry.index);
 		}
 	}
 	return result;
@@ -43,6 +52,15 @@ void PerColumnMetadataBlocks::AddColumn(idx_t col_idx, const vector<idx_t> &bloc
 	if (blocks.empty()) {
 		return;
 	}
+#ifdef D_ASSERT_IS_ENABLED
+	// assert sorted insertion: col_idx must be greater than the last column index
+	for (idx_t i = data.size(); i > 0; i--) {
+		if (data[i - 1].is_column_index) {
+			D_ASSERT(col_idx > data[i - 1].index);
+			break;
+		}
+	}
+#endif
 	PerColumnMetadataBlock marker;
 	marker.is_column_index = true;
 	marker.index = col_idx;
