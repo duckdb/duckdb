@@ -612,16 +612,15 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 	// statically linked implementation for built-in linked extensions only.
 	// This avoids loading a second copy from disk (ASan ODR violation) while
 	// keeping externally installed/autoloaded extensions on the normal path.
-	const auto name = options.extension_name;
-	if (!ExtensionHelper::IsFullPath(name)) {
-		auto extension_name = ExtensionHelper::GetExtensionName(name);
+	auto logical_name = ExtensionHelper::GetExtensionName(options.extension_name);
+	if (!ExtensionHelper::IsFullPath(options.extension_name)) {
 		for (idx_t i = 0; i < ExtensionHelper::DefaultExtensionCount(); i++) {
 			auto default_extension = ExtensionHelper::GetDefaultExtension(i);
-			if (!default_extension.statically_loaded || extension_name != default_extension.name) {
+			if (!default_extension.statically_loaded || logical_name != default_extension.name) {
 				continue;
 			}
 			DuckDB db_wrapper(db);
-			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, extension_name);
+			auto load_result = ExtensionHelper::LoadExtension(db_wrapper, logical_name);
 			if (load_result == ExtensionLoadResult::LOADED_EXTENSION) {
 				return;
 			}
@@ -635,7 +634,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, name, *info);
+		LoadExternalExtensionInternal(db, fs, options.extension_name, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
