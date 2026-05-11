@@ -378,7 +378,7 @@ SELECT * FROM cumulative_metrics;
 statement ok
 ROLLBACK;
 
-# --- LIMITation: rows scanned is not flushed when the scan is stopped early ---
+# --- Execution stopped early: statistics should reflect work done until stop trigger (operator) ---
 
 statement ok
 PRAGMA enable_profiling = 'json';
@@ -387,7 +387,7 @@ statement ok
 PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
 
 statement ok
-PRAGMA custom_profiling_settings='{"OPERATOR_ROWS_SCANNED": "true", "OPERATOR_TYPE": "true"}';
+PRAGMA custom_profiling_settings='{"OPERATOR_ROW_GROUPS_SCANNED": "true", "OPERATOR_TOTAL_ROW_GROUPS_TO_SCAN": "true", "OPERATOR_TYPE": "true"}';
 
 statement ok
 SELECT * FROM t LIMIT 1;
@@ -396,22 +396,43 @@ statement ok
 PRAGMA disable_profiling;
 
 statement ok
-CREATE VIEW rows_scanned_operator_metrics AS
+CREATE VIEW row_groups_scanned_operator_metrics AS
 WITH RECURSIVE ops AS (
     SELECT unnest(children) AS op FROM '__TEST_DIR__/profiling_output.json'
     UNION ALL
     SELECT unnest(op.children) FROM ops WHERE len(op.children) > 0
 )
 SELECT op.operator_type,
-       op.operator_rows_scanned AS rows_scanned
+       op.operator_row_groups_scanned AS row_groups_scanned,
+       op.operator_total_row_groups_to_scan AS total_row_groups_to_scan
 FROM ops;
 
-# The table scan starts, but the downstream LIMIT prevents FinishSource from
-# flushing OPERATOR_ROWS_SCANNED. Once fixed, this should report the started row group.
-query II
-SELECT * FROM rows_scanned_operator_metrics WHERE operator_type = 'TABLE_SCAN';
+query III
+SELECT * FROM row_groups_scanned_operator_metrics WHERE operator_type = 'TABLE_SCAN';
 ----
-TABLE_SCAN	0
+TABLE_SCAN	1	4
+
+# --- Execution stopped early: statistics should reflect work done until stop trigger (cumulative) ---
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_ROW_GROUPS_SCANNED": "true", "CUMULATIVE_TOTAL_ROW_GROUPS_TO_SCAN": "true"}';
+
+statement ok
+SELECT * FROM t LIMIT 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT * FROM cumulative_metrics;
+----
+1	4
 
 # --- Transaction-local append: pruning covers distinct persistent and local ranges ---
 
