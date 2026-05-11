@@ -40,10 +40,10 @@ public:
 			D_ASSERT(wexpr.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE);
 			auto &aggregate = *wexpr.aggregate;
 			bind_data = wexpr.bind_info.get();
-			dtor = aggregate.GetStateDestructorCallback();
-			state.resize(aggregate.GetStateSizeCallback()(aggregate));
+			dtor = aggregate.GetCallbacks().GetStateDestructorCallback();
+			state.resize(aggregate.GetCallbacks().GetStateSizeCallback()(aggregate));
 			state_ptr = state.data();
-			aggregate.GetStateInitCallback()(aggregate, state.data());
+			aggregate.GetCallbacks().GetStateInitCallback()(aggregate, state.data());
 			for (auto &child : wexpr.children) {
 				arg_types.push_back(child->GetReturnType());
 				executor.AddExpression(*child);

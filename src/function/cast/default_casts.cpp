@@ -93,9 +93,10 @@ static bool AggregateStateToStructReinterpret(Vector &source, Vector &result, id
 		result_entries[i].Reference(source_entries[i]);
 	}
 
-	source.Flatten(count);
+	source.Flatten();
 	FlatVector::ValidityMutable(result) = FlatVector::Validity(source);
-	result.Verify(count);
+	FlatVector::SetSize(result, count_t(count));
+	result.Verify();
 	return true;
 }
 
@@ -172,6 +173,8 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 		return TimestampCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return TimestampTzCastSwitch(input, source, target);
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
+		return TimestampTzNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return TimestampNsCastSwitch(input, source, target);
 	case LogicalTypeId::TIMESTAMP_MS:

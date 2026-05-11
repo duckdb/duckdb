@@ -22,7 +22,7 @@ struct SortedAggregateBindData : public FunctionData {
 	using BindInfoPtr = unique_ptr<FunctionData>;
 	using OrderBys = vector<BoundOrderByNode>;
 
-	SortedAggregateBindData(ClientContext &context, Expressions &children, AggregateFunction &aggregate,
+	SortedAggregateBindData(ClientContext &context, Expressions &children, BoundAggregateFunction &aggregate,
 	                        BindInfoPtr &bind_info, OrderBys &order_bys)
 	    : context(context), function(aggregate), bind_info(std::move(bind_info)),
 	      threshold(Settings::Get<OrderedAggregateThresholdSetting>(context)) {
@@ -129,7 +129,7 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	ClientContext &context;
-	AggregateFunction function;
+	BoundAggregateFunction function;
 	unique_ptr<FunctionData> bind_info;
 
 	//! The sort expressions (all references as the expressions have been computed)
@@ -238,12 +238,11 @@ struct SortedAggregateState {
 
 	static void LinkedAppend(const LinkedChunkFunctions &functions, ArenaAllocator &allocator, DataChunk &input,
 	                         LinkedLists &linked, SelectionVector &sel, idx_t nsel) {
-		const auto count = input.size();
 		for (column_t c = 0; c < input.ColumnCount(); ++c) {
 			auto &func = functions[c];
 			auto &linked_list = linked[c];
 			RecursiveUnifiedVectorFormat input_data;
-			Vector::RecursiveToUnifiedFormat(input.data[c], count, input_data);
+			Vector::RecursiveToUnifiedFormat(input.data[c], input_data);
 			for (idx_t i = 0; i < nsel; ++i) {
 				idx_t sidx = sel.get_index(i);
 				func.AppendRow(allocator, linked_list, input_data, sidx);
@@ -471,7 +470,7 @@ struct SortedAggregateFunction {
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
 		UnifiedVectorFormat svdata;
-		states.ToUnifiedFormat(count, svdata);
+		states.ToUnifiedFormat(svdata);
 
 		// Size the selection vector for each state.
 		auto sdata = UnifiedVectorFormat::GetData<SortedAggregateState *>(svdata);
@@ -521,6 +520,14 @@ struct SortedAggregateFunction {
 		throw InternalException("Sorted aggregates should not be generated for window clauses");
 	}
 
+	static void WindowBatch(AggregateInputData &aggr_input_data, const WindowPartitionInput &partition,
+	                        const_data_ptr_t g_state, data_ptr_t l_state, const SubFrames *subframes_per_row,
+	                        idx_t count, Vector &result, idx_t row_idx) {
+		for (idx_t rid = 0; rid < count; ++rid) {
+			Window(aggr_input_data, partition, g_state, l_state, subframes_per_row[rid], result, rid);
+		}
+	}
+
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
@@ -534,7 +541,7 @@ struct SortedAggregateFunction {
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
-		vector<data_t> agg_state(aggr.GetStateSizeCallback()(aggr));
+		vector<data_t> agg_state(aggr.GetCallbacks().GetStateSizeCallback()(aggr));
 		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())), count_t(1));
 
 		// State variables
@@ -542,13 +549,13 @@ struct SortedAggregateFunction {
 		AggregateInputData aggr_bind_info(bind_info, aggr_input_data.allocator);
 
 		// Inner aggregate APIs
-		auto initialize = aggr.GetStateInitCallback();
-		auto destructor = aggr.GetStateDestructorCallback();
-		auto simple_update = aggr.GetStateSimpleUpdateCallback();
-		auto update = aggr.GetStateUpdateCallback();
-		auto finalize = aggr.GetStateFinalizeCallback();
+		auto initialize = aggr.GetCallbacks().GetStateInitCallback();
+		auto destructor = aggr.GetCallbacks().GetStateDestructorCallback();
+		auto simple_update = aggr.GetCallbacks().GetStateSimpleUpdateCallback();
+		auto update = aggr.GetCallbacks().GetStateUpdateCallback();
+		auto finalize = aggr.GetCallbacks().GetStateFinalizeCallback();
 
-		auto sdata = states.Values<SortedAggregateState *>(count);
+		auto sdata = states.Values<SortedAggregateState *>();
 
 		vector<idx_t> state_unprocessed(count, 0);
 		for (idx_t i = 0; i < count; ++i) {
@@ -673,7 +680,7 @@ struct SortedAggregateFunction {
 			}
 		}
 
-		result.Verify(count);
+		result.Verify();
 	}
 };
 
@@ -713,17 +720,18 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    bound_function.name, arguments, bound_function.GetReturnType(),
+	    bound_function.GetName(), arguments, bound_function.GetReturnType(),
 	    AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, bound_function.GetNullHandling(), SortedAggregateFunction::SimpleUpdate,
-	    nullptr, AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window);
+	    SortedAggregateFunction::Finalize, bound_function.GetProperties().GetNullHandling(),
+	    SortedAggregateFunction::SimpleUpdate, nullptr,
+	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
+	    SortedAggregateFunction::WindowBatch);
 
-	expr.function = ordered_aggregate;
+	expr.function.ReplaceImplementation(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
 	expr.order_bys.reset();
 }
@@ -770,16 +778,18 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 
 	// Replace the aggregate with the wrapper
 	AggregateFunction ordered_aggregate(
-	    aggregate.name, arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
+	    aggregate.GetName(), arguments, aggregate.GetReturnType(), AggregateFunction::StateSize<SortedAggregateState>,
 	    AggregateFunction::StateInitialize<SortedAggregateState, SortedAggregateFunction,
 	                                       AggregateDestructorType::LEGACY>,
 	    SortedAggregateFunction::ScatterUpdate,
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
-	    SortedAggregateFunction::Finalize, aggregate.GetNullHandling(), SortedAggregateFunction::SimpleUpdate, nullptr,
+	    SortedAggregateFunction::Finalize, aggregate.GetProperties().GetNullHandling(),
+	    SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window);
+	    SortedAggregateFunction::WindowBatch);
+	ordered_aggregate.SetWindowCallback(SortedAggregateFunction::Window);
 
-	aggregate = ordered_aggregate;
+	aggregate.ReplaceImplementation(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);
 	expr.arg_orders.clear();
 }

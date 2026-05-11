@@ -332,8 +332,29 @@
         "default_value": "false"
     },
     {
+        "name": "debug_verification_mode",
+        "description": "DEBUG SETTING: toggle the verification mode.",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
+        "name": "debug_verification_projection",
+        "description": "DEBUG SETTING: add internal verification projections to stress optimizers",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
         "name": "debug_verify_blocks",
         "description": "DEBUG SETTING: verify block metadata during checkpointing",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "false"
+    },
+    {
+        "name": "debug_verify_column_bindings",
+        "description": "DEBUG SETTING: run extra internal verification of column bindings",
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
@@ -641,6 +662,32 @@
         "type": "VARCHAR",
         "scope": "global",
         "default_value": ""
+    },
+    {
+        "name": "external_file_cache_local_block_size",
+        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "16384",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_block_size",
+        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
     },
     {
         "name": "external_threads",

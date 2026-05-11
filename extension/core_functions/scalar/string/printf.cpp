@@ -28,44 +28,44 @@ static unique_ptr<FunctionData> BindPrintfFunction(BindScalarFunctionInput &inpu
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		switch (arguments[i]->GetReturnType().id()) {
 		case LogicalTypeId::BOOLEAN:
-			bound_function.GetArguments().emplace_back(LogicalType::BOOLEAN);
+			bound_function.GetArguments()[i] = LogicalType::BOOLEAN;
 			break;
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 		case LogicalTypeId::BIGINT:
-			bound_function.GetArguments().emplace_back(LogicalType::BIGINT);
+			bound_function.GetArguments()[i] = LogicalType::BIGINT;
 			break;
 		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::UINTEGER:
 		case LogicalTypeId::UBIGINT:
-			bound_function.GetArguments().emplace_back(LogicalType::UBIGINT);
+			bound_function.GetArguments()[i] = LogicalType::UBIGINT;
 			break;
 		case LogicalTypeId::HUGEINT:
-			bound_function.GetArguments().emplace_back(LogicalType::HUGEINT);
+			bound_function.GetArguments()[i] = LogicalType::HUGEINT;
 			break;
 		case LogicalTypeId::UHUGEINT:
-			bound_function.GetArguments().emplace_back(LogicalType::UHUGEINT);
+			bound_function.GetArguments()[i] = LogicalType::UHUGEINT;
 			break;
 		case LogicalTypeId::FLOAT:
 		case LogicalTypeId::DOUBLE:
-			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments()[i] = LogicalType::DOUBLE;
 			break;
 		case LogicalTypeId::VARCHAR:
-			bound_function.GetArguments().push_back(LogicalType::VARCHAR);
+			bound_function.GetArguments()[i] = LogicalType::VARCHAR;
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
-			bound_function.GetArguments().emplace_back(LogicalType::DOUBLE);
+			bound_function.GetArguments()[i] = LogicalType::DOUBLE;
 			break;
 		case LogicalTypeId::UNKNOWN:
 			// parameter: accept any input and rebind later
-			bound_function.GetArguments().emplace_back(LogicalType::ANY);
+			bound_function.GetArguments()[i] = LogicalType::ANY;
 			break;
 		default:
 			// all other types: add cast to string
-			bound_function.GetArguments().emplace_back(LogicalType::VARCHAR);
+			bound_function.GetArguments()[i] = LogicalType::VARCHAR;
 			break;
 		}
 	}
@@ -90,7 +90,7 @@ struct StringConstructArgument {
 template <class T, class OP = StandardConstructArgument, class CTX>
 static void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
                              vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
-	auto result = input.Values<T>(count);
+	auto result = input.Values<T>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &args = result_args[i];
 		if (args.size() != arg_idx - 1) {
@@ -114,7 +114,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	vector<vector<duckdb_fmt::basic_format_arg<CTX>>> format_args;
 	format_args.resize(count);
 
-	auto format_data = args.data[0].Values<string_t>(count);
+	auto format_data = args.data[0].Values<string_t>();
 
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		auto &col = args.data[i];

@@ -6,14 +6,14 @@
 namespace duckdb {
 
 void MapUtil::ReinterpretMap(Vector &result, Vector &input, idx_t count) {
-	input.Flatten(count);
+	input.Flatten();
 
 	auto &input_keys = MapVector::GetKeys(input);
 	auto &input_values = MapVector::GetValues(input);
 
 	// Copy the list offsets and top-level validity
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
-	for (auto entry : input.Values<list_entry_t>(count)) {
+	for (auto entry : input.Values<list_entry_t>()) {
 		if (!entry.IsValid()) {
 			result_data.WriteNull();
 			continue;

@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb.hpp"
-
 #include "duckdb/common/enums/date_part_specifier.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/function/function.hpp"
 #include "tz_calendar.hpp"
 
 namespace duckdb {
@@ -51,35 +50,41 @@ struct ICUDateFunc {
 	//! Sets the time zone for the calendar. Throws if it is not valid
 	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id, string *error_message = nullptr);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
-	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
+	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_tz_t &result);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
-	static timestamp_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
+	static timestamp_tz_t GetTime(icu::Calendar *calendar, uint64_t micros = 0);
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static bool TryGetTimeNS(icu::Calendar *calendar, uint64_t nanos, timestamp_tz_ns_t &result);
+	//! Gets the timestamp from the calendar, throwing if it is not in range.
+	static timestamp_tz_ns_t GetTimeNS(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Gets the timestamp from the calendar, assuming it is in range.
-	static timestamp_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
+	static timestamp_tz_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
 	//! Sets the calendar to the timestamp, returning the unused µs part
-	static uint64_t SetTime(icu::Calendar *calendar, timestamp_t date);
+	static uint64_t SetTime(icu::Calendar *calendar, timestamp_tz_t date);
+	//! Sets the calendar to the timestamp, returning the unused ns part
+	static uint64_t SetTimeNS(icu::Calendar *calendar, timestamp_tz_ns_t date);
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar
-	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
+	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_tz_t end_date);
 	//! Adds the timestamp and the interval using the calendar
-	static timestamp_t Add(TZCalendar &calendar, timestamp_t timestamp, interval_t interval);
+	static timestamp_tz_t Add(TZCalendar &calendar, timestamp_tz_t timestamp, interval_t interval);
 	//! Subtracts the interval from the timestamp using the calendar
-	static timestamp_t Sub(TZCalendar &calendar, timestamp_t timestamp, interval_t interval);
+	static timestamp_tz_t Sub(TZCalendar &calendar, timestamp_tz_t timestamp, interval_t interval);
 	//! Subtracts the latter timestamp from the former timestamp using the calendar
-	static interval_t Sub(TZCalendar &calendar, timestamp_t end_date, timestamp_t start_date);
+	static interval_t Sub(TZCalendar &calendar, timestamp_tz_t end_date, timestamp_tz_t start_date);
 	//! Pulls out the bin values from the timestamp assuming it is an instant,
 	//! constructs an ICU timestamp, and then converts that back to a DuckDB instant
 	//! Adding offset doesn't really work around DST because the bin values are ambiguous
-	static timestamp_t FromNaive(icu::Calendar *calendar, timestamp_t naive);
+	static timestamp_tz_t FromNaive(icu::Calendar *calendar, timestamp_t naive);
 
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
 	static part_trunc_t TruncationFactory(DatePartSpecifier part);
-	static timestamp_t CurrentMidnight(icu::Calendar *calendar, ExpressionState &state);
+	static timestamp_tz_t CurrentMidnight(icu::Calendar *calendar, ExpressionState &state);
 
 	//! Subtracts the two times at the given part precision
-	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date);
+	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_tz_t start_date, timestamp_tz_t end_date);
 	static part_sub_t SubtractFactory(DatePartSpecifier part);
 };
 

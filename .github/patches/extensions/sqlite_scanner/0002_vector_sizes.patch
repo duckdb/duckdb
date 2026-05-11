@@ -52,7 +52,7 @@ index 95c4e39..44502ef 100644
  	return SourceResultType::FINISHED;
  }
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
-index f49b4ea..ac10d13 100644
+index 565c185..29ab390 100644
 --- a/src/storage/sqlite_update.cpp
 +++ b/src/storage/sqlite_update.cpp
 @@ -85,6 +85,7 @@ SourceResultType SQLiteUpdate::GetDataInternal(ExecutionContext &context, DataCh

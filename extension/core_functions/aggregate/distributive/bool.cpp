@@ -93,7 +93,7 @@ struct BoolOrFunFunction {
 	}
 };
 
-LogicalType GetBoolAndStateType(const AggregateFunction &function) {
+LogicalType GetBoolAndStateType(const BoundAggregateFunction &function) {
 	child_list_t<LogicalType> child_types;
 	child_types.emplace_back("empty", LogicalType::BOOLEAN);
 	child_types.emplace_back("val", LogicalType::BOOLEAN);

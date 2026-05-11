@@ -493,7 +493,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) * 2 + header_size);
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + header_size);
 	//! for very large buffers, we store the size of the buffer in plaintext.
 	idx_t block_header_size = buffer.GetHeaderSize();
 	auto user_size = buffer.Size();
@@ -524,11 +524,12 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(QueryContext c
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 
-		auto buffer =
-		    temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(context, id, std::move(reusable_buffer));
+		idx_t eviction_size = 0;
+		auto buffer = temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(
+		    context, id, std::move(reusable_buffer), &eviction_size);
 
 		// Decrement evicted size.
-		evicted_data_per_tag[uint8_t(tag)] -= buffer->AllocSize();
+		evicted_data_per_tag[uint8_t(tag)] -= eviction_size;
 
 		return buffer;
 	}

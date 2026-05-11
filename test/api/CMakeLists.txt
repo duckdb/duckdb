@@ -7,7 +7,6 @@ if(${DISABLE_THREADS})
 endif()
 
 add_subdirectory(capi)
-add_subdirectory(udf_function)
 
 set(TEST_API_OBJECTS
     test_api.cpp
@@ -28,7 +27,6 @@ set(TEST_API_OBJECTS
     test_relation_api.cpp
     test_operator_memory_limit.cpp
     test_query_profiler.cpp
-    test_scalar_function_select_hook.cpp
     test_dbdir.cpp
     test_pending_with_parameters.cpp
     test_progress_bar.cpp

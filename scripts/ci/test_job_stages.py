@@ -17,6 +17,7 @@ from scripts.ci import job_stages
 
 class JobStagesTest(unittest.TestCase):
     UNITTEST_TOKEN_RE = re.compile(r"(?:\./)?[\w./-]*unittest(?:\.exe)?$")
+    SKIP_IF_OVERRIDE = "OVERRIDE_JOBS is set; baseline job-selection tests are not applicable."
 
     def _workflow_paths(self) -> list[Path]:
         return sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml"))
@@ -123,18 +124,21 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(job_ids, "failed to parse any top-level jobs from .github/workflows/Main.yml")
         return job_ids
 
-    def test_merge_queue_push_minimal_jobs(self):
-        selection = self._compute_job_selection("push", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_merge_group_minimal_jobs(self):
+        selection = self._compute_job_selection("merge_group", "gh-readonly-queue/main/pr-1-abc", "duckdb/duckdb")
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertTrue(selection.save_cache)
 
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_includes_main_only_jobs(self):
         selection = self._compute_job_selection("push", "main", "duckdb/duckdb")
         self.assertIn("main_julia", selection.enabled_jobs)
         self.assertIn("valgrind", selection.enabled_jobs)
         self.assertTrue(selection.save_cache)
 
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_adds_release_jobs(self):
         for ref_name in ["feature/my-branch", "main"]:
             push_selection = self._compute_job_selection("push", ref_name, "duckdb/duckdb")
@@ -143,6 +147,7 @@ class JobStagesTest(unittest.TestCase):
             self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(workflow_dispatch_selection.enabled_jobs)))
             self.assertEqual(workflow_dispatch_selection.save_cache, push_selection.save_cache)
 
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_repository_dispatch_adds_release_jobs(self):
         selection = self._compute_job_selection("repository_dispatch", "feature/my-branch", "duckdb/duckdb")
         self.assertTrue(set(job_stages.RELEASE_JOBS).issubset(set(selection.enabled_jobs)))
@@ -157,6 +162,7 @@ class JobStagesTest(unittest.TestCase):
         selection = self._compute_job_selection("pull_request", "feature/my-branch", "somefork/duckdb")
         self.assertTrue(selection.save_cache)
 
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_julia_changed_key_enables_main_julia_on_pr(self):
         selection = self._compute_job_selection(
             "pull_request", "feature/my-branch", "duckdb/duckdb", changed_keys={"julia"}
@@ -182,6 +188,7 @@ class JobStagesTest(unittest.TestCase):
         self.assertEqual(lines[0], "enabled_jobs=[\"linux-relassert\"]")
         self.assertEqual(lines[1], "save_cache=false")
 
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_prints_and_writes_outputs(self):
         with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False) as tmp:
             output_path = tmp.name
@@ -193,7 +200,7 @@ class JobStagesTest(unittest.TestCase):
             sys.argv = [
                 "job_stages.py",
                 "--event",
-                "push",
+                "merge_group",
                 "--ref_name",
                 "gh-readonly-queue/main/pr-1-abc",
                 "--repository",
@@ -216,6 +223,30 @@ class JobStagesTest(unittest.TestCase):
             else:
                 os.environ["GITHUB_OUTPUT"] = old_env
             os.unlink(output_path)
+
+    def test_job_selection_override_adds_prepare(self):
+        old_value = os.environ.get("OVERRIDE_JOBS")
+        try:
+            os.environ["OVERRIDE_JOBS"] = "extensions"
+            selection = self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
+            self.assertEqual(selection.enabled_jobs, ["prepare", "extensions"])
+        finally:
+            if old_value is None:
+                os.environ.pop("OVERRIDE_JOBS", None)
+            else:
+                os.environ["OVERRIDE_JOBS"] = old_value
+
+    def test_job_selection_override_invalid_job_raises(self):
+        old_value = os.environ.get("OVERRIDE_JOBS")
+        try:
+            os.environ["OVERRIDE_JOBS"] = "extensions,not-a-job"
+            with self.assertRaises(ValueError):
+                self._compute_job_selection("pull_request", "feature/my-branch", "duckdb/duckdb")
+        finally:
+            if old_value is None:
+                os.environ.pop("OVERRIDE_JOBS", None)
+            else:
+                os.environ["OVERRIDE_JOBS"] = old_value
 
     def test_all_jobs_matches_main_workflow(self):
         workflow_jobs = self._main_workflow_job_ids()

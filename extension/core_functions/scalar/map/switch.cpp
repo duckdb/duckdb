@@ -53,7 +53,7 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.function.name != "map") {
+	if (func.function.GetName() != "map") {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
 	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
@@ -66,7 +66,7 @@ void ExtractConstantExprFromList(unique_ptr<Expression> &expr, vector<unique_ptr
 		throw BinderException("Expected a function for the cases");
 	}
 	auto &list_function = expr->Cast<BoundFunctionExpression>();
-	if (list_function.function.name != "list_value") {
+	if (list_function.function.GetName() != "list_value") {
 		throw BinderException("Expected a list function");
 	}
 	if (list_function.children.empty()) {
@@ -121,7 +121,7 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		if (base_expr) {
 			auto max_type = LogicalType::MaxLogicalType(input.context, base_expr->GetReturnType(),
 			                                            keys_unpacked[i]->GetReturnType());
-			case_check.when_expr = make_uniq<BoundComparisonExpression>(
+			case_check.when_expr = BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_EQUAL, base_expr->Copy(),
 			    BoundCastExpression::AddCastToType(input.context, std::move(keys_unpacked[i]), max_type));
 		} else {

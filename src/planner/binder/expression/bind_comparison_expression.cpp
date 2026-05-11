@@ -50,6 +50,7 @@ static bool SwitchVarcharComparison(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::INTEGER_LITERAL:
 		return true;
@@ -187,8 +188,7 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	PushCollation(context, right, input_type);
 
 	// now create the bound comparison expression
-	return BindResult(
-	    make_uniq<BoundComparisonExpression>(expr.GetExpressionType(), std::move(left), std::move(right)));
+	return BindResult(BoundComparisonExpression::Create(expr.GetExpressionType(), std::move(left), std::move(right)));
 }
 
 } // namespace duckdb

@@ -33,13 +33,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		break;
 	}
-	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between_expr = expr.Cast<BoundBetweenExpression>();
-		callback(between_expr.input);
-		callback(between_expr.lower);
-		callback(between_expr.upper);
-		break;
-	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		for (auto &case_check : case_expr.case_checks) {
@@ -52,12 +45,6 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_CAST: {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
 		callback(cast_expr.child);
-		break;
-	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		callback(comp_expr.left);
-		callback(comp_expr.right);
 		break;
 	}
 	case ExpressionClass::BOUND_CONJUNCTION: {

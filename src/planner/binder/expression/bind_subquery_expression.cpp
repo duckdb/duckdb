@@ -60,7 +60,7 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 		return;
 	}
 	auto &function = child->Cast<BoundFunctionExpression>();
-	if (function.function.name != "row") {
+	if (function.function.GetName() != "row") {
 		// not "ROW"
 		return;
 	}

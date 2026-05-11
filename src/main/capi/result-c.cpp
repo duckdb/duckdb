@@ -55,7 +55,7 @@ struct CBlobConverter {
 struct CTimestampMsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
-		if (!Timestamp::IsFinite(input)) {
+		if (!input.IsFinite()) {
 			return input;
 		}
 		return Timestamp::FromEpochMs(input.value);
@@ -65,7 +65,7 @@ struct CTimestampMsConverter : public CBaseConverter {
 struct CTimestampNsConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
-		if (!Timestamp::IsFinite(input)) {
+		if (!input.IsFinite()) {
 			return input;
 		}
 		return Timestamp::FromEpochNanoSeconds(input.value);
@@ -75,7 +75,7 @@ struct CTimestampNsConverter : public CBaseConverter {
 struct CTimestampSecConverter : public CBaseConverter {
 	template <class SRC, class DST>
 	static DST Convert(SRC input) {
-		if (!Timestamp::IsFinite(input)) {
+		if (!input.IsFinite()) {
 			return input;
 		}
 		return Timestamp::FromEpochSeconds(input.value);
@@ -236,10 +236,10 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 		WriteData<string_t, duckdb_blob, CBlobConverter>(column, collection, column_ids);
 		break;
 	}
-	case LogicalTypeId::TIMESTAMP_NS: {
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		WriteData<timestamp_t, timestamp_t, CTimestampNsConverter>(column, collection, column_ids);
 		break;
-	}
 	case LogicalTypeId::TIMESTAMP_MS: {
 		WriteData<timestamp_t, timestamp_t, CTimestampMsConverter>(column, collection, column_ids);
 		break;

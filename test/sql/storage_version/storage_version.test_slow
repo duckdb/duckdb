@@ -2,10 +2,8 @@
 # description: Storage version test checks whether or not the storage version needs to be incremented.
 # group: [storage_version]
 
-# If this test fails, re-generate the database file by following the steps listed below:
-# 1) Increment the version number in src/storage/storage_info.cpp and recompile (make release)
-# 2) Run the script in scripts/generate_storage_version.py
-# 3) Commit the newly generated database file in test/sql/storage_version/storage_version.db
+# In the past we used to use this test to signal a bump in storage version
+# However, this is no longer required since DuckDB is now backwards compatible
 
 # The database was written with a vector size of 2048.
 require exact_vector_size 2048
@@ -76,11 +74,9 @@ NULL
 10203040-5060-7080-0102-030405060708
 
 # all types function
-# geometry used to be part of an extension, so even though it was technically part of the old storage version
-# it was not actually stored in the database file, so exclude it for now.
-# If we ever bump the minimum storage version, this exclusion can be removed.
 query I nosort alltypes
-SELECT * EXCLUDE(geometry) FROM test_all_types();
+SELECT bool, tinyint, smallint, int, bigint, hugeint, uhugeint, utinyint, usmallint, uint, ubigint, bignum, date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, float, double, dec_4_1, dec_9_4, dec_18_6, dec38_10, uuid, interval, varchar, blob, bit, small_enum, medium_enum, large_enum, int_array, double_array, date_array, timestamp_array, timestamptz_array, varchar_array, nested_int_array, struct, struct_of_arrays, array_of_structs, map, "union", fixed_int_array, fixed_varchar_array, fixed_nested_int_array, fixed_nested_varchar_array, fixed_struct_array, struct_of_fixed_array, fixed_array_of_int_list, list_of_fixed_int_array, time_ns
+FROM test_all_types();
 
 query I nosort alltypes
 SELECT * FROM all_types

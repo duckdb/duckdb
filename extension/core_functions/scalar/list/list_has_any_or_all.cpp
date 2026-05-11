@@ -27,8 +27,8 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 	UnifiedVectorFormat l_child_format;
 	UnifiedVectorFormat r_child_format;
 
-	l_child.ToUnifiedFormat(l_size, l_child_format);
-	r_child.ToUnifiedFormat(r_size, r_child_format);
+	l_child.ToUnifiedFormat(l_child_format);
+	r_child.ToUnifiedFormat(r_child_format);
 
 	// Create the sort keys for the list elements
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);
@@ -95,7 +95,7 @@ static void ListHasAnyFunction(DataChunk &args, ExpressionState &, Vector &resul
 
 static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	const auto swap = func_expr.function.name == "<@";
+	const auto swap = func_expr.function.GetName() == "<@";
 
 	auto &l_vec = args.data[swap ? 1 : 0];
 	auto &r_vec = args.data[swap ? 0 : 1];
@@ -117,8 +117,8 @@ static void ListHasAllFunction(DataChunk &args, ExpressionState &state, Vector &
 	UnifiedVectorFormat build_format;
 	UnifiedVectorFormat probe_format;
 
-	l_child.ToUnifiedFormat(l_size, build_format);
-	r_child.ToUnifiedFormat(r_size, probe_format);
+	l_child.ToUnifiedFormat(build_format);
+	r_child.ToUnifiedFormat(probe_format);
 
 	// Create the sort keys for the list elements
 	Vector l_sortkey_vec(LogicalType::BLOB, l_size);

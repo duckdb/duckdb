@@ -1,10 +1,10 @@
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-datefunc.hpp"
 
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -140,8 +140,8 @@ struct ICUDateTrunc : public ICUDateFunc {
 			}
 			const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
 			auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
-			UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
-				if (Timestamp::IsFinite(input)) {
+			UnaryExecutor::Execute<T, T>(date_arg, result, args.size(), [&](T input) {
+				if (input.IsFinite()) {
 					auto micros = SetTime(calendar.get(), input);
 					truncator(calendar.get(), micros);
 					return GetTimeUnsafe(calendar.get(), micros);
@@ -150,9 +150,9 @@ struct ICUDateTrunc : public ICUDateFunc {
 				}
 			});
 		} else {
-			BinaryExecutor::Execute<string_t, T, timestamp_t>(
+			BinaryExecutor::Execute<string_t, T, T>(
 			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
-				    if (Timestamp::IsFinite(input)) {
+				    if (input.IsFinite()) {
 					    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
 					    auto micros = SetTime(calendar.get(), input);
 					    truncator(calendar.get(), micros);
@@ -171,7 +171,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDateTruncFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
 		set.SetArgProperties(1, ArgProperties().NonDecreasing());
 		loader.RegisterFunction(set);
 	}
@@ -220,8 +220,8 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	}
 }
 
-timestamp_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionState &state) {
-	const auto current_timestamp = MetaTransaction::Get(state.GetContext()).start_timestamp;
+timestamp_tz_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionState &state) {
+	const timestamp_tz_t current_timestamp(MetaTransaction::Get(state.GetContext()).start_timestamp);
 	auto current_micros = SetTime(calendar, current_timestamp);
 	ICUDateTrunc::TruncDay(calendar, current_micros);
 	return GetTime(calendar);

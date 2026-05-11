@@ -100,8 +100,12 @@ Allocator &RowGroupCollection::GetAllocator() const {
 	return Allocator::Get(info->GetDB());
 }
 
-AttachedDatabase &RowGroupCollection::GetAttached() {
+AttachedDatabase &RowGroupCollection::GetAttached() const {
 	return GetTableInfo().GetDB();
+}
+
+DatabaseInstance &RowGroupCollection::GetDatabase() const {
+	return GetAttached().GetDatabase();
 }
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
@@ -530,9 +534,8 @@ void RowGroupCollection::InitializeAppend(TableAppendState &state) {
 }
 
 bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
-	const idx_t row_group_size = GetRowGroupSize();
 	D_ASSERT(chunk.ColumnCount() == types.size());
-	chunk.Verify();
+	chunk.Verify(GetDatabase());
 
 	bool new_row_group = false;
 	idx_t total_append_count = chunk.size();
@@ -585,8 +588,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppendState &state) {
-	const idx_t row_group_size = GetRowGroupSize();
-
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {

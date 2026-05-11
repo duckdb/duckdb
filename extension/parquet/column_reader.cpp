@@ -674,8 +674,8 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
                             idx_t result_offset) {
 	// flatten the result vector if required
 	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-		result.Flatten(result_offset);
-		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
+		result.Flatten();
+		result.Reserve(STANDARD_VECTOR_SIZE);
 	}
 	if (page_is_filtered_out) {
 		// page is filtered out - emit NULL for any rows
@@ -836,7 +836,7 @@ void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilter
                                SelectionVector &sel, idx_t &approved_tuple_count) {
 	FlatVector::SetSize(v, count_t(scan_count));
 	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(scan_count, vdata);
+	v.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
 }
 
@@ -964,6 +964,7 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(const ParquetReader &reader,
 			throw InternalException("TIMESTAMP requires type info");
 		}
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		switch (schema.type_info) {
 		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
 			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(reader, schema);

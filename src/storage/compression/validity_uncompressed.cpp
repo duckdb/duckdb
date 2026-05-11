@@ -468,7 +468,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Flatten(scan_count);
+	result.Flatten();
 
 	auto start = state.GetPositionInSegment();
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
@@ -489,7 +489,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 //===--------------------------------------------------------------------===//
 void ValiditySelect(ColumnSegment &segment, ColumnScanState &state, idx_t, Vector &result, const SelectionVector &sel,
                     idx_t sel_count) {
-	result.Flatten(sel_count);
+	result.Flatten();
 
 	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 	auto buffer_ptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();

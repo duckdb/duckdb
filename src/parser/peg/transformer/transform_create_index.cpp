@@ -55,7 +55,7 @@ unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateIndexStmt(PEGT
 			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
 				throw InvalidInputException("Create index option must be a constant value");
 			}
-			index_info->options[option_entry.first] = option_entry.second->Cast<ConstantExpression>().value;
+			index_info->options[option_entry.first] = option_entry.second->Cast<ConstantExpression>().GetValue();
 		}
 	}
 	auto &where_opt = list_pr.Child<OptionalParseResult>(10);

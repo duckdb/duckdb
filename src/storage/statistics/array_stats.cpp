@@ -97,7 +97,7 @@ void ArrayStats::Verify(const BaseStatistics &stats, Vector &vector, const Selec
 	auto array_size = ArrayType::GetSize(vector.GetType());
 
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(count, vdata);
+	vector.ToUnifiedFormat(vdata);
 
 	// Basically,
 	// 1. Count the number of valid arrays

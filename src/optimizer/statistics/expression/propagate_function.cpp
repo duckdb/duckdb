@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/arg_properties.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -16,8 +17,7 @@ static bool TryEvaluateAtConstants(ClientContext &context, const BoundFunctionEx
 		children.push_back(make_uniq<BoundConstantExpression>(v));
 	}
 	auto bind_info_clone = func.bind_info ? func.bind_info->Copy() : nullptr;
-	BoundFunctionExpression clone(func.GetReturnType(), func.function, std::move(children), std::move(bind_info_clone),
-	                              func.is_operator);
+	BoundFunctionExpression clone(func.function, std::move(children), std::move(bind_info_clone), func.is_operator);
 	return ExpressionExecutor::TryEvaluateScalar(context, clone, result);
 }
 
@@ -111,7 +111,7 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 	}
 	if (out_hi < out_lo) {
 		throw InternalException("Monotonic arg annotation violated for '%s': output min exceeds output max",
-		                        func.function.name);
+		                        func.function.GetName());
 	}
 
 	auto result = NumericStats::CreateEmpty(func.GetReturnType());
@@ -127,6 +127,12 @@ static unique_ptr<BaseStatistics> TryPropagateMonotoneBounds(ClientContext &cont
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFunctionExpression &func,
                                                                      unique_ptr<Expression> &expr_ptr) {
+	if (func.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
+		return PropagateBetween(func, expr_ptr);
+	}
+	if (BoundComparisonExpression::IsComparison(func)) {
+		return PropagateComparison(func, expr_ptr);
+	}
 	vector<BaseStatistics> stats;
 	stats.reserve(func.children.size());
 	for (idx_t i = 0; i < func.children.size(); i++) {

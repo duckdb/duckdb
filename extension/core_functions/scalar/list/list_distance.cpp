@@ -15,7 +15,7 @@ template <class TYPE, class OP>
 static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto &lstate = state.Cast<ExecuteFunctionState>();
 	const auto &expr = lstate.expr.Cast<BoundFunctionExpression>();
-	const auto &func_name = expr.function.name;
+	const auto &func_name = expr.function.GetName();
 
 	auto count = args.size();
 
@@ -28,8 +28,8 @@ static void ListGenericFold(DataChunk &args, ExpressionState &state, Vector &res
 	auto &lhs_child = ListVector::GetChildMutable(lhs_vec);
 	auto &rhs_child = ListVector::GetChildMutable(rhs_vec);
 
-	lhs_child.Flatten(lhs_count);
-	rhs_child.Flatten(rhs_count);
+	lhs_child.Flatten();
+	rhs_child.Flatten();
 
 	D_ASSERT(lhs_child.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rhs_child.GetVectorType() == VectorType::FLAT_VECTOR);

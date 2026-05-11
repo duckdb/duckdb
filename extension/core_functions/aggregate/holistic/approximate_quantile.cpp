@@ -283,7 +283,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimal(BindAggregateFunctionInput &i
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalFunction(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(ApproxQuantileDecimalFunction(arguments[0]->GetReturnType()));
 	return bind_data;
 }
 
@@ -293,7 +293,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
-	fun.GetArguments().emplace_back(LogicalType::FLOAT);
+	fun.GetSignature().AddParameter(LogicalType::FLOAT);
 	return fun;
 }
 
@@ -404,7 +404,7 @@ unique_ptr<FunctionData> BindApproxQuantileDecimalList(BindAggregateFunctionInpu
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto bind_data = BindApproxQuantile(input);
-	function = ApproxQuantileDecimalListFunction(arguments[0]->GetReturnType());
+	function.ReplaceImplementation(ApproxQuantileDecimalListFunction(arguments[0]->GetReturnType()));
 	return bind_data;
 }
 
@@ -415,7 +415,7 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetArguments().push_back(list_of_float);
+	fun.GetSignature().AddParameter(list_of_float);
 	return fun;
 }
 
@@ -424,9 +424,9 @@ unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserial
 	auto bind_data = ApproximateQuantileBindData::Deserialize(deserializer, function);
 	auto &return_type = deserializer.Get<const LogicalType &>();
 	if (return_type.id() == LogicalTypeId::LIST) {
-		function = ApproxQuantileDecimalListFunction(function.GetArguments()[0]);
+		function.ReplaceImplementation(ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
 	} else {
-		function = ApproxQuantileDecimalFunction(function.GetArguments()[0]);
+		function.ReplaceImplementation(ApproxQuantileDecimalFunction(function.GetArguments()[0]));
 	}
 	return bind_data;
 }

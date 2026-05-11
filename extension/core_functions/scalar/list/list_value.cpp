@@ -185,7 +185,7 @@ bool StructFunction(DataChunk &args, Vector &result) {
 		for (idx_t col = 0; col < column_count; col++) {
 			auto &struct_vector = args.data[col];
 			if (struct_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-				struct_vector.Flatten(args.size());
+				struct_vector.Flatten();
 			}
 			auto &struct_vector_members = StructVector::GetEntries(struct_vector);
 			chunk.data[col].Reference(struct_vector_members[member_idx]);
@@ -268,8 +268,6 @@ unique_ptr<FunctionData> UnpivotBind(BindScalarFunctionInput &input) {
 	}
 	child_type = LogicalType::NormalizeType(child_type);
 
-	// this is more for completeness reasons
-	bound_function.SetVarArgs(child_type);
 	bound_function.SetReturnType(LogicalType::LIST(child_type));
 	return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 }

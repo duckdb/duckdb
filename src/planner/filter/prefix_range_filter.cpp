@@ -75,7 +75,7 @@ public:
 
 	template <typename T, typename CONVERTER>
 	void InsertKeys(Vector &keys, idx_t count, uint64_t *state_bitmap) const {
-		for (const auto &entry : keys.template ValidValues<T>(count)) {
+		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U y = CONVERTER::Convert(entry.GetValue()) - min;
 			// All keys are in-range by construction, so the range check can be omitted here.
 			const U idx = y >> shift;
@@ -108,7 +108,7 @@ public:
 	template <typename T, typename CONVERTER>
 	idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const {
 		idx_t found_count = 0;
-		for (const auto &entry : keys.template ValidValues<T>(count)) {
+		for (const auto &entry : keys.template ValidValues<T>()) {
 			const U comparable = CONVERTER::Convert(entry.GetValue());
 			const U y = comparable - min;
 			const U bit_idx = y >> shift;
@@ -532,8 +532,8 @@ FilterPropagateResult PrefixRangeTableFilter::CheckStatistics(BaseStatistics &st
 		if (!StringStats::HasMinMax(stats)) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		min = Value(StringStats::Min(stats));
-		max = Value(StringStats::Max(stats));
+		min = Value::BLOB_RAW(StringStats::Min(stats));
+		max = Value::BLOB_RAW(StringStats::Max(stats));
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;

@@ -4,7 +4,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -299,7 +298,7 @@ static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, Rang
 	result.increment = FlatVector::GetValue<interval_t>(input.data[2], row_id);
 
 	// Infinities either cause errors or infinite loops, so just ban them
-	if (!Timestamp::IsFinite(result.start) || !Timestamp::IsFinite(result.end)) {
+	if (!result.start.IsFinite() || !result.end.IsFinite()) {
 		throw BinderException("RANGE with infinite bounds is not supported");
 	}
 
@@ -374,8 +373,7 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			state.initialized_row = false;
 			continue;
 		}
-		FlatVector::SetSize(output.data[0], count_t(size));
-		output.SetCardinality(size);
+		output.SetChildCardinality(size);
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	}
 }

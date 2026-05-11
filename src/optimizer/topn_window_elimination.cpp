@@ -292,7 +292,7 @@ TopNWindowElimination::CreateAggregateExpression(vector<unique_ptr<Expression>> 
 	fun_name += params.can_be_null && (requires_arg || change_to_arg) ? "_nulls_last" : "";
 
 	auto &fun_entry = catalog.GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA, fun_name);
-	const auto fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
+	const auto &fun = fun_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(aggregate_params));
 	return function_binder.BindAggregateFunction(fun, std::move(aggregate_params));
 }
 
@@ -313,7 +313,7 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		FunctionBinder function_binder(context);
 		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
-		const auto struct_pack_fun =
+		const auto &struct_pack_fun =
 		    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
 		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
 		aggregate_params.push_back(std::move(struct_pack_expr));
@@ -365,7 +365,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	array_length_exprs.push_back(std::move(aggregate_column_ref));
 	array_length_exprs.push_back(make_uniq<BoundConstantExpression>(1));
 
-	const auto array_length_fun = array_length_entry.functions.GetFunctionByArguments(
+	const auto &array_length_fun = array_length_entry.functions.GetFunctionByArguments(
 	    context, {array_length_exprs[0]->GetReturnType(), array_length_exprs[1]->GetReturnType()});
 	auto bound_array_length_fun = function_binder.BindScalarFunction(array_length_fun, std::move(array_length_exprs));
 
@@ -377,7 +377,7 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 	generate_series_exprs.push_back(make_uniq<BoundConstantExpression>(1));
 	generate_series_exprs.push_back(std::move(bound_array_length_fun));
 
-	const auto generate_series_fun = generate_series_entry.functions.GetFunctionByArguments(
+	const auto &generate_series_fun = generate_series_entry.functions.GetFunctionByArguments(
 	    context, {generate_series_exprs[0]->GetReturnType(), generate_series_exprs[1]->GetReturnType()});
 	auto bound_generate_series_fun =
 	    function_binder.BindScalarFunction(generate_series_fun, std::move(generate_series_exprs));
@@ -435,7 +435,7 @@ void TopNWindowElimination::AddStructExtractExprs(
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &struct_extract_entry =
 	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_extract");
-	const auto struct_extract_fun =
+	const auto &struct_extract_fun =
 	    struct_extract_entry.functions.GetFunctionByArguments(context, {struct_type, LogicalType::VARCHAR});
 
 	const auto &child_types = StructType::GetChildTypes(struct_type);
@@ -522,11 +522,12 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	auto &filter_comparison = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	if (filter_comparison.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+	auto &filter_comparison = filter.expressions[0]->Cast<BoundFunctionExpression>();
+	auto &right = BoundComparisonExpression::Right(filter_comparison);
+	if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 		return false;
 	}
-	auto &filter_value = filter_comparison.right->Cast<BoundConstantExpression>();
+	auto &filter_value = right.Cast<BoundConstantExpression>();
 	if (filter_value.value.type() != LogicalType::BIGINT) {
 		return false;
 	}
@@ -556,10 +557,11 @@ bool TopNWindowElimination::CanOptimize(LogicalOperator &op) {
 		return false;
 	}
 
-	if (filter_comparison.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+	auto &left = BoundComparisonExpression::LeftMutable(filter_comparison);
+	if (left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return false;
 	}
-	VisitExpression(&filter_comparison.left);
+	VisitExpression(&left);
 
 	reference<LogicalOperator> child = *filter.children[0];
 	while (child.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
@@ -839,9 +841,9 @@ TopNWindowElimination::ExtractOptimizerParameters(const LogicalWindow &window, c
                                                   vector<unique_ptr<Expression>> &aggregate_payload) {
 	TopNWindowEliminationParameters params;
 
-	auto &filter_expr = filter.expressions[0]->Cast<BoundComparisonExpression>();
-	auto &limit_expr = filter_expr.right;
-	params.limit = limit_expr->Cast<BoundConstantExpression>().value.GetValue<int64_t>();
+	auto &filter_expr = filter.expressions[0]->Cast<BoundFunctionExpression>();
+	auto &limit_expr = BoundComparisonExpression::Right(filter_expr);
+	params.limit = limit_expr.Cast<BoundConstantExpression>().value.GetValue<int64_t>();
 	if (filter_expr.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN) {
 		--params.limit;
 	}

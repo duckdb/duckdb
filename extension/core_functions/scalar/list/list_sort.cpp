@@ -77,13 +77,10 @@ static void SinkDataChunk(const Sort &sort, ExecutionContext &context, OperatorS
 	// initialize and fill chunk
 	DataChunk chunk;
 	chunk.InitializeEmpty(types);
-	FlatVector::SetSize(lists_indices, count_t(offset_lists_indices));
-	FlatVector::SetSize(payload_vector, count_t(offset_lists_indices));
-	FlatVector::SetSize(slice, count_t(offset_lists_indices));
 	chunk.data[0].Reference(lists_indices);
 	chunk.data[1].Reference(slice);
 	chunk.data[2].Reference(payload_vector);
-	chunk.SetCardinality(offset_lists_indices);
+	chunk.SetChildCardinality(offset_lists_indices);
 	chunk.Verify(context.client.db);
 
 	// sink
@@ -126,7 +123,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &child_vector = ListVector::GetChildMutable(sort_result_vec);
 
 	// get the lists data
-	auto list_entries = sort_result_vec.Values<list_entry_t>(count);
+	auto list_entries = sort_result_vec.Values<list_entry_t>();
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -247,12 +244,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			}
 		} else {
 			child_vector.Slice(sel_sorted, sel_sorted_idx);
-			child_vector.Flatten(sel_sorted_idx);
+			child_vector.Flatten();
 		}
 	}
 }
 
-static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
 	LogicalType child_type;
