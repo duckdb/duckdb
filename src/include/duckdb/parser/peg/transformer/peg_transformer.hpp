@@ -619,9 +619,6 @@ private:
 	                                                               ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, ParseResult &parse_result);
 
-	// detach.gram
-	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer, ParseResult &parse_result);
-
 	// drop.gram
 	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer, ParseResult &parse_result);
 	static unique_ptr<DropStatement> TransformDropEntries(PEGTransformer &transformer, ParseResult &parse_result);
