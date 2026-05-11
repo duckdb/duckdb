@@ -518,8 +518,8 @@ static void MergeOperatorExtraInfo(const InsertionOrderPreservingMap<string> &lo
 		merged[key] = value;
 	}
 
-	for (const auto &[key, value] : local_extra_info) {
-		merged[key] = value;
+	for (const auto &entry : local_extra_info) {
+		merged[entry.first] = entry.second;
 	}
 
 	global_extra_info = Value::MAP(merged);
