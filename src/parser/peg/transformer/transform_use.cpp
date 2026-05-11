@@ -4,7 +4,7 @@
 namespace duckdb {
 
 // UseStatement <- 'USE' UseTarget
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(QualifiedName use_target) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(const QualifiedName &use_target) {
 	string value_str;
 	if (IsInvalidSchema(use_target.schema)) {
 		value_str = SQLIdentifier::ToString(use_target.name);
@@ -27,19 +27,20 @@ QualifiedName PEGTransformerFactory::TransformUseTarget(PEGTransformer &transfor
 }
 
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(string catalog_name, string reserved_schema_name,
-                                                                     vector<string> dot_identifier) {
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchema(const string &catalog_name,
+                                                                     const string &reserved_schema_name,
+                                                                     const vector<string> &dot_identifier) {
 	if (!dot_identifier.empty()) {
 		throw ParserException("Expected \"USE database\" or \"USE database.schema\"");
 	}
 	QualifiedName result;
 	result.catalog = INVALID_CATALOG;
-	result.schema = std::move(catalog_name);
-	result.name = std::move(reserved_schema_name);
+	result.schema = catalog_name;
+	result.name = reserved_schema_name;
 	return result;
 }
 
-string PEGTransformerFactory::TransformDotIdentifier(string identifier) {
+string PEGTransformerFactory::TransformDotIdentifier(const string &identifier) {
 	return identifier;
 }
 } // namespace duckdb

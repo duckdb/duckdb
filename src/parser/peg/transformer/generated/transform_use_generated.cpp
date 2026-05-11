@@ -3,22 +3,22 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatementInternal(PEGTransformer &transformer,
-                                                                              ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatementInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto use_target = transformer.Transform<QualifiedName>(list_pr, 1);
 	return TransformUseStatement(use_target);
 }
 
-QualifiedName PEGTransformerFactory::TransformUseTargetInternal(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
+QualifiedName PEGTransformerFactory::TransformUseTargetInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	return TransformUseTarget(transformer, choice_pr.GetResult());
 }
 
-QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(PEGTransformer &transformer,
-                                                                             ParseResult &parse_result) {
+QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto catalog_name = list_pr.Child<IdentifierParseResult>(0).identifier;
 	auto reserved_schema_name = list_pr.Child<IdentifierParseResult>(2).identifier;
@@ -33,7 +33,8 @@ QualifiedName PEGTransformerFactory::TransformUseTargetCatalogSchemaInternal(PEG
 	return TransformUseTargetCatalogSchema(catalog_name, reserved_schema_name, dot_identifier);
 }
 
-string PEGTransformerFactory::TransformDotIdentifierInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+string PEGTransformerFactory::TransformDotIdentifierInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	auto identifier = list_pr.Child<IdentifierParseResult>(1).identifier;
 	return TransformDotIdentifier(identifier);

@@ -30,11 +30,13 @@
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"
+  by_value: true
   rules:
     - Program
 
 SQLStatement:
   type: "unique_ptr<SQLStatement>"
+  by_value: true
   rules:
     - Statement
     - AlterStatement
@@ -82,6 +84,7 @@ SQLStatement:
 
 SelectStatement:
   type: "unique_ptr<SelectStatement>"
+  by_value: true
   rules:
     - DescribeStatement
     - PivotStatement
@@ -101,12 +104,14 @@ SelectStatement:
 
 SetStatement:
   type: "unique_ptr<SetStatement>"
+  by_value: true
   rules:
     - SetTimeZone
     - StandardAssignment
 
 QueryNode:
   type: "unique_ptr<QueryNode>"
+  by_value: true
   rules:
     - ShowSelect
     - ShowTables
@@ -115,6 +120,7 @@ QueryNode:
 
 SelectNode:
   type: "unique_ptr<SelectNode>"
+  by_value: true
   rules:
     - SelectFrom
     - SelectFromClause
@@ -123,12 +129,14 @@ SelectNode:
 
 SetOperationNode:
   type: "unique_ptr<SetOperationNode>"
+  by_value: true
   rules:
     - SetopClause
     - SetIntersectClause
 
 CreateStatement:
   type: "unique_ptr<CreateStatement>"
+  by_value: true
   rules:
     - CreateSchemaStmt
     - CreateSecretStmt
@@ -143,6 +151,7 @@ CreateStatement:
 
 DropStatement:
   type: "unique_ptr<DropStatement>"
+  by_value: true
   rules:
     - DropEntries
     - DropTable
@@ -158,6 +167,7 @@ DropStatement:
 
 AlterInfo:
   type: "unique_ptr<AlterInfo>"
+  by_value: true
   rules:
     - AlterOptions
     - AlterTableStmt
@@ -170,6 +180,7 @@ AlterInfo:
 
 AlterTableInfo:
   type: "unique_ptr<AlterTableInfo>"
+  by_value: true
   rules:
     - AlterTableOptions
     - AddColumn
@@ -193,11 +204,13 @@ AlterTableInfo:
 
 CreateTypeInfo:
   type: "unique_ptr<CreateTypeInfo>"
+  by_value: true
   rules:
     - CreateType
 
 MacroFunction:
   type: "unique_ptr<MacroFunction>"
+  by_value: true
   rules:
     - MacroDefinition
     - TableMacroDefinition
@@ -205,6 +218,7 @@ MacroFunction:
 
 OnConflictInfo:
   type: "unique_ptr<OnConflictInfo>"
+  by_value: true
   rules:
     - OnConflictClause
     - OnConflictAction
@@ -213,6 +227,7 @@ OnConflictInfo:
 
 MergeIntoAction:
   type: "unique_ptr<MergeIntoAction>"
+  by_value: true
   rules:
     - MatchedClauseAction
     - UpdateMatchClause
@@ -228,6 +243,7 @@ MergeIntoAction:
 
 UpdateSetInfo:
   type: "unique_ptr<UpdateSetInfo>"
+  by_value: true
   rules:
     - UpdateSetClause
     - UpdateSetTuple
@@ -236,6 +252,7 @@ UpdateSetInfo:
 
 Constraint:
   type: "unique_ptr<Constraint>"
+  by_value: true
   rules:
     - TopLevelConstraint
     - TopLevelConstraintList
@@ -246,11 +263,13 @@ Constraint:
 
 ForeignKeyConstraint:
   type: "unique_ptr<ForeignKeyConstraint>"
+  by_value: true
   rules:
     - ForeignKeyConstraint
 
 WindowExpression:
   type: "unique_ptr<WindowExpression>"
+  by_value: true
   rules:
     - OverClause
     - WindowFrame
@@ -262,6 +281,7 @@ WindowExpression:
 
 SampleOptions:
   type: "unique_ptr<SampleOptions>"
+  by_value: true
   rules:
     - SampleClause
     - SampleEntry
@@ -271,6 +291,7 @@ SampleOptions:
 
 ResultModifier:
   type: "unique_ptr<ResultModifier>"
+  by_value: true
   rules:
     - LimitOffset
     - OffsetLimitClause
@@ -278,12 +299,14 @@ ResultModifier:
 
 AtClause:
   type: "unique_ptr<AtClause>"
+  by_value: true
   rules:
     - AtClause
     - AtSpecifier
 
 Expression:
   type: "unique_ptr<ParsedExpression>"
+  by_value: true
   rules:
     - Expression
     - SingleExpression
@@ -421,6 +444,7 @@ Expression:
 
 ColumnRefExpression:
   type: "unique_ptr<ColumnRefExpression>"
+  by_value: true
   rules:
     - NestedColumnName
     - CatalogReservedSchemaTableColumnName
@@ -429,6 +453,7 @@ ColumnRefExpression:
 
 TableRef:
   type: "unique_ptr<TableRef>"
+  by_value: true
   rules:
     - TableRef
     - FromClause
@@ -456,6 +481,7 @@ TableRef:
 
 BaseTableRef:
   type: "unique_ptr<BaseTableRef>"
+  by_value: true
   rules:
     - BaseTableName
     - SchemaReservedTable
@@ -469,6 +495,7 @@ BaseTableRef:
 
 ExpressionList:
   type: "vector<unique_ptr<ParsedExpression>>"
+  by_value: true
   rules:
     - TypeModifiers
     - BoundedListExpression
@@ -495,16 +522,19 @@ ExpressionList:
 
 TableRefList:
   type: "vector<unique_ptr<TableRef>>"
+  by_value: true
   rules:
     - DeleteUsingClause
 
 ResultModifierList:
   type: "vector<unique_ptr<ResultModifier>>"
+  by_value: true
   rules:
     - ResultModifiers
 
 OrderByNodeList:
   type: "vector<OrderByNode>"
+  by_value: false
   rules:
     - OrderByClause
     - OrderByExpressions
@@ -514,11 +544,13 @@ OrderByNodeList:
 
 MacroParameterList:
   type: "vector<MacroParameter>"
+  by_value: false
   rules:
     - MacroParameters
 
 StringList:
   type: "vector<string>"
+  by_value: false
   rules:
     - ColumnIdList
     - InsertColumnList
@@ -530,6 +562,7 @@ StringList:
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
+  by_value: true
   rules:
     - AttachOptions
     - GenericCopyOptionList
@@ -539,6 +572,7 @@ GenericCopyOptionList:
 
 WindowBoundaryExpressionList:
   type: "vector<WindowBoundaryExpression>"
+  by_value: false
   rules:
     - FrameExtent
     - BetweenFrameExtent
@@ -546,12 +580,14 @@ WindowBoundaryExpressionList:
 
 PivotColumnList:
   type: "vector<PivotColumn>"
+  by_value: false
   rules:
     - PivotColumnList
     - PivotOn
 
 PivotColumnEntryList:
   type: "vector<PivotColumnEntry>"
+  by_value: false
   rules:
     - PivotTargetList
     - UnpivotTargetList
@@ -562,6 +598,7 @@ PivotColumnEntryList:
 
 QualifiedName:
   type: "QualifiedName"
+  by_value: false
   rules:
     - QualifiedSequenceName
     - IdentifierOrStringLiteral
@@ -580,11 +617,13 @@ QualifiedName:
 
 OrderByNode:
   type: "OrderByNode"
+  by_value: false
   rules:
     - OrderByExpression
 
 GroupByNode:
   type: "GroupByNode"
+  by_value: false
   rules:
     - GroupByClause
     - GroupByExpressions
@@ -593,6 +632,7 @@ GroupByNode:
 
 LimitPercentResult:
   type: "LimitPercentResult"
+  by_value: false
   rules:
     - LimitClause
     - LimitValue
@@ -604,6 +644,7 @@ LimitPercentResult:
 
 DistinctClause:
   type: "DistinctClause"
+  by_value: false
   rules:
     - DistinctClause
     - DistinctOn
@@ -611,6 +652,7 @@ DistinctClause:
 
 TableAlias:
   type: "TableAlias"
+  by_value: false
   rules:
     - TableAlias
     - TableAliasAs
@@ -618,6 +660,7 @@ TableAlias:
 
 JoinPrefix:
   type: "JoinPrefix"
+  by_value: false
   rules:
     - JoinPrefix
     - CrossJoinPrefix
@@ -626,6 +669,7 @@ JoinPrefix:
 
 JoinQualifier:
   type: "JoinQualifier"
+  by_value: false
   rules:
     - JoinQualifier
     - OnClause
@@ -633,11 +677,13 @@ JoinQualifier:
 
 WindowFrame:
   type: "WindowFrame"
+  by_value: false
   rules:
     - FrameClause
 
 WindowBoundaryExpression:
   type: "WindowBoundaryExpression"
+  by_value: false
   rules:
     - FrameBound
     - FrameUnbounded
@@ -646,6 +692,7 @@ WindowBoundaryExpression:
 
 PivotColumn:
   type: "PivotColumn"
+  by_value: false
   rules:
     - PivotColumnEntry
     - PivotColumnSubquery
@@ -655,6 +702,7 @@ PivotColumn:
 
 GenericCopyOption:
   type: "GenericCopyOption"
+  by_value: false
   rules:
     - SpecializedOption
     - SingleOption
@@ -670,6 +718,7 @@ GenericCopyOption:
 
 MacroParameter:
   type: "MacroParameter"
+  by_value: false
   rules:
     - MacroParameter
     - SimpleParameter
@@ -677,6 +726,7 @@ MacroParameter:
 
 TriggerEventInfo:
   type: "TriggerEventInfo"
+  by_value: false
   rules:
     - TriggerEvent
     - TriggerEventInsert
@@ -686,6 +736,7 @@ TriggerEventInfo:
 
 VacuumOptions:
   type: "VacuumOptions"
+  by_value: false
   rules:
     - VacuumOptions
     - VacuumLegacyOptions
@@ -693,12 +744,14 @@ VacuumOptions:
 
 SettingInfo:
   type: "SettingInfo"
+  by_value: false
   rules:
     - SetSetting
     - SetVariable
 
 PartitionSortedOptions:
   type: "PartitionSortedOptions"
+  by_value: false
   rules:
     - PartitionSortedOptions
     - PartitionOptSortedOptions
@@ -706,6 +759,7 @@ PartitionSortedOptions:
 
 ColumnElements:
   type: "ColumnElements"
+  by_value: false
   rules:
     - CreateColumnList
     - CreateTableColumnList
@@ -716,6 +770,7 @@ ColumnElements:
 
 String:
   type: "string"
+  by_value: false
   rules:
     - AttachAlias
     - StringLiteral
@@ -776,6 +831,7 @@ String:
 
 Bool:
   type: "bool"
+  by_value: false
   rules:
     - TimeZone
     - WithOrWithout
@@ -797,12 +853,14 @@ Bool:
 
 Int64:
   type: "int64_t"
+  by_value: false
   rules:
     - ArrayBounds
     - SquareBracketsArray
 
 LogicalType:
   type: "LogicalType"
+  by_value: false
   rules:
     - Type
     - EnumStringLiteralList

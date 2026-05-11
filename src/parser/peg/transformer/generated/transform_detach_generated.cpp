@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
-                                                                                 ParseResult &parse_result) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDetachStatementInternal(
+    PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	bool if_exists {};
 	transformer.TransformOptional(list_pr, 2, if_exists);

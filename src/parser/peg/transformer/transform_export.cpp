@@ -4,14 +4,15 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(string export_source, string file_path,
-                                                                         vector<GenericCopyOption> options) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(const string &export_source,
+                                                                         const string &string_literal,
+                                                                         vector<GenericCopyOption> generic_copy_option_list) {
 	auto info = make_uniq<CopyInfo>();
-	info->file_path = std::move(file_path);
+	info->file_path = string_literal;
 	info->format = "csv";
 	info->is_from = false;
 
-	for (auto &option : options) {
+	for (auto &option : generic_copy_option_list) {
 		if (option.name == "format") {
 			info->format = option.children[0].GetValue<string>();
 			info->is_format_auto_detected = false;
@@ -27,7 +28,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExportStatement(string 
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformExportSource(string catalog_name) {
+string PEGTransformerFactory::TransformExportSource(const string &catalog_name) {
 	return catalog_name;
 }
 
