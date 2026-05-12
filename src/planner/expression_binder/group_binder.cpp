@@ -63,6 +63,8 @@ void GroupBinder::ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state
 		select_list_idx = index - 1;
 		break;
 	}
+	case ExpressionClass::PARAMETER:
+		throw ParameterNotAllowedException("Parameter not supported in GROUP BY clause");
 	default:
 		return;
 	}
