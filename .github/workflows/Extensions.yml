@@ -281,6 +281,7 @@ jobs:
           test: |
             pwd
             ls -lh build build/release || true
+            ls -lh duckdb duckdb/scripts/ci || true
             ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
             make test_release
           # TODO
