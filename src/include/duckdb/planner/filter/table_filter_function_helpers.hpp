@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "duckdb/planner/filter/selectivity_optional_filter.hpp"
 
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"

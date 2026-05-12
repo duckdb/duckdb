@@ -12,43 +12,6 @@
 
 namespace duckdb {
 
-struct SelectivityOptionalFilterState final : public TableFilterState {
-	enum class FilterStatus { ACTIVE, PAUSED_DUE_TO_HIGH_SELECTIVITY };
-
-	struct SelectivityStats {
-		SelectivityStats(idx_t n_vectors_to_check, float selectivity_threshold);
-
-		void Update(idx_t accepted, idx_t processed);
-		bool IsActive() const;
-		double GetSelectivity() const;
-
-		//! Configuration
-		const idx_t n_vectors_to_check;
-		const float selectivity_threshold;
-
-		//! For computing selectivity stats
-		idx_t tuples_accepted;
-		idx_t tuples_processed;
-		idx_t vectors_processed;
-
-		//! Whether currently paused
-		FilterStatus status;
-
-		//! For increasing pause if filter is not selective enough
-		idx_t pause_multiplier;
-	};
-
-	unique_ptr<TableFilterState> child_state;
-	SelectivityStats stats;
-
-	explicit SelectivityOptionalFilterState(unique_ptr<TableFilterState> child_state, const idx_t n_vectors_to_check,
-	                                        const float selectivity_threshold)
-	    : child_state(std::move(child_state)), stats(n_vectors_to_check, selectivity_threshold) {
-	}
-};
-
-enum class SelectivityOptionalFilterType : uint8_t { MIN_MAX, BF, PHJ, PRF };
-
 //! DEPRECATED - only preserved for backwards-compatible deserialization and expression conversion
 class LegacySelectivityOptionalFilter final : public LegacyOptionalFilter {
 public:
