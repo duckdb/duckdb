@@ -243,25 +243,13 @@ jobs:
 
 
     steps:
-      - uses: actions/checkout@v6
-        name: Checkout
+      - name: Prepare
+        uses: duckdb/duckdb-ci/prepare-extension@main
         with:
-          repository: duckdb/extension-template
-          ref: main
-          fetch-depth: 0
-          submodules: 'recursive'
-
-      # TODO: set correct git ref for extension-ci-tools
-      - name: Set git ref
-        run: |
-          git -C duckdb fetch --prune --tags origin "${{ inputs.git_ref }}"
-          git -C extension-ci-tools fetch --prune --tags origin
-          git -C duckdb checkout "${{ inputs.git_sha }}"
-          git -C extension-ci-tools checkout "main"
-
-          git config --global --add safe.directory "$PWD"
-          git config --global --add safe.directory "$PWD/duckdb"
-          git config --global --add safe.directory "$PWD/extension-ci-tools"
+          extension-repository: duckdb/extension-template
+          extension-ref: main
+          duckdb-ref: ${{ inputs.git_ref }}
+          duckdb-sha: ${{ inputs.git_sha }}
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2.23
