@@ -101,6 +101,37 @@ struct PerfectHashJoinFunctionData : public FunctionData {
 	bool Equals(const FunctionData &other) const override;
 };
 
+//! Runtime prefix-range filter state used by join pushdown and internal tablefilter functions.
+class PrefixRangeFilter {
+public:
+	struct BuildState {
+		virtual ~BuildState() = default;
+		template <class TARGET>
+
+		TARGET &Cast() {
+			DynamicCastCheck<TARGET>(this);
+			return reinterpret_cast<TARGET &>(*this);
+		}
+		template <class TARGET>
+		const TARGET &Cast() const {
+			DynamicCastCheck<TARGET>(this);
+			return reinterpret_cast<const TARGET &>(*this);
+		}
+	};
+
+	virtual ~PrefixRangeFilter() = default;
+	virtual void Initialize(ClientContext &context, idx_t number_of_rows, Value min, Value max) = 0;
+	virtual unique_ptr<BuildState> InitializeBuildState(ClientContext &context) const = 0;
+	virtual void InsertKeys(Vector &keys, idx_t count, BuildState &state) const = 0;
+	virtual void MergeBuildState(BuildState &state) = 0;
+	virtual idx_t LookupKeys(Vector &keys, SelectionVector &result_sel, idx_t count) const = 0;
+	virtual FilterPropagateResult LookupRange(const Value &lower_bound, const Value &upper_bound) const = 0;
+	virtual bool IsInitialized() const = 0;
+	static bool SupportedType(const LogicalType &type);
+	static unique_ptr<PrefixRangeFilter> CreatePrefixRangeFilter(const LogicalType &key_type);
+	static bool TryComputeSpan(const Value &lower_bound, const Value &upper_bound, uhugeint_t &result);
+};
+
 //! FunctionData for prefix range internal function
 struct PrefixRangeFunctionData : public FunctionData {
 	PrefixRangeFunctionData(optional_ptr<PrefixRangeFilter> filter_p, const string &key_column_name_p,

@@ -20,7 +20,6 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
-#include "duckdb/planner/filter/prefix_range_filter.hpp"
 
 namespace duckdb {
 
