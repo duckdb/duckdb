@@ -572,24 +572,10 @@ public:
 	}
 
 public:
-	template <class...>
-	using void_t_helper = void;
-
-	template <class OP, class STATE, class = void>
-	struct HasClusteredLocalState : std::false_type {};
-	template <class OP, class STATE>
-	struct HasClusteredLocalState<OP, STATE, void_t_helper<typename OP::template ClusteredLocalState<STATE>::Type>>
-	    : std::true_type {};
-
-	template <class OP, class = void>
-	struct HasClusteredOperation : std::false_type {};
-	template <class OP>
-	struct HasClusteredOperation<OP, void_t_helper<decltype(&OP::template ClusteredOp<int32_t, int32_t, OP>)>>
-	    : std::true_type {};
-
 	template <class STATE, class INPUT_TYPE, class OP>
 	static aggregate_cluster_update_t UnaryClusterUpdateCallback() {
-		if constexpr (HasClusteredLocalState<OP, STATE>::value || HasClusteredOperation<OP>::value) {
+		if constexpr (AggregateExecutor::HasClusteredLocalState<OP, STATE>::value ||
+		              AggregateExecutor::HasClusteredOperation<OP>::value) {
 			return AggregateFunction::UnaryClusterUpdate<STATE, INPUT_TYPE, OP>;
 		} else {
 			return nullptr;
@@ -598,12 +584,11 @@ public:
 
 	template <class STATE, class RESULT_TYPE, class OP>
 	static AggregateFunction NullaryAggregate(LogicalType return_type) {
-		auto function = AggregateFunction(
+		return AggregateFunction(
 		    string(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 		    FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NullaryClusterUpdate<STATE, OP>);
-		return function;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -611,13 +596,12 @@ public:
 	static AggregateFunction
 	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		auto function = AggregateFunction(string(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                                  AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
-		                                  AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-		                                  AggregateFunction::StateCombine<STATE, OP>,
-		                                  AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
-		                                  UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
-		return function;
+		return AggregateFunction(string(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
+		                         AggregateFunction::StateCombine<STATE, OP>,
+		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                         UnaryClusterUpdateCallback<STATE, INPUT_TYPE, OP>());
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
@@ -632,12 +616,11 @@ public:
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
 	                                         LogicalType return_type) {
-		auto function = AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                                  AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
-		                                  AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
-		                                  AggregateFunction::StateCombine<STATE, OP>,
-		                                  AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>);
-		return function;
+		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
+		                         AggregateFunction::StateCombine<STATE, OP>,
+		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>);
 	}
 
 public:
@@ -696,7 +679,7 @@ public:
 	static void UnaryClusterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
 	                               const ClusteredAggr &clustered, idx_t count) {
 		D_ASSERT(input_count == 1);
-		AggregateExecutor::UnartClusteredUpdate<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
+		AggregateExecutor::ExecuteUnaryClustered<STATE, INPUT_TYPE, OP>(inputs[0], aggr_input_data, clustered, count);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
