@@ -321,8 +321,9 @@ public:
 				const auto byte = current_key.get()[depth];
 				if (current.get().HasByte(art, byte)) {
 					Node::DeleteChild(art, current, parent, byte, status, row_id);
+					return true;
 				}
-				return true;
+				return false;
 			}
 			}
 		}
