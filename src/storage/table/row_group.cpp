@@ -1388,6 +1388,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 
 	auto result_row_group = make_shared_ptr<RowGroup>(GetCollection(), this->count);
 	result_row_group->columns.resize(GetColumnCount());
+	result_row_group->column_pointers.resize(GetColumnCount());
 	result_row_group->deletes_pointers = deletes_pointers;
 	result_row_group->deletes_is_loaded = deletes_is_loaded.load();
 	result_row_group->owned_version_info = owned_version_info;
@@ -1414,6 +1415,7 @@ RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 		if (!column_has_changes) {
 			// reuse this column's metadata
 			result.states.push_back(nullptr);
+			result_row_group->column_pointers[column_idx] = column_pointers[column_idx];
 			result.keep_column_loaded.push_back(true);
 			// carry forward existing column data and statistics
 			if (!ColumnIsLoaded(column_idx)) {
