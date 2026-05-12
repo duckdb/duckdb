@@ -228,7 +228,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	}
 	n_group_runs = st1.n_runs + st2.n_runs;
 	cached_dict_sel = nullptr;
-	return (5 * tuples_in_large >= 4 * count); // require >=80% of tuples in long-enough runs
+	return (5 * tuples_in_large >= 4 * static_cast<idx_t>(count)); // require >=80% of tuples in long-enough runs
 }
 
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {

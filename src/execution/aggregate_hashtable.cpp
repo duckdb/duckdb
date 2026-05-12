@@ -520,6 +520,9 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, payload.size());
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
+	static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+	dict_state.address_high_bits_uniform = (sizeof(uintptr_t) == sizeof(uint64_t));
+	dict_state.address_high_bits = static_cast<uint64_t>(aggregate_address) & GID_HIGH_MASK;
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
@@ -590,7 +593,9 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 		if (!clustered_state.TryBuild(clustered, addrs, payload.size())) {
 			return false;
 		}
-		clustered.InitializeStates([&](uint64_t gid) { return reinterpret_cast<data_ptr_t>(gid); });
+		clustered.InitializeStates([&](uint64_t gid) {
+			return reinterpret_cast<data_ptr_t>(state.dict_state.address_high_bits | gid);
+		});
 	}
 
 	const bool skip_addresses = clustered_state.all_clustered;
