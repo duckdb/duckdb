@@ -283,9 +283,9 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
-	// Let's cap the csv row to 10k bytes. For performance reasons.
-	if (csv_row.size() > 10000) {
-		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
+	// Cap the csv row for performance reasons.
+	if (reader_options.rejects_line_size_limit > 0 && csv_row.size() > reader_options.rejects_line_size_limit) {
+		csv_row.erase(csv_row.begin() + NumericCast<int64_t>(reader_options.rejects_line_size_limit), csv_row.end());
 	}
 	error << error_message << '\n';
 	error << fixes << '\n';

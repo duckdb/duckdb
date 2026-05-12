@@ -154,6 +154,9 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 
 	bool SupportsConcurrent() const override;
+
+private:
+	bool ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const;
 };
 
 class ContinueCommand : public Command {
