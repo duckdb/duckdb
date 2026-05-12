@@ -193,11 +193,6 @@ void PEGTransformerFactory::RegisterAttach() {
 	REGISTER_TRANSFORM(TransformDatabasePath);
 }
 
-void PEGTransformerFactory::RegisterCall() {
-	// call.gram
-	REGISTER_TRANSFORM(TransformCallStatement);
-}
-
 void PEGTransformerFactory::RegisterComment() {
 	// comment.gram
 	REGISTER_TRANSFORM(TransformCommentStatement);
@@ -1066,7 +1061,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
-	RegisterCall();
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();

@@ -260,7 +260,6 @@ public:
 	// Registration methods
 	void RegisterAlter();
 	void RegisterAttach();
-	void RegisterCall();
 	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCopy();
@@ -1271,6 +1270,11 @@ private:
 	static unique_ptr<TransformResultValue> TransformCheckpointForceInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static bool TransformCheckpointForce();
+	static unique_ptr<TransformResultValue> TransformCallStatementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<SQLStatement>
+	TransformCallStatement(const QualifiedName &qualified_table_function,
+	                       vector<unique_ptr<ParsedExpression>> table_function_arguments);
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

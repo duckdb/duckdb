@@ -166,6 +166,15 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCheckpointForce
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCallStatementInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto qualified_table_function = transformer.Transform<QualifiedName>(list_pr, 1);
+	auto table_function_arguments = transformer.Transform<vector<unique_ptr<ParsedExpression>>>(list_pr, 2);
+	auto result = TransformCallStatement(qualified_table_function, std::move(table_function_arguments));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
 void PEGTransformerFactory::RegisterGenerated() {
 	static const TransformRule builtin_transform_rules[] = {
 	    {"UseStatement", &PEGTransformerFactory::TransformUseStatementInternal},
@@ -186,6 +195,7 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"AnalyzeVerbose", &PEGTransformerFactory::TransformAnalyzeVerboseInternal},
 	    {"CheckpointStatement", &PEGTransformerFactory::TransformCheckpointStatementInternal},
 	    {"CheckpointForce", &PEGTransformerFactory::TransformCheckpointForceInternal},
+	    {"CallStatement", &PEGTransformerFactory::TransformCallStatementInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
 		sql_transform_functions[rule.name] = rule.transform;
