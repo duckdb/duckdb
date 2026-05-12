@@ -37,6 +37,13 @@ else
 	echo "No $BUILD_DIR/src/libduckdb.so* files found"
 fi
 
+# Required by jobs that link against the prebuilt static library.
+if [[ -f "$BUILD_DIR/src/libduckdb_static.a" ]]; then
+	cp -av "$BUILD_DIR/src/libduckdb_static.a" "$ARTIFACT_DIR"/src/
+else
+	echo "No $BUILD_DIR/src/libduckdb_static.a file found"
+fi
+
 # Required by regression jobs that run the prebuilt benchmark runner.
 if [[ -f "$BUILD_DIR/benchmark/benchmark_runner" ]]; then
 	mkdir -p "$ARTIFACT_DIR"/benchmark "$ARTIFACT_DIR"/scripts
