@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/column_qualifier.hpp"
 #include "duckdb/main/settings.hpp"
 
 #include <functional>
@@ -256,8 +257,9 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 
 CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 	QueryErrorContext error_context(function.GetQueryLocation());
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
-	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+
+	ColumnQualifier qualifier(binder);
+	auto func = qualifier.QualifyFunction(function);
 	if (!func) {
 		// function was not found - check if we this is a table function (to throw a more helpful error message)
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
@@ -270,6 +272,7 @@ CatalogEntry &ExpressionBinder::BindFunction(FunctionExpression &function) {
 			                      function.function_name);
 		}
 		// not a table function - rebind to throw an error
+		EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
 		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 	return *func;

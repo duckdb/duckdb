@@ -467,7 +467,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	if (statement.where_clause) {
 		// bind any star expressions in the WHERE clause
 		BindWhereStarExpression(statement.where_clause);
-		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
 	}
 	for (idx_t i = 0; i < statement.groups.group_expressions.size(); i++) {
 		auto &grp = statement.groups.group_expressions[i];

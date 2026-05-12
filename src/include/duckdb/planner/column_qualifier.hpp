@@ -40,7 +40,7 @@ public:
 	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vector<unordered_set<string>> &lambda_params,
 	                        const bool within_function_expression = false);
 
-	void QualifyFunction(FunctionExpression &function);
+	optional_ptr<CatalogEntry> QualifyFunction(FunctionExpression &function);
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 
 private:

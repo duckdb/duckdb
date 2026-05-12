@@ -235,7 +235,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	});
 }
 
-void ColumnQualifier::QualifyFunction(FunctionExpression &function) {
+optional_ptr<CatalogEntry> ColumnQualifier::QualifyFunction(FunctionExpression &function) {
 	D_ASSERT(!ExpressionBinder::IsUnnestFunction(function.function_name));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
@@ -246,19 +246,19 @@ void ColumnQualifier::QualifyFunction(FunctionExpression &function) {
 	    binder.GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (func) {
 		// found the function - we are done
-		return;
+		return func;
 	}
 	// not a table function - check if the schema is set
 	if (function.schema.empty()) {
 		// schema is not set - leave it as-is
-		return;
+		return nullptr;
 	}
 	// the schema is set - check if we can turn this the schema into a column ref
 	// does this function exist in the system catalog?
 	func = binder.GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!func) {
 		// we could not find the function - bail
-		return;
+		return nullptr;
 	}
 	// the function exists in the system catalog - turn this into a dot call
 	ErrorData error;
@@ -277,6 +277,7 @@ void ColumnQualifier::QualifyFunction(FunctionExpression &function) {
 	function.children.insert(function.children.begin(), std::move(new_colref));
 	function.catalog = INVALID_CATALOG;
 	function.schema = INVALID_SCHEMA;
+	return func;
 }
 
 void ColumnQualifier::QualifyColumnNamesInLambda(FunctionExpression &function,
