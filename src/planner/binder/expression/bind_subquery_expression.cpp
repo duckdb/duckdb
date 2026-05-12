@@ -89,6 +89,9 @@ static void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique
 }
 
 BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t depth) {
+	if (inside_try) {
+		throw BinderException("TRY can not be used in combination with a scalar subquery");
+	}
 	if (expr.subquery->node->type != QueryNodeType::BOUND_SUBQUERY_NODE) {
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);

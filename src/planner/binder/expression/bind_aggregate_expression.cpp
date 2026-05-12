@@ -113,6 +113,9 @@ static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedE
 }
 
 BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
+	if (inside_try) {
+		throw BinderException("aggregates are not allowed inside the TRY expression");
+	}
 	if (inside_aggregate_filter) {
 		throw BinderException(aggr, "aggregate functions are not allowed in FILTER");
 	}
