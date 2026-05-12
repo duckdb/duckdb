@@ -1,10 +1,15 @@
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
-PEGKeywordHelper &PEGKeywordHelper::Instance() {
-	static PEGKeywordHelper instance;
-	return instance;
+PEGKeywordHelper &PEGKeywordHelper::Get(ClientContext &context) {
+	return Get(DatabaseInstance::GetDatabase(context));
+}
+
+PEGKeywordHelper &PEGKeywordHelper::Get(DatabaseInstance &db) {
+	return db.GetParserCache().GetKeywordHelper();
 }
 
 PEGKeywordHelper::PEGKeywordHelper() {

@@ -268,7 +268,7 @@ void Parser::ParseQuery(const string &query) {
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		try {
-			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root());
+			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root(), cache.GetKeywordHelper());
 			for (auto &stmt : peg_statements) {
 				statements.push_back(std::move(stmt));
 			}
@@ -495,7 +495,8 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = PEGKeywordHelper::Instance();
+	ParserCache local_cache;
+	auto &helper = local_cache.GetKeywordHelper();
 	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
@@ -516,7 +517,8 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 }
 
 vector<ParserKeyword> Parser::KeywordList() {
-	return PEGKeywordHelper::Instance().KeywordList();
+	ParserCache local_cache;
+	return local_cache.GetKeywordHelper().KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {

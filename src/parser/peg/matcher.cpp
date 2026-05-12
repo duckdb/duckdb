@@ -577,7 +577,7 @@ private:
 	bool MatchIdentifier(MatchState &state) const {
 		// variable matchers match anything except for reserved keywords
 		auto &token_text = state.tokens[state.token_index].text;
-		const auto &keyword_helper = PEGKeywordHelper::Instance();
+		const auto &keyword_helper = state.keyword_helper;
 		switch (suggestion_type) {
 		case SuggestionState::SUGGEST_TYPE_NAME:
 			if (keyword_helper.KeywordCategoryType(token_text, PEGKeywordCategory::KEYWORD_UNRESERVED) ||
@@ -1500,6 +1500,10 @@ shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 		transformer_factory = std::move(new_factory);
 	}
 	return transformer_factory;
+}
+
+PEGKeywordHelper &ParserCache::GetKeywordHelper() {
+	return keyword_helper;
 }
 
 void ParserCache::Invalidate() {
