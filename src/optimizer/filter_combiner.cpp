@@ -25,6 +25,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/optimizer/in_clause_rewriter.hpp"
 
 namespace duckdb {
 
@@ -535,12 +536,6 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		    CreateComparisonExpression(*func.children[0], ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
 		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(bound_eq_comparison)));
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
-	}
-
-	// Lists large enough to benefit from a hash join should not be pushed into the
-	// scan. Use same threshold as InClauseRewriter
-	if (func.children.size() - 1 >= 6) {
-		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
 	//! Check if values are consecutive, if yes transform them to >= <= (only for integers)

@@ -7,10 +7,6 @@
 
 namespace duckdb {
 
-// ContainsToInClauseRule::ContainsToInClauseRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-// 	root = make_uniq<ExpressionMatcher>(ExpressionClass::BOUND_FUNCTION);
-// }
-
 ContainsToInClauseRule::ContainsToInClauseRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("contains");

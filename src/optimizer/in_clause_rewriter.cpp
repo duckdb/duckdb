@@ -57,7 +57,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		                                                          : ExpressionType::COMPARE_NOTEQUAL,
 		                                            std::move(expr.children[0]), std::move(expr.children[1]));
 	}
-	if (expr.children.size() < 6 || !all_scalar) {
+	if (expr.children.size() < IN_CLAUSE_REWRITE_THRESHOLD || !all_scalar) {
 		// low amount of children or not all scalar
 		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
