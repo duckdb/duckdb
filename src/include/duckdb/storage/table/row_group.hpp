@@ -89,10 +89,6 @@ struct RowGroupWriteData {
 	vector<BaseStatistics> statistics;
 	vector<bool> keep_column_loaded;
 	RowGroupWriteAction write_action = RowGroupWriteAction::FULLY_CHECKPOINT_ROW_GROUP;
-	vector<idx_t> existing_extra_metadata_blocks;
-	bool has_per_column_metadata_blocks = false;
-	PerColumnMetadataBlocks existing_per_column_metadata_blocks;
-	vector<MetaBlockPointer> existing_column_pointers;
 	optional_idx write_count;
 };
 
@@ -261,6 +257,7 @@ private:
 	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
+	friend class RowGroupCollection;
 	mutable mutex row_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)

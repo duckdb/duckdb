@@ -1601,16 +1601,17 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			for (idx_t segment_idx = 0; segment_idx < checkpoint_state.SegmentCount(); segment_idx++) {
 				auto entry = checkpoint_state.GetSegment(segment_idx);
 				auto &row_group = entry->GetNode();
-				auto &write_state = checkpoint_state.write_data[segment_idx];
 				metadata_manager.ClearModifiedBlocks(row_group.GetColumnStartPointers());
-				D_ASSERT(write_state.write_action == RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA);
+				D_ASSERT(checkpoint_state.write_data[segment_idx].write_action ==
+				         RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA);
 				vector<MetaBlockPointer> extra_metadata_block_pointers;
-				if (write_state.has_per_column_metadata_blocks) {
-					write_state.existing_per_column_metadata_blocks.ForEachBlock(
+				if (row_group.has_per_column_metadata_blocks) {
+					row_group.per_column_metadata_blocks.ForEachBlock(
 					    [&](idx_t, idx_t block_id) { extra_metadata_block_pointers.emplace_back(block_id, 0); });
 				} else {
-					extra_metadata_block_pointers.reserve(write_state.existing_extra_metadata_blocks.size());
-					for (auto &block_pointer : write_state.existing_extra_metadata_blocks) {
+					D_ASSERT(row_group.has_metadata_blocks);
+					extra_metadata_block_pointers.reserve(row_group.extra_metadata_blocks.size());
+					for (auto &block_pointer : row_group.extra_metadata_blocks) {
 						extra_metadata_block_pointers.emplace_back(block_pointer, 0);
 					}
 				}
