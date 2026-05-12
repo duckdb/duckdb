@@ -24,6 +24,10 @@ struct SelectBindState {
 	//! The original unparsed expressions. This is exported after binding, because the binding might change the
 	//! expressions (e.g. when a * clause is present)
 	vector<unique_ptr<ParsedExpression>> original_expressions;
+	vector<unique_ptr<ParsedExpression>> unbound_groups;
+	parsed_expression_map_t<ProjectionIndex> group_map;
+	case_insensitive_map_t<ProjectionIndex> group_alias_map;
+	unordered_map<ProjectionIndex, ProjectionIndex> collated_groups;
 
 public:
 	unique_ptr<ParsedExpression> BindAlias(idx_t index);

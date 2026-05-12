@@ -18,19 +18,13 @@ class WindowExpression;
 
 class BoundSelectNode;
 
-struct BoundGroupInformation {
-	parsed_expression_map_t<ProjectionIndex> map;
-	case_insensitive_map_t<ProjectionIndex> alias_map;
-	unordered_map<ProjectionIndex, ProjectionIndex> collated_groups;
-};
-
 //! The BaseSelectBinder is the base binder of the SELECT, HAVING and QUALIFY binders. It can bind aggregates and window
 //! functions.
 class BaseSelectBinder : public ExpressionBinder {
 	friend class ColumnQualifier;
 
 public:
-	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info);
+	BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node);
 
 	bool BoundAggregates() {
 		return bound_aggregate;
@@ -50,7 +44,6 @@ protected:
 	bool bound_aggregate = false;
 
 	BoundSelectNode &node;
-	BoundGroupInformation &info;
 
 protected:
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;

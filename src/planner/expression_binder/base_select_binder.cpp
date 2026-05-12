@@ -15,9 +15,8 @@
 
 namespace duckdb {
 
-BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
-                                   BoundGroupInformation &info)
-    : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
+BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node)
+    : ExpressionBinder(binder, context), inside_window(false), node(node) {
 }
 
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -41,11 +40,12 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
+	auto &alias_map = node.bind_state.group_alias_map;
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
-			auto alias_entry = info.alias_map.find(colref.column_names[0]);
-			if (alias_entry != info.alias_map.end()) {
+			auto alias_entry = alias_map.find(colref.column_names[0]);
+			if (alias_entry != alias_map.end()) {
 				// found entry!
 				return alias_entry->second;
 			}
@@ -53,12 +53,13 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	}
 	// no alias reference found
 	// check the list of group columns for a match
-	auto entry = info.map.find(expr);
-	if (entry != info.map.end()) {
+	auto &group_map = node.bind_state.group_map;
+	auto entry = group_map.find(expr);
+	if (entry != group_map.end()) {
 		return entry->second;
 	}
 #ifdef DEBUG
-	for (auto map_entry : info.map) {
+	for (auto map_entry : group_map) {
 		D_ASSERT(!map_entry.first.get().Equals(expr));
 		D_ASSERT(!expr.Equals(map_entry.first.get()));
 	}
@@ -101,8 +102,9 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index) {
-	auto it = info.collated_groups.find(group_index);
-	if (it != info.collated_groups.end()) {
+	auto &collated_groups = node.bind_state.collated_groups;
+	auto it = collated_groups.find(group_index);
+	if (it != collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
 		const auto return_type = node.aggregates[aggr_index]->GetReturnType();

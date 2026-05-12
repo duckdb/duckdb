@@ -490,13 +490,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		result.from_table.plan = PlanFilter(std::move(where_clause), std::move(result.from_table.plan));
 	}
 
-	vector<unique_ptr<ParsedExpression>> unbound_groups;
-	BoundGroupInformation info;
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		unbound_groups.resize(group_expressions.size());
-		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state, info.alias_map);
+		bind_state.unbound_groups.resize(group_expressions.size());
+		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
 		auto prev_can_contain_nulls = this->can_contain_nulls;
 		this->can_contain_nulls = true;
@@ -533,7 +531,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				function->SetAlias("__collated_group");
 
 				auto collated_idx = ColumnBinding::PushExpression(result.aggregates, std::move(function));
-				info.collated_groups[ProjectionIndex(i)] = collated_idx;
+				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
 
@@ -541,8 +539,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 			// we do this to make sure that "table.a" and "a" are treated the same
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
-			unbound_groups[i] = std::move(group_binder.unbound_expression);
-			info.map[*unbound_groups[i]] = ProjectionIndex(i);
+			bind_state.unbound_groups[i] = std::move(group_binder.unbound_expression);
+			bind_state.group_map[*bind_state.unbound_groups[i]] = ProjectionIndex(i);
 		}
 		this->can_contain_nulls = prev_can_contain_nulls;
 	}
@@ -550,7 +548,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
-		HavingBinder having_binder(*this, context, result, info, statement.aggregate_handling);
+		HavingBinder having_binder(*this, context, result, statement.aggregate_handling);
 		ExpressionBinder::QualifyColumnNames(having_binder, statement.having);
 		result.having = having_binder.Bind(statement.having);
 	}
@@ -561,7 +559,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
-		QualifyBinder qualify_binder(*this, context, result, info);
+		QualifyBinder qualify_binder(*this, context, result);
 		result.qualify = qualify_binder.Bind(statement.qualify);
 		if (qualify_binder.HasBoundColumns()) {
 			if (qualify_binder.BoundAggregates()) {
@@ -572,7 +570,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	}
 
 	// after that, we bind to the SELECT list
-	SelectBinder select_binder(*this, context, result, info);
+	SelectBinder select_binder(*this, context, result);
 
 	// if we expand select-list expressions, e.g., via UNNEST, then we need to possibly
 	// adjust the column index of the already bound ORDER BY modifiers, and not only set their types

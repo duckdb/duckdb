@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : BaseSelectBinder(binder, context, node, info), column_alias_binder(node.bind_state) {
+QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node)
+    : BaseSelectBinder(binder, context, node), column_alias_binder(node.bind_state) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
 

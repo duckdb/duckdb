@@ -11,8 +11,8 @@
 namespace duckdb {
 
 GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, TableIndex group_index,
-                         SelectBindState &bind_state, case_insensitive_map_t<ProjectionIndex> &group_alias_map)
-    : ExpressionBinder(binder, context), node(node), bind_state(bind_state), group_alias_map(group_alias_map),
+                         SelectBindState &bind_state)
+    : ExpressionBinder(binder, context), node(node), bind_state(bind_state),
       group_index(group_index) {
 }
 
@@ -62,7 +62,7 @@ BindResult GroupBinder::BindSelectRef(idx_t entry) {
 	auto select_entry = std::move(node.select_list[entry]);
 	auto binding = Bind(select_entry, nullptr, false);
 	// now replace the original expression in the select list with a reference to this group
-	group_alias_map[to_string(entry)] = bind_index;
+	bind_state.group_alias_map[to_string(entry)] = bind_index;
 	node.select_list[entry] = make_uniq<ColumnRefExpression>(to_string(entry));
 	// insert into the set of used aliases
 	used_aliases.insert(entry);
@@ -101,7 +101,7 @@ bool GroupBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t de
 	}
 	result = BindResult(BindSelectRef(entry->second));
 	if (!result.HasError()) {
-		group_alias_map[alias_name] = bind_index;
+		bind_state.group_alias_map[alias_name] = bind_index;
 	}
 	return true;
 }

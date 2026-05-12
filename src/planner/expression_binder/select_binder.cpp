@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info)
-    : BaseSelectBinder(binder, context, node, info) {
+SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node)
+    : BaseSelectBinder(binder, context, node) {
 }
 
 bool SelectBinder::TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
