@@ -1,11 +1,11 @@
 {
-  "description": "Run with the latest storage format on persistent databases with a default block size of 16kB.",
+  "description": "Run with the latest v1.x storage format on persistent databases with a default block size of 16kB.",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__latest_storage_block_size_16kb.db",
   "on_load": "skip",
   "settings": [
     {
       "name": "storage_compatibility_version",
-      "value": "latest"
+      "value": "v1.5.2"
     }
   ],
   "skip_compiled": "true",

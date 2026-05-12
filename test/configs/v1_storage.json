@@ -1,11 +1,11 @@
 {
-  "description": "Run with the latest storage format on persistent databases.",
+  "description": "Run with the latest v1.x storage format on persistent databases.",
   "initial_db": "{TEST_DIR}/{BASE_TEST_NAME}__test__config__latest_storage.db",
   "on_load": "skip",
   "settings": [
     {
       "name": "storage_compatibility_version",
-      "value": "latest"
+      "value": "v1.5.2"
     }
   ],
   "inherit_skip_tests": "test/configs/force_storage.json",

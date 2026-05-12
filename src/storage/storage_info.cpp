@@ -10,7 +10,7 @@ constexpr idx_t Storage::MIN_BLOCK_ALLOC_SIZE;
 constexpr idx_t Storage::DEFAULT_BLOCK_HEADER_SIZE;
 constexpr uint64_t MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
-const uint64_t VERSION_NUMBER = 64;
+const uint64_t VERSION_NUMBER = 69;
 const uint64_t VERSION_NUMBER_LOWER = 64;
 const uint64_t VERSION_NUMBER_UPPER = 69;
 
@@ -31,7 +31,7 @@ struct SerializationVersionInfo {
 // Do not edit them manually, your changes will be overwritten
 // clang-format off
 // START OF STORAGE VERSION INFO
-const uint64_t DEFAULT_STORAGE_VERSION_INFO = 64;
+const uint64_t DEFAULT_STORAGE_VERSION_INFO = 69;
 static const StorageVersionInfo storage_version_info[] = {
 	{"v0.0.4", 1},
 	{"v0.1.0", 1},
@@ -103,7 +103,7 @@ static_assert(DEFAULT_STORAGE_VERSION_INFO == VERSION_NUMBER, "Check on VERSION_
 
 // START OF SERIALIZATION VERSION INFO
 const uint64_t LATEST_SERIALIZATION_VERSION_INFO = 8;
-const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 1;
+const uint64_t DEFAULT_SERIALIZATION_VERSION_INFO = 8;
 static const SerializationVersionInfo serialization_version_info[] = {
 	{"v0.10.0", 1},
 	{"v0.10.1", 1},

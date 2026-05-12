@@ -1382,6 +1382,12 @@ jobs:
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage.json ./build/release/test/unittest
 
+    - name: test/configs/v1_storage.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/v1_storage.json ./build/release/test/unittest
+
     - name: test/configs/block_verification.json
       if: success() || failure()
       shell: bash
@@ -1471,6 +1477,12 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/latest_storage_block_size_16kB.json ./build/release/test/unittest
+
+    - name: test/configs/v1_storage_block_size_16kB.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/v1_storage_block_size_16kB.json ./build/release/test/unittest
 
     - name: test/configs/block_allocator_100mib.json
       if: success() || failure()

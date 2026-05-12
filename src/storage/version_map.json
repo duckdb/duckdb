@@ -65,7 +65,7 @@
 		"v1.5.2": 68,
 		"v2.0.0": 69
 	},
-	"default": 64
+	"default": 69
 },
 "serialization": {
 	"values": {
@@ -95,6 +95,6 @@
 		"v2.0.0": 8,
 		"latest": 8
 	},
-	"default": 1
+	"default": 8
 }
 }
