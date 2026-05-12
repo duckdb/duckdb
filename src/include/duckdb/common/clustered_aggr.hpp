@@ -23,6 +23,7 @@ struct ClusteredAggr {
 	static constexpr idx_t MAX_RUNS = STANDARD_VECTOR_SIZE;
 	static constexpr idx_t HOTKEYS_LOG2 = 5;
 	static constexpr idx_t MAX_HOTKEYS = idx_t(1) << HOTKEYS_LOG2;
+	static constexpr idx_t SAMPLE_SIZE = 128;
 	static constexpr idx_t HASHTAB_LOG2 = 11;
 	static constexpr idx_t HASHTAB_SZ = idx_t(1) << HASHTAB_LOG2;
 	static constexpr idx_t SLOT_GRP_BITS = 13;

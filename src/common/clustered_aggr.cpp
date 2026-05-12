@@ -20,7 +20,7 @@ namespace duckdb {
 // Is this only affecting aggregations with <25 groups? No, there are two more cases:
 // - repeating keys: rolling up an ordered dataframe, or aggregating back to the PK of a FK-PK join.
 //   e.g. change SELECT l_returnflag, l_shipmode into SELECT l_orderkey>>2, .. GROUP BY ALL
-//   (orderkey repeats 1..7 timesavg 4 -- this is not enough, I put the threshold at 16)
+//   (orderkey repeats 4 times avg -- this is not enough, I put the threshold at 6, hence >>2)
 // - (very) heavy hittng keys in a GROUP BY with potentially many groups
 //   e.g. change SELECT l_returnflag, l_shipmode into SELECT ((l_orderkey>>1)&l_orderkey&1)*l_orderkey,
 //
@@ -75,7 +75,7 @@ struct SlotTab {
 };
 
 static inline uint64_t slot_hash(uint64_t gid) {
-	return ((gid * 17) ^ (gid >> ClusteredAggr::HASHTAB_LOG2)) & (ClusteredAggr::HASHTAB_SZ - 1);
+	return ((gid * 3217161767) ^ (gid >> ClusteredAggr::HASHTAB_LOG2)) & (ClusteredAggr::HASHTAB_SZ - 1);
 }
 
 bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots) {
@@ -183,8 +183,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 		}
 	};
 
-	// Sample (dual hash_store) over the first `sample` positions of each cursor's range.
-	const sel_t sample = 64; // 64 dual iterations = 128 positions
+	const sel_t sample = SAMPLE_SIZE / 2; // dual cursor: half as many iterations as positions
 	const sel_t half = count / 2;
 	Slot cur1(~0ULL, ~0ULL, ~0ULL);
 	Slot cur2(~0ULL, ~0ULL, ~0ULL);
@@ -224,7 +223,7 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 	}
 	n_group_runs = st1.n_runs + st2.n_runs;
 	cached_dict_sel = nullptr;
-	return (2 * tuples_in_large >= count); // success is "half of the tuples is in a long run"
+	return (5 * tuples_in_large >= 4 * count); // require >=80% of tuples in long-enough runs
 }
 
 void ClusteredAggr::SetSingleRun(data_ptr_t state, idx_t count) {
@@ -290,7 +289,8 @@ bool ClusteredAggrState::TryBuild(ClusteredAggr &clustered, const uint64_t *grou
 		skipped_opportunities--;
 		return false;
 	}
-	if (count >= 512 && clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
+	if (count >= ClusteredAggr::SAMPLE_SIZE &&
+	    clustered.TryClustered(group_ids, static_cast<sel_t>(count), arena.get(), slots.get())) {
 		skipped_opportunities = 0;
 		retry_backoff = 1;
 		return true;
