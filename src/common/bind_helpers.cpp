@@ -147,21 +147,23 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 	child_binder->bind_context.AddGenericBinding(table_index, "__copy_input", bound_statement.names,
 	                                             bound_statement.types);
 	ExpressionBinder expr_binder(*child_binder, binder.context);
-	vector<BoundOrderByNode> result;
+	vector<BoundOrderByNode> bound_orders;
 	for (auto &parsed_order : parsed_orders) {
 		const auto order_type = config.ResolveOrder(binder.context, parsed_order.type);
 		const auto null_order = config.ResolveNullOrder(binder.context, order_type, parsed_order.null_order);
-		result.emplace_back(order_type, null_order, expr_binder.Bind(parsed_order.expression));
+		bound_orders.emplace_back(order_type, null_order, expr_binder.Bind(parsed_order.expression));
 	}
 
 	// Convert BoundColumnRefExpression to BoundReferenceExpression
 	vector<Value> name_values;
 	case_insensitive_map_t<vector<reference<unique_ptr<Expression>>>> name_to_colref;
-	ExpressionIterator::VisitExpressionClassMutable(result.back().expression, ExpressionClass::BOUND_COLUMN_REF,
-	                                                [&](unique_ptr<Expression> &child) {
-		                                                name_values.push_back(child->ToString());
-		                                                name_to_colref[child->ToString()].push_back(child);
-	                                                });
+	for (auto &bound_order : bound_orders) {
+		ExpressionIterator::VisitExpressionClassMutable(bound_order.expression, ExpressionClass::BOUND_COLUMN_REF,
+		                                                [&](unique_ptr<Expression> &child) {
+			                                                name_values.push_back(child->ToString());
+			                                                name_to_colref[child->ToString()].push_back(child);
+		                                                });
+	}
 	const auto indices = ParseColumnsOrdered(name_values, bound_statement.names, loption);
 	D_ASSERT(name_values.size() == indices.size());
 	for (idx_t i = 0; i < indices.size(); i++) {
@@ -172,7 +174,7 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 		}
 	}
 
-	return result;
+	return bound_orders;
 }
 
 } // namespace duckdb
