@@ -2,8 +2,23 @@
 
 #ifndef DUCKDB_ENABLE_JEMALLOC
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+
 #ifdef __GLIBC__
 #include <malloc.h>
+#endif
+
+#ifdef DUCKDB_DEBUG_ALLOCATION
+#include "duckdb/common/mutex.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+
+#include <execinfo.h>
 #endif
 
 namespace duckdb {
