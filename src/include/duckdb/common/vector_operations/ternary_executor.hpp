@@ -29,10 +29,11 @@ struct TernaryExecutor {
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
-	static idx_t Select(Vector &a, Vector &b, Vector &c, const SelectionVector *sel, idx_t count,
-	                    SelectionVector *true_sel, SelectionVector *false_sel) {
+	static idx_t Select(Vector &a, Vector &b, Vector &c, optional_ptr<const SelectionVector> sel, idx_t count,
+	                    optional_ptr<SelectionVector> true_sel, optional_ptr<SelectionVector> false_sel) {
 		std::array<VariadicExecutor::VectorRef, 3> inputs = {{a, b, c}};
-		return VariadicExecutor::Select<OP, A_TYPE, B_TYPE, C_TYPE>(inputs, sel, count, true_sel, false_sel);
+		return VariadicExecutor::Select<OP, A_TYPE, B_TYPE, C_TYPE>(inputs, sel.get(), count, true_sel.get(),
+		                                                            false_sel.get());
 	}
 };
 

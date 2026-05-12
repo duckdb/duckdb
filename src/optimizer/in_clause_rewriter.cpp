@@ -53,9 +53,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1
-		return make_uniq<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL
-		                                                          : ExpressionType::COMPARE_NOTEQUAL,
-		                                            std::move(expr.children[0]), std::move(expr.children[1]));
+		return BoundComparisonExpression::Create(is_regular_in ? ExpressionType::COMPARE_EQUAL
+		                                                       : ExpressionType::COMPARE_NOTEQUAL,
+		                                         std::move(expr.children[0]), std::move(expr.children[1]));
 	}
 	if (expr.children.size() < IN_CLAUSE_REWRITE_THRESHOLD || !all_scalar) {
 		// low amount of children or not all scalar
@@ -64,7 +64,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
 		                                                                       : ExpressionType::CONJUNCTION_AND);
 		for (idx_t i = 1; i < expr.children.size(); i++) {
-			conjunction->children.push_back(make_uniq<BoundComparisonExpression>(
+			conjunction->children.push_back(BoundComparisonExpression::Create(
 			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
 			    expr.children[0]->Copy(), std::move(expr.children[i])));
 		}

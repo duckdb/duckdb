@@ -1194,10 +1194,11 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 		auto &expr = *expr_filter.expr;
 
 		// Handle comparison expressions (from ConstantFilter conversion)
-		if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-			auto &comp = expr.Cast<BoundComparisonExpression>();
-			if (comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				auto &constant = comp.right->Cast<BoundConstantExpression>();
+		if (BoundComparisonExpression::IsComparison(expr)) {
+			auto &comp = expr.Cast<BoundFunctionExpression>();
+			auto &right = BoundComparisonExpression::Right(comp);
+			if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+				auto &constant = right.Cast<BoundConstantExpression>();
 				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
 					auto &min_value = pq_col_stats.min_value;
 					auto &max_value = pq_col_stats.max_value;

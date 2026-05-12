@@ -319,7 +319,7 @@ void CSVWriter::WriteChunk(DataChunk &input, MemoryStream &writer, CSVReaderOpti
                            CSVWriterOptions &writer_options) {
 	vector<VectorIterator<string_t>> input_iterators;
 	for (auto &col : input.data) {
-		input_iterators.emplace_back(col.Values<string_t>(input.size()));
+		input_iterators.emplace_back(col.Values<string_t>());
 	}
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {

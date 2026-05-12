@@ -854,7 +854,7 @@ void ParquetBloomProbeProcessor::InitializeInternal(ClientContext &context, Parq
 	protocol = make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 	allocator = &BufferAllocator::Get(context);
 	auto column_type = reader.GetColumns()[probe_column_idx.GetIndex()].type;
-	auto comparison = make_uniq<BoundComparisonExpression>(
+	auto comparison = BoundComparisonExpression::Create(
 	    ExpressionType::COMPARE_EQUAL, make_uniq<BoundReferenceExpression>(probe_column_name, column_type, 0),
 	    make_uniq<BoundConstantExpression>(probe_constant.CastAs(context, column_type)));
 	filter = make_uniq<ExpressionFilter>(std::move(comparison));

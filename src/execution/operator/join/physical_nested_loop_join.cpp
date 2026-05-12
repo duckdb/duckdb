@@ -29,7 +29,7 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
 
 bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		auto entries = chunk.data[col_idx].Validity(chunk.size());
+		auto entries = chunk.data[col_idx].Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}
@@ -86,7 +86,7 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	auto bool_result = FlatVector::GetDataMutable<bool>(mark_vector);
 	auto &mask = FlatVector::ValidityMutable(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		auto entries = join_keys.data[col_idx].Validity(join_keys.size());
+		auto entries = join_keys.data[col_idx].Validity();
 		if (!entries.CanHaveNull()) {
 			continue;
 		}

@@ -524,7 +524,7 @@ jobs:
       env:
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: 1
-        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;test-utils;httpfs"
         DISABLE_SANITIZER: 1
         SMOKE_UNITTEST: build/release/test/unittest
       with:
@@ -1441,6 +1441,18 @@ jobs:
       shell: bash
       run: |
         python3 scripts/ci/run_tests.py --test-config=test/configs/prefetch_all_parquet_files.json ./build/release/test/unittest
+
+    - name: test/configs/verification_projection.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verification_projection.json ./build/release/test/unittest
+
+    - name: test/configs/verify_column_bindings.json
+      if: success() || failure()
+      shell: bash
+      run: |
+        python3 scripts/ci/run_tests.py --test-config=test/configs/verify_column_bindings.json ./build/release/test/unittest
 
     - name: test/configs/no_local_filesystem.json
       if: success() || failure()

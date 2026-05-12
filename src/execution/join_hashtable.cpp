@@ -267,7 +267,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    bool has_row_sel) {
 	// densify hashes: If there is no sel, flatten the hashes, else densify via UnifiedVectorFormat
 	if (has_row_sel) {
-		auto hashes_unified = hashes_v.Values<hash_t>(count);
+		auto hashes_unified = hashes_v.Values<hash_t>();
 		auto hashes_dense = FlatVector::Writer<idx_t>(state.hashes_dense_v, count);
 
 		for (idx_t i = 0; i < count; i++) {
@@ -744,6 +744,7 @@ void JoinHashTable::InsertPrefixRangeChunk(TupleDataChunkState &chunk_state, idx
 	Vector build_keys(layout_ptr->GetTypes()[0], count);
 	auto &sel = *FlatVector::IncrementalSelectionVector();
 	data_collection->Gather(chunk_state.row_locations, sel, count, 0, build_keys, sel, nullptr);
+	FlatVector::SetSize(build_keys, count_t(count));
 	prefix_range_filter->InsertKeys(build_keys, count, state);
 }
 
