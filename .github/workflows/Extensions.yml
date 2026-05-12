@@ -282,7 +282,8 @@ jobs:
             echo ::group::Test info
             pwd
             ls -lh build build/release || true
-            ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
+            ls -lh duckdb duckdb/scripts/ci || true
+            echo ::endgroup::
             make test_release
             ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
           # TODO
