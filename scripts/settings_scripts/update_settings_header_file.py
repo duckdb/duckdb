@@ -83,9 +83,7 @@ struct GeneratedSettingInfo {
 	static constexpr idx_t MaxSettingIndex = %s;
 };
 
-''' % (
-        max_setting_index,
-    )
+''' % (max_setting_index,)
     return start_section + new_content + end_section
 
 

@@ -241,23 +241,17 @@ def launch_test(test, list_of_tests=False):
         return
 
     print("FAILURE IN RUNNING TEST")
-    print(
-        """--------------------
+    print("""--------------------
 RETURNCODE
---------------------"""
-    )
+--------------------""")
     print(res.returncode)
-    print(
-        """--------------------
+    print("""--------------------
 STDOUT
---------------------"""
-    )
+--------------------""")
     print(stdout)
-    print(
-        """--------------------
+    print("""--------------------
 STDERR
---------------------"""
-    )
+--------------------""")
     print(stderr)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
@@ -308,12 +302,10 @@ else:
 if all_passed:
     exit(0)
 if summarize_failures and len(error_container):
-    print(
-        '''\n\n====================================================
+    print('''\n\n====================================================
 ================  FAILURES SUMMARY  ================
 ====================================================\n
-'''
-    )
+''')
     for i, error in enumerate(error_container.get_errors(), start=1):
         print(f"\n{i}:", error["test"], "\n")
         print(error["stderr"])
