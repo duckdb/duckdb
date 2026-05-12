@@ -538,14 +538,16 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 	LoopDefinition loop_def = definition;
 	loop_def.loop_idx = definition.loop_start;
 
-	loop_def.tokens.clear();
-	// expand any parameters in the loop definition
-	for (auto &token : definition.tokens) {
-		if (!ForEachTokenReplace(*runner.con, token, loop_def.tokens)) {
-			loop_def.tokens.push_back(token);
+	if (!loop_def.tokens.empty()) {
+		loop_def.tokens.clear();
+		// expand any parameters in the loop definition
+		for (auto &token : definition.tokens) {
+			if (!ForEachTokenReplace(*runner.con, token, loop_def.tokens)) {
+				loop_def.tokens.push_back(token);
+			}
 		}
+		loop_def.loop_end = loop_def.tokens.size();
 	}
-	loop_def.loop_end = loop_def.tokens.size();
 	if (loop_def.is_parallel) {
 		for (auto &running_loop : context.running_loops) {
 			if (running_loop.is_parallel) {
@@ -610,8 +612,7 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			}
 		}
 	} else {
-		bool finished = false;
-		while (!finished && !runner.finished_processing_file) {
+		while (!runner.finished_processing_file) {
 			// execute the current iteration of the loop
 			idx_t loop_index = context.running_loops.size();
 			context.running_loops.push_back(loop_def);
