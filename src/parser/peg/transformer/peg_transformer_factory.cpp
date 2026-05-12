@@ -183,16 +183,6 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
-void PEGTransformerFactory::RegisterAttach() {
-	// attach.gram
-	REGISTER_TRANSFORM(TransformAttachStatement);
-	REGISTER_TRANSFORM(TransformAttachAlias);
-	REGISTER_TRANSFORM(TransformAttachOptions);
-	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
-	REGISTER_TRANSFORM(TransformGenericCopyOption);
-	REGISTER_TRANSFORM(TransformDatabasePath);
-}
-
 void PEGTransformerFactory::RegisterComment() {
 	// comment.gram
 	REGISTER_TRANSFORM(TransformCommentStatement);
@@ -259,6 +249,8 @@ void PEGTransformerFactory::RegisterCopy() {
 	REGISTER_TRANSFORM(TransformDelimiterAsOption);
 	REGISTER_TRANSFORM(TransformEscapeAsOption);
 	REGISTER_TRANSFORM(TransformSchemaOrData);
+	REGISTER_TRANSFORM(TransformGenericCopyOptionList);
+	REGISTER_TRANSFORM(TransformGenericCopyOption);
 }
 
 void PEGTransformerFactory::RegisterCreateIndex() {
@@ -363,6 +355,8 @@ void PEGTransformerFactory::RegisterCreateTable() {
 	REGISTER_TRANSFORM(TransformCommitAction);
 	REGISTER_TRANSFORM(TransformPreserveOrDelete);
 	REGISTER_TRANSFORM(TransformGeneratedColumnType);
+	REGISTER_TRANSFORM(TransformIfNotExists);
+	REGISTER_TRANSFORM(TransformOrReplace);
 }
 
 void PEGTransformerFactory::RegisterCreateType() {
@@ -1060,7 +1054,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
-	RegisterAttach();
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();

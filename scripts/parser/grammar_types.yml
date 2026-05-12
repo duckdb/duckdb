@@ -852,6 +852,9 @@ Bool:
     - IncludeOrExcludeNulls
     - AnalyzeVerbose
     - CheckpointForce
+    - IfNotExists
+    - OrReplace
+
 
 Int64:
   type: "int64_t"
@@ -1008,11 +1011,9 @@ excluded_rules:
   - RowOrRows
   - Recursive
   - StarSymbol
-  - IfNotExists
   - PlainIdentifier
   - QuotedIdentifier
   - CreateTableColumnElement
-  - OrReplace
   - ReservedIdentifier
   - CatalogName
   - SchemaName

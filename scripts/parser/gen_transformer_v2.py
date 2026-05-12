@@ -881,13 +881,14 @@ def main():
     args = arg_parser.parse_args()
 
     gram_files_to_gen = [
-        'use.gram',
-        'transaction.gram',
+        'analyze.gram',
+        'attach.gram',
+        'call.gram',
+        'checkpoint.gram',
         'detach.gram',
         'export.gram',
-        'analyze.gram',
-        'checkpoint.gram',
-        'call.gram',
+        'transaction.gram',
+        'use.gram',
     ]
     rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]
