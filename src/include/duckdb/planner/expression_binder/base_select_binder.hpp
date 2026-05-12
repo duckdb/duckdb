@@ -40,12 +40,6 @@ protected:
 
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
 
-	bool inside_window;
-	bool bound_aggregate = false;
-
-	BoundSelectNode &node;
-
-protected:
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 
 	//! Binds a WINDOW expression and returns the result.
@@ -54,6 +48,14 @@ protected:
 
 	ProjectionIndex TryBindGroup(ParsedExpression &expr);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
+
+protected:
+	bool inside_window = false;
+	bool inside_aggregate = false;
+	bool bound_aggregate = false;
+	bool inside_aggregate_filter = false;
+
+	BoundSelectNode &node;
 };
 
 } // namespace duckdb

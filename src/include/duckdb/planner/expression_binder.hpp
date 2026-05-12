@@ -103,6 +103,11 @@ public:
 	const vector<BoundColumnReferenceInfo> &GetBoundColumns() {
 		return bound_columns;
 	}
+	void TruncateBoundColumns(idx_t count) {
+		if (bound_columns.size() > count) {
+			bound_columns.resize(count);
+		}
+	}
 
 	void SetCatalogLookupCallback(catalog_entry_callback_t callback);
 	ErrorData Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false);

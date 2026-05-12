@@ -109,11 +109,14 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 	auto name = window.GetAlias();
 
+	if (inside_aggregate) {
+		throw BinderException(window, "aggregate function calls cannot contain window function calls");
+	}
 	if (inside_window) {
-		throw BinderException(error_context, "window function calls cannot be nested");
+		throw BinderException(window, "window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		throw BinderException(error_context, "correlated columns in window functions not supported");
+		throw BinderException(window, "correlated columns in window functions not supported");
 	}
 
 	//  Look up the aggregate function in the catalog

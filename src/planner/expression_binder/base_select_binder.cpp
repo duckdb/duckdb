@@ -9,14 +9,13 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
-#include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
 namespace duckdb {
 
 BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node)
-    : ExpressionBinder(binder, context), inside_window(false), node(node) {
+    : ExpressionBinder(binder, context), node(node) {
 }
 
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -28,6 +27,9 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
+		if (inside_aggregate) {
+			return ExpressionBinder::BindExpression(expr_ptr, depth, root_expression);
+		}
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	case ExpressionClass::DEFAULT:
 		return BindResult(BinderException::Unsupported(expr, "SELECT clause cannot contain DEFAULT clause"));
@@ -39,6 +41,9 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 }
 
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
+	if (inside_aggregate) {
+		return ProjectionIndex();
+	}
 	// first check the group alias map, if expr is a ColumnRefExpression
 	auto &alias_map = node.bind_state.group_alias_map;
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {

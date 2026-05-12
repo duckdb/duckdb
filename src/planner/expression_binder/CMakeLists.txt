@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_expression_binders
   OBJECT
-  aggregate_binder.cpp
   alter_binder.cpp
   base_select_binder.cpp
   check_binder.cpp
