@@ -177,7 +177,6 @@ void PEGParser::ParseRules(const char *grammar) {
 				                        string(1, grammar[c]));
 			}
 		}
-		default:
 			break;
 		}
 		if (!grammar[c]) {
