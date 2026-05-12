@@ -1,5 +1,5 @@
-# name: test/sql/copy/partitioned/partitioned_order_by_rotation.test
-# description: test sorted-run file rotation for partitioned COPY ORDER_BY
+# name: test/sql/copy/partitioned/partitioned_order_by.test
+# description: Test sortedness within each file for COPY with PARTITION_BY and ORDER_BY
 # group: [partitioned]
 
 require parquet
