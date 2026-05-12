@@ -246,6 +246,9 @@ public:
 
 	RandomEngine random;
 
+	//! The amount of tuples considered by a scan, before applying filters
+	idx_t rows_scanned = 0;
+
 	//! Optional state for custom row group ordering
 	unique_ptr<RowGroupReorderer> reorderer;
 

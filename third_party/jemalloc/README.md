@@ -11,14 +11,14 @@ Copy jemalloc source files:
 ```sh
 cd <jemalloc_dir>
 ./configure --with-jemalloc-prefix="duckdb_je_" --with-private-namespace="duckdb_" --without-export
-cp -r src/* $DUCKDB_DIR/extension/jemalloc/jemalloc/src/
-cp -r include/* $DUCKDB_DIR/extension/jemalloc/jemalloc/include/
-cp COPYING $DUCKDB_DIR/extension/jemalloc/jemalloc/LICENSE
+cp -r src/* $DUCKDB_DIR/third_party/jemalloc/src/
+cp -r include/* $DUCKDB_DIR/third_party/jemalloc/include/
+cp COPYING $DUCKDB_DIR/third_party/jemalloc/LICENSE
 ```
 
 Remove junk:
 ```sh
-cd $DUCKDB_DIR/extension/jemalloc/jemalloc
+cd $DUCKDB_DIR/third_party/jemalloc
 find . -name "*.in" -type f -delete
 find . -name "*.sh" -type f -delete
 find . -name "*.awk" -type f -delete
@@ -65,7 +65,7 @@ Add this to `jemalloc.h`:
 We also supply our own config string in `jemalloc.c`.
 Define this just after the `#include`s.
 ```c++
-#include "malloc_ncpus.h"
+#include "duckdb/malloc_ncpus.h"
 
 #define JE_MALLOC_CONF_BUFFER_SIZE 200
 char JE_MALLOC_CONF_BUFFER[JE_MALLOC_CONF_BUFFER_SIZE];
