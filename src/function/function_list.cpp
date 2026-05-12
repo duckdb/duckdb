@@ -69,6 +69,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorFloatDivideFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorIntegerDivideFun),
 	DUCKDB_SCALAR_FUNCTION(BetweenFun),
+	DUCKDB_SCALAR_FUNCTION(ComparisonFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUbigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUintegerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUsmallintFun),

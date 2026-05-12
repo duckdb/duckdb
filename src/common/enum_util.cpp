@@ -1950,7 +1950,7 @@ const StringUtil::EnumStringLiteral *GetExpressionClassValues() {
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CASE), "BOUND_CASE" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CAST), "BOUND_CAST" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_COLUMN_REF), "BOUND_COLUMN_REF" },
-		{ static_cast<uint32_t>(ExpressionClass::BOUND_COMPARISON), "BOUND_COMPARISON" },
+		{ static_cast<uint32_t>(ExpressionClass::LEGACY_BOUND_COMPARISON), "LEGACY_BOUND_COMPARISON" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONJUNCTION), "BOUND_CONJUNCTION" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_CONSTANT), "BOUND_CONSTANT" },
 		{ static_cast<uint32_t>(ExpressionClass::BOUND_DEFAULT), "BOUND_DEFAULT" },
@@ -2883,19 +2883,20 @@ const StringUtil::EnumStringLiteral *GetLoadTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(LoadType::LOAD), "LOAD" },
 		{ static_cast<uint32_t>(LoadType::INSTALL), "INSTALL" },
-		{ static_cast<uint32_t>(LoadType::FORCE_INSTALL), "FORCE_INSTALL" }
+		{ static_cast<uint32_t>(LoadType::FORCE_INSTALL), "FORCE_INSTALL" },
+		{ static_cast<uint32_t>(LoadType::LOAD_AS), "LOAD_AS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value) {
-	return StringUtil::EnumToString(GetLoadTypeValues(), 3, "LoadType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLoadTypeValues(), 4, "LoadType", static_cast<uint32_t>(value));
 }
 
 template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value) {
-	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 3, "LoadType", value));
+	return static_cast<LoadType>(StringUtil::StringToEnum(GetLoadTypeValues(), 4, "LoadType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogContextScopeValues() {

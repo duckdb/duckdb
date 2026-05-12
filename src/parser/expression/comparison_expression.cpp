@@ -11,7 +11,7 @@ ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<Parse
 }
 
 string ComparisonExpression::ToString() const {
-	return ToString<ComparisonExpression, ParsedExpression>(*this);
+	return ToString<ParsedExpression>(type, *left, *right);
 }
 
 bool ComparisonExpression::Equal(const ComparisonExpression &a, const ComparisonExpression &b) {

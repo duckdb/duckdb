@@ -116,7 +116,7 @@ void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &ca
 }
 
 void Optimizer::Verify(LogicalOperator &op) {
-	ColumnBindingResolver::Verify(op);
+	ColumnBindingResolver::Verify(context, op);
 }
 
 // Returns true if the plan contains a DML statement (INSERT/UPDATE/DELETE/MERGE INTO)

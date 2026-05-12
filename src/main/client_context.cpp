@@ -789,7 +789,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 		}
 
 		ColumnBindingResolver resolver;
-		resolver.Verify(*plan);
+		resolver.Verify(*this, *plan);
 		resolver.VisitOperator(*plan);
 
 		plan->ResolveOperatorTypes();

@@ -121,7 +121,6 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
                                                    optional_ptr<int32_t> nanos, bool strict) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
-	// We don't understand TZ without an extension, so fail if one was provided.
 	auto success = TryConvertTimestampTZ(str, len, result, use_offset, has_offset, tz, nanos);
 	if (success != TimestampCastResult::SUCCESS) {
 		return success;
@@ -144,7 +143,14 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 			return TimestampCastResult::SUCCESS;
 		}
 	}
-	return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	// We don't understand TZ without an extension, so fail if one was provided AND we were supposed to use it.
+	if (use_offset && !tz.Empty()) {
+		return TimestampCastResult::ERROR_NON_UTC_TIMEZONE;
+	} else if (strict && !tz.Empty()) {
+		return TimestampCastResult::STRICT_UTC;
+	} else {
+		return TimestampCastResult::SUCCESS;
+	}
 }
 
 bool Timestamp::TryFromTimestampNanos(timestamp_t input, int32_t nanos, timestamp_ns_t &result) {

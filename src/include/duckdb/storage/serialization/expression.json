@@ -36,6 +36,9 @@
     "class": "LegacyBoundBetweenExpression",
     "base": "Expression",
     "enum": "LEGACY_BOUND_BETWEEN",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_between_expression.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -135,9 +138,12 @@
     "constructor": ["return_type", "binding", "depth"]
   },
   {
-    "class": "BoundComparisonExpression",
+    "class": "LegacyBoundComparisonExpression",
     "base": "Expression",
-    "enum": "BOUND_COMPARISON",
+    "enum": "LEGACY_BOUND_COMPARISON",
+    "includes": [
+      "duckdb/planner/expression/legacy_bound_comparison_expression.hpp"
+     ],
     "members": [
       {
         "id": 200,
@@ -150,7 +156,8 @@
         "type": "Expression*"
       }
     ],
-    "constructor": ["type", "left", "right"]
+    "constructor": ["type", "left", "right"],
+    "constructor_method": "LegacyBoundComparisonExpression::DeserializeLegacyExpression"
   },
   {
     "class": "BoundConjunctionExpression",

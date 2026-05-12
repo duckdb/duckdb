@@ -215,7 +215,7 @@ unique_ptr<ListComprehensionMatch> MatchListComprehensionRewrite(ClientContext &
 	return match;
 }
 
-unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &match) {
+unique_ptr<Expression> BuildListComprehensionRewrite(ClientContext &context, ListComprehensionMatch &match) {
 	auto &inner_apply = *match.inner_apply;
 	auto &list_filter_expr = *match.list_filter_expr;
 	auto &root = *match.root;
@@ -231,7 +231,12 @@ unique_ptr<Expression> BuildListComprehensionRewrite(ListComprehensionMatch &mat
 	}
 
 	auto filter_return_type = filter_children[0]->GetReturnType();
-	auto filter_bind_info = make_uniq<ListLambdaBindData>(filter_return_type, filter_expr.Copy(), inner_bind.has_index);
+	auto filter_lambda = filter_expr.Copy();
+	if (filter_lambda->GetReturnType() != LogicalType::BOOLEAN) {
+		filter_lambda = BoundCastExpression::AddCastToType(context, std::move(filter_lambda), LogicalType::BOOLEAN);
+	}
+	auto filter_bind_info =
+	    make_uniq<ListLambdaBindData>(filter_return_type, std::move(filter_lambda), inner_bind.has_index);
 
 	auto new_func = list_filter_expr.function;
 	new_func.SetReturnType(filter_return_type);
@@ -271,7 +276,7 @@ unique_ptr<Expression> ListComprehensionRewriteRule::Apply(LogicalOperator &, ve
 	if (!match) {
 		return nullptr;
 	}
-	return BuildListComprehensionRewrite(*match);
+	return BuildListComprehensionRewrite(GetContext(), *match);
 }
 
 } // namespace duckdb
