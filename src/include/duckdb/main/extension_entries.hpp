@@ -609,6 +609,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_contains", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_containsproperly", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_convexhull", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_coverageclean", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_coverageinvalidedges", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_coverageinvalidedges_agg", "spatial", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"st_coveragesimplify", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
