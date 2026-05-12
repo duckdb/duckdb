@@ -463,8 +463,7 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
-	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index,
-	                 PEGKeywordHelper::Get(context));
+	MatchState state(tokenizer.tokens, suggestions, parse_allocator, max_token_index, PEGKeywordHelper::Get(context));
 
 	auto peg_matcher = PEGMatcher::Get(context);
 	peg_matcher->Root().Match(state);

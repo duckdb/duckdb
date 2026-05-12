@@ -268,7 +268,8 @@ void Parser::ParseQuery(const string &query) {
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		try {
-			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root(), cache.GetKeywordHelper());
+			auto peg_statements =
+			    peg_factory->Transform(tokens, options, peg_matcher->Root(), cache.GetKeywordHelper());
 			for (auto &stmt : peg_statements) {
 				statements.push_back(std::move(stmt));
 			}

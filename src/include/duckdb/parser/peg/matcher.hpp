@@ -124,8 +124,8 @@ struct MatchState {
 	}
 	MatchState(MatchState &state)
 	    : tokens(state.tokens), suggestions(state.suggestions), token_index(state.token_index),
-	      allocator(state.allocator), max_token_index(state.max_token_index),
-	      keyword_helper(state.keyword_helper), preserve_identifier_case(state.preserve_identifier_case) {
+	      allocator(state.allocator), max_token_index(state.max_token_index), keyword_helper(state.keyword_helper),
+	      preserve_identifier_case(state.preserve_identifier_case) {
 	}
 
 	vector<MatcherToken> &tokens;
