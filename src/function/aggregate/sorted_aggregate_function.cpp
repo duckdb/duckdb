@@ -1,4 +1,4 @@
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"

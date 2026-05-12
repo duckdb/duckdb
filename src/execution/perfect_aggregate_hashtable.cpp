@@ -1,6 +1,6 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"

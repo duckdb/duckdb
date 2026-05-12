@@ -10,7 +10,7 @@
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 
 namespace duckdb {
 

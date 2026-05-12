@@ -13,7 +13,7 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 
 namespace duckdb {

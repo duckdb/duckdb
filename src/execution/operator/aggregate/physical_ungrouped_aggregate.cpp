@@ -2,7 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -373,11 +373,10 @@ void LocalUngroupedAggregateState::Sink(DataChunk &payload_chunk, idx_t payload_
 	} else {
 		auto count = payload_chunk.size();
 		auto state_ptr = CastPointerToValue(state.aggregate_data[aggr_idx].get());
-		auto state_data = FlatVector::GetDataMutable<uintptr_t>(repeated_state_vector);
+		auto state_data = FlatVector::Writer<uintptr_t>(repeated_state_vector, count);
 		for (idx_t i = 0; i < count; i++) {
-			state_data[i] = state_ptr;
+			state_data.WriteValue(state_ptr);
 		}
-		FlatVector::SetSize(repeated_state_vector, count_t(count));
 		aggregate.function.GetStateUpdateCallback()(start_of_input, aggr_input_data, payload_cnt, repeated_state_vector,
 		                                            count);
 	}

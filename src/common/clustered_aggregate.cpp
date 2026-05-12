@@ -1,4 +1,4 @@
-#include "duckdb/common/clustered_aggr.hpp"
+#include "duckdb/common/clustered_aggregate.hpp"
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -37,9 +37,9 @@ namespace duckdb {
 //   (we construct separate group_run[] arrays for the two cursors but concatenate in them eventually)
 
 // Slot bitfield widths come from ClusteredAggr (header). Pull them into file scope for brevity.
-constexpr int SLOT_GRP_BITS = ClusteredAggr::SLOT_GRP_BITS;
-constexpr int SLOT_CURSOR_BITS = ClusteredAggr::SLOT_CURSOR_BITS;
-constexpr int SLOT_GID_BITS = ClusteredAggr::SLOT_GID_BITS;
+constexpr idx_t SLOT_GRP_BITS = ClusteredAggr::SLOT_GRP_BITS;
+constexpr idx_t SLOT_CURSOR_BITS = ClusteredAggr::SLOT_CURSOR_BITS;
+constexpr idx_t SLOT_GID_BITS = ClusteredAggr::SLOT_GID_BITS;
 constexpr uint64_t GID_MASK = ClusteredAggr::MAX_GID_COUNT - 1;
 
 static_assert((1 << SLOT_GRP_BITS) >= STANDARD_VECTOR_SIZE, "Group IDs must be able to address vectorsize");
@@ -55,12 +55,18 @@ struct Slot { // really just a 64-bits integer
 		} bitfields;
 		uint64_t i64; // allows to increment cursor without bit extraction logic
 	} val;
+	Slot() {
+		val.i64 = ClusteredAggr::FREE_SLOT;
+	}
 	Slot(uint64_t c, uint64_t i, uint64_t g) {
 		val.bitfields.cursor = c;
 		val.bitfields.idx = i;
 		val.bitfields.gid = g;
 	}
+	//! Sentinel value meaning "no slot allocated yet" (all bitfields are 1s).
+	static const Slot UNINITIALIZED;
 };
+const Slot Slot::UNINITIALIZED {};
 
 // Each cursor uses an independent slice of the shared arena and its own slice of group_runs[].
 // Each slice has a hot region first (MAX_HOT_PER_CURSOR lists of HALF_VEC slots) followed by a
@@ -190,8 +196,8 @@ bool ClusteredAggr::TryClustered(const uint64_t *group_ids, sel_t count, sel_t *
 
 	const sel_t sample = SAMPLE_SIZE / 2; // dual cursor: half as many iterations as positions
 	const sel_t half = count / 2;
-	Slot cur1(~0ULL, ~0ULL, ~0ULL);
-	Slot cur2(~0ULL, ~0ULL, ~0ULL);
+	Slot cur1 = Slot::UNINITIALIZED;
+	Slot cur2 = Slot::UNINITIALIZED;
 	sel_t miss1 = 0, miss2 = 0, pos;
 	for (pos = 0; pos < sample && st1.n_runs < MAX_HOT_PER_CURSOR && st2.n_runs < MAX_HOT_PER_CURSOR; pos++) {
 		uint64_t gid1 = group_ids[pos] & GID_MASK;

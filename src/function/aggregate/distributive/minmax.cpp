@@ -384,7 +384,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
 	return AggregateFunction(name, {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                         BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	                         nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
 }
 
 } // namespace

@@ -593,9 +593,8 @@ bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, co
 		if (!clustered_state.TryBuild(clustered, addrs, payload.size())) {
 			return false;
 		}
-		clustered.InitializeStates([&](uint64_t gid) {
-			return reinterpret_cast<data_ptr_t>(state.dict_state.address_high_bits | gid);
-		});
+		clustered.InitializeStates(
+		    [&](uint64_t gid) { return reinterpret_cast<data_ptr_t>(state.dict_state.address_high_bits | gid); });
 	}
 
 	const bool skip_addresses = clustered_state.all_clustered;
