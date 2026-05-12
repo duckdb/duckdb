@@ -150,11 +150,11 @@ buffer_ptr<VectorBuffer> VectorArrayBuffer::ConstantSliceInternal(const LogicalT
 	return result;
 }
 
-void VectorArrayBuffer::Resize(idx_t current_size, idx_t new_size) {
+void VectorArrayBuffer::ReserveInternal(idx_t new_size) {
 	// resize the validity
 	validity.Resize(new_size);
 	// resize the child
-	child->Resize(current_size * array_size, new_size * array_size);
+	child->Reserve(new_size * array_size);
 	capacity = new_size;
 }
 

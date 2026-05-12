@@ -141,8 +141,10 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
 //! The type to directly access the selection vector of a scalar function
-typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state, SelectionVector *true_sel,
-                                          SelectionVector *false_sel);
+typedef idx_t (*scalar_function_select_t)(DataChunk &args, ExpressionState &state,
+                                          optional_ptr<const SelectionVector> sel,
+                                          optional_ptr<SelectionVector> true_sel,
+                                          optional_ptr<SelectionVector> false_sel);
 //! The type to propagate statistics for this scalar function
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 

@@ -90,7 +90,7 @@ struct StringConstructArgument {
 template <class T, class OP = StandardConstructArgument, class CTX>
 static void ConvertArguments(const Vector &input, idx_t count, idx_t arg_idx,
                              vector<vector<duckdb_fmt::basic_format_arg<CTX>>> &result_args) {
-	auto result = input.Values<T>(count);
+	auto result = input.Values<T>();
 	for (idx_t i = 0; i < count; i++) {
 		auto &args = result_args[i];
 		if (args.size() != arg_idx - 1) {
@@ -114,7 +114,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	vector<vector<duckdb_fmt::basic_format_arg<CTX>>> format_args;
 	format_args.resize(count);
 
-	auto format_data = args.data[0].Values<string_t>(count);
+	auto format_data = args.data[0].Values<string_t>();
 
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		auto &col = args.data[i];

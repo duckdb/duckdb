@@ -147,7 +147,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 				}
 
 				ColumnBindingResolver resolver;
-				resolver.Verify(*plan);
+				resolver.Verify(context, *plan);
 				resolver.VisitOperator(*plan);
 				plan->ResolveOperatorTypes();
 

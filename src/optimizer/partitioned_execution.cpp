@@ -474,7 +474,7 @@ void PartitionedExecutionSplitPipeline(Optimizer &optimizer, unique_ptr<LogicalO
 
 		// Create lower bound filter
 		if (!range.min.IsNull()) {
-			filter->expressions.emplace_back(make_uniq<BoundComparisonExpression>(
+			filter->expressions.emplace_back(BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_GREATERTHANOREQUALTO,
 			    make_uniq<BoundColumnRefExpression>(range.min.type(), column.column_binding),
 			    make_uniq<BoundConstantExpression>(range.min)));
@@ -482,7 +482,7 @@ void PartitionedExecutionSplitPipeline(Optimizer &optimizer, unique_ptr<LogicalO
 
 		// Create upper bound filter
 		if (!range.max.IsNull()) {
-			filter->expressions.emplace_back(make_uniq<BoundComparisonExpression>(
+			filter->expressions.emplace_back(BoundComparisonExpression::Create(
 			    ExpressionType::COMPARE_LESSTHAN,
 			    make_uniq<BoundColumnRefExpression>(range.max.type(), column.column_binding),
 			    make_uniq<BoundConstantExpression>(range.max)));

@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "core_functions/aggregate/quantile_state.hpp"
 
 namespace duckdb {
@@ -134,7 +135,7 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
-		const auto delta = dt - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(dt, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
@@ -149,7 +150,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
+		const auto delta = SubtractOperator::Operation<timestamp_t, MEDIAN_TYPE, int64_t>(input, median);
 		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };

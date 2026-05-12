@@ -19,7 +19,7 @@ static void CurrentTimeFunction(DataChunk &input, ExpressionState &state, Vector
 	ICUDateFunc::BindData data(state.GetContext());
 
 	dtime_tz_t result_time(dtime_t(0), 0);
-	ICUToTimeTZ::ToTimeTZ(data.calendar.get(), instant, result_time);
+	ICUToTimeTZ::ToTimeTZ(data.calendar.get(), timestamp_tz_t(instant), result_time);
 	auto val = Value::TIMETZ(result_time);
 	result.Reference(val, count_t(input.size()));
 }
