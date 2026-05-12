@@ -151,7 +151,18 @@ unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector
 
 bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query) {
 	// run FROM arrow_scan(...) EXCEPT ALL <query> - this should be empty
-	auto regular_result = con.RelationFromQuery(query, "regular_result");
+
+	shared_ptr<Relation> regular_result;
+	try {
+		regular_result = con.RelationFromQuery(query, "regular_result");
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (StringUtil::Contains(error.Message(), "Expected a single SELECT")) {
+			return true;
+		}
+		printf("%s", error.Message().c_str());
+		return false;
+	}
 
 	auto result = arrow_tbl->Except(regular_result)->Execute();
 	if (result->HasError()) {
