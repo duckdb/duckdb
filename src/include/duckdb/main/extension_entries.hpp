@@ -724,6 +724,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_simplify", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_simplifypreservetopology", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_startpoint", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"st_symdifference", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_tileenvelope", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_touches", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_transform", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
