@@ -268,8 +268,8 @@ void Parser::ParseQuery(const string &query) {
 	tokenizer.TokenizeInput();
 	if (!tokens.empty()) {
 		try {
-			auto peg_statements =
-			    peg_factory->Transform(tokens, options, peg_matcher->Root(), cache.GetKeywordHelper());
+			auto kh = cache.GetKeywordHelper();
+			auto peg_statements = peg_factory->Transform(tokens, options, peg_matcher->Root(), *kh);
 			for (auto &stmt : peg_statements) {
 				statements.push_back(std::move(stmt));
 			}
@@ -497,17 +497,17 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
 	ParserCache local_cache;
-	auto &helper = local_cache.GetKeywordHelper();
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
+	auto kh = local_cache.GetKeywordHelper();
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 		return KeywordCategory::KEYWORD_UNRESERVED;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
 		return KeywordCategory::KEYWORD_TYPE_FUNC;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
 		return KeywordCategory::KEYWORD_COL_NAME;
 	}
 	return KeywordCategory::KEYWORD_NONE;
@@ -519,7 +519,7 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 
 vector<ParserKeyword> Parser::KeywordList() {
 	ParserCache local_cache;
-	return local_cache.GetKeywordHelper().KeywordList();
+	return local_cache.GetKeywordHelper()->KeywordList();
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list, ParserOptions options) {

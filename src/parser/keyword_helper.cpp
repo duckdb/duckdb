@@ -7,17 +7,17 @@ namespace duckdb {
 
 static KeywordCategory GetPEGKeywordCategory(const string &text) {
 	ParserCache local_cache;
-	auto &helper = local_cache.GetKeywordHelper();
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
+	auto kh = local_cache.GetKeywordHelper();
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
 		return KeywordCategory::KEYWORD_RESERVED;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
 		return KeywordCategory::KEYWORD_UNRESERVED;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
 		return KeywordCategory::KEYWORD_TYPE_FUNC;
 	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
+	if (kh->KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
 		return KeywordCategory::KEYWORD_COL_NAME;
 	}
 	return KeywordCategory::KEYWORD_NONE;

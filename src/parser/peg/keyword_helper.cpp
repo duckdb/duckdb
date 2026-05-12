@@ -4,11 +4,11 @@
 #include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
-PEGKeywordHelper &PEGKeywordHelper::Get(ClientContext &context) {
+shared_ptr<PEGKeywordHelper> PEGKeywordHelper::Get(ClientContext &context) {
 	return Get(DatabaseInstance::GetDatabase(context));
 }
 
-PEGKeywordHelper &PEGKeywordHelper::Get(DatabaseInstance &db) {
+shared_ptr<PEGKeywordHelper> PEGKeywordHelper::Get(DatabaseInstance &db) {
 	return db.GetParserCache().GetKeywordHelper();
 }
 

@@ -1502,7 +1502,18 @@ shared_ptr<PEGTransformerFactory> ParserCache::GetTransformerFactory() {
 	return transformer_factory;
 }
 
-PEGKeywordHelper &ParserCache::GetKeywordHelper() {
+shared_ptr<PEGKeywordHelper> ParserCache::GetKeywordHelper() {
+	{
+		std::unique_lock<std::mutex> lock(mutex);
+		if (keyword_helper) {
+			return keyword_helper;
+		}
+	}
+	auto new_helper = make_shared_ptr<PEGKeywordHelper>();
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!keyword_helper) {
+		keyword_helper = std::move(new_helper);
+	}
 	return keyword_helper;
 }
 
@@ -1510,6 +1521,7 @@ void ParserCache::Invalidate() {
 	std::unique_lock<std::mutex> lock(mutex);
 	matcher = nullptr;
 	transformer_factory = nullptr;
+	keyword_helper = nullptr;
 }
 
 } // namespace duckdb

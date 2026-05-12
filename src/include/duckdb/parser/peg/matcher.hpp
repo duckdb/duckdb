@@ -232,15 +232,14 @@ private:
 struct ParserCache {
 	shared_ptr<PEGMatcher> GetMatcher();
 	shared_ptr<PEGTransformerFactory> GetTransformerFactory();
-	PEGKeywordHelper &GetKeywordHelper();
+	shared_ptr<PEGKeywordHelper> GetKeywordHelper();
 	void Invalidate();
-
-	PEGKeywordHelper keyword_helper;
 
 private:
 	std::mutex mutex;
 	shared_ptr<PEGMatcher> matcher;
 	shared_ptr<PEGTransformerFactory> transformer_factory;
+	shared_ptr<PEGKeywordHelper> keyword_helper;
 };
 
 } // namespace duckdb

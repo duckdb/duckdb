@@ -40,7 +40,7 @@ public:
 
 	//! Get the PEG matcher for syntax-level autocomplete.
 	virtual shared_ptr<PEGMatcher> GetPEGMatcher() = 0;
-	virtual PEGKeywordHelper &GetKeywordHelper() = 0;
+	virtual shared_ptr<PEGKeywordHelper> GetKeywordHelper() = 0;
 };
 
 //! Empty provider — returns no catalog suggestions.
@@ -80,7 +80,7 @@ public:
 	shared_ptr<PEGMatcher> GetPEGMatcher() override {
 		return cache.GetMatcher();
 	}
-	PEGKeywordHelper &GetKeywordHelper() override {
+	shared_ptr<PEGKeywordHelper> GetKeywordHelper() override {
 		return cache.GetKeywordHelper();
 	}
 

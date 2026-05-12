@@ -20,8 +20,8 @@ class PEGKeywordHelper {
 public:
 	PEGKeywordHelper();
 
-	static PEGKeywordHelper &Get(ClientContext &context);
-	static PEGKeywordHelper &Get(DatabaseInstance &db);
+	static shared_ptr<PEGKeywordHelper> Get(ClientContext &context);
+	static shared_ptr<PEGKeywordHelper> Get(DatabaseInstance &db);
 	bool KeywordCategoryType(const string &text, PEGKeywordCategory type) const;
 	void InitializeKeywordMaps();
 	bool IsKeyword(const string &text) {
