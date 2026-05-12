@@ -60,6 +60,7 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, true);
+			return true;
 		}
 
 		auto &source_cc = ArrayVector::GetEntry(source);

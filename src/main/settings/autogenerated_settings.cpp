@@ -170,6 +170,14 @@ void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &paramet
 }
 
 //===----------------------------------------------------------------------===//
+// H T T P Proxy
+//===----------------------------------------------------------------------===//
+Value HTTPProxySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.http_proxy);
+}
+
+//===----------------------------------------------------------------------===//
 // Lambda Syntax
 //===----------------------------------------------------------------------===//
 void LambdaSyntaxSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
