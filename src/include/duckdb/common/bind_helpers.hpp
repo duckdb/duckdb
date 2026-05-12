@@ -15,6 +15,7 @@ namespace duckdb {
 class Value;
 struct BoundOrderByNode;
 struct BoundStatement;
+class Binder;
 
 Value ConvertVectorToValue(vector<Value> set);
 vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &option_name);
