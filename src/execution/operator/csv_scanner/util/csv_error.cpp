@@ -1,4 +1,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
+
+#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -286,6 +288,8 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	// Cap the csv row for performance reasons.
 	if (reader_options.rejects_line_size_limit > 0 && csv_row.size() > reader_options.rejects_line_size_limit) {
 		csv_row.erase(csv_row.begin() + NumericCast<int64_t>(reader_options.rejects_line_size_limit), csv_row.end());
+		// truncating might add invalid UTF8 at the tail end - make it valid again
+		Utf8Proc::MakeValid(csv_row.data(), csv_row.size(), '.');
 	}
 	error << error_message << '\n';
 	error << fixes << '\n';
