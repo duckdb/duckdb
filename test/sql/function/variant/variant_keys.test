@@ -1,0 +1,91 @@
+# name: test/sql/function/variant/variant_keys.test
+# group: [variant]
+
+statement ok
+CREATE MACRO struct_cast_data() AS TABLE (
+	SELECT {'a': [
+		{
+			'b': 'hello',
+			'c': NULL,
+			'a': '1970/03/15'::DATE
+		},
+		{
+			'b': NULL,
+			'c': True,
+			'a': '2020/11/03'::DATE
+		}
+	]}::VARIANT AS a
+	UNION ALL
+	SELECT {'a': [
+		{
+			'b': 'this is a long string',
+			'c': False,
+			'a': '1953/9/16'::DATE
+		}
+	],
+	'b': 42,
+	'c': {
+	    'd': 'world'
+	}}::VARIANT
+);
+
+query I
+select variant_keys('{"a": 1, "b": {"c": 12, "d": 10}}');
+----
+[a, b]
+
+# No path supplied
+
+# query I
+# select variant_keys(a) from struct_cast_data();
+# ----
+# [a]
+# [a, b, c]
+
+# Single path supplied
+
+# query I
+# select variant_keys(a, 'c') from struct_cast_data();
+# ----
+# []
+# [d]
+
+# Multiple paths supplied
+
+# query I
+# select variant_keys(a, ['', 'c']) from struct_cast_data();
+# ----
+# [[a], []]
+# [[a, b, c], [d]]
+
+# Arrays do not have keys
+
+# query I
+# select variant_keys(['duck', 'goose']::VARIANT) from struct_cast_data();
+# ----
+# []
+#
+# statement ok
+# create table t1 as
+# select range, case when range % 2 = 0 then {"duck": 42}::VARIANT else {"duck": 42, "goose": 43}::VARIANT end j
+# from range(10000)
+#
+# query II
+# select range % 2 g, sum(length(variant_keys(j))) c
+# from t1
+# group by g
+# order by all
+# ----
+# 0	5000
+# 1	10000
+#
+# statement ok
+# create table t2 as
+# select range, {'duck': {'key1': 42}, 'goose': {'key1': 42, 'key2': 43}}::VARIANT j
+# from range(10000)
+#
+# query T
+# select sum(list_sum([length(l) for l in variant_keys(j, ['duck', 'goose'])])) s
+# from t2
+# ----
+# 30000

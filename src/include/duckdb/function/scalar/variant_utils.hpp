@@ -30,6 +30,21 @@ public:
 	VariantPathComponent component;
 };
 
+struct VariantKeysBindData : public FunctionData {
+public:
+	explicit VariantKeysBindData();
+	explicit VariantKeysBindData(const string &str);
+	explicit VariantKeysBindData(uint32_t index);
+	VariantKeysBindData(const VariantKeysBindData &other) = default;
+
+public:
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
+
+public:
+	VariantPathComponent component;
+};
+
 struct VariantNestedDataCollectionResult {
 public:
 	VariantNestedDataCollectionResult() : success(true) {
