@@ -10,9 +10,8 @@
 
 namespace duckdb {
 
-GroupBinder::GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, TableIndex group_index,
-                         SelectBindState &bind_state)
-    : ExpressionBinder(binder, context), node(node), bind_state(bind_state), group_index(group_index) {
+GroupBinder::GroupBinder(Binder &binder, ClientContext &context, TableIndex group_index, SelectBindState &bind_state)
+    : ExpressionBinder(binder, context), bind_state(bind_state), group_index(group_index) {
 }
 
 BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {

@@ -8,19 +8,19 @@ CREATE TABLE test_alias(a INT, b VARCHAR);
 statement ok
 INSERT INTO test_alias VALUES (1, 'hello'), (2, 'world'), (3, 'foo');
 
-# # HAVING clause: unqualified alias method call works
-# query II
-# SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING greeting.lower() != 'foo!' ORDER BY a;
-# ----
-# 1	hello!
-# 2	world!
-#
-# # HAVING clause: qualified alias method call should also work
-# query II
-# SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING alias.greeting.lower() != 'foo!' ORDER BY a;
-# ----
-# 1	hello!
-# 2	world!
+# HAVING clause: unqualified alias method call works
+query II
+SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING greeting.lower() != 'foo!' ORDER BY a;
+----
+1	hello!
+2	world!
+
+# HAVING clause: qualified alias method call should also work
+query II
+SELECT a, b || '!' AS greeting FROM test_alias GROUP BY a, b HAVING alias.greeting.lower() != 'foo!' ORDER BY a;
+----
+1	hello!
+2	world!
 
 # WHERE clause: unqualified alias method call works
 query II

@@ -502,7 +502,7 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state);
+		GroupBinder group_binder(*this, context, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
 		auto prev_can_contain_nulls = this->can_contain_nulls;
 		this->can_contain_nulls = true;

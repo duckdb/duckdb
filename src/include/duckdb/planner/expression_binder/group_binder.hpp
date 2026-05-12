@@ -19,8 +19,7 @@ struct SelectBindState;
 //! The GROUP binder is responsible for binding expressions in the GROUP BY clause
 class GroupBinder : public ExpressionBinder {
 public:
-	GroupBinder(Binder &binder, ClientContext &context, SelectNode &node, TableIndex group_index,
-	            SelectBindState &bind_state);
+	GroupBinder(Binder &binder, ClientContext &context, TableIndex group_index, SelectBindState &bind_state);
 
 public:
 	static void ReplaceSelectRef(SelectNode &node, SelectBindState &bind_state, ProjectionIndex index,
@@ -35,7 +34,6 @@ protected:
 	                              unique_ptr<ParsedExpression> &expr_ptr) override;
 
 private:
-	SelectNode &node;
 	SelectBindState &bind_state;
 
 	TableIndex group_index;
