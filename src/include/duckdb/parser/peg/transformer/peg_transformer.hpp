@@ -261,7 +261,6 @@ public:
 	void RegisterAlter();
 	void RegisterAttach();
 	void RegisterCall();
-	void RegisterCheckpoint();
 	void RegisterComment();
 	void RegisterCommon();
 	void RegisterCopy();
@@ -1265,6 +1264,13 @@ private:
 	static unique_ptr<TransformResultValue> TransformAnalyzeVerboseInternal(PEGTransformer &transformer,
 	                                                                        ParseResult &parse_result);
 	static bool TransformAnalyzeVerbose();
+	static unique_ptr<TransformResultValue> TransformCheckpointStatementInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformCheckpointStatement(const bool &checkpoint_force,
+	                                                             const string &catalog_name);
+	static unique_ptr<TransformResultValue> TransformCheckpointForceInternal(PEGTransformer &transformer,
+	                                                                         ParseResult &parse_result);
+	static bool TransformCheckpointForce();
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

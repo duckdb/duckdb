@@ -1447,7 +1447,8 @@ ExportStatement <- 'EXPORT' 'DATABASE' ExportSource? StringLiteral GenericCopyOp
 ExportSource <- CatalogName 'TO'
 ImportStatement <- 'IMPORT' 'DATABASE' StringLiteral
 
-CheckpointStatement <- 'FORCE'? 'CHECKPOINT' CatalogName?
+CheckpointStatement <- CheckpointForce? 'CHECKPOINT' CatalogName?
+CheckpointForce <- 'FORCE'
 
 CopyStatement <- 'COPY' (CopyTable / CopySelect / CopyFromDatabase)
 

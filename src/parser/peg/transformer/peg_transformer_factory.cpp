@@ -198,11 +198,6 @@ void PEGTransformerFactory::RegisterCall() {
 	REGISTER_TRANSFORM(TransformCallStatement);
 }
 
-void PEGTransformerFactory::RegisterCheckpoint() {
-	// checkpoint.gram
-	REGISTER_TRANSFORM(TransformCheckpointStatement);
-}
-
 void PEGTransformerFactory::RegisterComment() {
 	// comment.gram
 	REGISTER_TRANSFORM(TransformCommentStatement);
@@ -1072,7 +1067,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterAlter();
 	RegisterAttach();
 	RegisterCall();
-	RegisterCheckpoint();
 	RegisterComment();
 	RegisterCommon();
 	RegisterCopy();

@@ -403,12 +403,10 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
     """
     OptionalNode(ReferenceNode) -> OptionalMatcher wrapping a named rule.
     Priority order matches _classify_reference:
-      1. excluded_rules             -> keyword-only optional (Transaction?) -> skip
-      2. IDENTIFIER_OVERRIDE_RULES  -> optional identifier, extracted via HasResult()
+      1. IDENTIFIER_OVERRIDE_RULES  -> optional identifier, extracted via HasResult()
+      2. excluded_rules             -> keyword-only optional (Transaction?) -> skip
       3. rule_types                 -> optional typed rule, extracted via TransformOptional
     """
-    if name in excluded_rules:
-        return _classify_literal()
     var_name = to_snake_case(name)
     if name in IDENTIFIER_OVERRIDE_RULES:
         lines = [
@@ -419,6 +417,8 @@ def _classify_optional_reference(name, idx, rule_types, excluded_rules):
             f"\t}}",
         ]
         return SeqElement(skip=False, var_name=var_name, cpp_type="string", extraction_lines=lines)
+    if name in excluded_rules:
+        return _classify_literal()
     if name in rule_types:
         cpp_type = rule_types[name].cpp_type
         lines = [
@@ -625,6 +625,21 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
     return elements
 
 
+def _sequence_skip_reason(children, rule_types, excluded_rules):
+    """Return a specific reason string explaining why classify_sequence_elements failed."""
+    identifier_rules = set(IDENTIFIER_OVERRIDE_RULES)
+    for idx, child in enumerate(children):
+        if classify_sequence_element(child, idx, rule_types, excluded_rules) is not None:
+            continue
+        inner = child.child if isinstance(child, OptionalNode) else child
+        if isinstance(inner, ReferenceNode):
+            name = inner.name
+            if name not in rule_types and name not in excluded_rules and name not in identifier_rules:
+                return f"child rule '{name}' is missing from grammar_types.yml and excluded_rules"
+        return f"cannot classify element {idx} ({type(child).__name__})"
+    return "unknown reason"
+
+
 # ---------------------------------------------------------------------------
 # Extended sequence-rule code generation
 # ---------------------------------------------------------------------------
@@ -745,6 +760,8 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
                 implementations.append(generate_sequence_internal(rule_name, return_type, return_by_value, elements))
                 registrations.append(generate_registration(rule_name))
                 continue
+            skipped.append((rule_name, _sequence_skip_reason(ast.children, rule_types, excluded_rules)))
+            continue
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
@@ -863,7 +880,14 @@ def main():
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
     args = arg_parser.parse_args()
 
-    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram', 'export.gram', 'analyze.gram']
+    gram_files_to_gen = [
+        'use.gram',
+        'transaction.gram',
+        'detach.gram',
+        'export.gram',
+        'analyze.gram',
+        'checkpoint.gram',
+    ]
     rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]
 

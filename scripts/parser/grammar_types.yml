@@ -851,6 +851,7 @@ Bool:
     - IfExists
     - IncludeOrExcludeNulls
     - AnalyzeVerbose
+    - CheckpointForce
 
 Int64:
   type: "int64_t"

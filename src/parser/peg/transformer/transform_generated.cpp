@@ -146,6 +146,26 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeVerboseI
 	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformCheckpointStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool checkpoint_force {};
+	transformer.TransformOptional(list_pr, 0, checkpoint_force);
+	string catalog_name;
+	auto &catalog_name_opt = list_pr.Child<OptionalParseResult>(2);
+	if (catalog_name_opt.HasResult()) {
+		catalog_name = catalog_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
+	}
+	auto result = TransformCheckpointStatement(checkpoint_force, catalog_name);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformCheckpointForceInternal(PEGTransformer &transformer,
+                                                                                         ParseResult &parse_result) {
+	auto result = TransformCheckpointForce();
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 void PEGTransformerFactory::RegisterGenerated() {
 	static const TransformRule builtin_transform_rules[] = {
 	    {"UseStatement", &PEGTransformerFactory::TransformUseStatementInternal},
@@ -164,6 +184,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"AnalyzeStatement", &PEGTransformerFactory::TransformAnalyzeStatementInternal},
 	    {"AnalyzeTarget", &PEGTransformerFactory::TransformAnalyzeTargetInternal},
 	    {"AnalyzeVerbose", &PEGTransformerFactory::TransformAnalyzeVerboseInternal},
+	    {"CheckpointStatement", &PEGTransformerFactory::TransformCheckpointStatementInternal},
+	    {"CheckpointForce", &PEGTransformerFactory::TransformCheckpointForceInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
 		sql_transform_functions[rule.name] = rule.transform;
