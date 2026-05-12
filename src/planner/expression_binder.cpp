@@ -16,24 +16,15 @@ void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callbac
 	binder.SetCatalogLookupCallback(std::move(callback));
 }
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context)
     : binder(binder), context(context) {
 	InitializeStackCheck();
-	if (replace_binder) {
-		stored_binder = &binder.GetActiveBinder();
-		binder.SetActiveBinder(*this);
-	} else {
-		binder.PushExpressionBinder(*this);
-	}
+	binder.PushExpressionBinder(*this);
 }
 
 ExpressionBinder::~ExpressionBinder() {
 	if (binder.HasActiveBinder()) {
-		if (stored_binder) {
-			binder.SetActiveBinder(*stored_binder);
-		} else {
-			binder.PopExpressionBinder();
-		}
+		binder.PopExpressionBinder();
 	}
 }
 

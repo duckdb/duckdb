@@ -254,11 +254,6 @@ void Binder::PopExpressionBinder() {
 	GetActiveBinders().pop_back();
 }
 
-void Binder::SetActiveBinder(ExpressionBinder &binder) {
-	D_ASSERT(HasActiveBinder());
-	GetActiveBinders().back() = binder;
-}
-
 ExpressionBinder &Binder::GetActiveBinder() {
 	return GetActiveBinders().back();
 }

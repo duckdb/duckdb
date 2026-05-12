@@ -291,7 +291,6 @@ public:
 
 	void PushExpressionBinder(ExpressionBinder &binder);
 	void PopExpressionBinder();
-	void SetActiveBinder(ExpressionBinder &binder);
 	ExpressionBinder &GetActiveBinder();
 	bool HasActiveBinder();
 

@@ -74,7 +74,7 @@ class ExpressionBinder {
 	friend class StackChecker<ExpressionBinder>;
 
 public:
-	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
+	ExpressionBinder(Binder &binder, ClientContext &context);
 	virtual ~ExpressionBinder();
 
 	virtual bool TryResolveAliasReference(ColumnRefExpression &colref, idx_t depth, bool root_expression,
@@ -228,15 +228,12 @@ protected:
 
 	Binder &binder;
 	ClientContext &context;
-	optional_ptr<ExpressionBinder> stored_binder;
 	vector<BoundColumnReferenceInfo> bound_columns;
 	bool inside_try = false;
 
 	BindResult TryBindLambdaOrJson(FunctionExpression &function, idx_t depth, CatalogEntry &func,
 	                               const LambdaSyntaxType syntax_type);
 
-	unique_ptr<ParsedExpression> QualifyColumnNameWithManyDotsInternal(ColumnRefExpression &col_ref, ErrorData &error,
-	                                                                   idx_t &struct_extract_start);
 	virtual void ThrowIfUnnestInLambda(const ColumnBinding &column_binding);
 };
 
