@@ -233,6 +233,10 @@ bool PEGTransformerFactory::TransformDropBehavior(PEGTransformer &transformer, P
 	return StringUtil::CIEquals(choice_pr.Cast<KeywordParseResult>().keyword, "cascade");
 }
 
+bool PEGTransformerFactory::TransformIfExists(PEGTransformer &transformer, ParseResult &parse_result) {
+	return true;
+}
+
 unique_ptr<DropStatement> PEGTransformerFactory::TransformDropSecret(PEGTransformer &transformer,
                                                                      ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
