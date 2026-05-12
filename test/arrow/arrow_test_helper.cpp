@@ -269,7 +269,9 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, A
 		arrow_scan = con.TableFunction("arrow_scan", params);
 	}
 
-	return CompareResults(con, std::move(arrow_scan), query);
+	auto success = CompareResults(con, std::move(arrow_scan), query);
+	arrow_stream.release = nullptr;
+	return success;
 }
 
 } // namespace duckdb
