@@ -122,6 +122,8 @@ public:
 
 	const vector<MetaBlockPointer> &GetColumnStartPointers() const;
 
+	vector<MetaBlockPointer> GetExtraMetadataBlockPointers() const;
+
 	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo() const;
 
@@ -257,7 +259,6 @@ private:
 	unique_ptr<RowGroup> CreateNewRowGroupCopy(RowGroupCollection &new_collection, idx_t new_column_count);
 
 private:
-	friend class RowGroupCollection;
 	mutable mutex row_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	//! Whether or not each column is loaded (mutable because `const` can lazy load)

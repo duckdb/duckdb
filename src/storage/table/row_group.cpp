@@ -1312,6 +1312,21 @@ const vector<MetaBlockPointer> &RowGroup::GetColumnStartPointers() const {
 	return column_pointers;
 }
 
+vector<MetaBlockPointer> RowGroup::GetExtraMetadataBlockPointers() const {
+	vector<MetaBlockPointer> extra_metadata_block_pointers;
+	if (has_per_column_metadata_blocks) {
+		per_column_metadata_blocks.ForEachBlock(
+		    [&](idx_t, idx_t block_id) { extra_metadata_block_pointers.emplace_back(block_id, 0); });
+	} else {
+		D_ASSERT(has_metadata_blocks);
+		extra_metadata_block_pointers.reserve(extra_metadata_blocks.size());
+		for (auto &block_pointer : extra_metadata_blocks) {
+			extra_metadata_block_pointers.emplace_back(block_pointer, 0);
+		}
+	}
+	return extra_metadata_block_pointers;
+}
+
 bool RowGroup::CanReuseMetadata(RowGroupWriter &writer) const {
 	if (!Settings::Get<ExperimentalMetadataReuseSetting>(writer.GetDatabase())) {
 		// disabled by configuration
