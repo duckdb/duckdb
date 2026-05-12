@@ -1584,8 +1584,9 @@ ExplainableStatements <-
     VacuumStatement /
     SetStatement /
     ResetStatement
-AnalyzeStatement <- 'ANALYZE' 'VERBOSE'? AnalyzeTarget?
+AnalyzeStatement <- 'ANALYZE' AnalyzeVerbose? AnalyzeTarget?
 AnalyzeTarget <- BaseTableName NameList?
+AnalyzeVerbose <- 'VERBOSE'
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- 'MACRO' / 'FUNCTION'

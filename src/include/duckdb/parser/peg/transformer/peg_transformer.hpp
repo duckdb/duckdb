@@ -259,7 +259,6 @@ public:
 
 	// Registration methods
 	void RegisterAlter();
-	void RegisterAnalyze();
 	void RegisterAttach();
 	void RegisterCall();
 	void RegisterCheckpoint();
@@ -1255,6 +1254,17 @@ private:
 	static unique_ptr<TransformResultValue> TransformImportStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformImportStatement(const string &string_literal);
+	static unique_ptr<TransformResultValue> TransformAnalyzeStatementInternal(PEGTransformer &transformer,
+	                                                                          ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformAnalyzeStatement(const bool &analyze_verbose,
+	                                                          AnalyzeTarget analyze_target);
+	static unique_ptr<TransformResultValue> TransformAnalyzeTargetInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static AnalyzeTarget TransformAnalyzeTarget(unique_ptr<BaseTableRef> base_table_name,
+	                                            const vector<string> &name_list);
+	static unique_ptr<TransformResultValue> TransformAnalyzeVerboseInternal(PEGTransformer &transformer,
+	                                                                        ParseResult &parse_result);
+	static bool TransformAnalyzeVerbose();
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULES
 	//===--------------------------------------------------------------------===//

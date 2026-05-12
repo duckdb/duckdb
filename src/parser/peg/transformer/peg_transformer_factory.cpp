@@ -183,12 +183,6 @@ void PEGTransformerFactory::RegisterAlter() {
 	REGISTER_TRANSFORM(TransformResetOptions);
 }
 
-void PEGTransformerFactory::RegisterAnalyze() {
-	// analyze.gram
-	REGISTER_TRANSFORM(TransformAnalyzeStatement);
-	REGISTER_TRANSFORM(TransformAnalyzeTarget);
-}
-
 void PEGTransformerFactory::RegisterAttach() {
 	// attach.gram
 	REGISTER_TRANSFORM(TransformAttachStatement);
@@ -1077,7 +1071,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
-	RegisterAnalyze();
 	RegisterCall();
 	RegisterCheckpoint();
 	RegisterComment();

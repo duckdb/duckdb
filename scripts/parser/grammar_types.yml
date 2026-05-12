@@ -850,6 +850,7 @@ Bool:
     - PrecedingOrFollowing
     - IfExists
     - IncludeOrExcludeNulls
+    - AnalyzeVerbose
 
 Int64:
   type: "int64_t"
@@ -864,6 +865,16 @@ LogicalType:
   rules:
     - Type
     - EnumStringLiteralList
+
+# ---------------------------------------------------------------------------
+# Structs passed by value (contain move-only members like unique_ptr<T>)
+# ---------------------------------------------------------------------------
+
+AnalyzeTarget:
+  type: "AnalyzeTarget"
+  by_value: true
+  rules:
+    - AnalyzeTarget
 
 # ---------------------------------------------------------------------------
 # Overrides: rules with unique or complex return types that don't share a
@@ -966,8 +977,6 @@ overrides:
   SampleSeed: "optional_idx"
   RepeatableSample: "optional_idx"
   SampleFunction: "SampleMethod"
-  # analyze.gram
-  AnalyzeTarget: "AnalyzeTarget"
   # transaction.gram
   ReadOrWrite: "TransactionModifierType"
   ReadOnlyOrReadWrite: "TransactionModifierType"

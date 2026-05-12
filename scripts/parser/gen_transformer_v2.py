@@ -732,6 +732,11 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
                 )
             continue
 
+        # Normalize: a single non-sequence, non-choice token (e.g. a lone keyword literal)
+        # is treated as a one-element sequence so the all-skip path handles it.
+        if not isinstance(ast, (SequenceNode, ChoiceNode)):
+            ast = SequenceNode([ast])
+
         if isinstance(ast, SequenceNode):
             elements = classify_sequence_elements(ast.children, rule_types, excluded_rules)
             if elements is not None:
@@ -858,7 +863,7 @@ def main():
     arg_parser.add_argument("--write", action="store_true", help="Write generated files to disk.")
     args = arg_parser.parse_args()
 
-    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram', 'export.gram']
+    gram_files_to_gen = ['use.gram', 'transaction.gram', 'detach.gram', 'export.gram', 'analyze.gram']
     rule_types, excluded_rules = load_grammar_types(type_dir / 'grammar_types.yml')
     results = [process_gram_file(f, rule_types, excluded_rules) for f in gram_files_to_gen]
 

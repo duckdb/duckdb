@@ -119,6 +119,33 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformImportStatement
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeStatementInternal(PEGTransformer &transformer,
+                                                                                          ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool analyze_verbose {};
+	transformer.TransformOptional(list_pr, 1, analyze_verbose);
+	AnalyzeTarget analyze_target {};
+	transformer.TransformOptional(list_pr, 2, analyze_target);
+	auto result = TransformAnalyzeStatement(analyze_verbose, std::move(analyze_target));
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeTargetInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr, 0);
+	vector<string> name_list {};
+	transformer.TransformOptional(list_pr, 1, name_list);
+	auto result = TransformAnalyzeTarget(std::move(base_table_name), name_list);
+	return make_uniq<TypedTransformResult<AnalyzeTarget>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformAnalyzeVerboseInternal(PEGTransformer &transformer,
+                                                                                        ParseResult &parse_result) {
+	auto result = TransformAnalyzeVerbose();
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 void PEGTransformerFactory::RegisterGenerated() {
 	static const TransformRule builtin_transform_rules[] = {
 	    {"UseStatement", &PEGTransformerFactory::TransformUseStatementInternal},
@@ -134,6 +161,9 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},
 	    {"ExportSource", &PEGTransformerFactory::TransformExportSourceInternal},
 	    {"ImportStatement", &PEGTransformerFactory::TransformImportStatementInternal},
+	    {"AnalyzeStatement", &PEGTransformerFactory::TransformAnalyzeStatementInternal},
+	    {"AnalyzeTarget", &PEGTransformerFactory::TransformAnalyzeTargetInternal},
+	    {"AnalyzeVerbose", &PEGTransformerFactory::TransformAnalyzeVerboseInternal},
 	};
 	for (const auto &rule : builtin_transform_rules) {
 		sql_transform_functions[rule.name] = rule.transform;
