@@ -17,8 +17,7 @@ namespace duckdb {
 //! The HAVING binder is responsible for binding an expression within the HAVING clause of a SQL statement.
 class HavingBinder : public BaseSelectBinder {
 public:
-	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
-	             AggregateHandling aggregate_handling);
+	HavingBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, AggregateHandling aggregate_handling);
 
 protected:
 	BindResult BindLambdaReference(LambdaRefExpression &expr, idx_t depth);

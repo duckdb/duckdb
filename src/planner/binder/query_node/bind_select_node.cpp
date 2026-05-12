@@ -437,7 +437,8 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	result.from_table = std::move(from_table);
 	// bind the sample clause
 	if (statement.sample) {
-		result.from_table.plan = make_uniq<LogicalSample>(std::move(statement.sample), std::move(result.from_table.plan));
+		result.from_table.plan =
+		    make_uniq<LogicalSample>(std::move(statement.sample), std::move(result.from_table.plan));
 	}
 
 	// visit the select list and expand any "*" statements
@@ -468,8 +469,16 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		BindWhereStarExpression(statement.where_clause);
 		ExpressionBinder::QualifyColumnNames(*this, statement.where_clause);
 	}
-	for (auto &grp : statement.groups.group_expressions) {
+	for (idx_t i = 0; i < statement.groups.group_expressions.size(); i++) {
+		auto &grp = statement.groups.group_expressions[i];
 		ExpressionBinder::QualifyColumnNames(*this, grp);
+
+		GroupBinder::ReplaceSelectRef(statement, bind_state, ProjectionIndex(i), grp);
+
+		// set up a mapping of expression -> group index so we can map expressions in the select list / having to groups
+		auto grp_copy = grp->Copy();
+		bind_state.group_map[*grp_copy] = ProjectionIndex(i);
+		bind_state.unbound_groups.push_back(std::move(grp_copy));
 	}
 
 	if (statement.qualify) {
@@ -493,19 +502,11 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		bind_state.unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result.group_index, bind_state);
 		// Allow NULL constants in GROUP BY to maintain their SQLNULL type
 		auto prev_can_contain_nulls = this->can_contain_nulls;
 		this->can_contain_nulls = true;
 		for (idx_t i = 0; i < group_expressions.size(); i++) {
-			// we keep a copy of the unbound expression;
-			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
-			// the reason we want the unbound copy is because we want to figure out whether an expression
-			// is a group reference BEFORE binding in the SELECT/HAVING binder
-			group_binder.unbound_expression = group_expressions[i]->Copy();
-			group_binder.bind_index = ProjectionIndex(i);
-
 			// bind the groups
 			LogicalType group_type;
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
@@ -534,13 +535,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 				bind_state.collated_groups[ProjectionIndex(i)] = collated_idx;
 			}
 			result.groups.group_expressions.push_back(std::move(bound_expr));
-
-			// in the unbound expression we DO bind the table names of any ColumnRefs
-			// we do this to make sure that "table.a" and "a" are treated the same
-			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
-			// hence we convert "a" -> "test.a" in the unbound expression
-			bind_state.unbound_groups[i] = std::move(group_binder.unbound_expression);
-			bind_state.group_map[*bind_state.unbound_groups[i]] = ProjectionIndex(i);
 		}
 		this->can_contain_nulls = prev_can_contain_nulls;
 	}
