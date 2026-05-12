@@ -118,6 +118,7 @@ TO '{TEST_DIR}/ordered_partitioned_return_files'
 ----
 16384	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
 
+# larger test to check order within a file is proper
 statement ok
 CREATE TABLE large_ordered_source AS
 SELECT
@@ -128,7 +129,7 @@ FROM range(131072) tbl(i);
 statement ok
 COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
 TO '{TEST_DIR}/large_ordered_partitioned'
-(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v), ROW_GROUP_SIZE 2048);
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (p, v), ROW_GROUP_SIZE 2048);
 
 query I
 SELECT count(*) > 16 FROM glob('{TEST_DIR}/large_ordered_partitioned/p=*/*.parquet');
