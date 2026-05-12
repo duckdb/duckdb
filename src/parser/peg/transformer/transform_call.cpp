@@ -5,11 +5,13 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformCallStatement(const QualifiedName &qualified_table_function,
-						   vector<unique_ptr<ParsedExpression>> table_function_arguments) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformCallStatement(const QualifiedName &qualified_table_function,
+                                              vector<unique_ptr<ParsedExpression>> table_function_arguments) {
 	auto result = make_uniq<CallStatement>();
-	auto function_expression = make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
-	                                                         qualified_table_function.name, std::move(table_function_arguments));
+	auto function_expression =
+	    make_uniq<FunctionExpression>(qualified_table_function.catalog, qualified_table_function.schema,
+	                                  qualified_table_function.name, std::move(table_function_arguments));
 	result->function = std::move(function_expression);
 	return std::move(result);
 }
