@@ -187,3 +187,32 @@ query I
 SELECT cumulative_rows_scanned FROM metrics_output;
 ----
 0
+
+# Limitation: LIMIT stops the query pipeline before source is exhausted, so when no metrics are available
+# a zero count is returned.
+
+statement ok
+PRAGMA disabled_optimizers='late_materialization';
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM range(10) LIMIT 10;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json'
+
+query I
+SELECT cumulative_rows_scanned FROM metrics_output;
+----
+0
