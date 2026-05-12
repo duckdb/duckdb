@@ -539,11 +539,13 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
         with open_utf8(temp_partition_name, 'w+') as f:
             write_license(f)
             f.write('#include "%s"\n#include "%s"' % (header_file_name, internal_header_file_name))
-            f.write('''
+            f.write(
+                '''
 #ifndef DUCKDB_AMALGAMATION
 #error header mismatch
 #endif
-''')
+'''
+            )
             for sfile in partition:
                 f.write(sfile)
         current_partition += 1
