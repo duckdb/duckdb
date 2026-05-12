@@ -118,13 +118,16 @@ TO '{TEST_DIR}/ordered_partitioned_return_files'
 ----
 16384	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
 
+statement ok
+set threads=4
+
 # larger test to check order within a file is proper
 statement ok
 CREATE TABLE large_ordered_source AS
 SELECT
 	(i % 16)::INTEGER AS p,
 	((i * 17) % 65536)::INTEGER AS v
-FROM range(131072) tbl(i);
+FROM range(524288) tbl(i);
 
 statement ok
 COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
@@ -161,4 +164,4 @@ query I
 SELECT count(*)
 FROM read_parquet('{TEST_DIR}/large_ordered_partitioned/**/*.parquet', hive_partitioning = true);
 ----
-131072
+524288
