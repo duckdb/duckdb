@@ -520,6 +520,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"postgres_attach", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"postgres_configure_pool", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"postgres_execute", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"postgres_hstore_get", "postgres_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"postgres_hstore_to_json", "postgres_scanner", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"postgres_query", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"postgres_scan", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"postgres_scan_pushdown", "postgres_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -1128,7 +1130,9 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"pg_experimental_filter_pushdown", "postgres_scanner"},
     {"pg_idle_in_transaction_timeout_millis", "postgres_scanner"},
     {"pg_null_byte_replacement", "postgres_scanner"},
+    {"pg_oauth_token", "postgres_scanner"},
     {"pg_pages_per_task", "postgres_scanner"},
+    {"pg_pool_acquire_mode", "postgres_scanner"},
     {"pg_pool_enable_reaper_thread", "postgres_scanner"},
     {"pg_pool_enable_thread_local_cache", "postgres_scanner"},
     {"pg_pool_health_check_query", "postgres_scanner"},
@@ -1168,9 +1172,12 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
 }; // END_OF_EXTENSION_SETTINGS
 
 static constexpr ExtensionEntry EXTENSION_SECRET_TYPES[] = {
-    {"aws", "httpfs"},         {"azure", "azure"},     {"ducklake", "ducklake"},   {"gcs", "httpfs"},
-    {"huggingface", "httpfs"}, {"iceberg", "iceberg"}, {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
-    {"r2", "httpfs"},          {"s3", "httpfs"},
+    {"aws", "httpfs"},          {"azure", "azure"},
+    {"ducklake", "ducklake"},   {"gcs", "httpfs"},
+    {"huggingface", "httpfs"},  {"iceberg", "iceberg"},
+    {"mysql", "mysql_scanner"}, {"postgres", "postgres_scanner"},
+    {"r2", "httpfs"},           {"rds", "postgres_scanner"},
+    {"s3", "httpfs"},
 }; // END_OF_EXTENSION_SECRET_TYPES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
