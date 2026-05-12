@@ -625,6 +625,8 @@ void RowGroup::Scan(ScanOptions options, CollectionScanState &state, DataChunk &
 			NextVector(state);
 			continue;
 		}
+		state.rows_scanned += count;
+
 		auto &block_manager = GetBlockManager();
 		if (block_manager.Prefetch()) {
 			PrefetchState prefetch_state;
