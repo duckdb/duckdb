@@ -1,45 +1,12 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 
 namespace duckdb {
 
-static bool WindowDependsOnInputOrder(LogicalOperator &op) {
-	if (op.type != LogicalOperatorType::LOGICAL_WINDOW) {
-		return false;
-	}
-	auto &window = op.Cast<LogicalWindow>();
-	for (const auto &expr : window.expressions) {
-		auto &wexpr = expr->Cast<BoundWindowExpression>();
-		if (wexpr.partitions.empty() && wexpr.orders.empty()) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool HasInputOrderDependentWindow(LogicalOperator &op, LogicalOperator &target, bool found_window) {
-	if (&op == &target) {
-		return found_window;
-	}
-	found_window = found_window || WindowDependsOnInputOrder(op);
-	for (auto &child : op.children) {
-		if (HasInputOrderDependentWindow(*child, target, found_window)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 void CompressedMaterialization::CompressAggregate(unique_ptr<LogicalOperator> &op) {
 	auto &aggregate = op->Cast<LogicalAggregate>();
-	if (aggregate.grouping_sets.size() > 1 && HasInputOrderDependentWindow(*root, *op, false)) {
-		// Compression can change grouping-set hash aggregate iteration order, which is observable here.
-		return;
-	}
 	auto &groups = aggregate.groups;
 	column_binding_set_t group_binding_set;
 	for (const auto &group : groups) {

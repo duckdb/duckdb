@@ -34,8 +34,8 @@ explain select a, b, sum(v)::bigint as s from grouping_set_cm group by rollup(a,
 ----
 logical_opt	<REGEX>:(.*__internal_compress.*){2}
 
-# Windows without PARTITION BY/ORDER BY observe input order. Avoid compressing
-# grouping sets below them because that can change hash aggregate iteration order.
+# Windows that need an order should specify one; compressed materialization can
+# change the hash aggregate iteration order.
 statement ok
 CREATE TABLE grouping_set_window(i INT, j INT, k INT)
 
@@ -59,11 +59,29 @@ INSERT INTO grouping_set_window VALUES
 	(1,2,4),
 	(1,4,4)
 
-statement ok
+query IRII
 SELECT
 	k,
 	STDDEV_POP(i),
 	SUM(j),
-	STDDEV_SAMP(k) OVER (ROWS UNBOUNDED PRECEDING) std_wf
+	COUNT(k) OVER (ORDER BY k NULLS FIRST ROWS UNBOUNDED PRECEDING) cnt_wf
 FROM grouping_set_window
 GROUP BY ROLLUP(k)
+ORDER BY k NULLS FIRST
+----
+NULL	0.0	48	0
+1	0.0	15	1
+2	0.0	11	2
+3	0.0	11	3
+4	0.0	11	4
+
+query II
+explain SELECT
+	k,
+	STDDEV_POP(i),
+	SUM(j),
+	COUNT(k) OVER (ORDER BY k NULLS FIRST ROWS UNBOUNDED PRECEDING) cnt_wf
+FROM grouping_set_window
+GROUP BY ROLLUP(k)
+----
+logical_opt	<REGEX>:(.*__internal_compress.*)
