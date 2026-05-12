@@ -84,9 +84,12 @@ vector<idx_t> ParseColumnsOrdered(const vector<Value> &set, const vector<string>
 	}
 
 	// Maps option to bool indicating if its found and the index in the original set
-	case_insensitive_map_t<std::pair<bool, idx_t>> option_map;
+	case_insensitive_map_t<pair<bool, idx_t>> option_map;
 	for (idx_t i = 0; i < set.size(); i++) {
-		option_map[set[i].ToString()] = {false, i};
+		const auto [it, inserted] = option_map.emplace(make_pair(set[i].ToString(), make_pair(false, i)));
+		if (!inserted) {
+			throw BinderException("\"%s\" does now allow duplicate columns (found: %s)", loption, set[i].ToString());
+		}
 	}
 	result.resize(option_map.size());
 
@@ -155,22 +158,27 @@ vector<BoundOrderByNode> ParseOrderByColumns(Binder &binder, const vector<Value>
 	}
 
 	// Convert BoundColumnRefExpression to BoundReferenceExpression
-	vector<Value> name_values;
-	case_insensitive_map_t<vector<reference<unique_ptr<Expression>>>> name_to_colref;
+	vector<Value> name_set;
+	case_insensitive_map_t<pair<idx_t, vector<reference<unique_ptr<Expression>>>>> name_map;
 	for (auto &bound_order : bound_orders) {
-		ExpressionIterator::VisitExpressionClassMutable(bound_order.expression, ExpressionClass::BOUND_COLUMN_REF,
-		                                                [&](unique_ptr<Expression> &child) {
-			                                                name_values.push_back(child->ToString());
-			                                                name_to_colref[child->ToString()].push_back(child);
-		                                                });
+		ExpressionIterator::VisitExpressionClassMutable(
+		    bound_order.expression, ExpressionClass::BOUND_COLUMN_REF, [&](unique_ptr<Expression> &child) {
+			    auto [it, inserted] = name_map.emplace(make_pair(
+			        child->ToString(), make_pair(name_set.size(), vector<reference<unique_ptr<Expression>>>())));
+			    it->second.second.push_back(child);
+			    if (inserted) {
+				    // Ensure we only add unique values
+				    name_set.emplace_back(child->ToString());
+			    }
+		    });
 	}
-	const auto indices = ParseColumnsOrdered(name_values, bound_statement.names, loption);
-	D_ASSERT(name_values.size() == indices.size());
-	for (idx_t i = 0; i < indices.size(); i++) {
-		auto name = name_values[i].ToString();
-		auto &expressions = name_to_colref[name];
+	const auto indices = ParseColumnsOrdered(name_set, bound_statement.names, loption);
+	D_ASSERT(name_set.size() == indices.size());
+	for (const auto &name_value : name_set) {
+		auto name = name_value.ToString();
+		const auto &[idx, expressions] = name_map[name];
 		for (auto &expr : expressions) {
-			expr.get() = make_uniq<BoundReferenceExpression>(name, expr.get()->GetReturnType(), indices[i]);
+			expr.get() = make_uniq<BoundReferenceExpression>(name, expr.get()->GetReturnType(), indices[idx]);
 		}
 	}
 
