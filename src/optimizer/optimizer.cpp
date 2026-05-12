@@ -43,8 +43,10 @@
 #include "duckdb/optimizer/row_number_rewriter.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/optimizer/outer_join_simplification.hpp"
+#include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 #include "duckdb/optimizer/projection_pullup.hpp"
 #include "duckdb/optimizer/rule/predicate_factoring.hpp"
+#include "duckdb/optimizer/scalar_aggregate_fusion.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -169,6 +171,12 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = cte_inlining.Optimize(std::move(plan));
 	});
 
+	// Fuse repeated scalar aggregate branches over the same input into one scan
+	RunOptimizer(OptimizerType::SCALAR_AGGREGATE_FUSION, [&]() {
+		ScalarAggregateFusion scalar_aggregate_fusion(*this);
+		plan = scalar_aggregate_fusion.Optimize(std::move(plan));
+	});
+
 	// Rewrites AVG(x) -> SUM(x)/COUNT(x) and SUM(x+C) -> SUM(x) + C*COUNT(x)
 	RunOptimizer(OptimizerType::AGGREGATE_FUNCTION_REWRITER, [&]() {
 		AggregateFunctionRewriter aggregate_function_rewriter(*this);
@@ -246,6 +254,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
+	});
+
+	// Pre-aggregate SUM aggregates below joins when it can reduce join work
+	// (Q22-shaped queries: GROUP BY product_name FROM fact JOIN dim — push SUM below)
+	RunOptimizer(OptimizerType::PARTIAL_AGGREGATE_PUSHDOWN, [&]() {
+		PartialAggregatePushdown partial_aggregate_pushdown(*this);
+		partial_aggregate_pushdown.VisitOperator(plan);
 	});
 
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {

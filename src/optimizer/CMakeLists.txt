@@ -32,12 +32,14 @@ add_library_unity(
   late_materialization_helper.cpp
   optimizer.cpp
   outer_join_simplification.cpp
+  partial_aggregate_pushdown.cpp
   partitioned_execution.cpp
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
   remove_unused_columns.cpp
   row_group_pruner.cpp
+  scalar_aggregate_fusion.cpp
   statistics_propagator.cpp
   limit_pushdown.cpp
   topn_optimizer.cpp
