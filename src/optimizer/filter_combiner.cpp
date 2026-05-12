@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -785,6 +786,71 @@ static bool AdjustTemporalValue(Value &val, int64_t margin) {
 	return true;
 }
 
+static bool TryGetArithmeticFilterBound(const string &op_name, bool col_is_left, double arith_const, double comp_const,
+                                        ExpressionType &comp_type, const LogicalType &col_type, Value &out_threshold) {
+	if (!std::isfinite(arith_const) || !std::isfinite(comp_const)) {
+		return false;
+	}
+	double raw_threshold;
+	if (op_name == "*") {
+		if (arith_const == 0.0) {
+			return false;
+		}
+		raw_threshold = comp_const / arith_const;
+		if (arith_const < 0.0) {
+			comp_type = FlipComparisonExpression(comp_type);
+		}
+	} else if (op_name == "/") {
+		if (!col_is_left) {
+			return false;
+		}
+		if (arith_const == 0.0) {
+			return false;
+		}
+		raw_threshold = comp_const * arith_const;
+		if (arith_const < 0.0) {
+			comp_type = FlipComparisonExpression(comp_type);
+		}
+	} else if (op_name == "+") {
+		raw_threshold = comp_const - arith_const;
+	} else {
+		D_ASSERT(op_name == "-");
+		if (col_is_left) {
+			raw_threshold = comp_const + arith_const;
+		} else {
+			raw_threshold = arith_const - comp_const;
+			comp_type = FlipComparisonExpression(comp_type);
+		}
+	}
+	if (!std::isfinite(raw_threshold)) {
+		return false;
+	}
+
+	bool is_lower_bound = IsGreaterThan(comp_type);
+	auto threshold = std::nextafter(raw_threshold, is_lower_bound ? -std::numeric_limits<double>::infinity()
+	                                                              : +std::numeric_limits<double>::infinity());
+
+	if (col_type.IsIntegral()) {
+		double snapped = is_lower_bound ? std::ceil(threshold) : std::floor(threshold);
+		if (!std::isfinite(snapped)) {
+			return false;
+		}
+		Value hugeint_val;
+		string err_msg;
+		if (!Value::DOUBLE(snapped).DefaultTryCastAs(LogicalType::HUGEINT, hugeint_val, &err_msg)) {
+			return false;
+		}
+		comp_type =
+		    is_lower_bound ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		return hugeint_val.DefaultTryCastAs(col_type, out_threshold, &err_msg);
+	}
+	if (col_type.IsNumeric()) {
+		out_threshold = Value::DOUBLE(threshold).DefaultCastAs(col_type);
+		return !out_threshold.IsNull();
+	}
+	return false;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSet &table_filters,
                                                                    const vector<ColumnIndex> &column_ids,
                                                                    Expression &expr) {
@@ -866,6 +932,100 @@ FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSe
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+FilterPushdownResult FilterCombiner::TryPushdownArithmeticFilter(TableFilterSet &table_filters,
+                                                                 const vector<ColumnIndex> &column_ids,
+                                                                 Expression &expr) {
+	if (!BoundComparisonExpression::IsComparison(expr)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &comp = expr.Cast<BoundFunctionExpression>();
+	if (!SupportedFilterComparison(comp.GetExpressionType())) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (comp.GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &left = BoundComparisonExpression::Left(comp);
+	auto &right = BoundComparisonExpression::Right(comp);
+
+	// identify which side is the arithmetic expression and which is the scalar constant
+	bool invert = false;
+	if (right.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION && left.IsFoldable()) {
+		invert = true;
+	} else if (!(left.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION && right.IsFoldable())) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &arith_side = invert ? right : left;
+	auto &scalar_side = invert ? left : right;
+
+	auto &arith_expr = arith_side.Cast<BoundFunctionExpression>();
+	auto &op_name = arith_expr.function.GetName();
+	if (op_name != "*" && op_name != "/" && op_name != "+" && op_name != "-") {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (arith_expr.children.size() != 2) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	bool left_const = arith_expr.children[0]->IsFoldable();
+	bool right_const = arith_expr.children[1]->IsFoldable();
+	if (left_const == right_const) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	idx_t col_idx = left_const ? 1 : 0;
+	idx_t const_idx = left_const ? 0 : 1;
+	bool col_is_left = (col_idx == 0);
+
+	ProjectionIndex proj_index;
+	if (!TryGetProjectionIndex(*arith_expr.children[col_idx], proj_index)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	Value arith_const_val, comp_const_val;
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *arith_expr.children[const_idx], arith_const_val)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	if (!ExpressionExecutor::TryEvaluateScalar(context, scalar_side, comp_const_val)) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	if (!arith_const_val.type().IsFloating() || !comp_const_val.type().IsFloating()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+
+	double arith_const = arith_const_val.GetValue<double>();
+	double comp_const = comp_const_val.GetValue<double>();
+	auto base_comp = comp.GetExpressionType();
+	if (invert) {
+		base_comp = FlipComparisonExpression(base_comp);
+	}
+	auto &col_type = arith_expr.children[col_idx]->GetReturnType();
+
+	auto push_bound = [&](ExpressionType cmp) -> bool {
+		Value threshold_val;
+		if (!TryGetArithmeticFilterBound(op_name, col_is_left, arith_const, comp_const, cmp, col_type, threshold_val)) {
+			return false;
+		}
+		auto expr_filter = make_uniq<ExpressionFilter>(
+		    CreateComparisonExpression(*arith_expr.children[col_idx], cmp, std::move(threshold_val)));
+		table_filters.PushFilter(proj_index, make_uniq<OptionalFilter>(std::move(expr_filter)));
+		return true;
+	};
+
+	bool is_gt = IsGreaterThan(base_comp);
+	bool is_lt = IsLessThan(base_comp);
+	bool is_eq = base_comp == ExpressionType::COMPARE_EQUAL;
+	bool pushed = false;
+	if (is_gt || is_eq) {
+		pushed |= push_bound(is_gt ? base_comp : ExpressionType::COMPARE_GREATERTHANOREQUALTO);
+	}
+	if (is_lt || is_eq) {
+		pushed |= push_bound(is_lt ? base_comp : ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	}
+	return pushed ? FilterPushdownResult::PUSHED_DOWN_PARTIALLY : FilterPushdownResult::NO_PUSHDOWN;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
@@ -884,7 +1044,12 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
-	return TryPushdownTemporalCastFilter(table_filters, column_ids, expr);
+	pushdown_result = TryPushdownTemporalCastFilter(table_filters, column_ids, expr);
+	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
+		return pushdown_result;
+	}
+
+	return TryPushdownArithmeticFilter(table_filters, column_ids, expr);
 }
 
 void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
@@ -900,6 +1065,11 @@ void FilterCombiner::TryPushdownRelaxedFilter(TableFilterSet &table_filters, con
 		auto comparison =
 		    BoundComparisonExpression::Create(info.comparison_type, node_expr.Copy(), std::move(constant));
 		auto result = TryPushdownTemporalCastFilter(table_filters, column_ids, *comparison);
+		if (result != FilterPushdownResult::NO_PUSHDOWN) {
+			pushdown_results.push_back(result);
+			continue;
+		}
+		result = TryPushdownArithmeticFilter(table_filters, column_ids, *comparison);
 		if (result != FilterPushdownResult::NO_PUSHDOWN) {
 			pushdown_results.push_back(result);
 		}
