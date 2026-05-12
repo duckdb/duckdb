@@ -117,3 +117,47 @@ TO '{TEST_DIR}/ordered_partitioned_return_files'
 (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC), RETURN_FILES);
 ----
 16384	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
+
+statement ok
+CREATE TABLE large_ordered_source AS
+SELECT
+	(i % 16)::INTEGER AS p,
+	((i * 17) % 65536)::INTEGER AS v
+FROM range(131072) tbl(i);
+
+statement ok
+COPY (SELECT p, v FROM large_ordered_source ORDER BY v DESC, p DESC)
+TO '{TEST_DIR}/large_ordered_partitioned'
+(FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v), ROW_GROUP_SIZE 2048);
+
+query I
+SELECT count(*) > 16 FROM glob('{TEST_DIR}/large_ordered_partitioned/p=*/*.parquet');
+----
+true
+
+query I
+WITH per_file AS (
+	SELECT
+		filename,
+		p,
+		v,
+		lag(p) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_p,
+		lag(v) OVER (PARTITION BY filename ORDER BY file_row_number) AS prev_v
+	FROM read_parquet(
+		'{TEST_DIR}/large_ordered_partitioned/**/*.parquet',
+		filename = true,
+		file_row_number = true,
+		hive_partitioning = true
+	)
+)
+SELECT count(*)
+FROM per_file
+WHERE prev_p > p OR (prev_p = p AND prev_v > v);
+----
+0
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/large_ordered_partitioned/**/*.parquet', hive_partitioning = true);
+----
+131072
