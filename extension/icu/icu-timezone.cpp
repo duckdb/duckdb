@@ -121,38 +121,38 @@ timestamp_tz_t ICUCast::Operation(timestamp_t src) {
 
 template <>
 timestamp_tz_t ICUCast::Operation(timestamp_ms_t src) {
-	return CastTimestampMsToUs::Operation<timestamp_ms_t, timestamp_tz_t>(src);
+	return Cast::Operation<timestamp_ms_t, timestamp_tz_t>(src);
 }
 
 template <>
 timestamp_tz_t ICUCast::Operation(timestamp_ns_t src) {
-	return CastTimestampMsToUs::Operation<timestamp_ns_t, timestamp_tz_t>(src);
+	return Cast::Operation<timestamp_ns_t, timestamp_tz_t>(src);
 }
 
 template <>
 timestamp_tz_t ICUCast::Operation(timestamp_sec_t src) {
-	return timestamp_tz_t(CastTimestampSecToUs::Operation<timestamp_sec_t, timestamp_tz_t>(src));
+	return Cast::Operation<timestamp_sec_t, timestamp_tz_t>(src);
 }
 
 template <>
 timestamp_tz_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_t(Cast::Operation<date_t, timestamp_t>(src));
+	return Cast::Operation<date_t, timestamp_tz_t>(src);
 }
 
 template <>
 timestamp_tz_ns_t ICUCast::Operation(date_t src) {
-	return timestamp_tz_ns_t(Cast::Operation<date_t, timestamp_tz_ns_t>(src));
+	return Cast::Operation<date_t, timestamp_tz_ns_t>(src);
 }
 
 //	From TIMESTAMP_TZ to naive types
 template <>
 timestamp_sec_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToSec::Operation<timestamp_tz_t, timestamp_sec_t>(src);
+	return Cast::Operation<timestamp_tz_t, timestamp_sec_t>(src);
 }
 
 template <>
 timestamp_ms_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToMs::Operation<timestamp_tz_t, timestamp_ms_t>(src);
+	return Cast::Operation<timestamp_tz_t, timestamp_ms_t>(src);
 }
 
 template <>
@@ -162,7 +162,7 @@ timestamp_t ICUCast::Operation(timestamp_tz_t src) {
 
 template <>
 timestamp_ns_t ICUCast::Operation(timestamp_tz_t src) {
-	return CastTimestampUsToNs::Operation<timestamp_tz_t, timestamp_ns_t>(src);
+	return Cast::Operation<timestamp_tz_t, timestamp_ns_t>(src);
 }
 
 //	From TIMESTAMP_TZ_NS
