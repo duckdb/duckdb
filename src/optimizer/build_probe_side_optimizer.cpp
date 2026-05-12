@@ -282,7 +282,8 @@ bool BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
-	// then the currentoperator
+	VisitOperatorChildren(op);
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
@@ -336,8 +337,6 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
-
-	VisitOperatorChildren(op);
 }
 
 } // namespace duckdb
