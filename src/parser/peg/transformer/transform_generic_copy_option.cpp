@@ -1,6 +1,7 @@
 #include "duckdb/parser/peg/ast/generic_copy_option.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -81,14 +82,21 @@ GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransform
 			}
 		}
 
-		if (has_order_modifier) {
+		if (StringUtil::CIEquals(copy_option.name, "ORDER_BY")) {
 			for (auto &order : orders) {
 				copy_option.children.emplace_back(order.ToString());
 			}
+		} else if (has_order_modifier) {
+			throw ParserException("ORDER BY modifiers are only supported in the ORDER_BY option");
+		} else if (orders.size() == 1) {
+			SetGenericCopyOptionExpression(copy_option, std::move(orders[0].expression));
 		} else {
+			vector<unique_ptr<ParsedExpression>> children;
 			for (auto &order : orders) {
-				SetGenericCopyOptionExpression(copy_option, std::move(order.expression));
+				children.push_back(std::move(order.expression));
 			}
+			copy_option.expression =
+			    make_uniq<FunctionExpression>(INVALID_CATALOG, DEFAULT_SCHEMA, "row", std::move(children));
 		}
 	} else {
 		auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(value_choice);
