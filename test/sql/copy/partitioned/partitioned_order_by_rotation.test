@@ -11,9 +11,6 @@ statement ok
 SET partitioned_write_flush_threshold=2048;
 
 statement ok
-SET default_order='ASC';
-
-statement ok
 CREATE TABLE ordered_source AS
 SELECT 0 AS p, i::INTEGER AS v
 FROM range(16384) tbl(i);
@@ -76,7 +73,7 @@ query I
 SELECT count(*)
 FROM read_parquet('{TEST_DIR}/ordered_partitioned/**/*.parquet', hive_partitioning = true);
 ----
-4096
+16384
 
 statement ok
 COPY (SELECT p, v FROM ordered_source ORDER BY v)
@@ -119,4 +116,4 @@ COPY (SELECT p, v FROM ordered_source ORDER BY v)
 TO '{TEST_DIR}/ordered_partitioned_return_files'
 (FORMAT PARQUET, PARTITION_BY (p), ORDER_BY (v DESC), RETURN_FILES);
 ----
-4096	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
+16384	<REGEX>:.*ordered_partitioned_return_files.*p=0.*data_0[.]parquet.*ordered_partitioned_return_files.*p=0.*data_1[.]parquet.*
