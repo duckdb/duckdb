@@ -48,8 +48,6 @@ public:
 	unique_ptr<Expression> having;
 	//! QUALIFY clause
 	unique_ptr<Expression> qualify;
-	//! SAMPLE clause
-	unique_ptr<SampleOptions> sample_options;
 
 	//! The amount of columns in the final result
 	idx_t column_count;
