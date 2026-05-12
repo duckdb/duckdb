@@ -759,7 +759,7 @@ def print_output(result: GramFileResult):
             print(f"  {rule_name}: {reason}")
         print()
 
-    print("=== DECLARATIONS (peg_transformer_generated.hpp) ===")
+    print("=== DECLARATIONS (peg_transformer.hpp, between generated markers) ===")
     print("".join(result.declarations))
 
     print(f"=== IMPLEMENTATION (generated/transform_{result.gram_stem}_generated.cpp) ===")
@@ -798,37 +798,41 @@ def write_cpp(all_implementations, all_registrations):
     print(f"Wrote {cpp_path}")
 
 
+_SEPARATOR = "\t//===--------------------------------------------------------------------===//\n"
+_START_BLOCK = _SEPARATOR + "\t// START GENERATED RULES\n" + _SEPARATOR
+_END_BLOCK = _SEPARATOR + "\t// END GENERATED RULES\n" + _SEPARATOR
+
+
 def write_hpp(all_declarations):
-    hpp_path = include_peg_dir / "peg_transformer_generated.hpp"
-    # This file is #include-d inside the PEGTransformerFactory class body, so it cannot be a
-    # valid standalone header (types like SQLStatement are only in scope inside the class).
-    # The #ifdef guard makes the file a no-op when clang-tidy processes it standalone,
-    # preventing false compilation errors. The guard is defined by peg_transformer.hpp
-    # immediately before the #include.
-    content = (
-        GENERATED_HEADER
-        + "#ifdef DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
-        + "".join(all_declarations)
-        + "#endif // DUCKDB_INSIDE_PEG_TRANSFORMER_HPP\n"
-    )
-    hpp_path.write_text(content)
-    print(f"Wrote {hpp_path}")
+    hpp_path = include_peg_dir / "peg_transformer.hpp"
+    content = hpp_path.read_text()
+
+    start_idx = content.find(_START_BLOCK)
+    if start_idx == -1:
+        raise RuntimeError(f"Could not find START GENERATED RULES marker in {hpp_path}")
+    end_idx = content.find(_END_BLOCK, start_idx + len(_START_BLOCK))
+    if end_idx == -1:
+        raise RuntimeError(f"Could not find END GENERATED RULES marker in {hpp_path}")
+
+    block_end = end_idx + len(_END_BLOCK)
+    generated_block = _START_BLOCK + "".join(all_declarations) + _END_BLOCK
+    new_content = content[:start_idx] + generated_block + content[block_end:]
+    hpp_path.write_text(new_content)
+    print(f"Updated {hpp_path}")
 
 
 def print_manual_steps(all_results):
     print("\nRemaining manual steps:")
-    print(f"  1. In {include_peg_dir / 'peg_transformer.hpp'}:")
-    print("       - The #include of peg_transformer_generated.hpp must remain inside the class body")
-    print(f"  2. In {transformer_dir / 'CMakeLists.txt'}:")
+    print(f"  1. In {transformer_dir / 'CMakeLists.txt'}:")
     print("       - Ensure transform_generated.cpp is listed in add_library_unity()")
     for r in all_results:
         if not r.registrations:
             continue
         reg_lines = "".join(f"           {r.strip()}\n" for r in r.registrations)
-        print(f"  3. In peg_transformer_factory.cpp Register{r.gram_stem.capitalize()}():")
+        print(f"  2. In peg_transformer_factory.cpp Register{r.gram_stem.capitalize()}():")
         print(f"       - Replace REGISTER_TRANSFORM macros for generated rules with:")
         print(reg_lines, end="")
-        print(f"  4. In transform_{r.gram_stem}.cpp:")
+        print(f"  3. In transform_{r.gram_stem}.cpp:")
         print("       - Remove Internal wrappers now generated (keep only hand-written bodies)")
         print("       - Update body function signatures to match the generated declarations")
 
