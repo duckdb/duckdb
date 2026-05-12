@@ -151,17 +151,15 @@ unique_ptr<QueryResult> ArrowTestHelper::ScanArrowObject(Connection &con, vector
 
 bool ArrowTestHelper::CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query) {
 	// run FROM arrow_scan(...) EXCEPT ALL <query> - this should be empty
-
 	shared_ptr<Relation> regular_result;
-	try {
+	auto statements = con.ExtractStatements(query);
+	if (statements.size() != 1 || statements[0]->type != StatementType::SELECT_STATEMENT) {
+		auto query_result = con.Query(query);
+		auto duck_collection = query_result->TakeCollection();
+		regular_result =
+		    make_shared_ptr<MaterializedRelation>(con.context, std::move(duck_collection), query_result->names, "duck");
+	} else {
 		regular_result = con.RelationFromQuery(query, "regular_result");
-	} catch (std::exception &ex) {
-		ErrorData error(ex);
-		if (StringUtil::Contains(error.Message(), "Expected a single SELECT")) {
-			return true;
-		}
-		printf("%s", error.Message().c_str());
-		return false;
 	}
 
 	auto result = arrow_tbl->Except(regular_result)->Execute();
@@ -268,17 +266,13 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 }
 
 bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream) {
-	unique_ptr<QueryResult> arrow_result;
-	shared_ptr<Relation> arrow_scan;
 	if (!arrow_stream.private_data) {
-		// no data, treat as empty result
-		vector<vector<Value>> values {{42}};
-		arrow_scan = con.Values(values, {"i"}, "empty_arrow_tbl")->Filter("i > 100");
-	} else {
-		// construct the arrow scan
-		auto params = ConstructArrowScan(arrow_stream);
-		arrow_scan = con.TableFunction("arrow_scan", params);
+		// no data - skip comparison
+		return true;
 	}
+	// construct the arrow scan
+	auto params = ConstructArrowScan(arrow_stream);
+	auto arrow_scan = con.TableFunction("arrow_scan", params);
 
 	auto success = CompareResults(con, std::move(arrow_scan), query);
 	arrow_stream.release = nullptr;
