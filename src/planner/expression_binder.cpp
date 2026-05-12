@@ -16,16 +16,11 @@ void ExpressionBinder::SetCatalogLookupCallback(catalog_entry_callback_t callbac
 	binder.SetCatalogLookupCallback(std::move(callback));
 }
 
-ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context)
-    : binder(binder), context(context) {
+ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context) : binder(binder), context(context) {
 	InitializeStackCheck();
-	binder.PushExpressionBinder(*this);
 }
 
 ExpressionBinder::~ExpressionBinder() {
-	if (binder.HasActiveBinder()) {
-		binder.PopExpressionBinder();
-	}
 }
 
 void ExpressionBinder::InitializeStackCheck() {
@@ -197,8 +192,6 @@ BindResult ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> 
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
 	auto bind_error = std::move(error_message);
-	// we already failed with the current binder
-	active_binders.pop_back();
 	idx_t depth = 1;
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
