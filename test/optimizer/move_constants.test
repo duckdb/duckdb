@@ -106,7 +106,7 @@ query I nosort mult_left_negative_flip
 EXPLAIN SELECT X>5 FROM test
 ----
 
-mode skip
+mode skip instable
 
 # FIXME
 # negation
