@@ -1,6 +1,8 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -496,7 +498,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, 0);
+		AppendTransientSegment(l, 0, nullptr);
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
@@ -504,7 +506,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
-		AppendTransientSegment(l, total_rows);
+		AppendTransientSegment(l, total_rows, last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
@@ -532,7 +534,7 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count);
+			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count, append_segment);
 			state.current = data.GetLastSegment(l);
 			state.current->GetNode().InitializeAppend(state);
 		}
@@ -634,27 +636,40 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
-void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	const auto block_size = block_manager.GetBlockSize();
-	const auto type_size = GetTypeIdSize(type.InternalType());
-	auto vector_segment_size = block_size;
-
-	if (data_type == ColumnDataType::INITIAL_TRANSACTION_LOCAL && start_row == 0) {
-#if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * type_size;
-#else
-		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
-#endif
-	}
-
-	// The segment size is bound by the block size, but can be smaller.
-	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
-	allocation_size += segment_size;
-
+void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment) {
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
+	idx_t segment_size;
+	if (!prev_segment) {
+		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
+		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
+		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
+	} else {
+		segment_size = prev_segment->SegmentSize() * 2;
+	}
+
+	// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
+	// any segment below STANDARD_MASK_SIZE triggers a dead-segment overflow chain
+	if (type.InternalType() == PhysicalType::BIT) {
+		segment_size = MaxValue(segment_size, ValidityMask::STANDARD_MASK_SIZE);
+	}
+
+	// We set the segment size to the next power of two minus the block header size to
+	// ensure that we have fixed-size segments which we can group when offloading to temporary storage.
+	// FIXME: turn this into the min. temporary buffer size instead of a magical number,
+	// FIXME: once we allow offloading tinier buffers.
+	if (segment_size >= 1024) {
+		const auto block_header_size = block_manager.GetBlockHeaderSize();
+		segment_size = NextPowerOfTwo(segment_size) - block_header_size;
+	}
+
+	// The maximum segment size is always the block size of the corresponding block manager.
+	const auto block_size = block_manager.GetBlockSize();
+	segment_size = MinValue<idx_t>(block_size, segment_size);
+	allocation_size += segment_size;
+
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	auto new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }
