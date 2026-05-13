@@ -49,3 +49,5 @@ Please also refer to our [Build Guide](https://duckdb.org/docs/current/dev/build
 ## Support
 
 See the [Support Options](https://duckdblabs.com/support/) page and the dedicated [`endoflife.date`](https://endoflife.date/duckdb) page.
+
+TESTING
