@@ -43,9 +43,14 @@ unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
 
 template <class T>
 void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start,
-                                         idx_t chunk_end, EnumWriterPageState &page_state) {
+                                         idx_t chunk_end, EnumWriterPageState &page_state,
+                                         StringStatisticsState &stats) {
 	auto &mask = FlatVector::ValidityMutable(input_column);
 	auto *ptr = FlatVector::GetData<T>(input_column);
+	// stats are computed from the actual values that appear in the column,
+	// not from the full enum dictionary, so look up each row's string here
+	auto &enum_values = EnumType::GetValuesInsertOrder(Type());
+	auto string_values = FlatVector::GetData<string_t>(enum_values);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {
 			if (!page_state.written_value) {
@@ -55,6 +60,7 @@ void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input
 				page_state.written_value = true;
 			}
 			page_state.encoder.WriteValue(temp_writer, ptr[r]);
+			stats.Update(string_values[ptr[r]]);
 		}
 	}
 }
@@ -63,15 +69,16 @@ void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatist
                                    ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,
                                    idx_t chunk_end) {
 	auto &page_state = page_state_p->Cast<EnumWriterPageState>();
+	auto &stats = stats_p->Cast<StringStatisticsState>();
 	switch (Type().InternalType()) {
 	case PhysicalType::UINT8:
-		WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+		WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state, stats);
 		break;
 	case PhysicalType::UINT16:
-		WriteEnumInternal<uint16_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+		WriteEnumInternal<uint16_t>(temp_writer, input_column, chunk_start, chunk_end, page_state, stats);
 		break;
 	case PhysicalType::UINT32:
-		WriteEnumInternal<uint32_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
+		WriteEnumInternal<uint32_t>(temp_writer, input_column, chunk_start, chunk_end, page_state, stats);
 		break;
 	default:
 		throw InternalException("Unsupported internal enum type");
@@ -107,8 +114,6 @@ idx_t EnumColumnWriter::DictionarySize(PrimitiveColumnWriterState &state_p) {
 }
 
 void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats_p) {
-	auto &stats = stats_p->Cast<StringStatisticsState>();
-	// write the enum values to a dictionary page
 	auto &enum_values = EnumType::GetValuesInsertOrder(Type());
 	auto enum_count = EnumType::GetSize(Type());
 	auto string_values = FlatVector::GetData<string_t>(enum_values);
@@ -116,8 +121,6 @@ void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, Column
 	auto temp_writer = make_uniq<MemoryStream>(BufferAllocator::Get(writer.GetContext()));
 	for (idx_t r = 0; r < enum_count; r++) {
 		D_ASSERT(!FlatVector::IsNull(enum_values, r));
-		// update the statistics
-		stats.Update(string_values[r]);
 		// write this string value to the dictionary
 		temp_writer->Write<uint32_t>(string_values[r].GetSize());
 		temp_writer->WriteData(const_data_ptr_cast(string_values[r].GetData()), string_values[r].GetSize());

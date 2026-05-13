@@ -23,6 +23,7 @@
 namespace duckdb {
 class EnumWriterPageState;
 class ParquetWriter;
+class StringStatisticsState;
 class Vector;
 class WriteStream;
 struct ParquetColumnSchema;
@@ -57,7 +58,7 @@ public:
 private:
 	template <class T>
 	void WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
-	                       EnumWriterPageState &page_state);
+	                       EnumWriterPageState &page_state, StringStatisticsState &stats);
 };
 
 } // namespace duckdb
