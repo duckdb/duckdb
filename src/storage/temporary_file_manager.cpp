@@ -197,7 +197,7 @@ TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(m
 
 TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex(idx_t block_header_size) {
 	TemporaryFileLock lock(file_lock);
-	if (index_manager.GetMaxIndex() >= max_allowed_index && index_manager.HasFreeBlocks()) {
+	if (index_manager.GetMaxIndex() >= max_allowed_index && !index_manager.HasFreeBlocks()) {
 		// file is at capacity
 		return TemporaryFileIndex();
 	}
