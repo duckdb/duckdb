@@ -370,8 +370,6 @@ RecursiveProbeSidePreference BuildProbeSideOptimizer::GetRecursiveProbeSidePrefe
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
-	VisitOperatorChildren(op);
-
 	if (op.type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 		VisitOperator(*op.children[0]);
 		active_recursive_cte_indexes.push_back(op.Cast<LogicalCTE>().table_index);
@@ -379,6 +377,8 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		active_recursive_cte_indexes.pop_back();
 		return;
 	}
+
+	VisitOperatorChildren(op);
 
 	// then the currentoperator
 	switch (op.type) {
