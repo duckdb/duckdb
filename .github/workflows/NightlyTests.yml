@@ -38,6 +38,45 @@ jobs:
       - name: Preliminary checks on CI
         run: echo "Event name is ${{ github.event_name }}"
 
+  codeql-analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: check-draft
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language:
+          - actions
+          - python
+          - c-cpp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Setup proxy for registries
+        run: echo "No registry proxy configuration required"
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}
+
   linux-memory-leaks:
      name: Linux Memory Leaks
      needs: check-draft
