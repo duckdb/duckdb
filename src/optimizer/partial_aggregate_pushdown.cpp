@@ -1,13 +1,15 @@
 #include "duckdb/optimizer/partial_aggregate_pushdown.hpp"
 
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -17,11 +19,8 @@ PartialAggregatePushdown::PartialAggregatePushdown(Optimizer &optimizer_p) : opt
 struct PartialAggregatePushdownHeuristics {
 	static constexpr idx_t MIN_DIMENSION_GROUPS = 4;
 	static constexpr idx_t MIN_AGGREGATE_TO_DIMENSION_RATIO = 4;
-	// Skip pushdown when the join shrinks the fact stream to <1/N of its
-	// original size — at that point post-join aggregation is cheaper than
-	// pre-join. Calibrated against Q92, where a date_dim filter cuts web_sales
-	// from 719K to ~1k rows.
 	static constexpr idx_t MAX_JOIN_SELECTIVITY_INV = 8;
+	static constexpr idx_t MAX_EXTRA_LOWER_GROUPS = 1;
 };
 
 struct PartialAggregatePushdownInfo {
@@ -29,6 +28,7 @@ struct PartialAggregatePushdownInfo {
 	idx_t dimension_side;
 	TableIndex lower_group_index;
 	TableIndex lower_aggregate_index;
+	idx_t join_key_count;
 	unordered_set<TableIndex> side_bindings[2];
 	vector<ColumnBinding> lower_group_bindings;
 	column_binding_map_t<ColumnBinding> lower_group_map;
@@ -58,31 +58,14 @@ static bool GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	return true;
 }
 
-static bool IsSupportedAggregate(const BoundAggregateExpression &expr, bool multi_grouping_set) {
+static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (expr.IsDistinct() || expr.filter || expr.order_bys) {
 		return false;
 	}
-	// PAP needs a child expression to determine which side of the join the
-	// aggregate references — so even though COUNT_STAR is conceptually
-	// pushable (via a synthetic side-tagging column), it isn't supported
-	// here. Bail before FindAggregateSide tries to access expr.children[0].
 	if (expr.children.size() != 1) {
 		return false;
 	}
-	// Gate on the EXPORT_STATE / FINALIZE_COMBINE infrastructure rather than on
-	// a hard-coded name list (per Mark's review on duckdb#22572). Any aggregate
-	// that exposes a state-combine callback can be split into a lower partial
-	// aggregate (yielding AGGREGATE_STATE) and an upper finalize_combine_aggr
-	// (consuming that state) — that's exactly the pipeline this pass builds.
-	if (!expr.function.HasStateCombineCallback()) {
-		return false;
-	}
-	// AVG's exported state serializes to a fixed blob that overflows to `inf`
-	// on the final divide once many partial states get combined at shallow
-	// ROLLUP/CUBE levels. AggregateFunctionRewriter rewrites AVG -> SUM/COUNT
-	// for ROLLUP queries (duckdb#22572), so this guard is a defensive belt
-	// rather than the primary path.
-	if (multi_grouping_set && StringUtil::Lower(expr.function.GetName()) == "avg") {
+	if (!expr.function.HasGetStateTypeCallback()) {
 		return false;
 	}
 	return true;
@@ -105,11 +88,6 @@ static bool GetPushdownOperators(LogicalOperator &op, LogicalAggregate *&aggr, L
 		return false;
 	}
 	aggr = &op.Cast<LogicalAggregate>();
-	// Allow ROLLUP / CUBE / GROUPING SETS — the upper aggregate now copies
-	// grouping_sets verbatim from the original (see CreateUpperAggregate), so
-	// every rollup level is computed from the pre-aggregated state.
-	// Reject grouping_functions for now because the rewrite would need to
-	// shift their grouping-set bitmask through the pre-aggregation.
 	if (!aggr->grouping_functions.empty() || aggr->groups.empty() || aggr->expressions.empty()) {
 		return false;
 	}
@@ -139,14 +117,13 @@ static bool GetExpressionSide(const Expression &expr, const PartialAggregatePush
 }
 
 static bool FindAggregateSide(const LogicalAggregate &aggr, PartialAggregatePushdownInfo &info) {
-	const bool multi_grouping_set = aggr.grouping_sets.size() > 1;
 	optional_idx aggregate_side;
 	for (auto &expr : aggr.expressions) {
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			return false;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		if (!IsSupportedAggregate(aggregate, multi_grouping_set)) {
+		if (!IsSupportedAggregate(aggregate)) {
 			return false;
 		}
 		idx_t side;
@@ -284,6 +261,7 @@ static void BuildLowerGroupMap(LogicalAggregate &aggr, LogicalComparisonJoin &jo
 		GetColumnBinding(**aggregate_expr, binding);
 		AddLowerGroup(info, binding, (*aggregate_expr)->GetReturnType());
 	}
+	info.join_key_count = info.lower_group_bindings.size();
 	for (auto &group : aggr.groups) {
 		auto &group_ref = group->Cast<BoundColumnRefExpression>();
 		if (info.lower_group_map.find(group_ref.binding) != info.lower_group_map.end()) {
@@ -297,10 +275,15 @@ static void BuildLowerGroupMap(LogicalAggregate &aggr, LogicalComparisonJoin &jo
 	}
 }
 
+static bool PassesLowerGroupHeuristic(const PartialAggregatePushdownInfo &info) {
+	return info.lower_group_bindings.size() <=
+	       info.join_key_count + PartialAggregatePushdownHeuristics::MAX_EXTRA_LOWER_GROUPS;
+}
+
 static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &aggr, TableIndex lower_aggregate_index,
                                    vector<unique_ptr<Expression>> &lower_aggregates,
                                    vector<unique_ptr<Expression>> &upper_aggregates) {
-	auto combine_function = FinalizeCombineAggregateFunction::GetFunction();
+	auto combine_function = CombineAggrFun::GetFunction();
 	FunctionBinder function_binder(context);
 
 	for (idx_t i = 0; i < aggr.expressions.size(); i++) {
@@ -315,7 +298,7 @@ static bool BindPushdownAggregates(ClientContext &context, LogicalAggregate &agg
 		auto lower_binding = ColumnBinding(lower_aggregate_index, ProjectionIndex(i));
 		arguments.push_back(make_uniq<BoundColumnRefExpression>(lower_type, lower_binding));
 		auto upper_aggregate = function_binder.BindAggregateFunction(combine_function, std::move(arguments));
-		if (upper_aggregate->GetReturnType() != aggr.expressions[i]->GetReturnType()) {
+		if (upper_aggregate->GetReturnType().id() != LogicalTypeId::AGGREGATE_STATE) {
 			return false;
 		}
 		lower_aggregates.push_back(std::move(lower_aggregate));
@@ -415,11 +398,54 @@ static unique_ptr<LogicalAggregate> CreateUpperAggregate(LogicalAggregate &aggr,
 	return upper_aggr;
 }
 
+static unique_ptr<LogicalProjection> CreateFinalProjection(Optimizer &optimizer, LogicalAggregate &aggr,
+                                                           unique_ptr<LogicalAggregate> upper_aggr,
+                                                           column_binding_map_t<ColumnBinding> &replacement_map) {
+	const auto proj_index = optimizer.binder.GenerateTableIndex();
+	const auto group_count = aggr.groups.size();
+	vector<unique_ptr<Expression>> projection_expressions;
+	projection_expressions.reserve(group_count + aggr.expressions.size());
+
+	for (idx_t group_idx = 0; group_idx < group_count; group_idx++) {
+		auto group_binding = ColumnBinding(upper_aggr->group_index, ProjectionIndex(group_idx));
+		replacement_map[group_binding] = ColumnBinding(proj_index, ProjectionIndex(group_idx));
+		projection_expressions.push_back(
+		    make_uniq<BoundColumnRefExpression>(upper_aggr->types[group_idx], group_binding));
+	}
+
+	for (idx_t aggr_idx = 0; aggr_idx < aggr.expressions.size(); aggr_idx++) {
+		auto aggregate_binding = ColumnBinding(upper_aggr->aggregate_index, ProjectionIndex(aggr_idx));
+		replacement_map[aggregate_binding] = ColumnBinding(proj_index, ProjectionIndex(group_count + aggr_idx));
+		auto aggregate_type = upper_aggr->types[group_count + aggr_idx];
+		auto aggregate_ref = make_uniq<BoundColumnRefExpression>(aggregate_type, aggregate_binding);
+		auto final_expression = optimizer.BindScalarFunction("finalize", std::move(aggregate_ref));
+		if (final_expression->GetReturnType() != aggr.expressions[aggr_idx]->GetReturnType()) {
+			return nullptr;
+		}
+		projection_expressions.push_back(std::move(final_expression));
+	}
+
+	auto projection = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
+	if (upper_aggr->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(upper_aggr->estimated_cardinality);
+	}
+	projection->children.push_back(std::move(upper_aggr));
+	projection->ResolveOperatorTypes();
+	return projection;
+}
+
 void PartialAggregatePushdown::VisitOperator(unique_ptr<LogicalOperator> &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
-	if (TryPushdownAggregate(op)) {
-		LogicalOperatorVisitor::VisitOperator(op);
+	TryPushdownAggregate(op);
+}
+
+unique_ptr<Expression> PartialAggregatePushdown::VisitReplace(BoundColumnRefExpression &expr,
+                                                              unique_ptr<Expression> *expr_ptr) {
+	auto entry = replacement_map.find(expr.binding);
+	if (entry != replacement_map.end()) {
+		expr.binding = entry->second;
 	}
+	return nullptr;
 }
 
 bool PartialAggregatePushdown::TryPushdownAggregate(unique_ptr<LogicalOperator> &op) {
@@ -436,6 +462,9 @@ bool PartialAggregatePushdown::TryPushdownAggregate(unique_ptr<LogicalOperator> 
 	info.lower_group_index = optimizer.binder.GenerateTableIndex();
 	info.lower_aggregate_index = optimizer.binder.GenerateTableIndex();
 	BuildLowerGroupMap(*aggr, *join, info);
+	if (!PassesLowerGroupHeuristic(info)) {
+		return false;
+	}
 
 	vector<unique_ptr<Expression>> lower_aggregates;
 	vector<unique_ptr<Expression>> upper_aggregates;
@@ -446,7 +475,12 @@ bool PartialAggregatePushdown::TryPushdownAggregate(unique_ptr<LogicalOperator> 
 
 	auto lower_aggr = CreateLowerAggregate(*aggr, *join, info, std::move(lower_aggregates));
 	auto new_join = CreateJoin(*join, info, std::move(lower_aggr));
-	op = CreateUpperAggregate(*aggr, std::move(new_join), info, std::move(upper_aggregates));
+	auto upper_aggr = CreateUpperAggregate(*aggr, std::move(new_join), info, std::move(upper_aggregates));
+	auto final_projection = CreateFinalProjection(optimizer, *aggr, std::move(upper_aggr), replacement_map);
+	if (!final_projection) {
+		return false;
+	}
+	op = std::move(final_projection);
 	return true;
 }
 
