@@ -57,14 +57,14 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr, bool mult
 	if (expr.IsDistinct() || expr.filter || expr.order_bys) {
 		return false;
 	}
-	auto name = StringUtil::Lower(expr.function.GetName());
-	if (name == "count_star") {
-		// COUNT(*) — no child expressions allowed
-		return expr.children.empty();
-	}
+	// PAP needs a child expression to determine which side of the join the
+	// aggregate references — so even though COUNT_STAR is conceptually
+	// pushable (via a synthetic side-tagging column), it isn't supported
+	// here. Bail before FindAggregateSide tries to access expr.children[0].
 	if (expr.children.size() != 1) {
 		return false;
 	}
+	auto name = StringUtil::Lower(expr.function.GetName());
 	// SUM / COUNT / MIN / MAX have non-destructive combine semantics — their
 	// AGGREGATE_STATE pipeline produces numerically exact results regardless of
 	// how many times finalize_combine_aggr is invoked across grouping sets.
