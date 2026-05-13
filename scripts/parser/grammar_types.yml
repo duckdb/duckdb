@@ -854,6 +854,7 @@ Bool:
     - CheckpointForce
     - IfNotExists
     - OrReplace
+    - DeallocatePrepare
 
 
 Int64:

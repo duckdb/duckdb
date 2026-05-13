@@ -269,7 +269,6 @@ public:
 	void RegisterCreateType();
 	void RegisterCreateView();
 	void RegisterCreateTrigger();
-	void RegisterDeallocate();
 	void RegisterDelete();
 	void RegisterDescribe();
 	void RegisterDrop();
@@ -1247,6 +1246,13 @@ private:
 	static unique_ptr<TransformResultValue> TransformSecretNameInternal(PEGTransformer &transformer,
 	                                                                    ParseResult &parse_result);
 	static string TransformSecretName(const string &col_id);
+	static unique_ptr<TransformResultValue> TransformDeallocateStatementInternal(PEGTransformer &transformer,
+	                                                                             ParseResult &parse_result);
+	static unique_ptr<SQLStatement> TransformDeallocateStatement(const bool &deallocate_prepare,
+	                                                             const string &identifier);
+	static unique_ptr<TransformResultValue> TransformDeallocatePrepareInternal(PEGTransformer &transformer,
+	                                                                           ParseResult &parse_result);
+	static bool TransformDeallocatePrepare();
 	static unique_ptr<TransformResultValue> TransformDetachStatementInternal(PEGTransformer &transformer,
 	                                                                         ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDetachStatement(const bool &if_exists, const string &catalog_name);

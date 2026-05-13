@@ -374,11 +374,6 @@ void PEGTransformerFactory::RegisterCreateTrigger() {
 	REGISTER_TRANSFORM(TransformTriggerBody);
 }
 
-void PEGTransformerFactory::RegisterDeallocate() {
-	// deallocate.gram
-	REGISTER_TRANSFORM(TransformDeallocateStatement);
-}
-
 void PEGTransformerFactory::RegisterDelete() {
 	// delete.gram
 	REGISTER_TRANSFORM(TransformDeleteStatement);
@@ -1053,7 +1048,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateType();
 	RegisterCreateView();
 	RegisterCreateTrigger();
-	RegisterDeallocate();
 	RegisterDelete();
 	RegisterDescribe();
 	RegisterDrop();

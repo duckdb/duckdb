@@ -141,6 +141,22 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformSecretNameInter
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::TransformDeallocateStatementInternal(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	bool deallocate_prepare {};
+	transformer.TransformOptional(list_pr, 1, deallocate_prepare);
+	auto identifier = list_pr.Child<IdentifierParseResult>(2).identifier;
+	auto result = TransformDeallocateStatement(deallocate_prepare, identifier);
+	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDeallocatePrepareInternal(PEGTransformer &transformer,
+                                                                                           ParseResult &parse_result) {
+	auto result = TransformDeallocatePrepare();
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatementInternal(PEGTransformer &transformer,
                                                                                          ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -273,6 +289,8 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"CreateSecretStmt", &PEGTransformerFactory::TransformCreateSecretStmtInternal},
 	    {"SecretStorageSpecifier", &PEGTransformerFactory::TransformSecretStorageSpecifierInternal},
 	    {"SecretName", &PEGTransformerFactory::TransformSecretNameInternal},
+	    {"DeallocateStatement", &PEGTransformerFactory::TransformDeallocateStatementInternal},
+	    {"DeallocatePrepare", &PEGTransformerFactory::TransformDeallocatePrepareInternal},
 	    {"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
 	    {"ExportStatement", &PEGTransformerFactory::TransformExportStatementInternal},
 	    {"ExportSource", &PEGTransformerFactory::TransformExportSourceInternal},

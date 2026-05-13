@@ -1031,7 +1031,8 @@ PragmaAssign <- SettingName '=' VariableList
 PragmaFunction <- PragmaName PragmaParameters?
 PragmaParameters <- Parens(List(Expression))
 
-DeallocateStatement <- 'DEALLOCATE' 'PREPARE'? Identifier
+DeallocateStatement <- 'DEALLOCATE' DeallocatePrepare? Identifier
+DeallocatePrepare <- 'PREPARE'
 
 PrepareStatement <- 'PREPARE' Identifier TypeList? 'AS' Statement
 

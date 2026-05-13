@@ -13,7 +13,10 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 	return Value();
 }
 
-unique_ptr<CreateStatement> PEGTransformerFactory::TransformCreateSecretStmt(const bool &if_not_exists, const string &secret_name, const string &secret_storage_specifier, vector<GenericCopyOption> generic_copy_option_list) {
+unique_ptr<CreateStatement>
+PEGTransformerFactory::TransformCreateSecretStmt(const bool &if_not_exists, const string &secret_name,
+                                                 const string &secret_storage_specifier,
+                                                 vector<GenericCopyOption> generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	auto info = make_uniq<CreateSecretInfo>(on_conflict, SecretPersistType::DEFAULT);

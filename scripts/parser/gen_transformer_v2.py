@@ -886,37 +886,54 @@ def _norm_ws(s):
     return re.sub(r'\s+', ' ', s).strip()
 
 
-def _find_already_implemented(gram_stem, body_stubs):
-    """Return set of rule_names whose body stub signature matches what is in transform_{gram_stem}.cpp.
+def _check_implementations(gram_stem, body_stubs):
+    """Check which body stubs are implemented in transform_{gram_stem}.cpp.
 
-    Matches from PEGTransformerFactory:: onwards (normalized whitespace) so that return types
-    split across lines and multi-line param lists are handled correctly. A function with the
-    right name but wrong signature (e.g. an old Internal wrapper) is NOT considered implemented.
+    Compares from PEGTransformerFactory:: onwards (normalized whitespace) so that return types
+    split across lines and multi-line param lists are handled correctly.
+
+    Returns (implemented, mismatched):
+      implemented: set of rule_names whose signature exactly matches the stub
+      mismatched:  set of rule_names that exist in the file but with a different signature
     """
     cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
     if not cpp_path.exists():
-        return set()
+        return set(), set()
     text = cpp_path.read_text()
     prefix = 'PEGTransformerFactory::'
     implemented = set()
+    mismatched = set()
     for rule_name, stub_cpp in body_stubs:
-        first_line = stub_cpp.split('\n')[0]
-        expected = _norm_ws(first_line.rstrip('{').rstrip())
         actual = _extract_func_signature(text, f'Transform{rule_name}')
         if actual is None:
             continue
+        first_line = stub_cpp.split('\n')[0]
+        expected = _norm_ws(first_line.rstrip('{').rstrip())
         actual = _norm_ws(actual)
         expected_norm = expected[expected.find(prefix) :] if prefix in expected else expected
         actual_norm = actual[actual.find(prefix) :] if prefix in actual else actual
         if expected_norm == actual_norm:
             implemented.add(rule_name)
-    return implemented
+        else:
+            mismatched.add(rule_name)
+    return implemented, mismatched
 
 
 def print_manual_steps(all_results):
     print("\nRemaining manual steps:")
 
     step = 1
+
+    all_skipped = [(r.gram_stem, rule_name, reason) for r in all_results for rule_name, reason in r.skipped]
+    if all_skipped:
+        print(f"\n  {step}. Skipped rules (not auto-generated):")
+        current_stem = None
+        for gram_stem, rule_name, reason in all_skipped:
+            if gram_stem != current_stem:
+                print(f"\n       {gram_stem}.gram:")
+                current_stem = gram_stem
+            print(f"         {rule_name}: {reason}")
+        step += 1
 
     transform_files = [r for r in all_results if r.declarations]
     if transform_files:
@@ -929,13 +946,28 @@ def print_manual_steps(all_results):
     has_any_stubs = any(r.body_stubs for r in all_results)
     if has_any_stubs:
         pending_stubs = []
+        sig_mismatches = []
         for r in all_results:
             if not r.body_stubs:
                 continue
-            already = _find_already_implemented(r.gram_stem, r.body_stubs)
+            implemented, mismatched = _check_implementations(r.gram_stem, r.body_stubs)
             for rule_name, stub in r.body_stubs:
-                if rule_name not in already:
+                if rule_name in implemented:
+                    pass
+                elif rule_name in mismatched:
+                    sig_mismatches.append((r.gram_stem, rule_name, stub.split('\n')[0].rstrip('{').rstrip()))
+                else:
                     pending_stubs.append((r.gram_stem, stub))
+
+        if sig_mismatches:
+            print(f"\n  {step}. Signature mismatches (function exists but params don't match generated declaration):")
+            current_stem = None
+            for gram_stem, rule_name, expected_sig in sig_mismatches:
+                if gram_stem != current_stem:
+                    print(f"\n       transform_{gram_stem}.cpp:")
+                    current_stem = gram_stem
+                print(f"         Transform{rule_name} -- update to: {expected_sig}")
+            step += 1
 
         if pending_stubs:
             print(f"\n  {step}. Body stubs to implement (copy into respective transform_*.cpp files):")
@@ -948,7 +980,8 @@ def print_manual_steps(all_results):
                     print(f"       {line}")
                 print()
             step += 1
-        else:
+
+        if not sig_mismatches and not pending_stubs:
             print(f"\n  {step}. All user-implemented body stubs already found in transform_*.cpp files.")
             step += 1
 
@@ -981,6 +1014,7 @@ def main():
         'checkpoint.gram',
         'create_schema.gram',
         'create_secret.gram',
+        'deallocate.gram',
         'detach.gram',
         'export.gram',
         'transaction.gram',
