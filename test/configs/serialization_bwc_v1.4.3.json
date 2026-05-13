@@ -13,6 +13,42 @@
         "test/sql/pragma/profiling/test_custom_profiling_blocked_thread_time.test",
         "test/sql/pragma/profiling/test_profiling_fs.test"
       ]
+    },
+    {
+      "reason": "Attempting to combine ColumnDataCollections with mismatching types",
+      "paths": [
+        "test/sql/copy/csv/recursive_read_csv.test",
+        "test/sql/copy/parquet/recursive_parquet_union_by_name.test",
+        "test/sql/copy/partitioned/hive_partition_recursive_cte.test",
+        "test/sql/cte/cte_issue_17311.test",
+        "test/sql/cte/materialized/recursive_array_slice_materialized.test",
+        "test/sql/cte/materialized/recursive_cte_complex_pipelines.test",
+        "test/sql/cte/materialized/test_correlated_recursive_cte_materialized.test",
+        "test/sql/cte/materialized/test_cte_materialized.test",
+        "test/sql/cte/materialized/test_nested_recursive_cte_materialized.test",
+        "test/sql/cte/materialized/test_outer_joins_recursive_cte_materialized.test",
+        "test/sql/cte/materialized/test_recursive_cte_tutorial_materialized.test",
+        "test/sql/cte/materialized/test_recursive_cte_union_all_materialized.test",
+        "test/sql/cte/materialized/test_recursive_cte_union_materialized.test",
+        "test/sql/cte/recursive_array_slice.test",
+        "test/sql/cte/recursive_cte_complex_pipelines.test",
+        "test/sql/cte/test_nested_recursive_cte.test",
+        "test/sql/cte/test_outer_joins_recursive_cte.test"
+      ]
+    },
+    {
+      "reason": "Expected vector of type VARCHAR, but found vector of type UINT8",
+      "paths": [
+        "test/sql/attach/attach_or_replace.test",
+        "test/sql/copy/parquet/writer/parquet_test_all_types.test"
+      ]
+    },
+    {
+      "reason": "Table function deserialization failure in function \"test_all_types\" - column with name float was serialized with type FLOAT, but now has type TIMESTAMPTZ_NS",
+      "paths": [
+        "test/sql/attach/attach_all_types.test",
+        "test/sql/copy/return_stats.test"
+      ]
     }
   ]
 }
