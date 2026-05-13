@@ -9,20 +9,32 @@
 #pragma once
 
 #include "duckdb/storage/statistics/string_stats.hpp"
+#include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
 
 namespace duckdb {
 
 struct StringStatsWriter {
-	StringStatsWriter(bool is_varchar_p) : is_varchar(is_varchar_p) {
-		for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
-			min[i] = 0;
-			max[i] = 0xFF;
+	friend class StringStats;
+
+	explicit StringStatsWriter(const LogicalType &type)
+	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
+		if (!is_geometry) {
+			for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+				min[i] = 0xFF;
+				max[i] = 0;
+			}
+		} else {
+			geometry_stats.SetEmpty();
 		}
 	}
 
 	inline void Update(const string_t &value) {
+		if (is_geometry) {
+			geometry_stats.Update(value);
+			return;
+		}
 		auto data = const_data_ptr_cast(value.GetData());
 		auto size = value.GetSize();
 
@@ -47,7 +59,7 @@ struct StringStatsWriter {
 				has_unicode = true;
 			} else if (unicode == UnicodeType::INVALID) {
 				throw ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
-														"segment statistics update");
+				                                        "segment statistics update");
 			}
 		}
 	}
@@ -73,18 +85,34 @@ struct StringStatsWriter {
 	}
 
 	static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
-		idx_t value_size = size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
+		idx_t value_size =
+		    size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
 		memcpy(target, data, value_size);
 		for (idx_t i = value_size; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
 			target[i] = '\0';
 		}
 	}
 
+	bool HasStats() const {
+		return min[0] <= max[0];
+	}
+
+	void Merge(BaseStatistics &other) const {
+		if (is_geometry) {
+			GeometryStats::GetDataUnsafe(other).Merge(geometry_stats);
+		} else {
+			StringStats::Merge(other, *this);
+		}
+	}
+
+private:
 	data_t min[StringStatsData::MAX_STRING_MINMAX_SIZE];
 	data_t max[StringStatsData::MAX_STRING_MINMAX_SIZE];
 	bool has_unicode = false;
 	uint32_t max_string_length = 0;
 	bool is_varchar = true;
+	bool is_geometry = false;
+	GeometryStatsData geometry_stats;
 };
 
 } // namespace duckdb

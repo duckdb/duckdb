@@ -15,6 +15,7 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/statistics/string_stats_writer.hpp"
 
 namespace duckdb {
 struct StringDictionaryContainer {
@@ -103,6 +104,7 @@ public:
 
 		idx_t remaining_space = RemainingSpace(segment, handle);
 		auto base_count = segment.count.load();
+		StringStatsWriter writer(stats.statistics.GetType());
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = base_count + i;
@@ -148,7 +150,8 @@ public:
 			}
 
 			// we have space: write the string
-			UpdateStringStats(stats, source_data[source_idx]);
+			stats.statistics.SetHasNoNullFast();
+			writer.Update(source_data[source_idx]);
 
 			if (DUCKDB_UNLIKELY(use_overflow_block)) {
 				// write to overflow blocks
@@ -188,6 +191,7 @@ public:
 			GetDictionary(segment, handle).Verify(segment.GetBlockSize());
 #endif
 		}
+		writer.Merge(stats.statistics);
 		segment.count += count;
 		return count;
 	}
