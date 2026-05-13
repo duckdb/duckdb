@@ -33,7 +33,9 @@ public:
 struct VariantKeysBindData : public FunctionData {
 public:
 	explicit VariantKeysBindData();
-	explicit VariantKeysBindData(const string &str);
+	explicit VariantKeysBindData(const string &input_path);
+	explicit VariantKeysBindData(const vector<string> &input_paths);
+	// TODO: remove?
 	explicit VariantKeysBindData(uint32_t index);
 	VariantKeysBindData(const VariantKeysBindData &other) = default;
 
@@ -42,7 +44,7 @@ public:
 	bool Equals(const FunctionData &other) const override;
 
 public:
-	VariantPathComponent component;
+	vector<vector<VariantPathComponent>> paths;
 };
 
 struct VariantNestedDataCollectionResult {

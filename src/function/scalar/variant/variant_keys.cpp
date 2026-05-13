@@ -1,5 +1,6 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/variant_vector.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
@@ -12,42 +13,71 @@ namespace duckdb {
 
 VariantKeysBindData::VariantKeysBindData() : FunctionData() {
 }
-VariantKeysBindData::VariantKeysBindData(const string &str) : FunctionData(), component(str) {
+VariantKeysBindData::VariantKeysBindData(const string &input_path) : FunctionData() {
+	if (input_path.empty()) {
+		paths.emplace_back();
+	} else {
+		paths.push_back({VariantPathComponent(input_path)});
+	}
+}
+VariantKeysBindData::VariantKeysBindData(const vector<string> &input_paths) : FunctionData() {
+	for (auto &path : input_paths) {
+		if (path.empty()) {
+			paths.emplace_back();
+		} else {
+			paths.push_back({VariantPathComponent(path)});
+		}
+	}
 }
 VariantKeysBindData::VariantKeysBindData(uint32_t index) : FunctionData() {
 	if (index == 0) {
 		throw BinderException("Extracting index 0 from VARIANT(ARRAY) is invalid, indexes are 1-based");
 	}
-	component = VariantPathComponent(index - 1);
+	paths = {{VariantPathComponent(index - 1)}};
 }
 
 unique_ptr<FunctionData> VariantKeysBindData::Copy() const {
 	return make_uniq<VariantKeysBindData>(*this);
 }
 
-bool VariantKeysBindData::Equals(const FunctionData &other) const {
-	auto &bind_data = other.Cast<VariantKeysBindData>();
-	if (bind_data.component.lookup_mode != component.lookup_mode) {
+static bool VariantPathComponentEquals(const VariantPathComponent &a, const VariantPathComponent &b) {
+	if (a.lookup_mode != b.lookup_mode) {
 		return false;
 	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_INDEX &&
-	    bind_data.component.index != component.index) {
+	if (a.lookup_mode == VariantChildLookupMode::BY_INDEX && a.index != b.index) {
 		return false;
 	}
-	if (bind_data.component.lookup_mode == VariantChildLookupMode::BY_KEY && bind_data.component.key != component.key) {
+	if (a.lookup_mode == VariantChildLookupMode::BY_KEY && a.key != b.key) {
 		return false;
 	}
 	return true;
 }
 
-static void VariantKeys(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
-                        idx_t count) {
-	// TODO: Try from shredded
-	auto &allocator = Allocator::DefaultAllocator();
+bool VariantKeysBindData::Equals(const FunctionData &other) const {
+	auto &bind_data = other.Cast<VariantKeysBindData>();
+	if (paths.size() != bind_data.paths.size()) {
+		return false;
+	}
 
-	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
-	UnifiedVariantVectorData variant(source_format);
+	for (idx_t i = 0; i < paths.size(); i++) {
+		if (paths[i].size() != bind_data.paths[i].size()) {
+			return false;
+		}
+		for (idx_t j = 0; j < paths[i].size(); j++) {
+			if (!VariantPathComponentEquals(paths[i][j], bind_data.paths[i][j])) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static vector<vector<string>> CollectVariantKeys(const UnifiedVariantVectorData &variant, const vector<VariantPathComponent> &components,
+                            idx_t count) {
+	vector<vector<string>> rows;
+	rows.resize(count);
+
+	auto &allocator = Allocator::DefaultAllocator();
 
 	// Input and output buffers used during the object walk
 	SelectionVector value_index_sel, new_value_index_sel;
@@ -69,9 +99,9 @@ static void VariantKeys(const Vector &variant_vec, const vector<VariantPathCompo
 		auto &input_indices = i % 2 == 0 ? value_index_sel : new_value_index_sel;
 		auto &output_indices = i % 2 == 0 ? new_value_index_sel : value_index_sel;
 
-		// Reuse setup variant_extract path modes for now
 		auto expected_type = component.lookup_mode == VariantChildLookupMode::BY_INDEX ? VariantLogicalType::ARRAY
 		                                                                               : VariantLogicalType::OBJECT;
+
 		(void)VariantUtils::CollectNestedData(variant, expected_type, input_indices, count, optional_idx(), 0,
 		                                      nested_data, validity);
 		//! Look up the value_index of the child we're extracting
@@ -100,25 +130,75 @@ static void VariantKeys(const Vector &variant_vec, const vector<VariantPathCompo
 	(void)VariantUtils::CollectNestedData(variant, VariantLogicalType::OBJECT, input_indices, count, optional_idx(), 0,
 	                                      nested_data, validity);
 
-	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
-	auto result_writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
-
-	for (idx_t row = 0; row < count; row++) {
-		if (!validity.RowIsValid(row)) {
-			result_writer.WriteList(0);
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!validity.RowIsValid(row_idx)) {
 			continue;
 		}
 
-		auto &[child_count, children_idx] = nested_data[row];
-		auto list = result_writer.WriteList(child_count);
+		const auto &[child_count, children_idx] = nested_data[row_idx];
+		rows[row_idx].reserve(child_count);
 
+		for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
+			const auto key_id = variant.GetKeysIndex(row_idx, children_idx + child_idx);
+			const auto &key = variant.GetKey(row_idx, key_id);
+
+			rows[row_idx].push_back(key.GetString());
+		}
+	}
+
+	return rows;
+}
+
+// TODO: Add fast path for shredded variant vector.
+static void UnaryVariantKeys(const Vector &variant_vec, const vector<VariantPathComponent> &components, Vector &result,
+                        idx_t count) {
+	RecursiveUnifiedVectorFormat source_format;
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
+	const UnifiedVariantVectorData variant(source_format);
+
+	const auto rows = CollectVariantKeys(variant, components, count);
+
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+	auto result_writer = FlatVector::Writer<VectorListType<string_t>>(result, count);
+
+	for (idx_t row_idx = 0; row_idx < rows.size(); row_idx++) {
+		auto row_writer = result_writer.WriteList(rows[row_idx].size());
 		idx_t child_idx = 0;
-		for (auto &child_writer : list) {
-			auto key_id = variant.GetKeysIndex(row, children_idx + child_idx);
-			auto key = variant.GetKey(row, key_id);
+		for (auto &child_writer: row_writer) {
+			child_writer.WriteValue(rows[row_idx][child_idx++]);
+		}
+	}
+}
 
-			child_writer.WriteValue(key);
-			child_idx++;
+static void ManyVariantKeys(const Vector &variant_vec, const vector<vector<VariantPathComponent>> &paths, Vector &result,
+						idx_t count) {
+	vector<vector<vector<string>>> path_results;
+	path_results.reserve(paths.size());
+
+	RecursiveUnifiedVectorFormat source_format;
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
+	const UnifiedVariantVectorData variant(source_format);
+
+
+	for (const auto &path : paths) {
+		path_results.push_back(CollectVariantKeys(variant, path, count));
+	}
+
+	result.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+	auto result_writer = FlatVector::Writer<VectorListType<VectorListType<string_t>>>(result, count);
+
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		auto row_writer = result_writer.WriteList(paths.size());
+		idx_t path_idx = 0;
+		for (auto &list_writer : row_writer) {
+			auto path_writer = list_writer.WriteList(path_results[path_idx][row_idx].size());
+
+			idx_t key_idx = 0;
+			for (auto &key_writer: path_writer) {
+				key_writer.WriteValue(path_results[path_idx][row_idx][key_idx++]);
+			}
+
+			path_idx++;
 		}
 	}
 }
@@ -155,7 +235,8 @@ static unique_ptr<BaseStatistics> VariantKeysPropagateStats(ClientContext &conte
 		// TODO: Why do we skip when VARIANT is not fully shredded? Can't we use some of the properties still?
 		return nullptr;
 	}
-	auto found_stats = VariantShreddedStats::FindChildStats(shredded_stats, info.component);
+	// FIXME: This should not be static
+	auto found_stats = VariantShreddedStats::FindChildStats(shredded_stats, info.paths[0][0]);
 	if (!found_stats || !VariantShreddedStats::IsFullyShredded(*found_stats)) {
 		// TODO: Why do we skip when VARIANT is not fully shredded? Can't we use some of the properties still?
 		return nullptr;
@@ -180,7 +261,7 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 	auto &path = *arguments[1];
 	// TODO: Check for the element type somewhere.
 	if (path.GetReturnType().id() != LogicalTypeId::VARCHAR && path.GetReturnType().id() != LogicalTypeId::LIST) {
-		throw BinderException("'variant_keys' expects the second argument to be of type VARCHAR, not %s",
+		throw BinderException("'variant_keys' expects the second argument to be of type VARCHAR or VARCHAR[], not %s",
 		                      path.GetReturnType().ToString());
 	}
 
@@ -192,8 +273,15 @@ static unique_ptr<FunctionData> VariantKeysBind(BindScalarFunctionInput &input) 
 	if (constant_arg.type().id() == LogicalTypeId::VARCHAR) {
 		return make_uniq<VariantKeysBindData>(constant_arg.GetValue<string>());
 	} else if (constant_arg.type().id() == LogicalTypeId::LIST) {
-		// TODO: Insert paths
-		return make_uniq<VariantKeysBindData>();
+		vector<string> paths;
+		const auto &children = ListValue::GetChildren(constant_arg);
+		for (const auto &child : children) {
+			if (child.IsNull()) {
+				throw BinderException("'variant_keys' does not accept NULL paths");
+			}
+			paths.push_back(child.GetValue<string>());
+		}
+		return make_uniq<VariantKeysBindData>(paths);
 	} else {
 		throw InternalException("Constant-folded argument was not of type VARCHAR");
 	}
@@ -241,10 +329,12 @@ static void VariantKeysFunction(DataChunk &input, ExpressionState &state, Vector
 	auto &info = func_expr.bind_info->Cast<VariantKeysBindData>();
 
 	// TODO: Instead of setting the input as the first path component, parse based on JSONPath/JSON Pointer.
-	if (input.ColumnCount() == 2) {
-		VariantKeys(variant_vec, {info.component}, result, count);
+	if (input.ColumnCount() == 2 && input.data[1].GetType().id() == LogicalTypeId::VARCHAR) {
+		UnaryVariantKeys(variant_vec, info.paths[0], result, count);
+	} else if (input.ColumnCount() == 2 && input.data[1].GetType().id() == LogicalTypeId::LIST) {
+		ManyVariantKeys(variant_vec, info.paths, result, count);
 	} else {
-		VariantKeys(variant_vec, {}, result, count);
+		UnaryVariantKeys(variant_vec, {}, result, count);
 	}
 }
 
@@ -268,6 +358,7 @@ ScalarFunctionSet VariantKeysFun::GetFunctions() {
 
 	AddFunctionsWithParameterType(fun_set, LogicalType::VARIANT());
 	AddFunctionsWithParameterType(fun_set, LogicalType::VARCHAR);
+	// AddFunctionsWithParameterType(fun_set, LogicalType::JSON());
 
 	return fun_set;
 }
