@@ -33,4 +33,8 @@ struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 };
 
+struct FinalizeCombineAggregateFunction {
+	static AggregateFunction GetFunction();
+};
+
 } // namespace duckdb

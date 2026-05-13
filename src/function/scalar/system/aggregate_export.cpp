@@ -854,6 +854,22 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 	SerializeStructFields(layout, result, count, addresses_ptrs);
 }
 
+unique_ptr<FunctionData> FinalizeCombineAggrBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+
+	auto bind_data = BindAggregateStateInternal(context, function, arguments, false);
+
+	function.SetStateSizeCallback(bind_data->aggr.GetStateSizeCallback());
+	function.SetStateInitCallback(bind_data->aggr.GetStateInitCallback());
+	function.SetStateCombineCallback(bind_data->aggr.GetStateCombineCallback());
+	function.SetStateFinalizeCallback(bind_data->aggr.GetStateFinalizeCallback());
+	function.SetReturnType(bind_data->aggr.GetReturnType());
+
+	return std::move(bind_data);
+}
+
 } // namespace
 
 unique_ptr<BoundAggregateExpression>
@@ -971,6 +987,14 @@ AggregateFunction CombineAggrFun::GetFunction() {
 	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
 	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
 	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	return function;
+}
+
+AggregateFunction FinalizeCombineAggregateFunction::GetFunction() {
+	auto function = AggregateFunction("finalize_combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
+	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
+	                                  FinalizeCombineAggrBind, nullptr, nullptr, nullptr);
 	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	return function;
 }

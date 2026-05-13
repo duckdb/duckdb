@@ -1,0 +1,152 @@
+# name: test/optimizer/partial_aggregate_pushdown.test
+# description: Test partial aggregate pushdown below joins
+# group: [optimizer]
+
+statement ok
+CREATE TABLE fact AS SELECT
+  i % 1000 AS dim_key,
+  (i * 17) % 100 AS measure
+FROM range(100000) _(i);
+
+# Dimension carries 4 grouping attributes — PAP's MIN_DIMENSION_GROUPS
+# heuristic requires the GROUP BY to reference ≥4 dimension columns
+# (calibrated against TPC-DS Q22's ROLLUP(a,b,c,d) shape). All keys are
+# INTEGER so the `compressed_materialization` optimizer doesn't wrap the
+# join in a PROJECTION — PAP needs COMPARISON_JOIN as the direct child
+# of the LOGICAL_AGGREGATE.
+statement ok
+CREATE TABLE dim AS SELECT
+  i AS dim_key,
+  (i % 7)  AS d_a,
+  (i % 11) AS d_b,
+  (i % 13) AS d_c,
+  (i % 17) AS d_d
+FROM range(1000) _(i);
+
+statement ok
+ANALYZE;
+
+# Result correctness: PAP must not change the answer.
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+statement ok
+RESET disabled_optimizers
+
+# Same query with PAP enabled — identical aggregate result.
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+4950000
+
+query I
+SELECT count(*) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+1000
+
+# The optimization fires for fact ⋈ dim → GROUP BY 4 dimension attributes,
+# with the pre-aggregated state showing up as `finalize_combine_aggr`.
+query II
+EXPLAIN
+SELECT d_a, d_b, d_c, d_d, sum(measure)
+FROM fact JOIN dim USING (dim_key)
+GROUP BY d_a, d_b, d_c, d_d
+----
+physical_plan	<REGEX>:.*finalize_combine_aggr.*
+
+# ROLLUP correctness: results identical with and without PAP. (PAP fires on
+# real-world ROLLUP queries — e.g. TPC-DS Q22 — but on this toy schema a
+# transparent logical projection between AGGREGATE and JOIN keeps PAP from
+# firing on ROLLUP. The non-ROLLUP shape above is the structural assertion.)
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(s)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, sum(measure) AS s
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY ROLLUP(d_a, d_b, d_c, d_d)
+)
+----
+24750000
+
+# AVG with single grouping set: result identical with vs without PAP
+# (PAP routes AVG through SUM/COUNT decomposition).
+statement ok
+SET disabled_optimizers = 'partial_aggregate_pushdown'
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+statement ok
+RESET disabled_optimizers
+
+query I
+SELECT round(sum(avg_m)::DOUBLE) FROM (
+  SELECT d_a, d_b, d_c, d_d, avg(measure)::DOUBLE AS avg_m
+  FROM fact JOIN dim USING (dim_key)
+  GROUP BY d_a, d_b, d_c, d_d
+)
+----
+49500
+
+# COUNT_STAR is not pushable through this path — should not crash.
+query I
+SELECT count(*) FROM fact JOIN dim USING (dim_key) WHERE d_a = 3
+----
+14300
+
+# The MAX_JOIN_SELECTIVITY_INV guard (which prevents PAP from firing on
+# highly-selective dimension filters — see Q92) is calibrated for TPC-DS
+# row counts and depends on accurate post-filter cardinality estimates, so
+# it isn't reliably exercised by toy data.
+
+# The optimizer is queryable.
+query I
+SELECT count(*) FROM duckdb_optimizers() WHERE name = 'partial_aggregate_pushdown'
+----
+1
