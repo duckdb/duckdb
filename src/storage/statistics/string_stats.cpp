@@ -9,40 +9,10 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/storage/statistics/string_stats_writer.hpp"
 
 namespace duckdb {
 
-namespace {
-
-bool AllCharsEqualTo(const data_t data[], data_t comp) {
-	for (idx_t i = 0; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
-		if (data[i] != comp) {
-			return false;
-		}
-	}
-	return true;
-}
-
-int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {
-	for (idx_t i = 0; i < len; i++) {
-		if (data[i] < comparison[i]) {
-			return -1;
-		} else if (data[i] > comparison[i]) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
-	idx_t value_size = size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
-	memcpy(target, data, value_size);
-	for (idx_t i = value_size; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
-		target[i] = '\0';
-	}
-}
-
-} // namespace
 
 BaseStatistics StringStats::CreateUnknown(LogicalType type) {
 	BaseStatistics result(std::move(type));
@@ -87,7 +57,7 @@ bool StringStats::HasMinMax(const BaseStatistics &stats) {
 		return false;
 	}
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	if (StringValueComparison(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
+	if (StringStatsWriter::StringValueComparison(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
 		return false;
 	}
 	if (stats.GetType().id() == LogicalTypeId::BLOB) {
@@ -96,7 +66,7 @@ bool StringStats::HasMinMax(const BaseStatistics &stats) {
 	}
 	// The initial min value means either "empty string" or not set. Both effectively represent no lower bound. Thus,
 	// return true if at least max is set.
-	return !AllCharsEqualTo(string_data.max, 0xFF);
+	return !StringStatsWriter::AllCharsEqualTo(string_data.max, 0xFF);
 }
 
 bool StringStats::HasMaxStringLength(const BaseStatistics &stats) {
@@ -177,14 +147,14 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 	//! we can only fit 8 bytes, so we might need to trim our string
 	// construct the value
 	data_t target[StringStatsData::MAX_STRING_MINMAX_SIZE];
-	ConstructValue(data, size, target);
+	StringStatsWriter::ConstructValue(data, size, target);
 
 	// update the min and max
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	if (StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {
+	if (StringStatsWriter::StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {
 		memcpy(string_data.min, target, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
-	if (StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
+	if (StringStatsWriter::StringValueComparison(target, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
 		memcpy(string_data.max, target, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
 	if (size > string_data.max_string_length) {
@@ -202,11 +172,11 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 }
 
 void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
-	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
+	StringStatsWriter::ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).min);
 }
 
 void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
-	ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
+	StringStatsWriter::ConstructValue(const_data_ptr_cast(value.GetData()), value.GetSize(), GetDataUnsafe(stats).max);
 }
 
 void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
@@ -218,10 +188,10 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	auto &other_data = StringStats::GetDataUnsafe(other);
-	if (StringValueComparison(other_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {
+	if (StringStatsWriter::StringValueComparison(other_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.min) < 0) {
 		memcpy(string_data.min, other_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
-	if (StringValueComparison(other_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
+	if (StringStatsWriter::StringValueComparison(other_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE, string_data.max) > 0) {
 		memcpy(string_data.max, other_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	}
 	string_data.has_unicode = string_data.has_unicode || other_data.has_unicode;
@@ -253,8 +223,8 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	auto data = const_data_ptr_cast(constant.c_str());
 	idx_t size = constant.size();
 
-	int min_comp = StringValueComparison(data, MinValue(min_len, size), min_data);
-	int max_comp = StringValueComparison(data, MinValue(max_len, size), max_data);
+	int min_comp = StringStatsWriter::StringValueComparison(data, MinValue(min_len, size), min_data);
+	int max_comp = StringStatsWriter::StringValueComparison(data, MinValue(max_len, size), max_data);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
@@ -344,12 +314,12 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString());
 			}
 		}
-		if (StringValueComparison(const_data_ptr_cast(data),
+		if (StringStatsWriter::StringValueComparison(const_data_ptr_cast(data),
 		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString());
 		}
-		if (StringValueComparison(const_data_ptr_cast(data),
+		if (StringStatsWriter::StringValueComparison(const_data_ptr_cast(data),
 		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString());
