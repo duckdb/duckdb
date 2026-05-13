@@ -275,6 +275,14 @@ void StringStats::SetMax(BaseStatistics &stats, const string_t &value, StringSta
 	stats_data.max_type = type;
 }
 
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	SetMin(stats, value, StringStatsType::TRUNCATED_STATS);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	SetMax(stats, value, StringStatsType::TRUNCATED_STATS);
+}
+
 void StringStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 	auto &string_data = GetDataUnsafe(stats);
 	auto &other_data = GetDataUnsafe(other);

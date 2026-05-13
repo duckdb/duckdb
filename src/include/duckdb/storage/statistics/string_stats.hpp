@@ -89,6 +89,12 @@ struct StringStats {
 	                                                     string_t constant);
 
 	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
+	[[deprecated("StringStats::SetMin without specifying StringStatsType is deprecated - specify either "
+	             "StringStatsType::TRUNCATED_STATS or StringStatsType::EXACT_STATS")]] DUCKDB_API static void
+	SetMin(BaseStatistics &stats, const string_t &value);
+	[[deprecated("StringStats::SetMax without specifying StringStatsType is deprecated - specify either "
+	             "StringStatsType::TRUNCATED_STATS or StringStatsType::EXACT_STATS")]] DUCKDB_API static void
+	SetMax(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
