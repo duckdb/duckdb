@@ -332,6 +332,7 @@ public:
 
 				// Now re-lock the state and add the reader
 				parallel_lock.lock();
+				global_state.files_opened++;
 				if (can_skip_file) {
 					current_reader_data.file_state = MultiFileFileState::SKIPPED;
 					// release the reader so its file handle is closed; skipped files are
@@ -560,6 +561,7 @@ public:
 				}
 				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
 				                                    context, file_idx, *result);
+				result->files_opened++;
 				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
@@ -886,7 +888,7 @@ public:
 	static InsertionOrderPreservingMap<string> MultiFileDynamicToString(TableFunctionDynamicToStringInput &input) {
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
 		InsertionOrderPreservingMap<string> result;
-		auto files_loaded = gstate.file_index.load();
+		auto files_loaded = gstate.files_opened.load();
 		result.insert(make_pair("Total Files Read", std::to_string(files_loaded)));
 
 		constexpr size_t FILE_NAME_LIST_LIMIT = 5;
