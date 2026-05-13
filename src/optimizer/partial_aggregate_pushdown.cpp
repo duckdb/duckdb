@@ -53,7 +53,7 @@ static bool GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 	return true;
 }
 
-static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
+static bool IsSupportedAggregate(const BoundAggregateExpression &expr, bool multi_grouping_set) {
 	if (expr.IsDistinct() || expr.filter || expr.order_bys) {
 		return false;
 	}
@@ -65,13 +65,21 @@ static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
 	if (expr.children.size() != 1) {
 		return false;
 	}
-	// All of these have state-combine functions on the AGGREGATE_STATE pipeline,
-	// so the upper-stage `finalize_combine_aggr` reassembles a numerically-exact result.
-	// AVG is included because the rewriter pass does NOT always decompose it into
-	// SUM/COUNT (only when the surrounding expression demands), so Q22-shape queries
-	// arrive at PAP with `avg(x)` intact.
-	return name == "sum" || name == "sum_no_overflow" || name == "count" || name == "avg" ||
-	       name == "min" || name == "max";
+	// SUM / COUNT / MIN / MAX have non-destructive combine semantics — their
+	// AGGREGATE_STATE pipeline produces numerically exact results regardless of
+	// how many times finalize_combine_aggr is invoked across grouping sets.
+	if (name == "sum" || name == "sum_no_overflow" || name == "count" || name == "min" || name == "max") {
+		return true;
+	}
+	// AVG goes through the same pipeline but the exported state representation
+	// loses precision at shallow ROLLUP/CUBE levels (verified on TPC-DS Q22:
+	// the `(i_product_name)` and grand-total rows produced `inf` while
+	// (a,b,c,d) was numerically exact). Restrict AVG to single-grouping-set
+	// queries until the state serialization is widened.
+	if (name == "avg" && !multi_grouping_set) {
+		return true;
+	}
+	return false;
 }
 
 static bool ContainsAggregateInput(const LogicalOperator &op) {
@@ -91,11 +99,12 @@ static bool GetPushdownOperators(LogicalOperator &op, LogicalAggregate *&aggr, L
 		return false;
 	}
 	aggr = &op.Cast<LogicalAggregate>();
-	// ROLLUP / CUBE / GROUPING SETS would need the rewritten upper aggregate to preserve
-	// every grouping set; the current PAP plumbing only rebuilds the single-set form, so
-	// allowing them silently dropped the secondary grouping sets and over-aggregated. Reject.
-	if (aggr->grouping_sets.size() > 1 || !aggr->grouping_functions.empty() ||
-	    aggr->groups.empty() || aggr->expressions.empty()) {
+	// Allow ROLLUP / CUBE / GROUPING SETS — the upper aggregate now copies
+	// grouping_sets verbatim from the original (see CreateUpperAggregate), so
+	// every rollup level is computed from the pre-aggregated state.
+	// Reject grouping_functions for now because the rewrite would need to
+	// shift their grouping-set bitmask through the pre-aggregation.
+	if (!aggr->grouping_functions.empty() || aggr->groups.empty() || aggr->expressions.empty()) {
 		return false;
 	}
 	auto &child = *op.children[0];
@@ -124,13 +133,14 @@ static bool GetExpressionSide(const Expression &expr, const PartialAggregatePush
 }
 
 static bool FindAggregateSide(const LogicalAggregate &aggr, PartialAggregatePushdownInfo &info) {
+	const bool multi_grouping_set = aggr.grouping_sets.size() > 1;
 	optional_idx aggregate_side;
 	for (auto &expr : aggr.expressions) {
 		if (expr->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
 			return false;
 		}
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
-		if (!IsSupportedAggregate(aggregate)) {
+		if (!IsSupportedAggregate(aggregate, multi_grouping_set)) {
 			return false;
 		}
 		idx_t side;
@@ -378,6 +388,13 @@ static unique_ptr<LogicalAggregate> CreateUpperAggregate(LogicalAggregate &aggr,
                                                         vector<unique_ptr<Expression>> upper_aggregates) {
 	auto upper_aggr = make_uniq<LogicalAggregate>(aggr.group_index, aggr.aggregate_index, std::move(upper_aggregates));
 	upper_aggr->groups = CreateUpperGroups(aggr, *new_join, info);
+	// Preserve ROLLUP / CUBE / GROUPING SETS. The grouping_sets vector contains
+	// indices into the `groups` vector, and CreateUpperGroups produces the upper
+	// groups in the same order as `aggr.groups`, so the indices stay valid.
+	// Without this copy, a 5-set ROLLUP collapses to a single set on the upper
+	// side and silently over-aggregates (verified on TPC-DS Q22).
+	upper_aggr->grouping_sets = aggr.grouping_sets;
+	upper_aggr->grouping_functions = aggr.grouping_functions;
 	upper_aggr->children.push_back(std::move(new_join));
 	upper_aggr->ResolveOperatorTypes();
 	upper_aggr->estimated_cardinality = aggr.estimated_cardinality;
