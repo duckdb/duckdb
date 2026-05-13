@@ -349,7 +349,7 @@ class SeqElement:
     skip: bool  # True for LiteralNode - no semantic value
     var_name: str = ""
     cpp_type: str = ""
-    by_value: bool = False  # True for unique_ptr<T>, vector<unique_ptr<T>>, bool, int64_t
+    by_value: bool = False  # True for unique_ptr<T> and vector<unique_ptr<T>> (non-copyable)
     extraction_lines: List[str] = field(default_factory=list)
 
 
@@ -570,14 +570,6 @@ def _classify_repeat(node, idx, rule_types, optional):
     )
 
 
-def _classify_star_repeat(node, idx, rule_types):
-    return _classify_repeat(node, idx, rule_types, optional=True)
-
-
-def _classify_plus_repeat(node, idx, rule_types):
-    return _classify_repeat(node, idx, rule_types, optional=False)
-
-
 def classify_sequence_element(child, idx, rule_types, excluded_rules):
     """
     Classify one element of a SequenceNode.
@@ -596,11 +588,11 @@ def classify_sequence_element(child, idx, rule_types, excluded_rules):
             return _classify_optional_reference(inner.name, idx, rule_types, excluded_rules)
         if isinstance(inner, RepeatNode):
             # A* is represented as OptionalNode(RepeatNode(A)), matching the runtime
-            # OptionalMatcher(RepeatMatcher(A)) structure. Delegate to star-repeat classifier.
-            return _classify_star_repeat(inner, idx, rule_types)
+            # OptionalMatcher(RepeatMatcher(A)) structure.
+            return _classify_repeat(inner, idx, rule_types, optional=True)
         return None  # OptionalNode(ParensNode) etc. - deferred
     if isinstance(child, RepeatNode):
-        return _classify_plus_repeat(child, idx, rule_types)
+        return _classify_repeat(child, idx, rule_types, optional=False)
     if isinstance(child, ParensNode):
         if isinstance(child.inner, ListMacroNode):
             return _classify_parens_list(child.inner, idx, rule_types)
@@ -627,14 +619,13 @@ def classify_sequence_elements(children, rule_types, excluded_rules):
 
 def _sequence_skip_reason(children, rule_types, excluded_rules):
     """Return a specific reason string explaining why classify_sequence_elements failed."""
-    identifier_rules = set(IDENTIFIER_OVERRIDE_RULES)
     for idx, child in enumerate(children):
         if classify_sequence_element(child, idx, rule_types, excluded_rules) is not None:
             continue
         inner = child.child if isinstance(child, OptionalNode) else child
         if isinstance(inner, ReferenceNode):
             name = inner.name
-            if name not in rule_types and name not in excluded_rules and name not in identifier_rules:
+            if name not in rule_types and name not in excluded_rules and name not in IDENTIFIER_OVERRIDE_RULES:
                 return f"child rule '{name}' is missing from grammar_types.yml and excluded_rules"
         return f"cannot classify element {idx} ({type(child).__name__})"
     return "unknown reason"
@@ -645,29 +636,22 @@ def _sequence_skip_reason(children, rule_types, excluded_rules):
 # ---------------------------------------------------------------------------
 
 
+def _seq_param_decl(e):
+    """Format one SeqElement as a C++ parameter declaration."""
+    if e.by_value:
+        return f"{e.cpp_type} {e.var_name}"
+    return f"const {e.cpp_type} &{e.var_name}"
+
+
 def generate_sequence_body_decl(rule_name, return_type, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
-
-    def _param_decl(e):
-        # Move-only types (unique_ptr<T>, vector<unique_ptr<T>>) are passed by value.
-        # Everything else (structs, strings, primitives) uses const T & to avoid tidy warnings.
-        if e.by_value:
-            return f"{e.cpp_type} {e.var_name}"
-        return f"const {e.cpp_type} &{e.var_name}"
-
-    params = ", ".join(_param_decl(e) for e in elements if not e.skip)
+    params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
 
 
 def generate_sequence_body_stub(rule_name, return_type, elements):
     """Stub .cpp definition for a sequence body that must be hand-implemented."""
-
-    def _param_decl(e):
-        if e.by_value:
-            return f"{e.cpp_type} {e.var_name}"
-        return f"const {e.cpp_type} &{e.var_name}"
-
-    params = ", ".join(_param_decl(e) for e in elements if not e.skip)
+    params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
     return (
         f"{return_type} PEGTransformerFactory::Transform{rule_name}({params}) {{\n"
         f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
@@ -790,7 +774,15 @@ def collect_generated(gram_stem, rules, rule_types, excluded_rules):
 
         skipped.append((rule_name, "complex rule (has operators/choices/groups)"))
 
-    return GramFileResult(gram_stem, declarations, implementations, registrations, skipped, manual_bodies, body_stubs)
+    return GramFileResult(
+        gram_stem=gram_stem,
+        declarations=declarations,
+        implementations=implementations,
+        registrations=registrations,
+        skipped=skipped,
+        manual_bodies=manual_bodies,
+        body_stubs=body_stubs,
+    )
 
 
 def print_output(result: GramFileResult):
@@ -812,7 +804,7 @@ def print_output(result: GramFileResult):
     print(f"=== IMPLEMENTATION (generated/transform_{result.gram_stem}_generated.cpp) ===")
     print("".join(result.implementations))
 
-    print(f"=== REGISTRATION (in Register{result.gram_stem.capitalize()}() in peg_transformer_factory.cpp) ===")
+    print(f"=== REGISTRATION (transform_generated.cpp static table) ===")
     print("".join(result.registrations))
 
     if result.body_stubs:
@@ -872,10 +864,6 @@ def write_hpp(all_declarations):
     print(f"Updated {hpp_path}")
 
 
-def _norm_ws(s):
-    return re.sub(r'\s+', ' ', s).strip()
-
-
 def _extract_func_signature(text, func_name):
     """Extract 'ReturnType PEGTransformerFactory::func_name(params)' from C++ source text."""
     m = re.search(rf'\bPEGTransformerFactory::{re.escape(func_name)}\s*\(', text)
@@ -895,46 +883,18 @@ def _extract_func_signature(text, func_name):
 
 
 def _find_already_implemented(gram_stem, body_stubs):
-    """Return set of rule_names whose stubs already have a matching signature in transform_{gram_stem}.cpp."""
+    """Return set of rule_names that already have any implementation in transform_{gram_stem}.cpp."""
     cpp_path = transformer_dir / f"transform_{gram_stem}.cpp"
     if not cpp_path.exists():
         return set()
     text = cpp_path.read_text()
-    implemented = set()
-    prefix = 'PEGTransformerFactory::'
-    for rule_name, stub_cpp in body_stubs:
-        first_line = stub_cpp.split('\n')[0]
-        expected = _norm_ws(first_line.rstrip('{').rstrip())
-        actual = _extract_func_signature(text, f'Transform{rule_name}')
-        if actual is None:
-            continue
-        actual = _norm_ws(actual)
-        # Compare from PEGTransformerFactory:: onwards: handles return types on a separate line
-        # and multi-line params (depth-tracking + _norm_ws already collapses those).
-        expected_norm = expected[expected.find(prefix):] if prefix in expected else expected
-        actual_norm = actual[actual.find(prefix):] if prefix in actual else actual
-        if expected_norm == actual_norm:
-            implemented.add(rule_name)
-    return implemented
+    return {rule_name for rule_name, _ in body_stubs if _extract_func_signature(text, f'Transform{rule_name}') is not None}
 
 
 def print_manual_steps(all_results):
     print("\nRemaining manual steps:")
 
     step = 1
-
-    print(f"\n  {step}. {transformer_dir / 'CMakeLists.txt'}:")
-    print("       - Ensure transform_generated.cpp is listed in add_library_unity()")
-    step += 1
-
-    factory_results = [r for r in all_results if r.registrations]
-    if factory_results:
-        print(f"\n  {step}. {transformer_dir / 'peg_transformer_factory.cpp'}:")
-        for r in factory_results:
-            reg_lines = "".join(f"             {line.strip()}\n" for line in r.registrations)
-            print(f"       Register{r.gram_stem.capitalize()}() — replace REGISTER_TRANSFORM macros for generated rules:")
-            print(reg_lines, end="")
-        step += 1
 
     transform_files = [r for r in all_results if r.declarations]
     if transform_files:
@@ -944,26 +904,31 @@ def print_manual_steps(all_results):
         print("       - Update body function signatures to match the generated declarations")
         step += 1
 
-    pending_stubs = []
-    for r in all_results:
-        if not r.body_stubs:
-            continue
-        already = _find_already_implemented(r.gram_stem, r.body_stubs)
-        for rule_name, stub in r.body_stubs:
-            if rule_name not in already:
-                pending_stubs.append((r.gram_stem, stub))
+    has_any_stubs = any(r.body_stubs for r in all_results)
+    if has_any_stubs:
+        pending_stubs = []
+        for r in all_results:
+            if not r.body_stubs:
+                continue
+            already = _find_already_implemented(r.gram_stem, r.body_stubs)
+            for rule_name, stub in r.body_stubs:
+                if rule_name not in already:
+                    pending_stubs.append((r.gram_stem, stub))
 
-    if pending_stubs:
-        print(f"\n  {step}. Body stubs to implement (copy into respective transform_*.cpp files):")
-        current_stem = None
-        for gram_stem, stub in pending_stubs:
-            if gram_stem != current_stem:
-                print(f"\n       // transform_{gram_stem}.cpp")
-                current_stem = gram_stem
-            for line in stub.splitlines():
-                print(f"       {line}")
-            print()
-        step += 1
+        if pending_stubs:
+            print(f"\n  {step}. Body stubs to implement (copy into respective transform_*.cpp files):")
+            current_stem = None
+            for gram_stem, stub in pending_stubs:
+                if gram_stem != current_stem:
+                    print(f"\n       // transform_{gram_stem}.cpp")
+                    current_stem = gram_stem
+                for line in stub.splitlines():
+                    print(f"       {line}")
+                print()
+            step += 1
+        else:
+            print(f"\n  {step}. All user-implemented body stubs already found in transform_*.cpp files.")
+            step += 1
 
 
 def process_gram_file(gram_filename, rule_types, excluded_rules):
