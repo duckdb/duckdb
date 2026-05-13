@@ -224,12 +224,20 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	string_data.max_type = string_data.min_type;
 }
 
-void StringStats::Update(BaseStatistics &stats, const string_t &value) {
-	//! we can only fit 8 bytes, so we might need to trim our string
-	// FIXME: allow larger strings instead of falling back to the
+void StringStats::FromConstant(BaseStatistics &stats, string_t value) {
+	static constexpr const idx_t CONSTANT_STATS_BOUND = 100000;
+
+	// use the string stats writer for setting stats
 	StringStatsWriter writer(stats.GetType());
 	writer.Update(value);
 	writer.Merge(stats);
+
+	// just directly assign the min/max, since the stats writer truncates
+	// ... except if it is REALLY long
+	if (value.GetSize() <= CONSTANT_STATS_BOUND) {
+		SetMin(stats, value, StringStatsType::EXACT_STATS);
+		SetMax(stats, value, StringStatsType::EXACT_STATS);
+	}
 }
 
 struct StringData {

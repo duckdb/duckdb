@@ -67,6 +67,9 @@ struct StringStats {
 	//! Returns the max value
 	DUCKDB_API static string Max(const BaseStatistics &stats);
 
+	//! Construct string stats from a constant
+	DUCKDB_API static void FromConstant(BaseStatistics &stats, string_t input);
+
 	DUCKDB_API static StringStatsType GetMinType(const BaseStatistics &stats);
 	DUCKDB_API static StringStatsType GetMaxType(const BaseStatistics &stats);
 
@@ -88,7 +91,6 @@ struct StringStats {
 	                                                     StringStatsType max_type, ExpressionType comparison_type,
 	                                                     string_t constant);
 
-	DUCKDB_API static void Update(BaseStatistics &stats, const string_t &value);
 	DUCKDB_API static void SetMin(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void SetMax(BaseStatistics &stats, const string_t &value, StringStatsType type);
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other);
