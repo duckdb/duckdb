@@ -728,20 +728,23 @@ def run_tests(config: TestRunnerConfig, batches):
 
     progress.flush_line()
     elapsed = time.monotonic() - start
+    exit_code = 0
+
     if state.failed_count:
         print(f"error: found {state.failed_count} test batch failures in {elapsed:.0f}s")
-        return 1
-
-    if total_skipped_tests > 0:
+        exit_code = 1
+    elif total_skipped_tests:
         print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
     else:
         print(f"all tests passed in {elapsed:.0f}s")
+
     if skipped_reason_counts:
         print()
         print("Skipped tests for the following reasons:")
         for reason in sorted(skipped_reason_counts):
             print(f"{reason}: {skipped_reason_counts[reason]}")
-    return 0
+
+    return exit_code
 
 
 if __name__ == "__main__":
