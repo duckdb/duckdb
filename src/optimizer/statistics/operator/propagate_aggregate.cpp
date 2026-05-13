@@ -313,11 +313,11 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 		vector<unique_ptr<Expression>> proj_expressions;
 		for (idx_t i = 0; i < aggr.expressions.size(); i++) {
 			auto &aggr_expr = aggr.expressions[i]->Cast<BoundAggregateExpression>();
-			const string &fun_name = aggr_expr.function.name;
+			const string &fun_name = aggr_expr.function.GetName();
 
 			// Reference to the aggregate output column
 			auto agg_col_ref = make_uniq<BoundColumnRefExpression>(
-			    aggr_expr.return_type, ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
+			    aggr_expr.GetReturnType(), ColumnBinding(aggr.aggregate_index, ProjectionIndex(i)));
 
 			if (fun_name == "count_star") {
 				// pre_count + count_star_from_scan
@@ -332,7 +332,7 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				string merge_func = (fun_name == "min") ? "least" : "greatest";
 				auto merged = optimizer.BindScalarFunction(merge_func, pre_val_expr->Copy(), std::move(agg_col_ref));
 				auto coalesce =
-				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.return_type);
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_COALESCE, aggr_expr.GetReturnType());
 				coalesce->children.push_back(std::move(merged));
 				coalesce->children.push_back(pre_val_expr->Copy());
 				coalesce->SetAlias(aggr.expressions[i]->GetAlias());

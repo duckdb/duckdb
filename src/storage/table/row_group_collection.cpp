@@ -267,10 +267,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
 	state.collection = this;
 	state.row_groups = GetRowGroups();
-	state.current_row_group = state.GetRootSegment(*state.row_groups);
-	while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
-		state.current_row_group = state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
-	}
+	state.AssignRowGroup(state.GetRootSegment(*state.row_groups));
 	state.vector_index = 0;
 	state.max_row = state.row_groups->GetBaseRowId() + total_rows;
 	state.batch_index = 0;
@@ -306,21 +303,14 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 				D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < current_row_group.count);
 				state.vector_index++;
 				if (state.vector_index * STANDARD_VECTOR_SIZE >= current_row_group.count) {
-					state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
-					while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
-						state.current_row_group =
-						    state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
-					}
+					state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 					state.vector_index = 0;
 				}
 			} else {
 				state.processed_rows += current_row_group.count;
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
-				state.current_row_group = state.GetNextRowGroup(*state.row_groups, *row_group).get();
-				while (state.current_row_group && !state.ShouldScanPartition(*state.current_row_group)) {
-					state.current_row_group = state.GetNextRowGroup(*state.row_groups, *state.current_row_group).get();
-				}
+				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
 			scan_state.batch_index = ++state.batch_index;

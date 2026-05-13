@@ -327,6 +327,7 @@ private:
 
 struct ParallelCollectionScanState {
 	ParallelCollectionScanState();
+	void AssignRowGroup(optional_ptr<SegmentNode<RowGroup>> row_group);
 	optional_ptr<SegmentNode<RowGroup>> GetRootSegment(RowGroupSegmentTree &row_groups) const;
 	optional_ptr<SegmentNode<RowGroup>> GetNextRowGroup(RowGroupSegmentTree &row_groups,
 	                                                    SegmentNode<RowGroup> &row_group) const;
