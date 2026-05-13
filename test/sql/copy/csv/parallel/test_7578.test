@@ -26,7 +26,7 @@ from  read_csv('{DATA_DIR}/csv/bug_7578.csv', delim='\t', quote = '`', columns={
 
 
 # FIXME: this fails randomly
-mode skip
+mode skip flaky
 
 statement ok
 pragma threads=2

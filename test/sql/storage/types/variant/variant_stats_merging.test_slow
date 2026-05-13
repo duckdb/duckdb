@@ -35,7 +35,7 @@ select count(*) from tbl where col is null
 122880
 
 # FIXME: this is wrong
-mode skip
+mode skip instable
 
 query I
 select s.has_null from (select s.fully_shredded.child_stats.stats s from (select stats(col) s from tbl limit 1));
