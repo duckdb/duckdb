@@ -1,5 +1,5 @@
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/operator/numeric_cast.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <thread>
 #include <cstdint>
