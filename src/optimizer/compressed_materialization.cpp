@@ -64,9 +64,11 @@ void CompressedMaterialization::UpdateBindingInfo(CompressedMaterializationInfo 
 
 	auto &binding_info = binding_it->second;
 	binding_info.needs_decompression = needs_decompression;
-	auto stats_it = statistics_map.find(binding);
-	if (stats_it != statistics_map.end()) {
-		binding_info.stats = statistics_map[binding]->ToUnique();
+	if (!binding_info.stats) {
+		auto stats_it = statistics_map.find(binding);
+		if (stats_it != statistics_map.end() && stats_it->second) {
+			binding_info.stats = stats_it->second->ToUnique();
+		}
 	}
 }
 
