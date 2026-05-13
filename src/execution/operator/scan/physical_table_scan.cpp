@@ -313,7 +313,7 @@ string PhysicalTableScan::GetFilterInfo(const TableFilterSet &filter_set) const 
 	bool first_item = true;
 	for (auto &f : filter_set) {
 		auto filter_idx = f.GetIndex();
-		auto &filter = f.Filter();
+		auto &filter = f.Filter().Cast<ExpressionFilter>();
 		if (filter_idx < names.size()) {
 			if (!first_item) {
 				filters_info += "\n";

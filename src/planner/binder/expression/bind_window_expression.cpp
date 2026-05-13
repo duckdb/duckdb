@@ -95,8 +95,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 
 BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
-	//	Check for macros pretending to be aggregates
 
+	//	Check for macros pretending to be aggregates
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.function_name, error_context);
 	auto entry = GetCatalogEntry(window.catalog, window.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
@@ -109,11 +109,17 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 
 	auto name = window.GetAlias();
 
+	if (inside_try) {
+		throw BinderException("window functions are not allowed in try");
+	}
+	if (inside_aggregate) {
+		throw BinderException(window, "aggregate function calls cannot contain window function calls");
+	}
 	if (inside_window) {
-		throw BinderException(error_context, "window function calls cannot be nested");
+		throw BinderException(window, "window function calls cannot be nested");
 	}
 	if (depth > 0) {
-		throw BinderException(error_context, "correlated columns in window functions not supported");
+		throw BinderException(window, "correlated columns in window functions not supported");
 	}
 
 	//  Look up the aggregate function in the catalog

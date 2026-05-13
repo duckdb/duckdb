@@ -11,7 +11,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -48,6 +47,12 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), sink_count(0), skip_lookups(false), enable_hll(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
+	clustered_state.all_clustered = AllAggregatesClustered(aggregate_objects_p);
+	clustered_state.n_clustered = CountAggregatesClustered(aggregate_objects_p);
+	if (clustered_state.n_clustered > 1) {
+		clustered_state.Initialize();
+	}
+
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 
@@ -291,7 +296,6 @@ idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
-	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));
 	if (Count() != 0 && size < capacity) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
@@ -408,6 +412,9 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		}
 		memset(dict_state.found_entry.get(), 0, dict_size * sizeof(bool));
 		dict_state.dictionary_id = dictionary_id;
+		dict_state.address_high_bits = ~uint64_t(0);
+		dict_state.address_high_bits_uniform =
+		    (sizeof(uintptr_t) == sizeof(uint64_t)); // only relevant on 64-bits systems
 	} else if (dict_size > dict_state.capacity) {
 		throw InternalException("AggregateHT - using cached dictionary data but dictionary has changed (dictionary id "
 		                        "%s - dict size %d, current capacity %d)",
@@ -455,7 +462,17 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	auto dict_addresses = FlatVector::ScatterWriter<uintptr_t>(dictionary_addresses);
 	for (idx_t i = 0; i < unique_count; i++) {
 		auto dict_idx = unique_entries.get_index(i);
-		dict_addresses[dict_idx] = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
+		const uintptr_t addr = new_dict_addresses[i] + layout_ptr->GetAggrOffset();
+		static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+		if (dict_state.address_high_bits_uniform) { // for clustered aggregation: check high bit uniformity
+			const uint64_t high_bits = static_cast<uint64_t>(addr) & GID_HIGH_MASK;
+			if (dict_state.address_high_bits == ~uint64_t(0)) { // uninitialized
+				dict_state.address_high_bits = high_bits;
+			} else if (high_bits != dict_state.address_high_bits) {
+				dict_state.address_high_bits_uniform = false;
+			}
+		}
+		dict_addresses[dict_idx] = addr;
 	}
 	// now set up the addresses for the aggregates
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, groups.size());
@@ -464,8 +481,8 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 		result_addresses.WriteValue(dict_addresses[dict_idx]);
 	}
 
-	// finally process the aggregates
-	UpdateAggregates(payload, filter);
+	// finally process the aggregates (ht_offsets are only valid for unique entries, not the full payload)
+	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
 }
@@ -506,13 +523,15 @@ optional_idx GroupedAggregateHashTable::TryAddConstantGroups(DataChunk &groups, 
 	auto new_dict_addresses = FlatVector::GetData<uintptr_t>(new_dictionary_pointers);
 	auto result_addresses = FlatVector::Writer<uintptr_t>(state.addresses, payload.size());
 	uintptr_t aggregate_address = new_dict_addresses[0] + layout_ptr->GetAggrOffset();
+	static constexpr uint64_t GID_HIGH_MASK = ~(ClusteredAggr::MAX_GID_COUNT - 1);
+	dict_state.address_high_bits_uniform = (sizeof(uintptr_t) == sizeof(uint64_t));
+	dict_state.address_high_bits = static_cast<uint64_t>(aggregate_address) & GID_HIGH_MASK;
 	for (idx_t i = 0; i < payload.size(); i++) {
 		result_addresses.WriteValue(aggregate_address);
 	}
-	FlatVector::SetSize(state.addresses, payload.size());
-	state.addresses.SetVectorType(VectorType::CONSTANT_VECTOR);
-	UpdateAggregates(payload, filter);
-	state.addresses.SetVectorType(VectorType::FLAT_VECTOR);
+
+	// Process the aggregates: ht_offsets are only valid for the single constant group, not the full payload.
+	UpdateAggregates(payload, filter, false);
 
 	return new_group_count;
 }
@@ -544,8 +563,57 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 	return AddChunk(groups, state.hashes, payload, filter);
 }
 
-void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter) {
-	// Now every cell has an entry, update the aggregates
+bool GroupedAggregateHashTable::UpdateAggregatesClustered(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                          bool ht_offsets_valid) {
+	if (skip_lookups) {
+		return false;
+	}
+	if (sizeof(uintptr_t) < sizeof(uint64_t)) {
+		return false;
+	}
+	ClusteredAggr clustered;
+	if (ht_offsets_valid) {
+		if (capacity >= ClusteredAggr::MAX_GID_COUNT) {
+			return false;
+		}
+		if (!clustered_state.TryBuild(clustered, FlatVector::GetData<uint64_t>(state.ht_offsets), payload.size())) {
+			return false;
+		}
+		const auto aggr_offset = layout_ptr->GetAggrOffset();
+		clustered.InitializeStates([&](uint64_t gid) {
+			auto slot = static_cast<idx_t>(gid);
+			return entries[slot].GetPointer() + aggr_offset;
+		});
+	} else {
+		// dictionary path: addresses are already resolved pointers — and gids are not even set then
+		// But, we can use the "addresses as gids". ClusteredAggr only triggers on low gid counts (see above) and
+		// for speed the TryClustered method exploits that by ignoring high gid bits. When using "addresses as gids"
+		// we thus need to know that all high bits are the same (this is very typically the case).
+		if (!state.dict_state.address_high_bits_uniform) {
+			return false;
+		}
+		auto addrs = FlatVector::GetData<uint64_t>(state.addresses);
+		if (!clustered_state.TryBuild(clustered, addrs, payload.size())) {
+			return false;
+		}
+		clustered.InitializeStates(
+		    [&](uint64_t gid) { return reinterpret_cast<data_ptr_t>(state.dict_state.address_high_bits | gid); });
+	}
+
+	const bool skip_addresses = clustered_state.all_clustered;
+	auto &aggregates = layout_ptr->GetAggregates();
+	RowOperations::UpdateStatesClustered(state.row_state, aggregates, &filter_set, &filter, state.addresses, payload,
+	                                     payload.size(), clustered, skip_addresses);
+	return true;
+}
+
+void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter,
+                                                 bool ht_offsets_valid) {
+	if (UpdateAggregatesClustered(payload, filter, ht_offsets_valid)) {
+		Verify();
+		return;
+	}
+
 	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;

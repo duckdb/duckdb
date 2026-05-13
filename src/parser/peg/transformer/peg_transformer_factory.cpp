@@ -434,11 +434,6 @@ void PEGTransformerFactory::RegisterDescribe() {
 	REGISTER_TRANSFORM(TransformSummarize);
 }
 
-void PEGTransformerFactory::RegisterDetach() {
-	// detach.gram
-	REGISTER_TRANSFORM(TransformDetachStatement);
-}
-
 void PEGTransformerFactory::RegisterDrop() {
 	// drop.gram
 	REGISTER_TRANSFORM(TransformDropStatement);
@@ -456,6 +451,7 @@ void PEGTransformerFactory::RegisterDrop() {
 	REGISTER_TRANSFORM(TransformDropCollation);
 	REGISTER_TRANSFORM(TransformDropType);
 	REGISTER_TRANSFORM(TransformDropBehavior);
+	REGISTER_TRANSFORM(TransformIfExists);
 	REGISTER_TRANSFORM(TransformDropSecret);
 	REGISTER_TRANSFORM(TransformDropSecretStorage);
 	REGISTER_TRANSFORM(TransformDropTrigger);
@@ -473,11 +469,6 @@ void PEGTransformerFactory::RegisterExplain() {
 	REGISTER_TRANSFORM(TransformExplainOptionList);
 	REGISTER_TRANSFORM(TransformExplainOption);
 	Register("ExplainOptionName", &TransformIdentifierOrKeyword);
-}
-
-void PEGTransformerFactory::RegisterExport() {
-	REGISTER_TRANSFORM(TransformExportSource);
-	REGISTER_TRANSFORM(TransformExportStatement);
 }
 
 void PEGTransformerFactory::RegisterExpression() {
@@ -653,10 +644,6 @@ void PEGTransformerFactory::RegisterExpression() {
 	REGISTER_TRANSFORM(TransformRenameEntry);
 
 	REGISTER_TRANSFORM(TransformIgnoreOrRespectNulls);
-}
-
-void PEGTransformerFactory::RegisterImport() {
-	REGISTER_TRANSFORM(TransformImportStatement);
 }
 
 void PEGTransformerFactory::RegisterInsert() {
@@ -883,13 +870,6 @@ void PEGTransformerFactory::RegisterSelect() {
 	REGISTER_TRANSFORM(TransformRepeatableSample);
 }
 
-void PEGTransformerFactory::RegisterUse() {
-	// use.gram
-	REGISTER_TRANSFORM(TransformUseStatement);
-	REGISTER_TRANSFORM(TransformUseTarget);
-	REGISTER_TRANSFORM(TransformUseTargetCatalogSchema);
-}
-
 void PEGTransformerFactory::RegisterSet() {
 	// set.gram
 	REGISTER_TRANSFORM(TransformResetStatement);
@@ -906,13 +886,7 @@ void PEGTransformerFactory::RegisterSet() {
 }
 
 void PEGTransformerFactory::RegisterTransaction() {
-	// transaction.gram
-	REGISTER_TRANSFORM(TransformTransactionStatement);
-	REGISTER_TRANSFORM(TransformBeginTransaction);
-	REGISTER_TRANSFORM(TransformReadOrWrite);
 	REGISTER_TRANSFORM(TransformReadOnlyOrReadWrite);
-	REGISTER_TRANSFORM(TransformCommitTransaction);
-	REGISTER_TRANSFORM(TransformRollbackTransaction);
 }
 
 void PEGTransformerFactory::RegisterUpdate() {
@@ -1101,6 +1075,7 @@ void PEGTransformerFactory::RegisterEnums() {
 }
 
 PEGTransformerFactory::PEGTransformerFactory() {
+	RegisterGenerated();
 	REGISTER_TRANSFORM(TransformStatement);
 	RegisterAlter();
 	RegisterAttach();
@@ -1121,14 +1096,11 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterCreateTrigger();
 	RegisterDeallocate();
 	RegisterDelete();
-	RegisterDetach();
 	RegisterDescribe();
 	RegisterDrop();
 	RegisterExecute();
 	RegisterExplain();
-	RegisterExport();
 	RegisterExpression();
-	RegisterImport();
 	RegisterInsert();
 	RegisterLoad();
 	RegisterMergeInto();
@@ -1136,7 +1108,6 @@ PEGTransformerFactory::PEGTransformerFactory() {
 	RegisterPragma();
 	RegisterPrepare();
 	RegisterSelect();
-	RegisterUse();
 	RegisterSet();
 	RegisterTransaction();
 	RegisterUpdate();

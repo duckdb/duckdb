@@ -8,7 +8,7 @@ require no_alternative_verify
 load {TEST_DIR}/test_fk_persistent.db
 
 statement ok
-SET memory_limit = '1925kB';
+SET memory_limit = '1792kB';
 
 statement ok
 SET threads = 2;

@@ -27,6 +27,181 @@ def start_runner(cli_args: list[str]):
 
 
 class RunTestsScriptTest(unittest.TestCase):
+    def test_reports_skipped_tests_summary(self):
+        cases = [
+            {
+                "name": "plain",
+                "stdout": """
+All tests passed (5 skipped tests, 123 assertions in 4 test cases)
+
+Skipped tests for the following reasons:
+require longdouble: 2
+require-env SOME_TOKEN: 3
+""",
+                "expected_skip_count": 5,
+                "expected_reasons": ["require longdouble: 2", "require-env SOME_TOKEN: 3"],
+            },
+            {
+                "name": "ansi",
+                "stdout": (
+                    "\x1b[36mAll tests passed (14 skipped tests, 2659 assertions in 86 test cases)\x1b[0m\n\n"
+                    "\x1b[1mSkipped tests for the following reasons:\x1b[0m\n"
+                    "\x1b[33mrequire httpfs: 1\x1b[0m\n"
+                    "\x1b[33mrequire icu: 2\x1b[0m\n"
+                    "\x1b[33mrequire-env LOCAL_EXTENSION_REPO: 5\x1b[0m\n"
+                ),
+                "expected_skip_count": 14,
+                "expected_reasons": ["require httpfs: 1", "require icu: 2", "require-env LOCAL_EXTENSION_REPO: 5"],
+            },
+        ]
+
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                test_list_path = create_temp_file("test/sql/a.test\n")
+                try:
+                    with mock.patch(
+                        "scripts.ci.run_tests.run_batch",
+                        return_value={
+                            "failed": False,
+                            "stdout": case["stdout"],
+                            "stderr": "",
+                            "message": None,
+                            "peak_rss_bytes": 0,
+                        },
+                    ):
+                        proc = start_runner(
+                            [
+                                "--workers",
+                                "1",
+                                "--batch-size",
+                                "1",
+                                "--test-list",
+                                str(test_list_path),
+                                "--test-command",
+                                "echo fake-run {test_list}",
+                                "unused-binary",
+                            ]
+                        )
+                finally:
+                    test_list_path.unlink(missing_ok=True)
+
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertIn("all tests passed in ", proc.stdout)
+                self.assertIn(f"({case['expected_skip_count']} skipped tests)", proc.stdout)
+                self.assertIn("Skipped tests for the following reasons:", proc.stdout)
+                for expected_reason in case["expected_reasons"]:
+                    self.assertIn(expected_reason, proc.stdout)
+
+    def test_aggregates_skipped_tests_from_multiple_batches(self):
+        test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
+        batch_outputs = [
+            {
+                "failed": False,
+                "stdout": """
+All tests passed (2 skipped tests, 100 assertions in 1 test cases)
+
+Skipped tests for the following reasons:
+require windows: 1
+require-env A: 1
+""",
+                "stderr": "",
+                "message": None,
+                "peak_rss_bytes": 0,
+            },
+            {
+                "failed": False,
+                "stdout": """
+All tests passed (3 skipped tests, 100 assertions in 1 test cases)
+
+Skipped tests for the following reasons:
+require-env A: 2
+require-env B: 1
+""",
+                "stderr": "",
+                "message": None,
+                "peak_rss_bytes": 0,
+            },
+        ]
+        try:
+            with mock.patch("scripts.ci.run_tests.run_batch", side_effect=batch_outputs):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("(5 skipped tests)", proc.stdout)
+        self.assertIn("require windows: 1", proc.stdout)
+        self.assertIn("require-env A: 3", proc.stdout)
+        self.assertIn("require-env B: 1", proc.stdout)
+
+    def test_retry_only_counts_skips_from_successful_attempt(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                side_effect=[
+                    {
+                        "failed": True,
+                        "stdout": """
+All tests passed (7 skipped tests, 100 assertions in 1 test cases)
+
+Skipped tests for the following reasons:
+require windows: 7
+""",
+                        "stderr": "",
+                        "message": "first attempt failed",
+                        "peak_rss_bytes": 0,
+                    },
+                    {
+                        "failed": False,
+                        "stdout": """
+All tests passed (2 skipped tests, 100 assertions in 1 test cases)
+
+Skipped tests for the following reasons:
+require windows: 2
+""",
+                        "stderr": "",
+                        "message": None,
+                        "peak_rss_bytes": 0,
+                    },
+                ],
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--retry",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("(2 skipped tests)", proc.stdout)
+        summary_block = proc.stdout.rsplit("Skipped tests for the following reasons:", 1)[-1]
+        self.assertIn("require windows: 2", summary_block)
+        self.assertNotIn("require windows: 7", summary_block)
+
     def test_generate_list(self):
         listed_tests_path = create_temp_file(
             """
