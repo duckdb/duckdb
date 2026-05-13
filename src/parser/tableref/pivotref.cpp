@@ -274,7 +274,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 vector<PivotColumnEntry> PivotColumn::GetEntriesForSerialization(Serializer &serializer) const {
 	vector<PivotColumnEntry> result;
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		// Latest version, serialize as is.
 		// Unfortunately, we have to make a deep copy to return vector by value.
 		for (auto &entry : entries) {

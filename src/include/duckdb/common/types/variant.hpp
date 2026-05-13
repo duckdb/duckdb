@@ -12,6 +12,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb_yyjson {
 struct yyjson_mut_doc;

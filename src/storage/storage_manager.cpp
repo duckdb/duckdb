@@ -368,7 +368,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		// in-memory databases can always use the latest storage version
-		storage_version = GetSerializationVersion("latest");
+		storage_version = GetStorageVersion("latest");
 		load_complete = true;
 		return;
 	}

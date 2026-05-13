@@ -322,7 +322,7 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::DeepCopy() const {
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
 
-	if (serializer.ShouldSerialize(7)) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
 		return;
 	}

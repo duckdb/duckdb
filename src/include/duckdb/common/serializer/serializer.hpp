@@ -45,8 +45,12 @@ public:
 	virtual ~Serializer() {
 	}
 
-	bool ShouldSerialize(idx_t version_added) {
+	bool ShouldSerializeInternal(StorageVersion version_added) const {
 		return options.storage_compatibility.Compare(version_added);
+	}
+
+	bool ShouldSerialize(StorageVersion version_added) const {
+		return ShouldSerializeInternal(version_added);
 	}
 
 	class List {

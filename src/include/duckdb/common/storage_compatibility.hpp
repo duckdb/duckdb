@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -16,13 +17,15 @@ class AttachedDatabase;
 class StorageCompatibility {
 public:
 	static StorageCompatibility FromDatabase(AttachedDatabase &db);
-	static StorageCompatibility FromIndex(idx_t storage_version);
+	static StorageCompatibility FromIndex(StorageVersion storage_version_p);
 	static StorageCompatibility FromString(const string &input);
 	static StorageCompatibility Default();
 	static StorageCompatibility Latest();
 
 public:
-	bool Compare(idx_t property_version) const;
+	bool Compare(StorageVersion property_version) const;
+	bool CompareVersionString(const string &property_version) const;
+	StorageVersion GetStorageVersionCompatibility() const;
 
 public:
 	//! The user provided version

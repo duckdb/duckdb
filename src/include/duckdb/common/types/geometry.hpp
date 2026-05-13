@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include <limits>
 #include <cmath>
 
