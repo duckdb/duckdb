@@ -1,10 +1,12 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 
 namespace duckdb {
 
@@ -130,26 +132,53 @@ struct BitwiseOperation {
 	}
 };
 
-struct BitAndOperation : public BitwiseOperation {
+template <class OP>
+struct NumericBitwiseOperation : public BitwiseOperation, public ClusteredStateCopy {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value &= typename STATE::TYPE(input);
-		;
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input) {
+		if (!local.is_set) {
+			Assign(local, input);
+			local.is_set = true;
+		} else {
+			OP::template Execute<INPUT_TYPE>(local, input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if (count != 0) {
+			UpdateClusteredLocal(local, input);
+		}
 	}
 };
 
-struct BitOrOperation : public BitwiseOperation {
+template <class OP>
+struct SimpleBitwiseOperation : public NumericBitwiseOperation<SimpleBitwiseOperation<OP>> {
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value |= typename STATE::TYPE(input);
-		;
+		state.value = OP::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
 	}
 };
 
-struct BitXorOperation : public BitwiseOperation {
+using BitAndOperation = SimpleBitwiseOperation<BitAnd>;
+using BitOrOperation = SimpleBitwiseOperation<BitOr>;
+
+struct BitXorOperation : public NumericBitwiseOperation<BitXorOperation> {
+	using NumericBitwiseOperation<BitXorOperation>::UpdateClusteredLocal;
+
 	template <class INPUT_TYPE, class STATE>
 	static void Execute(STATE &state, INPUT_TYPE input) {
-		state.value ^= typename STATE::TYPE(input);
+		state.value = BitXor::template Operation<typename STATE::TYPE>(state.value, typename STATE::TYPE(input));
+	}
+
+	template <class INPUT_TYPE, class STATE>
+	static void UpdateClusteredLocal(STATE &local, const INPUT_TYPE &input, idx_t count) {
+		if ((count & 1) != 0) {
+			NumericBitwiseOperation<BitXorOperation>::template UpdateClusteredLocal<INPUT_TYPE>(local, input);
+		} else if (count != 0 && !local.is_set) {
+			local.value = typename STATE::TYPE(0);
+			local.is_set = true;
+		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>

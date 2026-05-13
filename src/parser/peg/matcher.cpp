@@ -1177,7 +1177,9 @@ public:
 				throw InternalException("Choice matcher should never be the root in the matcher stack");
 			}
 			root_matcher.Cast<ChoiceMatcher>().matchers.push_back(matcher);
-			matchers.pop_back();
+			if (!matchers.empty()) {
+				matchers.pop_back();
+			}
 			break;
 		default:
 			throw InternalException("Cannot add matcher to root matcher of this type");
@@ -1311,7 +1313,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 					final_matcher = Repeat(final_matcher.get());
 				}
 				auto &replaced_matcher = Optional(final_matcher);
-				list_matcher.matchers.pop_back();
+				if (!list_matcher.matchers.empty()) {
+					list_matcher.matchers.pop_back();
+				}
 				list_matcher.matchers.push_back(replaced_matcher);
 				break;
 			}
@@ -1327,7 +1331,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 				}
 				auto &final_matcher = list_matcher.matchers.back();
 				final_matcher = Repeat(final_matcher.get());
-				list_matcher.matchers.pop_back();
+				if (!list_matcher.matchers.empty()) {
+					list_matcher.matchers.pop_back();
+				}
 				list_matcher.matchers.push_back(final_matcher);
 				break;
 			}
@@ -1350,7 +1356,9 @@ Matcher &MatcherFactory::CreateMatcher(PEGParser &parser, string_t rule_name, ve
 					choice_options.push_back(previous_matcher);
 					auto &new_choice_matcher = Choice(choice_options);
 
-					list_matcher.matchers.pop_back();
+					if (!list_matcher.matchers.empty()) {
+						list_matcher.matchers.pop_back();
+					}
 					list_matcher.matchers.push_back(new_choice_matcher);
 
 					list.AddRootMatcher(new_choice_matcher);

@@ -51,7 +51,6 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -1176,15 +1175,16 @@ static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const
                                                      const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
 	// check both stats against the filter
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetFloatFilter");
 	auto &type = reader.Type();
 	auto nan_stats = NumericStats::CreateUnknown(type);
 	auto nan_value = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(nan_stats, nan_value);
 	NumericStats::SetMax(nan_stats, nan_value);
-	auto nan_prune = filter.CheckStatistics(nan_stats);
+	auto nan_prune = expr_filter.CheckStatistics(nan_stats);
 
 	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
-	auto prune = filter.CheckStatistics(*min_max_stats);
+	auto prune = expr_filter.CheckStatistics(*min_max_stats);
 
 	// if EITHER of them cannot be pruned - we cannot prune
 	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
@@ -1245,7 +1245,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				prune_result = CheckParquetFloatFilter(column_reader,
 				                                       group.columns[schema_column_index].meta_data.statistics, filter);
 			} else {
-				prune_result = filter.CheckStatistics(*stats);
+				auto &expr_filter =
+				    ExpressionFilter::GetExpressionFilter(filter, "ParquetReader::PrepareRowGroupBuffer");
+				prune_result = expr_filter.CheckStatistics(*stats);
 			}
 			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
@@ -1493,7 +1495,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					// check if any filter is non-optional
 					bool has_non_optional_filter = false;
 					for (auto &entry : *filters) {
-						if (entry.Filter().filter_type != TableFilterType::OPTIONAL_FILTER) {
+						if (!ExpressionFilter::IsRootOptionalFilter(entry.Filter())) {
 							has_non_optional_filter = true;
 						}
 					}
@@ -1508,7 +1510,7 @@ AsyncResult ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &
 					bool has_filter = false;
 					if (filters) {
 						auto filter = filters->TryGetFilterByColumnIndex(col_idx);
-						if (filter && filter->filter_type != TableFilterType::OPTIONAL_FILTER) {
+						if (filter && !ExpressionFilter::IsRootOptionalFilter(*filter)) {
 							has_filter = true;
 						}
 					}
