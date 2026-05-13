@@ -24,6 +24,16 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
+# Consume optional vcpkg-related cache variables passed by CI/Makefile to avoid
+# "manually-specified variables were not used by the project" warnings in
+# extension-config-only runs.
+if(DEFINED VCPKG_BUILD)
+  set(_duckdb_vcpkg_build "${VCPKG_BUILD}")
+endif()
+if(DEFINED VCPKG_MANIFEST_DIR)
+  set(_duckdb_vcpkg_manifest_dir "${VCPKG_MANIFEST_DIR}")
+endif()
+
 set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
