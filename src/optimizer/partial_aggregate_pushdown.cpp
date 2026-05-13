@@ -167,8 +167,19 @@ static bool PassesCardinalityHeuristic(const LogicalComparisonJoin &join, const 
 	if (!aggregate_child.has_estimated_cardinality || !dimension_child.has_estimated_cardinality) {
 		return true;
 	}
-	return aggregate_child.estimated_cardinality >=
-	       PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO * dimension_child.estimated_cardinality;
+	if (aggregate_child.estimated_cardinality <
+	    PartialAggregatePushdownHeuristics::MIN_AGGREGATE_TO_DIMENSION_RATIO * dimension_child.estimated_cardinality) {
+		return false;
+	}
+	// Reject when the join is highly selective on the aggregate side — if the
+	// join already shrinks the fact stream to <1/8 of its original size, doing
+	// the aggregation AFTER the join is cheaper than before. (Without this
+	// guard, Q92's inner subquery pushed SUM/COUNT below a date_dim filter
+	// that cuts web_sales from 719K to ~1k rows, doing ~700x more work.)
+	if (join.has_estimated_cardinality && join.estimated_cardinality * 8 < aggregate_child.estimated_cardinality) {
+		return false;
+	}
+	return true;
 }
 
 static bool GetJoinSideExpressions(JoinCondition &condition, const PartialAggregatePushdownInfo &info,
