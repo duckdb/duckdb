@@ -81,7 +81,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		// IN with enough values can benefit from a hash join is handled by InClauseRewriter
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
 			auto &in_expr = expr.Cast<BoundOperatorExpression>();
-			if (!in_expr.children.empty() && in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+			if (!in_expr.children.empty() &&
+			    in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
 		}
