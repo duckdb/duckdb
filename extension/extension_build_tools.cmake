@@ -568,8 +568,12 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
     include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load base extension config
-include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+# Load base extension config unless explicit extension configs were provided
+if (NOT "${DUCKDB_EXTENSION_CONFIGS}" STREQUAL "")
+    message(STATUS "Skipping base extension config because DUCKDB_EXTENSION_CONFIGS is set")
+else()
+    include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
+endif()
 
 # Write linked libs to file for bundle-setup
 if(DUCKDB_ALL_LINKED_LIBS)
