@@ -1,8 +1,5 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/common/vector/string_vector.hpp"
-#include "duckdb/common/vector/flat_vector.hpp"
 
 namespace duckdb {
 
@@ -35,79 +32,63 @@ static int64_t CharLength(const char *data, idx_t size) {
 	return length;
 }
 
-static string_t OverlayScalar(Vector &result, string_t input, string_t replacement, int64_t start, int64_t count) {
-	auto input_data = input.GetData();
-	auto input_size = input.GetSize();
-	auto repl_data = replacement.GetData();
-	auto repl_size = replacement.GetSize();
+void OverlayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto count = args.size();
 
-	if (count < 0) {
-		count = 0;
+	auto input_values = args.data[0].Values<string_t>();
+	auto repl_values = args.data[1].Values<string_t>();
+	auto start_values = args.data[2].Values<int64_t>();
+	optional<VectorIterator<int64_t>> count_values;
+	if (args.ColumnCount() == 4) {
+		count_values = args.data[3].Values<int64_t>();
 	}
 
-	idx_t byte_start = CharPosToByte(input_data, input_size, start);
-	idx_t byte_end = CharPosToByte(input_data, input_size, start + count);
+	auto result_data = FlatVector::Writer<string_t>(result, count);
+	for (idx_t i = 0; i < count; i++) {
+		auto input_entry = input_values[i];
+		auto repl_entry = repl_values[i];
+		auto start_entry = start_values[i];
 
-	idx_t before_size = byte_start;
-	idx_t after_size = input_size - byte_end;
-	idx_t total_size = before_size + repl_size + after_size;
-
-	auto result_string = StringVector::EmptyString(result, total_size);
-	auto result_data = result_string.GetDataWriteable();
-
-	memcpy(result_data, input_data, before_size);
-	memcpy(result_data + before_size, repl_data, repl_size);
-	memcpy(result_data + before_size + repl_size, input_data + byte_end, after_size);
-
-	result_string.Finalize();
-	return result_string;
-}
-
-void OverlayFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input_vec = args.data[0];
-	auto &repl_vec = args.data[1];
-	auto &start_vec = args.data[2];
-
-	if (args.ColumnCount() == 4) {
-		auto &count_vec = args.data[3];
-		// Flatten all inputs so we can iterate safely
-		UnifiedVectorFormat input_data, repl_data, start_data, count_data;
-		input_vec.ToUnifiedFormat(input_data);
-		repl_vec.ToUnifiedFormat(repl_data);
-		start_vec.ToUnifiedFormat(start_data);
-		count_vec.ToUnifiedFormat(count_data);
-
-		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
-		auto repls = UnifiedVectorFormat::GetData<string_t>(repl_data);
-		auto starts = UnifiedVectorFormat::GetData<int64_t>(start_data);
-		auto counts = UnifiedVectorFormat::GetData<int64_t>(count_data);
-
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		auto result_entries = FlatVector::GetDataMutable<string_t>(result);
-		auto &result_validity = FlatVector::ValidityMutable(result);
-
-		for (idx_t i = 0; i < args.size(); i++) {
-			auto input_idx = input_data.sel->get_index(i);
-			auto repl_idx = repl_data.sel->get_index(i);
-			auto start_idx = start_data.sel->get_index(i);
-			auto count_idx = count_data.sel->get_index(i);
-
-			if (!input_data.validity.RowIsValid(input_idx) || !repl_data.validity.RowIsValid(repl_idx) ||
-			    !start_data.validity.RowIsValid(start_idx) || !count_data.validity.RowIsValid(count_idx)) {
-				result_validity.SetInvalid(i);
+		if (!input_entry.IsValid() || !repl_entry.IsValid() || !start_entry.IsValid()) {
+			result_data.WriteNull();
+			continue;
+		}
+		auto input = input_entry.GetValue();
+		auto repl = repl_entry.GetValue();
+		int64_t char_count = CharLength(repl.GetData(), repl.GetSize());
+		if (count_values.has_value()) {
+			auto count_entry = count_values.value()[i];
+			if (!count_entry.IsValid()) {
+				result_data.WriteNull();
 				continue;
 			}
-			int64_t count_value = counts[count_idx] < 0 ? (int64_t)repls->GetSize() : counts[count_idx];
-			result_entries[i] =
-			    OverlayScalar(result, inputs[input_idx], repls[repl_idx], starts[start_idx], count_value);
+			if (count_entry.GetValue() >= 0) {
+				char_count = count_entry.GetValue();
+			}
 		}
-	} else {
-		TernaryExecutor::Execute<string_t, string_t, int64_t, string_t>(
-		    input_vec, repl_vec, start_vec, result, args.size(),
-		    [&](string_t input, string_t replacement, int64_t start) {
-			    int64_t count = CharLength(replacement.GetData(), replacement.GetSize());
-			    return OverlayScalar(result, input, replacement, start, count);
-		    });
+
+		auto input_ptr = input.GetData();
+		auto input_size = input.GetSize();
+		auto repl_ptr = repl.GetData();
+		auto repl_size = repl.GetSize();
+		auto start = start_entry.GetValue();
+
+		idx_t byte_start = CharPosToByte(input_ptr, input_size, start);
+		int64_t end_pos = (char_count > 0 && start > NumericLimits<int64_t>::Maximum() - char_count)
+		                      ? NumericLimits<int64_t>::Maximum()
+		                      : start + char_count;
+		idx_t byte_end = CharPosToByte(input_ptr, input_size, end_pos);
+		idx_t after_size = input_size - byte_end;
+		idx_t blob_size = byte_start + repl_size + after_size;
+
+		auto &blob = result_data.WriteEmptyString(blob_size);
+		auto blob_ptr = blob.GetDataWriteable();
+
+		memcpy(blob_ptr, input_ptr, byte_start);
+		memcpy(blob_ptr + byte_start, repl_ptr, repl_size);
+		memcpy(blob_ptr + byte_start + repl_size, input_ptr + byte_end, after_size);
+
+		blob.Finalize();
 	}
 }
 
