@@ -22,7 +22,7 @@ TEST_CASE("Test StringStats HasMinMax edge cases", "[string_stats]") {
 
 	SECTION("VARCHAR with only max set reports a usable range from empty string") {
 		auto stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
-		StringStats::SetMax(stats, string_t("dog"));
+		StringStats::SetMax(stats, string_t("dog"), StringStatsType::EXACT_STATS);
 
 		REQUIRE(StringStats::HasMinMax(stats));
 		REQUIRE(StringStats::Min(stats) == "");
@@ -39,7 +39,7 @@ TEST_CASE("Test StringStats HasMinMax edge cases", "[string_stats]") {
 
 	SECTION("VARCHAR with only min set remains unusable for HasMinMax but zonemaps can still use it") {
 		auto stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
-		StringStats::SetMin(stats, string_t("dog"));
+		StringStats::SetMin(stats, string_t("dog"), StringStatsType::EXACT_STATS);
 
 		REQUIRE_FALSE(StringStats::HasMinMax(stats));
 
@@ -50,8 +50,8 @@ TEST_CASE("Test StringStats HasMinMax edge cases", "[string_stats]") {
 
 	SECTION("VARCHAR stats with empty string minimum remain usable") {
 		auto stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
-		StringStats::SetMin(stats, string_t(""));
-		StringStats::SetMax(stats, string_t("dog"));
+		StringStats::SetMin(stats, string_t(""), StringStatsType::EXACT_STATS);
+		StringStats::SetMax(stats, string_t("dog"), StringStatsType::EXACT_STATS);
 
 		REQUIRE(StringStats::HasMinMax(stats));
 		REQUIRE(StringStats::Min(stats) == "");
@@ -64,7 +64,8 @@ TEST_CASE("Test StringStats HasMinMax edge cases", "[string_stats]") {
 
 		auto max_only = StringStats::CreateUnknown(LogicalType::BLOB);
 		auto max_blob = string("\x00\x7f", 2);
-		StringStats::SetMax(max_only, string_t(max_blob.data(), UnsafeNumericCast<uint32_t>(max_blob.size())));
+		StringStats::SetMax(max_only, string_t(max_blob.data(), UnsafeNumericCast<uint32_t>(max_blob.size())),
+		                    StringStatsType::EXACT_STATS);
 		REQUIRE(StringStats::HasMinMax(max_only));
 
 		auto outside_upper_bound = Value::BLOB_RAW(string("\x01\x00", 2));
@@ -73,7 +74,8 @@ TEST_CASE("Test StringStats HasMinMax edge cases", "[string_stats]") {
 
 		auto min_only = StringStats::CreateUnknown(LogicalType::BLOB);
 		auto min_blob = string("\x10\x00", 2);
-		StringStats::SetMin(min_only, string_t(min_blob.data(), UnsafeNumericCast<uint32_t>(min_blob.size())));
+		StringStats::SetMin(min_only, string_t(min_blob.data(), UnsafeNumericCast<uint32_t>(min_blob.size())),
+		                    StringStatsType::EXACT_STATS);
 		REQUIRE(StringStats::HasMinMax(min_only));
 
 		auto below_lower_bound = Value::BLOB_RAW(string("\x00\xff", 2));

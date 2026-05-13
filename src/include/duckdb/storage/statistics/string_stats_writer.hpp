@@ -16,7 +16,7 @@
 namespace duckdb {
 
 struct StringStatsWriter {
-	friend class StringStats;
+	friend struct StringStats;
 
 	explicit StringStatsWriter(const LogicalType &type)
 	    : is_varchar(type.id() == LogicalTypeId::VARCHAR), is_geometry(type.id() == LogicalTypeId::GEOMETRY) {
@@ -88,11 +88,11 @@ struct StringStatsWriter {
 		return 0;
 	}
 
-	static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
-		idx_t value_size =
-		    size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
+	static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[],
+	                           idx_t max_length = StringStatsData::MAX_STRING_MINMAX_SIZE) {
+		idx_t value_size = size > max_length ? max_length : size;
 		memcpy(target, data, value_size);
-		for (idx_t i = value_size; i < StringStatsData::MAX_STRING_MINMAX_SIZE; i++) {
+		for (idx_t i = value_size; i < max_length; i++) {
 			target[i] = '\0';
 		}
 	}

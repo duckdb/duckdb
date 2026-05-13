@@ -1172,49 +1172,6 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 	return min_offset;
 }
 
-static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
-                                                      const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
-		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-		for (auto &child_filter : conjunction_filter.child_filters) {
-			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
-			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			}
-			if (child_prune_result != and_result) {
-				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			}
-		}
-		return and_result;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "CheckParquetStringFilter");
-		auto &expr = *expr_filter.expr;
-
-		// Handle comparison expressions (from ConstantFilter conversion)
-		if (BoundComparisonExpression::IsComparison(expr)) {
-			auto &comp = expr.Cast<BoundFunctionExpression>();
-			auto &right = BoundComparisonExpression::Right(comp);
-			if (right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				auto &constant = right.Cast<BoundConstantExpression>();
-				if (constant.value.type().id() == LogicalTypeId::VARCHAR) {
-					auto &min_value = pq_col_stats.min_value;
-					auto &max_value = pq_col_stats.max_value;
-					return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
-					                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
-					                                 comp.GetExpressionType(), StringValue::Get(constant.value));
-				}
-			}
-		}
-		return filter.Cast<ExpressionFilter>().CheckStatistics(stats);
-	}
-	default:
-		return filter.CheckStatistics(stats);
-	}
-}
-
 static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
                                                      const TableFilter &filter) {
 	// floating point values can have values in the [min, max] domain AND nan values
@@ -1278,12 +1235,6 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!is_generated_column && has_min_max && column_reader.Type().id() == LogicalTypeId::VARCHAR) {
-				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
-				// however, when reading remote Parquet files, skipping row groups is really important
-				// here, we implement a special case to check the full length for string filters
-				prune_result =
-				    CheckParquetStringFilter(*stats, group.columns[schema_column_index].meta_data.statistics, filter);
 			} else if (!is_generated_column && has_min_max &&
 			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
 			            column_reader.Type().id() == LogicalTypeId::DOUBLE) &&

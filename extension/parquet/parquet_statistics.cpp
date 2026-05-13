@@ -359,6 +359,10 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	}
 }
 
+bool IsVariantNull(const string &str) {
+	return str.size() == 1 && str[0] == '\0';
+}
+
 static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStatistics> input_p) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::UINTEGER);
 
@@ -369,14 +373,13 @@ static bool ConvertUnshreddedStats(BaseStatistics &result, optional_ptr<BaseStat
 	D_ASSERT(input.GetType().id() == LogicalTypeId::BLOB);
 	result.CopyValidity(input);
 
-	auto min = StringStats::Min(input);
-	auto max = StringStats::Max(input);
-
 	if (!result.CanHaveNoNull()) {
 		return true;
 	}
 
-	if (min.empty() && max.empty()) {
+	auto min = StringStats::Min(input);
+	auto max = StringStats::Max(input);
+	if (IsVariantNull(min) && IsVariantNull(max)) {
 		//! All non-shredded values are NULL or VARIANT_NULL, set the stats to indicate this
 		NumericStats::SetMin<uint32_t>(result, 0);
 		NumericStats::SetMax<uint32_t>(result, 0);
@@ -479,15 +482,21 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateUnknown(type);
 		const bool is_varchar = type.id() == LogicalTypeId::VARCHAR;
+		auto min_stats_type = parquet_stats.__isset.is_min_value_exact && parquet_stats.is_min_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
+		auto max_stats_type = parquet_stats.__isset.is_max_value_exact && parquet_stats.is_max_value_exact
+		                          ? StringStatsType::EXACT_STATS
+		                          : StringStatsType::TRUNCATED_STATS;
 		if (parquet_stats.__isset.min_value && StringColumnReader::IsValid(parquet_stats.min_value, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min_value);
+			StringStats::SetMin(string_stats, parquet_stats.min_value, min_stats_type);
 		} else if (parquet_stats.__isset.min && StringColumnReader::IsValid(parquet_stats.min, is_varchar)) {
-			StringStats::SetMin(string_stats, parquet_stats.min);
+			StringStats::SetMin(string_stats, parquet_stats.min, min_stats_type);
 		}
 		if (parquet_stats.__isset.max_value && StringColumnReader::IsValid(parquet_stats.max_value, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max_value);
+			StringStats::SetMax(string_stats, parquet_stats.max_value, max_stats_type);
 		} else if (parquet_stats.__isset.max && StringColumnReader::IsValid(parquet_stats.max, is_varchar)) {
-			StringStats::SetMax(string_stats, parquet_stats.max);
+			StringStats::SetMax(string_stats, parquet_stats.max, max_stats_type);
 		}
 		return string_stats.ToUnique();
 	}

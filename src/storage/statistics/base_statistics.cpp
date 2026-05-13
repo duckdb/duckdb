@@ -259,6 +259,9 @@ void BaseStatistics::Copy(const BaseStatistics &other) {
 	case StatisticsType::VARIANT_STATS:
 		VariantStats::Copy(*this, other);
 		break;
+	case StatisticsType::STRING_STATS:
+		StringStats::Copy(*this, other);
+		break;
 	default:
 		break;
 	}
