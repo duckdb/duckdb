@@ -29,6 +29,9 @@ bool JoinFilterPushdownUtil::PushdownJoinFilterExpression(const Expression &expr
 		// interval is not supported for pushdown
 		return false;
 	}
+	if (!filter.filter_type.IsValid()) {
+		filter.filter_type = expr.GetReturnType();
+	}
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		// column-ref - pass through the new column binding

@@ -30,6 +30,8 @@ struct JoinFilterPushdownColumn {
 	ColumnBinding probe_column_index;
 	//! The type of the value in storage (LogicalGet)
 	LogicalType storage_type;
+	//! The original type of the pushed probe expression before rewriting to the LogicalGet storage column
+	LogicalType filter_type;
 };
 
 struct JoinFilterGlobalState {
@@ -96,13 +98,14 @@ private:
 	void PushInFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
 	                  idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 
-	void PushBloomFilter(const PhysicalOperator &op, JoinHashTable &ht, const JoinFilterPushdownFilter &info,
-	                     ProjectionIndex filter_col_idx) const;
-	void PushPerfectHashJoinFilter(const PhysicalOperator &op, PerfectHashJoinExecutor &perfect_join_executor,
-	                               const JoinFilterPushdownFilter &info, ProjectionIndex filter_col_idx) const;
+	void PushBloomFilter(ClientContext &context, const PhysicalOperator &op, JoinHashTable &ht,
+	                     const JoinFilterPushdownFilter &info, idx_t filter_idx, ProjectionIndex filter_col_idx) const;
+	void PushPerfectHashJoinFilter(ClientContext &context, const PhysicalOperator &op,
+	                               PerfectHashJoinExecutor &perfect_join_executor, const JoinFilterPushdownFilter &info,
+	                               idx_t filter_idx, ProjectionIndex filter_col_idx) const;
 	void RegisterPrefixRangeFilter(const JoinFilterPushdownFilter &info, ClientContext &context, JoinHashTable &ht,
-	                               const PhysicalOperator &op, ProjectionIndex filter_col_idx, const Value &min_val,
-	                               const Value &max_val) const;
+	                               const PhysicalOperator &op, idx_t filter_idx, ProjectionIndex filter_col_idx,
+	                               const Value &min_val, const Value &max_val) const;
 
 	bool CanUseInFilter(const ClientContext &context, optional_ptr<JoinHashTable> ht, const ExpressionType &cmp) const;
 	bool CanUseBloomFilter(const ClientContext &context, const PhysicalComparisonJoin &op, const ExpressionType &cmp,

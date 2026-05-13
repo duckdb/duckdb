@@ -149,3 +149,201 @@ JOIN build_part b
   ON p.part = b.part
 ----
 2000
+
+# PR #21791 made non-min/max runtime join filters work when the probe-side
+# storage type needs to be cast to the hash-table key type. PR #22645 currently
+# keeps the min/max filters but drops the PRF in this shape.
+statement ok
+CREATE TABLE probe_cast_up AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_cast_up AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_cast_up p
+JOIN build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN PRF\(k\).*
+
+query I
+SELECT count(*)
+FROM probe_cast_up p
+JOIN build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+# The reverse cast direction still has the PRF. This keeps the test from being
+# only a generic "PRF disabled" check.
+statement ok
+CREATE TABLE probe_cast_down AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE build_cast_down AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM (VALUES (100000), (900000)) v(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM probe_cast_down p
+JOIN build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN PRF\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM probe_cast_down p
+JOIN build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+2
+
+# Perfect hash join filters have the same cast-up gap. This query has only a
+# single equality condition and a small build range so PHJ is preferred over PRF
+# or BF when the filter is allowed through.
+statement ok
+CREATE TABLE phj_probe_cast_up AS
+SELECT i::INTEGER AS k
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE phj_build_cast_up AS
+SELECT i::BIGINT AS k
+FROM range(100000, 100010) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM phj_probe_cast_up p
+JOIN phj_build_cast_up b
+  ON p.k = b.k
+----
+analyzed_plan	<REGEX>:.*IN PHJ\(k\).*
+
+query I
+SELECT count(*)
+FROM phj_probe_cast_up p
+JOIN phj_build_cast_up b
+  ON p.k = b.k
+----
+10
+
+statement ok
+CREATE TABLE phj_probe_cast_down AS
+SELECT i::BIGINT AS k
+FROM range(0, 1000000) t(i)
+
+statement ok
+CREATE TABLE phj_build_cast_down AS
+SELECT i::INTEGER AS k
+FROM range(100000, 100010) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM phj_probe_cast_down p
+JOIN phj_build_cast_down b
+  ON p.k = b.k
+----
+analyzed_plan	<REGEX>:.*IN PHJ\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM phj_probe_cast_down p
+JOIN phj_build_cast_down b
+  ON p.k = b.k
+----
+10
+
+# Bloom filters need a larger sparse build side so PRF is not selected first.
+# The residual inequality also prevents using the perfect hash join path.
+statement ok
+CREATE TABLE bf_probe_cast_up AS
+SELECT i::INTEGER AS k, (i % 7)::INTEGER AS g
+FROM range(0, 2000000) t(i)
+
+statement ok
+CREATE TABLE bf_build_cast_up AS
+SELECT (100000 + i * 3)::BIGINT AS k, ((100000 + i * 3) % 7)::INTEGER AS g
+FROM range(0, 600000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN bf_build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN BF\(k\).*
+
+query I
+SELECT count(*)
+FROM bf_probe_cast_up p
+JOIN bf_build_cast_up b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+600000
+
+statement ok
+CREATE TABLE bf_probe_cast_down AS
+SELECT i::BIGINT AS k, (i % 7)::INTEGER AS g
+FROM range(0, 2000000) t(i)
+
+statement ok
+CREATE TABLE bf_build_cast_down AS
+SELECT (100000 + i * 3)::INTEGER AS k, ((100000 + i * 3) % 7)::INTEGER AS g
+FROM range(0, 600000) t(i)
+
+statement ok
+CHECKPOINT
+
+query II
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM bf_probe_cast_down p
+JOIN bf_build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+analyzed_plan	<REGEX>:.*IN BF\(CAST\(k AS BIGINT\)\).*
+
+query I
+SELECT count(*)
+FROM bf_probe_cast_down p
+JOIN bf_build_cast_down b
+  ON p.k = b.k
+ AND p.g >= b.g
+----
+600000
