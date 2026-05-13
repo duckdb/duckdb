@@ -795,25 +795,27 @@ if(OS_NAME STREQUAL "windows")
 endif()
 
 include_directories(src/include)
-include_directories(third_party/fsst)
-include_directories(third_party/fmt/include)
-include_directories(third_party/hyperloglog)
-include_directories(third_party/fastpforlib)
-include_directories(third_party/skiplist)
-include_directories(third_party/ska_sort)
-include_directories(third_party/fast_float)
-include_directories(third_party/re2)
-include_directories(third_party/miniz)
-include_directories(third_party/utf8proc/include)
-include_directories(third_party/concurrentqueue)
-include_directories(third_party/pcg)
-include_directories(third_party/pdqsort)
-include_directories(third_party/tdigest)
-include_directories(third_party/mbedtls/include)
-include_directories(third_party/jaro_winkler)
-include_directories(third_party/vergesort)
-include_directories(third_party/yyjson/include)
-include_directories(third_party/zstd/include)
+if (NOT EXTENSION_CONFIG_BUILD)
+  include_directories(third_party/fsst)
+  include_directories(third_party/fmt/include)
+  include_directories(third_party/hyperloglog)
+  include_directories(third_party/fastpforlib)
+  include_directories(third_party/skiplist)
+  include_directories(third_party/ska_sort)
+  include_directories(third_party/fast_float)
+  include_directories(third_party/re2)
+  include_directories(third_party/miniz)
+  include_directories(third_party/utf8proc/include)
+  include_directories(third_party/concurrentqueue)
+  include_directories(third_party/pcg)
+  include_directories(third_party/pdqsort)
+  include_directories(third_party/tdigest)
+  include_directories(third_party/mbedtls/include)
+  include_directories(third_party/jaro_winkler)
+  include_directories(third_party/vergesort)
+  include_directories(third_party/yyjson/include)
+  include_directories(third_party/zstd/include)
+endif()
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -922,42 +924,46 @@ elseif (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(extension)
 endif()
 
-add_third_party(fastpforlib)
-add_third_party(fmt)
-add_third_party(fsst)
-add_third_party(hyperloglog)
-add_third_party(mbedtls)
-add_third_party(miniz)
-add_third_party(re2)
-add_third_party(skiplist)
-add_third_party(utf8proc)
-add_third_party(yyjson)
-add_third_party(zstd)
-
-if(NOT DUCKDB_EXPLICIT_PLATFORM)
-  set(VERSION_SOURCES tools/utils/test_platform.cpp)
-
-  add_executable(duckdb_platform_binary ${VERSION_SOURCES})
-  link_threads(duckdb_platform_binary "")
-
-  set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
-  set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                         ${PROJECT_BINARY_DIR})
-  add_custom_command(
-          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          DEPENDS duckdb_platform_binary
-	  COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          )
-else()
-  add_custom_command(
-          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          COMMAND
-          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
-          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-          )
+if (NOT EXTENSION_CONFIG_BUILD)
+  add_third_party(fastpforlib)
+  add_third_party(fmt)
+  add_third_party(fsst)
+  add_third_party(hyperloglog)
+  add_third_party(mbedtls)
+  add_third_party(miniz)
+  add_third_party(re2)
+  add_third_party(skiplist)
+  add_third_party(utf8proc)
+  add_third_party(yyjson)
+  add_third_party(zstd)
 endif()
-add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
+
+if (NOT EXTENSION_CONFIG_BUILD)
+  if(NOT DUCKDB_EXPLICIT_PLATFORM)
+    set(VERSION_SOURCES tools/utils/test_platform.cpp)
+
+    add_executable(duckdb_platform_binary ${VERSION_SOURCES})
+    link_threads(duckdb_platform_binary "")
+
+    set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
+    set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+                                           ${PROJECT_BINARY_DIR})
+    add_custom_command(
+            OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            DEPENDS duckdb_platform_binary
+            COMMAND $<TARGET_FILE:duckdb_platform_binary> > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            )
+  else()
+    add_custom_command(
+            OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            COMMAND
+            ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            )
+  endif()
+  add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
+endif()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})
