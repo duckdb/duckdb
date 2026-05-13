@@ -133,6 +133,7 @@ public:
 		return function;
 	}
 	bool IsNopCast() const;
+	bool IsTryNullCast() const;
 	void SetFunction(cast_function_t new_function) {
 		function = new_function;
 	}

@@ -104,6 +104,10 @@ bool BoundCastInfo::IsNopCast() const {
 	return function == DefaultCasts::NopCast;
 }
 
+bool BoundCastInfo::IsTryNullCast() const {
+	return function == DefaultCasts::TryVectorNullCast;
+}
+
 static BoundCastInfo AggregateStateCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(source.IsAggregateStateStructType());
 
