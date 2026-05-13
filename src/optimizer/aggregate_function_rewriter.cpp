@@ -58,7 +58,13 @@ public:
 
 public:
 	bool ShouldSkip(const LogicalAggregate &aggr) const override {
-		return !aggr.grouping_functions.empty() || aggr.grouping_sets.size() > 1;
+		// We used to bail out for ROLLUP/CUBE/GROUPING SETS — but SUM(x)/COUNT(x) is
+		// mathematically identical to AVG(x) under any grouping (both ignore NULLs
+		// identically), and decomposing here is the prerequisite for partial-aggregate
+		// pushdown (PAP) to fire on Q22-shape queries. Keep the guard only for
+		// grouping_functions, which produce per-row grouping-set bitmasks that the
+		// rewrite doesn't know how to track.
+		return !aggr.grouping_functions.empty();
 	}
 
 	unique_ptr<Expression> Rewrite(unique_ptr<Expression> &expr, vector<reference<Expression>> &bindings,
