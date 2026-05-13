@@ -30,6 +30,11 @@ select TRY(CAST('abc' as INTEGER) IS NULL);
 ----
 NULL
 
+statement error
+select (50000 * 50000) IS NULL;
+----
+Overflow in multiplication
+
 
 # --- OPERATOR_IS_NOT_NULL ---
 
@@ -37,6 +42,11 @@ query I
 select TRY(CAST('abc' as INTEGER) IS NOT NULL);
 ----
 NULL
+
+statement error
+select (50000 * 50000) IS NOT NULL;
+----
+Overflow in multiplication
 
 # --- COMPARE_EQUAL ---
 
