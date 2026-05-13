@@ -252,7 +252,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		} else if (stats.size() == sizeof(int64_t)) {
 			val = Load<int64_t>(stats_data);
 		} else {
-			throw InvalidInputException("Incorrect stats size for type TIME");
+			throw InvalidInputException("Incorrect stats size for type TIME_NS");
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
