@@ -1,0 +1,20 @@
+diff --git a/vcpkg.json b/vcpkg.json
+index 514f1e9..f8cd3b6 100644
+--- a/vcpkg.json
++++ b/vcpkg.json
+@@ -1,14 +1,6 @@
+ {
+         "dependencies": [
+                 "openssl", "curl"
+-        ],
+-        "vcpkg-configuration": {
+-                "overlay-ports": [
+-                        "./extension-ci-tools/vcpkg_ports"
+-                ],
+-                "overlay-triplets": [
+-                        "./extension-ci-tools/toolchains"
+-                ]
+-        }
++        ]
+ }
+ 
