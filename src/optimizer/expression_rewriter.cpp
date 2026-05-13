@@ -10,6 +10,12 @@
 
 namespace duckdb {
 
+struct RewriteFrame {
+	reference<unique_ptr<Expression>> expr;
+	bool is_root;
+	bool children_visited;
+};
+
 static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<reference<Rule>> &rules,
                                         unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
@@ -37,31 +43,40 @@ static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<refere
 	return expr;
 }
 
+static void CollectChildren(Expression &expr, vector<reference<unique_ptr<Expression>>> &children) {
+	children.clear();
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) { children.push_back(child); });
+}
+
 unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
-	while (true) {
-		bool iteration_made_change = false;
-		// Rewrite the subtree bottom-up so parent rules see already-simplified children.
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			bool child_made_change = false;
-			child = ExpressionRewriter::ApplyRules(op, rules, std::move(child), child_made_change);
-			if (child_made_change) {
-				iteration_made_change = true;
-				changes_made = true;
-			}
-		});
+	vector<RewriteFrame> stack;
+	vector<reference<unique_ptr<Expression>>> children;
+	stack.push_back({expr, is_root, false});
 
-		bool node_made_change = false;
-		expr = ApplyRule(op, rules, std::move(expr), node_made_change, is_root);
-		if (node_made_change) {
-			iteration_made_change = true;
-			changes_made = true;
+	while (!stack.empty()) {
+		auto &frame = stack.back();
+		auto &current_expr = frame.expr.get();
+		D_ASSERT(current_expr);
+		if (!frame.children_visited) {
+			frame.children_visited = true;
+			// Rewrite the subtree bottom-up so parent rules see already-simplified children.
+			CollectChildren(*current_expr, children);
+			for (idx_t i = children.size(); i > 0; i--) {
+				stack.push_back({children[i - 1], false, false});
+			}
 			continue;
 		}
-		if (!iteration_made_change) {
-			return expr;
+		bool node_made_change = false;
+		current_expr = ApplyRule(op, rules, std::move(current_expr), node_made_change, frame.is_root);
+		if (node_made_change) {
+			changes_made = true;
+			frame.children_visited = false;
+			continue;
 		}
+		stack.pop_back();
 	}
+	return expr;
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
