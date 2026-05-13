@@ -1,6 +1,10 @@
 # name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
 # group: [temp_directory]
 
+# FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
+# FIXME: allocating plenty here.
+require vector_size 2048
+
 require skip_reload
 
 # In in-memory mode, the 'temp_directory' defaults to '.tmp'

@@ -19,9 +19,9 @@ enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNO
 
 struct LoopDefinition {
 	string loop_iterator_name;
-	int loop_idx;
-	int loop_start;
-	int loop_end;
+	idx_t loop_idx;
+	idx_t loop_start;
+	idx_t loop_end;
 	bool is_parallel;
 	vector<string> tokens;
 	bool is_skipped = false;
@@ -154,6 +154,9 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 
 	bool SupportsConcurrent() const override;
+
+private:
+	bool ForEachTokenReplace(Connection &con, const string &parameter, vector<string> &result) const;
 };
 
 class ContinueCommand : public Command {

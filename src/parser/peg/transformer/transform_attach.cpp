@@ -1,7 +1,4 @@
 #include "duckdb/parser/peg/ast/generic_copy_option.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/statement/attach_statement.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 
@@ -67,71 +64,6 @@ vector<GenericCopyOption> PEGTransformerFactory::TransformAttachOptions(PEGTrans
                                                                         ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
 	return transformer.Transform<vector<GenericCopyOption>>(list_pr.Child<ListParseResult>(0));
-}
-
-vector<GenericCopyOption> PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
-                                                                                ParseResult &parse_result) {
-	vector<GenericCopyOption> result;
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &extract_parens = ExtractResultFromParens(list_pr.Child<ListParseResult>(0));
-	auto option_list = ExtractParseResultsFromList(extract_parens);
-	for (auto &option : option_list) {
-		result.push_back(transformer.Transform<GenericCopyOption>(option));
-	}
-	return result;
-}
-
-GenericCopyOption PEGTransformerFactory::TransformGenericCopyOption(PEGTransformer &transformer,
-                                                                    ParseResult &parse_result) {
-	GenericCopyOption copy_option;
-
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	copy_option.name = StringUtil::Lower(list_pr.Child<IdentifierParseResult>(0).identifier);
-	auto &optional_expression = list_pr.Child<OptionalParseResult>(1);
-	if (!optional_expression.HasResult()) {
-		return copy_option;
-	}
-	// TODO(Dtenwolde) Rework to switch statement
-	auto expression = transformer.Transform<unique_ptr<ParsedExpression>>(optional_expression.GetResult());
-	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
-	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
-		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
-	} else if (expression->GetExpressionType() == ExpressionType::PLACEHOLDER) {
-		auto &op_expr = expression->Cast<OperatorExpression>();
-		for (auto &child : op_expr.children) {
-			if (child->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().GetValue()));
-			} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-				copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
-			} else {
-				throw InternalException("Unexpected expression type %s encountered for GenericCopyOption",
-				                        ExpressionClassToString(child->GetExpressionClass()));
-			}
-		}
-	} else if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
-		copy_option.expression = std::move(expression);
-	} else if (expression->GetExpressionType() == ExpressionType::STAR) {
-		copy_option.children.push_back(Value("*"));
-	} else if (expression->GetExpressionType() == ExpressionType::OPERATOR_CAST) {
-		auto &cast_expr = expression->Cast<CastExpression>();
-		if (cast_expr.child->GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_expr = cast_expr.child->Cast<ConstantExpression>();
-			if (const_expr.GetValue().GetValue<string>() == "t") {
-				copy_option.children.push_back(Value(true));
-			} else if (const_expr.GetValue().GetValue<string>() == "f") {
-				copy_option.children.push_back(Value(false));
-			} else {
-				copy_option.expression = std::move(expression);
-			}
-		} else {
-			copy_option.expression = std::move(expression);
-		}
-	} else {
-		throw NotImplementedException("Unrecognized expression type %s",
-		                              ExpressionTypeToString(expression->GetExpressionType()));
-	}
-	return copy_option;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,

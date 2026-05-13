@@ -139,7 +139,7 @@ logical_opt	<REGEX>:.*\(col1 < 5\).*
 
 
 # FIXME - disabled because of bugs in the filter combiner
-mode skip
+mode skip instable
 
 ### Complex transitive filters #################################################
 #columns i and j correspond to columns: col0 and col1 in the optimized logical plan
