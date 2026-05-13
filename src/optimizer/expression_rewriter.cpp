@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
-                                                      unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
+static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<reference<Rule>> &rules,
+                                        unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
 		vector<reference<Expression>> bindings;
 		if (rule.get().root->Match(*expr, bindings)) {
@@ -22,26 +22,46 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 			if (result) {
 				changes_made = true;
 				// the base node changed: the rule applied changes
-				// rerun on the new node
 				if (!alias.empty()) {
 					result->SetAlias(std::move(alias));
 				}
-				return ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
+				return result;
 			} else if (rule_made_change) {
 				changes_made = true;
-				// the base node didn't change, but changes were made, rerun
 				return expr;
 			}
 			// else nothing changed, continue to the next rule
 			continue;
 		}
 	}
-	// no changes could be made to this node
-	// recursively run on the children of this node
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		child = ExpressionRewriter::ApplyRules(op, rules, std::move(child), changes_made);
-	});
 	return expr;
+}
+
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
+                                                      unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
+	while (true) {
+		bool iteration_made_change = false;
+		// Rewrite the subtree bottom-up so parent rules see already-simplified children.
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			bool child_made_change = false;
+			child = ExpressionRewriter::ApplyRules(op, rules, std::move(child), child_made_change);
+			if (child_made_change) {
+				iteration_made_change = true;
+				changes_made = true;
+			}
+		});
+
+		bool node_made_change = false;
+		expr = ApplyRule(op, rules, std::move(expr), node_made_change, is_root);
+		if (node_made_change) {
+			iteration_made_change = true;
+			changes_made = true;
+			continue;
+		}
+		if (!iteration_made_change) {
+			return expr;
+		}
+	}
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
@@ -90,11 +110,8 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 }
 
 void ExpressionRewriter::VisitExpression(unique_ptr<Expression> *expression) {
-	bool changes_made;
-	do {
-		changes_made = false;
-		*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, std::move(*expression), changes_made, true);
-	} while (changes_made);
+	bool changes_made = false;
+	*expression = ExpressionRewriter::ApplyRules(*op, to_apply_rules, std::move(*expression), changes_made, true);
 }
 
 ClientContext &Rule::GetContext() const {
