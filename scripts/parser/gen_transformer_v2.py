@@ -645,13 +645,15 @@ def _seq_param_decl(e):
 
 def generate_sequence_body_decl(rule_name, return_type, elements):
     """Declaration for the hand-written body that receives extracted typed args."""
-    params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
     return f"\tstatic {return_type} Transform{rule_name}({params});\n"
 
 
 def generate_sequence_body_stub(rule_name, return_type, elements):
     """Stub .cpp definition for a sequence body that must be hand-implemented."""
-    params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    typed_params = ", ".join(_seq_param_decl(e) for e in elements if not e.skip)
+    params = f"PEGTransformer &transformer, {typed_params}" if typed_params else "PEGTransformer &transformer"
     return (
         f"{return_type} PEGTransformerFactory::Transform{rule_name}({params}) {{\n"
         f"\tthrow NotImplementedException(\"Transform{rule_name}\");\n"
@@ -693,8 +695,8 @@ def generate_sequence_internal(rule_name, return_type, return_by_value, elements
             return f"std::move({e.var_name})"
         return e.var_name
 
-    arg_names = ", ".join(_param_arg(e) for e in semantic)
-    body.append(f"\tauto result = Transform{rule_name}({arg_names});")
+    args = ["transformer"] + [_param_arg(e) for e in semantic]
+    body.append(f"\tauto result = Transform{rule_name}({', '.join(args)});")
     box = _box_result(return_type, return_by_value).rstrip('\n')
     body.append(box)
     return (
@@ -1014,8 +1016,10 @@ def main():
         'checkpoint.gram',
         'create_schema.gram',
         'create_secret.gram',
+        'create_view.gram',
         'deallocate.gram',
         'detach.gram',
+        'execute.gram',
         'export.gram',
         'transaction.gram',
         'use.gram',

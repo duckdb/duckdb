@@ -5,7 +5,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformExportStatement(const string &export_source, const string &string_literal,
+PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, const string &export_source,
+                                                const string &string_literal,
                                                 vector<GenericCopyOption> generic_copy_option_list) {
 	auto info = make_uniq<CopyInfo>();
 	info->file_path = string_literal;
@@ -28,11 +29,12 @@ PEGTransformerFactory::TransformExportStatement(const string &export_source, con
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformExportSource(const string &catalog_name) {
+string PEGTransformerFactory::TransformExportSource(PEGTransformer &transformer, const string &catalog_name) {
 	return catalog_name;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(const string &string_literal) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTransformer &transformer,
+                                                                         const string &string_literal) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "import_database";
 	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(string_literal)));

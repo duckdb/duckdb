@@ -14,8 +14,8 @@ Value PEGTransformerFactory::GetConstantExpressionValue(unique_ptr<ParsedExpress
 }
 
 unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateSecretStmt(const bool &if_not_exists, const string &secret_name,
-                                                 const string &secret_storage_specifier,
+PEGTransformerFactory::TransformCreateSecretStmt(PEGTransformer &transformer, const bool &if_not_exists,
+                                                 const string &secret_name, const string &secret_storage_specifier,
                                                  vector<GenericCopyOption> generic_copy_option_list) {
 	auto result = make_uniq<CreateStatement>();
 	auto on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -61,11 +61,11 @@ PEGTransformerFactory::TransformCreateSecretStmt(const bool &if_not_exists, cons
 	return result;
 }
 
-string PEGTransformerFactory::TransformSecretStorageSpecifier(const string &identifier) {
+string PEGTransformerFactory::TransformSecretStorageSpecifier(PEGTransformer &transformer, const string &identifier) {
 	return identifier;
 }
 
-string PEGTransformerFactory::TransformSecretName(const string &col_id) {
+string PEGTransformerFactory::TransformSecretName(PEGTransformer &transformer, const string &col_id) {
 	return col_id;
 }
 

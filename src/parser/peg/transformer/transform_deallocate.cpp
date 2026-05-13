@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(const bool &deallocate_prepare,
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(PEGTransformer &transformer,
+                                                                             const bool &deallocate_prepare,
                                                                              const string &identifier) {
 	auto result = make_uniq<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;
@@ -11,7 +12,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeallocateStatement(con
 	return std::move(result);
 }
 
-bool PEGTransformerFactory::TransformDeallocatePrepare() {
+bool PEGTransformerFactory::TransformDeallocatePrepare(PEGTransformer &transformer) {
 	return true;
 }
 

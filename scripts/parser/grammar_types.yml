@@ -855,6 +855,7 @@ Bool:
     - IfNotExists
     - OrReplace
     - DeallocatePrepare
+    - CreateRecursive
 
 
 Int64:

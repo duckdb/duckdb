@@ -6,7 +6,8 @@
 namespace duckdb {
 
 unique_ptr<SQLStatement>
-PEGTransformerFactory::TransformCallStatement(const QualifiedName &qualified_table_function,
+PEGTransformerFactory::TransformCallStatement(PEGTransformer &transformer,
+                                              const QualifiedName &qualified_table_function,
                                               vector<unique_ptr<ParsedExpression>> table_function_arguments) {
 	auto result = make_uniq<CallStatement>();
 	auto function_expression =

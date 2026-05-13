@@ -7,11 +7,10 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(const bool &or_replace,
-                                                                         const bool &if_not_exists,
-                                                                         unique_ptr<ParsedExpression> database_path,
-                                                                         const string &attach_alias,
-                                                                         vector<GenericCopyOption> attach_options) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformAttachStatement(PEGTransformer &transformer, const bool &or_replace,
+                                                const bool &if_not_exists, unique_ptr<ParsedExpression> database_path,
+                                                const string &attach_alias, vector<GenericCopyOption> attach_options) {
 	auto result = make_uniq<AttachStatement>();
 	auto info = make_uniq<AttachInfo>();
 
@@ -51,16 +50,18 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAttachStatement(const b
 	return std::move(result);
 }
 
-string PEGTransformerFactory::TransformAttachAlias(const string &col_id) {
+string PEGTransformerFactory::TransformAttachAlias(PEGTransformer &transformer, const string &col_id) {
 	return col_id;
 }
 
 vector<GenericCopyOption>
-PEGTransformerFactory::TransformAttachOptions(vector<GenericCopyOption> generic_copy_option_list) {
+PEGTransformerFactory::TransformAttachOptions(PEGTransformer &transformer,
+                                              vector<GenericCopyOption> generic_copy_option_list) {
 	return std::move(generic_copy_option_list);
 }
 
-unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(unique_ptr<ParsedExpression> expression) {
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformDatabasePath(PEGTransformer &transformer,
+                                                                          unique_ptr<ParsedExpression> expression) {
 	return std::move(expression);
 }
 

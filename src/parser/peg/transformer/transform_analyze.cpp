@@ -4,7 +4,8 @@
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 
 namespace duckdb {
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(const bool &analyze_verbose,
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(PEGTransformer &transformer,
+                                                                          const bool &analyze_verbose,
                                                                           AnalyzeTarget analyze_target) {
 	VacuumOptions vacuum_options;
 	vacuum_options.analyze = true;
@@ -20,7 +21,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAnalyzeStatement(const 
 	return std::move(result);
 }
 
-AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(unique_ptr<BaseTableRef> base_table_name,
+AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(PEGTransformer &transformer,
+                                                            unique_ptr<BaseTableRef> base_table_name,
                                                             const vector<string> &name_list) {
 	AnalyzeTarget result;
 	result.ref = std::move(base_table_name);
@@ -28,7 +30,7 @@ AnalyzeTarget PEGTransformerFactory::TransformAnalyzeTarget(unique_ptr<BaseTable
 	return result;
 }
 
-bool PEGTransformerFactory::TransformAnalyzeVerbose() {
+bool PEGTransformerFactory::TransformAnalyzeVerbose(PEGTransformer &transformer) {
 	return true;
 }
 } // namespace duckdb
