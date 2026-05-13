@@ -49,6 +49,7 @@ BaseStatistics::BaseStatistics(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 }
 
@@ -58,6 +59,7 @@ BaseStatistics &BaseStatistics::operator=(BaseStatistics &&other) noexcept {
 	has_no_null = other.has_no_null;
 	distinct_count = other.distinct_count;
 	stats_union = other.stats_union;
+	std::swap(extra_data, other.extra_data);
 	std::swap(child_stats, other.child_stats);
 	return *this;
 }
