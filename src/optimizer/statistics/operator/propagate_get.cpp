@@ -2,8 +2,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -34,9 +32,6 @@ static void GetColumnIndex(const unique_ptr<Expression> &expr, idx_t &index, str
 
 FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
                                                                  TableFilter &filter) {
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return filter.CheckStatistics(stats);
-	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::PropagateTableFilter");
 
 	// get physical storage index of the filter
@@ -71,19 +66,6 @@ FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding s
 }
 
 void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, const TableFilter &filter) {
-	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		switch (filter.filter_type) {
-		case TableFilterType::CONJUNCTION_AND: {
-			auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-			for (auto &child_filter : conjunction_and.child_filters) {
-				UpdateFilterStatistics(input, *child_filter);
-			}
-			return;
-		}
-		default:
-			return;
-		}
-	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "StatisticsPropagator::UpdateFilterStatistics");
 	UpdateExpressionFilterStatistics(input, *expr_filter.expr);
 }
@@ -140,9 +122,6 @@ void StatisticsPropagator::UpdateExpressionFilterStatistics(BaseStatistics &inpu
 }
 
 static bool IsConstantOrNullFilter(const TableFilter &table_filter) {
-	if (table_filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
-		return false;
-	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "IsConstantOrNullFilter");
 	if (expr_filter.expr->GetExpressionType() != ExpressionType::BOUND_FUNCTION) {
 		return false;
@@ -155,7 +134,6 @@ static bool CanReplaceConstantOrNull(const TableFilter &table_filter) {
 	if (!IsConstantOrNullFilter(table_filter)) {
 		throw InternalException("CanReplaceConstantOrNull() called on unexpected Table Filter");
 	}
-	D_ASSERT(table_filter.filter_type == TableFilterType::EXPRESSION_FILTER);
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(table_filter, "CanReplaceConstantOrNull");
 	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
 	if (ConstantOrNull::IsConstantOrNull(func, Value::BOOLEAN(true))) {
