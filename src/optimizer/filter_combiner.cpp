@@ -788,6 +788,10 @@ static bool AdjustTemporalValue(Value &val, int64_t margin) {
 
 static bool TryGetArithmeticFilterBound(const string &op_name, bool col_is_left, double arith_const, double comp_const,
                                         ExpressionType &comp_type, const LogicalType &col_type, Value &out_threshold) {
+	if (!col_type.IsFloating()) {
+		return false;
+	}
+
 	if (!std::isfinite(arith_const) || !std::isfinite(comp_const)) {
 		return false;
 	}
@@ -826,29 +830,12 @@ static bool TryGetArithmeticFilterBound(const string &op_name, bool col_is_left,
 		return false;
 	}
 
+	// IEEE 754 guarantees ≤ 0.5 ULP rounding error for basic operations; shifting by 1 ULP ensures conservativeness.
 	bool is_lower_bound = IsGreaterThan(comp_type);
 	auto threshold = std::nextafter(raw_threshold, is_lower_bound ? -std::numeric_limits<double>::infinity()
 	                                                              : +std::numeric_limits<double>::infinity());
-
-	if (col_type.IsIntegral()) {
-		double snapped = is_lower_bound ? std::ceil(threshold) : std::floor(threshold);
-		if (!std::isfinite(snapped)) {
-			return false;
-		}
-		Value hugeint_val;
-		string err_msg;
-		if (!Value::DOUBLE(snapped).DefaultTryCastAs(LogicalType::HUGEINT, hugeint_val, &err_msg)) {
-			return false;
-		}
-		comp_type =
-		    is_lower_bound ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_LESSTHANOREQUALTO;
-		return hugeint_val.DefaultTryCastAs(col_type, out_threshold, &err_msg);
-	}
-	if (col_type.IsNumeric()) {
-		out_threshold = Value::DOUBLE(threshold).DefaultCastAs(col_type);
-		return !out_threshold.IsNull();
-	}
-	return false;
+	string err_msg;
+	return Value::DOUBLE(threshold).DefaultTryCastAs(col_type, out_threshold, &err_msg);
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownTemporalCastFilter(TableFilterSet &table_filters,
@@ -990,17 +977,17 @@ FilterPushdownResult FilterCombiner::TryPushdownArithmeticFilter(TableFilterSet 
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
-	if (!arith_const_val.type().IsFloating() || !comp_const_val.type().IsFloating()) {
+	auto &col_type = arith_expr.children[col_idx]->GetReturnType();
+	if (!col_type.IsFloating() || !arith_const_val.type().IsFloating() || !comp_const_val.type().IsFloating()) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 
-	double arith_const = arith_const_val.GetValue<double>();
-	double comp_const = comp_const_val.GetValue<double>();
+	auto arith_const = arith_const_val.GetValue<double>();
+	auto comp_const = comp_const_val.GetValue<double>();
 	auto base_comp = comp.GetExpressionType();
 	if (invert) {
 		base_comp = FlipComparisonExpression(base_comp);
 	}
-	auto &col_type = arith_expr.children[col_idx]->GetReturnType();
 
 	auto push_bound = [&](ExpressionType cmp) -> bool {
 		Value threshold_val;
