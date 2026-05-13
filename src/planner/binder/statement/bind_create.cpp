@@ -369,8 +369,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		ErrorData error;
 		if (info.type == CatalogType::MACRO_ENTRY) {
 			BoundSelectNode sel_node;
-			BoundGroupInformation group_info;
-			SelectBinder binder(*this, context, sel_node, group_info);
+			SelectBinder binder(*this, context, sel_node);
 			if (should_create_dependencies) {
 				binder.SetCatalogLookupCallback(binder_callback);
 			}

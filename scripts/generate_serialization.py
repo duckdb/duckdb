@@ -440,11 +440,6 @@ class SerializableClass:
                 exit(1)
         if 'constructor_method' in entry:
             self.constructor_method = entry['constructor_method']
-            if self.constructor is not None:
-                print(
-                    "Not allowed to mix 'constructor_method' and 'constructor', 'constructor_method' will implicitly receive all parameters"
-                )
-                exit(1)
         if 'custom_implementation' in entry and entry['custom_implementation']:
             self.custom_implementation = True
         if 'custom_switch_code' in entry:

@@ -324,7 +324,7 @@ void VerifyStructStateRoundtrip(const AggregateStateLayout &layout, const Vector
 	// DeserializeStructFields: struct vector -> packed buffer
 	unsafe_unique_array<data_t> temp_state_buf(make_unsafe_uniq_array<data_t>(valid_count * layout.aligned_state_size));
 	UnifiedVectorFormat struct_format;
-	struct_vec.ToUnifiedFormat(valid_count, struct_format);
+	struct_vec.ToUnifiedFormat(struct_format);
 	DeserializeStructFields(layout, layout.aligned_state_size, struct_vec, struct_format, valid_count,
 	                        temp_state_buf.get());
 
@@ -405,10 +405,10 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, input.size());
 
-	input.data[0].Flatten(input.size());
+	input.data[0].Flatten();
 
 	UnifiedVectorFormat state_data;
-	input.data[0].ToUnifiedFormat(input.size(), state_data);
+	input.data[0].ToUnifiedFormat(state_data);
 
 	if (layout.is_struct) {
 		for (idx_t i = 0; i < input.size(); i++) {
@@ -472,14 +472,14 @@ void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &r
 	}
 
 	if (layout.is_struct) {
-		input.data[0].Flatten(input.size());
-		input.data[1].Flatten(input.size());
-		result.Flatten(input.size());
+		input.data[0].Flatten();
+		input.data[1].Flatten();
+		result.Flatten();
 	}
 
 	UnifiedVectorFormat state0_data, state1_data;
-	input.data[0].ToUnifiedFormat(input.size(), state0_data);
-	input.data[1].ToUnifiedFormat(input.size(), state1_data);
+	input.data[0].ToUnifiedFormat(state0_data);
+	input.data[1].ToUnifiedFormat(state1_data);
 
 	// Partition rows by NULL using SelectionVector
 	SelectionVector both_null_sel(STANDARD_VECTOR_SIZE);
@@ -740,7 +740,7 @@ void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data,
 	if (should_result_as_struct) {
 		AggregateStateLayout layout(bind_data.aggregate->function.GetStateType(), state_size);
 
-		result.Flatten(count);
+		result.Flatten();
 		SerializeStructFields(layout, result, count, addresses_ptrs);
 		return;
 	}
@@ -798,13 +798,13 @@ void CombineAggrUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx
 	AggregateStateLayout layout(inputs[0].GetType(), state_size);
 
 	UnifiedVectorFormat sdata;
-	states.ToUnifiedFormat(count, sdata);
+	states.ToUnifiedFormat(sdata);
 	auto state_ptrs = UnifiedVectorFormat::GetData<data_ptr_t>(sdata);
 
-	inputs[0].Flatten(count);
+	inputs[0].Flatten();
 
 	UnifiedVectorFormat input_data;
-	inputs[0].ToUnifiedFormat(count, input_data);
+	inputs[0].ToUnifiedFormat(input_data);
 
 	auto aligned_size = layout.aligned_state_size;
 	unsafe_unique_array<data_t> temp_state_buf = make_unsafe_uniq_array<data_t>(count * aligned_size);
@@ -850,7 +850,7 @@ void CombineAggrFinalize(Vector &state, AggregateInputData &aggr_input_data, Vec
 
 	AggregateStateLayout layout(underlying_aggr.GetStateType(), state_size);
 
-	result.Flatten(count);
+	result.Flatten();
 	SerializeStructFields(layout, result, count, addresses_ptrs);
 }
 
@@ -891,13 +891,13 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 		return_type = LogicalType::LEGACY_AGGREGATE_STATE(std::move(state_type));
 	}
 
-	auto export_function =
-	    AggregateFunction("aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(),
-	                      return_type, bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
-	                      bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(),
-	                      ExportAggregateFinalize, bound_function.GetStateSimpleUpdateCallback(),
-	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
-	                      /* can't propagate statistics */ nullptr, nullptr);
+	auto export_function = AggregateFunction(
+	    "aggregate_state_export_" + bound_function.GetName(), bound_function.GetArguments(), return_type,
+	    bound_function.GetStateSizeCallback(), bound_function.GetStateInitCallback(),
+	    bound_function.GetStateUpdateCallback(), bound_function.GetStateCombineCallback(), ExportAggregateFinalize,
+	    FunctionNullHandling::DEFAULT_NULL_HANDLING, bound_function.GetStateClusterUpdateCallback(),
+	    /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
+	    /* can't propagate statistics */ nullptr, nullptr);
 	export_function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	export_function.SetSerializeCallback(ExportStateAggregateSerialize);
 	export_function.SetDeserializeCallback(ExportStateAggregateDeserialize);
@@ -968,10 +968,11 @@ ScalarFunctionSet CombineFun::GetFunctions() {
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
-	auto function = AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE,
-	                                  nullptr, nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize, nullptr,
-	                                  CombineAggrBind, nullptr, nullptr, nullptr);
-	function.SetNullHandling(FunctionNullHandling::DEFAULT_NULL_HANDLING);
+	auto function =
+	    AggregateFunction("combine_aggr", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::AGGREGATE_STATE, nullptr,
+	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
+	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
 

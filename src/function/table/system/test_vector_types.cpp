@@ -170,7 +170,7 @@ struct TestVectorSequence {
 		case LogicalTypeId::UBIGINT:
 			result.Sequence(3, 2, 3);
 #if STANDARD_VECTOR_SIZE <= 2
-			result.Flatten(3);
+			result.Flatten();
 #endif
 			return;
 		default:

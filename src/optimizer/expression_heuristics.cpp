@@ -1,11 +1,11 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 
 namespace duckdb {
 
@@ -103,10 +103,12 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundCastExpression &expr) {
 	return Cost(*expr.child) + cast_cost;
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(const BoundComparisonExpression &expr) {
+idx_t ExpressionHeuristics::ComparisonExpressionCost(const BoundFunctionExpression &expr) {
 	// COMPARE_EQUAL, COMPARE_NOTEQUAL, COMPARE_GREATERTHAN, COMPARE_GREATERTHANOREQUALTO, COMPARE_LESSTHAN,
 	// COMPARE_LESSTHANOREQUALTO
-	return Cost(*expr.left) + 5 + Cost(*expr.right);
+	auto &left = BoundComparisonExpression::Left(expr);
+	auto &right = BoundComparisonExpression::Right(expr);
+	return Cost(left) + 5 + Cost(right);
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &expr) {
@@ -121,6 +123,9 @@ idx_t ExpressionHeuristics::ExpressionCost(const BoundConjunctionExpression &exp
 idx_t ExpressionHeuristics::ExpressionCost(const BoundFunctionExpression &expr) {
 	if (expr.GetExpressionType() == ExpressionType::COMPARE_BETWEEN) {
 		return BetweenExpressionCost(expr);
+	}
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		return ComparisonExpressionCost(expr);
 	}
 	unordered_map<std::string, idx_t> function_costs = {
 	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
@@ -185,10 +190,6 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 		auto &cast_expr = expr.Cast<BoundCastExpression>();
 		return ExpressionCost(cast_expr);
 	}
-	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comp_expr = expr.Cast<BoundComparisonExpression>();
-		return ExpressionCost(comp_expr);
-	}
 	case ExpressionClass::BOUND_CONJUNCTION: {
 		auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 		return ExpressionCost(conj_expr);
@@ -227,33 +228,13 @@ idx_t ExpressionHeuristics::Cost(const Expression &expr) {
 }
 
 idx_t ExpressionHeuristics::Cost(const TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
-		auto &expr_filter = filter.Cast<ExpressionFilter>();
-		return Cost(*expr_filter.expr);
-	}
-	switch (filter.filter_type) {
-	case TableFilterType::DYNAMIC_FILTER:
-	case TableFilterType::OPTIONAL_FILTER:
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ExpressionHeuristics::Cost");
+	auto &expr = *expr_filter.expr;
+	if (ExpressionFilter::ContainsInternalFunction(expr, DynamicFilterScalarFun::NAME) ||
+	    ExpressionFilter::IsOptionalExpression(expr)) {
 		return 0;
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_and = filter.Cast<ConjunctionOrFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
 	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		idx_t cost = 5;
-		for (auto &child_filter : conjunction_and.child_filters) {
-			cost += Cost(*child_filter);
-		}
-		return cost;
-	}
-	default:
-		return 1000;
-	}
+	return Cost(expr);
 }
 
 vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_filters) {

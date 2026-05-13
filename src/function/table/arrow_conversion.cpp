@@ -568,8 +568,8 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto &runs = *run_end_encoding.run_ends;
 	auto &values = *run_end_encoding.values;
 
-	auto run_ends_data = runs.Values<RUN_END_TYPE>(compressed_size);
-	auto values_data = values.Values<VALUE_TYPE>(compressed_size);
+	auto run_ends_data = runs.Values<RUN_END_TYPE>();
+	auto values_data = values.Values<VALUE_TYPE>();
 	auto result_data = FlatVector::ScatterWriter<VALUE_TYPE>(result);
 	auto &validity = FlatVector::ValidityMutable(result);
 
@@ -1487,7 +1487,7 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		SetSelectionVector(sel, indices, offset_type, size);
 	}
 	vector.Slice(array_state.GetDictionary(), sel, size);
-	vector.Verify(size);
+	vector.Verify();
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,

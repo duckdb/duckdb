@@ -1,6 +1,8 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -8,6 +10,7 @@
 #include "duckdb/function/variant/variant_shredding.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -27,23 +30,17 @@
 namespace duckdb {
 
 static bool IsDirectNullCheckFilter(const TableFilter &filter) {
-	switch (filter.filter_type) {
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr = filter.Cast<ExpressionFilter>().expr;
-		if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
-			return false;
-		}
-		auto &op = expr->Cast<BoundOperatorExpression>();
-		if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
-		     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
-		    op.children.size() != 1) {
-			return false;
-		}
-		return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
-	}
-	default:
+	auto &expr = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::IsDirectNullCheckFilter").expr;
+	if (expr->GetExpressionClass() != ExpressionClass::BOUND_OPERATOR) {
 		return false;
 	}
+	auto &op = expr->Cast<BoundOperatorExpression>();
+	if ((op.GetExpressionType() != ExpressionType::OPERATOR_IS_NULL &&
+	     op.GetExpressionType() != ExpressionType::OPERATOR_IS_NOT_NULL) ||
+	    op.children.size() != 1) {
+		return false;
+	}
+	return op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_REF;
 }
 
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
@@ -295,7 +292,7 @@ void ColumnData::FetchUpdates(TransactionData transaction, idx_t vector_index, V
 	if (update_type == UpdateScanType::DISALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 		throw TransactionException("Cannot create index with outstanding updates");
 	}
-	result.Flatten(scan_count);
+	result.Flatten();
 	updates->FetchUpdates(transaction, vector_index, result);
 }
 
@@ -353,10 +350,10 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
-	auto scan_count = ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	ScanVector(child_state, result, s_count, ScanVectorType::SCAN_FLAT_VECTOR);
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		result.Flatten(scan_count);
+		result.Flatten();
 		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
 	}
 }
@@ -377,7 +374,7 @@ void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnS
 	FlatVector::SetSize(result, count_t(scan_count));
 
 	UnifiedVectorFormat vdata;
-	result.ToUnifiedFormat(scan_count, vdata);
+	result.ToUnifiedFormat(vdata);
 	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
@@ -394,7 +391,7 @@ void ColumnData::Skip(ColumnScanState &state, idx_t s_count) {
 
 void ColumnData::Append(BaseStatistics &append_stats, ColumnAppendState &state, Vector &vector, idx_t append_count) {
 	UnifiedVectorFormat vdata;
-	vector.ToUnifiedFormat(append_count, vdata);
+	vector.ToUnifiedFormat(vdata);
 	AppendData(append_stats, state, vdata, append_count);
 }
 
@@ -414,7 +411,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	// for dynamic filters we never consider the segment being "checked" as it can always change
-	state.segment_checked = filter.filter_type != TableFilterType::DYNAMIC_FILTER;
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	bool is_dynamic = ExpressionFilter::ContainsInternalFunction(*expr_filter.expr, DynamicFilterScalarFun::NAME);
+	state.segment_checked = !is_dynamic;
 	FilterPropagateResult prune_result;
 	{
 		lock_guard<mutex> l(stats_lock);
@@ -422,7 +421,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		    IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 		        ? state.child_states[0].current->GetNode().stats.statistics
 		        : state.current->GetNode().stats.statistics;
-		prune_result = filter.CheckStatistics(segment_stats);
+		prune_result = expr_filter.CheckStatistics(segment_stats);
 		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
@@ -434,7 +433,7 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	}
 	auto update_stats = updates->GetStatistics();
 	// combine the update and original prune result
-	FilterPropagateResult update_result = filter.CheckStatistics(*update_stats);
+	FilterPropagateResult update_result = expr_filter.CheckStatistics(*update_stats);
 	if (prune_result == update_result) {
 		return prune_result;
 	}
@@ -451,9 +450,11 @@ FilterPropagateResult ColumnData::CheckZonemap(const StorageIndex &index, TableF
 		if (!child_stats) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		}
-		return filter.CheckStatistics(*child_stats);
+		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+		return expr_filter.CheckStatistics(*child_stats);
 	}
-	return filter.CheckStatistics(stats->statistics);
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
+	return expr_filter.CheckStatistics(stats->statistics);
 }
 
 const BaseStatistics &ColumnData::GetStatisticsRef() const {
@@ -496,7 +497,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	auto l = data.Lock();
 	if (data.IsEmpty(l)) {
 		// no segments yet, append an empty segment
-		AppendTransientSegment(l, 0);
+		AppendTransientSegment(l, 0, nullptr);
 	}
 	auto segment = data.GetLastSegment(l);
 	auto &last_segment = segment->GetNode();
@@ -504,7 +505,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	    !last_segment.GetCompressionFunction().init_append) {
 		// we cannot append to this segment - append a new segment
 		auto total_rows = segment->GetRowStart() + last_segment.count;
-		AppendTransientSegment(l, total_rows);
+		AppendTransientSegment(l, total_rows, last_segment);
 		state.current = data.GetLastSegment(l);
 	} else {
 		state.current = segment;
@@ -532,7 +533,7 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
-			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count);
+			AppendTransientSegment(l, state.current->GetRowStart() + append_segment.count, append_segment);
 			state.current = data.GetLastSegment(l);
 			state.current->GetNode().InitializeAppend(state);
 		}
@@ -612,7 +613,7 @@ idx_t ColumnData::FetchUpdateData(ColumnScanState &state, row_t *row_ids, Vector
 		throw InternalException("ColumnData::FetchUpdateData out of range");
 	}
 	auto fetch_count = ColumnData::Fetch(state, row_ids[0] - UnsafeNumericCast<row_t>(row_group_start), base_vector);
-	base_vector.Flatten(fetch_count);
+	base_vector.Flatten();
 	return fetch_count;
 }
 
@@ -634,27 +635,40 @@ void ColumnData::UpdateColumn(TransactionData transaction, DuckTableEntry &table
 	ColumnData::Update(transaction, table_entry, column_path[0], update_vector, row_ids, update_count, row_group_start);
 }
 
-void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-	const auto block_size = block_manager.GetBlockSize();
-	const auto type_size = GetTypeIdSize(type.InternalType());
-	auto vector_segment_size = block_size;
-
-	if (data_type == ColumnDataType::INITIAL_TRANSACTION_LOCAL && start_row == 0) {
-#if STANDARD_VECTOR_SIZE < 1024
-		vector_segment_size = 1024 * type_size;
-#else
-		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
-#endif
-	}
-
-	// The segment size is bound by the block size, but can be smaller.
-	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
-	allocation_size += segment_size;
-
+void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, optional_ptr<ColumnSegment> prev_segment) {
 	auto &db = GetDatabase();
 	auto &config = DBConfig::GetConfig(db);
-	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
+	idx_t segment_size;
+	if (!prev_segment) {
+		// We start with the `initial_bytes` setting, but we ensure that we have enough space for at least one row.
+		const auto initial_bytes = Settings::Get<InitialColumnSegmentSizeSetting>(config);
+		segment_size = MaxValue<idx_t>(GetTypeIdSize(type.InternalType()), initial_bytes);
+	} else {
+		segment_size = prev_segment->SegmentSize() * 2;
+	}
+
+	// BIT (validity) segments can only hold rows in multiples of STANDARD_VECTOR_SIZE;
+	// any segment below STANDARD_MASK_SIZE triggers a dead-segment overflow chain
+	if (type.InternalType() == PhysicalType::BIT) {
+		segment_size = MaxValue(segment_size, ValidityMask::STANDARD_MASK_SIZE);
+	}
+
+	// We set the segment size to the next power of two minus the block header size to
+	// ensure that we have fixed-size segments which we can group when offloading to temporary storage.
+	// FIXME: turn this into the min. temporary buffer size instead of a magical number,
+	// FIXME: once we allow offloading tinier buffers.
+	if (segment_size >= 1024) {
+		const auto block_header_size = block_manager.GetBlockHeaderSize();
+		segment_size = NextPowerOfTwo(segment_size) - block_header_size;
+	}
+
+	// The maximum segment size is always the block size of the corresponding block manager.
+	const auto block_size = block_manager.GetBlockSize();
+	segment_size = MinValue<idx_t>(block_size, segment_size);
+	allocation_size += segment_size;
+
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	auto new_segment = ColumnSegment::CreateTransientSegment(db, function, type, segment_size, block_manager);
 	AppendSegment(l, std::move(new_segment));
 }

@@ -63,7 +63,6 @@ void PEGTransformer::SetParamCount(idx_t new_count) {
 unique_ptr<SQLStatement> PEGTransformer::GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTypeInfo>();
-
 	info->temporary = true;
 	info->internal = false;
 	info->catalog = INVALID_CATALOG;

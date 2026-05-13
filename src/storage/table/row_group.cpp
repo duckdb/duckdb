@@ -10,6 +10,7 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -598,7 +599,8 @@ FilterPropagateResult RowGroup::CheckRowIdFilter(const TableFilter &filter, idx_
 	NumericStats::SetMin(dummy_stats, UnsafeNumericCast<row_t>(beg_row));
 	NumericStats::SetMax(dummy_stats, UnsafeNumericCast<row_t>(end_row));
 
-	return filter.CheckStatistics(dummy_stats);
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "RowGroup::CheckRowIdFilter");
+	return expr_filter.CheckStatistics(dummy_stats);
 }
 
 bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
@@ -614,7 +616,7 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (filter.IsOnlyForZoneMapFiltering()) {
+		if (ExpressionFilter::IsRootOptionalFilter(filter)) {
 			// these are only for row group checking, set as always true so we don't check it
 			filters.SetFilterAlwaysTrue(i);
 		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
@@ -657,7 +659,9 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 		}
 		D_ASSERT(target_row >= row_start);
 		D_ASSERT(target_row <= row_start + this->count);
-		idx_t target_vector_index = (target_row - row_start) / STANDARD_VECTOR_SIZE;
+		// current_segment->GetRowStart() is already row-group-relative, and state.vector_index uses the same
+		// coordinate space. Subtracting row_start here incorrectly makes the target segment-local.
+		idx_t target_vector_index = target_row / STANDARD_VECTOR_SIZE;
 
 		if (!target_vector_index_max.IsValid() || target_vector_index_max.GetIndex() < target_vector_index) {
 			target_vector_index_max = target_vector_index;
@@ -1037,7 +1041,7 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		D_ASSERT(col_data.type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset, offset + count);
-			sliced_vector.Flatten(count);
+			sliced_vector.Flatten();
 			col_data.Update(transaction, table_entry, column.index, sliced_vector, ids + offset, count,
 			                row_group_start);
 		} else {
@@ -1059,7 +1063,7 @@ void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_e
 	idx_t depth = 1;
 	if (offset > 0) {
 		Vector sliced_vector(updates.data[0], offset, offset + count);
-		sliced_vector.Flatten(count);
+		sliced_vector.Flatten();
 		col_data.UpdateColumn(transaction, table_entry, column_path, sliced_vector, ids + offset, count, depth,
 		                      row_group_start);
 	} else {

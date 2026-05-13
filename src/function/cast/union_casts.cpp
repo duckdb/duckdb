@@ -282,11 +282,11 @@ static bool UnionMemberToMemberCast(Vector &source, Vector &result, idx_t count,
 		// This is not always the case, e.g. when a member is cast using the default TryNullCast function
 		// the resulting member vector will be a constant null vector.
 		for (idx_t target_member_idx = 0; target_member_idx < target_member_count; target_member_idx++) {
-			UnionVector::GetMember(result, target_member_idx).Flatten(count);
+			UnionVector::GetMember(result, target_member_idx).Flatten();
 		}
 
 		// We assume that a union tag vector validity matches the union vector validity.
-		auto source_tag_entries = source_tag_vector.Values<union_tag_t>(count);
+		auto source_tag_entries = source_tag_vector.Values<union_tag_t>();
 
 		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 			auto entry = source_tag_entries[row_idx];
@@ -341,7 +341,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 	// now construct the actual varchar vector
 	// varchar_union.Flatten(count);
 	auto &tag_vector = UnionVector::GetTags(varchar_union);
-	auto tag_entries = tag_vector.Values<union_tag_t>(count);
+	auto tag_entries = tag_vector.Values<union_tag_t>();
 
 	auto result_data = FlatVector::Writer<string_t>(result, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -353,7 +353,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 		auto tag = tag_entry.GetValue();
 		auto &member = UnionVector::GetMember(varchar_union, tag);
-		auto member_entries = member.Values<string_t>(count);
+		auto member_entries = member.Values<string_t>();
 		auto member_entry = member_entries[i];
 		if (member_entry.IsValid()) {
 			result_data.WriteValue(member_entry.GetValue());

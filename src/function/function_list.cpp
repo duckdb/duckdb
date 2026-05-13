@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
+#include "duckdb/function/scalar/tablefilter_functions.hpp"
 #include "duckdb/function/window/ranking_functions.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window/value_functions.hpp"
@@ -69,6 +70,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorFloatDivideFun),
 	DUCKDB_SCALAR_FUNCTION_SET(OperatorIntegerDivideFun),
 	DUCKDB_SCALAR_FUNCTION(BetweenFun),
+	DUCKDB_SCALAR_FUNCTION(ComparisonFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUbigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUintegerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUsmallintFun),
@@ -88,6 +90,12 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralUintegerFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressIntegralUsmallintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalDecompressStringFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterBloomFilterFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterDynamicFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterOptionalFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterPerfectHashJoinFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterPrefixRangeFun),
+	DUCKDB_SCALAR_FUNCTION(TableFilterSelectivityOptionalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(AddFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(AnyValueFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ArbitraryFun),

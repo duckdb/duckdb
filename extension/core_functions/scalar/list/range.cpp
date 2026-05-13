@@ -2,7 +2,6 @@
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -68,7 +67,7 @@ struct TimestampRangeInfo {
 			return 0;
 		}
 		// We don't allow infinite bounds because they generate errors or infinite loops
-		if (!Timestamp::IsFinite(start_value) || !Timestamp::IsFinite(end_value)) {
+		if (!start_value.IsFinite() || !end_value.IsFinite()) {
 			throw InvalidInputException("Interval infinite bounds not supported");
 		}
 
@@ -116,16 +115,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
 			break;
 		case 2:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
 			break;
 		case 3:
-			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
-			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
-			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(vdata[0]);
+			args.data[1].ToUnifiedFormat(vdata[1]);
+			args.data[2].ToUnifiedFormat(vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");

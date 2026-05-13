@@ -109,7 +109,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 			}
 		}
 	} else {
-		auto entries = vector.Values<T>(count);
+		auto entries = vector.Values<T>();
 		for (idx_t i = 0; i < count; i++) {
 			auto entry = entries[i];
 			auto res_idx = sel.get_index(i);
@@ -132,7 +132,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 			}
 		}
 	} else {
-		auto entries = vector.Validity(count);
+		auto entries = vector.Validity();
 		if (!entries.CanHaveNull()) {
 			return;
 		}
@@ -193,7 +193,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 	case PhysicalType::STRUCT: {
 		if (vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			// below code needs constant or flat structs
-			vector.Flatten(count);
+			vector.Flatten();
 		}
 		auto &vector_entries = StructVector::GetEntries(vector);
 		auto &result_entries = StructVector::GetEntries(result);

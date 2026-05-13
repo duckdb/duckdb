@@ -23,7 +23,7 @@ MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
 PYTHON ?= python3
-FORMAT_VENV ?= build/format-venv
+FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
 
@@ -575,8 +575,8 @@ define ensure_apt_commands
 		command -v $$cmd >/dev/null 2>&1 || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(2); \
+		sudo apt-get $(APT_TIMEOUT_OPTS) update -y -q && \
+		sudo apt-get $(APT_TIMEOUT_OPTS) install -y -q $(2); \
 	fi
 endef
 
@@ -586,10 +586,12 @@ define ensure_apt_packages
 		dpkg-query -W -f='$${Status}' $$pkg 2>/dev/null | grep -q "install ok installed" || missing=1; \
 	done; \
 	if [ $$missing -eq 1 ]; then \
-		sudo apt-get update -y -qq; \
-		sudo apt-get install -y -qq $(1); \
+		sudo apt-get $(APT_TIMEOUT_OPTS) update -y -q && \
+		sudo apt-get $(APT_TIMEOUT_OPTS) install -y -q $(1); \
 	fi
 endef
+
+APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
 
 .PHONY: toolsci
 

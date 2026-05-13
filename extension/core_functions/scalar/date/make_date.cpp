@@ -54,7 +54,7 @@ void ExecuteStructMakeDate(DataChunk &input, ExpressionState &state, Vector &res
 	auto &vec = input.data[0];
 	const auto count = input.size();
 
-	auto iter = vec.Values<VectorStructType<T, T, T>>(count);
+	auto iter = vec.Values<VectorStructType<T, T, T>>();
 	auto writer = FlatVector::Writer<date_t>(result, count);
 	for (const auto entry : iter) {
 		const auto y = entry.template GetChildValue<0>();
@@ -111,7 +111,7 @@ struct MakeTimestampOperator {
 	template <typename T, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(T value) {
 		const auto result = RESULT_TYPE(value);
-		if (!Timestamp::IsFinite(result)) {
+		if (!result.IsFinite()) {
 			throw ConversionException("Timestamp microseconds out of range: %ld", value);
 		}
 		return RESULT_TYPE(value);

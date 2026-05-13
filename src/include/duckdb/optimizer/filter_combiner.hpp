@@ -12,7 +12,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 
 #include "duckdb/storage/data_table.hpp"
 #include <functional>
@@ -61,8 +60,8 @@ public:
 private:
 	FilterResult AddFilter(Expression &expr);
 	FilterResult AddBoundComparisonFilter(Expression &expr);
-	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root = true);
-	unique_ptr<Expression> FindTransitiveFilter(Expression &expr);
+	FilterResult AddTransitiveFilters(BoundFunctionExpression &comparison, bool is_root = true);
+	unique_ptr<Expression> FindTransitiveFilter(const Expression &expr);
 	Expression &GetNode(Expression &expr);
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);

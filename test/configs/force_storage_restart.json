@@ -67,6 +67,12 @@
       "paths": [
         "test/sql/transactions/concurrent_drop_table.test"
       ]
+    },
+    {
+      "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
+      "paths": [
+        "test/sql/storage/adaptive_segment_allocation.test"
+      ]
     }
   ]
 }

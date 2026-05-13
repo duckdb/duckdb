@@ -101,20 +101,23 @@ public:
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
-	DUCKDB_API string ToString(idx_t count) const;
-	DUCKDB_API void Print(idx_t count) const;
+	[[deprecated("ToString no longer requires a count - use ToString() instead")]] DUCKDB_API string
+	ToString(idx_t count) const;
+	[[deprecated("Print no longer requires a count - use Print() instead")]] DUCKDB_API void Print(idx_t count) const;
 
 	DUCKDB_API string ToString() const;
 	DUCKDB_API void Print() const;
 
-	DUCKDB_API void Flatten(idx_t count) const;
+	[[deprecated("Flatten no longer requires a count - use Flatten() instead")]] DUCKDB_API void
+	Flatten(idx_t count) const;
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	//! While Flatten mutates the buffers / vector type, it does not change the *logical* representation of a vector
 	//! As such, it can be used on constant vectors.
 	DUCKDB_API void Flatten() const;
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count) const;
 
-	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) const;
+	[[deprecated("ToUnifiedFormat no longer requires a count - use ToUnifiedFormat(data) instead")]] DUCKDB_API void
+	ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) const;
 	//! Creates a UnifiedVectorFormat of a vector
 	//! The UnifiedVectorFormat allows efficient reading of vectors regardless of their vector type
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
@@ -122,8 +125,12 @@ public:
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
 	DUCKDB_API void ToUnifiedFormat(UnifiedVectorFormat &data) const;
+
+	[[deprecated("RecursiveToUnifiedFormat no longer requires a count - use RecursiveToUnifiedFormat(input, data) "
+	             "instead")]] static void
+	RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
-	static void RecursiveToUnifiedFormat(const Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
+	static void RecursiveToUnifiedFormat(const Vector &input, RecursiveUnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
@@ -131,8 +138,8 @@ public:
 	//! Turn the vector into a shredded variant vector
 	DUCKDB_API void Shred(Vector &shredded_data, idx_t capacity);
 
-	//[[deprecated("Verify no longer requires a count - use Verify() without count instead")]]
-	DUCKDB_API void Verify(idx_t count) const;
+	[[deprecated("Verify no longer requires a count - use Verify() without count instead")]] DUCKDB_API void
+	Verify(idx_t count) const;
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify() const;
@@ -156,14 +163,16 @@ public:
 
 	//! Reserve space for at least "to_reserve" elements
 	DUCKDB_API void Reserve(idx_t to_reserve);
-	DUCKDB_API void Resize(idx_t size, idx_t to_reserve);
+	[[deprecated("Resize has been replaced by Reserve - use Reserve(to_reserve) instead")]] DUCKDB_API void
+	Resize(idx_t current_size, idx_t to_reserve);
 
 	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	//! Returns the uncompressed size of the data stored within this vector
-	idx_t GetDataSize(idx_t cardinality) const;
-	[[deprecated("This method is an alias for GetDataSize(cardinality) for legacy reasons - use either that or "
+	idx_t GetDataSize() const;
+	idx_t GetDataSize(idx_t count) const;
+	[[deprecated("This method is an alias for GetDataSize() for legacy reasons - use either that or "
 	             "GetAllocationSize() instead")]] idx_t
 	GetAllocationSize(idx_t cardinality) const;
 	//! Returns the data allocated by the vector buffers
@@ -202,12 +211,12 @@ public:
 	static void DebugShuffleNestedVector(Vector &vector, idx_t count);
 
 	template <class T>
-	VectorIterator<T> Values(idx_t count) const;
+	VectorIterator<T> Values() const;
 
 	template <class T>
-	VectorValidValueIterator<T> ValidValues(idx_t count) const;
+	VectorValidValueIterator<T> ValidValues() const;
 
-	VectorValidityIterator Validity(idx_t count) const;
+	VectorValidityIterator Validity() const;
 
 	//! This allows a vector to reference another vector while const
 	//! This is only used internally in `Flatten` - since referencing

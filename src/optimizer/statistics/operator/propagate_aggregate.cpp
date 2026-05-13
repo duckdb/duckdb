@@ -11,6 +11,7 @@
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -223,7 +224,9 @@ void StatisticsPropagator::TryExecuteAggregates(LogicalAggregate &aggr, unique_p
 				if (!column_stats) {
 					return;
 				}
-				auto col_filter_result = filter.get().CheckStatistics(*column_stats);
+				auto &expr_filter =
+				    ExpressionFilter::GetExpressionFilter(filter.get(), "AggregateStats::CheckPartitionFilters");
+				auto col_filter_result = expr_filter.CheckStatistics(*column_stats);
 				if (col_filter_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 					// all data in this partition is filtered out, remove this partition entirely
 					filter_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;

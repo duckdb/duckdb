@@ -1067,7 +1067,8 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"RelOptionArgumentOpt <- '=' DefArg\n"
 	"DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression\n"
 	"NoneLiteral <- 'NONE'\n"
-	"LoadStatement <- 'LOAD' ColIdOrString\n"
+	"LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?\n"
+	"ExtensionAlias <- 'AS' Identifier\n"
 	"InstallStatement <- 'FORCE'? 'INSTALL' IdentifierOrStringLiteral FromSource? VersionNumber?\n"
 	"UpdateExtensionsStatement <- 'UPDATE' 'EXTENSIONS' Parens(List(Identifier))?\n"
 	"FromSource <- 'FROM' (Identifier / StringLiteral)\n"
@@ -1476,7 +1477,8 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DetachStatement <- 'DETACH' Database? IfExists? CatalogName\n"
 	"UseStatement <- 'USE' UseTarget\n"
 	"UseTarget <- UseTargetCatalogSchema / SchemaName / CatalogName\n"
-	"UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName ('.' Identifier)*\n"
+	"UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*\n"
+	"DotIdentifier <- '.' Identifier\n"
 	"CallStatement <- 'CALL' QualifiedTableFunction TableFunctionArguments\n"
 
 };

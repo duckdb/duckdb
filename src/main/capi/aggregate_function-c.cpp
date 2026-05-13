@@ -93,7 +93,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
                          idx_t count) {
 	DataChunk chunk;
 	for (idx_t c = 0; c < input_count; c++) {
-		inputs[c].Flatten(count);
+		inputs[c].Flatten();
 		chunk.data.emplace_back(Vector::Ref(inputs[c]));
 	}
 	chunk.SetCardinality(count);
@@ -111,7 +111,7 @@ void CAPIAggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_data, i
 }
 
 void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
-	state.Flatten(count);
+	state.Flatten();
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto input_state_data = FlatVector::GetDataMutableUnsafe<duckdb_aggregate_state>(state);
 	auto result_state_data = FlatVector::GetDataMutableUnsafe<duckdb_aggregate_state>(combined);
@@ -125,7 +125,7 @@ void CAPIAggregateCombine(Vector &state, Vector &combined, AggregateInputData &a
 
 void CAPIAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                            idx_t offset) {
-	state.Flatten(count);
+	state.Flatten();
 	auto &bind_data = aggr_input_data.bind_data->Cast<CAggregateFunctionBindData>();
 	auto input_state_data = FlatVector::GetDataMutableUnsafe<duckdb_aggregate_state>(state);
 	auto result_vector = reinterpret_cast<duckdb_vector>(&result);
@@ -149,10 +149,10 @@ void CAPIAggregateDestructor(Vector &state, AggregateInputData &aggr_input_data,
 using duckdb::GetCAggregateFunction;
 
 duckdb_aggregate_function duckdb_create_aggregate_function() {
-	auto function = new duckdb::AggregateFunction("", {}, duckdb::LogicalType::INVALID, duckdb::CAPIAggregateStateSize,
-	                                              duckdb::CAPIAggregateStateInit, duckdb::CAPIAggregateUpdate,
-	                                              duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize, nullptr,
-	                                              duckdb::CAPIAggregateBind);
+	auto function = new duckdb::AggregateFunction(
+	    "", {}, duckdb::LogicalType::INVALID, duckdb::CAPIAggregateStateSize, duckdb::CAPIAggregateStateInit,
+	    duckdb::CAPIAggregateUpdate, duckdb::CAPIAggregateCombine, duckdb::CAPIAggregateFinalize,
+	    duckdb::FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, duckdb::CAPIAggregateBind);
 	try {
 		function->SetExtraFunctionInfo<duckdb::CAggregateFunctionInfo>();
 		return reinterpret_cast<duckdb_aggregate_function>(function);

@@ -189,7 +189,7 @@ void VariantNormalizer::Normalize(Vector &variant_vec, Vector &result, idx_t cou
 
 	//! Set up the access helper for the source VARIANT
 	RecursiveUnifiedVectorFormat source_format;
-	Vector::RecursiveToUnifiedFormat(variant_vec, count, source_format);
+	Vector::RecursiveToUnifiedFormat(variant_vec, source_format);
 	UnifiedVariantVectorData variant(source_format);
 
 	//! Take the original sizes of the lists, the result will be similar size, never bigger

@@ -79,7 +79,7 @@ static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
 		}
 	}
 	result.Slice(sel, total_length);
-	result.Flatten(total_length);
+	result.Flatten();
 	return total_length;
 }
 

@@ -10,10 +10,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -63,7 +60,7 @@ InsertionOrderPreservingMap<string> LogicalGet::ParamsToString() const {
 	bool first_item = true;
 	for (auto &kv : table_filters) {
 		auto filter_idx = kv.GetIndex();
-		auto &filter = kv.Filter();
+		auto &filter = kv.Filter().Cast<ExpressionFilter>();
 		auto &col_id_entry = column_ids[filter_idx];
 		const auto col_id = col_id_entry.GetPrimaryIndex();
 		if (col_id_entry.IsVirtualColumn()) {

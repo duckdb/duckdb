@@ -19,8 +19,8 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
@@ -173,11 +173,12 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 		// 		bindings[0] = the expression
 		// 		bindings[1] = the index expression
 		// 		bindings[2] = the constant
-		auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+		auto &comparison = bindings[0].get().Cast<BoundFunctionExpression>();
 		auto constant_value = bindings[2].get().Cast<BoundConstantExpression>().value;
 		auto comparison_type = comparison.GetExpressionType();
 
-		if (comparison.left->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
+		auto &left = BoundComparisonExpression::Left(comparison);
+		if (left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 			// The expression is on the right side, we flip the comparison expression.
 			comparison_type = FlipComparisonExpression(comparison_type);
 		}
@@ -257,7 +258,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	D_ASSERT(keys.size() >= count);
 
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -275,7 +276,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 template <class T, bool IS_NOT_NULL>
 static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 	UnifiedVectorFormat data;
-	input.ToUnifiedFormat(count, data);
+	input.ToUnifiedFormat(data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
 
 	for (idx_t i = 0; i < count; i++) {

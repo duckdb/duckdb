@@ -55,10 +55,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateBetween(BoundFunctionE
 		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
 	} else if (lower_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// lower filter is always true: replace with upper comparison
-		expr_ptr = make_uniq<BoundComparisonExpression>(upper_comparison, std::move(input), std::move(upper_bound));
+		expr_ptr = BoundComparisonExpression::Create(upper_comparison, std::move(input), std::move(upper_bound));
 	} else if (upper_prune == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
 		// upper filter is always true: replace with lower comparison
-		expr_ptr = make_uniq<BoundComparisonExpression>(lower_comparison, std::move(input), std::move(lower_bound));
+		expr_ptr = BoundComparisonExpression::Create(lower_comparison, std::move(input), std::move(lower_bound));
 	}
 	return nullptr;
 }

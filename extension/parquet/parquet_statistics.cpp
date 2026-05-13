@@ -18,7 +18,6 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -40,7 +39,6 @@
 #include "duckdb/common/types/geometry.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "duckdb/storage/statistics/numeric_stats.hpp"
@@ -646,14 +644,17 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 }
 
 static bool HasFilterConstants(const Expression &expr) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.GetExpressionType() == ExpressionType::COMPARE_EQUAL &&
-		    comp.right->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-			auto &constant = comp.right->Cast<BoundConstantExpression>();
-			return !constant.value.IsNull();
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
+			return false;
 		}
-		return false;
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
+		return !constant.value.IsNull();
 	}
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONJUNCTION) {
 		return false;
@@ -668,31 +669,8 @@ static bool HasFilterConstants(const Expression &expr) {
 }
 
 static bool HasFilterConstants(const TableFilter &duckdb_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool child_has_constant = false;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			child_has_constant |= HasFilterConstants(*child_filter);
-		}
-		return child_has_constant;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter =
-		    ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
-		return HasFilterConstants(*expr_filter.expr);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::HasFilterConstants");
+	return HasFilterConstants(*expr_filter.expr);
 }
 
 template <class T>
@@ -736,13 +714,16 @@ static uint64_t ValueXXH64(const Value &constant) {
 }
 
 static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_filter) {
-	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
-		auto &comp = expr.Cast<BoundComparisonExpression>();
-		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL ||
-		    comp.right->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+	if (BoundComparisonExpression::IsComparison(expr)) {
+		auto &comp = expr.Cast<BoundFunctionExpression>();
+		if (comp.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return false;
 		}
-		auto &constant = comp.right->Cast<BoundConstantExpression>();
+		auto &right = BoundComparisonExpression::Right(comp);
+		if (right.GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			return false;
+		}
+		auto &constant = right.Cast<BoundConstantExpression>();
 		D_ASSERT(!constant.value.IsNull());
 		auto hash = ValueXXH64(constant.value);
 		return hash > 0 && !bloom_filter.FilterCheck(hash);
@@ -769,30 +750,8 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 }
 
 static bool ApplyBloomFilter(const TableFilter &duckdb_filter, ParquetBloomFilter &bloom_filter) {
-	switch (duckdb_filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and_filter = duckdb_filter.Cast<ConjunctionAndFilter>();
-		bool any_children_true = false;
-		for (auto &child_filter : conjunction_and_filter.child_filters) {
-			any_children_true |= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return any_children_true;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction_or_filter = duckdb_filter.Cast<ConjunctionOrFilter>();
-		bool all_children_true = true;
-		for (auto &child_filter : conjunction_or_filter.child_filters) {
-			all_children_true &= ApplyBloomFilter(*child_filter, bloom_filter);
-		}
-		return all_children_true;
-	}
-	case TableFilterType::EXPRESSION_FILTER: {
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
-		return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
-	}
-	default:
-		return false;
-	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(duckdb_filter, "ParquetStatistics::ApplyBloomFilter");
+	return ApplyBloomFilter(*expr_filter.expr, bloom_filter);
 }
 
 bool ParquetStatisticsUtils::BloomFilterSupported(const LogicalTypeId &type_id) {
