@@ -976,7 +976,7 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 Value Value::TYPE(const LogicalType &type) {
 	MemoryStream stream;
 	SerializationOptions options;
-	options.serialization_compatibility = SerializationCompatibility::Latest();
+	options.storage_compatibility = StorageCompatibility::Latest();
 	BinarySerializer::Serialize(type, stream, options);
 	auto data_ptr = const_char_ptr_cast(stream.GetData());
 	auto data_len = stream.GetPosition();

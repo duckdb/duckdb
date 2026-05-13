@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serialization_compatibility.hpp
+// duckdb/common/storage_compatibility.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,13 +13,13 @@
 namespace duckdb {
 class AttachedDatabase;
 
-class SerializationCompatibility {
+class StorageCompatibility {
 public:
-	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
-	static SerializationCompatibility FromIndex(idx_t serialization_version);
-	static SerializationCompatibility FromString(const string &input);
-	static SerializationCompatibility Default();
-	static SerializationCompatibility Latest();
+	static StorageCompatibility FromDatabase(AttachedDatabase &db);
+	static StorageCompatibility FromIndex(idx_t storage_version);
+	static StorageCompatibility FromString(const string &input);
+	static StorageCompatibility Default();
+	static StorageCompatibility Latest();
 
 public:
 	bool Compare(idx_t property_version) const;
@@ -27,13 +27,13 @@ public:
 public:
 	//! The user provided version
 	string duckdb_version;
-	//! The max version that should be serialized
-	idx_t serialization_version;
+	//! The max storage version that should be serialized
+	StorageVersion storage_version;
 	//! Whether this was set by a manual SET/PRAGMA or default
 	bool manually_set;
 
 protected:
-	SerializationCompatibility() = default;
+	StorageCompatibility() = default;
 };
 
 } // namespace duckdb

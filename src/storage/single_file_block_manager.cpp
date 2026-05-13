@@ -260,7 +260,7 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
-	ser.Write<idx_t>(serialization_compatibility);
+	ser.Write<idx_t>(storage_compatibility);
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -288,7 +288,7 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	}
 
 	// Default to 1 for version 64, else read from file.
-	header.serialization_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
+	header.storage_compatibility = main_header.version_number == 64 ? 1 : source.Read<idx_t>();
 
 	return header;
 }
@@ -539,7 +539,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
-	h1.serialization_compatibility = options.storage_version.GetIndex();
+	h1.storage_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -552,7 +552,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
-	h2.serialization_compatibility = options.storage_version.GetIndex();
+	h2.storage_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.GetDataMutable());
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -769,17 +769,17 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	if (options.storage_version.IsValid()) {
 		// storage version specified explicitly - use requested storage version
 		auto requested_compat_version = options.storage_version.GetIndex();
-		if (requested_compat_version < header.serialization_compatibility) {
+		if (requested_compat_version < header.storage_compatibility) {
 			throw InvalidInputException(
 			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
 			    "the database itself uses (%d). The storage version of an existing database cannot be lowered.",
-			    path, requested_compat_version, header.serialization_compatibility);
+			    path, requested_compat_version, header.storage_compatibility);
 		}
 	} else {
 		// load storage version from header
-		options.storage_version = header.serialization_compatibility;
+		options.storage_version = header.storage_compatibility;
 	}
-	if (header.serialization_compatibility > SerializationCompatibility::Latest().serialization_version) {
+	if (header.storage_compatibility > StorageCompatibility::Latest().storage_version) {
 		throw InvalidInputException(
 		    "Error opening \"%s\": file was written with a storage version greater than the latest version supported "
 		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
@@ -1306,7 +1306,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
 
-	header.serialization_compatibility = options.storage_version.GetIndex();
+	header.storage_compatibility = options.storage_version.GetIndex();
 
 	auto debug_checkpoint_abort = Settings::Get<DebugCheckpointAbortSetting>(db.GetDatabase());
 	if (debug_checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {

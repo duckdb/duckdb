@@ -331,7 +331,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	if (expr->GetExpressionType() != ExpressionType::TYPE) {
 		throw SerializationException(
 		    "Cannot serialize non-type type expression when targeting database storage version '%s'",
-		    serializer.GetOptions().serialization_compatibility.duckdb_version);
+		    serializer.GetOptions().storage_compatibility.duckdb_version);
 	}
 
 	auto &type_expr = expr->Cast<TypeExpression>();
@@ -345,7 +345,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 		if (param->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 			throw SerializationException(
 			    "Cannot serialize non-constant type parameter when targeting serialization version %s",
-			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			    serializer.GetOptions().storage_compatibility.duckdb_version);
 		}
 
 		auto &const_expr = param->Cast<ConstantExpression>();

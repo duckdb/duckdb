@@ -29,7 +29,7 @@ using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
 	// storage version < v1.4.0
 	if (!storage_version.IsValid() ||
-	    storage_version.GetIndex() < SerializationCompatibility::FromString("v1.4.0").serialization_version) {
+	    storage_version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
 			                            "v1.4.0) are not compatible",
@@ -47,11 +47,11 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	case EncryptionTypes::V0_1:
 		// storage version not explicitly set
 		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+			storage_version = StorageCompatibility::FromString("v1.5.0").storage_version;
 			break;
 		}
 		// storage version set, but v1.4.0 =< storage < v1.5.0
-		if (storage_version.GetIndex() < SerializationCompatibility::FromString("v1.5.0").serialization_version) {
+		if (storage_version.GetIndex() < StorageCompatibility::FromString("v1.5.0").storage_version) {
 			if (!storage_version_user_provided.empty()) {
 				if (encryption_version == target_encryption_version) {
 					// encryption version is explicitly given, but not compatible with < v1.5.0
@@ -72,7 +72,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	case EncryptionTypes::V0_0:
 		// we set this to V0 to V1.5.0 if no explicit storage version provided
 		if (!storage_version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version = SerializationCompatibility::FromString("v1.5.0").serialization_version;
+			storage_version = StorageCompatibility::FromString("v1.5.0").storage_version;
 			break;
 		}
 		// if storage version is provided, we do nothing
@@ -114,8 +114,7 @@ void StorageOptions::Initialize(unordered_map<string, Value> &options) {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version =
-			    SerializationCompatibility::FromString(storage_version_user_provided).serialization_version;
+			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -440,7 +439,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config
-			options.storage_version = config.options.serialization_compatibility.serialization_version;
+			options.storage_version = config.options.storage_compatibility.storage_version;
 		}
 
 		// Initialize the block manager before creating a new database.

@@ -112,7 +112,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, const string 
 		Allocator allocator;
 		MemoryStream stream(allocator);
 		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+		options.storage_compatibility = StorageCompatibility::FromString("latest");
 		optional_ptr<SelectStatement> to_serialize_stmt;
 		optional_ptr<QueryNode> to_serialize_node;
 		switch (statement->type) {

@@ -197,11 +197,11 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
-		if (config.options.serialization_compatibility.manually_set) {
+		if (config.options.storage_compatibility.manually_set) {
 			// Override the default of 'latest' if this was manually set (for testing, mostly)
-			options.serialization_compatibility = config.options.serialization_compatibility;
+			options.storage_compatibility = config.options.storage_compatibility;
 		} else {
-			options.serialization_compatibility = SerializationCompatibility::Latest();
+			options.storage_compatibility = StorageCompatibility::Latest();
 		}
 
 		BinarySerializer::Serialize(*op, stream, options);
