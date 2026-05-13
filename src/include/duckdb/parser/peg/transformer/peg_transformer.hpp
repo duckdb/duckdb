@@ -374,6 +374,8 @@ private:
 	static vector<GenericCopyOption> TransformGenericCopyOptionList(PEGTransformer &transformer,
 	                                                                ParseResult &parse_result);
 	static GenericCopyOption TransformGenericCopyOption(PEGTransformer &transformer, ParseResult &parse_result);
+	static vector<OrderByNode> TransformGenericCopyOptionParenthesizedExpressionList(PEGTransformer &transformer,
+	                                                                                 ParseResult &parse_result);
 	static unique_ptr<ParsedExpression> TransformDatabasePath(PEGTransformer &transformer, ParseResult &parse_result);
 
 	// call.gram
