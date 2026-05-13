@@ -5,7 +5,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/function_serialization.hpp"
-#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 

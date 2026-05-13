@@ -15,10 +15,9 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/enums/preserve_order.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
-
-struct BoundOrderByNode;
 
 class LogicalCopyToFile : public LogicalOperator {
 public:
@@ -29,6 +28,8 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_TO_FILE), function(std::move(function)),
 	      bind_data(std::move(bind_data)), copy_info(std::move(copy_info)) {
 	}
+
+public:
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<CopyInfo> copy_info;
