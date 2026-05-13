@@ -34,24 +34,38 @@ class RunTestsScriptTest(unittest.TestCase):
                 "stdout": """
 All tests passed (5 skipped tests, 123 assertions in 4 test cases)
 
+mode skip flaky planner
+mode skip unsupported
+
 Skipped tests for the following reasons:
 require longdouble: 2
 require-env SOME_TOKEN: 3
 """,
                 "expected_skip_count": 5,
-                "expected_reasons": ["require longdouble: 2", "require-env SOME_TOKEN: 3"],
+                "expected_reasons": [
+                    "require longdouble: 2",
+                    "require-env SOME_TOKEN: 3",
+                    "mode skip flaky planner: 1",
+                    "mode skip unsupported: 1",
+                ],
             },
             {
                 "name": "ansi",
                 "stdout": (
                     "\x1b[36mAll tests passed (14 skipped tests, 2659 assertions in 86 test cases)\x1b[0m\n\n"
+                    "\x1b[33mmode skip flaky parser\x1b[0m\n"
                     "\x1b[1mSkipped tests for the following reasons:\x1b[0m\n"
                     "\x1b[33mrequire httpfs: 1\x1b[0m\n"
                     "\x1b[33mrequire icu: 2\x1b[0m\n"
                     "\x1b[33mrequire-env LOCAL_EXTENSION_REPO: 5\x1b[0m\n"
                 ),
                 "expected_skip_count": 14,
-                "expected_reasons": ["require httpfs: 1", "require icu: 2", "require-env LOCAL_EXTENSION_REPO: 5"],
+                "expected_reasons": [
+                    "require httpfs: 1",
+                    "require icu: 2",
+                    "require-env LOCAL_EXTENSION_REPO: 5",
+                    "mode skip flaky parser: 1",
+                ],
             },
         ]
 
@@ -100,6 +114,8 @@ require-env SOME_TOKEN: 3
                 "stdout": """
 All tests passed (2 skipped tests, 100 assertions in 1 test cases)
 
+mode skip flaky planner
+
 Skipped tests for the following reasons:
 require windows: 1
 require-env A: 1
@@ -112,6 +128,9 @@ require-env A: 1
                 "failed": False,
                 "stdout": """
 All tests passed (3 skipped tests, 100 assertions in 1 test cases)
+
+mode skip flaky planner
+mode skip unsupported
 
 Skipped tests for the following reasons:
 require-env A: 2
@@ -145,6 +164,8 @@ require-env B: 1
         self.assertIn("require windows: 1", proc.stdout)
         self.assertIn("require-env A: 3", proc.stdout)
         self.assertIn("require-env B: 1", proc.stdout)
+        self.assertIn("mode skip flaky planner: 2", proc.stdout)
+        self.assertIn("mode skip unsupported: 1", proc.stdout)
 
     def test_does_not_double_count_summary_when_in_stdout_and_stderr(self):
         test_list_path = create_temp_file("test/sql/a.test\n")
