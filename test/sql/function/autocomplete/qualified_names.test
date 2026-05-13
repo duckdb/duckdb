@@ -1,0 +1,97 @@
+# name: test/sql/function/autocomplete/qualified_names.test
+# description: Test qualified name autocomplete (catalog.schema.table)
+# group: [autocomplete]
+
+require autocomplete
+
+# --- Setup ---
+statement ok
+CREATE SCHEMA test_schema;
+
+statement ok
+CREATE TABLE test_schema.schema_table1(i INTEGER);
+
+statement ok
+CREATE TABLE test_schema.schema_table2(j INTEGER);
+
+statement ok
+CREATE TABLE main_table(k INTEGER);
+
+# --- Bug 1: Trailing dot triggers table suggestions, not "." keyword ---
+# After typing "test_schema.", we should get tables from that schema
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('SELECT * FROM test_schema.') ORDER BY suggestion_score ASC LIMIT 1;
+----
+schema_table1	26	table
+
+# Partial name after dot still works
+query II
+SELECT suggestion, suggestion_start FROM sql_auto_complete('SELECT * FROM test_schema.schema_t') LIMIT 1;
+----
+schema_table1	26
+
+# --- Bug 3: Context-aware filtering ---
+# Tables from other schemas should NOT appear when qualifying with test_schema
+query I
+SELECT count(*) FROM sql_auto_complete('SELECT * FROM test_schema.') WHERE suggestion = 'main_table';
+----
+0
+
+# --- Catalog-qualified completions ---
+statement ok
+ATTACH ':memory:' AS test_db;
+
+statement ok
+CREATE SCHEMA test_db.db_schema;
+
+statement ok
+CREATE TABLE test_db.db_schema.db_table(i INTEGER);
+
+# catalog.schema. should suggest tables in that schema
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('SELECT * FROM test_db.db_schema.') ORDER BY suggestion_score ASC LIMIT 1;
+----
+db_table	32	table
+
+# catalog. should suggest schemas in that catalog
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('SELECT * FROM test_db.db_') ORDER BY suggestion_score ASC LIMIT 1;
+----
+db_schema.	22	schema
+
+# catalog.schema. filtering: tables from a different schema in the same catalog should NOT appear
+statement ok
+CREATE SCHEMA test_db.other_schema;
+
+statement ok
+CREATE TABLE test_db.other_schema.other_table(i INTEGER);
+
+query I
+SELECT count(*) FROM sql_auto_complete('SELECT * FROM test_db.db_schema.') WHERE suggestion = 'other_table';
+----
+0
+
+# catalog. with just trailing dot should include schemas from that catalog
+query I
+SELECT count(*) FROM sql_auto_complete('SELECT * FROM test_db.') WHERE suggestion = 'db_schema.' AND suggestion_type = 'schema';
+----
+1
+
+# catalog. filtering: schemas from a different catalog should NOT appear
+# test_schema exists in the default catalog, not in test_db
+query I
+SELECT count(*) FROM sql_auto_complete('SELECT * FROM test_db.') WHERE suggestion = 'test_schema.';
+----
+0
+
+# Also works for DROP TABLE with schema qualification
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('DROP TABLE test_schema.') ORDER BY suggestion_score ASC LIMIT 1;
+----
+schema_table1	23	table
+
+# Also works for CREATE TABLE with catalog.schema qualification
+query III
+SELECT suggestion, suggestion_start, suggestion_type FROM sql_auto_complete('CREATE TABLE test_db.db_schema.') ORDER BY suggestion_score ASC LIMIT 1;
+----
+db_table	31	table
