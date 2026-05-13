@@ -54,11 +54,24 @@ static bool GetColumnBinding(const Expression &expr, ColumnBinding &binding) {
 }
 
 static bool IsSupportedAggregate(const BoundAggregateExpression &expr) {
-	if (expr.IsDistinct() || expr.filter || expr.order_bys || expr.children.size() != 1) {
+	if (expr.IsDistinct() || expr.filter || expr.order_bys) {
 		return false;
 	}
 	auto name = StringUtil::Lower(expr.function.GetName());
-	return name == "sum" || name == "sum_no_overflow";
+	if (name == "count_star") {
+		// COUNT(*) — no child expressions allowed
+		return expr.children.empty();
+	}
+	if (expr.children.size() != 1) {
+		return false;
+	}
+	// All of these have state-combine functions on the AGGREGATE_STATE pipeline,
+	// so the upper-stage `finalize_combine_aggr` reassembles a numerically-exact result.
+	// AVG is included because the rewriter pass does NOT always decompose it into
+	// SUM/COUNT (only when the surrounding expression demands), so Q22-shape queries
+	// arrive at PAP with `avg(x)` intact.
+	return name == "sum" || name == "sum_no_overflow" || name == "count" || name == "avg" ||
+	       name == "min" || name == "max";
 }
 
 static bool ContainsAggregateInput(const LogicalOperator &op) {
@@ -78,8 +91,11 @@ static bool GetPushdownOperators(LogicalOperator &op, LogicalAggregate *&aggr, L
 		return false;
 	}
 	aggr = &op.Cast<LogicalAggregate>();
-	if (aggr->grouping_sets.size() > 1 || !aggr->grouping_functions.empty() || aggr->groups.empty() ||
-	    aggr->expressions.empty()) {
+	// ROLLUP / CUBE / GROUPING SETS would need the rewritten upper aggregate to preserve
+	// every grouping set; the current PAP plumbing only rebuilds the single-set form, so
+	// allowing them silently dropped the secondary grouping sets and over-aggregated. Reject.
+	if (aggr->grouping_sets.size() > 1 || !aggr->grouping_functions.empty() ||
+	    aggr->groups.empty() || aggr->expressions.empty()) {
 		return false;
 	}
 	auto &child = *op.children[0];

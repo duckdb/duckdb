@@ -56,7 +56,7 @@ static void ReplaceExpressionBindings(unique_ptr<Expression> &expr, const vector
 					    }
 					    colref.binding = replacement.new_binding;
 					    if (replacement.replace_type) {
-						    colref.return_type = replacement.new_type;
+						    colref.SetReturnType(replacement.new_type);
 					    }
 					    replaced = true;
 					    break;
@@ -132,7 +132,7 @@ static bool ExtractSources(LogicalOperator &op, BranchInfo &branch) {
 			}
 			auto &expression = projection.expressions[binding_idx];
 			branch.replacements_to_primary.push_back(
-			    {projection_bindings[binding_idx], child_bindings[binding_idx], expression->return_type, true});
+			    {projection_bindings[binding_idx], child_bindings[binding_idx], expression->GetReturnType(), true});
 		}
 		return ExtractSources(*projection.children[0], branch);
 	}
@@ -282,7 +282,7 @@ static bool IsSupportedAggregate(const Expression &expr) {
 		}
 	}
 
-	auto &name = aggregate.function.name;
+	const auto &name = aggregate.function.GetName();
 	if (name == "count_star") {
 		return aggregate.children.empty() && !aggregate.IsDistinct();
 	}
