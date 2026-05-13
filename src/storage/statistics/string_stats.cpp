@@ -157,7 +157,7 @@ void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[]
 		data_t no_stats_byte = is_min ? 0x00 : 0xFF;
 		memset(result, no_stats_byte, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	} else {
-		StringStatsWriter::ConstructValue(input_data, StringStatsData::MAX_STRING_MINMAX_SIZE, result);
+		StringStatsWriter::ConstructValue(input_data, input.GetSize(), result);
 	}
 }
 
