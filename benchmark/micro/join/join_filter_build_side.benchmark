@@ -1,0 +1,28 @@
+# name: benchmark/micro/join/join_filter_build_side.benchmark
+# description: Prefer a filtered build side when it can produce a join filter for a large probe scan
+# group: [join]
+
+name Join Filter Build Side
+group micro
+subgroup join
+
+require parquet
+
+cache join_filter_build_side.duckdb
+
+load
+CREATE TABLE build_payload AS PIVOT (
+	SELECT i, 'c' || j::VARCHAR AS name, NULL::VARCHAR AS val
+	FROM range(200000) _(i), range(400) __(j)
+) ON name USING first(val) GROUP BY i;
+CREATE TABLE build AS SELECT (i * 50)::INTEGER AS id, i < 100 AS keep, * EXCLUDE(i) FROM build_payload;
+DROP TABLE build_payload;
+COPY (SELECT i::INTEGER AS id FROM range(10000000) _(i)) TO '${BENCHMARK_DIR}/join_filter_build_side_probe.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 50000);
+CREATE VIEW probe AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/join_filter_build_side_probe.parquet');
+ANALYZE build;
+
+run
+SELECT *
+FROM probe p
+JOIN build b ON p.id = b.id
+WHERE b.keep;
