@@ -548,19 +548,27 @@ FilterPropagateResult PrefixRangeScalarFun::FilterPrune(const FunctionStatistics
 	if (!data.filter || !data.filter->IsInitialized()) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (input.stats.GetStatsType() != StatisticsType::NUMERIC_STATS) {
+	switch (input.stats.GetStatsType()) {
+	case StatisticsType::NUMERIC_STATS: {
+		if (!NumericStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		const auto min = NumericStats::Min(input.stats);
+		const auto max = NumericStats::Max(input.stats);
+		if (min > max) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return data.filter->LookupRange(min, max);
+	}
+	case StatisticsType::STRING_STATS: {
+		if (!StringStats::HasMinMax(input.stats)) {
+			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+		}
+		return data.filter->LookupRange(Value(StringStats::Min(input.stats)), Value(StringStats::Max(input.stats)));
+	}
+	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
-	if (!NumericStats::HasMinMax(input.stats)) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-
-	const auto min = NumericStats::Min(input.stats);
-	const auto max = NumericStats::Max(input.stats);
-	if (min > max) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
-	return data.filter->LookupRange(min, max);
 }
 
 ScalarFunction TableFilterPrefixRangeFun::GetFunction() {
