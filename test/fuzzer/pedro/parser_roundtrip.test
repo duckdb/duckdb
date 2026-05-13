@@ -14,7 +14,7 @@ statement ok
 SELECT "x-x"."y-y" FROM (SELECT 42) AS "x-x"("y-y");
 
 # FIXME: explicit cross joins not rendered correctly (yet)
-mode skip
+mode skip flaky
 
 query I
 SELECT 1 FROM ((SELECT 2) t0(c0) JOIN (SELECT 3) t1(c0) ON TRUE), ((SELECT 4) t2(c0) JOIN ((SELECT 5) t3(c0) CROSS JOIN (SELECT 6) t4(c0)) ON TRUE);

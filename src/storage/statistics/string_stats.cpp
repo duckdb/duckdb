@@ -21,8 +21,8 @@ BaseStatistics StringStats::CreateUnknown(LogicalType type) {
 	string_data.max_string_length = 0;
 	string_data.has_max_string_length = false;
 	string_data.has_unicode = true;
-	string_data.min_type = StringStatsType::EMPTY_STATS;
-	string_data.max_type = StringStatsType::EMPTY_STATS;
+	string_data.min_type = StringStatsType::NO_STATS;
+	string_data.max_type = StringStatsType::NO_STATS;
 	return result;
 }
 
@@ -182,7 +182,7 @@ void LegacyConstructMinMax(string_t input, StringStatsType type, data_t result[]
 		data_t no_stats_byte = is_min ? 0x00 : 0xFF;
 		memset(result, no_stats_byte, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	} else {
-		StringStatsWriter::ConstructValue(input_data, StringStatsData::MAX_STRING_MINMAX_SIZE, result);
+		StringStatsWriter::ConstructValue(input_data, input.GetSize(), result);
 	}
 }
 
@@ -242,8 +242,8 @@ void StringStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) 
 	deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
 	deserializer.ReadProperty(203, "has_max_string_length", string_data.has_max_string_length);
 	deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
-	string_data.min = LegacyReadMinMax(min_data);
-	string_data.max = LegacyReadMinMax(max_data);
+	string_data.min = AssignString(base, LegacyReadMinMax(min_data), true);
+	string_data.max = AssignString(base, LegacyReadMinMax(max_data), false);
 	string_data.min_type =
 	    LegacyGetMinMaxType(min_data, max_data, string_data.has_max_string_length, string_data.max_string_length);
 	string_data.max_type = string_data.min_type;
@@ -306,6 +306,14 @@ void StringStats::SetMax(BaseStatistics &stats, const string_t &value, StringSta
 	auto &stats_data = GetDataUnsafe(stats);
 	stats_data.max = AssignString(stats, value, false);
 	stats_data.max_type = type;
+}
+
+void StringStats::SetMin(BaseStatistics &stats, const string_t &value) {
+	SetMin(stats, value, StringStatsType::TRUNCATED_STATS);
+}
+
+void StringStats::SetMax(BaseStatistics &stats, const string_t &value) {
+	SetMax(stats, value, StringStatsType::TRUNCATED_STATS);
 }
 
 void StringStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {

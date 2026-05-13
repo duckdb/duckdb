@@ -5,7 +5,7 @@
 # FIXME: This is a significant regression because we no longer evict "tiny buffers", of which we're
 # FIXME: allocating plenty here.
 # FIXME: I am skipping the test temporarily because if fails for a bunch of configurations.
-mode skip
+mode skip unsupported
 
 require noforcestorage
 
