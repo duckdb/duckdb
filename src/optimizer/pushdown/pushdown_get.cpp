@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -79,7 +80,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		// IN with enough values can benefit from a hash join is handled by InClauseRewriter
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN) {
-			continue;
+			auto &in_expr = expr.Cast<BoundOperatorExpression>();
+			if (!in_expr.children.empty() && in_expr.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
 		if (expr.CanThrow() && filters.size() > 1) {
